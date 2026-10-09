@@ -208,16 +208,17 @@ export function PageContent(props: ParentProps) {
 
 /**
  * Sends first-time desktop users into the onboarding flow at /onboarding.
- * App chrome mounts it, so it fires on any app destination (marketing SSO
- * lands on /app, not /login) and never on the onboarding pages themselves.
+ * App chrome runs it, so it fires on any app destination (marketing SSO lands
+ * on /app, not /login) and never on the onboarding pages themselves.
  */
-function NewOnboardingRedirect() {
+function useNewOnboardingRedirect() {
   const userInfoQuery = useUserInfoQuery();
   const navigate = useNavigate();
   const location = useLocation();
   createEffect(() => {
     if (isMobile() || isNativeMobilePlatform()) return;
-    const data = userInfoQuery.data;
+    // A pending read would suspend the chrome; wait for the user instead.
+    const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
@@ -235,8 +236,6 @@ function NewOnboardingRedirect() {
       { replace: true }
     );
   });
-
-  return null;
 }
 
 /**
@@ -255,6 +254,7 @@ export function AppChrome(props: ParentProps) {
 
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
+  useNewOnboardingRedirect();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -273,7 +273,6 @@ export function AppChrome(props: ParentProps) {
         </Show>
         <Suspense>
           <Show when={isAuthenticated()}>
-            <NewOnboardingRedirect />
             <GithubReauthenticationPrompt />
             <GmailReauthenticationPrompt />
             <CalendarPermissionPrompt />

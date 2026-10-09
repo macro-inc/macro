@@ -6,8 +6,8 @@ import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
-import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
-import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
+import { useReactiveFavicon } from '@components/app/useReactiveFavicon';
+import { useGlobalAttachableHistory } from '@core/component/AI/signal/globalAttachments';
 import { TeamContextProvider } from '@core/context/team';
 import { useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -20,14 +20,14 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { useChatRenameWebsocketSync } from '@queries/chat';
-import { QuerySyncProvider } from '@queries/sync/SyncProvider';
+import { useQuerySync } from '@queries/sync/use-query-sync';
 import { MutationUndoProvider } from '@queries/undo';
 import {
   useRefreshTrackedEntitiesOnFocus,
   useReopenTrackedEntitiesOnReconnect,
 } from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
-import { type ParentProps, Show } from 'solid-js';
+import type { ParentProps } from 'solid-js';
 
 function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
@@ -55,6 +55,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     onNotification
   );
   useNotificationUpdates(notificationSource);
+  useReactiveFavicon(notificationSource);
 
   const blockOrchestrator = createBlockOrchestrator();
   usePendingNotificationNavigationEffect(notificationSource);
@@ -69,51 +70,23 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   );
 }
 
-function SoupBackfillSideEffect(props: { userId: string }) {
-  useSoupBackfills(props.userId);
-  return null;
-}
-
-function CalendarCacheSideEffect() {
-  useCalendarCache();
-  return null;
-}
-
-/** Caches only the app's views read: soup backfill and the calendar cache. */
-function UserCacheSideEffects() {
-  const userId = useUserId();
-  return (
-    <Show when={userId()} keyed>
-      {(id) => (
-        <>
-          <SoupBackfillSideEffect userId={id} />
-          <CalendarCacheSideEffect />
-        </>
-      )}
-    </Show>
-  );
-}
-
-function QuerySyncProviderWithUserId() {
-  const userId = useUserId();
-  return <QuerySyncProvider userId={userId} />;
-}
-
 /**
  * State only the app's views use: notifications, undo, search, and the caches
  * and sync behind them. Auth, booking, and meeting pages render without it.
  */
 export function AppProviders(props: ParentProps) {
+  const userId = useUserId();
+  useQuerySync(userId);
+  useSoupBackfills(userId);
+  useCalendarCache(() => userId() !== undefined);
+  useGlobalAttachableHistory();
+
   return (
     <TeamContextProvider>
       <ConfiguredGlobalAppStateProvider>
         <MutationUndoProvider>
           <SearchProvider>
             <IncomingMeetingInvitationsProvider>
-              <QuerySyncProviderWithUserId />
-              <UserCacheSideEffects />
-              <ChatAttachmentsInit />
-              <ReactiveFavicon />
               {props.children}
             </IncomingMeetingInvitationsProvider>
           </SearchProvider>

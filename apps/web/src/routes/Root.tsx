@@ -121,8 +121,8 @@ const ROUTES: RouteDefinition[] = [
   { path: '/*path', component: AppRouterView },
 ];
 
-/** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
-function UserInfoSideEffects() {
+/** Syncs the signed-in user to observability, analytics, and the login cookie. */
+function useUserInfoSideEffects() {
   const analytics = useAnalytics();
   const posthog = usePosthog();
 
@@ -177,8 +177,6 @@ function UserInfoSideEffects() {
       trackSignupCompletion(analytics, { id: user.id });
     })
   );
-
-  return null;
 }
 
 const clearBodyInlineStyleColor = () => {
@@ -196,6 +194,7 @@ const BOOT_SHELL_MAX_WAIT_MS = 8000;
  * the cap keeps an outage from hiding the app's own error states.
  */
 function AppRouteFrame(props: RouteSectionProps) {
+  useUserInfoSideEffects();
   onMount(() => {
     const cap = setTimeout(dismissBootShell, BOOT_SHELL_MAX_WAIT_MS);
     onCleanup(() => clearTimeout(cap));
@@ -236,7 +235,6 @@ export function Root() {
                   <IosPushNotificationModal />
                   <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />
-                  <UserInfoSideEffects />
                   <ChannelsContextProvider>
                     <CallProvider>
                       <CallKitSync />

@@ -57,12 +57,8 @@ import {
   parseWebsocketPayload,
   ws,
 } from '@service-connection/websocket';
-import { type Accessor, onCleanup, type ParentProps } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
-
-type SyncProviderProps = ParentProps<{
-  userId: Accessor<string | undefined>;
-}>;
 
 function withParsedWebsocketPayload<T>(
   type: string,
@@ -75,7 +71,8 @@ function withParsedWebsocketPayload<T>(
   handle(parsedPayload);
 }
 
-export function QuerySyncProvider(props: SyncProviderProps) {
+/** Keeps queries in sync with the connection websocket's updates for `userId`. */
+export function useQuerySync(userId: Accessor<string | undefined>): void {
   ws.addEventListener(WebsocketEvent.Open, invalidateChannelPictures);
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidateChannelPictures)
@@ -118,7 +115,7 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         withParsedWebsocketPayload<Parameters<typeof handleMessageEvent>[0]>(
           data.type,
           data.data,
-          (event) => handleMessageEvent(event, props.userId())
+          (event) => handleMessageEvent(event, userId())
         );
       })
       .with({ type: 'comms_channel_picture' }, () => {
@@ -214,6 +211,4 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       })
       .otherwise(() => {});
   });
-
-  return props.children;
 }

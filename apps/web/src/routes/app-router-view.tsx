@@ -18,12 +18,57 @@ import {
 } from '@components/app/split-layout/split-router/legacy-route';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { lazy, onCleanup } from 'solid-js';
+import { lazy } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
+import {
+  ActivityRouteView,
+  AgentsRouteView,
+  BookingReceiptRoutePage,
+  CalendarRouteView,
+  CallDetailRouteView,
+  CallsRouteView,
+  ChannelDetailRouteView,
+  ChannelInviteAcceptance,
+  ChannelsRouteView,
+  CompaniesRouteView,
+  DriveCallRouteView,
+  DriveDetailView,
+  DriveRouteView,
+  EmailCallback,
+  EmailDetailRouteView,
+  EmailLinkCallback,
+  FoldersRouteView,
+  FormRespondRoutePage,
+  HomeEntityDetailRouteView,
+  InviteLinksPortal,
+  InviteWelcome,
+  LoginPage,
+  LoginPopupSuccess,
+  MailRouteView,
+  MeetingRouter,
+  MobileWebSignup,
+  NotFound,
+  OnboardingPage,
+  PrDetailRouteView,
+  ProjectDetailRouteView,
+  ProjectTaskRouteView,
+  PublicBookingRoutePage,
+  RecentRouteView,
+  ReviewsPrDetailRouteView,
+  ReviewsRouteView,
+  RoutineCreateRouteView,
+  SearchRouteView,
+  SettingsRouteView,
+  SignupPage,
+  TaskSlugPage,
+  TasksDetailRouteView,
+  TasksRouteView,
+  TeamInviteAcceptance,
+  WelcomePage,
+} from './lazy-route-views';
 import {
   activityRoute,
   agentChatsRoute,
@@ -100,169 +145,6 @@ import {
 
 const { Router, Route } = SplitRouter;
 
-/**
- * Every view except Home (the default landing) loads as its own chunk. The
- * split router warms a route's chunks while it navigates, and the app's route
- * (`warmRouteViews`) fetches the likely-next ones once the first screen settles.
- */
-const ActivityRouteView = lazyNamed(
-  () => import('@app/features/activity/route-views'),
-  'ActivityRouteView'
-);
-const AgentsRouteView = lazyNamed(
-  () => import('@app/features/agents-view/route-views'),
-  'AgentsRouteView'
-);
-const MobileWebSignup = lazyNamed(
-  () => import('@app/features/auth/auth'),
-  'MobileWebSignup'
-);
-const CallDetailRouteView = lazyNamed(
-  () => import('@app/features/block-call/route-views'),
-  'CallDetailRouteView'
-);
-const PrDetailRouteView = lazyNamed(
-  () => import('@app/features/block-pr/route-views'),
-  'PrDetailRouteView'
-);
-const CalendarRouteView = lazyNamed(
-  () => import('@app/features/calendar-view/route-views'),
-  'CalendarRouteView'
-);
-const ChannelInviteAcceptance = lazyNamed(
-  () => import('@app/features/channel-invitations/ChannelInviteAcceptance'),
-  'ChannelInviteAcceptance'
-);
-const ChannelDetailRouteView = lazyNamed(
-  () => import('@app/features/channels-view/channels-view'),
-  'ChannelDetailRouteView'
-);
-const ChannelsRouteView = lazyNamed(
-  () => import('@app/features/channels-view/route-views'),
-  'ChannelsRouteView'
-);
-const CompaniesRouteView = lazyNamed(
-  () => import('@app/features/crm/route-views'),
-  'CompaniesRouteView'
-);
-const DriveDetailView = lazyNamed(
-  () => import('@app/features/drive-view/components/DriveDetailView'),
-  'DriveDetailView'
-);
-const DriveCallRouteView = lazyNamed(
-  () => import('@app/features/drive-view/route-views'),
-  'DriveCallRouteView'
-);
-const DriveRouteView = lazyNamed(
-  () => import('@app/features/drive-view/route-views'),
-  'DriveRouteView'
-);
-const EmailDetailRouteView = lazyNamed(
-  () => import('@app/features/email-view/components/EmailDetailView'),
-  'EmailDetailRouteView'
-);
-const MailRouteView = lazyNamed(
-  () => import('@app/features/email-view/route-views'),
-  'MailRouteView'
-);
-const InviteLinksPortal = lazyNamed(
-  () => import('@app/features/gtm-invite/InviteLinksPortal'),
-  'InviteLinksPortal'
-);
-const InviteWelcome = lazyNamed(
-  () => import('@app/features/gtm-invite/InviteWelcome'),
-  'InviteWelcome'
-);
-const HomeEntityDetailRouteView = lazyNamed(
-  () => import('@app/features/home/components/HomeEntityDetailRouteView'),
-  'HomeEntityDetailRouteView'
-);
-const MeetingRouter = lazyNamed(
-  () => import('@app/features/meetings/meeting-router'),
-  'MeetingRouter'
-);
-const CallsRouteView = lazyNamed(
-  () => import('@app/features/next-soup/route-views'),
-  'CallsRouteView'
-);
-const FoldersRouteView = lazyNamed(
-  () => import('@app/features/next-soup/route-views'),
-  'FoldersRouteView'
-);
-const RecentRouteView = lazyNamed(
-  () => import('@app/features/next-soup/route-views'),
-  'RecentRouteView'
-);
-const SearchRouteView = lazyNamed(
-  () => import('@app/features/next-soup/route-views'),
-  'SearchRouteView'
-);
-const ReviewsPrDetailRouteView = lazyNamed(
-  () => import('@app/features/reviews-view/route-views'),
-  'ReviewsPrDetailRouteView'
-);
-const ReviewsRouteView = lazyNamed(
-  () => import('@app/features/reviews-view/route-views'),
-  'ReviewsRouteView'
-);
-const RoutineCreateRouteView = lazyNamed(
-  () => import('@app/features/routines/route-views'),
-  'RoutineCreateRouteView'
-);
-const SettingsRouteView = lazyNamed(
-  () => import('@app/features/settings/route-views'),
-  'SettingsRouteView'
-);
-const TasksDetailRouteView = lazyNamed(
-  () => import('@app/features/tasks-view/components/TasksDetailView'),
-  'TasksDetailRouteView'
-);
-const ProjectDetailRouteView = lazyNamed(
-  () => import('@app/features/tasks-view/route-views'),
-  'ProjectDetailRouteView'
-);
-const ProjectTaskRouteView = lazyNamed(
-  () => import('@app/features/tasks-view/route-views'),
-  'ProjectTaskRouteView'
-);
-const TasksRouteView = lazyNamed(
-  () => import('@app/features/tasks-view/route-views'),
-  'TasksRouteView'
-);
-const TeamInviteAcceptance = lazyNamed(
-  () => import('@app/features/team-invitations/TeamInviteAcceptance'),
-  'TeamInviteAcceptance'
-);
-const BookingReceiptRoutePage = lazyNamed(
-  () => import('./pages'),
-  'BookingReceiptRoutePage'
-);
-const FormRespondRoutePage = lazyNamed(
-  () => import('./pages'),
-  'FormRespondRoutePage'
-);
-const EmailCallback = lazyNamed(() => import('./pages'), 'EmailCallback');
-const EmailLinkCallback = lazyNamed(
-  () => import('./pages'),
-  'EmailLinkCallback'
-);
-const LoginPage = lazyNamed(() => import('./pages'), 'LoginPage');
-const LoginPopupSuccess = lazyNamed(
-  () => import('./pages'),
-  'LoginPopupSuccess'
-);
-const OnboardingPage = lazyNamed(() => import('./pages'), 'OnboardingPage');
-const PublicBookingRoutePage = lazyNamed(
-  () => import('./pages'),
-  'PublicBookingRoutePage'
-);
-const SignupPage = lazyNamed(() => import('./pages'), 'SignupPage');
-const TaskSlugPage = lazyNamed(() => import('./pages'), 'TaskSlugPage');
-const WelcomePage = lazyNamed(() => import('./pages'), 'WelcomePage');
-const NotFound = lazy(
-  () => import('@core/component/AccessErrorViews/NotFound')
-);
-
 /** Debug views stay behind the registry's lazy import. */
 function debugView(componentId: string) {
   return lazy(async () => {
@@ -273,77 +155,6 @@ function debugView(componentId: string) {
   });
 }
 
-/**
- * Views a session is likely to open next. Fetching them while the browser is
- * idle keeps the first navigation as fast as it was with one big bundle.
- */
-const LIKELY_NEXT_VIEWS = [
-  HomeEntityDetailRouteView,
-  ChannelsRouteView,
-  ChannelDetailRouteView,
-  MailRouteView,
-  EmailDetailRouteView,
-  DriveRouteView,
-  DriveDetailView,
-  TasksRouteView,
-  AgentsRouteView,
-  CalendarRouteView,
-];
-
-type PreloadableView = { preload: () => Promise<unknown> };
-type NetworkInformation = { saveData?: boolean };
-
-/**
- * Warms the likely-next view chunks one at a time while the app is open,
- * leaving startup and hidden tabs alone and skipping Save-Data connections.
- */
-function warmRouteViews(views: readonly PreloadableView[]): void {
-  const connection = (
-    navigator as Navigator & { connection?: NetworkInformation }
-  ).connection;
-  if (connection?.saveData) return;
-
-  const queue = [...views];
-  let disposed = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-
-  const next = () => {
-    const view = disposed ? undefined : queue.shift();
-    if (!view) return;
-    void view
-      .preload()
-      .catch(() => {})
-      .finally(schedule);
-  };
-  function schedule() {
-    if (disposed || queue.length === 0) return;
-    if (document.visibilityState !== 'visible') {
-      document.addEventListener('visibilitychange', schedule, { once: true });
-      return;
-    }
-    if ('requestIdleCallback' in window) {
-      window.requestIdleCallback(next, { timeout: 5000 });
-    } else {
-      timer = setTimeout(next, 1000);
-    }
-  }
-
-  // Leave the first seconds to the landing view's own data and chunks.
-  timer = setTimeout(schedule, 2500);
-  onCleanup(() => {
-    disposed = true;
-    clearTimeout(timer);
-    document.removeEventListener('visibilitychange', schedule);
-  });
-}
-
-/** The app's route: its shell, plus warming the views a session opens next. */
-function AppRoute() {
-  warmRouteViews(LIKELY_NEXT_VIEWS);
-  return <AppShell />;
-}
-
-/** The app's router: the first pane's top-level route renders here, and app URLs render the split layout. */
 export function AppRouterView() {
   const debugRouteElements = debugRoutes.map(({ componentId, route }) => (
     <Route definition={route} component={debugView(componentId)} />
@@ -425,7 +236,7 @@ export function AppRouterView() {
         />
       </Route>
 
-      <Route definition={appRoute} component={AppRoute}>
+      <Route definition={appRoute} component={AppShell}>
         <Route definition={driveSplitRoute} component={DriveRouteView}>
           <Route definition={driveFolderRoute}>
             <Route

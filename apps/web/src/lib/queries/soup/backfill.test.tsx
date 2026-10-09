@@ -116,7 +116,7 @@ const recencyTree = (signal: boolean, gte: string) => ({
 });
 
 function BackfillRunner(props: { userId: string }) {
-  useSoupBackfills(props.userId);
+  useSoupBackfills(() => props.userId);
   return null;
 }
 
