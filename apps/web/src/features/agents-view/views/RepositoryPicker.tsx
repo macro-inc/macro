@@ -207,7 +207,7 @@ export function RepositoryPicker(props: {
           <CaretDownIcon class="size-3 shrink-0" />
         </Popover.Trigger>
         <Popover.Portal>
-          <Popover.Content class="z-action-menu w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-edge-muted bg-menu p-3 text-sm text-ink shadow-menu">
+          <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-1rem)] p-3 text-sm">
             <Popover.Title class="mb-2 font-medium">Repository</Popover.Title>
             <form
               onSubmit={(event) => {
@@ -359,7 +359,7 @@ export function RepositoryPicker(props: {
             </Show>
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content class="z-action-menu w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-edge-muted bg-menu p-3 text-sm text-ink shadow-menu">
+            <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-1rem)] p-3 text-sm">
               <Popover.Title class="mb-2 font-medium">
                 Starting branch
               </Popover.Title>

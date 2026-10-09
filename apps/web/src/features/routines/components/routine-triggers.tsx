@@ -347,7 +347,7 @@ function TriggerChip(
         }}
       >
         <Popover.Content
-          class="z-modal flex max-h-[min(32rem,var(--kb-popper-content-available-height))] w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink shadow-lg"
+          class="menu-surface z-modal flex max-h-[min(32rem,var(--kb-popper-content-available-height))] w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden"
           onKeyDown={(e) => e.stopPropagation()}
         >
           <Popover.Title class="sr-only">

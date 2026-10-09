@@ -955,7 +955,7 @@ function SelectCell(props: GridCellProps) {
         <Popover.Trigger {...trigger}>{shown()}</Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
-            class="z-action-menu rounded-lg border border-edge bg-menu p-1 text-ink shadow-menu outline-none"
+            class="menu-surface z-action-menu p-1 outline-none"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               searchInput?.focus();

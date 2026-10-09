@@ -536,6 +536,14 @@ async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
+    // Session tasks are read as the owner through the same services Macro's own tools use.
+    let task_directory = agent_harness::outbound::session_tasks::DocumentTaskDirectory::new(
+        tool_context.document_tool_context.service.clone(),
+        tool_context
+            .document_tool_context
+            .entity_access_service
+            .clone(),
+    );
     // Macro's own tools run in-process here rather than through the egress
     // proxy, so they are held for the owner by the same approvals.
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(
@@ -637,14 +645,30 @@ async fn run() -> anyhow::Result<()> {
             GithubSyncClientImpl::default(),
         ),
     ));
+    let session_metadata_realtime = ConnectionGatewayAgentSessionRealtime::new(
+        connection_gateway.clone(),
+        session_audience.clone(),
+    );
+    let session_tasks: Arc<dyn agent_session::domain::session_task::SessionTasks> = Arc::new(
+        agent_session::domain::session_task::SessionTaskService::new(
+            session_repo.clone(),
+            session_repo.clone(),
+            task_directory,
+            agent_harness::outbound::session_tasks::GithubTaskPullRequestLinker::new(
+                github::domain::service::PullRequestTaskLinkService::new(PgGithubSyncRepo::new(
+                    pool.clone(),
+                )),
+            ),
+            session_metadata_realtime.clone(),
+            macro_service_urls::AppServiceUrl::new()?.as_ref(),
+        ),
+    );
     let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
         Arc::new(
             agent_session::domain::pull_request::SessionPullRequestService::new(
                 session_repo.clone(),
-                ConnectionGatewayAgentSessionRealtime::new(
-                    connection_gateway.clone(),
-                    session_audience.clone(),
-                ),
+                session_metadata_realtime,
+                session_tasks.clone(),
             ),
         );
     let session_working_branches: Arc<
@@ -661,6 +685,7 @@ async fn run() -> anyhow::Result<()> {
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
         session_pull_requests.clone(),
+        session_tasks,
         url::Url::parse(&egress_base_url)?
             .host_str()
             .context("egress URL needs a host")?

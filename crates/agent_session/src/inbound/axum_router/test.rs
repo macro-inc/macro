@@ -209,6 +209,7 @@ impl SessionOpener for RecordingOpener {
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,
@@ -246,6 +247,7 @@ impl SessionOpener for RecordingOpener {
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,
@@ -462,6 +464,7 @@ impl ExternalSessionRequester for RecordingRequester {
         let session = AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id: request.session_id,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,
@@ -1324,6 +1327,7 @@ async fn an_external_open_carries_its_instructions() {
     );
 }
 
+mod coding_preferences;
 mod owned_purge;
 mod read;
 mod user_cleanup;

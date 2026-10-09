@@ -1097,6 +1097,19 @@ fn read_response_to_js<'a, T: Serialize>(
     js_sys::JSON::parse(&json)
 }
 
+/// JSON values a watch update sends to JS. Patch values cross the boundary
+/// the same way as a hit's data, so they need the same integer check.
+fn query_update_values(
+    update: &cache_core::engine::watch_query::QueryUpdate,
+) -> Vec<&serde_json::Value> {
+    use cache_core::engine::watch_query::QueryUpdate;
+    match update {
+        QueryUpdate::Hit { data, .. } => vec![data.as_ref()],
+        QueryUpdate::Patch { patches, .. } => patches.iter().map(|patch| &patch.value).collect(),
+        QueryUpdate::Miss { .. } => Vec::new(),
+    }
+}
+
 fn has_unsafe_json_integer(value: &serde_json::Value) -> bool {
     const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
     match value {
@@ -1380,13 +1393,7 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
-            let data = match &result {
-                cache_core::engine::watch_query::QueryUpdate::Hit { data, .. } => {
-                    Some(data.as_ref())
-                }
-                _ => None,
-            };
-            read_response_to_js(&result, data)
+            read_response_to_js(&result, query_update_values(&result))
         })
     }
 

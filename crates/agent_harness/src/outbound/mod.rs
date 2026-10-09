@@ -19,6 +19,7 @@ pub mod prompt_mentions;
 pub(crate) mod provision;
 pub mod routing;
 pub mod runtime_registry;
+pub mod session_tasks;
 pub mod sidecar;
 pub mod tool_approvals;
 

@@ -62,6 +62,92 @@
         ]
       }
     },
+    "/agent-coding-preferences": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read what the caller's new coding sessions are told to do beyond their assignment.",
+        "operationId": "get_agent_coding_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingPreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace the caller's coding preferences.",
+        "operationId": "put_agent_coding_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodingPreferencesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingPreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-models/load": {
       "post": {
         "tags": ["agent-models"],
@@ -2847,6 +2933,10 @@
             "$ref": "#/components/schemas/SessionStatusDto",
             "description": "The session's status."
           },
+          "taskId": {
+            "type": ["string", "null"],
+            "description": "The Macro task the session was linked to."
+          },
           "threadChannelId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -3118,6 +3208,21 @@
           "channel_id": {
             "type": "string",
             "description": "The channel id"
+          }
+        }
+      },
+      "CodingPreferencesBody": {
+        "type": "object",
+        "description": "Request or response body for the caller's coding preferences.",
+        "required": ["createTasks", "openPullRequests"],
+        "properties": {
+          "createTasks": {
+            "type": "boolean",
+            "description": "Whether new coding sessions research prior work and link a Macro task."
+          },
+          "openPullRequests": {
+            "type": "boolean",
+            "description": "Whether new coding sessions deliver their work as a pull request."
           }
         }
       },

@@ -3786,11 +3786,9 @@ describe('normalizedCacheExchange', () => {
         ]);
       });
 
-      // Known gap kept by the queue runner extraction: a recovery failure
-      // rolls back without rechecking its attempt token. The replacement
-      // queue reuses transaction id txn-1 and lease generation 1, so the
-      // stale attempt discards the new head. Change to `it` once fenced.
-      it.fails('fences a recovery-failure rollback after storage resets', async () => {
+      // The replacement queue reuses transaction id txn-1 and lease
+      // generation 1, so an unfenced stale attempt would discard the new head.
+      it('fences a recovery-failure rollback after storage resets', async () => {
         const recording = deferred<void>();
         let admissions = 0;
         const { ops, forwarded } = controlledQueryHarness(host, {
