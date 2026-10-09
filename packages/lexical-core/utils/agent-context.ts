@@ -172,8 +172,22 @@ export type RoutineContext = {
   routine_id: string;
   name: string;
   owner: ContextPerson;
+  /** What the routine asks for, as its owner wrote it. */
+  instructions: string;
+  triggers: RoutineTrigger[];
   firing: RoutineFiring;
 };
+
+/** One of the ways a routine runs. */
+export type RoutineTrigger =
+  | { type: 'schedule'; cron: string; timezone: string }
+  | {
+      type: 'events';
+      events: string[];
+      /** Absent when the routine watches every entity. */
+      entity_ids?: string[];
+      condition?: string;
+    };
 
 /** What made a routine fire. */
 export type RoutineFiring =
@@ -182,8 +196,8 @@ export type RoutineFiring =
   | {
       type: 'event';
       event: RoutineEvent;
-      /** Why the routine's condition matched. */
-      condition?: string;
+      /** Questions the event was checked against; it answered yes to at least one. */
+      conditions?: string[];
     };
 
 /** The event a routine fired on. */
@@ -1146,12 +1160,37 @@ function routineFiringNodes(firing: RoutineFiring): FxpNode[] {
         requested_at,
       }),
     ])
-    .with({ type: 'event' }, ({ event, condition }) => [
+    .with({ type: 'event' }, ({ event, conditions }) => [
       el('event', routineEventChildren(event), { type: event.event }),
-      ...(condition === undefined
+      ...(conditions === undefined || conditions.length === 0
         ? []
-        : [el('condition_matched', [text(condition)])]),
+        : [
+            el('conditions', [
+              note('The event answered yes to at least one of these.'),
+              ...conditions.map((condition) =>
+                el('condition', [text(condition)])
+              ),
+            ]),
+          ]),
     ])
+    .exhaustive();
+}
+
+function routineTriggerNode(trigger: RoutineTrigger): FxpNode {
+  return match(trigger)
+    .with({ type: 'schedule' }, ({ cron, timezone }) =>
+      el('schedule', [], { cron, timezone })
+    )
+    .with({ type: 'events' }, ({ events, entity_ids, condition }) =>
+      el(
+        'events',
+        condition === undefined ? [] : [el('condition', [text(condition)])],
+        present({
+          names: events.join(', '),
+          only: entity_ids?.join(', '),
+        })
+      )
+    )
     .exhaustive();
 }
 
@@ -1171,6 +1210,8 @@ function routineNode(context: RoutineContext): FxpNode {
           ...personAttributes(context.owner, 'owner'),
         })
       ),
+      el('instructions', [text(context.instructions)]),
+      el('triggers', context.triggers.map(routineTriggerNode)),
       ...routineFiringNodes(context.firing),
     ],
     { kind: 'routine' }

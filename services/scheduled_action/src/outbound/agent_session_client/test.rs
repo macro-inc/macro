@@ -14,7 +14,9 @@ use tokio::{
     net::TcpListener,
     task::JoinHandle,
 };
-use trigger_context::{ContextPerson, RoutineContext, RoutineFiring, TriggerContext};
+use trigger_context::{
+    ContextPerson, RoutineContext, RoutineFiring, RoutineTrigger, TriggerContext,
+};
 
 const KEY: &str = "test-internal-key";
 
@@ -153,6 +155,11 @@ async fn all_commands_use_internal_auth_and_domain_wire_contract_at_both_prefixe
                     name: "dana@example.com".into(),
                     email: Some("dana@example.com".into()),
                 },
+                instructions: "Summarize my unread email.".into(),
+                triggers: vec![RoutineTrigger::Schedule {
+                    cron: "0 0 9 * * *".into(),
+                    timezone: "UTC".into(),
+                }],
                 firing: RoutineFiring::Scheduled {
                     scheduled_for: chrono::DateTime::UNIX_EPOCH,
                     schedule: "cron `0 0 9 * * *` in UTC".into(),

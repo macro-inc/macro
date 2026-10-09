@@ -302,6 +302,14 @@ describe('composeAgentContextPrompt with a trigger', () => {
           name: 'Julia',
           email: 'julia@example.com',
         },
+        instructions: 'Sort new email into Finance and Support.',
+        triggers: [
+          {
+            type: 'schedule',
+            cron: '0 0 9 * * MON-FRI',
+            timezone: 'America/New_York',
+          },
+        ],
         firing: {
           type: 'scheduled',
           scheduled_for: '2026-10-08T09:00:00Z',
@@ -315,6 +323,10 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '<trigger kind="routine">',
         '  <note>The routine Morning triage, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
         '  <routine id="r-1" name="Morning triage" owner="Julia" owner_email="julia@example.com" owner_id="macro|julia@example.com"/>',
+        '  <instructions>Sort new email into Finance and Support.</instructions>',
+        '  <triggers>',
+        '    <schedule cron="0 0 9 * * MON-FRI" timezone="America/New_York"/>',
+        '  </triggers>',
         '  <scheduled for="2026-10-08T09:00:00Z" schedule="Every weekday at 9:00">',
         '    <note>The routine ran because its schedule came due.</note>',
         '  </scheduled>',
@@ -335,6 +347,14 @@ describe('composeAgentContextPrompt with a trigger', () => {
           name: 'Julia',
           email: 'julia@example.com',
         },
+        instructions: 'Tell the team when a task gets blocked.',
+        triggers: [
+          {
+            type: 'events',
+            events: ['task.status_changed'],
+            condition: 'Did the task move to Blocked?',
+          },
+        ],
         firing: {
           type: 'event',
           event: {
@@ -346,7 +366,7 @@ describe('composeAgentContextPrompt with a trigger', () => {
               status: 'Blocked',
             },
           },
-          condition: 'The task moved to Blocked.',
+          conditions: ['Did the task move to Blocked?'],
         },
       },
     });
@@ -356,13 +376,22 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '<trigger kind="routine">',
         '  <note>The routine Escalate blockers, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
         '  <routine id="r-2" name="Escalate blockers" owner="Julia" owner_email="julia@example.com" owner_id="macro|julia@example.com"/>',
+        '  <instructions>Tell the team when a task gets blocked.</instructions>',
+        '  <triggers>',
+        '    <events names="task.status_changed">',
+        '      <condition>Did the task move to Blocked?</condition>',
+        '    </events>',
+        '  </triggers>',
         '  <event type="task_status_changed">',
         '    <change property="status" to="Blocked"/>',
         '    <task id="task-2" title="Renew SSL cert" status="Blocked">',
         '      <description>Expires Friday.</description>',
         '    </task>',
         '  </event>',
-        '  <condition_matched>The task moved to Blocked.</condition_matched>',
+        '  <conditions>',
+        '    <note>The event answered yes to at least one of these.</note>',
+        '    <condition>Did the task move to Blocked?</condition>',
+        '  </conditions>',
         '</trigger>',
       ].join('\n')
     );
@@ -380,6 +409,8 @@ describe('composeAgentContextPrompt with a trigger', () => {
           name: 'Julia',
           email: 'julia@example.com',
         },
+        instructions: 'File invoices into the Finance folder.',
+        triggers: [{ type: 'events', events: ['email.message_received'] }],
         firing: {
           type: 'event',
           event: {
@@ -402,6 +433,10 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '<trigger kind="routine">',
         '  <note>The routine Invoice intake, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
         '  <routine id="r-3" name="Invoice intake" owner="Julia" owner_email="julia@example.com" owner_id="macro|julia@example.com"/>',
+        '  <instructions>File invoices into the Finance folder.</instructions>',
+        '  <triggers>',
+        '    <events names="email.message_received"/>',
+        '  </triggers>',
         '  <event type="email_received">',
         '    <email thread="e-1" subject="Invoice #42" from="Acme Billing &lt;billing@acme.test&gt;" to="julia@example.com, ap@example.com" received_at="2026-10-08T08:15:00Z">',
         '      <body>Please find invoice #42 attached.</body>',
@@ -424,6 +459,10 @@ describe('composeAgentContextPrompt with a trigger', () => {
           name: 'Julia',
           email: 'julia@example.com',
         },
+        instructions: 'Summarise attached reports.',
+        triggers: [
+          { type: 'events', events: ['channel.message_attachment_created'] },
+        ],
         firing: {
           type: 'event',
           event: {
@@ -485,6 +524,10 @@ describe('composeAgentContextPrompt with a trigger', () => {
         '<trigger kind="routine">',
         '  <note>The routine File intake, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
         '  <routine id="r-4" name="File intake" owner="Julia" owner_email="julia@example.com" owner_id="macro|julia@example.com"/>',
+        '  <instructions>Summarise attached reports.</instructions>',
+        '  <triggers>',
+        '    <events names="channel.message_attachment_created"/>',
+        '  </triggers>',
         '  <event type="channel_message_attachment_created">',
         '    <attachment entity_type="document" entity_id="doc-q3"/>',
         '    <discussion>',

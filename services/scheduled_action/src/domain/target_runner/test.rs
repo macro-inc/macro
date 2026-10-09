@@ -26,7 +26,8 @@ use model_entity::EntityType;
 use rootcause::Report;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use trigger_context::{
-    ContextPerson, RoutineContext, RoutineEvent, RoutineFiring, TaskSnapshot, TriggerContext,
+    ContextPerson, RoutineContext, RoutineEvent, RoutineFiring,
+    RoutineTrigger as ContextRoutineTrigger, TaskSnapshot, TriggerContext,
 };
 
 const USER: &str = "macro|routine@macro.com";
@@ -319,6 +320,7 @@ async fn model_targets_use_macro_sessions_with_the_selected_model_and_event_cont
             prompts[0].prompt,
             first_prompt(
                 &task(&action).unwrap(),
+                prompts[0].context.as_ref(),
                 event.as_ref().map(|run| &run.pending.event)
             )
             .unwrap()
@@ -402,7 +404,7 @@ async fn omitted_override_preserves_persona_default_and_no_fabricated_event() {
         None
     );
     assert!(
-        !first_prompt(&task(&action).unwrap(), None)
+        !first_prompt(&task(&action).unwrap(), None, None)
             .unwrap()
             .contains("Triggering event")
     );
@@ -882,9 +884,7 @@ async fn a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedul
     assert_eq!(prompts.len(), 1);
     assert_eq!(
         prompts[0].prompt,
-        format!(
-            "{SCHEDULED_GUIDANCE}\n\nRoutine instructions:\nSummarize my unread email.\n\nUser task:\nPost it in #digest."
-        )
+        format!("{SCHEDULED_GUIDANCE}\n\nUser task:\nPost it in #digest.")
     );
     assert_eq!(
         prompts[0].context,
@@ -896,6 +896,17 @@ async fn a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedul
                 name: "dana@example.com".into(),
                 email: Some("dana@example.com".into()),
             },
+            instructions: "Summarize my unread email.".into(),
+            triggers: vec![
+                ContextRoutineTrigger::Schedule {
+                    cron: "0 0 9 * * MON-FRI".into(),
+                    timezone: "America/New_York".into(),
+                },
+                ContextRoutineTrigger::Schedule {
+                    cron: "0 0 12 * * SAT".into(),
+                    timezone: "UTC".into(),
+                },
+            ],
             firing: RoutineFiring::Scheduled {
                 scheduled_for,
                 schedule:
@@ -940,7 +951,18 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
         name: "Review handoff".into(),
         trigger: serde_json::from_value(json!({
             "type": "events",
-            "filters": [{"events": ["task.status_changed"]}],
+            "filters": [
+                {
+                    "events": ["task.status_changed", "task.created"],
+                    "ids": ["01928f3e-6a2b-7c3d-8e4f-000000007a5c"],
+                    "condition": "Is the task ready for review?",
+                },
+                {
+                    "events": ["task.property_changed"],
+                    "condition": "Did someone ask for a second reviewer?",
+                },
+                {"events": ["document.created"]},
+            ],
         }))
         .unwrap(),
         kind: ActionKind::Agent,
@@ -990,9 +1012,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
     assert_eq!(prompts.len(), 1);
     assert_eq!(
         prompts[0].prompt,
-        format!(
-            "{SCHEDULED_GUIDANCE}\n\nRoutine instructions:\nAsk a reviewer to pick it up.\n\nUser task:\nTag the right reviewer."
-        )
+        format!("{SCHEDULED_GUIDANCE}\n\nUser task:\nTag the right reviewer.")
     );
     assert_eq!(
         prompts[0].context,
@@ -1004,9 +1024,32 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
                 name: "dana@example.com".into(),
                 email: Some("dana@example.com".into()),
             },
+            instructions: "Ask a reviewer to pick it up.".into(),
+            triggers: vec![
+                ContextRoutineTrigger::Events {
+                    events: vec!["document.created".into()],
+                    entity_ids: Vec::new(),
+                    condition: None,
+                },
+                ContextRoutineTrigger::Events {
+                    events: vec!["task.created".into(), "task.status_changed".into()],
+                    entity_ids: vec![
+                        Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-000000007a5c").unwrap()
+                    ],
+                    condition: Some("Is the task ready for review?".into()),
+                },
+                ContextRoutineTrigger::Events {
+                    events: vec!["task.property_changed".into()],
+                    entity_ids: Vec::new(),
+                    condition: Some("Did someone ask for a second reviewer?".into()),
+                },
+            ],
             firing: RoutineFiring::Event {
                 event: Box::new(task_status_changed),
-                condition: None,
+                conditions: vec![
+                    "Did someone ask for a second reviewer?".into(),
+                    "Is the task ready for review?".into(),
+                ],
             },
         }))
     );
@@ -1054,9 +1097,7 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
     assert_eq!(prompts.len(), 1);
     assert_eq!(
         prompts[0].prompt,
-        format!(
-            "{SCHEDULED_GUIDANCE}\n\nRoutine instructions:\nLabel my new email.\n\nUser task:\nUse the Finance label for invoices."
-        )
+        format!("{SCHEDULED_GUIDANCE}\n\nUser task:\nUse the Finance label for invoices.")
     );
     assert_eq!(
         prompts[0].context,
@@ -1068,6 +1109,12 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
                 name: "dana@example.com".into(),
                 email: Some("dana@example.com".into()),
             },
+            instructions: "Label my new email.".into(),
+            triggers: vec![ContextRoutineTrigger::Events {
+                events: vec!["email.message_received".into()],
+                entity_ids: Vec::new(),
+                condition: None,
+            }],
             firing: RoutineFiring::Manual { requested_at },
         }))
     );

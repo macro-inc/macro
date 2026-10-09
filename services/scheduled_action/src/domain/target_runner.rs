@@ -14,10 +14,14 @@ use anyhow::{Context, Result};
 use bot_id::BotId;
 use chrono_tz::Tz;
 use macro_user_id::user_id::MacroUserIdStr;
-use trigger_context::{ContextPerson, RoutineContext, RoutineFiring, TriggerContext};
+use trigger_context::{
+    ContextPerson, RoutineContext, RoutineFiring, RoutineTrigger as ContextTrigger, TriggerContext,
+};
 
 use super::{
-    event_trigger::{ActionTrigger, EventReference, RoutineTrigger},
+    event_trigger::{
+        ActionTrigger, ConditionRequirement, EventFilters, EventReference, RoutineTrigger,
+    },
     execution::ExecutionHandle,
     models::{AgentTask, ExecutionResource, ExecutionResourceType, Schedule, ScheduledAction},
     ports::{RoutineEventReader, RoutineRun, ScheduledAgentRunner},
@@ -113,14 +117,12 @@ impl<Sessions: RoutineSessions, Events: RoutineEventReader> ScheduledAgentRunner
             "expected prepared agent session"
         );
         let identity = session_action(action, handle, bot_id)?;
-        let context = self.context(action, &identity.owner, firing).await?;
-        // The ids of an event the context could not describe are all the agent has.
-        let unread_event = firing.event().filter(|_| context.is_none());
+        let context = self.context(action, &task, &identity.owner, firing).await?;
         let accepted = self
             .sessions
             .prompt(PromptRoutineSession {
                 action: identity.clone(),
-                prompt: first_prompt(&task, unread_event)?,
+                prompt: first_prompt(&task, context.as_ref(), firing.event())?,
                 context,
             })
             .await?;
@@ -146,6 +148,7 @@ impl<Sessions: RoutineSessions, Events: RoutineEventReader> TargetRunner<Session
     async fn context(
         &self,
         action: &ScheduledAction,
+        task: &AgentTask,
         owner: &MacroUserIdStr<'static>,
         firing: RoutineRun<'_>,
     ) -> Result<Option<TriggerContext>> {
@@ -156,10 +159,9 @@ impl<Sessions: RoutineSessions, Events: RoutineEventReader> TargetRunner<Session
             },
             RoutineRun::Manual { requested_at } => RoutineFiring::Manual { requested_at },
             RoutineRun::Event(run) => match self.events.read_event(owner, run).await {
-                // The classifier answers with a probability, never a reason.
                 Ok(event) => RoutineFiring::Event {
                     event: Box::new(event),
-                    condition: None,
+                    conditions: conditions(&action.trigger, &run.pending.event),
                 },
                 Err(error) => {
                     tracing::warn!(
@@ -179,6 +181,8 @@ impl<Sessions: RoutineSessions, Events: RoutineEventReader> TargetRunner<Session
                 name: owner.email_str().to_owned(),
                 email: Some(owner.email_str().to_owned()),
             },
+            instructions: task.prompt.clone(),
+            triggers: triggers(&action.trigger),
             firing,
         })))
     }
@@ -261,7 +265,77 @@ fn schedule(trigger: &ActionTrigger) -> String {
     }
 }
 
-fn first_prompt(task: &AgentTask, event: Option<&EventReference>) -> Result<String> {
+/// The routine's triggers as the agent reads them: one entry per schedule and
+/// per event filter.
+fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
+    let schedule = |schedule: &Schedule, timezone: &Tz| ContextTrigger::Schedule {
+        cron: schedule.as_str().to_owned(),
+        timezone: timezone.name().to_owned(),
+    };
+    let mut triggers: Vec<ContextTrigger> = match trigger {
+        ActionTrigger::Cron {
+            schedule: cron,
+            timezone,
+        } => vec![schedule(cron, timezone)],
+        ActionTrigger::Multiple { triggers } => triggers
+            .as_slice()
+            .iter()
+            .filter_map(|trigger| match trigger {
+                RoutineTrigger::Cron {
+                    schedule: cron,
+                    timezone,
+                } => Some(schedule(cron, timezone)),
+                RoutineTrigger::Events { .. } => None,
+            })
+            .collect(),
+        ActionTrigger::Events { .. } => Vec::new(),
+    };
+    triggers.extend(
+        trigger
+            .event_filters()
+            .into_iter()
+            .flat_map(EventFilters::as_slice)
+            .map(|filter| ContextTrigger::Events {
+                events: filter
+                    .events()
+                    .iter()
+                    .map(|event| event.as_str().to_owned())
+                    .collect(),
+                entity_ids: filter.ids().map(<[_]>::to_vec).unwrap_or_default(),
+                condition: filter
+                    .condition()
+                    .map(|condition| condition.as_str().to_owned()),
+            }),
+    );
+    triggers
+}
+
+/// The questions the event was checked against before the run started.
+fn conditions(trigger: &ActionTrigger, event: &EventReference) -> Vec<String> {
+    match trigger
+        .event_filters()
+        .map(|filters| filters.condition_requirement(event))
+    {
+        Some(ConditionRequirement::AnyOf(conditions)) => conditions
+            .iter()
+            .map(|condition| condition.as_str().to_owned())
+            .collect(),
+        Some(ConditionRequirement::Unconditional) | None => Vec::new(),
+    }
+}
+
+/// The routine's instructions travel in the context when there is one.
+fn first_prompt(
+    task: &AgentTask,
+    context: Option<&TriggerContext>,
+    event: Option<&EventReference>,
+) -> Result<String> {
+    if context.is_some() {
+        return Ok(format!(
+            "{SCHEDULED_GUIDANCE}\n\nUser task:\n{}",
+            task.user_prompt
+        ));
+    }
     let mut prompt = format!(
         "{SCHEDULED_GUIDANCE}\n\nRoutine instructions:\n{}\n\nUser task:\n{}",
         task.prompt, task.user_prompt

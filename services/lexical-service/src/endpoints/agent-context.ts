@@ -271,6 +271,20 @@ const routineFiring = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('event'),
     event: routineEvent,
+    conditions: z.array(z.string()).optional(),
+  }),
+]);
+
+const routineTrigger = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('schedule'),
+    cron: z.string().min(1),
+    timezone: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('events'),
+    events: z.array(z.string().min(1)),
+    entity_ids: z.array(z.string().min(1)).optional(),
     condition: z.string().optional(),
   }),
 ]);
@@ -309,6 +323,8 @@ const triggerContextSchema = z.discriminatedUnion('kind', [
     routine_id: z.string().min(1),
     name: z.string(),
     owner: triggerPerson,
+    instructions: z.string(),
+    triggers: z.array(routineTrigger),
     firing: routineFiring,
   }),
 ]);

@@ -347,8 +347,36 @@ pub struct RoutineContext {
     pub name: String,
     /// Whose routine it is.
     pub owner: ContextPerson,
-    /// What made it fire.
+    /// What the routine asks for, as its owner wrote it.
+    pub instructions: String,
+    /// Everything that makes it run.
+    pub triggers: Vec<RoutineTrigger>,
+    /// What made it fire this time.
     pub firing: RoutineFiring,
+}
+
+/// One of the ways a routine runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RoutineTrigger {
+    /// A cron schedule.
+    Schedule {
+        /// The cron expression.
+        cron: String,
+        /// The timezone it is read in.
+        timezone: String,
+    },
+    /// Events it watches.
+    Events {
+        /// The event names, such as `email.message_received`.
+        events: Vec<String>,
+        /// Only these entities, when the routine narrows to some.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        entity_ids: Vec<Uuid>,
+        /// A yes/no question the event's content must answer yes to.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        condition: Option<String>,
+    },
 }
 
 /// What made a routine fire.
@@ -371,9 +399,10 @@ pub enum RoutineFiring {
     Event {
         /// The event. Boxed: it carries whole discussions and documents.
         event: Box<RoutineEvent>,
-        /// Why the routine's condition matched, when it has one.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        condition: Option<String>,
+        /// The routine's yes/no questions this event was checked against;
+        /// it answered yes to at least one. Empty when the routine asks none.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        conditions: Vec<String>,
     },
 }
 
