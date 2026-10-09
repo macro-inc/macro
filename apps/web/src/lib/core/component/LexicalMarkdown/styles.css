@@ -143,6 +143,26 @@
   display: none;
 }
 
+/* Task-list controls. Filtered-out items dim in place. */
+.md-list.md-check > li.mdtl-dim {
+  opacity: 0.35;
+}
+
+/*
+* TaskListNode's non-lexical control-line mount inside the <ul>. The negative
+* margin is computed here, in the list's own font size, so the line's left
+* edge sits exactly on the checkbox column. Solid portals always add a
+* wrapper div, so render it transparently.
+*/
+.md-list.md-check > .mdtl-bar-mount {
+  margin-left: var(--md-marker-left);
+  user-select: none;
+}
+
+.md-list.md-check > .mdtl-bar-mount > div {
+  display: contents;
+}
+
 /* Handle nested numbered lists up to depth 6. This could be done in 3 lines with variable counters,
 * but this approach support safari. */
 ol.static-md {

@@ -242,7 +242,7 @@ const comparisonGroups: Array<{
     group: 'AI and agents',
     rows: [
       { label: 'AI usage', free: 'Limited', pro: 'Standard', max: '10× Pro' },
-      { label: 'AI models', free: 'Haiku', pro: 'All', max: 'All' },
+      { label: 'AI models', free: 'Gemini Flash', pro: 'All', max: 'All' },
       {
         label: 'Agents with workspace context',
         free: true,
@@ -260,7 +260,7 @@ const comparisonGroups: Array<{
         pro: 'Unlimited',
         max: 'Unlimited',
       },
-      { label: 'Storage', free: '5 GB', pro: '1 TB', max: '1 TB' },
+      { label: 'Storage', free: '5 GB', pro: '100 GB', max: '1 TB' },
       {
         label: 'Calls, recording, and transcription',
         free: false,
@@ -279,20 +279,8 @@ const comparisonGroups: Array<{
         max: 'Removed',
       },
       {
-        label: 'Auto-shared email and CRM for your team',
-        free: false,
-        pro: true,
-        max: true,
-      },
-      {
         label: 'Team-level memory for your agents',
-        free: false,
-        pro: true,
-        max: true,
-      },
-      {
-        label: 'Channel-based sharing and access control',
-        free: false,
+        free: true,
         pro: true,
         max: true,
       },

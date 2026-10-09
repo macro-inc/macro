@@ -92,6 +92,29 @@ impl SessionPullRequestLinkRepo for Arc<StubLinks> {
             .map(|(session, ..)| *session)
             .collect())
     }
+
+    async fn links_for_pull_requests(
+        &self,
+        github_keys: &[String],
+    ) -> Result<Vec<PullRequestSessionLinkRow>> {
+        Ok(self
+            .links
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, key, ..)| {
+                github_keys
+                    .iter()
+                    .any(|requested| requested.eq_ignore_ascii_case(key))
+            })
+            .map(|(session, key, source, _)| PullRequestSessionLinkRow {
+                github_key: key.clone(),
+                session: *session,
+                source: *source,
+                thread_parent: Some(MessageParent::Channel(session.as_uuid())),
+            })
+            .collect())
+    }
 }
 
 struct ViewableSessions(HashSet<AgentSessionId>);
@@ -259,4 +282,96 @@ async fn sessions_for_a_pull_request_are_the_linked_ones_the_viewer_can_view() {
         .unwrap();
 
     assert_eq!(sessions, vec![visible]);
+}
+
+#[tokio::test]
+async fn sessions_for_pull_requests_answers_each_requested_pull_request_in_order() {
+    let visible = AgentSessionId::new();
+    let hidden = AgentSessionId::new();
+    let links = Arc::new(StubLinks::with_agent_link(
+        visible,
+        "Macro-Inc/Macro/pull/7",
+    ));
+    links.links.lock().unwrap().extend([
+        (
+            visible,
+            "macro-inc/macro/pull/9".to_owned(),
+            PullRequestLinkSource::User,
+            None,
+        ),
+        (
+            hidden,
+            "macro-inc/macro/pull/9".to_owned(),
+            PullRequestLinkSource::User,
+            None,
+        ),
+    ]);
+    let service = service(&links, &[visible]);
+
+    let pull_requests = service
+        .sessions_for_pull_requests(
+            &user(),
+            &[
+                "https://github.com/macro-inc/macro/pull/9".to_owned(),
+                "https://github.com/macro-inc/macro/pull/8".to_owned(),
+                "https://github.com/macro-inc/macro/pull/7#discussion".to_owned(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    let summary: Vec<_> = pull_requests
+        .iter()
+        .map(|pull_request| {
+            (
+                pull_request.github_key.as_str(),
+                pull_request
+                    .sessions
+                    .iter()
+                    .map(|session| (session.session_id, session.source))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            (
+                "macro-inc/macro/pull/9",
+                vec![(visible.as_uuid(), PullRequestLinkSource::User)]
+            ),
+            ("macro-inc/macro/pull/8", vec![]),
+            (
+                "macro-inc/macro/pull/7",
+                vec![(visible.as_uuid(), PullRequestLinkSource::Agent)]
+            ),
+        ]
+    );
+    assert_eq!(
+        pull_requests[0].sessions[0].thread_parent,
+        Some(MessageParent::Channel(visible.as_uuid()))
+    );
+}
+
+#[tokio::test]
+async fn sessions_for_pull_requests_rejects_oversized_and_invalid_requests() {
+    let links = Arc::new(StubLinks::default());
+    let service = service(&links, &[]);
+
+    let too_many: Vec<_> = (1..=MAX_PULL_REQUESTS_PER_LOOKUP + 1)
+        .map(|number| format!("https://github.com/macro-inc/macro/pull/{number}"))
+        .collect();
+    assert!(matches!(
+        service.sessions_for_pull_requests(&user(), &too_many).await,
+        Err(AgentSessionError::TooManyPullRequests(_))
+    ));
+    assert!(matches!(
+        service
+            .sessions_for_pull_requests(
+                &user(),
+                &["https://github.com/macro-inc/macro/issues/1".to_owned()]
+            )
+            .await,
+        Err(AgentSessionError::InvalidPullRequestUrl)
+    ));
 }

@@ -17,6 +17,7 @@ import { TableDeleteButtons } from '../component/misc/TableDeleteButtons';
 import { TableInsertButton } from '../component/misc/TableInsertButton';
 import { TableMoveHandle } from '../component/misc/TableMoveHandle';
 import { TableSelectionActionBar } from '../component/misc/TableSelectionActionBar';
+import { TaskListControlsRenderer } from '../component/task-list/TaskListControls';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
 import type {
   MarkdownEditing,
@@ -48,6 +49,10 @@ export function MarkdownEditingOverlays(props: {
     <>
       <DecoratorRenderer editor={props.editor} />
       <NodeAccessoryRenderer editor={props.editor} store={accessoryStore} />
+      <TaskListControlsRenderer
+        editor={props.editor}
+        data={props.editing.checklistControls}
+      />
 
       <DragInsertIndicator state={dragInsertStore} active={props.canEdit()} />
 

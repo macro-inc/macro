@@ -161,11 +161,16 @@ async fn main() -> Result<()> {
                 Arc::clone(&access),
                 &config,
             )?),
+            // Condition evaluation is the only model work this process meters
+            // (agent targets are funded by the harness). Counted usage asks the
+            // authentication service to settle the payer, as every other host does.
             Arc::new(JevClassifier::new(
                 provider,
-                ai_usage::pg_recorder_with_enforcement(
+                ai_billing::composition::pg_settling_recorder(
                     db.clone(),
                     config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
                 ),
             )),
         )),

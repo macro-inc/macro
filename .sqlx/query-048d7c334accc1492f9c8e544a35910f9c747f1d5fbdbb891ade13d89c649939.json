@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET access_role='freeBusyReader' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "048d7c334accc1492f9c8e544a35910f9c747f1d5fbdbb891ade13d89c649939"
+}

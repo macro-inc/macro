@@ -5,6 +5,29 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Connecting an app from an agent session
+
+When existing tools cannot handle a request, agent sessions can use
+`DiscoverConnectors` to search Pipedream by app name and inspect an app's actual
+tool list. Expand the discovery row to see the results. An app name alone does
+not establish that the requested action is supported.
+
+For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
+it opens the hosted authorization flow over the agent transcript. After the
+backend verifies and registers the connection, the agent session sends a visible
+continuation message in the same conversation. The native Macro runtime refreshes
+the session’s permitted connector tools before the next turn. The unsent draft
+is preserved. Closing authorization or a failed registration sends no message.
+If the conversation changed or was closed during auth, there is no automatic
+continuation; the connected app remains available for the next request.
+
+Verify with an unconnected app: inspect its tools, click Connect, cancel once,
+then complete authorization and check that exactly one continuation appears and
+the assistant can discover the app's tools. Also verify a disabled connection
+does not display as connected. Regular AI chat does not expose discovery or
+automatic continuation. A selected-app agent keeps its configured MCP scope;
+authorization does not add apps outside that scope.
+
 ## Checking first-response latency
 
 From outside an editor, press `c`, then `a`, type a prompt, and press Enter.
@@ -16,6 +39,16 @@ A model selected before the first prompt is part of the create request, and the
 runtime starts on it; no model change appears in the new session's transcript.
 A selected effort is confirmed before the first prompt; settings the runtime
 already reports do not need another control request.
+
+Macro's in-process agent opens each reply with a line from a fast model
+(`gpt-5.4-mini`), usually within half a second of Enter. Small talk
+("hi there", "thanks") gets that line as the whole reply, and the chosen model,
+already started alongside it, is cancelled. A real task ("what is on my calendar tomorrow?") gets a short
+opener ("Let me check your calendar."), then the chosen model's answer after a
+blank line, with no second acknowledgement. The opener answers the user's
+words, never the prompt's hidden context. The sent prompt is fully opaque from
+the first paint, and its `Context` chip is already in place, so nothing shifts
+when the server confirms it.
 
 Repeat from a fresh tab using Home, Agents, and a document's Chat action.
 Focusing an agent composer prepares its transcript renderer locally; focus alone
@@ -539,7 +572,9 @@ file or a guessed remote revision.
 Home's composer follows the existing `enable-chat-v3-agents` flag: disabled keeps
 legacy chat; enabled mounts the same new-conversation composer as the Agents page.
 The greeting, agent/model selector, coding repository/branch drawer, and send flow
-are shared. Sending opens the new session inside Agents with the matching URL.
+are shared. Sending stays on Home and opens the new session in Home's detail
+pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
+top of the Home list once the session is created.
 Home suggestions and document/project context populate this same draft as markdown
 mentions. A failed suggestion conversion preserves the text and shows an error.
 Session creation and prompt delivery use the shared pending-session flow.
@@ -566,7 +601,7 @@ documents:
 
 Quota admission uses the backend's default-off `ENABLE_AI_USAGE_ENFORCEMENT`
 policy once configured by the host; it is independent of environment. Settlement
-(credit consumption and Stripe overage collection) is gated by the separate
+(credit consumption and automatic credit reloads) is gated by the separate
 default-off `ENABLE_AI_USAGE_BILLING` policy, also independent of environment.
 With admission enabled, cognition chat
 and structured completion return 402 for exhausted allowance or 503 with
@@ -839,6 +874,22 @@ in-process agent; sandboxed ones wait as long when their MCP client accepts prog
 four minutes otherwise). A declined or cancelled call does not run and the agent says so. The Magic Chip
 reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
 
+## Forms authoring and sharing
+
+With Forms enabled, ask the agent to create a complete form, including ordered
+sections and qualification screeners. Creation starts closed and members-only.
+The expandable tool result shows the saved questions, builder link, respondent
+link, and actual response availability. Edits use granular CRDT updates
+to preserve unrelated human changes. Partial outcomes have recovery guidance;
+a link by itself is not a completed or open form.
+
+`SetFormAccess` executes immediately for the form owner, using the same settings
+and channel-sharing services as the browser. There is no custom review card.
+Channel Edit also grants access to the entire response database. Settings and
+channel grants are separate writes; inspect any partial outcome before retrying.
+See [Forms](forms.md#forms-through-the-ai-tools) for screeners, booking link reveal,
+supported edits and retry behavior.
+
 ## In channels
 
 Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
@@ -1034,10 +1085,13 @@ select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
 Sessions also support **Share** from entity list menus and the entity sharing
 shortcut. **People with access** lists the owner and shared conversations;
-the owner can change or remove a conversation's access. **Link sharing** offers
+the owner can change or remove a conversation's access. When that list holds
+nobody but the owner — what a participant who cannot read the other grants
+sees — the section is titled **Owner** instead. **Link sharing** offers
 None / Public / Team and an access level. **Team access** shares directly with
 the owner's team when one exists. On mobile these controls are in the Share,
-People, and Link tabs. View and Comment allow reading; Edit also allows
+People, and Link tabs, and the People tab is likewise named Owner when only the
+owner is listed. View and Comment allow reading; Edit also allows
 controlling the session. View-only sessions keep the composer, model selector,
 and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
 closes the composer without sending.
@@ -1521,3 +1575,25 @@ text-only model, keep the draft and image chip but disable Send until the image
 is removed or a vision model is selected. Switching an existing image conversation
 to a text-only model is rejected by the backend when sending, with guidance to
 choose a vision model or start a conversation without images.
+
+
+## Accelerated model speed
+
+The lightning button beside the model selector enables Ultrafast for GPT-6 Astra
+and GPT-6.1 Sol (6× token pricing), or Fast for Claude Opus 5.5 (2× token pricing).
+Its tooltip shows the mode, state, and usage multiplier before sending. Other
+models keep standard speed. The preference is saved in browser local storage and
+shared by legacy chat and native Macro agent composers. External coding agents
+use their own speed controls.
+
+Preview the controls at `/app/debug/ui?ui=speed-toggle`.
+Click the bolt and verify its brief scale/rotation animation and highlighted state.
+Reload, change between supported models, and confirm the preference survives.
+Select an unsupported model and verify the bolt is hidden; switching back restores
+the preference. With reduced motion enabled, toggling changes the state without
+animation. Native sessions confirm speed configuration before sending the prompt;
+a rejected configuration must retain the unsent draft and attachments.
+
+Usage records follow the provider's delivered speed for each call, including tool
+loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that
+call. Standard and accelerated rates have separate pricing keys.

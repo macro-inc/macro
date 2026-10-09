@@ -3,11 +3,14 @@ import {
   MobileSearchInput,
 } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableTasksReviews } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import IconGear from '@phosphor/gear.svg';
+import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
@@ -30,6 +33,7 @@ function MoreViewsDrawer(props: {
   onNavigate: (id: MobileDockNavId) => void;
 }) {
   const { settingsOpen, toggleSettings } = useSettingsState();
+  const reviewsFlag = useFeatureFlag(enableTasksReviews);
 
   return (
     <MobileDrawer
@@ -61,7 +65,7 @@ function MoreViewsDrawer(props: {
                 <IconGear class="size-4 shrink-0" />
                 <span>Settings</span>
               </MobileDrawer.Close>
-              <Show when={props.views.length > 0}>
+              <Show when={props.views.length > 0 || reviewsFlag().enabled}>
                 <div class="-mx-1 h-px shrink-0 bg-edge" />
               </Show>
               <For each={props.views.toReversed()}>
@@ -81,6 +85,21 @@ function MoreViewsDrawer(props: {
                   </MobileDrawer.Close>
                 )}
               </For>
+              <Show when={reviewsFlag().enabled}>
+                <MobileDrawer.Close
+                  as={MobileDrawer.Item}
+                  aria-label="Reviews"
+                  class={props.isActive('reviews') ? 'text-accent' : undefined}
+                  aria-current={props.isActive('reviews') ? 'page' : undefined}
+                  onClick={() => {
+                    hapticImpact('light');
+                    props.onNavigate('reviews');
+                  }}
+                >
+                  <GitPullRequestIcon class="size-4 shrink-0" />
+                  <span>Reviews</span>
+                </MobileDrawer.Close>
+              </Show>
               <div class="-mx-1 h-px shrink-0 bg-edge" />
               <MobileDrawer.Close
                 aria-label="Views"

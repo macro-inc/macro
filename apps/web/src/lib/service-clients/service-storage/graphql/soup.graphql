@@ -416,6 +416,7 @@ fragment SoupNotificationFields on GraphqlNotification {
 }
 
 fragment SoupNotificationStateFields on GraphqlNotification {
+	__typename
 	id
 	eventType
 	entityType

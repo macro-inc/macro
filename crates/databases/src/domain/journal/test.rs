@@ -122,6 +122,7 @@ fn schema() -> SchemaImage {
                 definition: NAME_DEFINITION,
                 kind: Some(ColumnKind::Text),
                 options: Vec::new(),
+                formula: None,
             },
             ColumnImage {
                 nullable: true,
@@ -149,6 +150,7 @@ fn schema() -> SchemaImage {
                         color: None,
                     },
                 ],
+                formula: None,
             },
             ColumnImage {
                 nullable: true,
@@ -160,6 +162,7 @@ fn schema() -> SchemaImage {
                 definition: PLUS_ONES_DEFINITION,
                 kind: Some(ColumnKind::Number),
                 options: Vec::new(),
+                formula: None,
             },
         ],
         views: views().to_vec(),

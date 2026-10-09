@@ -57,6 +57,9 @@ pub enum ReadResultWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResultWire {
+    /// Effective scalar patches; absent when a query reread is required.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     /// Bindings omitted while preserving a normalizable server response.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub identity_errors: Vec<String>,
@@ -400,6 +403,7 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
+        field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
@@ -430,10 +434,22 @@ impl EngineHandle {
     /// Wraps an opened storage backend. A `hot_capacity` of 0 is treated as
     /// unset (engine default).
     pub fn new(storage: TursoStorage, hot_capacity: Option<u32>) -> Self {
-        let engine = match hot_capacity.filter(|c| *c > 0) {
-            Some(cap) => Engine::with_capacity(storage, cap as usize),
-            None => Engine::new(storage),
-        };
+        Self::with_schema(storage, hot_capacity, cache_core::meta::bundled_schema())
+    }
+
+    /// Constructs the native engine with metadata loaded from its frontend bundle.
+    pub fn with_schema(
+        storage: TursoStorage,
+        hot_capacity: Option<u32>,
+        schema: Arc<cache_core::meta::Schema>,
+    ) -> Self {
+        let engine = Engine::with_schema(
+            storage,
+            hot_capacity
+                .filter(|c| *c > 0)
+                .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
+            schema,
+        );
         EngineHandle {
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
             inner: Arc::new(Mutex::new(EngineState {
@@ -478,6 +494,25 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
+    /// Validates and persists compatible metadata before publishing it to native operations.
+    pub async fn install_schema(
+        &self,
+        schema: &cache_core::meta::Schema,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
+        let mut state = self.inner.lock().await;
+        let merged = state
+            .engine
+            .schema()
+            .merge(schema)
+            .map_err(|e| e.to_string())?;
+        persist_schema(path, &merged)?;
+        state
+            .engine
+            .install_schema(&merged)
+            .map_err(|e| e.to_string())
+    }
+
     /// Cache read; registers `op_id` as active when given.
     pub async fn read(
         &self,
@@ -506,6 +541,36 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
+    /// Incrementally project a query; operation teardown releases its bindings.
+    pub async fn watch(
+        &self,
+        op_id: String,
+        query: String,
+        operation_name: Option<String>,
+        variables: Variables,
+        entity_resolvers: Vec<EntityResolver>,
+        since: Option<String>,
+    ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
+        let since = since
+            .map(|value| value.parse::<CacheRevision>())
+            .transpose()
+            .map_err(|error| error.to_string())?;
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops, .. } = &mut *state;
+        let op = ops.intern(&op_id);
+        engine
+            .watch_query(
+                op,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &entity_resolvers,
+                since,
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Projects explicit normalized entity keys without scanning storage.
     pub async fn read_records_by_keys(
         &self,
@@ -514,9 +579,10 @@ impl EngineHandle {
         keys: Vec<String>,
     ) -> Result<RecordSelectionResultWire, String> {
         let mut state = self.inner.lock().await;
+        let schema = state.engine.schema_snapshot();
         let selection = state
             .selections
-            .get(document, fragment_name)
+            .get(&schema, document, fragment_name)
             .map_err(|error| error.to_string())?;
         let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
         state
@@ -547,7 +613,14 @@ impl EngineHandle {
         request: EntityFilterRequest,
     ) -> Result<EntityFilterResult, String> {
         let mut state = self.inner.lock().await;
-        soup::filter(&mut state.engine, &self.mail_generation, request).await
+        let state = &mut *state;
+        soup::filter(
+            &mut state.engine,
+            &mut state.selections,
+            &self.mail_generation,
+            request,
+        )
+        .await
     }
 
     /// Recovers cached query variables without materializing each variant.
@@ -987,3 +1060,25 @@ impl EngineHandle {
 
 #[cfg(test)]
 mod test;
+
+/// Atomically persists metadata separately from user records; no database reset occurs.
+pub(crate) fn persist_schema(
+    path: &std::path::Path,
+    schema: &cache_core::meta::Schema,
+) -> Result<(), String> {
+    let bytes = serde_json::to_vec(schema.artifact()).map_err(|e| e.to_string())?;
+    let temporary = path.with_extension("json.tmp");
+    use std::io::Write;
+    let mut file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
+    file.write_all(&bytes).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    drop(file);
+    std::fs::rename(&temporary, path).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        std::fs::File::open(parent)
+            .and_then(|dir| dir.sync_all())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

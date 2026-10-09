@@ -73,6 +73,9 @@ export const SoupViewContextSort = () => {
       <Match when={isComponentListView('channels')}>
         <ChannelsSort {...openProps()} />
       </Match>
+      <Match when={isComponentListView('calls')}>
+        <InboxSort {...openProps()} />
+      </Match>
       <Match when={isComponentListView('folders')}>
         <FilesSort {...openProps()} />
       </Match>

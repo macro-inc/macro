@@ -214,6 +214,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
                                 relation: false,
                             },
                             options: vec![],
+                            formula: None,
                         },
                         ColumnSchema {
                             id: ColumnId::from_uuid(Uuid::from_u128(0xb002)),
@@ -237,6 +238,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
                                     order: 1,
                                 },
                             ],
+                            formula: None,
                         },
                         ColumnSchema {
                             id: ColumnId::from_uuid(Uuid::from_u128(0xb003)),
@@ -249,6 +251,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
                                 relation: false,
                             },
                             options: vec![],
+                            formula: None,
                         },
                         ColumnSchema {
                             id: ColumnId::from_uuid(Uuid::from_u128(0xb004)),
@@ -261,6 +264,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
                                 relation: true,
                             },
                             options: vec![],
+                            formula: None,
                         },
                     ],
                 }],

@@ -826,3 +826,109 @@ async fn protected_columns_refuse_direct_sql_but_allow_parent_deletion(pool: PgP
     .await
     .unwrap();
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edits(pool: PgPool) {
+    use crate::domain::models::ColumnConfig;
+    use models_databases::{Formula, Operator};
+    let guests = guests(&pool).await;
+    let (seats, doubled) = (ColumnId::new(), ColumnId::new());
+    let times = |factor: f64| Formula::Binary {
+        operator: Operator::Multiply,
+        left: Box::new(Formula::Column { column: seats }),
+        right: Box::new(Formula::Number { value: factor }),
+    };
+    service(&pool)
+        .apply_ops(
+            edit(guests.database_id),
+            viewer(),
+            vec![
+                DatabaseOp::Column {
+                    table: guests.table_id,
+                    column: seats,
+                    change: ColumnChange::Create {
+                        definition: NewColumn::New {
+                            name: "Seats".into(),
+                            kind: ColumnKind::Number,
+                            options: vec![],
+                            infer_type: false,
+                        },
+                        after: None,
+                    },
+                },
+                DatabaseOp::Column {
+                    table: guests.table_id,
+                    column: doubled,
+                    change: ColumnChange::Create {
+                        definition: NewColumn::Derived {
+                            name: "Doubled".into(),
+                            formula: times(2.0),
+                        },
+                        after: None,
+                    },
+                },
+            ]
+            .into(),
+        )
+        .await
+        .unwrap();
+    let repository = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    let stored = |columns: Vec<crate::domain::models::Column>| {
+        columns
+            .into_iter()
+            .find(|column| column.id == doubled)
+            .unwrap()
+    };
+    let created = stored(
+        repository
+            .columns_for_tables(&[guests.table_id])
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        created.config,
+        Some(ColumnConfig::Derived {
+            formula: times(2.0)
+        })
+    );
+
+    let results = service(&pool)
+        .apply_ops(
+            edit(guests.database_id),
+            viewer(),
+            vec![DatabaseOp::Column {
+                table: guests.table_id,
+                column: doubled,
+                change: ColumnChange::SetFormula {
+                    formula: times(3.0),
+                },
+            }]
+            .into(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        results.as_slice(),
+        [OpResult::Column {
+            change: ColumnResult::FormulaSet,
+            ..
+        }]
+    ));
+    let edited = stored(
+        repository
+            .columns_for_tables(&[guests.table_id])
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        edited.config,
+        Some(ColumnConfig::Derived {
+            formula: times(3.0)
+        })
+    );
+    assert_eq!(
+        edited.property_definition_id,
+        created.property_definition_id
+    );
+}

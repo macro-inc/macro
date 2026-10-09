@@ -2,8 +2,9 @@ import type { ColumnDetail } from '@service-storage/generated/schemas/columnDeta
 import type { DatabaseViewColumn } from '../core/database-view';
 
 export function toViewColumn(column: ColumnDetail): DatabaseViewColumn {
-  const relation =
-    column.column.config?.kind === 'link' ? column.column.config : undefined;
+  const config = column.column.config;
+  const relation = config?.kind === 'link' ? config : undefined;
+  const formula = config?.kind === 'derived' ? config.formula : undefined;
   return {
     id: column.column.id,
     name:
@@ -15,8 +16,9 @@ export function toViewColumn(column: ColumnDetail): DatabaseViewColumn {
       label: String(option.value.value),
       color: option.color,
     })),
-    writable: column.writable,
+    writable: column.writable && !formula,
     sharedOutsideDatabase: column.shared_outside_database,
+    ...(formula ? { formula } : {}),
     ...(relation
       ? {
           relation: {

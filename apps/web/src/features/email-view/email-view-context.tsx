@@ -90,6 +90,11 @@ export type EmailViewContext = {
    * lands on the All tab. Clearing keeps the current tab.
    */
   showTags: (tagIds: string[]) => void;
+  /**
+   * Filters by a single tag without changing tabs. Used by the inline
+   * "filter by tag" button on entity rows.
+   */
+  filterByTag: (optionId: string) => void;
   source: EmailDataSource;
   list: EmailListController;
   registerListActivationHandler: (
@@ -378,6 +383,16 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread();
   };
 
+  // Filters by a single tag without changing tabs. Used by the inline
+  // "filter by tag" button on entity rows.
+  const filterByTag = (optionId: string) => {
+    closeThread();
+    setState(
+      'facets',
+      reconcile(normalizeFacetSelection({ tags: [optionId] }))
+    );
+  };
+
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
 
@@ -393,6 +408,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setInboxIds,
     setFacets,
     showTags,
+    filterByTag,
     source,
     list,
     registerListActivationHandler,

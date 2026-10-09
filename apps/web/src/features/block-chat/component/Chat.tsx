@@ -284,6 +284,7 @@ function ChatInner(props: {
     onSend({
       content: pendingSend.content,
       model: pendingSend.model ?? input.model(),
+      speed: pendingSend.speed,
       attachments: pendingSend.attachments ?? [],
       toolset: { type: 'all' },
     });

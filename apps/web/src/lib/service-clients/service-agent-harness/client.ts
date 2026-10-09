@@ -14,6 +14,7 @@ import type {
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AnswerToolApprovalResponse,
+  CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -24,6 +25,7 @@ import type {
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
+  PullRequestsSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
   SessionPullRequestsResponse,
@@ -33,7 +35,7 @@ import type {
   WarmAgentSessionResponse,
 } from './generated/schemas';
 
-export type { SandboxSize, SandboxSizeBody };
+export type { CodingPreferencesBody, SandboxSize, SandboxSizeBody };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
@@ -295,6 +297,26 @@ export const agentHarnessServiceClient = {
     );
   },
 
+  getCodingPreferences() {
+    return fetchWithToken<CodingPreferencesBody>(
+      `${agentHarnessHost}/agent-coding-preferences`,
+      {
+        method: 'GET',
+      }
+    );
+  },
+
+  setCodingPreferences(preferences: CodingPreferencesBody) {
+    return fetchWithToken<CodingPreferencesBody>(
+      `${agentHarnessHost}/agent-coding-preferences`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences),
+      }
+    );
+  },
+
   /**
    * The session's latest captured changes: changed files with statuses and
    * line counts, plus how the latest capture attempt went.
@@ -353,6 +375,21 @@ export const agentHarnessServiceClient = {
       `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests?${new URLSearchParams({ url })}`,
       { method: 'DELETE', errorResponseHandler: sessionError }
     ).then((result) => result.map(() => undefined));
+  },
+
+  /**
+   * The sessions linked to each pull request in `urls` (at most 100) that the
+   * caller can view, with the thread each session was started from.
+   */
+  sessionsForPullRequests(urls: string[]) {
+    return fetchWithToken<PullRequestsSessionsResponse>(
+      `${agentHarnessHost}/agent-sessions/by-pull-requests`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      }
+    );
   },
 
   /** The sessions linked to the pull request at `url` that the caller can view. */

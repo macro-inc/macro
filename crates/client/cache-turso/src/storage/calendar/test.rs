@@ -434,28 +434,52 @@ fn reopen_rebuilds_range_rows_after_a_projection_change() {
     block_on(async {
         let database = TursoMemoryDatabase::new("calendar-projection.db");
         let mut storage = database.open("scope").unwrap();
-        let entries = (0..300)
+        let mut entries = (0..300)
             .map(|index| {
                 let start = MONDAY_MS + index * HOUR_MS;
                 timed(&format!("e{index:03}"), "l1", start, start + HOUR_MS)
             })
             .collect::<Vec<_>>();
+        let point = timed("legacy-point", "l1", MONDAY_MS, MONDAY_MS);
+        entries.push(point.clone());
         storage.put_batch(entries).await.unwrap();
+        storage
+            .calendar_commit(&CalendarCommit {
+                coverage: week_coverage(),
+                watermark: Some(CalendarWatermarkUpdate::Merge {
+                    links: vec![link("l1", 4)],
+                }),
+                freshness: Some(CalendarFreshness::Fresh),
+                ..CalendarCommit::default()
+            })
+            .await
+            .unwrap();
         raw_execute(&storage, "DELETE FROM calendar_ranges");
         raw_execute(
             &storage,
-            "UPDATE meta SET value = '0' WHERE key = 'calendar_projection_version'",
+            "UPDATE meta SET value = '1' WHERE key = 'calendar_projection_version'",
         );
         storage.try_close().unwrap();
 
         let storage = database.open("scope").unwrap();
-        assert_eq!(row_count(&storage), 300);
+        assert_eq!(row_count(&storage), 301);
+        let snapshot = storage.query_calendar_ranges(&week()).await.unwrap();
+        assert!(
+            snapshot
+                .rows
+                .iter()
+                .any(|row| row.record_key == point.0 && row.span.start == row.span.end)
+        );
+        assert_eq!(snapshot.coverage, week_coverage());
+        assert_eq!(snapshot.sync.watermark, Some(vec![link("l1", 4)]));
+        assert_eq!(snapshot.sync.freshness, CalendarFreshness::Fresh);
+        assert!(storage.get_batch(&[point.0]).await.unwrap()[0].is_some());
         storage.try_close().unwrap();
 
         // A normal reopen neither scans nor decodes occurrence records.
         driver::arm_reset_failure(SEARCH_REBUILD_RECORDS);
         let storage = database.open("scope").unwrap();
-        assert_eq!(row_count(&storage), 300);
+        assert_eq!(row_count(&storage), 301);
         storage.try_close().unwrap();
     });
 }

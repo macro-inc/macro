@@ -119,3 +119,28 @@ describe('combined model and effort selection', () => {
     await result;
   });
 });
+
+it('confirms speed independently of reasoning effort before the caller sends a prompt', async () => {
+  const f = fixture();
+  f.snapshot.metadata.configOptions.push({
+    ...f.config,
+    id: 'speed',
+    currentValue: 'standard',
+    options: [{ value: 'standard' }, { value: 'ultrafast' }],
+  });
+  let finished = false;
+  const result = configureSessionModel(f.session, undefined, {
+    configId: 'speed',
+    value: 'ultrafast',
+  }).then(() => {
+    finished = true;
+  });
+  await flush();
+  expect(f.issue.mock.calls).toEqual([
+    [{ type: 'setConfigOption', configId: 'speed', value: 'ultrafast' }],
+  ]);
+  expect(finished).toBe(false);
+  f.confirm(1);
+  await result;
+  expect(finished).toBe(true);
+});

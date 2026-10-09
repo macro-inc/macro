@@ -3,7 +3,7 @@ use crate::error::AgentError;
 use crate::hook::{BridgeInputs, RegisterFn, ToolLoads, ToolRouter, UserToolFinisher};
 use crate::model::metering::MeteringContext;
 use crate::model::router::{ModelRouter, ProviderAgent};
-use crate::model::{PredefinedModel, ReasoningEffort};
+use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::DynToolSetAdapter;
@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
-const DEFAULT_MAX_TURNS: usize = 16;
+const DEFAULT_MAX_TURNS: usize = 200;
 const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// A session's system prompt, optionally split where the part every session
@@ -103,6 +103,7 @@ impl From<&str> for SystemPrompt {
 pub struct AgentLoop {
     model: String,
     reasoning_effort: Option<ReasoningEffort>,
+    speed: ModelSpeed,
     max_turns: usize,
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
@@ -129,6 +130,7 @@ impl AgentLoop {
         Self {
             model: PredefinedModel::default().to_string(),
             reasoning_effort: None,
+            speed: ModelSpeed::Standard,
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
@@ -137,6 +139,17 @@ impl AgentLoop {
             agent_name: None,
             genai_telemetry: true,
         }
+    }
+
+    /// Select a supported inference speed without changing the model or effort.
+    pub fn with_speed(mut self, speed: ModelSpeed) -> Result<Self, AgentError> {
+        if !speed.supported(&self.model) {
+            return Err(AgentError::Other(anyhow::anyhow!(
+                "speed is not supported by this model"
+            )));
+        }
+        self.speed = speed;
+        Ok(self)
     }
 
     /// Finish user tools inside the turn.
@@ -159,6 +172,9 @@ impl AgentLoop {
     /// api-id string (frontend).
     pub fn with_model<M: ToString>(mut self, model: M) -> Self {
         self.model = model.to_string();
+        if !self.speed.supported(&self.model) {
+            self.speed = ModelSpeed::Standard;
+        }
         self
     }
 
@@ -245,6 +261,7 @@ impl AgentLoop {
                 telemetry.set_model(routed.provider(), routed.model_name());
                 routed.into_agent(
                     self.reasoning_effort,
+                    self.speed,
                     handle,
                     prompt,
                     tool_search,
@@ -410,7 +427,12 @@ impl AgentLoop {
             telemetry.clone(),
         );
 
-        let financial_context = MeteringContext::for_operation(self.recorder.as_ref(), &usage_ctx);
+        let financial_context = MeteringContext::for_session(
+            self.recorder.clone(),
+            &usage_ctx,
+            &self.model,
+            self.speed,
+        );
         Session {
             agent,
             history: Vec::new(),
@@ -499,6 +521,7 @@ impl AgentLoop {
                 telemetry.set_model(routed.provider(), routed.model_name());
                 ProviderAgent::Test(Box::new(routed.into_agent(
                     self.reasoning_effort,
+                    self.speed,
                     handle,
                     prompt,
                     tool_search,
@@ -594,7 +617,7 @@ impl Session {
         } else if self
             .financial_context
             .as_ref()
-            .is_some_and(MeteringContext::activated)
+            .is_some_and(|context| context.activated() || context.records_per_call())
         {
             self.financial_context.clone()
         } else if current.is_some() {

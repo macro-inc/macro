@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_change_log SET created_at = now() - interval '40 days' WHERE link_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ab92e3babbad2d74b9f47db60cf48c301df2ca353b76e7dbd9170adfaa21031d"
+}

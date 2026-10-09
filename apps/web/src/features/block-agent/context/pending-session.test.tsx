@@ -35,6 +35,7 @@ vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: class extends Error {},
   watchAgentSessionLog: () => ({
     cached: Promise.resolve(undefined),
+    cacheMiss: () => undefined,
     fetched: Promise.resolve({ bot: { id: 'bot' }, rows: [] }),
     stop: () => {},
   }),
@@ -304,4 +305,50 @@ describe('pending navigation ownership', () => {
     expect(harness.get).not.toHaveBeenCalled();
     expect(fold.closeSession).not.toHaveBeenCalled();
   });
+});
+
+it('retains submitting context until the first prompt is accepted', async () => {
+  const delivery = deferred<ReturnType<typeof accepted>>();
+  harness.control.mockReturnValue(delivery.promise);
+  const onDelivered = vi.fn();
+  const onFailure = vi.fn();
+  startPendingSession({ prompt: 'Hello', onDelivered, onFailure });
+  await settle();
+  expect(onDelivered).not.toHaveBeenCalled();
+  delivery.resolve(accepted(harness.control.mock.calls[0][1]));
+  await settle();
+  expect(onDelivered).toHaveBeenCalledOnce();
+  expect(onFailure).not.toHaveBeenCalled();
+});
+
+it('restores submitting context when speed configuration fails', async () => {
+  fold.readSession.mockResolvedValue({
+    messages: [],
+    metadata: {
+      turn: 'idle',
+      model: 'openai/gpt-6-astra',
+      configOptions: [
+        {
+          id: 'speed',
+          type: 'select',
+          currentValue: 'standard',
+          options: [{ value: 'standard' }],
+        },
+      ],
+    },
+  });
+  const onDelivered = vi.fn();
+  const onFailure = vi.fn();
+  const id = startPendingSession({
+    prompt: 'Keep this draft',
+    modelOverride: 'openai/gpt-6-astra',
+    speedOverride: { configId: 'speed', value: 'ultrafast' },
+    onDelivered,
+    onFailure,
+  });
+  await settle();
+  expect(pendingSession(id)?.failed()).toBe(true);
+  expect(onDelivered).not.toHaveBeenCalled();
+  expect(onFailure).toHaveBeenCalledOnce();
+  expect(harness.control).not.toHaveBeenCalled();
 });

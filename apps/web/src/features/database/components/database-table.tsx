@@ -52,6 +52,7 @@ import {
 import type { DatabaseTableModel } from '../primitives/table-model';
 import type { DatabaseColumnHeaderProps } from './database-column-header';
 import { DatabaseColumnHeader } from './database-column-header';
+import { DatabaseTableSummary } from './database-table-summary';
 
 /** The cell this client has focused, as shared with the table's other viewers. */
 export type DatabaseCellFocus = {
@@ -146,6 +147,11 @@ export function DatabaseTable(props: DatabaseTableProps) {
       .toArray()
       .some((child) => child != null && typeof child !== 'boolean');
   const rows = () => props.model.table.getRowModel().rows;
+  const summaryRows = createMemo(() =>
+    rows()
+      .filter((row) => !props.isUnsavedRow?.(row.id))
+      .map((row) => row.original)
+  );
   let scrollContainer!: HTMLDivElement;
   let gridElement!: HTMLDivElement;
   const columnReorder = createHorizontalReorder({
@@ -454,7 +460,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
       />
       <div
         ref={scrollContainer}
-        class="@container/database-grid min-h-0 flex-1 overflow-auto overscroll-x-none"
+        class="@container/database-grid min-h-0 flex-1 overflow-auto overscroll-x-none scroll-py-10"
       >
         <div
           ref={(grid) => {
@@ -485,7 +491,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
           tabIndex={-1}
           aria-multiselectable="true"
           aria-label={props.name}
-          aria-rowcount={rows().length + 1}
+          aria-rowcount={rows().length + 2}
           aria-colcount={columns().length + 1 + Number(hasAddColumn())}
           data-grid
           class="relative flex min-h-full min-w-fit flex-col"
@@ -889,6 +895,12 @@ export function DatabaseTable(props: DatabaseTableProps) {
               <div />
             </Show>
           </div>
+          <DatabaseTableSummary
+            columns={columns()}
+            rows={summaryRows()}
+            template={template()}
+            addColumn={hasAddColumn()}
+          />
           <Show when={columnReorder.drop()}>
             {(drop) => (
               <InsertionLine

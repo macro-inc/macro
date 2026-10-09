@@ -6,12 +6,15 @@ import {
   DEFAULT_SHEET_ID,
   readSpreadsheetCells,
   readSpreadsheetLayout,
+  resizeSpreadsheetColumn,
   type SpreadsheetSelection,
   writeSpreadsheetCells,
 } from '../core/spreadsheet-document';
 import {
   addSpreadsheetSheet,
   deleteSpreadsheetSheet,
+  moveSpreadsheetSheet,
+  readSpreadsheetSheets,
 } from '../core/workbook-document';
 import { createSpreadsheetStore } from './create-spreadsheet-store';
 
@@ -60,6 +63,91 @@ describe('spreadsheet store', () => {
       'workbook changed'
     );
     expect(readSpreadsheetCells(doc).B1.value).toBe('New collaborator edit');
+    dispose();
+    peer.free();
+    doc.free();
+  });
+
+  it("rejects a shift prepared before a collaborator's width or layout change", async () => {
+    const doc = new LoroDoc();
+    writeSpreadsheetCells(doc, { A1: { value: 'Name' } });
+    resizeSpreadsheetColumn(doc, 1, 150);
+    let dispose = () => {};
+    const store = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createSpreadsheetStore({
+        canEdit: () => true,
+        source: {
+          doc: () => doc,
+          ready: () => true,
+          error: () => undefined,
+          status: () => 'connected',
+          peers: () => [],
+          setSelection: () => {},
+        },
+      });
+    });
+    await Promise.resolve();
+    store.setMetadata({ hiddenColumns: [1] });
+    const peer = new LoroDoc();
+    peer.import(doc.export({ mode: 'snapshot' }));
+    // Insert a column at A, as the calculation worker would return it.
+    const shift = () => {
+      const before = structuredClone(store.workbook());
+      const next = before.map((sheet) => ({
+        ...sheet,
+        cells: { B1: sheet.cells.A1 },
+        metadata: { ...sheet.metadata, hiddenColumns: [2] },
+        layout: {
+          ...sheet.layout,
+          columnCount: sheet.layout.columnCount + 1,
+          columnWidths: Object.fromEntries(
+            Object.entries(sheet.layout.columnWidths).map(([key, width]) => [
+              Number(key) + 1,
+              width,
+            ])
+          ),
+        },
+      }));
+      return { before, next, revision: store.revision() };
+    };
+    const sync = () => {
+      doc.import(peer.export({ mode: 'update', from: doc.oplogVersion() }));
+      peer.import(doc.export({ mode: 'update', from: peer.oplogVersion() }));
+    };
+
+    let pending = shift();
+    resizeSpreadsheetColumn(peer, 2, 240);
+    sync();
+    expect(() =>
+      store.applyStructure(pending.before, pending.next, pending.revision)
+    ).toThrow('workbook changed');
+    expect(readSpreadsheetLayout(doc).columnWidths[2]).toBe(240);
+    expect(store.cells().A1.value).toBe('Name');
+
+    pending = shift();
+    peer
+      .getMap('spreadsheetSheetMetadata')
+      .set(
+        DEFAULT_SHEET_ID,
+        JSON.stringify({ hiddenColumns: [1], hiddenRows: [4] })
+      );
+    peer.commit();
+    sync();
+    expect(() =>
+      store.applyStructure(pending.before, pending.next, pending.revision)
+    ).toThrow('workbook changed');
+    expect(store.activeSheet().metadata).toEqual({
+      hiddenColumns: [1],
+      hiddenRows: [4],
+    });
+
+    // A shift prepared after both changes moves them with the cells.
+    pending = shift();
+    store.applyStructure(pending.before, pending.next, pending.revision);
+    expect(store.cells().B1.value).toBe('Name');
+    expect(readSpreadsheetLayout(doc).columnWidths[3]).toBe(240);
+    expect(store.activeSheet().metadata?.hiddenRows).toEqual([4]);
     dispose();
     peer.free();
     doc.free();
@@ -176,6 +264,79 @@ describe('spreadsheet store', () => {
     doc.free();
   });
 
+  it('moves sheets as undoable steps that merge with a collaborator moving another sheet', async () => {
+    const doc = new LoroDoc();
+    const peer = new LoroDoc();
+    const b = addSpreadsheetSheet(doc, 'B');
+    const c = addSpreadsheetSheet(doc, 'C');
+    const d = addSpreadsheetSheet(doc, 'D');
+    let dispose = () => {};
+    const store = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createSpreadsheetStore({
+        canEdit: () => true,
+        source: {
+          doc: () => doc,
+          ready: () => true,
+          error: () => undefined,
+          status: () => 'connected',
+          peers: () => [],
+          setSelection: () => {},
+        },
+      });
+    });
+    await Promise.resolve();
+    const names = () => store.sheets().map((sheet) => sheet.name);
+    store.moveSheet(d, 0);
+    expect(names()).toEqual(['D', 'Sheet1', 'B', 'C']);
+    store.moveSheet(DEFAULT_SHEET_ID, 3);
+    expect(names()).toEqual(['D', 'B', 'C', 'Sheet1']);
+    store.undo();
+    expect(names()).toEqual(['D', 'Sheet1', 'B', 'C']);
+    store.redo();
+    expect(names()).toEqual(['D', 'B', 'C', 'Sheet1']);
+    store.moveSheet(b, 1);
+    expect(names()).toEqual(['D', 'B', 'C', 'Sheet1']);
+
+    peer.import(doc.export({ mode: 'snapshot' }));
+    moveSpreadsheetSheet(peer, c, 0);
+    store.moveSheet(DEFAULT_SHEET_ID, 1);
+    doc.import(peer.export({ mode: 'update' }));
+    peer.import(doc.export({ mode: 'update' }));
+    expect(names()).toEqual(['C', 'D', 'Sheet1', 'B']);
+    expect(readSpreadsheetSheets(peer).map((sheet) => sheet.name)).toEqual(
+      names()
+    );
+    dispose();
+    peer.free();
+    doc.free();
+  });
+
+  it('renumbers sheets whose orders tie when moving between them', () => {
+    const doc = new LoroDoc();
+    const b = addSpreadsheetSheet(doc, 'B');
+    const c = addSpreadsheetSheet(doc, 'C');
+    const order = doc.getMap('spreadsheetSheetOrder');
+    order.set(b, 5);
+    order.set(c, 5);
+    doc.commit();
+    // Equal orders sort by sheet id.
+    const [, first, second] = readSpreadsheetSheets(doc).map(
+      (sheet) => sheet.name
+    );
+    moveSpreadsheetSheet(doc, DEFAULT_SHEET_ID, 1);
+    expect(readSpreadsheetSheets(doc).map((sheet) => sheet.name)).toEqual([
+      first,
+      'Sheet1',
+      second,
+    ]);
+    expect(Object.values(order.toJSON()).sort()).toEqual([0, 1, 2]);
+    expect(() => moveSpreadsheetSheet(doc, 'missing', 0)).toThrow(
+      'no longer exists'
+    );
+    doc.free();
+  });
+
   it.each(['readonly', 'hydrating'] as const)(
     'does not revive a retained fallback while %s',
     async (state) => {
@@ -206,6 +367,7 @@ describe('spreadsheet store', () => {
       store.renameSheet(DEFAULT_SHEET_ID, 'Blocked');
       store.addSheet('Blocked');
       store.duplicateSheet(DEFAULT_SHEET_ID);
+      store.moveSheet(DEFAULT_SHEET_ID, 1);
       store.undo();
       expect(doc.version().toJSON()).toEqual(version);
       expect(doc.getMap('spreadsheetDeletedSheets').get(DEFAULT_SHEET_ID)).toBe(

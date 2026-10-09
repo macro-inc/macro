@@ -153,6 +153,36 @@ export function newEventType(
   };
 }
 
+export function newDefaultBookingLink(
+  scheduleId: string,
+  userId: string,
+  firstName: string
+): EventType {
+  const displayName = firstName || 'My';
+  const title = `${displayName}'s Booking Link`;
+  return {
+    id: crypto.randomUUID(),
+    title,
+    slug: slugify(title),
+    description: `Book a meeting with ${displayName}`,
+    durationMinutes: 30,
+    location: '',
+    googleMeet: true,
+    enabled: true,
+    scheduleId,
+    mode: 'individual',
+    hosts: [userId],
+    beforeMinutes: 0,
+    afterMinutes: 0,
+    noticeMinutes: 120,
+    horizonDays: 60,
+    intervalMinutes: 30,
+    dailyLimit: null,
+    requiresConfirmation: false,
+    questions: [],
+  };
+}
+
 export function slugify(value: string): string {
   return value
     .toLowerCase()

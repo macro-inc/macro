@@ -822,7 +822,8 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         key: CalendarBackfillJobKey,
     ) -> impl Future<Output = Result<CalendarBackfillClaim, Report>> + Send;
 
-    /// Mark the account as actively syncing after a successful claim.
+    /// Mark the account as actively syncing after a successful claim, preserving
+    /// any prior failure until successful completion establishes healthy coverage.
     fn mark_google_account_syncing(
         &self,
         key: CalendarBackfillJobKey,

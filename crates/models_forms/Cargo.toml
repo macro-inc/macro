@@ -6,7 +6,11 @@ version = "0.1.0"
 
 # The wire vocabulary of Macro Forms, shared by the service, the web client
 # and the SDK. Answers and gate rules are `models_databases` types unchanged.
+[features]
+schema = ["dep:schemars", "models_databases/schema"]
+
 [dependencies]
+schemars = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 macro_uuid = { path = "../macro_uuid" }
 models_databases = { path = "../models_databases" }

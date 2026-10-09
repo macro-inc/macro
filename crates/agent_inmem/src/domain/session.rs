@@ -212,6 +212,8 @@ pub struct SessionState {
     pub model: String,
     /// Reasoning effort applied to subsequent turns.
     pub reasoning_effort: ReasoningEffort,
+    /// Inference speed applied to subsequent turns.
+    pub speed: agent::ModelSpeed,
     /// Who this agent is, snapshotted from the session's bot at attach.
     pub identity: Option<AgentIdentity>,
     /// Instructions every turn runs under, snapshotted from the session row
@@ -231,6 +233,7 @@ impl SessionState {
             acp_session_id: None,
             model,
             reasoning_effort: ReasoningEffort::default(),
+            speed: agent::ModelSpeed::Standard,
             identity: None,
             instructions: None,
             history: Vec::new(),

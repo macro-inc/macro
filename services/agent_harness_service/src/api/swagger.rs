@@ -19,16 +19,19 @@ use agent_harness::inbound::tool_approvals::{
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
-use agent_session::domain::pull_request_links::{PullRequestLinkSource, SessionPullRequestLink};
+use agent_session::domain::pull_request_links::{
+    PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
+};
 use agent_session::inbound::axum_router::pull_requests::{
-    PullRequestSessionsResponse, PullRequestUrl, SessionPullRequestsResponse,
+    PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
+    SessionPullRequestsResponse,
 };
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
-    AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, ControlRequest,
-    ControlResponse, ControlStatusDto, CreateAgentSessionRequest, CreateAgentSessionResponse,
-    CreateSessionThread, EditQueuedActionRequest, LogDirectionDto, LogFrameDto,
-    PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
+    AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, CodingPreferencesBody,
+    ControlRequest, ControlResponse, ControlStatusDto, CreateAgentSessionRequest,
+    CreateAgentSessionResponse, CreateSessionThread, EditQueuedActionRequest, LogDirectionDto,
+    LogFrameDto, PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
     RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, SetAgentSessionArchivedRequest,
     WithAgentSessionId,
 };
@@ -72,6 +75,7 @@ impl Modify for SecurityAddon {
         axum_router::pull_requests::link_session_pull_request,
         axum_router::pull_requests::unlink_session_pull_request,
         axum_router::pull_requests::sessions_for_pull_request,
+        axum_router::pull_requests::sessions_for_pull_requests,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::get_agent_session_queue_handler,
@@ -82,6 +86,8 @@ impl Modify for SecurityAddon {
         axum_router::put_agent_session_sandbox_size_handler,
         axum_router::get_agent_sandbox_size_handler,
         axum_router::put_agent_sandbox_size_handler,
+        axum_router::get_agent_coding_preferences_handler,
+        axum_router::put_agent_coding_preferences_handler,
         model_load::load_agent_models_handler,
         capability_discovery::discover_agent_capabilities_handler,
         repositories::list_agent_repositories_handler,
@@ -119,6 +125,10 @@ impl Modify for SecurityAddon {
         PullRequestUrl,
         SessionPullRequestsResponse,
         PullRequestSessionsResponse,
+        PullRequestUrls,
+        PullRequestsSessionsResponse,
+        PullRequestSessions,
+        PullRequestLinkedSession,
         SessionPullRequestLink,
         PullRequestLinkSource,
         SessionStatusDto,
@@ -129,6 +139,7 @@ impl Modify for SecurityAddon {
         LogDirectionDto,
         SandboxSize,
         SandboxSizeBody,
+        CodingPreferencesBody,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
         AgentModelDto,

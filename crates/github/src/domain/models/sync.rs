@@ -631,6 +631,21 @@ impl TeamTaskReference {
     }
 }
 
+/// The text to put in a pull request so the webhook links it to `task`: the team reference
+/// when the webhook's parser reads it back, else `MACRO-{short_uuid}`.
+pub fn pull_request_task_reference(task: &MacroTaskId, team: Option<&TeamTaskReference>) -> String {
+    team.and_then(|team| {
+        let reference = format!(
+            "{}-{}",
+            team.team_slug.to_ascii_uppercase(),
+            team.team_task_id
+        );
+        (TeamTaskReference::extract_from_text(&reference).as_slice() == std::slice::from_ref(team))
+            .then_some(reference)
+    })
+    .unwrap_or_else(|| task.to_task_id_string())
+}
+
 /// A [`TeamTaskReference`] resolved against a concrete team.
 ///
 /// Because team slugs are not unique, one reference can resolve in more than

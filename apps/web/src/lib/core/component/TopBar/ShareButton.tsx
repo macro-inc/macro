@@ -513,6 +513,8 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
 interface MobileShareDrawerProps {
   editPermissionEnabled?: boolean;
   canForward: boolean;
+  /** The roster lists only the owner, so it is titled for them alone. */
+  ownerOnlyRoster: boolean;
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
   blockAlias: ShareBlockType;
@@ -551,7 +553,10 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
   const mobileTabs = createMemo((): TabItem[] => {
     const tabs: TabItem[] = [{ value: 'share', label: 'Share' }];
     if ((props.recipients?.length ?? 0) > 0 || props.owner)
-      tabs.push({ value: 'people', label: 'People' });
+      tabs.push({
+        value: 'people',
+        label: props.ownerOnlyRoster ? 'Owner' : 'People',
+      });
     if (
       props.linkSharing ||
       (props.userPermissions === Permissions.OWNER &&
@@ -898,6 +903,14 @@ export function ShareModal(props: ShareModalProps) {
     const sharePermission = result.value;
     return sharePermission.channelSharePermissions;
   });
+
+  // A viewer who does not own the item cannot read its other grants, so the
+  // roster is just the owner and must not be titled as the full audience.
+  const ownerOnlyRoster = () =>
+    !!props.owner &&
+    props.owner !== userId() &&
+    (recipients()?.length ?? 0) === 0 &&
+    !props.hasDirectShares;
 
   // Function to navigate to a channel
   const navigateToChannel = createCallback((channelId: string) => {
@@ -1373,6 +1386,7 @@ export function ShareModal(props: ShareModalProps) {
         <MobileShareDrawer
           editPermissionEnabled={editPermissionEnabled()}
           canForward={canForward()}
+          ownerOnlyRoster={ownerOnlyRoster()}
           isOpen={props.open}
           setIsOpen={props.onOpenChange}
           blockAlias={props.blockAlias}
@@ -1467,8 +1481,10 @@ export function ShareModal(props: ShareModalProps) {
                 <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Header class="px-4">
                     <span class="text-sm font-medium">
-                      People with access to this{' '}
-                      {getShareItemNoun(props.itemType)}
+                      <Show when={!ownerOnlyRoster()} fallback="Owner">
+                        People with access to this{' '}
+                        {getShareItemNoun(props.itemType)}
+                      </Show>
                     </span>
                   </Panel.Header>
                   <Panel.Body class="text-ink">

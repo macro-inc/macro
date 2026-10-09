@@ -42,6 +42,7 @@ impl From<FormError> for EntityMutationErrorCode {
             | FormError::Repository(_)
             | FormError::Collaboration(_)
             | FormError::AccessDirectory(_)
+            | FormError::DatabaseRetained { .. }
             | FormError::DatabaseContract(_)) => Self::internal(rootcause::report!(error)),
         }
     }

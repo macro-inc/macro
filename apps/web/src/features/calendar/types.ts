@@ -3,8 +3,12 @@ import type { CalendarAttendee } from '@service-storage/generated/schemas/calend
 import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventTransparency } from '@service-storage/generated/schemas/eventTransparency';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { multiDayTimedDisplayRange } from './utils/calendar-date';
+import {
+  isTimedPointEvent,
+  multiDayTimedDisplayRange,
+} from './utils/calendar-date';
 import { canEditCalendarEventTime } from './utils/event-interaction';
 
 /** Supported FullCalendar period views. */
@@ -44,6 +48,13 @@ export interface CalendarSource {
 
 /** Calendar occurrence data, independent from FullCalendar. */
 export interface CalendarEvent {
+  /** A sanitized team projection grants read access only, never provider actions. */
+  teamProjection?: {
+    ownerId: string;
+    kind: 'busy' | 'details';
+    /** Legacy OOO status does not carry an availability classification. */
+    contributesToAvailability?: boolean;
+  };
   /** Stable identifier for this rendered occurrence. */
   id: string;
   /** Stable canonical calendar event identifier. */
@@ -87,6 +98,8 @@ export interface CalendarEvent {
   reminderEventType?: EventType;
   /** Provider event type; absent means a regular event. */
   eventType?: EventType;
+  /** `transparent` events show the owner as free; absent means busy. */
+  transparency?: EventTransparency;
   /** Calendar of the copy this chip shows. Mutations address that copy. */
   calendarId?: string;
   /**
@@ -251,6 +264,7 @@ export function mapCalendarOccurrence(
     reminderCalendarId: canonical.calendarId ?? undefined,
     reminderEventType: canonical.eventType ?? undefined,
     eventType: content.eventType ?? undefined,
+    transparency: content.transparency,
     calendarId,
     sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
@@ -275,12 +289,18 @@ export function mapCalendarEventToFullCalendar(
   // ranges. Keep projected timed events fixed so their timestamps are not
   // accidentally replaced with date-only API values.
   const interactionEditable = timeEditable && allDayRange === undefined;
+  // FullCalendar replaces an equal end with its default one-hour duration.
+  // Give an instant a minimal rendering footprint without changing the model.
+  // Point events cannot be dragged/resized, so this display end is never saved.
+  const displayEnd = isTimedPointEvent(event)
+    ? new Date(Date.parse(event.start) + 1).toISOString()
+    : event.end;
 
   return {
     id: event.id,
     title: event.title,
     start: allDayRange?.start ?? event.start,
-    end: allDayRange?.end ?? event.end,
+    end: allDayRange?.end ?? displayEnd,
     allDay: isRenderedAllDay,
     display: 'auto',
     startEditable: interactionEditable,

@@ -3,8 +3,8 @@ import { defineViewTour } from '@app/features/tours/core/view-tour';
 import { defineTourTargets } from '@ui/components/Tour';
 
 export const COMPANIES_TOUR = defineTourTargets('companies', [
-  'layout',
-  'views',
+  'records',
+  'create',
 ]);
 
 export const companiesTour = defineViewTour({
@@ -22,12 +22,12 @@ export const companiesTour = defineViewTour({
   },
   steps: [
     {
-      target: COMPANIES_TOUR.layout,
+      target: COMPANIES_TOUR.records,
       entry: VIEW_SHELL_TOUR.sidebarToggle,
       entryLabel: 'Show the Customers sidebar to continue',
-      title: 'Your pipeline, as a board or list',
+      title: 'Companies and people',
       description:
-        'Switch to Board to see companies by stage, or List to scan their details in rows. Both show the same customer relationships—choose the view that fits your work.',
+        'Companies lists every customer your team works with. People lists their contacts across your teams.',
     },
     {
       target: VIEW_SHELL_TOUR.main,
@@ -36,12 +36,12 @@ export const companiesTour = defineViewTour({
         'Open a company to view its contacts and details. Update properties as the relationship develops.',
     },
     {
-      target: COMPANIES_TOUR.views,
+      target: COMPANIES_TOUR.create,
       entry: VIEW_SHELL_TOUR.sidebarToggle,
       entryLabel: 'Show the Customers sidebar to continue',
-      title: 'Make your pipeline useful',
+      title: 'Add your own records',
       description:
-        'Use filters and saved views to focus on the right companies. Switch to the board to see work by stage.',
+        'Use New to add a company, a contact, or a pipeline. Filters and saved views in the toolbar focus the list on the companies that matter.',
     },
   ],
 });

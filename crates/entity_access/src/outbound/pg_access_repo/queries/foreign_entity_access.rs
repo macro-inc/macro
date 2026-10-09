@@ -98,3 +98,35 @@ pub async fn list_foreign_entity_grants(
         })
         .collect())
 }
+
+/// Current personal owner or team members of a foreign record.
+#[tracing::instrument(err, skip(pool))]
+pub async fn get_foreign_entity_users(
+    pool: &PgPool,
+    foreign_entity_id: &Uuid,
+) -> anyhow::Result<Vec<macro_user_id::user_id::MacroUserIdStr<'static>>> {
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+    let users = sqlx::query_scalar!(
+        r#"
+        SELECT stored_for_id AS "user_id!" FROM foreign_entity
+        WHERE id = $1 AND stored_for_auth_entity = 'user'
+        UNION
+        SELECT tu.user_id AS "user_id!"
+        FROM foreign_entity fe
+        JOIN team_user tu ON tu.team_id = CASE
+            WHEN fe.stored_for_auth_entity = 'team' THEN fe.stored_for_id::uuid END
+        WHERE fe.id = $1 AND fe.stored_for_auth_entity = 'team'
+        "#,
+        foreign_entity_id,
+    )
+    .fetch_all(pool)
+    .await?;
+    users
+        .into_iter()
+        .map(|user| {
+            MacroUserIdStr::parse_from_str(&user)
+                .map(|id| id.into_owned())
+                .map_err(anyhow::Error::from)
+        })
+        .collect()
+}

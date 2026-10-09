@@ -10,7 +10,7 @@ import type { AutoReloadSnapshotMonthlySpendLimitCents } from './autoReloadSnaps
  * The payer's automatic reload settings, as shown in Billing settings.
  */
 export interface AutoReloadSnapshot {
-  /** Whether reloads will fire: overage is on and reloads are not suspended. */
+  /** Whether reloads will fire: the payer opted in and reloads are not suspended. */
   active: boolean;
   /** Reload once the effective balance drops below this, in customer cents. */
   minimum_balance_cents: number;

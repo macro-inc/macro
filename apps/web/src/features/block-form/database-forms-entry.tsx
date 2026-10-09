@@ -1,7 +1,6 @@
 /**
- * App adapter for the database page (RFC 02 §7): a "Forms" chip after the
- * table tabs listing the forms over the current table, and the creation of a
- * form over the table, offered here and in the "+ view" dialog. Creating
+ * App adapter for the database page (RFC 02 §7): the table selector’s add menu
+ * lists forms over the current table and offers form creation. Creating
  * over an existing table needs database Owner; editors and viewers keep
  * navigation to the forms that exist. Mounted only while forms are on.
  */
@@ -9,17 +8,9 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import ClipboardText from '@phosphor/clipboard-text.svg';
-import Plus from '@phosphor/plus.svg';
 import { createForm, useFormsForDatabaseQuery } from '@queries/storage/forms';
 import { Dropdown } from '@ui';
-import {
-  type Accessor,
-  createRenderEffect,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 
 /** Make a form over an existing table and open it; resolves why it was refused, if it was. */
 async function createFormOverTable(
@@ -43,66 +34,6 @@ async function createFormOverTable(
   }
   open(created.value.form.id);
   return undefined;
-}
-
-/**
- * The "+ view" dialog's Form choice: offered to the database's owner while
- * no form writes to the table. Each table has at most one form.
- */
-export function useTableFormCreation(props: {
-  databaseId: Accessor<string>;
-  tableId: Accessor<string | undefined>;
-  tableName: Accessor<string | undefined>;
-  isOwner: Accessor<boolean>;
-  enabled: Accessor<boolean>;
-}): Accessor<NewFormChoice | undefined> {
-  const { replaceOrInsertSplit } = useSplitLayout();
-  const forms = useFormsForDatabaseQuery(() =>
-    props.enabled() && props.isOwner() ? props.databaseId() : undefined
-  );
-  return () => {
-    const tableId = props.tableId();
-    if (!props.enabled() || !props.isOwner() || !tableId || !forms.isSuccess)
-      return undefined;
-    if (forms.data.some((form) => form.tableId === tableId)) return undefined;
-    return {
-      initialName: `${props.tableName() ?? 'Table'} form`,
-      onCreate: (name) =>
-        createFormOverTable(
-          { databaseId: props.databaseId(), tableId, name },
-          (formId) => replaceOrInsertSplit({ type: 'form', id: formId })
-        ),
-    };
-  };
-}
-
-type NewFormChoice = {
-  initialName: string;
-  onCreate: (name: string) => Promise<string | undefined>;
-};
-
-/**
- * Hands the database page its "+ view" Form choice, so the page reaches
- * this feature only through a lazy import. Renders nothing.
- */
-export function DatabaseFormCreation(props: {
-  databaseId: string;
-  tableId: string | undefined;
-  tableName: string | undefined;
-  isOwner: boolean;
-  onChoice: (choice: NewFormChoice | undefined) => void;
-}) {
-  const choice = useTableFormCreation({
-    databaseId: () => props.databaseId,
-    tableId: () => props.tableId,
-    tableName: () => props.tableName,
-    isOwner: () => props.isOwner,
-    enabled: () => true,
-  });
-  // Syncing out to the page that mounted this, not deriving local state.
-  createRenderEffect(() => props.onChoice(choice()));
-  onCleanup(() => props.onChoice(undefined));
-  return null;
 }
 
 /**
@@ -163,7 +94,13 @@ function DatabaseFormsMenu(props: {
       ? forms.data.filter((form) => form.tableId === props.tableId)
       : [];
   async function createFromTable() {
-    if (creating() || !forms.isSuccess || onTable().length > 0) return;
+    if (
+      !props.canCreate ||
+      creating() ||
+      !forms.isSuccess ||
+      onTable().length > 0
+    )
+      return;
     setCreating(true);
     const refusal = await createFormOverTable(
       {
@@ -180,54 +117,49 @@ function DatabaseFormsMenu(props: {
     <Show
       when={onTable().length > 0}
       fallback={
-        <Show when={props.canCreate && forms.isSuccess}>
-          <button
-            type="button"
+        <Show
+          when={props.canCreate && forms.isSuccess}
+          fallback={
+            <Dropdown.Item disabled>
+              {forms.isError
+                ? 'Could not load forms'
+                : forms.isSuccess
+                  ? 'No forms for this table'
+                  : 'Loading forms…'}
+            </Dropdown.Item>
+          }
+        >
+          <Dropdown.Item
             disabled={creating()}
-            aria-busy={creating()}
-            class="ml-1 inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-edge-focus disabled:opacity-60"
-            onClick={() => void createFromTable()}
+            closeOnSelect={false}
+            onSelect={() => void createFromTable()}
           >
-            <ClipboardText class="size-3.5 text-violet" aria-hidden="true" />
-            <Plus class="size-3" aria-hidden="true" />
-            Form
-          </button>
+            <ClipboardText class="size-4 text-violet" aria-hidden="true" />
+            {creating() ? 'Creating form…' : 'New form'}
+          </Dropdown.Item>
         </Show>
       }
     >
-      <Dropdown>
-        <Dropdown.Trigger
-          variant="outline"
-          size="sm"
-          class="ml-1 h-7 shrink-0 gap-1.5 px-2 text-xs"
-          aria-label={`Forms over ${props.tableName}`}
-        >
-          <ClipboardText class="size-3.5 text-violet" />
-          {onTable().length === 1 ? '1 form' : `${onTable().length} forms`}
-        </Dropdown.Trigger>
-        <Dropdown.Content class="w-64">
-          <Dropdown.Group>
-            <Dropdown.GroupLabel>
-              Forms writing to {props.tableName}
-            </Dropdown.GroupLabel>
-            <For each={onTable()}>
-              {(form) => (
-                <Dropdown.Item
-                  onSelect={() =>
-                    replaceOrInsertSplit({ type: 'form', id: form.id })
-                  }
-                >
-                  <ClipboardText class="size-4 text-violet" />
-                  <span class="flex-1 truncate">{form.name}</span>
-                  <span class="text-xs text-ink-muted">
-                    {form.status === 'closed' ? 'Closed' : 'Open'}
-                  </span>
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Group>
-        </Dropdown.Content>
-      </Dropdown>
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>
+          Forms writing to {props.tableName}
+        </Dropdown.GroupLabel>
+        <For each={onTable()}>
+          {(form) => (
+            <Dropdown.Item
+              onSelect={() =>
+                replaceOrInsertSplit({ type: 'form', id: form.id })
+              }
+            >
+              <ClipboardText class="size-4 text-violet" />
+              <span class="flex-1 truncate">{form.name}</span>
+              <span class="text-xs text-ink-muted">
+                {form.status === 'closed' ? 'Closed' : 'Open'}
+              </span>
+            </Dropdown.Item>
+          )}
+        </For>
+      </Dropdown.Group>
     </Show>
   );
 }

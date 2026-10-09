@@ -722,6 +722,8 @@ async fn replaying_the_log_reproduces_what_the_viewer_reads(pool: PgPool) {
     let declined_start = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
     series.occurrences[1].recurrence_id = Some(declined_start.to_rfc3339());
     series.overrides = vec![CalendarEventOverride {
+        visibility: None,
+        transparency: None,
         sequence: None,
         source_updated_at: None,
         recurrence_id: declined_start.to_rfc3339(),

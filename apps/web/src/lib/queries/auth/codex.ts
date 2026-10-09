@@ -5,7 +5,7 @@ import {
   type CodexLogin,
   codexClient,
 } from '@service-auth/codex';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { authKeys } from './keys';
 
 const invalidateConnection = async () => {
@@ -16,10 +16,11 @@ const invalidateConnection = async () => {
     }),
   ]);
 };
-export function useCodexStatusQuery(enabled: () => boolean = () => true) {
-  return useQuery(() => ({
+// Cached callbacks close over plain values only; hooks resolve accessors.
+function codexStatusQueryOptions(enabled: boolean) {
+  return queryOptions({
     queryKey: authKeys.codexStatus.queryKey,
-    enabled: enabled(),
+    enabled,
     queryFn: () => throwOnErr(codexClient.status),
     placeholderData: {
       connected: false,
@@ -27,14 +28,17 @@ export function useCodexStatusQuery(enabled: () => boolean = () => true) {
       accountId: null,
       environmentId: null,
     },
-  }));
+  });
 }
-export function useCodexLoginQuery(attempt: () => CodexLogin | undefined) {
-  return useQuery(() => ({
-    queryKey: authKeys.codexLogin(attempt()?.attemptId ?? '').queryKey,
-    enabled: !!attempt(),
+export function useCodexStatusQuery(enabled: () => boolean = () => true) {
+  return useQuery(() => codexStatusQueryOptions(enabled()));
+}
+function codexLoginQueryOptions(login: CodexLogin | undefined) {
+  const pollIntervalMs = Math.max(1, login?.pollIntervalSeconds ?? 5) * 1000;
+  return queryOptions({
+    queryKey: authKeys.codexLogin(login?.attemptId ?? '').queryKey,
+    enabled: !!login,
     queryFn: async () => {
-      const login = attempt();
       if (!login) throw new Error('No active Codex login');
       const result = await throwOnErr(() => codexClient.poll(login.attemptId));
       if (result.status === 'connected') await invalidateConnection();
@@ -44,16 +48,22 @@ export function useCodexLoginQuery(attempt: () => CodexLogin | undefined) {
     refetchInterval: (query) =>
       query.state.data && query.state.data.status !== 'pending'
         ? false
-        : Math.max(1, attempt()?.pollIntervalSeconds ?? 5) * 1000,
+        : pollIntervalMs,
     refetchIntervalInBackground: true,
-  }));
+  });
+}
+export function useCodexLoginQuery(attempt: () => CodexLogin | undefined) {
+  return useQuery(() => codexLoginQueryOptions(attempt()));
+}
+function codexEnvironmentsQueryOptions(enabled: boolean) {
+  return queryOptions({
+    queryKey: authKeys.codexEnvironments.queryKey,
+    enabled,
+    queryFn: () => throwOnErr(codexClient.environments),
+  });
 }
 export function useCodexEnvironmentsQuery(enabled: () => boolean) {
-  return useQuery(() => ({
-    queryKey: authKeys.codexEnvironments.queryKey,
-    enabled: enabled(),
-    queryFn: () => throwOnErr(codexClient.environments),
-  }));
+  return useQuery(() => codexEnvironmentsQueryOptions(enabled()));
 }
 export function useBeginCodexLogin() {
   return useMutation(() => ({

@@ -177,7 +177,10 @@ export function AgentSessionProvider(
           // is the same dead end for the reader as a load that failed.
           loadFailed: () => live.loadFailed() || failed(),
           accessDenied: live.accessDenied,
-          // Retrying a 401 gets the same 401.
+          // Retrying a refusal in earnest gets the same refusal. A refusal of
+          // a session this tab just created is not one of those, and never
+          // reaches here as denied access: `AgentSession` waits it out, and
+          // reports a load that can be tried again if it never clears.
           loadRetryable: () => live.loadFailed() && !live.accessDenied(),
           retryLoad: live.retry,
           turn,

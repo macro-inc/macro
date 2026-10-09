@@ -47,6 +47,7 @@ use super::*;
 mod agent_metadata;
 mod exclusions;
 mod favorites;
+mod work_feed;
 
 struct NoopEmailPreviewService;
 

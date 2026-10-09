@@ -26,6 +26,12 @@ pub trait MessageReader: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError>;
+    /// Read a parent's discussions and timeline activity as one ordered page.
+    async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError>;
 
     /// Read live history preceding a prompt, scoped by its parent.
     async fn preceding(
@@ -139,6 +145,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
         MessageService::timeline(self, access, query).await
+    }
+    async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        MessageService::timeline_entries(self, access, query).await
     }
 
     async fn preceding(
@@ -256,6 +269,12 @@ mockall::mock! {
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError>;
+    /// Read a parent's discussions and timeline activity as one ordered page.
+    async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError>;
 
     /// Read live history preceding a prompt, scoped by its parent.
     async fn preceding(

@@ -16,10 +16,9 @@ decides who may respond.
 - **Create → Form** (shortcut **C → Q**, **Shift** opens it in a new split)
   creates "Untitled form" with a new database whose table is "Responses",
   and opens the builder at `/app/form/<uuid>`.
-- On a database page you own, **+ view** offers **Form** beside Table and
-  Board while no form writes to the current table, and the control after the
-  table tabs is **+ Form**; both make a form with a question per existing
-  column. Each table has at most one form; the control opens that form once created.
+- On a database page you own, **+ → New form** in the table selector makes
+  a form with a question per existing column while no form writes to the current
+  table. Each table has at most one form; the control opens that form once created.
   A trashed form reserves its table until restored or permanently deleted.
   Creating over an existing table needs
   database Owner: editors and viewers see the existing forms only.
@@ -33,9 +32,9 @@ decides who may respond.
 
 ## The form page
 
-Editors see three tabs, kept per split (a split opened with
-`params.view` `responses` or `share` starts there), with the status at the right ("Accepting responses · closes Oct 3",
-"Closed", "Table deleted"). Viewers (respondents) land on the respond page
+Editors see **Build**, **Responses** (with its count), and **Settings** in the
+shared pill tab selector beside the form title in the top bar, kept per split (a split opened with
+`params.view` `responses` or `share` starts there). Viewers (respondents) land on the respond page
 instead. The header's primary button, for owners, is **Publish** (opens sharing)
 until someone responds or the form is shared (public, a channel, the team),
 then **Open form** (respond view in a new split); other editors always see
@@ -43,23 +42,25 @@ then **Open form** (respond view in a new split); other editors always see
 
 ### Build
 
-A banner at the top contains the editable form name, description, and a link
-to its database. Below, a centered column of sections holds the question rows,
-with a numbered **Outline** panel on the left and an **Add question** panel on
-the right. The outline marks the selected section or question. Question types
-use two columns of buttons, grouped as **Text & files**, **Choices**,
-**Numbers & dates**, and **Linked items**. **From database** reuses existing
-fields; **Form flow** separately holds Section, Screener, and Booking. Medium
-splits keep the palette beside the canvas. On mobile and narrow splits, a compact
-**Add question** dropdown below the canvas includes question types, existing
-database fields, and the Section, Screener, and Booking actions. Database row
-and Booking choices open dialogs that fit within the screen.
+Build uses the same centered 768px content column as a Markdown document.
+The editable title sits above a linked-database property pill and a read-only
+status pill ("Accepting responses", "Closed", or "Table deleted"), then the
+description.
+A compact document-style outline rail on the left previews sections and questions
+on hover and navigates to them on click. It marks the selected section or question.
+Each question section ends with a large **Add question** menu. It appends a new
+question or existing database field to that section, regardless of the current
+selection. Three visible actions sit below the canvas: **Add section** adds a
+question section directly, **Add gate** adds a screener with its inline rule editor
+open, and **Add meeting link** opens the booking-link picker (when scheduling is
+available). Hover a question boundary to reveal a plus that inserts a question
+at that position. Hover between sections to insert a **Section** or **Gate**.
+These controls also appear on keyboard focus and stay visible while their menus
+are open. Meeting links can only be added at the end; adding other sections later
+keeps the meeting link last. Start an empty form by adding a section, then its questions.
 
-- Click a question type in the right panel to add it after the selected
-  question, or drag the button to an insertion line in the canvas. A drop creates
-  exactly one question; Escape or dropping outside the canvas creates nothing.
-  **Database row** asks which table to use before adding the question. An empty
-  form accepts a question directly and creates its first section.
+- **Database row** asks which table to use before adding the question.
+  Existing questions and sections can still be reordered with their drag handles.
 - After **Section** (or
   focusing a section's title, which outlines it) it goes to the end of that
   section. An empty section has its own **Add question** menu.
@@ -87,9 +88,6 @@ and Booking choices open dialogs that fit within the screen.
   Rules are sent to respondents' browsers, so keep confidential criteria out.
   A gate whose rule tests a question that is gone shows **Remove broken
   rules**.
-- The right panel's **Section** and **Screener** controls can also be dragged directly
-  into the canvas. The insertion line shows where the new section will go;
-  dropping outside the canvas or pressing Escape leaves the form unchanged.
 - "N columns not on this form" at the bottom lists table columns that are not
   questions; **Add** puts one on the form.
 - Layout edits collaborate live through Loro. Other editors' selections appear
@@ -100,13 +98,15 @@ and Booking choices open dialogs that fit within the screen.
   question**: a new column gets the answers that convert and the question
   moves to it; the old column stays (listed under columns not on the form).
 - **Preview** opens a new tab with the respondent experience after pending
-  question and Share settings edits are saved, including edits started before
+  question and form settings edits are saved, including edits started before
   switching tabs. Fill it, try the screeners, and return to the builder. Preview
   creates no response rows, file uploads or bookings.
   On touch devices, Preview, Publish (or Open form), and Share are in the
   floating header above the editor.
-- **Booking** in the right panel selects an existing booking link from **Booking links**
-  settings. It is always the last step. **Change** selects another link;
+- **Add meeting link** selects an existing booking link from **Booking links**
+  settings, or opens settings to create one. It is always the last step. Once added,
+  the action becomes **View meeting link** and focuses the existing step rather than
+  adding a duplicate. **Change** selects another link;
   **Remove booking step** leaves the link itself intact. A form's screeners
   control when its respondents see the link; the native link still works directly.
 - New standalone forms share their name with the database they create. Rename
@@ -114,8 +114,7 @@ and Booking choices open dialogs that fit within the screen.
 
 ### Responses
 
-The linked table's grid, embedded and live, with **Open database**, **Export
-CSV** and tiles: Responses, Stopped submissions (per screener in its hint), Rows in
+The linked table's grid, embedded and live, with summary tiles: Responses, Stopped submissions (per screener in its hint), Rows in
 the table, and (owners, when posted in channels) People in its channels (the
 owner excluded; a dash for public forms). Every row of the table shows,
 including rows added in the grid. Stopped submissions counts signed-in respondents
@@ -123,7 +122,7 @@ whose latest recorded result is stopped. Retrying does not add another count;
 a successful submission clears that stop. Anonymous attempts and stops before
 submitting are not recorded; answers stay in the browser until Submit.
 
-### Share
+### Settings
 
 **Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
@@ -153,7 +152,10 @@ while still checking, or when the check failed, instead of saying nothing).
 it inside the app shell (sidebar, command menu); anonymous visitors get a
 focused page, so a public form never hits login. Signed in, a respondent
 keeps their identity on either audience and can edit their response while the
-form is open; anonymous visitors cannot. One section per screen with
+form is open; anonymous visitors cannot. The response page has no top bar:
+it uses the builder’s centered 768px content column, plain title and description,
+and questions grouped within a single section card. Public sign-in guidance
+sits below the form. One section per screen with
 **Back / Next**, **Submit** on the last. Required fields keep their asterisks;
 the legend and response-editing guidance sit below the questions. Next checks required answers and any
 gate locally; a failing gate shows "This form can't take your response" with
@@ -211,3 +213,57 @@ in the form's banner. Each submission is a row; the `Submitted` and
 but their types cannot change and they cannot be deleted while the form exists
 (including while it is in the trash). Permanently deleting the form releases
 those protections and preserves its database, columns, and answer rows.
+
+## Forms through the AI tools
+
+`CreateForm` creates a complete questionnaire over a new database, or an explicitly
+selected table whose database you own. Give questions and sections distinct local
+keys; gates refer to earlier question keys and choice rules can refer to their
+option keys. The result maps these keys to saved identities. New forms start
+**closed and members-only**. A successful create returns the actual saved draft,
+and its builder and respondent URLs.
+A respondent URL alone does not mean the form accepts responses.
+
+Use `ReadForm` in authoring mode before changing an existing form. It reads the
+shared durable editor document, including a draft that has not reached the
+respondent page. `EditForm` applies named fields or placements to the current
+Loro document without a read-time baseline or a separate snapshot table. Changes
+arriving during the write merge as CRDT operations, including concurrent text
+edits. The merged layout must still pass Forms validation. There is no
+staged release: valid edits to an open form can become visible immediately.
+Question removal retains the response column and its existing answers. Submitted
+and Respondent remain protected. Additive columns are supported; column cleanup,
+linked type changes, independent display-label overrides, and reference pickers
+are not offered by these tools.
+
+Required means an answer must be present; it does not mean the answer qualifies.
+Use nonempty AND/OR screeners for qualification. Rules must refer to questions in
+earlier sections and options belonging to those questions. Empty answers pass
+only an `isEmpty` presence check, including for negative comparisons. Zero and
+false are answers. Put at most one booking section last. Select a saved accessible
+profile/event identity from the scheduling UI or available booking tools. Booking
+screeners reveal a link after an accepted response; the independent booking URL
+remains usable. Requests for strict booking enforcement are refused.
+
+`ListForms` searches forms reachable through your actual grants, not every public
+form. It returns at most 50 matches; narrow the name, database, status or access
+filter when truncated. Respondent-mode `ReadForm` omits authoring revisions,
+response summaries and hidden booking destinations. Authoring summaries contain
+counts, never response rows.
+
+The owner calls `SetFormAccess` with complete audience, open/closed, deadline and
+tally settings. It executes directly without a sharing review card. Channel View
+allows responding. Channel Edit also permits reading and editing the entire
+backing database, including columns the form does not ask. Explicit grant deltas
+leave other grants unchanged and do not post messages or send invitations.
+A passed deadline keeps an otherwise open form closed to responses. Settings and
+channel grants use the same services as the browser and are separate writes;
+a partial result requires inspecting the form before retrying.
+
+Mutations do not retain a retry history or deduplicate repeated calls. Each
+`CreateForm` invocation can create a new form. After a timeout, use `ListForms`
+and `ReadForm` to inspect existing work before creating again. A partial result
+includes the target form ID; inspect it and make targeted repairs.
+Forms tool UI follows the existing `enable-forms` feature flag; server execution
+uses the same authenticated user/delegated-agent permissions as the rest of Forms.
+Owners can still close a form or remove access when its draft needs repair.

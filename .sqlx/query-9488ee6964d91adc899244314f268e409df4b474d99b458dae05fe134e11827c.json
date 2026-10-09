@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_accounts SET last_sync_error=NULL,last_synced_at=now()-interval '16 minutes' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9488ee6964d91adc899244314f268e409df4b474d99b458dae05fe134e11827c"
+}

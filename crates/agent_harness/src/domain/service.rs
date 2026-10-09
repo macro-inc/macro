@@ -22,6 +22,7 @@ mod lifecycle;
 mod lifecycle_events;
 mod open;
 mod queue;
+pub mod session_mcp;
 mod warm;
 
 use std::sync::Arc;

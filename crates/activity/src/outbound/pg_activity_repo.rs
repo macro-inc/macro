@@ -2,6 +2,7 @@
 
 #[cfg(test)]
 mod test;
+mod timeline;
 
 mod entity_history;
 

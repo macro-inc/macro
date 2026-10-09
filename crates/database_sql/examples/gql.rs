@@ -211,6 +211,7 @@ impl Api {
                 relation: false,
             },
             options: Vec::new(),
+            formula: None,
         }];
         for definition in definitions
             .into_iter()
@@ -251,6 +252,7 @@ impl Api {
                     relation: false,
                 },
                 options,
+                formula: None,
             });
         }
         let schema = Schema {

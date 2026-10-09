@@ -462,6 +462,11 @@ pub async fn run() -> anyhow::Result<()> {
         GithubPullRequestServiceImpl::new(
             foreign_entity_service,
             PgGithubPullRequestRepo::new(db.clone()),
+        )
+        .with_event_publisher(
+            github_pull_requests::broker::BrokerGithubPullRequestPublisher(
+                macro_event_broker.clone(),
+            ),
         ),
         GithubLinkConfig {
             client_id: config.github_client_id.to_string(),
@@ -534,6 +539,29 @@ pub async fn run() -> anyhow::Result<()> {
         .with_enforcement(config.enable_ai_usage_enforcement)
         .with_billing(config.enable_ai_usage_billing),
     );
+    // The floor under every settlement request: on a schedule, settle
+    // everyone who recorded counted usage recently, whose period just closed,
+    // or who holds a reload that was never collected. Settlement is
+    // idempotent and serialized per payer in the database, so replicas may
+    // sweep concurrently. Not started while billing is off: every settlement
+    // would return before reading anything.
+    let settlement_sweep = config.enable_ai_usage_billing.is_enabled().then(|| {
+        tokio::spawn(ai_billing::inbound::run_settlement_sweep(
+            ai_billing::domain::SettlementSweep::new(
+                ai_billing_service.clone(),
+                ai_billing::outbound::PgSettlementCandidates::new(db.clone()),
+                ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                    user_roles_and_permissions_service.clone(),
+                    teams_repo_impl.clone(),
+                ),
+            ),
+            ai_billing::inbound::SETTLEMENT_SWEEP_INITIAL_DELAY,
+            ai_billing::inbound::SETTLEMENT_SWEEP_INTERVAL,
+        ))
+    });
+    if settlement_sweep.is_none() {
+        tracing::info!("ai billing settlement sweep not started: ENABLE_AI_USAGE_BILLING is off");
+    }
     let document_storage_service_client = Arc::new(document_storage_service_client);
     // The harness and scheduled-action services validate the fleet-wide
     // internal key, not this service's own inbound key.
@@ -645,6 +673,12 @@ pub async fn run() -> anyhow::Result<()> {
         config.port,
     )
     .await;
+
+    // A sweep interrupted here leaves nothing half done: each settlement
+    // step commits on its own and the next sweep, on any replica, resumes.
+    if let Some(sweep) = settlement_sweep {
+        sweep.abort();
+    }
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

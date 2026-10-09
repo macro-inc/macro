@@ -93,6 +93,57 @@ describe('agent fold preloading', () => {
     await expect(pushed).resolves.toEqual([]);
   });
 
+  // The three ways a worker can fail are distinguishable, and the browser
+  // tells them apart only by the error event's message. Measured in Chrome: a
+  // script that 404s reports no message at all; one that loads and throws
+  // reports what it threw; a failure inside the worker never reaches `error`
+  // and comes back as an ordinary reply.
+  it('reports a script that never loaded as the build being gone', async () => {
+    const { AgentFoldWorkerUnavailable, pushSession } = await import(
+      './client'
+    );
+    const pushed = pushSession('session', [{ kind: 'snapshot', rows: [] }]);
+
+    workers[0]!.dispatchEvent(new ErrorEvent('error', { message: '' }));
+
+    const error = await pushed.catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(AgentFoldWorkerUnavailable);
+    expect((error as Error).message).toContain('no longer served');
+    // The chunk names the build, which is the whole diagnosis.
+    expect((error as Error).message).toContain('fold.worker');
+  });
+
+  it('reports a script that loaded and threw as a startup failure', async () => {
+    const { AgentFoldWorkerUnavailable, pushSession } = await import(
+      './client'
+    );
+    const pushed = pushSession('session', [{ kind: 'snapshot', rows: [] }]);
+
+    workers[0]!.dispatchEvent(
+      new ErrorEvent('error', { message: 'Uncaught Error: wasm exploded' })
+    );
+
+    const error = await pushed.catch((reason: unknown) => reason);
+    expect(error).not.toBeInstanceOf(AgentFoldWorkerUnavailable);
+    expect((error as Error).message).toContain('wasm exploded');
+  });
+
+  it('rejects every fold in flight from one worker failure', async () => {
+    const { pushSession } = await import('./client');
+    const first = pushSession('a', [{ kind: 'snapshot', rows: [] }]);
+    const second = pushSession('b', [{ kind: 'snapshot', rows: [] }]);
+
+    workers[0]!.dispatchEvent(new ErrorEvent('error', { message: '' }));
+
+    // One cause, two reports: why a single failure looks like many in Datadog.
+    const [a, b] = await Promise.all([
+      first.catch((reason: unknown) => reason),
+      second.catch((reason: unknown) => reason),
+    ]);
+    expect((a as Error).name).toBe('AgentFoldWorkerUnavailable');
+    expect((b as Error).name).toBe('AgentFoldWorkerUnavailable');
+  });
+
   it('contains constructor failures without preventing a later real load', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.stubGlobal(

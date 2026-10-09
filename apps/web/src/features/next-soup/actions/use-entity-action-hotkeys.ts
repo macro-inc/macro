@@ -36,6 +36,7 @@ import {
   makeSetCompanyPropertyAction,
   makeShareAction,
 } from './index';
+import type { MarkDoneDelegate } from './mark-done-delegate';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
@@ -51,6 +52,8 @@ type UseEntityActionHotkeysOptions = {
   condition?: () => boolean;
   /** Home previews reserve Delete/Backspace for the open editor. */
   enableDeleteHotkey?: boolean;
+  /** A list that completes its own rows, such as Home's work feed. */
+  markDoneDelegate?: () => MarkDoneDelegate | undefined;
 };
 
 export const useEntityActionHotkeys = (
@@ -75,6 +78,7 @@ export const useEntityActionHotkeys = (
     userId: () => userId(),
     notificationSource: () => notificationSource,
     hotkeyGroup: group,
+    delegate: options.markDoneDelegate,
   });
 
   const markNotDone = makeMarkNotDoneAction({

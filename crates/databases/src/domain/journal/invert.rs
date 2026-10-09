@@ -226,6 +226,19 @@ impl Inverter<'_> {
                     });
                 }
             }
+            ColumnChange::SetFormula { .. } => {
+                if later.iter().any(|step| !matches!(step.write, Write::Unchanged { .. }) && matches!(step.op, DatabaseOp::Column { column: named, change: ColumnChange::SetFormula { .. }, .. } if *named == column)) {
+                    return;
+                }
+                let Some(formula) = image.and_then(|image| image.formula) else {
+                    return;
+                };
+                self.push(DatabaseOp::Column {
+                    table,
+                    column,
+                    change: ColumnChange::SetFormula { formula },
+                });
+            }
             ColumnChange::ChangeType { .. } => {
                 let Some(image) = image else { return };
                 let Some(kind) = image.kind else { return };
@@ -248,6 +261,7 @@ impl Inverter<'_> {
                         kind: image.kind,
                         infer_type: image.infer_type,
                         nullable: image.nullable,
+                        formula: image.formula.clone(),
                     },
                 );
                 self.push(DatabaseOp::Column {

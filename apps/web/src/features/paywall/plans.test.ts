@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { PLAN_BY_TIER, PLANS, planFeatures } from './plans';
+import { getUpgradePlans, PLAN_BY_TIER, PLANS, planFeatures } from './plans';
 
 describe('plan catalogs', () => {
+  it('offers both paid plans to Free accounts, only Max to Pro, and no downgrade to Max', () => {
+    expect(getUpgradePlans('free')).toEqual(['premium', 'max']);
+    expect(getUpgradePlans('premium')).toEqual(['max']);
+    expect(getUpgradePlans('max')).toEqual([]);
+  });
+
   it('lists Free, Pro and Max, cheapest first', () => {
     expect(PLANS.map((plan) => plan.tier)).toEqual(['free', 'premium', 'max']);
     expect(PLAN_BY_TIER.free.name).toBe('Free');

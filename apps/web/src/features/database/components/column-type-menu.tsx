@@ -1,5 +1,6 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import FunctionIcon from '@phosphor/function.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import {
@@ -51,6 +52,8 @@ export function ColumnTypeMenu(props: {
    * it is not offered.
    */
   onConvertToNewColumn?: (choice: DatabaseColumnConversionChoice) => void;
+  /** Offer a formula; the host decides where the formula column goes. */
+  onFormula?: () => void;
 }) {
   const [open, setOpen] = createSignal(false);
   const protectedType = () =>
@@ -150,6 +153,21 @@ export function ColumnTypeMenu(props: {
               )}
             </For>
           </Dropdown.Group>
+          <Show when={props.onFormula}>
+            {(onFormula) => (
+              <Dropdown.Group>
+                <Dropdown.Item
+                  disabled={protectedType()}
+                  onSelect={() => onFormula()()}
+                >
+                  <FunctionIcon class="size-3.5 shrink-0 text-ink-muted" />
+                  <Dropdown.ItemLabel class="flex-1">
+                    Formula
+                  </Dropdown.ItemLabel>
+                </Dropdown.Item>
+              </Dropdown.Group>
+            )}
+          </Show>
           <Show when={offeredTables().length}>
             <Dropdown.Group>
               <Dropdown.GroupLabel>Related table</Dropdown.GroupLabel>

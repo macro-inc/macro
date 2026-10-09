@@ -224,3 +224,20 @@ impl SoupRealtimeService for SoupRealtimeServiceImpl {
             .context("realtime Soup worker stopped before completing patch")?
     }
 }
+
+/// Expand a PR change to source-scoped records and linked sessions. Each item
+/// keeps its own access source; PR access never grants access to a session.
+pub async fn pull_request_patches(
+    sessions: &impl super::ports::PullRequestSessions,
+    github_key: &str,
+    records: impl IntoIterator<Item = Entity<'static>>,
+) -> Result<Vec<SoupRealtimePatch>, Report> {
+    let linked = sessions.linked_sessions(github_key).await?;
+    let mut seen = HashSet::new();
+    Ok(records
+        .into_iter()
+        .chain(linked)
+        .filter(|entity| seen.insert(entity.clone()))
+        .map(|entity| SoupRealtimePatch::for_entity(Patch::Updated(entity)))
+        .collect())
+}

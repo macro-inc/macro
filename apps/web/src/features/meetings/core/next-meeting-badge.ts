@@ -8,9 +8,9 @@ export type NextMeetingBadge =
   | { kind: 'soon'; label: string; minutes: number };
 
 /**
- * The sidebar badge for the current moment: `Now` while a timed event is in
- * progress, else the minutes until the next timed event when it is under an
- * hour away. All-day events are ignored — they never mark a meeting.
+ * The sidebar badge for the current moment: `Now` while a timed meeting is in
+ * progress, else the minutes until the next timed meeting when it is under an
+ * hour away. All-day events and non-meetings are ignored.
  */
 export function nextMeetingBadge(
   events: readonly UpcomingCalendarEvent[],
@@ -19,10 +19,10 @@ export function nextMeetingBadge(
   const nowMs = now.getTime();
   let soonest = Number.POSITIVE_INFINITY;
   for (const event of events) {
-    if (event.allDay) continue;
+    if (event.allDay || !event.isMeeting) continue;
     const start = Date.parse(event.start);
     const end = Date.parse(event.end);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
       continue;
     }
     if (start <= nowMs && nowMs < end) return { kind: 'now', label: 'Now' };

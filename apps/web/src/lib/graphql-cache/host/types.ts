@@ -30,10 +30,12 @@ import type {
   MutationSettlement,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
+  QueryUpdate,
   QueryVariableFilter,
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
   ReadResult,
+  RecordFieldChange,
   RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
@@ -51,6 +53,11 @@ export interface CacheReadArgs {
   /** Read-only synthetic entity relations compiled by the exchange. */
   entityResolvers?: readonly EntityResolverWire[];
 }
+
+export type CacheWatchArgs = CacheReadArgs & {
+  opKey: number;
+  since?: CacheRevision;
+};
 
 export interface InspectQueryArgs {
   query: string;
@@ -115,7 +122,14 @@ export type CacheGenerationChange = {
   storage: 'preserved' | 'reset';
 };
 
+export type AffectedOperationsListener = (
+  opKeys: number[],
+  fieldChanges?: RecordFieldChange[]
+) => void;
+
 export interface CacheHost {
+  /** The host understands engine-maintained fragment query requests. */
+  readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
   /** True for the storage-free fallback when browser cache APIs are unsupported. */
@@ -127,6 +141,8 @@ export interface CacheHost {
    * whenever the stored cache is cleared or recreated. */
   currentStorageGeneration(): Promise<string>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
+  /** Engine-owned document projection; absent on older/disabled runtimes. */
+  watchQuery?(args: CacheWatchArgs): Promise<QueryUpdate>;
   /** Projects a bounded explicit set of normalized entity keys. */
   readRecordsByKeys(
     args: ReadRecordsByKeysArgs
@@ -203,7 +219,7 @@ export interface CacheHost {
    * (local writes from other operations, other tabs, push invalidation).
    * Only keys belonging to this client are delivered. Returns unsubscribe.
    */
-  onOpsAffected(cb: (opKeys: number[]) => void): () => void;
+  onOpsAffected(cb: AffectedOperationsListener): () => void;
 
   /** Subscribes whenever the effective normalized-cache view changes. */
   onCacheChanged(

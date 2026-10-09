@@ -20,6 +20,7 @@ import {
   setActiveScope,
   setPressedKeys,
 } from '@core/hotkey/state';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
@@ -112,7 +113,13 @@ export function CommandMenu() {
   });
 
   const handleSelect = (item: CommandMenuItem) => {
-    if (isSearchItem(item) || isAskAiItem(item) || item.kind === 'new-project')
+    if (
+      isSearchItem(item) ||
+      isAskAiItem(item) ||
+      item.kind === 'new-project' ||
+      (isCommandItem(item) &&
+        item.data.hotkeyToken === TOKENS.global.createCommand)
+    )
       suppressCloseAutoFocus = true;
   };
 
@@ -320,8 +327,11 @@ export function CommandMenuInner(props: {
       const command = item.data;
       trackCommandUsage(item.id);
 
-      // Check if this is a multi-stage command
-      if (command.activateCommandScopeId) {
+      // Create opens its own launcher; other multi-stage commands stay here.
+      if (
+        command.activateCommandScopeId &&
+        command.hotkeyToken !== TOKENS.global.createCommand
+      ) {
         const commandScope = hotkeyScopeTree.get(
           command.activateCommandScopeId
         );

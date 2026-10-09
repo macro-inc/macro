@@ -13,12 +13,17 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
   let current = inner;
   return {
     clientId: inner.clientId,
+    get liveQueries() {
+      return current.liveQueries;
+    },
     get disabled() {
       return current.disabled;
     },
     currentRevision: () => current.currentRevision(),
     currentStorageGeneration: () => current.currentStorageGeneration(),
     readQuery: (args) => current.readQuery(args),
+    watchQuery: (args) =>
+      current.watchQuery?.(args) ?? Promise.resolve({ kind: 'unsupported' }),
     readRecordsByKeys: (args) => current.readRecordsByKeys(args),
     search: (args) => current.search(args),
     entityFilter: (args) => current.entityFilter(args),

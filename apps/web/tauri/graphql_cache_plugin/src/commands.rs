@@ -55,33 +55,67 @@ pub async fn graphql_cache_init<R: Runtime>(
     scope: String,
     hot_capacity: Option<u32>,
 ) -> Result<(), String> {
-    let mut guard = state
-        .0
-        .lock()
-        .map_err(|_| "graphql cache state poisoned".to_string())?;
-    if let Some(existing) = guard.as_ref() {
-        if existing.scope == scope {
-            return Ok(());
-        }
-        return Err(format!(
-            "graphql cache already initialized for scope {}, got {}",
-            existing.scope, scope
-        ));
-    }
+    // A pre-runtime-schema bundle may return after an OTA rollback. Retain
+    // persisted definitions needed by queued work instead of reverting to only
+    // the metadata embedded in the binary.
+    let schema_sdl = cache_core::meta::BUNDLED_SCHEMA_SDL.to_owned();
+    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl).await
+}
+
+/// Parses bundle SDL while retaining native cache execution and native Turso storage.
+/// The dedicated command prevents old binaries from silently ignoring the schema payload.
+#[tauri::command]
+pub async fn graphql_cache_init_with_schema<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    scope: String,
+    hot_capacity: Option<u32>,
+    schema_sdl: String,
+) -> Result<(), String> {
+    let incoming = cache_core::meta::Schema::from_sdl(&schema_sdl).map_err(|e| e.to_string())?;
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("graphql-cache");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let database =
-        TursoFileDatabase::new(dir.join("cache.turso")).map_err(|error| error.to_string())?;
-    let storage = database
-        .open_or_reset(&scope)
-        .map_err(|error| error.to_string())?;
-    let handle = EngineHandle::new(storage, hot_capacity);
-    *guard = Some(InitializedCache { scope, handle });
-    Ok(())
+    let schema_path = dir.join("schema.json");
+    let handle = {
+        let mut guard = state
+            .0
+            .lock()
+            .map_err(|_| "graphql cache state poisoned".to_string())?;
+        if let Some(existing) = guard.as_ref() {
+            if existing.scope != scope {
+                return Err("graphql cache scope mismatch".into());
+            }
+            existing.handle.clone()
+        } else {
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let schema = match std::fs::read_to_string(&schema_path) {
+                Ok(json) => cache_core::meta::Schema::from_json(&json)
+                    .and_then(|old| old.merge(&incoming))
+                    .map_err(|e| e.to_string())?,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    cache_core::meta::bundled_schema()
+                        .merge(&incoming)
+                        .map_err(|e| e.to_string())?
+                }
+                Err(error) => return Err(error.to_string()),
+            };
+            // Validate persisted metadata before opening or modifying user storage.
+            crate::engine::persist_schema(&schema_path, &schema)?;
+            let database =
+                TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
+            let storage = database.open_or_reset(&scope).map_err(|e| e.to_string())?;
+            let handle = EngineHandle::with_schema(storage, hot_capacity, schema);
+            *guard = Some(InitializedCache {
+                scope,
+                handle: handle.clone(),
+            });
+            handle
+        }
+    };
+    handle.install_schema(&incoming, &schema_path).await
 }
 
 /// Returns the current in-memory cache revision as a decimal string.
@@ -117,6 +151,29 @@ pub async fn graphql_cache_read(
             operation_name,
             variables.unwrap_or_default(),
             entity_resolvers.unwrap_or_default(),
+        )
+        .await
+}
+
+/// Incrementally project an ordinary query through cache-core.
+#[tauri::command]
+pub async fn graphql_cache_watch(
+    state: State<'_, CacheState>,
+    op_id: String,
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<Variables>,
+    entity_resolvers: Option<Vec<EntityResolver>>,
+    since: Option<String>,
+) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
+    engine_handle(&state)?
+        .watch(
+            op_id,
+            query,
+            operation_name,
+            variables.unwrap_or_default(),
+            entity_resolvers.unwrap_or_default(),
+            since,
         )
         .await
 }
@@ -170,7 +227,12 @@ pub async fn graphql_cache_calendar_commit<R: Runtime>(
     commit: CalendarCommit,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?.calendar_commit(commit).await?;
-    emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_ops_affected(
+        &app,
+        &result.affected_ops,
+        &result.changed,
+        result.field_changes.as_ref(),
+    );
     if result.revision_advanced {
         emit_cache_changed_with_search_changes(
             &app,
@@ -221,7 +283,12 @@ pub async fn graphql_cache_write<R: Runtime>(
             identity,
         })
         .await?;
-    emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_ops_affected(
+        &app,
+        &result.affected_ops,
+        &result.changed,
+        result.field_changes.as_ref(),
+    );
     if result.revision_advanced {
         emit_cache_changed_with_search_changes(
             &app,
@@ -290,6 +357,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             &app,
             &result.write_result.affected_ops,
             &result.write_result.changed,
+            None,
         );
         if result.write_result.revision_advanced {
             emit_cache_changed(
@@ -356,7 +424,12 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
             uncertain_calendar_event_keys.unwrap_or_default(),
         )
         .await?;
-    emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
+    emit_ops_affected(
+        &app,
+        &result.result.affected_ops,
+        &result.result.changed,
+        result.result.field_changes.as_ref(),
+    );
     if result.result.revision_advanced {
         emit_cache_changed(&app, &result.result.revision, result.result.reset);
     }
@@ -461,7 +534,12 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
         result: write_result,
     } = &result
     {
-        emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+        emit_ops_affected(
+            &app,
+            &write_result.affected_ops,
+            &write_result.changed,
+            write_result.field_changes.as_ref(),
+        );
         if write_result.revision_advanced {
             emit_cache_changed(&app, &write_result.revision, write_result.reset);
         }
@@ -519,7 +597,12 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             result,
         } => (result, Some(replacement_transaction_id.clone()), None),
     };
-    emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+    emit_ops_affected(
+        &app,
+        &write_result.affected_ops,
+        &write_result.changed,
+        write_result.field_changes.as_ref(),
+    );
     if write_result.revision_advanced {
         emit_cache_changed(&app, &write_result.revision, write_result.reset);
     }
@@ -560,7 +643,12 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
         RollbackOptimisticWriteResultWire::RolledBack {
             result: write_result,
         } => {
-            emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+            emit_ops_affected(
+                &app,
+                &write_result.affected_ops,
+                &write_result.changed,
+                write_result.field_changes.as_ref(),
+            );
             if write_result.revision_advanced {
                 emit_cache_changed(&app, &write_result.revision, write_result.reset);
             }
@@ -578,7 +666,12 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
             replacement_transaction_id,
             result: write_result,
         } => {
-            emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+            emit_ops_affected(
+                &app,
+                &write_result.affected_ops,
+                &write_result.changed,
+                write_result.field_changes.as_ref(),
+            );
             if write_result.revision_advanced {
                 emit_cache_changed(&app, &write_result.revision, write_result.reset);
             }
@@ -605,7 +698,7 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
     keys: Vec<String>,
 ) -> Result<AffectedOperationsResultWire, String> {
     let affected = engine_handle(&state)?.invalidate(keys.clone()).await?;
-    emit_ops_affected(&app, &affected.affected_ops, &keys);
+    emit_ops_affected(&app, &affected.affected_ops, &keys, None);
     emit_cache_changed(&app, &affected.revision, false);
     Ok(affected)
 }
@@ -619,7 +712,7 @@ pub async fn graphql_cache_delete_records<R: Runtime>(
     keys: Vec<String>,
 ) -> Result<AffectedOperationsResultWire, String> {
     let affected = engine_handle(&state)?.delete_records(keys.clone()).await?;
-    emit_ops_affected(&app, &affected.affected_ops, &keys);
+    emit_ops_affected(&app, &affected.affected_ops, &keys, None);
     emit_cache_changed(&app, &affected.revision, false);
     Ok(affected)
 }
