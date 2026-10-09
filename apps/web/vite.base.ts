@@ -130,6 +130,54 @@ function cloudFrontCompressionLimit(): Plugin {
   };
 }
 
+/**
+ * loro-crdt's `browser` export downloads its 3 MB WASM with a synchronous
+ * XMLHttpRequest and compiles it on the main thread, freezing startup for the
+ * whole download. Builds use the `bundler` export that dev already resolves
+ * through the `development` condition: vite-plugin-wasm streams and compiles it
+ * off the main thread, and the preload fetches it alongside the entry.
+ */
+function loroAsyncWasm(): Plugin {
+  let base = '/';
+  return {
+    name: 'loro-async-wasm',
+    apply: 'build',
+    enforce: 'pre',
+    configResolved(config) {
+      base = config.base.endsWith('/') ? config.base : `${config.base}/`;
+    },
+    resolveId(source, importer, options) {
+      if (source !== 'loro-crdt') return null;
+      return this.resolve('loro-crdt/bundler', importer, {
+        ...options,
+        skipSelf: true,
+      });
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, ctx) {
+        const wasmFile = Object.keys(ctx.bundle ?? {}).find((fileName) =>
+          /(^|\/)loro_wasm_bg-[\w-]+\.wasm$/.test(fileName)
+        );
+        if (!wasmFile) return;
+        return [
+          {
+            tag: 'link',
+            attrs: {
+              rel: 'preload',
+              href: `${base}${wasmFile}`,
+              as: 'fetch',
+              type: 'application/wasm',
+              crossorigin: '',
+            },
+            injectTo: 'head',
+          },
+        ];
+      },
+    },
+  };
+}
+
 const BOOT_ENTRY = resolve(__dirname, 'src/boot.ts');
 
 /**
@@ -192,6 +240,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         pureGeneratedZodSchemas(),
         solid(),
         wasm(),
+        loroAsyncWasm(),
         tailwind(),
         solidSvg({ defaultAsComponent: true }),
         tsconfigpaths({
