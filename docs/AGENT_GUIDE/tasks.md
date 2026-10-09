@@ -332,16 +332,16 @@ filter sheets. Desktop uses the centered composer dialog.
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
    chip (defaults to you), `Due Date`, `Project` (when Projects is enabled; the standard
-   property dropdown, listing projects), `Change or select tags`, `Attach image or video`,
-   a `Create More` switch, and `Create Task Ctrl ↵`. If the chosen project can't be
+   property dropdown, listing projects), `Change or select tags`, a `Create More` switch,
+   and `Create Task Ctrl ↵`. `Attach image or video` (paperclip) sits just under the
+   description, above the property buttons. If the chosen project can't be
    set, the task is still created and a toast says it wasn't added to the project.
-   The `Shared with Team` row defaults to on and remembers your choice in local
-   storage across composer openings and page reloads. Its hint explains whether
-   the task will be visible to your whole team or only to you and the people you
-   share it with. The choice also applies to Create More, continuing in a split,
-   and tasks created from a project.
-   This row sits below the creation buttons, separated by an edge-to-edge divider.
-   A second divider separates it from Similar Tasks when matches are shown.
+   The `Share with <team name>` switch in the footer's left corner (hidden when you
+   aren't on a team) defaults to on and remembers your
+   choice in local storage across composer openings and page reloads. Hovering it
+   explains whether the task will be visible to your whole team or only to you and
+   the people you share it with. The choice also applies to Create More, continuing
+   in a split, and tasks created from a project.
 3. `type_text` the title, then press **Ctrl+Enter** to create (the `Create Task` button
    enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
