@@ -156,6 +156,12 @@ editing: only moved or removed rows should be added or removed. Rename a row and
 then drag it: its drag label/payload must use the new fields without another
 registration/layout measurement.
 
+Desktop multi-select filter menus in Home, Tasks, Drive, Email, Reviews, Search,
+CRM, Calendar, and database option-value filters close after an ordinary click or
+Enter. Hold Shift while clicking or pressing Enter to toggle individual options
+and keep the menu open for further selections. Shift does not select a range.
+Single-select controls and mobile filter drawers retain their existing behavior.
+
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
 filters operate over synchronized channel metadata. The default channel scope
@@ -1162,6 +1168,12 @@ and **Created by** submenus alongside **Files** for Default, All files, and Emai
 attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
+Hold Shift while selecting or deselecting Type options to keep the submenu open
+and combine several file types without reopening it. Desktop filter submenus allow a
+250 ms grace period when the mouse crosses the parent menu's padding; entering
+the submenu cancels the pending close. Hovering another category immediately
+switches to that category, including when the submenu opens to the left.
+Escape and outside clicks still dismiss immediately.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. **New → Folder**

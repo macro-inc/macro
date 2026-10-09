@@ -179,7 +179,7 @@ export function CalendarPeopleFilterSubmenu(props: {
                   {(contact) => (
                     <Dropdown.CheckboxItem
                       class="h-8"
-                      closeOnSelect={false}
+                      closeOnSelect="unless-shift"
                       checked={props
                         .values()
                         .includes(contact.email.toLowerCase())}
@@ -202,7 +202,7 @@ export function CalendarPeopleFilterSubmenu(props: {
           </Show>
           <Show when={canAddEmail()}>
             <Dropdown.Item
-              closeOnSelect={false}
+              closeOnSelect="unless-shift"
               onSelect={() => {
                 const email = normalizedSearch();
                 inputRef()?.focus();
