@@ -138,8 +138,15 @@ pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
     DcsAuthorizationService,
 >;
 
+/// Read-only Home inference service, composed at startup.
+pub type DcsUniversalInputService = universal_input::domain::UniversalInputService<
+    jev::domain::JevClassifier<jev::outbound::TypesafeJev>,
+    universal_input::outbound::AgentFieldExtractor,
+>;
+
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
+    pub universal_input: Arc<DcsUniversalInputService>,
     pub db: PgPool,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub document_storage_client: Arc<DocumentStorageServiceClient>,

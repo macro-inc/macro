@@ -22,7 +22,7 @@ export type BootShellHint = {
   /** Whether the rail shows the Get-the-mobile-app button. */
   mobileApp?: boolean;
   /** Home's composer: the Agents new-chat layout or the legacy greeting. */
-  homeComposer?: 'agents' | 'legacy';
+  homeComposer?: 'agents' | 'legacy' | 'universal';
 };
 
 /** Records part of the current layout for the next load's boot shell. */

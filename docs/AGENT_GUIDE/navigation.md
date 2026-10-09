@@ -367,13 +367,14 @@ Its **New conversation** button opens the composer for the current mode with one
 chat agents, and the composer stays on one line. In Code it lists coding agents
 only, the composer opens expanded with the repository drawer below it, and the
 greeting reads "What should we build?". New sessions use the selected agent's
-default model and the URL for its kind. Home's composer is unchanged and still
-offers both kinds. Opening an existing row restores its own kind and URL.
+default model and the URL for its kind. Home's universal input reveals the agent
+and model selectors only after AI is selected. Opening an existing row restores
+its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 
-Home's inner rail starts with a full-width **New chat** plus button that returns
-to Home's starting pane without creating a chat. Email and Tasks use the same
+Home's inner rail starts with a full-width **New** plus button that returns
+to Home's starting pane without creating anything. Email and Tasks use the same
 pill styling and top placement for **New email** and **New task**, replacing
 the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split. The last
@@ -386,6 +387,7 @@ These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
 sidebar layout default to 256px; manually resized Chat widths remain saved.
+
 After dragging a view's inner sidebar divider (or using its arrow keys), resizing
 the containing split preserves the chosen sidebar width while space permits.
 Narrow splits may shrink or collapse the sidebar; widening restores its chosen
@@ -403,6 +405,30 @@ across lists, previews, and drag images, with regular and bold weights. Read ema
 uses an open envelope, calendar invitations use a calendar, and pull requests
 retain their open/merged/closed glyphs and status colors. Direct messages may
 show the other participant's avatar instead of a glyph.
+
+### Experimental universal input on desktop Home
+
+The starting pane contains a blank input with accessible name **Your input**.
+Type directly; after a short pause it recognizes AI, global Macro search, email,
+Markdown note, task, calendar event, or message/DM. The main editor keeps focus
+while editable fields appear below it. **Content type** defaults to **Auto**;
+ambiguous text offers choices. Choosing a type or editing a field locks the type.
+Select **Auto** to resume detection; manually edited fields remain yours.
+
+**Enter** inserts a newline. **Cmd/Ctrl+Enter** or the labeled action button
+submits only the currently displayed, complete action. There is no queued send
+while inference is pending. Email and message modes show their outgoing body
+and resolved recipients. Ambiguous names require a specific selection. Calendar
+shows the absolute date, time, timezone, calendar, and invitees. For example,
+“Call John at 3pm tomorrow” becomes a one-hour event at 3 PM tomorrow with no
+invitation; inviting John requires an explicit invitation request or guest edit.
+
+Drafts persist locally per signed-in user. Failed inference allows manual type
+selection and field entry; failed submission keeps the draft. Successful writes
+show **Open**, while AI and search navigate immediately. Attached AI context
+must be removed before submitting another type. Dedicated Agents and mobile Home
+keep their existing layouts. Browser fixture tests use recording-only writes;
+real email/message buttons send to the displayed recipients.
 
 ## List-row dragging
 

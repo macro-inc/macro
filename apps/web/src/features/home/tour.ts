@@ -33,7 +33,7 @@ export const homeTour = defineViewTour({
       target: VIEW_SHELL_TOUR.main,
       title: 'Start something new',
       description:
-        'Choose New chat to work with an agent, or use Create in the sidebar to start a document, task, or conversation.',
+        'Choose New and type what you have in mind. Home recognizes searches, AI questions, emails, notes, tasks, events, and messages, then shows the fields and action before you submit.',
     },
   ],
 });

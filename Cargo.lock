@@ -6121,6 +6121,7 @@ dependencies = [
  "http 1.4.0",
  "http-body-util",
  "import",
+ "jev",
  "last_online_tracker",
  "lazy_static",
  "lexical_client",
@@ -6185,6 +6186,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "unfurl_service",
+ "universal_input",
  "url",
  "utoipa",
  "utoipa-swagger-ui",
@@ -20153,6 +20155,25 @@ checksum = "f4987bdc12753382e0bec4a65c50738ffaabc998b9cdd1f952fb5f39b0048a96"
 dependencies = [
  "crypto-common 0.2.2",
  "ctutils",
+]
+
+[[package]]
+name = "universal_input"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "ai_billing",
+ "ai_usage",
+ "chrono",
+ "chrono-tz",
+ "jev",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
 ]
 
 [[package]]

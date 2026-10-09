@@ -1,0 +1,12 @@
+@keyframes universal-input-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.universal-input-fields {
+  animation: universal-input-reveal 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .universal-input-fields { animation: none; }
+}

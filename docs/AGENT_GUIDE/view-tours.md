@@ -7,6 +7,10 @@ Documents, Tasks, Channels, Calendar, Customers, Agents, Calls, and Folders. Tou
 are not mounted on narrow screens or primary touch devices, including their videos
 and highlights.
 
+Home’s final **Start something new** step describes the blank universal input,
+its seven inferred destinations, and the fields shown before submission. It
+keeps the existing main-pane target and dismissal key.
+
 ## What you see
 
 - A card sits beside the current feature, preferably to its right, and a thin

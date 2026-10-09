@@ -924,7 +924,22 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .with_auth_completed_hook(pipedream_auth_hook);
 
+    let universal_input = Arc::new(universal_input::domain::UniversalInputService::new(
+        config
+            .typesafe_api_key
+            .value()
+            .map(jev::outbound::TypesafeJev::new)
+            .transpose()
+            .context("invalid TYPESAFE_API_KEY")?
+            .map(|provider| {
+                jev::domain::JevClassifier::new(provider, tool_service_context.recorder.clone())
+            }),
+        universal_input::outbound::AgentFieldExtractor::new(tool_service_context.recorder.clone()),
+        tool_service_context.admission.clone(),
+    ));
+
     let api_result = api::setup_and_serve(ApiContext {
+        universal_input,
         db: db.clone(),
         email_service_client_external,
         sqs_client: Arc::new(sqs_client),

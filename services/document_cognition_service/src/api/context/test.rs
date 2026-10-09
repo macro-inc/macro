@@ -668,6 +668,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         search_service_client,
         email_service_client_external,
         authorization_state: authorization_state.clone(),
+        universal_input: Arc::new(universal_input::domain::UniversalInputService::new(
+            None,
+            universal_input::outbound::AgentFieldExtractor::new(
+                tool_service_context.recorder.clone(),
+            ),
+            admission.clone(),
+        )),
         ai_admission: admission,
         ai_billing: Arc::new(
             ai_billing::domain::BillingServiceImpl::new(

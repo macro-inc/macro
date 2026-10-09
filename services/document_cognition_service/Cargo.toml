@@ -24,6 +24,8 @@ local_queue = []
 
 
 [dependencies]
+jev = { path = "../../crates/jev", features = ["outbound"] }
+universal_input = { path = "../../crates/universal_input" }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
 ai_projections = { path = "../../crates/ai_projections", features = ["agent"] }
 ai_billing = { path = "../../crates/ai_billing" }

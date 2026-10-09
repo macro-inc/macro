@@ -12,6 +12,7 @@ use crate::api::{
     structured_completion::{
         self, StructuredCompletionError, StructuredCompletionRequest, StructuredCompletionResponse,
     },
+    universal_input,
 };
 use crate::model::{
     response::attachments::GetChatsForAttachmentResponse,
@@ -90,6 +91,8 @@ use utoipa::OpenApi;
             chat_message::send_chat_message,
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
+        universal_input::classify,
+        universal_input::extract,
             memory_api::get_memory_handler,
             import_api::get_state_handler,
             import_api::run_import_handler,

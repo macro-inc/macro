@@ -13,6 +13,8 @@ import type {
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
   ChatMessageError,
+  ClassifyInputRequest,
+  ClassifyInputResponse,
   CompleteOnboardingRequest,
   CreateChatRequest,
   DeleteMcpServerParams,
@@ -20,6 +22,8 @@ import type {
   DocumentTextPart,
   ErrorBody,
   ErrorResponse,
+  ExtractInputRequest,
+  ExtractInputResponse,
   GetBatchPreviewRequest,
   GetBatchPreviewResponse,
   GetChatPermissionsResponse,
@@ -2683,4 +2687,124 @@ export const structuredCompletion = async (
     status: res.status,
     headers: res.headers,
   } as structuredCompletionResponse;
+};
+
+export type classifyResponse200 = {
+  data: ClassifyInputResponse;
+  status: 200;
+};
+
+export type classifyResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type classifyResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type classifyResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type classifyResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type classifyResponseSuccess = classifyResponse200 & {
+  headers: Headers;
+};
+export type classifyResponseError = (
+  | classifyResponse400
+  | classifyResponse401
+  | classifyResponse402
+  | classifyResponse503
+) & {
+  headers: Headers;
+};
+
+export type classifyResponse = classifyResponseSuccess | classifyResponseError;
+
+export const getClassifyUrl = () => {
+  return `/universal-input/classify`;
+};
+
+export const classify = async (
+  classifyInputRequest: ClassifyInputRequest,
+  options?: RequestInit
+): Promise<classifyResponse> => {
+  const res = await fetch(getClassifyUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(classifyInputRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: classifyResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as classifyResponse;
+};
+
+export type extractResponse200 = {
+  data: ExtractInputResponse;
+  status: 200;
+};
+
+export type extractResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type extractResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type extractResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type extractResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type extractResponseSuccess = extractResponse200 & {
+  headers: Headers;
+};
+export type extractResponseError = (
+  | extractResponse400
+  | extractResponse401
+  | extractResponse402
+  | extractResponse503
+) & {
+  headers: Headers;
+};
+
+export type extractResponse = extractResponseSuccess | extractResponseError;
+
+export const getExtractUrl = () => {
+  return `/universal-input/extract`;
+};
+
+export const extract = async (
+  extractInputRequest: ExtractInputRequest,
+  options?: RequestInit
+): Promise<extractResponse> => {
+  const res = await fetch(getExtractUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(extractInputRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: extractResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as extractResponse;
 };

@@ -2213,6 +2213,86 @@
           }
         }
       }
+    },
+    "/universal-input/classify": {
+      "post": {
+        "tags": ["universal_input"],
+        "operationId": "classify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifyInputResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "402": {
+            "description": "AI allowance exhausted"
+          },
+          "503": {
+            "description": "Detection unavailable"
+          }
+        }
+      }
+    },
+    "/universal-input/extract": {
+      "post": {
+        "tags": ["universal_input"],
+        "operationId": "extract",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractInputResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "402": {
+            "description": "AI allowance exhausted"
+          },
+          "503": {
+            "description": "Extraction unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2935,6 +3015,38 @@
           }
         ]
       },
+      "ClassifyInputRequest": {
+        "type": "object",
+        "description": "A draft snapshot. Revisions are opaque to the server and echoed to the client.",
+        "required": ["text", "revision"],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "ClassifyInputResponse": {
+        "type": "object",
+        "required": ["revision", "scores"],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntentScore"
+            }
+          }
+        }
+      },
       "CompleteOnboardingRequest": {
         "type": "object",
         "description": "Body for completing onboarding.",
@@ -3189,6 +3301,53 @@
         "type": "string",
         "description": "How long a projection remains active without being requested.",
         "enum": ["day", "week", "month"]
+      },
+      "ExtractInputRequest": {
+        "type": "object",
+        "required": [
+          "text",
+          "intent",
+          "revision",
+          "reference_time",
+          "time_zone"
+        ],
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/InputIntent"
+          },
+          "reference_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "text": {
+            "type": "string"
+          },
+          "time_zone": {
+            "type": "string"
+          }
+        }
+      },
+      "ExtractInputResponse": {
+        "type": "object",
+        "required": ["revision", "intent", "suggestions"],
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/InputIntent"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "suggestions": {
+            "$ref": "#/components/schemas/InputSuggestions"
+          }
+        }
       },
       "FeatureUsage": {
         "type": "object",
@@ -3902,6 +4061,70 @@
         "type": "string",
         "description": "Where an import entity was first staged from. Provenance only — never a\nvisibility filter.",
         "enum": ["onboarding", "chat", "archive", "manual"]
+      },
+      "InputIntent": {
+        "type": "string",
+        "description": "A destination the composer can prepare, but never execute through inference.",
+        "enum": ["ai", "search", "email", "note", "task", "calendar", "message"]
+      },
+      "InputSuggestions": {
+        "type": "object",
+        "description": "Suggestions are text, never authorized recipient, channel or calendar IDs.",
+        "properties": {
+          "body": {
+            "type": ["string", "null"]
+          },
+          "due_date": {
+            "type": ["string", "null"]
+          },
+          "end": {
+            "type": ["string", "null"]
+          },
+          "guests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only populated when an invitation was explicitly requested."
+          },
+          "location": {
+            "type": ["string", "null"]
+          },
+          "query": {
+            "type": ["string", "null"]
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "start": {
+            "type": ["string", "null"],
+            "description": "Local wall-clock values, interpreted in the request's IANA timezone."
+          },
+          "subject": {
+            "type": ["string", "null"]
+          },
+          "title": {
+            "type": ["string", "null"]
+          }
+        },
+        "additionalProperties": false
+      },
+      "IntentScore": {
+        "type": "object",
+        "description": "Independent yes/no probabilities; these do not sum to one.",
+        "required": ["intent", "score"],
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/InputIntent"
+          },
+          "score": {
+            "type": "number",
+            "format": "float"
+          }
+        }
       },
       "JwtPayload": {
         "type": "object",

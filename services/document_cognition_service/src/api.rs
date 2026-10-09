@@ -26,6 +26,7 @@ mod attachments;
 mod chats;
 pub mod structured_completion;
 pub(crate) mod tool_selection;
+pub(crate) mod universal_input;
 
 #[cfg(test)]
 mod test;
@@ -112,6 +113,8 @@ fn api_router(api_context: ApiContext) -> Router {
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
         .nest("/stream", stream::router())
+        .route("/universal-input/classify", post(universal_input::classify))
+        .route("/universal-input/extract", post(universal_input::extract))
         .route(
             "/structured-completion",
             post(structured_completion::structured_completion),
