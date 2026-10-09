@@ -47,14 +47,24 @@ jobs:
       environment: dev
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  build-web-app:
+    name: Build Web App
+    uses: ./.github/workflows/build_web_app.yml
+    with:
+      environment: dev
+    secrets:
+      SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
   deploy-web-app:
     needs:
     - deploy-cloud-storage
+    - build-web-app
     name: Deploy Web App
     uses: ./.github/workflows/deploy_web_app.yml
     with:
       notify: false
       environment: dev
+      prebuilt: true
     secrets:
       AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
