@@ -150,7 +150,7 @@ it('lists the record’s team, files, and tasks', () => {
   fireEvent.input(view.getByRole('textbox', { name: 'Search contacts' }), {
     target: { value: 'priya' },
   });
-  expect(contacts.queryByText('Dana Whitfield')).toBeNull();
+  expect(contacts.queryByText('Dana')).toBeNull();
   fireEvent.click(view.getByRole('radio', { name: 'Files' }));
   expect(
     view.getByRole('button', { name: 'Team rollout plan 9:30 AM' })

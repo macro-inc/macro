@@ -7,6 +7,7 @@ import {
   type OperationResult,
 } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
 import { createUrqlInfiniteQuery } from './create-urql-infinite-query';
@@ -76,6 +77,35 @@ afterEach(() => {
 });
 
 describe('createUrqlInfiniteQuery', () => {
+  it('reselects when a live page changes without another result emission', () => {
+    const fake = makeFakeClient();
+    const [page, setPage] = createStore<Page>({
+      values: ['a'],
+      nextCursor: 'next',
+    });
+    createRoot((dispose) => {
+      disposals.push(dispose);
+      const query = createUrqlInfiniteQuery(() => ({
+        client: fake.client,
+        query: DOCUMENT,
+        initialPageParam: null as string | null,
+        variables: (cursor: string | null) => ({ cursor }),
+        getNextPageParam: (page: Page) => page.nextCursor,
+        select: ({ pages }: { pages: Page[] }) =>
+          pages.flatMap((page) =>
+            page.nextCursor === 'next' ? page.values : []
+          ),
+      }));
+      fake.executions[0].next(page);
+      expect(query.data).toEqual(['a']);
+      setPage('nextCursor', null);
+      expect(query.data).toEqual([]);
+      setPage('nextCursor', 'next');
+      expect(query.data).toEqual(['a']);
+      expect(fake.executions).toHaveLength(1);
+    });
+  });
+
   it('caches immutable observer results between emissions', () => {
     const fake = makeFakeClient();
     let selectCalls = 0;

@@ -9,6 +9,11 @@ const { client, navigate } = vi.hoisted(() => ({
   navigate: vi.fn(),
 }));
 vi.mock('@queries/client', () => ({
+  queryPersistence: {
+    clear: async () => {
+      client.current?.clear();
+    },
+  },
   get queryClient() {
     return client.current;
   },

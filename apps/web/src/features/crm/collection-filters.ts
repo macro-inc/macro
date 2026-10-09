@@ -108,6 +108,9 @@ function crmCompanyActivePredicate(entity: EntityData): boolean {
 function crmCompanyHiddenPredicate(entity: EntityData): boolean {
   return entity.type === 'crm_company' && entity.hidden;
 }
+function crmContactActivePredicate(entity: EntityData): boolean {
+  return entity.type === 'crm_contact' && !entity.hidden;
+}
 
 export const crmCompanyFilter = config({
   id: 'crm-company',
@@ -128,5 +131,13 @@ export const crmCompanyHiddenFilter = config({
   query: defineQueryFilters(
     { include: { crmCompanyHidden: true } },
     { skipTargets: ['ccf'] }
+  ),
+});
+export const crmContactActiveFilter = config({
+  id: 'crm-contact-active',
+  predicate: crmContactActivePredicate,
+  query: defineQueryFilters(
+    { include: { crmContactHidden: false } },
+    { skipTargets: ['crmf'] }
   ),
 });

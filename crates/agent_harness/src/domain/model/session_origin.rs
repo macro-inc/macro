@@ -3,6 +3,7 @@
 use agent_runtime_protocol::domain::action::{AgentAction, PromptAttachment};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use trigger_context::TriggerContext;
 
 use super::AnnounceOrigin;
 
@@ -25,6 +26,9 @@ pub struct MentionOrigin {
     /// Files attached to the message, as the prompt will refer to them.
     #[serde(default)]
     pub attachments: Vec<PromptAttachment>,
+    /// Why the agent was called, as the trigger read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
 }
 
 /// A task assignment that starts a session without a user-authored mention.
@@ -38,6 +42,9 @@ pub struct TaskAssignmentOrigin {
     pub actor: MacroUserIdStr<'static>,
     /// Task instructions supplied privately to the session.
     pub prompt: String,
+    /// The task, who assigned it, and how, as the trigger read it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
 }
 
 /// The event that opens a managed session.
@@ -73,6 +80,13 @@ impl SessionOrigin {
         match self {
             Self::Mention(origin) => &origin.sender,
             Self::TaskAssignment(origin) => &origin.actor,
+        }
+    }
+
+    pub(crate) fn context(&self) -> Option<&TriggerContext> {
+        match self {
+            Self::Mention(origin) => origin.context.as_ref(),
+            Self::TaskAssignment(origin) => origin.context.as_ref(),
         }
     }
 

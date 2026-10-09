@@ -1602,6 +1602,8 @@ pub fn no_op_schedule_context() -> RoutineToolContext {
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
 pub struct ToolServiceContext {
+    /// Read-only discovery of connectors the caller has not yet authorized.
+    pub connector_tool_context: ToolConnectorToolContext,
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub soup_service: Arc<ToolSoupService>,
@@ -1649,6 +1651,27 @@ pub struct ToolServiceContext {
     /// this context. Set per-session by the caller so AI calls made by tools
     /// (e.g. subagents) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
+}
+
+/// Pipedream discovery dependencies shared by chat tools.
+pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
+    pipedream_mcp::outbound::api::PipedreamClient,
+    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+>;
+
+/// Wire connector discovery at the composition boundary.
+pub fn build_connector_tool_context(
+    pool: sqlx::PgPool,
+    client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+) -> ToolConnectorToolContext {
+    pipedream_mcp::inbound::toolset::ConnectorToolContext {
+        service: Arc::new(
+            pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
+                client,
+                Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
+            ),
+        ),
+    }
 }
 
 impl FromRef<ToolServiceContext> for AnthropicToolContext {

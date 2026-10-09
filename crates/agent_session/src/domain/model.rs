@@ -178,9 +178,9 @@ pub enum SessionStatus {
 }
 
 /// Which Pipedream MCP servers a session is handed: the agent's own choice,
-/// snapshotted onto the session at creation like `instructions`. The ACP
-/// agent is given its server list once per attach and cannot refresh it, so
-/// the snapshot is what every later attach re-advertises; editing the agent
+/// snapshotted onto the session at creation like `instructions`. The native
+/// runtime refreshes connections within this policy before each turn. Other
+/// ACP runtimes receive the list on attach; editing the agent's selection
 /// applies to its next session.
 pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 
@@ -260,6 +260,8 @@ pub struct AgentSession {
     pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// The pull request associated with this session, independent of conversation history.
     pub pull_request_url: Option<String>,
+    /// The Macro task the session was explicitly linked to.
+    pub task_id: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,
@@ -407,6 +409,9 @@ pub struct StoredQueuedAction {
     /// Chip message id, once posted, so a retry does not announce twice.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub announced_message_id: Option<Uuid>,
+    /// Why the agent is being asked, composed into the prompt at dispatch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<trigger_context::TriggerContext>,
 }
 
 impl From<&StoredQueuedAction> for super::ports::QueuedControl {

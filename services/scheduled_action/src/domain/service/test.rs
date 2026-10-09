@@ -519,12 +519,25 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
             .unwrap();
         assert!(sessions.preparations.lock().unwrap().is_empty());
         *sessions.error.lock().unwrap() = Some(denial);
-        let runner = TargetRunner::new(sessions.clone());
+        let runner = TargetRunner::new(sessions.clone(), Arc::new(UnreadEvents));
         let mut handle = ExecutionHandle::default();
         let error = runner.prepare(&created, &mut handle).await.unwrap_err();
         assert_eq!(error.downcast_ref(), Some(&denial));
         assert!(handle.resource.is_none());
         assert_eq!(sessions.preparations.lock().unwrap().len(), 1);
+    }
+}
+
+/// Preparation never reads the triggering event.
+struct UnreadEvents;
+
+impl crate::domain::ports::RoutineEventReader for UnreadEvents {
+    async fn read_event(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &crate::domain::event_runs::AuthorizedEventRun,
+    ) -> std::result::Result<trigger_context::RoutineEvent, rootcause::Report> {
+        panic!("preparation must not read the triggering event")
     }
 }
 

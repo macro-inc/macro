@@ -81,6 +81,7 @@ fn action(action: AgentAction) -> DeliverAction {
         action,
         actor: Some(staff_sender()),
         announce: None,
+        context: None,
     }
 }
 
@@ -123,6 +124,7 @@ async fn denied_or_unavailable_trigger_open_has_no_side_effects() {
                     discussion_id: macro_uuid::generate_uuid_v7(),
                     actor: staff_sender(),
                     prompt: "Work on this task".to_owned(),
+                    context: None,
                 }),
             ] {
                 admission.calls.lock().unwrap().clear();
@@ -714,6 +716,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             announce: command.announce,
             announced: Some(macro_uuid::generate_uuid_v7()),
             created_at: chrono::Utc::now(),
+            context: None,
         };
         let stored = entry.to_stored().unwrap();
         let mut sessions = MockAgentSessionService::new();

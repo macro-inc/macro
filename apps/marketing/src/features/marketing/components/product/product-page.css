@@ -17,7 +17,6 @@
 .product-page .product-demo { height: var(--demo-h, 580px); border-radius: 16px; overflow: hidden; background-color: var(--color-panel); box-shadow: var(--glass-shadow); }
 .product-demo > .dummy-main { height: 100%; }
 .product-demo .sample-chat-log { padding: 32px; }
-.product-demo .sample-message-row { margin-bottom: 22px; }
 .product-demo .sample-details { display: none; }
 .product-demo .sample-detail-layout[data-panel-open=true] .sample-details { display: block; }
 .product-demo-request { margin-bottom: 28px; }

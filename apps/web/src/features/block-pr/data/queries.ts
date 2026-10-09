@@ -44,6 +44,7 @@ function prForeignEntityDataFromStored(
       description: pullRequest.description,
       checks: pullRequest.checks,
       comments: pullRequest.comments,
+      draft: pullRequest.draft,
       deletions: pullRequest.deletions,
       displayName: prDisplayName(prRef),
       foreignEntityId: pullRequest.id,

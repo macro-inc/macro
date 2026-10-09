@@ -1,12 +1,9 @@
 /*
- * /migrate is the switching guide. The focus is how to move: what maps to what,
- * the steps for each tool people come from, and what to connect rather than
- * migrate. Where a section touches on why Macro is different, it stays short
- * and links out to the versus posts, the feature pages, and the docs.
- *
- * Copy tracks docs.macro.com/switch-to-macro; the switch graphics there are
- * rebuilt against this site's theme variables in SwitchGraphic.tsx.
+ * /migrate leads with the content a company wants to bring over. MigrationPaths
+ * explains the import routes; detailed comparisons live on product pages. Keep import
+ * guidance aligned with the authenticated app and import pipeline.
  */
+import CaretDown from '@phosphor/caret-down.svg';
 import { A } from '@solidjs/router';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { isServer } from 'solid-js/web';
@@ -16,26 +13,17 @@ import { MacroMarkIcon } from '../components/graphics/MacroMarkIcon';
 import { ModuleGraphic } from '../components/graphics/ModuleGraphic';
 import { MODULE_LOGOS } from '../components/graphics/moduleLogos';
 import { SetupGraphic } from '../components/graphics/SetupGraphic';
-import {
-  type SwitchBrand,
-  SwitchBrandIcon,
-} from '../components/graphics/SwitchGraphic';
-import { ComparisonTable } from '../components/sections/ComparisonTable';
 import { HomeHeroBackdrop } from '../components/sections/HomeAppPreview';
 import { HomeSectionRule } from '../components/sections/HomeSectionRule';
-import { SectionHomeQuote } from '../components/sections/SectionHomeQuote';
-import { SectionMigrateComparisons } from '../components/sections/SectionMigrateComparisons';
+import { MigrationPaths } from '../components/sections/MigrationPaths';
 import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
 import { buildCalLinkWithAttribution } from '../utils/utilAnalytic';
 import { APP_BASE_URL } from '../utils/utilBaseUrl';
 import { viewportWidth } from '../utils/utilBreakpoint';
-import { ctaHref, ctaLabel, handleCtaClick } from '../utils/utilCta';
+import { ctaHref, handleCtaClick } from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
 
 const mobile = () => viewportWidth() < 700;
-// The comparison panels need ample room for their 170px fiducial rail. Below
-// this point, use the compact flow rather than progressively squeezing it.
-const comparisonMobile = () => viewportWidth() < 1200;
 
 const isLocalhost =
   !isServer && ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -58,14 +46,6 @@ const MODULE_ROW = [
   MODULE_LOGOS.Notion,
   MODULE_LOGOS.Slack,
 ];
-
-const SWITCH_LABELS: Record<SwitchBrand, string> = {
-  superhuman: 'Superhuman',
-  notion: 'Notion',
-  slack: 'Slack',
-  linear: 'Linear',
-  clickup: 'ClickUp',
-};
 
 // ---------------------------------------------------------------------------
 // Shared styles and small pieces
@@ -98,67 +78,7 @@ const bodyStyle = (): JSX.CSSProperties => ({
   'text-wrap': 'pretty',
 });
 
-const comparisonBodyStyle = (): JSX.CSSProperties => ({
-  ...bodyStyle(),
-  'font-size': mobile() ? '15px' : '16px',
-  'line-height': 1.7,
-});
-
-const pillStyle = (): JSX.CSSProperties => ({
-  'align-items': 'center',
-  'background-color': 'var(--b1)',
-  border: '1px solid color-mix(in srgb, var(--c4) 16%, transparent)',
-  'border-radius': '999px',
-  color: 'var(--c2)',
-  cursor: 'default',
-  display: 'inline-flex',
-  'font-family': 'Inter, body',
-  'font-size': mobile() ? '13px' : '14px',
-  'font-weight': '700',
-  gap: '7px',
-  'letter-spacing': '0.05em',
-  padding: '8px 15px',
-  'text-decoration': 'none',
-  'text-transform': 'uppercase',
-});
-
-function ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
-  return (
-    <a
-      href={ctaHref()}
-      class="migrate-cta-button"
-      onClick={(event) => handleCtaClick(event, props.buttonName)}
-      style={{
-        'align-items': 'center',
-        'background-color': 'var(--a0)',
-        'border-radius': '999px',
-        'box-sizing': 'border-box',
-        color: 'var(--b0)',
-        cursor: 'default',
-        display: 'inline-flex',
-        'font-family': 'body',
-        'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
-        'font-weight': '750',
-        gap: '8px',
-        height: mobile() ? '40px' : props.large ? '46px' : '40px',
-        'justify-content': 'center',
-        'letter-spacing': '0.045em',
-        'line-height': 1,
-        overflow: 'hidden',
-        padding: mobile() ? '0 20px' : props.large ? '0 28px' : '0 22px',
-        'text-decoration': 'none',
-        'text-transform': 'uppercase',
-        transition: 'transform 160ms ease',
-        'white-space': 'nowrap',
-        width: mobile() ? '100%' : 'max-content',
-      }}
-    >
-      {ctaLabel('Quick import via MCP')}
-    </a>
-  );
-}
-
-function BookCallButton(props: { large?: boolean }) {
+function BookCallButton(props: { large?: boolean; label?: string }) {
   return (
     <a
       href={DEMO_CALL_HREF}
@@ -189,7 +109,7 @@ function BookCallButton(props: { large?: boolean }) {
         width: mobile() ? '100%' : 'max-content',
       }}
     >
-      Talk to us
+      {props.label ?? 'Talk to us'}
     </a>
   );
 }
@@ -223,80 +143,6 @@ function InlineLink(props: {
         {props.children}
       </a>
     </Show>
-  );
-}
-
-/** A keyboard key, mirroring the <kbd> shortcuts in the docs. */
-function Key(props: { children: JSX.Element }) {
-  return (
-    <kbd
-      style={{
-        'background-color': 'var(--b1)',
-        border: '1px solid color-mix(in srgb, var(--c4) 22%, transparent)',
-        'border-radius': '5px',
-        color: 'var(--c2)',
-        'font-family': 'Inter, body',
-        'font-size': '0.85em',
-        'font-weight': '700',
-        padding: '1px 6px',
-      }}
-    >
-      {props.children}
-    </kbd>
-  );
-}
-
-/** The agent prompt people paste to run an import. */
-function PromptBlock(props: { children: string }) {
-  return (
-    <pre
-      style={{
-        'background-color': 'var(--b1)',
-        border: '1px solid color-mix(in srgb, var(--c4) 12%, transparent)',
-        'border-radius': '8px',
-        'box-sizing': 'border-box',
-        color: 'var(--c2)',
-        'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
-        'font-size': mobile() ? '13px' : '14px',
-        'line-height': 1.6,
-        margin: 0,
-        'overflow-x': 'auto',
-        padding: mobile() ? '14px 16px' : '18px 20px',
-        'white-space': 'pre-wrap',
-        width: '100%',
-      }}
-    >
-      {props.children}
-    </pre>
-  );
-}
-
-function Steps(props: { items: (() => JSX.Element)[] }) {
-  return (
-    <ol
-      style={{
-        display: 'grid',
-        gap: mobile() ? '10px' : '12px',
-        margin: 0,
-        'padding-left': '22px',
-      }}
-    >
-      <For each={props.items}>
-        {(item) => (
-          <li style={{ ...comparisonBodyStyle(), 'padding-left': '4px' }}>
-            {item()}
-          </li>
-        )}
-      </For>
-    </ol>
-  );
-}
-
-function SettingsPath(props: { children: JSX.Element }) {
-  return (
-    <strong style={{ color: 'var(--c2)', 'font-weight': '600' }}>
-      {props.children}
-    </strong>
   );
 }
 
@@ -361,7 +207,7 @@ function SectionHeading(props: {
 // Comparison-table marks and cells
 // ---------------------------------------------------------------------------
 
-type Cell = boolean | 'partial' | string;
+type Cell = boolean;
 
 function CheckMark() {
   return (
@@ -406,38 +252,32 @@ function CrossMark() {
   );
 }
 
-function ComparisonCell(props: { value: Cell; macro: boolean }) {
+function ComparisonCell(props: { value: Cell }) {
   return (
     <div
       style={{
-        'align-items': 'center',
         display: 'flex',
+        'align-items': 'center',
         'justify-content': 'center',
         'min-height': '22px',
-        'text-align': 'center',
       }}
     >
-      <Show
-        when={typeof props.value === 'string'}
-        fallback={
-          <Show when={props.value === true} fallback={<CrossMark />}>
-            <CheckMark />
-          </Show>
-        }
-      >
-        <span
-          style={{
-            color: props.macro ? 'var(--a0)' : 'var(--c2)',
-            'font-family': "'Inter', body",
-            'font-size': mobile() ? '10px' : '11px',
-            'font-weight': '400',
-            'letter-spacing': '0.02em',
-            'line-height': 1.25,
-          }}
-        >
-          {props.value as string}
-        </span>
+      <Show when={props.value} fallback={<CrossMark />}>
+        <CheckMark />
       </Show>
+    </div>
+  );
+}
+
+function ComparisonKey() {
+  return (
+    <div class="migrate-comparison-legend">
+      <span>
+        <CheckMark /> Available
+      </span>
+      <span>
+        <CrossMark /> Not offered as a built-in tool
+      </span>
     </div>
   );
 }
@@ -463,7 +303,11 @@ const compareRowBg = (rowIndex: number) =>
     ? 'color-mix(in srgb, var(--c4) 4%, var(--b0))'
     : 'var(--b0)';
 
-function CompareHeaderLabel(props: { label: string; macro: boolean }) {
+function CompareHeaderLabel(props: {
+  label: string;
+  macro: boolean;
+  href?: string;
+}) {
   return (
     <span
       style={{
@@ -486,718 +330,35 @@ function CompareHeaderLabel(props: { label: string; macro: boolean }) {
           }}
         />
       </Show>
-      <span>{props.label}</span>
-    </span>
-  );
-}
-
-type ComparisonRow = { feature: string; macro: Cell; them: Cell };
-
-/** The per-tool table, Macro first. Rows mirror the docs switching guide. */
-function SwitchTable(props: {
-  brand: SwitchBrand;
-  competitor: string;
-  rows: ComparisonRow[];
-}) {
-  return (
-    <ComparisonTable
-      columns={[
-        { label: 'Macro', macro: true },
-        {
-          label: props.competitor,
-          icon: (
-            <SwitchBrandIcon brand={props.brand} size={mobile() ? 13 : 15} />
-          ),
-        },
-      ]}
-      rows={props.rows.map((row) => ({
-        feature: row.feature,
-        cells: [row.macro, row.them],
-      }))}
-      mobileCellWidth={72}
-      mobileMinWidth={400}
-      sortRows={false}
-      valueWrap="normal"
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Per-tool migration sections
-// ---------------------------------------------------------------------------
-
-/*
- * Copy is held as thunks rather than JSX values. These sections live at module
- * scope, and module-scope JSX is evaluated at import time before any Route
- * context exists. That makes <A> throw during prerendering.
- */
-type ToolSection = {
-  brand: SwitchBrand;
-  title: string;
-  /** What changes, and why it's an upgrade. Kept to two paragraphs. */
-  body: (() => JSX.Element)[];
-  rows: ComparisonRow[];
-  steps: (() => JSX.Element)[];
-  /** Trailing note after the steps, usually "you can keep it connected". */
-  note?: () => JSX.Element;
-  links: { label: string; href: string }[];
-  docsAnchor: string;
-};
-
-const TOOL_SECTIONS: ToolSection[] = [
-  {
-    brand: 'superhuman',
-    title: 'Macro vs. Superhuman',
-    body: [
-      () => (
-        <>
-          Macro Mail keeps Superhuman's keyboard-first speed, but adds
-          Outlook-style multitasking and Gmail's simplicity.
-        </>
-      ),
-      () => (
-        <>
-          Macro Mail brings your email into its own database, so search and AI
-          context are not bottlenecked by Gmail's API or MCP. Signal vs. Noise
-          helps you triage, and you can easily link an email thread to your team
-          without resorting to screenshots or copy/paste. AI agents can perform
-          actions like drafting, triaging, and sending, so you spend less time
-          in your inbox.
-        </>
-      ),
-    ],
-    rows: [
-      { feature: 'Built on Gmail (no migration)', macro: true, them: true },
-      { feature: 'j / k / e triage shortcuts', macro: true, them: true },
-      {
-        feature: 'Multiple accounts in one unified inbox',
-        macro: true,
-        them: false,
-      },
-      { feature: 'AI triage / split inbox', macro: true, them: true },
-      {
-        feature: 'Shared email comments and @mentions',
-        macro: true,
-        them: true,
-      },
-      {
-        feature: 'Email, tasks, and chat in one inbox',
-        macro: true,
-        them: false,
-      },
-      {
-        feature: 'Agents that draft, triage, and send',
-        macro: true,
-        them: 'partial',
-      },
-    ],
-    steps: [
-      () => (
-        <>
-          Connect your Gmail or Google Workspace account during signup or later
-          in <SettingsPath>Settings</SettingsPath>.
-        </>
-      ),
-      () => (
-        <>
-          Your mail, labels, and history appear automatically because Macro
-          syncs with Gmail.
-        </>
-      ),
-    ],
-    note: () => (
-      <>
-        Both apps use Gmail, so there is nothing to migrate or undo. Use them
-        side by side for as long as you need.
-      </>
-    ),
-    links: [
-      { label: 'Macro vs Superhuman', href: '/posts/superhuman-alternative' },
-      { label: 'Macro Mail', href: '/email' },
-    ],
-    docsAnchor: '#from-superhuman',
-  },
-  {
-    brand: 'notion',
-    title: 'Macro vs. Notion',
-    body: [
-      () => (
-        <>
-          Macro pairs Notion-style @mentions with markdown-first docs, but it
-          treats tasks, CRM, email, and channels as dedicated modules rather
-          than pages and databases you have to configure.
-        </>
-      ),
-      () => (
-        <>
-          Macro Docs use a CRDT representation, so people and agents can edit
-          live or offline without conflicts or data loss. When you reconnect,
-          changes sync to the database and to your peers automatically. Macro
-          Docs are fast, stable, and designed for live collaboration with
-          teammates and agents.
-        </>
-      ),
-    ],
-    rows: [
-      { feature: 'Markdown-first documents', macro: true, them: 'partial' },
-      { feature: 'Offline-capable editing', macro: true, them: 'partial' },
-      { feature: 'Tasks', macro: true, them: 'partial' },
-      { feature: 'CRM', macro: true, them: 'partial' },
-      { feature: 'Email client', macro: true, them: true },
-      { feature: 'Team chat / channels', macro: true, them: false },
-      {
-        feature: 'Agent actions across docs, tasks, email, chat, and calls',
-        macro: true,
-        them: 'partial',
-      },
-    ],
-    steps: [
-      () => (
-        <>
-          Go to <SettingsPath>Settings → Connectors</SettingsPath> and connect
-          Notion.
-        </>
-      ),
-      () => (
-        <>
-          Open an agent chat (<Key>c</Key> then <Key>a</Key>) and ask it to
-          import:
-          <div style={{ 'margin-top': '12px' }}>
-            <PromptBlock>
-              {
-                'Import my Notion docs from the "Engineering" workspace as Macro docs.\nKeep the folder structure and skip anything archived.'
-              }
-            </PromptBlock>
-          </div>
-        </>
-      ),
-      () => (
-        <>
-          For each Notion database, choose the closest fit: tasks, CRM records,
-          or a doc with properties. Then ask the agent to import it and populate
-          the corresponding Macro entities.
-        </>
-      ),
-    ],
-    note: () => (
-      <>
-        Keep Notion connected so agents can search old content. Move only what
-        your team still uses.
-      </>
-    ),
-    links: [
-      { label: 'Macro vs Notion', href: '/posts/notion-alternative' },
-      { label: 'Macro Docs', href: '/documents' },
-    ],
-    docsAnchor: '#from-notion',
-  },
-  {
-    brand: 'slack',
-    title: 'Macro vs. Slack',
-    body: [
-      () => (
-        <>
-          Macro gives channels an inbox, sorted into Signal and Noise. You can
-          respond to messages based on urgency, or leave them for later, instead
-          of relying on read and unread.
-        </>
-      ),
-      () => (
-        <>
-          Macro Chat is integrated with the rest of your workspace. @mention a
-          doc, task, or email and it is shared with the channel automatically.
-          Create a task from a message with one click. Smart filtering, inline
-          threads, and a shared inbox make communication with your team more
-          focused, and less noisy.
-        </>
-      ),
-    ],
-    rows: [
-      { feature: 'Channels, threads, emoji', macro: true, them: true },
-      {
-        feature: 'Inline thread replies (forum-style reading)',
-        macro: true,
-        them: false,
-      },
-      { feature: 'One inbox shared with your email', macro: true, them: false },
-      {
-        feature: '@mention a doc or task to share it automatically',
-        macro: true,
-        them: false,
-      },
-      { feature: 'Video calls / huddles', macro: true, them: true },
-    ],
-    steps: [
-      () => (
-        <>
-          Create a channel per team or project (<Key>c</Key> then <Key>m</Key>).
-        </>
-      ),
-      () => (
-        <>
-          Add people by email. They don't need a Macro account yet to be
-          included.
-        </>
-      ),
-      () => <>Use @mentions to share docs and tasks as you discuss them.</>,
-    ],
-    note: () => (
-      <>
-        Connect Slack under <SettingsPath>Settings → Connectors</SettingsPath>{' '}
-        so agents can search it. You can keep Slack for external channels while
-        your team moves internal work to Macro.
-      </>
-    ),
-    links: [
-      { label: 'Macro vs Slack', href: '/posts/slack-alternative' },
-      { label: 'Macro Chat', href: '/channels' },
-    ],
-    docsAnchor: '#from-slack',
-  },
-  {
-    brand: 'linear',
-    title: 'Macro vs. Linear',
-    body: [
-      () => (
-        <>
-          Macro Tasks are inspired by Linear. They keep the status, priority,
-          assignee, keyboard shortcuts, and GitHub workflow you know, while
-          staying simple to create, assign, prioritize, and close out.
-        </>
-      ),
-      () => (
-        <>
-          Create a task from an email or channel message and it links to its
-          source bi-directionally. For programming work, tasks also stay linked
-          to GitHub pull requests and update automatically. Agents create tasks,
-          de-duplicate them, update them, and close them out as work progresses.
-        </>
-      ),
-    ],
-    rows: [
-      {
-        feature: 'Status, priority, assignee, keyboard-first',
-        macro: true,
-        them: true,
-      },
-      {
-        feature: 'GitHub: branch, PR, and merge move the task',
-        macro: true,
-        them: true,
-      },
-      {
-        feature: 'Tasks in the same app as email, channels, and docs',
-        macro: true,
-        them: false,
-      },
-      {
-        feature: 'Turn an email or channel message into a task in one click',
-        macro: true,
-        them: 'partial',
-      },
-      {
-        feature: 'Non-engineers see engineering work',
-        macro: true,
-        them: true,
-      },
-    ],
-    steps: [
-      () => (
-        <>
-          Connect Linear under{' '}
-          <SettingsPath>Settings → Connectors</SettingsPath>. The MCP connector
-          lets Macro agents read your Linear workspace while you move work over.
-        </>
-      ),
-      () => (
-        <>
-          Open an agent chat (<Key>c</Key> then <Key>a</Key>) and ask it to
-          populate Macro Tasks from your open Linear issues:
-          <div style={{ 'margin-top': '12px' }}>
-            <PromptBlock>
-              {
-                'Import my open Linear issues as Macro tasks.\nPreserve the title, status, priority, assignee, due date, and linked GitHub work.\nSkip completed and canceled issues.'
-              }
-            </PromptBlock>
-          </div>
-        </>
-      ),
-    ],
-    note: () => (
-      <>
-        Keep Linear connected over MCP during the rollout so agents can still
-        search the issue history your team has not moved.
-      </>
-    ),
-    links: [
-      { label: 'Macro vs Linear', href: '/posts/linear-alternative' },
-      { label: 'Macro Tasks', href: '/tasks' },
-    ],
-    docsAnchor: '#from-linear',
-  },
-  {
-    brand: 'clickup',
-    title: 'Macro vs. ClickUp',
-    body: [
-      () => (
-        <>
-          Macro is open source under the AGPLv3, so your team can inspect,
-          extend, fork, and self-host the workspace. Macro gives you a dedicated
-          CRM alongside agents, tasks, docs, channels, and email.
-        </>
-      ),
-      () => (
-        <>
-          Macro treats email as a core workspace experience, with every account
-          in one inbox alongside tasks and channels. Macro Docs also support
-          collaborative offline editing, so the work keeps moving when your
-          connection drops.
-        </>
-      ),
-    ],
-    rows: [
-      { feature: 'Open source and self-hostable', macro: true, them: false },
-      { feature: 'Tasks, docs, chat', macro: true, them: true },
-      {
-        feature: 'Email client with all accounts in one unified inbox',
-        macro: true,
-        them: false,
-      },
-      {
-        feature: 'Offline document editing with automatic sync',
-        macro: true,
-        them: false,
-      },
-      { feature: 'Dedicated CRM module', macro: true, them: 'partial' },
-      {
-        feature: 'GitHub branch, PR, and merge move the task',
-        macro: true,
-        them: 'partial',
-      },
-      {
-        feature:
-          'Agents with context from email, chat, docs, tasks, calls, and CRM',
-        macro: true,
-        them: 'partial',
-      },
-    ],
-    steps: [
-      () => (
-        <>
-          Recreate your active lists as Macro tasks. Most teams skip closed
-          work.
-        </>
-      ),
-      () => (
-        <>
-          For history or a gradual cutover, connect ClickUp under{' '}
-          <SettingsPath>Settings → Connectors</SettingsPath> and ask an agent to
-          bring the open tasks across.
-        </>
-      ),
-      () => (
-        <>
-          An agent can also recreate your ClickUp Docs as Macro documents:
-          <div style={{ 'margin-top': '12px' }}>
-            <PromptBlock>
-              {
-                'Import my ClickUp Docs from the "Engineering" space as Macro docs.\nKeep the folder structure and skip anything archived.'
-              }
-            </PromptBlock>
-          </div>
-        </>
-      ),
-    ],
-    links: [
-      { label: 'Macro vs ClickUp', href: '/posts/clickup-alternative' },
-      { label: 'Macro Tasks', href: '/tasks' },
-    ],
-    docsAnchor: '#from-clickup',
-  },
-];
-
-function ToolLinks(props: { section: ToolSection }) {
-  return (
-    <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '10px' }}>
-      <For each={props.section.links}>
-        {(link) => (
-          <A href={link.href} class="migrate-pill" style={pillStyle()}>
-            {link.label} <span aria-hidden="true">→</span>
+      <Show when={props.href} fallback={<span>{props.label}</span>}>
+        {(href) => (
+          <A
+            href={href()}
+            style={{
+              color: 'inherit',
+              'text-underline-offset': '3px',
+              'text-decoration': 'underline',
+            }}
+          >
+            {props.label}
           </A>
         )}
-      </For>
-      <a
-        href={`${DOCS_SWITCH}${props.section.docsAnchor}`}
-        target="_blank"
-        rel="noreferrer"
-        class="migrate-pill"
-        style={pillStyle()}
-      >
-        Migration steps <span aria-hidden="true">→</span>
-      </a>
-    </div>
-  );
-}
-
-function ComparisonBrandLockup(props: { brand: SwitchBrand }) {
-  return (
-    <div
-      aria-label={`Macro versus ${SWITCH_LABELS[props.brand]}`}
-      role="img"
-      style={{
-        'align-items': 'center',
-        color: 'var(--c2)',
-        display: 'flex',
-        'flex-shrink': '0',
-        gap: comparisonMobile() ? '7px' : '10px',
-      }}
-    >
-      <MacroMarkIcon
-        aria-hidden="true"
-        style={{
-          color: 'var(--a0)',
-          display: 'block',
-          fill: 'currentColor',
-          height: comparisonMobile() ? '20px' : '26px',
-          overflow: 'visible',
-          stroke: 'none',
-        }}
-      />
-      <span
-        aria-hidden="true"
-        style={{
-          color: 'color-mix(in srgb, var(--c4) 42%, transparent)',
-          'font-family': 'display',
-          'font-size': comparisonMobile() ? '32px' : '42px',
-          'font-weight': '315',
-          'line-height': 0.65,
-          transform: 'translateY(-5px) scaleY(1.5)',
-        }}
-      >
-        /
-      </span>
-      <SwitchBrandIcon
-        brand={props.brand}
-        size={comparisonMobile() ? 21 : 28}
-      />
-    </div>
-  );
-}
-
-function ComparisonGutterFiducials() {
-  const stroke = '1px solid color-mix(in srgb, var(--c4) 42%, transparent)';
-
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        display: comparisonMobile() ? 'none' : 'block',
-        height: '76px',
-        left: '-170px',
-        'pointer-events': 'none',
-        position: 'absolute',
-        top: '-16px',
-        width: '142px',
-      }}
-    >
-      <span
-        style={{
-          'border-left': stroke,
-          'border-top': stroke,
-          height: '11px',
-          left: 0,
-          position: 'absolute',
-          top: 0,
-          width: '11px',
-        }}
-      />
-      <span
-        style={{
-          'border-right': stroke,
-          'border-top': stroke,
-          height: '11px',
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          width: '11px',
-        }}
-      />
-      <span
-        style={{
-          'border-bottom': stroke,
-          'border-left': stroke,
-          bottom: 0,
-          height: '11px',
-          left: 0,
-          position: 'absolute',
-          width: '11px',
-        }}
-      />
-      <span
-        style={{
-          'border-bottom': stroke,
-          'border-right': stroke,
-          bottom: 0,
-          height: '11px',
-          position: 'absolute',
-          right: 0,
-          width: '11px',
-        }}
-      />
-    </div>
-  );
-}
-
-function ComparisonGutterLabel(props: { index: string; label: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        'align-items': 'center',
-        color: 'color-mix(in srgb, var(--c4) 68%, transparent)',
-        display: comparisonMobile() ? 'none' : 'flex',
-        'font-family': 'Inter, body',
-        'font-size': '10px',
-        'font-weight': '700',
-        gap: '6px',
-        'justify-content': 'flex-start',
-        left: '-170px',
-        'letter-spacing': '0.1em',
-        'line-height': 1,
-        'pointer-events': 'none',
-        position: 'absolute',
-        'text-align': 'left',
-        top: '3px',
-        'white-space': 'nowrap',
-        width: '142px',
-      }}
-    >
-      <span
-        style={{ background: 'currentColor', height: '1px', width: '12px' }}
-      />
-      <span>{props.index}</span>
-      <span>{props.label}</span>
+      </Show>
     </span>
   );
 }
 
-function ToolSectionBlock(props: { section: ToolSection }) {
-  return (
-    <div
-      aria-label={props.section.title}
-      style={{
-        ...columnStyle(),
-        margin: '0 auto',
-        padding: comparisonMobile() ? '28px 20px 32px' : '44px 52px 52px',
-      }}
-    >
-      <div style={{ position: 'relative', 'text-align': 'left' }}>
-        <ComparisonGutterFiducials />
-        <div
-          style={{
-            'align-items': 'center',
-            display: comparisonMobile() ? 'block' : 'flex',
-            height: comparisonMobile() ? 'auto' : '76px',
-            'justify-content': 'center',
-            'margin-bottom': comparisonMobile() ? '16px' : 0,
-            position: comparisonMobile() ? 'static' : 'absolute',
-            left: '-170px',
-            top: '-16px',
-            width: comparisonMobile() ? 'auto' : '142px',
-          }}
-        >
-          <ComparisonBrandLockup brand={props.section.brand} />
-        </div>
-        <div
-          style={{
-            display: 'grid',
-            gap: comparisonMobile() ? '20px' : '24px',
-            'text-align': 'left',
-          }}
-        >
-          <h3
-            style={{
-              color: 'var(--c1)',
-              'font-family': 'display',
-              'font-size': comparisonMobile() ? '26px' : '32px',
-              'font-weight': '315',
-              'letter-spacing': '-0.015em',
-              'line-height': 1.12,
-              margin: 0,
-            }}
-          >
-            {props.section.title}
-          </h3>
-          <div
-            style={{
-              display: 'grid',
-              gap: comparisonMobile() ? '10px' : '12px',
-            }}
-          >
-            <For each={props.section.body}>
-              {(paragraph) => (
-                <p style={comparisonBodyStyle()}>{paragraph()}</p>
-              )}
-            </For>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ position: 'relative' }}>
-        <ComparisonGutterLabel index="01" label="COMPARE" />
-        <SwitchTable
-          brand={props.section.brand}
-          competitor={SWITCH_LABELS[props.section.brand]}
-          rows={props.section.rows}
-        />
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gap: comparisonMobile() ? '18px' : '22px',
-          position: 'relative',
-        }}
-      >
-        <ComparisonGutterLabel index="02" label="SWITCH" />
-        <h4
-          style={{
-            color: 'var(--a0)',
-            'font-family': 'Inter, body',
-            'font-size': comparisonMobile() ? '13px' : '15px',
-            'font-weight': '700',
-            'letter-spacing': '0.1em',
-            margin: 0,
-            'text-transform': 'uppercase',
-          }}
-        >
-          To switch
-        </h4>
-        <div
-          style={{ display: 'grid', gap: comparisonMobile() ? '10px' : '12px' }}
-        >
-          <Steps items={props.section.steps} />
-          <Show when={props.section.note}>
-            {(note) => <p style={comparisonBodyStyle()}>{note()()}</p>}
-          </Show>
-        </div>
-      </div>
-
-      <div style={{ position: 'relative' }}>
-        <ComparisonGutterLabel index="03" label="MORE INFO" />
-        <ToolLinks section={props.section} />
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Macro vs. the world
-// ---------------------------------------------------------------------------
+const WORLD_DETAILS: Record<string, string> = {
+  'Superhuman Mail': '/email#compare-superhuman',
+  Notion: '/documents#compare-notion',
+  Slack: '/channels#compare-slack',
+  Linear: '/tasks#compare-linear',
+  ClickUp: '/posts/clickup-alternative',
+};
 
 const WORLD_COLUMNS = [
   'Macro',
-  'Superhuman',
+  'Superhuman Mail',
   'Notion',
   'Slack',
   'Linear',
@@ -1213,61 +374,43 @@ type WorldRow = {
 
 const WORLD_ROWS: WorldRow[] = [
   {
-    feature: 'Email',
+    feature: 'Full email client',
     href: '/email',
     cells: [true, true, false, false, false, false],
   },
   {
-    feature: 'Channels',
+    feature: 'Team chat / channels',
     href: '/channels',
     cells: [true, false, false, true, false, true],
   },
   {
-    feature: 'Tasks',
+    feature: 'Task management',
     href: '/tasks',
-    cells: [true, false, 'Via databases', false, true, true],
+    cells: [true, false, true, true, true, true],
   },
   {
-    feature: 'Docs',
+    feature: 'Collaborative docs',
     href: '/documents',
-    cells: [true, false, true, false, false, true],
+    cells: [true, false, true, true, true, true],
   },
   {
-    feature: 'CRM',
+    feature: 'Dedicated CRM',
     href: '/crm',
-    cells: [true, false, 'Via databases', false, false, 'Via setup'],
+    cells: [true, false, false, false, false, false],
   },
   {
-    feature: 'File storage',
-    href: `${DOCS}/product/folders`,
-    external: true,
-    cells: [true, false, 'Attachments', 'Attachments', false, 'Attachments'],
-  },
-  {
-    feature: 'Calls',
+    feature: 'Video calls',
     href: '/calls',
-    cells: [true, false, false, 'Huddles', false, false],
+    cells: [true, false, false, true, false, true],
   },
   {
     feature: 'Agents',
     href: '/agents',
-    cells: [true, false, true, false, true, true],
+    cells: [true, true, true, true, true, true],
   },
   {
-    feature: 'Unified inbox',
+    feature: 'Email, tasks, and chat in one inbox',
     href: `${DOCS}/product/inbox`,
-    external: true,
-    cells: [true, false, false, false, false, false],
-  },
-  {
-    feature: 'Unified search',
-    href: `${DOCS}/product/search`,
-    external: true,
-    cells: [true, false, false, false, false, false],
-  },
-  {
-    feature: 'Unified memory',
-    href: `${DOCS}/product/unified-memory`,
     external: true,
     cells: [true, false, false, false, false, false],
   },
@@ -1276,12 +419,15 @@ const WORLD_ROWS: WorldRow[] = [
 function WorldTable() {
   const gridTemplate = () =>
     mobile()
-      ? 'minmax(120px, 1.2fr) repeat(6, minmax(58px, 1fr))'
+      ? 'minmax(140px, 1.2fr) repeat(6, minmax(100px, 1fr))'
       : 'minmax(0, 1.8fr) repeat(6, minmax(0, 1fr))';
 
   return (
     <div
       class="migrate-world-table-scroll"
+      tabIndex={0}
+      role="region"
+      aria-label="Compare all tools; scroll sideways for more"
       style={{
         '-webkit-overflow-scrolling': 'touch',
         'max-width': '100%',
@@ -1296,7 +442,7 @@ function WorldTable() {
           display: 'grid',
           'font-family': "'Inter', body",
           'grid-template-columns': gridTemplate(),
-          'min-width': mobile() ? '640px' : '760px',
+          'min-width': mobile() ? '820px' : '760px',
           overflow: 'hidden',
         }}
       >
@@ -1322,7 +468,11 @@ function WorldTable() {
                 padding: mobile() ? '10px 4px' : '12px 8px',
               }}
             >
-              <CompareHeaderLabel label={col} macro={index() === 0} />
+              <CompareHeaderLabel
+                label={col}
+                macro={index() === 0}
+                href={WORLD_DETAILS[col]}
+              />
             </div>
           )}
         </For>
@@ -1367,7 +517,7 @@ function WorldTable() {
                       padding: mobile() ? '9px 4px' : '10px 8px',
                     }}
                   >
-                    <ComparisonCell value={cell} macro={cellIndex() === 0} />
+                    <ComparisonCell value={cell} />
                   </div>
                 )}
               </For>
@@ -1385,13 +535,23 @@ function WorldTable() {
 
 function DesyncCaseStudy() {
   let videoRef!: HTMLVideoElement;
+  let playButtonRef: HTMLButtonElement | undefined;
   const [playing, setPlaying] = createSignal(false);
 
-  function handlePlay() {
-    videoRef
-      .play()
-      .then(() => setPlaying(true))
-      .catch(() => setPlaying(false));
+  async function handlePlay(fromKeyboard: boolean) {
+    try {
+      await videoRef.play();
+      setPlaying(true);
+      if (fromKeyboard) videoRef.focus();
+    } catch {
+      setPlaying(false);
+    }
+  }
+
+  function resetPlayback() {
+    const restoreFocus = document.activeElement === videoRef;
+    setPlaying(false);
+    if (restoreFocus) queueMicrotask(() => playButtonRef?.focus());
   }
 
   return (
@@ -1436,18 +596,14 @@ function DesyncCaseStudy() {
           'z-index': 1,
         }}
       >
-        <div
-          class="migrate-case-video"
-          style={{ cursor: playing() ? 'default' : 'pointer' }}
-          onClick={() => {
-            if (!playing()) handlePlay();
-          }}
-        >
+        <div class="migrate-case-video">
           <video
             ref={videoRef}
             controls={playing()}
-            onEnded={() => setPlaying(false)}
-            onError={() => setPlaying(false)}
+            tabIndex={playing() ? 0 : -1}
+            aria-label="Desync case study video"
+            onEnded={resetPlayback}
+            onError={resetPlayback}
             playsinline
             poster={markDesyncPlaceholder}
             preload="metadata"
@@ -1455,6 +611,13 @@ function DesyncCaseStudy() {
             style={{ 'object-fit': playing() ? 'contain' : 'cover' }}
           />
           <Show when={!playing()}>
+            <button
+              ref={playButtonRef}
+              type="button"
+              class="migrate-case-play-trigger"
+              aria-label="Play Desync case study"
+              onClick={(event) => void handlePlay(event.detail === 0)}
+            />
             <img
               src={markDesyncPlaceholder}
               loading="lazy"
@@ -1465,7 +628,7 @@ function DesyncCaseStudy() {
             <div class="migrate-case-scrim" aria-hidden="true" />
             <div class="migrate-case-heading">
               <h2 class="migrate-case-title">Case study</h2>
-              <p class="migrate-case-subtitle">A startup switches to Macro</p>
+              <p class="migrate-case-subtitle">A company switches to Macro</p>
             </div>
             <aside
               class="migrate-case-quote"
@@ -1515,21 +678,16 @@ function DesyncCaseStudy() {
 
 export const RouteMigrate: Component = () => {
   setPageSeo({
-    title: 'Switch your startup to Macro | Migration guide',
+    title: 'Switch your company to Macro | Migration guide',
     description:
-      'Move your team to Macro from Superhuman, Notion, Slack, Linear, or ClickUp. Learn what to import, what to connect, and how to switch.',
+      'Bring your company’s email, files, docs, tasks, and conversations into Macro. Explore imports, connected tools, and help from our team.',
     path: '/migrate',
   });
-  const comparisonTabs = TOOL_SECTIONS.map((section) => ({
-    id: section.brand,
-    icon: <SwitchBrandIcon brand={section.brand} size={15} />,
-    label: SWITCH_LABELS[section.brand],
-    content: <ToolSectionBlock section={section} />,
-  }));
 
   return (
     <div
       lang="en"
+      class="migrate-page"
       style={{
         'background-color': 'var(--b0)',
         'box-sizing': 'border-box',
@@ -1541,10 +699,29 @@ export const RouteMigrate: Component = () => {
       }}
     >
       <style>{`
+        .migrate-page { --a0: var(--c1); }
+        .migrate-hero-graphic, .migrate-module-graphic { filter: grayscale(1); }
+        .migrate-hero-graphic .supermodule-cta-headline { font-size: 26px; letter-spacing: 0.03em; }
+        .migrate-page :focus-visible { outline: 2px solid var(--c1); outline-offset: 4px; }
+        .migrate-full-comparison { width: 100%; max-width: 980px; min-width: 0; }
+        .migrate-full-comparison h2 { font-family: display; font-size: clamp(28px, 4vw, 40px); font-weight: 315; letter-spacing: -0.015em; margin: 0 0 16px; }
+        .migrate-full-comparison-content { display: grid; gap: 24px; padding-top: 20px; min-width: 0; }
+        .migrate-connected-tools { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px; width: 100%; max-width: 760px; justify-items: center; }
+        .migrate-agent-prompt { max-width: 660px; margin: 0; padding: 4px 0 4px 24px; border-left: 2px solid var(--c4); color: var(--c2); font: 400 20px/1.55 Inter, body; text-wrap: pretty; }
+        .migrate-practical-faq details { border-bottom: 1px solid var(--b2); padding: 20px 0; }
+        .migrate-practical-faq summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; list-style: none; color: var(--c2); font: 500 16px/1.5 Inter, body; }
+        .migrate-practical-faq summary::-webkit-details-marker { display: none; }
+        .migrate-practical-faq summary > svg { width: 16px; height: 16px; flex: none; margin-top: 4px; color: var(--c4); transition: transform 160ms; }
+        .migrate-practical-faq details[open] > summary > svg { transform: rotate(180deg); }
+        .migrate-practical-faq p { color: var(--c4); font: 400 15px/1.75 Inter, body; margin: 16px 0 0; }
+        .migrate-practical-faq a { color: var(--c2); text-decoration: underline; text-underline-offset: 3px; }
+        @media (max-width: 699px) { .migrate-connected-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; } .migrate-agent-prompt { font-size: 17px; padding-left: 16px; } }
+        .migrate-comparison-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px 24px; color: var(--c4); font-family: Inter, body; font-size: 12px; }
+        .migrate-comparison-legend > span { display: inline-flex; align-items: center; gap: 8px; }
+        .migrate-scroll-hint { color: var(--c4); font-family: Inter, body; font-size: 12px; margin: 12px 0 0; }
         @media (hover) {
           .migrate-cta-button:hover { transform: scale(1.02); }
           .migrate-link:hover { text-decoration: underline; }
-          .migrate-pill:hover { background-color: color-mix(in srgb, var(--a0) 12%, var(--b1)); color: var(--a0); }
         }
         .migrate-hero-graphic, .migrate-module-graphic { display: block; height: auto; width: 100%; }
         .migrate-world-table-scroll,
@@ -1617,7 +794,7 @@ export const RouteMigrate: Component = () => {
           z-index: 0;
         }
         /* The wash is a positioned sibling, so it would otherwise paint over the
-           in-flow card and quotes. Lift them above it rather than pushing it to
+           in-flow illustration. Lift them above it rather than pushing it to
            a negative z-index, which would drop it behind the section backdrop. */
         .migrate-washband > * {
           position: relative;
@@ -1689,6 +866,22 @@ export const RouteMigrate: Component = () => {
           .migrate-case-video {
             border-radius: 14px;
           }
+        }
+        .migrate-case-play-trigger {
+          position: absolute;
+          inset: 0;
+          z-index: 3;
+          width: 100%;
+          height: 100%;
+          padding: 0;
+          border: 0;
+          border-radius: inherit;
+          background: transparent;
+          color: inherit;
+        }
+        .migrate-case-play-trigger:focus-visible {
+          outline: 2px solid var(--c1);
+          outline-offset: -4px;
         }
         .migrate-case-video video {
           background: var(--b1);
@@ -1900,7 +1093,7 @@ export const RouteMigrate: Component = () => {
                 margin: '0',
               }}
             >
-              Switch your startup to Macro
+              Switch your company to Macro
             </h1>
             <p
               style={{
@@ -1914,25 +1107,9 @@ export const RouteMigrate: Component = () => {
                 'text-wrap': 'pretty',
               }}
             >
-              Move your team from Slack, Notion, Superhuman, Linear, or
-              {'\u00A0'}ClickUp.
-              <br />
-              Keep the tools that still work and bring the rest into Macro.
+              Connect your email, bring over your files, and import work from
+              your existing tools.
             </p>
-            <div
-              style={{
-                'align-items': 'center',
-                display: 'flex',
-                'flex-direction': mobile() ? 'column' : 'row',
-                gap: mobile() ? '12px' : '14px',
-                'justify-content': mobile() ? 'flex-start' : 'center',
-                'margin-top': mobile() ? '4px' : '8px',
-                width: mobile() ? '100%' : 'auto',
-              }}
-            >
-              <ConnectGoogleButton buttonName="migrate_hero_connect_google" />
-              <BookCallButton />
-            </div>
           </div>
         </section>
 
@@ -1950,9 +1127,7 @@ export const RouteMigrate: Component = () => {
             'z-index': 1,
           }}
         >
-          {/* The wash sits behind the card and the testimonials, and stops with
-              them — the case study below gets none, which is what draws the line
-              between the two. */}
+          {/* Keep the illustration wash separate from the case-study video. */}
           <div class="migrate-washband">
             <div class="migrate-graphic-card">
               <div class="migrate-figure">
@@ -1960,6 +1135,8 @@ export const RouteMigrate: Component = () => {
                   class="migrate-hero-graphic"
                   importButton={{
                     href: ctaHref(),
+                    leadingLabel: 'Connect your tools',
+                    trailingLabel: 'Bring work over',
                     onClick: (event) =>
                       handleCtaClick(event, 'migrate_hero_import'),
                     horizontalOffsetPx: mobile() ? 0 : -46,
@@ -1968,35 +1145,19 @@ export const RouteMigrate: Component = () => {
                 />
               </div>
             </div>
-            <SectionHomeQuote variant="migrate" />
           </div>
-          <DesyncCaseStudy />
         </div>
       </div>
 
-      <SectionMigrateComparisons tabs={comparisonTabs} />
+      <MigrationPaths helpHref={DEMO_CALL_HREF} />
 
-      <HomeSectionRule />
-
-      {/* Keep other tools connected instead of migrating them. */}
       <section
-        aria-label="Migrate incrementally or all at once"
+        aria-label="Bring work over with an agent"
         style={sectionShell()}
       >
         <div style={{ ...columnStyle(), 'justify-items': 'center' }}>
-          <SectionHeading title="Migrate incrementally or all at once" />
-          <div
-            style={{
-              display: 'grid',
-              gap: mobile() ? '12px' : '24px',
-              'grid-template-columns': mobile()
-                ? 'repeat(3, minmax(0, 1fr))'
-                : 'repeat(5, minmax(0, 1fr))',
-              'justify-items': 'center',
-              'max-width': '760px',
-              width: '100%',
-            }}
-          >
+          <SectionHeading title="Tell your agent what to bring over." />
+          <div class="migrate-connected-tools">
             <For each={MODULE_ROW}>
               {(logo) => (
                 <ModuleGraphic
@@ -2012,84 +1173,94 @@ export const RouteMigrate: Component = () => {
               ...bodyStyle(),
               'max-width': '720px',
               'text-align': 'center',
-              'text-wrap': 'balance',
             }}
           >
-            Connect the tools you want to keep through MCP, then move the rest
-            into Macro on your own timeline. Agents can search across both while
-            your team makes the switch.
+            Connect an app such as Notion or Linear in Settings. Your agent can
+            then find the pages and issues available to your connected account.
+            Tell it which work matters to your company.
           </p>
         </div>
       </section>
 
       <HomeSectionRule />
 
-      {/* The full side-by-side picture */}
+      <section aria-label="Moving your company" style={sectionShell()}>
+        <div style={columnStyle()}>
+          <SectionHeading title="Moving your company" />
+          <div class="migrate-practical-faq">
+            <details class="migrate-faq__item">
+              <summary>
+                <span>What comes over with the import?</span>
+                <CaretDown aria-hidden="true" />
+              </summary>
+              <p class="migrate-faq__answer">
+                Notion pages become editable docs. Linear issues become tasks
+                with descriptions, source links, and supported status, priority,
+                assignee, and due-date fields. Files and CSVs use their own
+                upload and import flows.{' '}
+                <a href={DOCS_SWITCH}>See the source-specific import guide</a>.
+              </p>
+            </details>
+            <details class="migrate-faq__item">
+              <summary>
+                <span>Does imported work stay in sync with the old tool?</span>
+                <CaretDown aria-hidden="true" />
+              </summary>
+              <p class="migrate-faq__answer">
+                Imports create copies in Macro. Later edits in Notion or Linear
+                do not automatically replace those copies. Connected tools
+                remain available to agents. Gmail works differently: your
+                connected mailbox continues to sync.
+              </p>
+            </details>
+            <details class="migrate-faq__item">
+              <summary>
+                <span>How do we bring the team over?</span>
+                <CaretDown aria-hidden="true" />
+              </summary>
+              <p class="migrate-faq__answer">
+                Review the imported work, confirm task assignees, and set
+                sharing in Macro. Invite teammates by email and give them access
+                to the projects and channels they need. Your company can move
+                together or in stages.
+              </p>
+            </details>
+            <details class="migrate-faq__item">
+              <summary>
+                <span>Can your team help plan a larger move?</span>
+                <CaretDown aria-hidden="true" />
+              </summary>
+              <p class="migrate-faq__answer">
+                Yes. Tell us which tools you use, how much work you want to
+                bring over, and which history matters. We’ll help choose the
+                import routes and plan the move.{' '}
+                <a href={DEMO_CALL_HREF}>Talk to our team</a>.
+              </p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <HomeSectionRule />
+
+      <DesyncCaseStudy />
+      <HomeSectionRule />
+
+      {/* The overview is visible; provider-specific detail stays in the linked pages. */}
       <section
         aria-label="Macro compared to the rest of the toolset"
-        style={sectionShell()}
+        style={{
+          ...sectionShell(),
+          'padding-block': mobile() ? '48px' : '64px',
+        }}
       >
-        <div
-          style={{
-            display: 'grid',
-            gap: mobile() ? '40px' : '56px',
-            'justify-items': 'center',
-            'max-width': '980px',
-            'min-width': '0',
-            width: '100%',
-          }}
-        >
-          <SectionHeading
-            eyebrow="The comparison"
-            title="See what Macro replaces"
-          >
-            Compare Macro with the tools your team uses today.
-          </SectionHeading>
-          <WorldTable />
-          <div
-            style={{
-              'align-items': 'center',
-              color: 'var(--c4)',
-              display: 'flex',
-              'flex-wrap': 'wrap',
-              gap: mobile() ? '16px' : '24px',
-              'justify-content': 'center',
-            }}
-          >
-            <span
-              style={{
-                'align-items': 'center',
-                display: 'inline-flex',
-                'font-size': '13px',
-                gap: '8px',
-              }}
-            >
-              <CheckMark /> Built in
-            </span>
-            <span
-              style={{
-                'align-items': 'center',
-                display: 'inline-flex',
-                'font-size': '13px',
-                gap: '8px',
-              }}
-            >
-              <CrossMark /> Not available
-            </span>
+        <div class="migrate-full-comparison">
+          <h2>Compare all tools</h2>
+          <div class="migrate-full-comparison-content">
+            <WorldTable />
+            <ComparisonKey />
             <Show when={mobile()}>
-              <span
-                style={{
-                  'font-family': 'Inter, body',
-                  'font-size': '11px',
-                  'letter-spacing': '0.06em',
-                  opacity: 0.6,
-                  'text-align': 'center',
-                  'text-transform': 'uppercase',
-                  width: '100%',
-                }}
-              >
-                Scroll table sideways →
-              </span>
+              <p class="migrate-scroll-hint">Scroll sideways to compare →</p>
             </Show>
           </div>
         </div>
@@ -2105,7 +1276,7 @@ export const RouteMigrate: Component = () => {
         }}
       >
         <section
-          aria-label="Get started"
+          aria-label="Get help from our team"
           style={{
             'align-items': mobile() ? 'start' : 'center',
             display: 'grid',
@@ -2132,7 +1303,7 @@ export const RouteMigrate: Component = () => {
                 margin: '0',
               }}
             >
-              Want help switching?
+              Get help from our team
             </h2>
             <p
               style={{
@@ -2143,8 +1314,8 @@ export const RouteMigrate: Component = () => {
                 margin: '0',
               }}
             >
-              Connect Google in 30 seconds, or book a call and we will help your
-              team move.
+              Book a call with us. We’ll answer your questions and help you get
+              your company set up in Macro.
             </p>
           </div>
           <div
@@ -2156,11 +1327,7 @@ export const RouteMigrate: Component = () => {
               width: mobile() ? '100%' : 'auto',
             }}
           >
-            <ConnectGoogleButton
-              buttonName="migrate_final_connect_google"
-              large
-            />
-            <BookCallButton large />
+            <BookCallButton large label="Talk to our team" />
           </div>
         </section>
       </div>

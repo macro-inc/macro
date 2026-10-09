@@ -12,7 +12,9 @@ function parseBuildNumber(name, fallback) {
   if (!/^\d+$/.test(value)) {
     throw new Error(`${name} must be an unsigned integer, got ${JSON.stringify(value)}`);
   }
-  return Number(value);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) throw new Error(`${name} exceeds safe integer range`);
+  return parsed;
 }
 
 function gitSha() {
@@ -27,10 +29,21 @@ function gitSha() {
   }
 }
 
+const androidMinimum = parseBuildNumber('MIN_NATIVE_BUILD_ANDROID', undefined);
+const iosMinimum = parseBuildNumber('MIN_NATIVE_BUILD_IOS', undefined);
+if ((androidMinimum === undefined) !== (iosMinimum === undefined)) {
+  throw new Error('Set both MIN_NATIVE_BUILD_ANDROID and MIN_NATIVE_BUILD_IOS');
+}
+const platformMinima = androidMinimum === undefined ? undefined : {
+  android: androidMinimum,
+  ios: iosMinimum,
+};
+
 const manifest = {
-  schemaVersion: 2,
+  schemaVersion: platformMinima ? 3 : 2,
   bundleBuild: parseBuildNumber('BUNDLE_BUILD_NUMBER', Date.now()),
   minNativeBuild: parseBuildNumber('MIN_NATIVE_BUILD', 0),
+  ...(platformMinima ? { minNativeBuilds: platformMinima } : {}),
   gitSha: gitSha(),
   appVersion: packageJson.version,
 };

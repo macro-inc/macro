@@ -105,8 +105,10 @@ fn map_stop_reason(stop_reason: StopReason) -> FinishReason {
         StopReason::MaxTokens => FinishReason::Length,
         StopReason::StopSequence => FinishReason::Stop,
         StopReason::ToolUse => FinishReason::ToolCalls,
-        StopReason::PausTurn => FinishReason::Stop,
+        StopReason::PauseTurn => FinishReason::Stop,
         StopReason::Refusal => FinishReason::ContentFilter,
+        StopReason::ModelContextWindowExceeded => FinishReason::Length,
+        StopReason::Unknown => FinishReason::Stop,
     }
 }
 

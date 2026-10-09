@@ -34,10 +34,19 @@ function PrPill(props: { class?: string; children: JSX.Element }) {
 }
 
 /** Frozen PR presentation using fictional content; no GitHub/service dependencies. */
-export function DemoPrDocument(props: { merged?: boolean }) {
+export function DemoPrDocument(props: {
+  merged?: boolean;
+  record?: {
+    name: string;
+    description: string;
+    repository: string;
+    number: number;
+  };
+}) {
+  const record = () => props.record ?? DEPLOY_PR;
   return (
     <>
-      <h1 class="text-2xl font-semibold">{DEPLOY_PR.name}</h1>
+      <h1 class="text-2xl font-semibold">{record().name}</h1>
       <div class="spacer h-3" />
       <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm">
         <PrPill
@@ -49,14 +58,20 @@ export function DemoPrDocument(props: { merged?: boolean }) {
           />
           {props.merged ? 'Merged' : 'Open'}
         </PrPill>
-        <PrPill class="text-ink-muted">macro-inc/macro#482</PrPill>
-        <PrPill>
-          <span class="text-success">+{DEPLOY_PR.additions}</span>
-          <span class="text-failure">−{DEPLOY_PR.deletions}</span>
+        <PrPill class="text-ink-muted">
+          {props.record
+            ? `${props.record.repository}#${props.record.number}`
+            : 'macro-inc/macro#482'}
         </PrPill>
+        <Show when={!props.record}>
+          <PrPill>
+            <span class="text-success">+{DEPLOY_PR.additions}</span>
+            <span class="text-failure">−{DEPLOY_PR.deletions}</span>
+          </PrPill>
+        </Show>
       </div>
       <div class="text-sm wrap-break-word max-w-full overflow-x-auto">
-        <DemoMarkdown markdown={DEPLOY_PR.description} />
+        <DemoMarkdown markdown={record().description} />
       </div>
     </>
   );

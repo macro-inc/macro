@@ -15,6 +15,7 @@ import type {
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
+  CodingPreferencesBody,
   CompleteRequest,
   ControlRequest,
   ControlResponse,
@@ -128,6 +129,123 @@ export const discoverAgentCapabilitiesHandler = async (
     status: res.status,
     headers: res.headers,
   } as discoverAgentCapabilitiesHandlerResponse;
+};
+
+/**
+ * @summary Read what the caller's new coding sessions are told to do beyond their assignment.
+ */
+export type getAgentCodingPreferencesResponse200 = {
+  data: CodingPreferencesBody;
+  status: 200;
+};
+
+export type getAgentCodingPreferencesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentCodingPreferencesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentCodingPreferencesResponseSuccess =
+  getAgentCodingPreferencesResponse200 & {
+    headers: Headers;
+  };
+export type getAgentCodingPreferencesResponseError = (
+  | getAgentCodingPreferencesResponse401
+  | getAgentCodingPreferencesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentCodingPreferencesResponse =
+  | getAgentCodingPreferencesResponseSuccess
+  | getAgentCodingPreferencesResponseError;
+
+export const getGetAgentCodingPreferencesUrl = () => {
+  return `/agent-coding-preferences`;
+};
+
+export const getAgentCodingPreferences = async (
+  options?: RequestInit
+): Promise<getAgentCodingPreferencesResponse> => {
+  const res = await fetch(getGetAgentCodingPreferencesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentCodingPreferencesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentCodingPreferencesResponse;
+};
+
+/**
+ * @summary Replace the caller's coding preferences.
+ */
+export type putAgentCodingPreferencesResponse200 = {
+  data: CodingPreferencesBody;
+  status: 200;
+};
+
+export type putAgentCodingPreferencesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentCodingPreferencesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentCodingPreferencesResponseSuccess =
+  putAgentCodingPreferencesResponse200 & {
+    headers: Headers;
+  };
+export type putAgentCodingPreferencesResponseError = (
+  | putAgentCodingPreferencesResponse401
+  | putAgentCodingPreferencesResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentCodingPreferencesResponse =
+  | putAgentCodingPreferencesResponseSuccess
+  | putAgentCodingPreferencesResponseError;
+
+export const getPutAgentCodingPreferencesUrl = () => {
+  return `/agent-coding-preferences`;
+};
+
+export const putAgentCodingPreferences = async (
+  codingPreferencesBody: CodingPreferencesBody,
+  options?: RequestInit
+): Promise<putAgentCodingPreferencesResponse> => {
+  const res = await fetch(getPutAgentCodingPreferencesUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(codingPreferencesBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentCodingPreferencesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentCodingPreferencesResponse;
 };
 
 /**
@@ -812,6 +930,10 @@ export const warmAgentSessionHandler = async (
 };
 
 /**
+ * A caller holding no grant is answered 401; an id with no session behind it
+at all is answered 404. They used to be the same answer, which left a
+client that read a session before its create had landed unable to tell a
+race it should retry from a refusal it should not.
  * @summary Get an agent session by id.
  */
 export type getAgentSessionResponse200 = {
@@ -829,6 +951,11 @@ export type getAgentSessionResponse403 = {
   status: 403;
 };
 
+export type getAgentSessionResponse404 = {
+  data: string;
+  status: 404;
+};
+
 export type getAgentSessionResponse500 = {
   data: string;
   status: 500;
@@ -840,6 +967,7 @@ export type getAgentSessionResponseSuccess = getAgentSessionResponse200 & {
 export type getAgentSessionResponseError = (
   | getAgentSessionResponse401
   | getAgentSessionResponse403
+  | getAgentSessionResponse404
   | getAgentSessionResponse500
 ) & {
   headers: Headers;

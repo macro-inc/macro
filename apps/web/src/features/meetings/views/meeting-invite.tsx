@@ -70,7 +70,7 @@ export function MeetingInvite(props: {
       </Tooltip>
       <Popover.Portal>
         <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-edge bg-menu-glass text-ink shadow-lg glass menu-open-animation">
+          <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-2rem)] menu-open-animation">
             <Popover.Title class="sr-only">Invite teammates</Popover.Title>
             <Show when={open()}>
               <Suspense

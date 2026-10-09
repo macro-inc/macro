@@ -50,6 +50,7 @@ it('preserves initiative identity, properties, and metadata separately from fold
 it('preserves the scheduled occurrence identity on reminder notifications', async () => {
   const { mapGraphqlNotification } = await import('./graphql-soup');
   const mapped = mapGraphqlNotification({
+    __typename: 'GraphqlNotification',
     id: 'notification-1',
     entityId: 'thread-1',
     entityType: 'EMAIL_THREAD',
@@ -316,6 +317,9 @@ vi.mock('@service-auth/fetch', () => ({
 vi.mock('./graphql-soup-connection', () => ({
   createGraphqlSoupConnection: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
 }));
+vi.mock('../../queries/optimistic-resolvers', () => ({
+  soupOptimisticResolvers: [],
+}));
 vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
@@ -398,6 +402,7 @@ describe('legacy channel list notifications', () => {
   const notification = (
     metadata: ChannelListNotificationFieldsFragment['metadata']
   ): ChannelListNotificationFieldsFragment => ({
+    __typename: 'GraphqlNotification',
     id: 'notification',
     eventType: 'channel_message_send',
     entityId: 'channel',

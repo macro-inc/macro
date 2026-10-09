@@ -168,7 +168,6 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_auth::init())
-            .plugin(tauri_plugin_notifications::init())
             .plugin(tauri_plugin_virtual_keyboard::init())
             .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
@@ -183,7 +182,8 @@ pub fn run() {
         builder = builder
             .plugin(tauri_plugin_android_auth::init())
             .plugin(tauri_plugin_android_mobile::init())
-            .plugin(tauri_plugin_android_push::init());
+            .plugin(tauri_plugin_android_push::init())
+            .plugin(tauri_plugin_network_status::init());
     }
 
     // register the rest of the common plugins
@@ -226,6 +226,14 @@ pub fn run() {
             // checks from settings still work.
             .with_auto_update(cfg!(feature = "auto_apply_update") && !recording),
         );
+
+    #[cfg(target_os = "ios")]
+    {
+        // Both notification plugins assign UNUserNotificationCenter.delegate.
+        // Initialize push last: the local-notification delegate ignores remote
+        // pushes, so leaving it installed drops taps before frontend navigation.
+        builder = builder.plugin(tauri_plugin_notifications::init());
+    }
 
     #[cfg(mobile)]
     {
@@ -277,6 +285,7 @@ pub fn run() {
             graphql_cache_plugin::commands::graphql_cache_current_revision,
             graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
             graphql_cache_plugin::commands::graphql_cache_read,
+            graphql_cache_plugin::commands::graphql_cache_watch,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
             graphql_cache_plugin::commands::graphql_cache_entity_filter,

@@ -113,6 +113,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   SaveDatabaseView: (whose) => `save a view in ${whose} databases`,
   SearchSkills: (whose) => `search ${whose} skills`,
   SearchTools: null,
+  DiscoverConnectors: null,
   SelfKnowledge: null,
   SendChannelMessage: (whose) => `post a message from ${whose} account`,
   SendConfirmedEmail: (whose) => `send email from ${whose} account`,

@@ -1,6 +1,17 @@
-import { Button, Dialog, Panel } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import BuildingsIcon from '@phosphor/buildings.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
+import UsersIcon from '@phosphor/users.svg';
+import XIcon from '@phosphor/x.svg';
+import { Button, Checkbox, Dialog, Dropdown, EntityComposer, Panel } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { NewPipeline } from '../core/pipeline';
+
+const RECORD_TYPES = [
+  { value: 'company', label: 'Companies', icon: BuildingsIcon },
+  { value: 'contact', label: 'Contacts', icon: UsersIcon },
+] as const;
 
 /** One creation session; cancel preserves existing CRM data. */
 export function PipelineDialog(props: {
@@ -10,11 +21,13 @@ export function PipelineDialog(props: {
   const [name, setName] = createSignal('');
   const [recordType, setRecordType] =
     createSignal<NewPipeline['recordType']>('company');
-  const [sharing, setSharing] = createSignal<NewPipeline['sharing']>('private');
+  const [shareWithTeam, setShareWithTeam] = createSignal(false);
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal(false);
-  async function submit(event: SubmitEvent) {
-    event.preventDefault();
+  const tracked = () =>
+    RECORD_TYPES.find((type) => type.value === recordType()) ?? RECORD_TYPES[0];
+  const close = () => !pending() && props.onClose();
+  async function submit() {
     if (pending() || !name().trim()) return;
     setPending(true);
     setError(false);
@@ -22,7 +35,7 @@ export function PipelineDialog(props: {
       await props.onCreate({
         name: name().trim(),
         recordType: recordType(),
-        sharing: sharing(),
+        sharing: shareWithTeam() ? 'team' : 'private',
       });
       props.onClose();
     } catch {
@@ -32,95 +45,128 @@ export function PipelineDialog(props: {
     }
   }
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => !open && !pending() && props.onClose()}
-      class="w-112 max-w-[calc(100vw-2rem)]"
-    >
-      <Panel>
+    <Dialog open onOpenChange={(open) => !open && close()}>
+      <Panel hideBorder class="bg-transparent rounded-[inherit] *:max-h-[75vh]">
         <Panel.Body>
-          <form onSubmit={submit} class="flex flex-col gap-4 p-5">
-            <Dialog.Title class="text-base font-semibold">
-              New pipeline
-            </Dialog.Title>
-            <Dialog.Description class="text-sm text-ink-muted">
-              Track companies or contacts with columns you can customize.
-            </Dialog.Description>
-            <label class="flex flex-col gap-1.5 text-sm">
-              Pipeline name
-              <input
-                required
-                maxlength={200}
-                value={name()}
-                onInput={(event) => setName(event.currentTarget.value)}
-                disabled={pending()}
-                placeholder="e.g. Design partners"
-                class="rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
-              />
-            </label>
-            <fieldset disabled={pending()} class="flex flex-col gap-2 text-sm">
-              <legend class="mb-2 font-medium">Track</legend>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="recordType"
-                  checked={recordType() === 'company'}
-                  onChange={() => setRecordType('company')}
-                />
-                Companies
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="recordType"
-                  checked={recordType() === 'contact'}
-                  onChange={() => setRecordType('contact')}
-                />
-                Contacts
-              </label>
-            </fieldset>
-            <fieldset disabled={pending()} class="flex flex-col gap-2 text-sm">
-              <legend class="mb-2 font-medium">Share with</legend>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="sharing"
-                  checked={sharing() === 'private'}
-                  onChange={() => setSharing('private')}
-                />
-                Just me
-              </label>
-              <label class="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="sharing"
-                  checked={sharing() === 'team'}
-                  onChange={() => setSharing('team')}
-                />
-                My team
-              </label>
-              <p class="text-xs text-ink-muted">
-                You can change sharing later. Team members can edit shared
-                pipelines.
-              </p>
-            </fieldset>
-            <Show when={error()}>
-              <p role="alert" class="text-sm text-failure-ink">
-                Could not create this pipeline. Please try again.
-              </p>
-            </Show>
-            <div class="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                disabled={pending()}
-                onClick={props.onClose}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending() || !name().trim()}>
-                {pending() ? 'Creating…' : 'Create pipeline'}
-              </Button>
-            </div>
+          <form
+            class="h-full min-h-0"
+            aria-label="New pipeline"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter' &&
+                (event.metaKey || event.ctrlKey) &&
+                !event.isComposing
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                void submit();
+              }
+            }}
+          >
+            <EntityComposer.Root>
+              <EntityComposer.Header>
+                <Dialog.Title class="sr-only">New pipeline</Dialog.Title>
+                <EntityComposer.Title class="mb-0 min-w-0 flex-1 self-center">
+                  <input
+                    autofocus
+                    aria-label="Pipeline name"
+                    placeholder="Pipeline name"
+                    maxlength={200}
+                    required
+                    class="ph-no-capture w-full min-w-0 text-xl/7 font-medium outline-none bg-transparent placeholder:text-ink-placeholder"
+                    value={name()}
+                    disabled={pending()}
+                    onInput={(event) => setName(event.currentTarget.value)}
+                  />
+                </EntityComposer.Title>
+                <Button
+                  tabIndex={-1}
+                  aria-label="Close"
+                  tooltip="Close"
+                  size="icon-composer"
+                  disabled={pending()}
+                  onClick={close}
+                >
+                  <XIcon />
+                </Button>
+              </EntityComposer.Header>
+              <EntityComposer.Main class="gap-4">
+                <EntityComposer.Properties class="px-2">
+                  <Dropdown placement="bottom-start">
+                    <Dropdown.Trigger
+                      aria-label={`Track ${tracked().label}`}
+                      class="rounded-full"
+                      disabled={pending()}
+                    >
+                      <Dynamic
+                        component={tracked().icon}
+                        class="size-3 shrink-0"
+                      />
+                      {tracked().label}
+                      <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+                    </Dropdown.Trigger>
+                    <Dropdown.Content class="min-w-40">
+                      <Dropdown.Group>
+                        <Dropdown.GroupLabel>Track</Dropdown.GroupLabel>
+                        <Dropdown.RadioGroup
+                          value={recordType()}
+                          onChange={(value) =>
+                            setRecordType(value as NewPipeline['recordType'])
+                          }
+                        >
+                          <For each={RECORD_TYPES}>
+                            {(type) => (
+                              <Dropdown.RadioItem
+                                value={type.value}
+                                closeOnSelect
+                              >
+                                <Dynamic
+                                  component={type.icon}
+                                  class="size-4 shrink-0"
+                                />
+                                <span class="flex-1">{type.label}</span>
+                                <Dropdown.ItemIndicator>
+                                  <CheckIcon class="size-3.5 text-accent" />
+                                </Dropdown.ItemIndicator>
+                              </Dropdown.RadioItem>
+                            )}
+                          </For>
+                        </Dropdown.RadioGroup>
+                      </Dropdown.Group>
+                    </Dropdown.Content>
+                  </Dropdown>
+                </EntityComposer.Properties>
+              </EntityComposer.Main>
+              <Show when={error()}>
+                <p role="alert" class="px-2 text-sm text-failure">
+                  Could not create this pipeline. Please try again.
+                </p>
+              </Show>
+              <EntityComposer.Footer class="items-center">
+                <Checkbox
+                  checked={shareWithTeam()}
+                  disabled={pending()}
+                  onChange={setShareWithTeam}
+                >
+                  <Checkbox.Control />
+                  <Checkbox.Label class="text-xs text-ink-muted font-normal whitespace-nowrap">
+                    Share with my team
+                  </Checkbox.Label>
+                </Checkbox>
+                <EntityComposer.Submit
+                  type="submit"
+                  class="ml-auto"
+                  hasContent={Boolean(name().trim())}
+                  disabled={pending() || !name().trim()}
+                >
+                  {pending() ? 'Creating…' : 'Create pipeline'}
+                </EntityComposer.Submit>
+              </EntityComposer.Footer>
+            </EntityComposer.Root>
           </form>
         </Panel.Body>
       </Panel>

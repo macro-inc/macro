@@ -3,7 +3,7 @@
  * shells: signed-in visitors see it inside the app shell (sidebar, command
  * menu) and can edit their response; anonymous
  * visitors get the focused shell, so a public form never meets the login
- * redirect (`routes/focused-shell.ts`). The form itself is the shared
+ * redirect (`withFormRespondShell` in `routes/shells.tsx`). The form itself is the shared
  * `RespondView`.
  */
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';

@@ -1,6 +1,8 @@
 import type { UnifiedNotification } from '@notifications/types';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createUnreadDestinationRegistry } from '../create-unread-destination-registry';
 import {
+  unreadDestinationPositions,
   unreadNotificationChip,
   unreadThreads,
 } from '../unread-thread-navigation';
@@ -57,6 +59,7 @@ describe('channel unread notification navigation', () => {
       {
         threadId: 'old',
         messageId: 'third',
+        messageIds: ['third', 'second', 'first'],
         createdAt: '2026-09-01T14:00:00Z',
       },
     ]);
@@ -144,17 +147,49 @@ describe('channel unread notification navigation', () => {
   it('uses measured reply position within a tall thread and hides for a visible message', () => {
     const threads = unreadThreads([reply('a', 'middle')]);
     expect(
-      unreadNotificationChip(threads, positions, visible, 'above')?.direction
+      unreadNotificationChip(
+        threads,
+        positions,
+        visible,
+        new Map([['a', 'above']])
+      )?.direction
     ).toBe('above');
     expect(
-      unreadNotificationChip(threads, positions, visible, 'below')?.direction
+      unreadNotificationChip(
+        threads,
+        positions,
+        visible,
+        new Map([['a', 'below']])
+      )?.direction
     ).toBe('below');
     expect(
-      unreadNotificationChip(threads, positions, visible, 'visible')
+      unreadNotificationChip(
+        threads,
+        positions,
+        visible,
+        new Map([['a', 'visible']])
+      )
     ).toBeUndefined();
-    expect(unreadNotificationChip(threads, positions, visible)?.direction).toBe(
-      'below'
-    );
+    expect(unreadNotificationChip(threads, positions, visible)).toBeUndefined();
+  });
+
+  it('counts unloaded offscreen threads without resolving every parent', () => {
+    const threads = unreadThreads([
+      reply('a', 'old', 14),
+      reply('b', 'unloaded', 12),
+    ]);
+    expect(unreadNotificationChip(threads, positions, visible)).toMatchObject({
+      count: 2,
+      direction: 'above',
+      thread: { messageId: 'a' },
+    });
+    expect(
+      unreadNotificationChip(
+        unreadThreads([reply('a', 'old', 12), reply('b', 'unloaded', 14)]),
+        positions,
+        visible
+      )
+    ).toBeUndefined();
   });
 
   it('waits for layout and an unloaded parent position instead of guessing from reply time', () => {
@@ -163,5 +198,124 @@ describe('channel unread notification navigation', () => {
       unreadNotificationChip(threads, positions, undefined)
     ).toBeUndefined();
     expect(unreadNotificationChip(threads, new Map(), visible)).toBeUndefined();
+  });
+  it('hands off a visible collapsed thread to its badge and targets another offscreen thread', () => {
+    const threads = unreadThreads([
+      reply('a', 'middle', 14),
+      reply('b', 'old', 13),
+      reply('c', 'new', 12),
+    ]);
+    const destinations = new Map([['a', 'visible' as const]]);
+    expect(
+      unreadNotificationChip(threads, positions, visible, destinations)
+    ).toMatchObject({
+      count: 2,
+      direction: 'above',
+      thread: { messageId: 'b' },
+    });
+    expect(
+      unreadNotificationChip(
+        threads.slice(0, 1),
+        positions,
+        visible,
+        destinations
+      )
+    ).toBeUndefined();
+    // Visibility changes the navigation affordance, never the underlying unread records.
+    expect(threads).toHaveLength(3);
+  });
+
+  it('keeps a thread reachable when its newest unread reply is visible but an older one is above', () => {
+    const threads = unreadThreads([
+      reply('newest', 'middle', 14),
+      reply('older', 'middle', 13),
+      reply('oldest', 'middle', 12),
+    ]);
+    expect(
+      unreadNotificationChip(
+        threads,
+        positions,
+        visible,
+        new Map([
+          ['newest', 'visible'],
+          ['older', 'above'],
+          ['oldest', 'above'],
+        ])
+      )
+    ).toMatchObject({
+      count: 1,
+      direction: 'above',
+      thread: { messageId: 'older' },
+    });
+  });
+
+  it('does not guess a direction for an unmeasured destination anywhere within the visible range', () => {
+    const threads = unreadThreads([reply('a', 'middle')]);
+    expect(
+      unreadNotificationChip(threads, positions, { first: 'old', last: 'new' })
+    ).toBeUndefined();
+  });
+});
+
+describe('unread destination geometry', () => {
+  afterEach(() => document.body.replaceChildren());
+  function fixture() {
+    const registry = createUnreadDestinationRegistry(() => {});
+    const viewport = document.createElement('div');
+    document.body.append(viewport);
+    viewport.getBoundingClientRect = () => new DOMRect(0, 100, 500, 400);
+    const add = (
+      kind: 'message' | 'disclosure',
+      id: string,
+      top: number,
+      height = 32
+    ) => {
+      const element = document.createElement('button');
+      element.getBoundingClientRect = () => new DOMRect(0, top, 100, height);
+      viewport.append(element);
+      if (kind === 'message') registry.registerMessage(id, element);
+      else registry.registerDisclosure(id, element);
+      return element;
+    };
+    const threads = unreadThreads([reply('a', 'middle')]);
+    const measure = () =>
+      unreadDestinationPositions(threads, registry.elements, viewport, {
+        start: 20,
+        end: 80,
+      });
+    return { add, measure };
+  }
+
+  it('uses the visible show-replies control for a hidden unread reply at the channel bottom', () => {
+    const { add, measure } = fixture();
+    add('message', 'middle', 50);
+    const disclosure = add('disclosure', 'middle', 350);
+    expect(measure().get('a')).toBe('visible');
+    disclosure.getBoundingClientRect = () => new DOMRect(0, 80, 100, 32);
+    expect(measure().get('a')).toBe('above');
+    disclosure.getBoundingClientRect = () => new DOMRect(0, 110, 100, 32);
+    expect(measure().get('a')).toBe('above');
+    disclosure.getBoundingClientRect = () => new DOMRect(0, 410, 100, 32);
+    expect(measure().get('a')).toBe('below');
+    disclosure.getBoundingClientRect = () => new DOMRect(0, 430, 100, 32);
+    expect(measure().get('a')).toBe('below');
+  });
+
+  it('uses a rendered reply rather than its thread disclosure, including after expansion', () => {
+    const { add, measure } = fixture();
+    const disclosure = add('disclosure', 'middle', 350);
+    const message = add('message', 'a', 50);
+    expect(measure().get('a')).toBe('above');
+    disclosure.remove();
+    expect(measure().get('a')).toBe('above');
+    message.getBoundingClientRect = () => new DOMRect(0, 200, 100, 32);
+    expect(measure().get('a')).toBe('visible');
+  });
+
+  it('waits for a destination to mount or obtain layout', () => {
+    const { add, measure } = fixture();
+    expect(measure().has('a')).toBe(false);
+    add('message', 'a', 0, 0);
+    expect(measure().has('a')).toBe(false);
   });
 });

@@ -34,14 +34,14 @@ const LAUNCH_CALLS: AgentToolCall[] = [
       {
         kind: 'email',
         title: 'Ready for Thursday',
-        sender: 'Teo Nys',
+        sender: 'Teo',
         snippet: 'The invite flow is ready. Let’s run through the checklist.',
         time: '9:18 AM',
       },
       {
         kind: 'channel',
         title: 'launch',
-        sender: 'Julia Westphal',
+        sender: 'Julia',
         snippet: 'Last pass before Thursday.',
         time: '9:20 AM',
       },

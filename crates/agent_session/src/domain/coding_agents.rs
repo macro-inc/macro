@@ -213,6 +213,9 @@ where
                         action_id,
                     },
                     prompt: command.prompt,
+                    // Dispatch moves onto the trigger topic separately, and
+                    // takes its context from there.
+                    context: None,
                 })
                 .await
                 .map_err(failed)?;

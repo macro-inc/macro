@@ -9,11 +9,16 @@ import { PersonIcon, PRIORITY_IDS, STATUS_IDS } from './TaskProperties';
 export function TaskMention(props: {
   task: WorkspaceTask;
   onOpen?: () => void;
+  inline?: boolean;
 }) {
   return (
     <button
       type="button"
-      class="dummy-entity-link sample-task-mention"
+      class={
+        props.inline
+          ? 'sample-task-mention-inline'
+          : 'dummy-entity-link sample-task-mention'
+      }
       onClick={props.onOpen}
     >
       <ListChecks class="size-4 shrink-0 text-task" />

@@ -31,3 +31,21 @@
   .task-checklist-toolbar > button:not([data-convert-tasks]):not(:first-child), .task-checklist-divider { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .task-pr-pill { animation: none; } }
+
+.task-agent-scene { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.task-agent-scene[data-typing='true'] .demo-mention-editor:not(:empty)::after { content: ''; display: inline-block; height: 1em; margin-left: 1px; border-right: 1px solid currentColor; vertical-align: -0.1em; }
+
+/* Playback uses a stable composer grid instead of switching at 70 characters. */
+.task-agent-scene { container:task-agent / inline-size; }
+.task-agent-scene .mail-channel-input { min-height:24px; }
+@container task-agent (max-width:720px) {
+  .task-agent-scene .mail-channel-input { min-height:72px; }
+  .task-agent-scene [data-input-layout][data-composer-compact] {
+    grid-template-areas:'body body body' 'left . right';
+    align-items:center;
+    row-gap:3.75px;
+    padding:7.5px;
+    --input-editor-padding:4.6875px 9.375px;
+  }
+}
+.task-agent-scene .sample-chat-log { overflow-anchor:none; }

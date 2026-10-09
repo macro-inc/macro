@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::models::{
     EmailImportRepoOutcome, GithubPullRequest, ImportEmailAttachmentRepoArgs, OwnerTeam,
+    TeamTaskNumber,
 };
 use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
 
@@ -3429,4 +3430,68 @@ async fn github_pull_request_tasks_reject_oversized_lookups() {
         .await;
 
     assert!(matches!(result, Err(DocumentError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn task_identity_names_a_team_task_by_its_team_number() {
+    let document_id = "00000000-0000-0000-0000-000000000301";
+    let mut repo = make_mock_repo();
+    repo.expect_get_team_task_number()
+        .withf(move |id| id == document_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(Some(TeamTaskNumber {
+                team_slug: "ENG".to_string(),
+                task_num: 42,
+            }))))
+        });
+    let service = make_test_service(repo);
+
+    let identity = service
+        .get_task_identity(
+            authenticated_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        identity,
+        TaskIdentity {
+            document_id: document_id.to_string(),
+            title: "Test task".to_string(),
+            short_id: short_id_for_entity_id(document_id).unwrap(),
+            team_task: Some(TeamTaskNumber {
+                team_slug: "ENG".to_string(),
+                task_num: 42,
+            }),
+        }
+    );
+}
+
+#[tokio::test]
+async fn task_identity_rejects_a_document_that_is_not_a_task() {
+    let document_id = "00000000-0000-0000-0000-000000000302";
+    let service = make_test_service(make_mock_repo());
+    let mut document = task_document_context(document_id);
+    document.sub_type = None;
+
+    let result = service
+        .get_task_identity(authenticated_receipt(document_id), &document)
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn task_identity_treats_a_deleted_task_as_missing() {
+    let document_id = "00000000-0000-0000-0000-000000000303";
+    let service = make_test_service(make_mock_repo());
+    let mut document = task_document_context(document_id);
+    document.deleted_at = Some(chrono::Utc::now());
+
+    let result = service
+        .get_task_identity(authenticated_receipt(document_id), &document)
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::NotFound(_))));
 }

@@ -271,6 +271,12 @@ describe('upcoming calendar events source', () => {
     ).toEqual(['event-4', 'event-5', 'event-6']);
     expect(result.events()[1].url).toBeUndefined();
     expect(result.events()[2].url).toBeUndefined();
+    expect(
+      result
+        .events()
+        .slice(0, 4)
+        .map((event) => event.isMeeting)
+    ).toEqual([false, false, false, true]);
     expect(list).toHaveBeenCalledTimes(2);
     expect(list.mock.calls[1][0].start).toBe(list.mock.calls[0][0].end);
   });

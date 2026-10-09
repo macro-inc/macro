@@ -1,21 +1,20 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
-import { rememberBootShell } from '@components/app/boot-shell';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
-import { useTauri } from '@macro/tauri';
 import GearIcon from '@phosphor/gear.svg';
 import GearFillIcon from '@phosphor-fill/gear-fill.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
-import { createEffect, createMemo, Show } from 'solid-js';
-import { NativeUpdateButton } from './native-update-button';
+import { createMemo, Show } from 'solid-js';
+import { useAppUpdate } from './app-update';
 import { NavGlyph } from './nav-glyph';
+import { UpdateButton } from './update-button';
 
 /**
  * Sizes the gear and punches a gap around the avatar badge (16px, centred at
@@ -45,10 +44,6 @@ const MobileAppButton = () => {
   const isTabAvailable = useSettingsTabAvailable();
 
   const isActive = () => isSettingsActive() && activeTabId() === 'Mobile App';
-
-  createEffect(() =>
-    rememberBootShell({ mobileApp: isTabAvailable('Mobile App') })
-  );
 
   const open = (event: MouseEvent) => {
     event.preventDefault();
@@ -90,7 +85,7 @@ export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;
 }) => {
   const analytics = useAnalytics();
-  const tauri = useTauri();
+  const update = useAppUpdate();
   const { openSettings, openSettingsInSplit, settingsOpen, activeTabId } =
     useSettingsState();
   const userId = useUserId();
@@ -118,13 +113,11 @@ export const FooterActions = (props: {
 
   return (
     <div class="flex w-full shrink-0 flex-col items-center gap-1">
-      <Show when={tauri}>
-        {(native) => (
-          <Show when={native().nativeUpdateStatus().status === 'Ready'}>
-            <NativeUpdateButton
-              preparing={native().nativeUpdatePreparing()}
-              onRestart={() => void native().restartNativeUpdate()}
-            />
+      {/* Keyed by id: a new update remounts the button, so its popover opens again. */}
+      <Show when={update()?.id} keyed>
+        {(_id) => (
+          <Show when={update()}>
+            {(current) => <UpdateButton update={current} />}
           </Show>
         )}
       </Show>

@@ -134,8 +134,8 @@ where
                 model: row.model,
                 identity: Some(AgentIdentity {
                     bot: row.bot_id,
+                    handle: bot_id::mention_handle(row.bot_id, &bot.handle).to_owned(),
                     name: bot.name,
-                    handle: bot.handle,
                 }),
                 instructions: row.instructions,
                 acp_session_id: row.acp_session_id,

@@ -14,7 +14,7 @@ use crate::service::chat_renamer::spawn_initial_chat_rename;
 use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
-use agent::{AgentLoop, StreamAccumulator};
+use agent::{AgentLoop, ModelSpeed, StreamAccumulator};
 use ai_billing::inbound::admission::admission_status;
 use async_stream::stream;
 use attachment::FormattedParts;
@@ -77,6 +77,9 @@ pub struct HttpSendChatMessageRequest {
     pub chat_id: Option<String>,
     /// The model to respond with (`provider/model` id)
     pub model: String,
+    /// Inference speed, validated against the selected model. Defaults to standard.
+    #[serde(default)]
+    pub speed: ModelSpeed,
     /// Additional system instructions appended to the base system prompt
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_instructions: Option<String>,
@@ -186,6 +189,14 @@ async fn send_chat_message_inner(
             error: format!("No access to model {}", request.model),
             stream_id: Some(stream_id.clone()),
             status: Some(StatusCode::FORBIDDEN),
+            code: None,
+        });
+    }
+    if !request.speed.supported(&request.model) {
+        return Err(ChatMessageError {
+            error: "Speed is not supported by the selected model".to_owned(),
+            stream_id: Some(stream_id),
+            status: Some(StatusCode::BAD_REQUEST),
             code: None,
         });
     }
@@ -366,6 +377,7 @@ async fn send_chat_message_inner(
         message_id.clone(),
         stream_id.clone(),
         model,
+        request.speed,
         now,
         request.content.clone(),
         user_message_id,
@@ -522,6 +534,7 @@ fn stream_and_save_message(
     message_id: String,
     stream_id: String,
     model: String,
+    speed: ModelSpeed,
     now: std::time::Instant,
     user_message_content: String,
     user_message_id: String,
@@ -571,7 +584,9 @@ fn stream_and_save_message(
         // in the observability backend.
         let agent_loop = AgentLoop::new(tool_context.recorder.clone())
             .with_model(&model)
-            .with_conversation_id(&chat_id);
+            .with_conversation_id(&chat_id)
+            .with_speed(speed)
+            .expect("chat speed was validated before starting the stream");
 
 
         let rig_messages = agent::to_rig_messages(&request);

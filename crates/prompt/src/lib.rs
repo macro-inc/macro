@@ -20,6 +20,7 @@ pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
+pub mod pull_requests;
 pub mod skills;
 pub mod tone;
 pub mod tool_usage;
@@ -302,6 +303,17 @@ mod tests {
         assert!(instructions.contains("\"expanded\":true"));
         assert!(instructions.contains("\"blockName\":\"skill\""));
         assert!(instructions.contains("\"blockName\":\"initiative\""));
+    }
+
+    #[test]
+    fn system_prompt_tells_agents_to_open_ready_pull_requests_with_ci_passing() {
+        let prompt = BASE_PROMPT.to_string();
+        assert!(prompt.contains(pull_requests::READY_PULL_REQUEST));
+        assert!(mcp_instructions("https://macro.com").contains(pull_requests::READY_PULL_REQUEST));
+
+        let coding = coding_agents::PROMPT.to_string();
+        assert!(coding.contains("ready for review, not a draft"));
+        assert!(coding.contains("CI passing"));
     }
 
     #[test]

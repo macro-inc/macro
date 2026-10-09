@@ -182,3 +182,48 @@ fn in_memory_points_follow_the_calendar_storage_contract() {
 fn turso_points_follow_the_calendar_storage_contract() {
     block_on(point_contract::<TursoFactory>());
 }
+
+/// An identity reset rewrites the cache from one response, so the records it
+/// restores need the same derived calendar rows as an ordinary write.
+async fn reset_contract<F: BackendFactory>() {
+    let (mut factory, mut storage) = F::create();
+    let point_key = |name: &str| key(&format!("GraphqlCalendarOccurrence:points:{name}"));
+    storage
+        .put_batch(vec![(
+            point_key("previous"),
+            timed_record(START_MS, START_MS),
+        )])
+        .await
+        .unwrap();
+    storage
+        .reset_with_records(
+            vec![(
+                point_key("restored"),
+                timed_record(START_MS + 500, START_MS + 500),
+            )],
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+    let storage = factory.reopen(storage);
+    let snapshot = storage.query_calendar_ranges(&point_range()).await.unwrap();
+    assert_eq!(
+        snapshot
+            .rows
+            .iter()
+            .map(|row| row.record_key.clone())
+            .collect::<Vec<_>>(),
+        [point_key("restored")]
+    );
+    factory.finish(storage);
+}
+
+#[test]
+fn in_memory_reset_writes_calendar_rows_for_restored_records() {
+    block_on(reset_contract::<InMemoryFactory>());
+}
+
+#[test]
+fn turso_reset_writes_calendar_rows_for_restored_records() {
+    block_on(reset_contract::<TursoFactory>());
+}

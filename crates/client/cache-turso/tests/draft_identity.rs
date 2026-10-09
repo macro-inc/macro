@@ -80,6 +80,7 @@ async fn enqueue(
                     query: PAGE.into(),
                     operation_name: Some("EmailThreadPage".into()),
                     variables_json: json!({"threadId":"local-thread"}).to_string(),
+                    only_on_link_failure: false,
                 }],
                 identity_bindings: &bindings(delete),
                 created_at_ms: now,

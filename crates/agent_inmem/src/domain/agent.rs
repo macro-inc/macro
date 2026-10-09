@@ -14,8 +14,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::domain::model_access::{InMemModelAccess, ModelAccess, ModelAccessError};
-use agent::ReasoningEffort;
 use agent::types::{AssistantMessagePart, ChatMessage};
+use agent::{ModelSpeed, ReasoningEffort};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
@@ -34,6 +34,7 @@ use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
+use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use agent_session::domain::model::AgentSessionId;
 use ai_billing::domain::AiAdmissionService;
 use ai_tools::user_tool_review::{
@@ -105,6 +106,7 @@ struct TurnInput {
     model: String,
     /// Reasoning effort the turn runs with.
     reasoning_effort: ReasoningEffort,
+    speed: ModelSpeed,
     /// Who this agent is, for the engine's system prompt.
     identity: Option<AgentIdentity>,
     /// The session's instructions, for the engine's system prompt.
@@ -136,6 +138,8 @@ pub struct AgentState {
     /// The tools of those servers, once dialed; `None` until then or when
     /// there were none.
     pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
+    /// Attached entries retain the credential used to resolve live connections.
+    pub mcp_servers: Mutex<Vec<AcpMcpServer>>,
     /// In-flight `connect_mcp` from `session/new` / `session/resume`. The
     /// handshake does not join it; the first turn does, so SearchTools still
     /// sees the catalog.
@@ -150,7 +154,7 @@ pub struct AgentState {
 
 impl AgentState {
     /// Dial the servers a session request carried and keep their tools for
-    /// every turn that follows. Started at `session/new`/`session/resume` so
+    /// the next turn. Started at `session/new`/`session/resume` so
     /// the handshake is not held by `tools/list`; the first turn joins the
     /// same work so SearchTools still has the catalog.
     async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
@@ -173,6 +177,10 @@ impl AgentState {
     /// Start [`Self::connect_mcp`] without joining it. `session/new` and
     /// `session/resume` call this so create can return while listing runs.
     fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
+        *self
+            .mcp_servers
+            .lock()
+            .expect("mcp servers lock should not be poisoned") = servers.clone();
         let state = Arc::clone(self);
         let handle = tokio::spawn(async move {
             state.connect_mcp(servers).await;
@@ -183,9 +191,9 @@ impl AgentState {
             .expect("mcp connect lock should not be poisoned") = Some(handle);
     }
 
-    /// The tools the next turn should compose, waiting out an in-flight
-    /// connect so the searchable catalog is not empty on turn one.
-    async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
+    /// Wait for the initial listing, then refresh permitted connections so
+    /// authorization or disconnection takes effect without a new session.
+    async fn mcp_tools_for_turn(&self) -> anyhow::Result<Option<RemoteMcpToolSet>> {
         let handle = self
             .mcp_connect
             .lock()
@@ -194,10 +202,19 @@ impl AgentState {
         if let Some(handle) = handle {
             let _ = handle.await;
         }
-        self.mcp_tools
+        let advertised = self
+            .mcp_servers
+            .lock()
+            .expect("mcp servers lock should not be poisoned")
+            .clone();
+        if let Some(servers) = self.mcp.refresh_dyn(self.session_id, advertised).await? {
+            self.connect_mcp(servers).await;
+        }
+        Ok(self
+            .mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned")
-            .clone()
+            .clone())
     }
 
     fn expect_session(&self, requested: &SessionId) -> Result<(), AcpError> {
@@ -234,6 +251,9 @@ impl AgentState {
             if !ReasoningEffort::supported(&model).contains(&state.reasoning_effort) {
                 state.reasoning_effort = ReasoningEffort::default();
             }
+            if !state.speed.supported(&model) {
+                state.speed = ModelSpeed::Standard;
+            }
             state.model = model;
         }
     }
@@ -254,6 +274,7 @@ impl AgentState {
             &session.model,
             &access.models(self.engine.supported_models()),
             session.reasoning_effort,
+            session.speed,
         )
     }
 
@@ -265,6 +286,7 @@ impl AgentState {
                 messages: messages_for_turn(&[], prompt),
                 model: String::new(),
                 reasoning_effort: ReasoningEffort::default(),
+                speed: ModelSpeed::Standard,
                 identity: None,
                 instructions: None,
             },
@@ -272,6 +294,7 @@ impl AgentState {
                 messages: messages_for_turn(&state.history, prompt),
                 model: state.model.clone(),
                 reasoning_effort: state.reasoning_effort,
+                speed: state.speed,
                 identity: state.identity.clone(),
                 instructions: state.instructions.clone(),
             },
@@ -732,6 +755,25 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             }
                             state.set_model(value.to_string());
                         }
+                        "speed" => {
+                            let speed = ModelSpeed::parse(&value.to_string());
+                            let Some(speed) = speed else {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params().data("unknown speed"),
+                                );
+                            };
+                            let mut session = state
+                                .store
+                                .get_mut(&state.session_id)
+                                .expect("active session exists");
+                            if !speed.supported(&session.model) || !access.allows(&session.model) {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params()
+                                        .data("speed is not available for this model"),
+                                );
+                            }
+                            session.speed = speed;
+                        }
                         REASONING_EFFORT_CONFIG_ID => {
                             let Ok(effort) = value.to_string().parse() else {
                                 return responder.respond_with_error(
@@ -830,12 +872,13 @@ async fn run_turn(
     let mcp_tools = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        tools = state.mcp_tools_for_turn() => tools,
+        tools = state.mcp_tools_for_turn() => tools.map_err(|error| AcpError::new(-32603, format!("Could not refresh connector tools: {error}")))?,
     };
     let TurnInput {
         messages,
         model,
         reasoning_effort,
+        speed,
         identity,
         instructions,
     } = state.turn_input(&prompt);
@@ -847,6 +890,25 @@ async fn run_turn(
     if !access.allows(&model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
     }
+    // Check the full history as well: changing models must not send earlier
+    // images to a text-only provider or silently discard what the user attached.
+    if super::models::supports_images(&model) == Some(false)
+        && messages.iter().any(|message| {
+            message
+                .attachments
+                .as_ref()
+                .is_some_and(super::session::contains_images)
+        })
+    {
+        let notice = FailureNotice {
+            kind: FailureNoticeKind::UnsupportedImageInput,
+            title: format!("{} does not support images", super::models::display_name(&model)),
+            body: "Choose a vision model to continue this conversation, or start a conversation without images.".to_owned(),
+            link: None,
+        };
+        return Err(AcpError::new(-32602, notice.title.clone())
+            .data(serde_json::to_value(notice).expect("failure notice is serializable")));
+    }
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
@@ -855,6 +917,7 @@ async fn run_turn(
         owner: state.owner.clone(),
         model,
         reasoning_effort,
+        speed,
         identity,
         instructions,
         messages,

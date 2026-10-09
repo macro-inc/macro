@@ -16,7 +16,7 @@ use sqlx::{Pool, Postgres, Row};
 use crate::domain::models::{
     CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, EmailImportRepoOutcome,
     FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
-    InitialLinkShare, NewDocument,
+    InitialLinkShare, NewDocument, TeamTaskNumber,
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
@@ -1863,6 +1863,31 @@ async fn test_create_first_task_assigns_team_task_id_one(pool: Pool<Postgres>) {
 
     assert_eq!(task_metadata.team_id, TEST_TEAM_ID);
     assert_eq!(task_metadata.task_num, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_team_task_number_names_the_team_slug(pool: Pool<Postgres>) {
+    sqlx::query!("UPDATE team SET slug = 'ENG' WHERE id = $1", TEST_TEAM_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = test_repo(pool);
+    let task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+
+    assert_eq!(
+        repo.get_team_task_number(&task.document_id).await.unwrap(),
+        Some(TeamTaskNumber {
+            team_slug: "ENG".to_string(),
+            task_num: 1,
+        })
+    );
+    assert_eq!(
+        repo.get_team_task_number(TEST_DOCUMENT_ID).await.unwrap(),
+        None
+    );
 }
 
 #[sqlx::test(

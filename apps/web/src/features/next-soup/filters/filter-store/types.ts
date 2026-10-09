@@ -101,6 +101,9 @@ export type ScalarFieldFilters = {
   callStatus?: CallStatus;
   callAttended?: boolean;
   crmCompanyHidden?: boolean;
+  crmContactHidden?: boolean;
+  /** Literal text matched against a CRM contact's name or email. */
+  crmContactSearch?: string;
   calendarEventSeen?: boolean;
   calendarEventDone?: boolean;
   includeAgentSessions?: boolean;

@@ -19,6 +19,10 @@ import {
   type MessageData,
 } from '../Message';
 import { createTargetReplyScroller } from './create-target-reply-scroller';
+import {
+  type MessageElementMount,
+  notifyElementOnMount,
+} from './message-element-lifecycle';
 import { buildThreadReplyListMeta } from './reply-list-meta';
 import { ThreadReplyMonorail } from './ThreadReplyMonorail';
 import { ThreadReplyRail } from './ThreadReplyRail';
@@ -36,6 +40,7 @@ export function ThreadReplyList(props: {
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   messageEditor?: MessageEditor;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
+  onMessageMount?: MessageElementMount;
   onReady?: (handle: ThreadReplyListHandle) => void;
   positionTarget?: (
     threadRow: HTMLElement,
@@ -96,6 +101,7 @@ export function ThreadReplyList(props: {
           <div
             ref={(element) => {
               replyElements.set(id, element);
+              notifyElementOnMount(props.onMessageMount, id, element);
             }}
             class="relative"
           >
