@@ -2838,6 +2838,131 @@ enum GraphqlCrmDiscussionReason {
 }
 
 """
+A CRM pipeline the viewer can see.
+"""
+type GraphqlCrmPipeline {
+	"""
+	The pipeline's identifier.
+	"""
+	id: ID!
+	"""
+	The pipeline's name.
+	"""
+	name: String!
+	"""
+	Which CRM record its rows reference.
+	"""
+	recordType: GraphqlCrmPipelineRecordType!
+	"""
+	Whether the pipeline is shared with its team.
+	"""
+	sharing: GraphqlCrmPipelineSharing!
+	"""
+	The table that pipeline operations name.
+	"""
+	tableId: ID!
+	"""
+	Whether the viewer may edit the pipeline's rows.
+	"""
+	canEdit: Boolean!
+}
+
+"""
+One cell of a pipeline row.
+"""
+type GraphqlCrmPipelineCell {
+	"""
+	The cell's column.
+	"""
+	column: GraphqlCrmPipelineColumn!
+	"""
+	The cell's value, absent when the cell is empty.
+	"""
+	value: GraphqlPropertyValue
+}
+
+"""
+A pipeline column, with what its cells' values mean.
+"""
+type GraphqlCrmPipelineColumn {
+	"""
+	The column's identifier.
+	"""
+	id: ID!
+	"""
+	The property definition the column binds.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	The column's name.
+	"""
+	name: String!
+	"""
+	The type of value the column holds.
+	"""
+	dataType: GraphqlPropertyDataType!
+	"""
+	Whether a cell can hold more than one value.
+	"""
+	isMultiSelect: Boolean!
+	"""
+	The required entity type for a reference column, when constrained.
+	"""
+	specificEntityType: GraphqlPropertyEntityType
+	"""
+	The options a select column's cells choose from, in display order.
+	"""
+	options: [GraphqlPropertyOption!]!
+}
+
+"""
+A pipeline row that references a company or contact.
+"""
+type GraphqlCrmPipelineEntry {
+	"""
+	The row's identifier.
+	"""
+	id: ID!
+	"""
+	The pipeline holding the row.
+	"""
+	pipeline: GraphqlCrmPipeline!
+	"""
+	The row's cells in column order, for every column but the reference
+	to the record itself. An empty cell has no value.
+	"""
+	cells: [GraphqlCrmPipelineCell!]!
+}
+
+"""
+Which CRM record a pipeline's rows reference.
+"""
+enum GraphqlCrmPipelineRecordType {
+	"""
+	Companies.
+	"""
+	COMPANY
+	"""
+	Contacts.
+	"""
+	CONTACT
+}
+
+"""
+Whether a pipeline is shared with its team.
+"""
+enum GraphqlCrmPipelineSharing {
+	"""
+	Only people granted access individually.
+	"""
+	PRIVATE
+	"""
+	The whole team may edit.
+	"""
+	TEAM
+}
+
+"""
 GraphQL input representing the crm scope.
 """
 input GraphqlCrmScope @oneOf {
@@ -6853,6 +6978,11 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
+	Rows of the viewer's live pipelines that reference this record, grouped
+	by pipeline in each one's row order.
+	"""
+	pipelineEntries: [GraphqlCrmPipelineEntry!]!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -6948,6 +7078,11 @@ type GraphqlSoupCrmContact implements GraphqlSoupEntity {
 	timeline. Deeper history belongs to the viewer's activity feed.
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	Rows of the viewer's live pipelines that reference this record, grouped
+	by pipeline in each one's row order.
+	"""
+	pipelineEntries: [GraphqlCrmPipelineEntry!]!
 	"""
 	Optional viewer frecency score.
 	"""
@@ -8228,6 +8363,16 @@ type GraphqlUser {
 	Fetch one accessible email thread by its canonical identifier.
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
+	"""
+	Fetch one CRM company the viewer can see, with the pipeline rows
+	that reference it reachable through `pipelineEntries`.
+	"""
+	crmCompany(companyId: ID!): GraphqlSoupCrmCompany
+	"""
+	Fetch one CRM contact the viewer can see, with the pipeline rows
+	that reference it reachable through `pipelineEntries`.
+	"""
+	crmContact(contactId: ID!): GraphqlSoupCrmContact
 	"""
 	Fetch one accessible agent session by id, with its protocol log
 	reachable through `log`.

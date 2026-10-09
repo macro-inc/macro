@@ -13,6 +13,7 @@ use graphql_activity::{
     ActivityEdgeKey, GraphqlActivityEvent, SoupActivityEdgeReader, load_entity_activity,
     parse_activity_edge_limit,
 };
+use graphql_crm::{CrmRecord, GraphqlCrmPipelineEntry, load_pipeline_entries};
 use graphql_email::{
     EmailContentKey, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
     email_message_selection_requires_full_payload, load_email_messages,
@@ -77,6 +78,7 @@ where
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
     type AgentSessionEdges = SoupAgentSessionEdges;
     type InitiativeEdges = SoupInitiativeEdges;
+    type CrmRecordEdges = SoupCrmRecordEdges;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {
@@ -125,6 +127,17 @@ where
 
     fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges {
         SoupInitiativeEdges { initiative_id }
+    }
+
+    fn crm_record_edges(record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
+        let id = record.entity_id.parse().ok();
+        SoupCrmRecordEdges {
+            record: match record.entity_type {
+                model_entity::EntityType::CrmCompany => id.map(CrmRecord::Company),
+                model_entity::EntityType::CrmContact => id.map(CrmRecord::Contact),
+                _ => None,
+            },
+        }
     }
 
     fn agent_session_edges(session_id: Uuid, bot_id: Uuid) -> Self::AgentSessionEdges {
@@ -692,6 +705,28 @@ impl SoupInitiativeEdges {
                 .await?
                 .completed_task_count,
         )
+    }
+}
+
+/// CRM fields composed onto Soup company and contact entities.
+#[derive(Clone)]
+pub struct SoupCrmRecordEdges {
+    /// The company or contact, when its identity parses.
+    record: Option<CrmRecord>,
+}
+
+#[Object]
+impl SoupCrmRecordEdges {
+    /// Rows of the viewer's live pipelines that reference this record, grouped
+    /// by pipeline in each one's row order.
+    async fn pipeline_entries(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlCrmPipelineEntry>> {
+        match self.record {
+            Some(record) => load_pipeline_entries(ctx, record).await,
+            None => Ok(Vec::new()),
+        }
     }
 }
 

@@ -25,8 +25,9 @@ use crate::{
     inputs::{GroupedSoupInput, SoupInput},
     loaders::{AgentSessionEntityLoader, SoupItemDataLoader},
     objects::{
-        GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
-        SoupEntityEdges, SoupPage, SoupPatch,
+        GraphqlSoupAgentSession, GraphqlSoupCrmCompany, GraphqlSoupCrmContact,
+        GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup, SoupEntityEdges, SoupPage,
+        SoupPatch,
     },
 };
 
@@ -147,6 +148,52 @@ where
         GraphqlSoupEntity::AgentSession(session) => Ok(Some(session)),
         _ => Err(async_graphql::Error::new(
             "Soup returned a non-agent-session entity for an agent-session request",
+        )),
+    }
+}
+
+/// Fetch one CRM company the viewer can see, through the same access filter
+/// the Soup list uses, so a company outside their team reads as absent.
+pub async fn resolve_soup_crm_company<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    company_id: uuid::Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupCrmCompany<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = ctx.data::<SoupItemDataLoader>()?;
+    let entity = EntityType::CrmCompany.with_entity_string(company_id.to_string());
+    let Some(item) = loader.load_one((user_id, entity)).await? else {
+        return Ok(None);
+    };
+    match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
+        GraphqlSoupEntity::CrmCompany(company) => Ok(Some(company)),
+        _ => Err(async_graphql::Error::new(
+            "Soup returned a non-company entity for a CRM company request",
+        )),
+    }
+}
+
+/// Fetch one CRM contact the viewer can see, through the same access filter
+/// the Soup list uses, so a contact outside their team reads as absent.
+pub async fn resolve_soup_crm_contact<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    contact_id: uuid::Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupCrmContact<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = ctx.data::<SoupItemDataLoader>()?;
+    let entity = EntityType::CrmContact.with_entity_string(contact_id.to_string());
+    let Some(item) = loader.load_one((user_id, entity)).await? else {
+        return Ok(None);
+    };
+    match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
+        GraphqlSoupEntity::CrmContact(contact) => Ok(Some(contact)),
+        _ => Err(async_graphql::Error::new(
+            "Soup returned a non-contact entity for a CRM contact request",
         )),
     }
 }

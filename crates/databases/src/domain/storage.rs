@@ -60,6 +60,15 @@ pub trait DatabaseStorageService: Send + Sync + 'static {
         table: TableId,
         query: StorageRowsQuery,
     ) -> impl Future<Output = Result<StorageRows, DatabaseError>> + Send;
+    /// Read the cells of those of `rows` that belong to a table in the
+    /// authorized resource, in the table's row order. Unlike
+    /// [`Self::storage_rows`], only these rows' cells are read.
+    fn storage_row_cells(
+        &self,
+        id: DatabaseId,
+        table: TableId,
+        rows: &[RowId],
+    ) -> impl Future<Output = Result<Vec<StorageRow>, DatabaseError>> + Send;
     /// Validate typed operations with the shared planner, then commit through
     /// `DatabaseStorage`. External property bindings and cross-resource relations
     /// require a host capability and are not accepted by this entry point.
