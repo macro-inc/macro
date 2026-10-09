@@ -21,7 +21,7 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import { QueryClientProvider } from '@tanstack/solid-query';
-import type { OperationResult } from '@urql/core';
+import { gql, type OperationResult } from '@urql/core';
 import { createComputed, createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import {
@@ -33,6 +33,34 @@ import {
   TAG_DEFINITION_ID,
   tagSets,
 } from './data';
+
+// Another document for the renameEntities field: it reaches the field
+// resolver through its own variables, response alias, and narrower selection.
+const RenameTitleDocument = gql`
+  mutation RenameTitle($id: ID!, $name: String!) {
+    renamed: renameEntities(
+      inputs: [{ entity: { type: DOCUMENT, id: $id }, displayName: $name }]
+    ) {
+      results {
+        __typename
+        ... on GraphqlMutationSuccess {
+          effects {
+            __typename
+            ... on SoupUpdated {
+              item {
+                __typename
+                id
+                ... on GraphqlSoupDocument {
+                  documentName: name
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
 
 const mode = new URLSearchParams(location.search).get('cache') ?? 'cached';
 disableBrowserTursoCache.override = mode === 'disabled';
@@ -171,9 +199,21 @@ function Readers() {
       .toPromise();
     if (result.error) throw result.error;
   }
+  async function renameByField() {
+    const result = await getGraphqlSoupClient()
+      .mutation(RenameTitleDocument, {
+        id: DOCUMENT_ID,
+        name: 'Renamed task',
+      })
+      .toPromise();
+    if (result.error) throw result.error;
+  }
   return (
     <>
       <button onClick={() => void edit(rename)}>Rename task</button>
+      <button onClick={() => void edit(renameByField)}>
+        Rename task by field
+      </button>
       <button onClick={() => void edit(() => tags.applyTag('user', DOCS_TAG))}>
         Add docs
       </button>

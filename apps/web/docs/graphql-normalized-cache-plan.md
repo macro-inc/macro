@@ -584,7 +584,10 @@ retain the existing urql-solid contract. Existing `createUrqlQuery` and
 `createUrqlInfiniteQuery` consumers use the same live projection path without
 being rewritten; every loaded infinite-query page stays subscribed.
 
-Mutation predictions are registered once, alongside domain query definitions:
+Mutation predictions are keyed by mutation field and registered once per field,
+alongside domain query definitions. A representative generated document names
+the field, types its arguments through the document's variables, and types the
+predicted value through its selection:
 
 ```ts
 optimisticResolver(MarkEmailThreadSeenDocument, ({ input }) => ({
@@ -593,11 +596,28 @@ optimisticResolver(MarkEmailThreadSeenDocument, ({ input }) => ({
   isRead: true,
 }));
 
-// Any caller can then execute the ordinary generated mutation.
+// Any caller can then execute the ordinary generated mutation, or any other
+// document that selects markEmailThreadSeen.
 await client.mutation(MarkEmailThreadSeenDocument, {
   input: { threadId },
 }).toPromise();
 ```
+
+The representative must pass every field argument as a same-named variable, so
+its variables and the field's arguments coincide. For each mutation without an
+explicit optimistic context, the exchange evaluates every root field's arguments
+against the operation's variables (substituting variables and applying variable
+defaults) and places the resolver's value under that document's response key.
+Predictions are all or nothing: if any root field has no resolver, carries a
+directive such as `@include` or `@skip`, or its resolver returns `undefined`, the
+operation is sent without a prediction. Registering two resolvers for one field
+is an error.
+
+Cache-core normalizes the prediction through the executing document's selection.
+Fields that document does not select are ignored, and selected fields missing
+from the prediction keep their cached values on existing entities. Nested
+response keys come from the representative, so a document that selects a field
+under a different alias does not receive that field's predicted value.
 
 The durable optimistic queue owns ordering, retries, commit and rollback. The
 query author supplies no optimistic callbacks, result traversal or cache writes.
@@ -629,13 +649,20 @@ Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-33 mutation documents and fails when a document has no declared strategy:
+35 mutation documents and fails when a document has no declared strategy.
+Because predictions are keyed by mutation field, it also checks that local
+resolver documents select only resolved fields, and that any other document
+reaching a field resolver is a listed exception the resolver declines.
+RenameDatabase and RenameForm call `renameEntities` and so reach its resolver,
+which declines database and form entities; they stay authoritative, and the test
+proves they receive no prediction. Each representative document must declare
+every schema argument of its field with the schema's type:
 
 | Strategy | Operations |
 | --- | --- |
 | Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (10) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent |
-| Authoritative outcome (9) | CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity |
+| Existing domain optimistic recipe (11) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, MarkWorkFeedItemsDone |
+| Authoritative outcome (10) | CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
 | Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
 
 The project resolver predicts names and members; sharing waits for the server.

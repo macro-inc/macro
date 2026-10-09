@@ -1,4 +1,4 @@
-import { CombinedError, stringifyDocument } from '@urql/core';
+import { CombinedError } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +29,7 @@ vi.mock('../soup/graphql/active-queries', () => ({
   getActiveGraphqlSoupRevalidations: mocks.revalidations,
 }));
 
+import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
   SetEmailThreadArchivedDocument,
   SoupDocument,
@@ -71,14 +72,12 @@ describe('GraphQL email archive writes', () => {
         { input: { threadId: 'thread', archived: value } },
         expect.objectContaining({ optimisticMutation: { revalidations: [] } })
       );
-      const resolver = soupOptimisticResolvers.find(
-        (resolver) =>
-          resolver.document ===
-          stringifyDocument(SetEmailThreadArchivedDocument)
-      );
       expect(
-        resolver?.resolve({ input: { threadId: 'thread', archived: value } })
-          ?.response
+        predictOptimisticMutation(
+          soupOptimisticResolvers,
+          SetEmailThreadArchivedDocument,
+          { input: { threadId: 'thread', archived: value } }
+        )?.response
       ).toEqual({
         setEmailThreadArchived: {
           __typename: 'GraphqlSoupEmailThread',
