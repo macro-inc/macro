@@ -2281,8 +2281,8 @@ composer border in dark mode, with subtle row separators. The compact sidebar
 uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
-in a circle with a periodic pulsing ring) appears in the sidebar rail above the
-mobile-app and settings icons. Its popover (**Update available**, a short
+in a circle, with a glow that periodically spins around it) appears in the
+sidebar rail above the mobile-app and settings icons. Its popover (**Update available**, a short
 description, and one action) opens by itself once per update until dismissed
 (click outside or Escape); the button stays until the update is applied. The
 action depends on the update: **Reload** for a newer web build, **Update** for a

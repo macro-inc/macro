@@ -6,6 +6,16 @@ import type { AppUpdate } from './app-update';
 
 const DISMISSED_KEY = 'macro:app-update-dismissed';
 
+/**
+ * Two accent arcs of different lengths and strengths on a thin ring, so the
+ * glow swells and thins as it travels around the circle.
+ */
+const GLOW_RING = {
+  background:
+    'conic-gradient(from 0deg, transparent 0deg, var(--color-accent) 70deg, transparent 120deg, transparent 190deg, color-mix(in oklch, var(--color-accent) 55%, transparent) 225deg, transparent 255deg)',
+  mask: 'radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px))',
+} as const;
+
 function dismissedUpdate(): string | null {
   try {
     return localStorage.getItem(DISMISSED_KEY);
@@ -23,8 +33,8 @@ function dismissUpdate(id: string): void {
 }
 
 /**
- * The rail's update button: a download glyph in a circle whose ring pulses
- * every few seconds. Its popover opens by itself once per update, until it is
+ * The rail's update button: a download glyph in a circle with a glow that
+ * spins around it every few seconds. Its popover opens by itself once per update, until it is
  * dismissed; mount one per update id so a new update opens it again.
  */
 export function UpdateButton(props: { update: () => AppUpdate }) {
@@ -55,7 +65,13 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
         <span class="pointer-events-none relative flex size-7 items-center justify-center rounded-full bg-accent text-accent-contrast">
           <span
             aria-hidden="true"
-            class="absolute inset-0 rounded-full border-2 border-accent animate-update-ring motion-reduce:animate-none"
+            class="absolute -inset-1 rounded-full opacity-0 blur-[3px] animate-update-glow motion-reduce:hidden"
+            style={GLOW_RING}
+          />
+          <span
+            aria-hidden="true"
+            class="absolute -inset-1 rounded-full opacity-0 blur-[0.5px] animate-update-glow motion-reduce:hidden"
+            style={GLOW_RING}
           />
           <DownloadIcon class="size-4" aria-hidden="true" />
         </span>

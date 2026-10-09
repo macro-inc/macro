@@ -576,8 +576,8 @@ body.tauri-ios {
   --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
   --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
-  /* One ring pulse, then a long rest before the next. */
-  --animate-update-ring: update-ring 8s ease-out infinite;
+  /* One glowing lap around the circle, then a long rest before the next. */
+  --animate-update-glow: update-glow 8s linear infinite;
   --animate-accordion-down: accordion-down 150ms ease-out;
   --animate-accordion-up: accordion-up 150ms ease-out;
 
@@ -1308,9 +1308,11 @@ html[data-touch-device='true'] :is(
 }
 
 /* Ported from opencode's `--animate-pulse-scale` (github.com/sst/opencode, MIT © 2025 opencode). */
-@keyframes update-ring {
-  0%        { transform: scale(1);   opacity: 0.8; }
-  12%, 100% { transform: scale(1.6); opacity: 0;   }
+@keyframes update-glow {
+  0%        { transform: rotate(0deg);   opacity: 0; }
+  4%        { opacity: 1; }
+  16%       { opacity: 1; }
+  20%, 100% { transform: rotate(360deg); opacity: 0; }
 }
 
 @keyframes todo-pulse {
