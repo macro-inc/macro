@@ -44,7 +44,26 @@ it('replaces only the dragged assignee, preserves other references, and does not
   });
   expect(
     projectGroupMoveValue(properties, 'assignee', { ...move, toGroup: '' })
-  ).toEqual({ valueType: 'ENTITY', refs: null });
+  ).toBeUndefined();
+});
+
+it('only clears Unassigned when no other assignee or reference would be removed', () => {
+  const clear = { ...move, toGroup: '' };
+  const alice = { entity_id: 'alice', entity_type: 'USER' as const };
+  expect(
+    projectGroupMoveValue(assignments([alice]), 'assignee', clear)
+  ).toEqual({
+    valueType: 'ENTITY',
+    refs: null,
+  });
+  for (const other of [
+    { entity_id: 'bob', entity_type: 'USER' as const },
+    { entity_id: 'document', entity_type: 'DOCUMENT' as const },
+  ]) {
+    expect(
+      projectGroupMoveValue(assignments([alice, other]), 'assignee', clear)
+    ).toBeUndefined();
+  }
 });
 
 it('rejects stale assignee occurrences and refuses to treat an assigned project as unassigned', () => {

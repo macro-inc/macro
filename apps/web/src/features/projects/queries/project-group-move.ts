@@ -43,7 +43,16 @@ export function projectGroupMoveValue(
       : users.length > 0
   )
     return;
-  if (!move.toGroup) return { valueType: 'ENTITY', refs: null };
+  if (!move.toGroup) {
+    // Unassigned cannot retain another assignment or discard unrelated references.
+    if (
+      refs.some(
+        (ref) => ref.entity_type !== 'USER' || ref.entity_id !== move.fromGroup
+      )
+    )
+      return;
+    return { valueType: 'ENTITY', refs: null };
+  }
   const next = refs.filter((ref) => ref.entity_id !== move.fromGroup);
   if (!next.some((ref) => ref.entity_id === move.toGroup)) {
     next.push({ entity_id: move.toGroup, entity_type: 'USER' });

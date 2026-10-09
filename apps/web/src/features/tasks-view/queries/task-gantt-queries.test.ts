@@ -1,6 +1,6 @@
 import { createSoupEntityRow } from '@app/features/soup/collection/rows';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
 import { createTaskGanttQueries } from './task-gantt-queries';
@@ -83,6 +83,60 @@ it('rechecks permission and source membership on release instead of trusting the
   await expect(source.moveGroup(move)).rejects.toThrow('no longer editable');
   expect(fixture.save).not.toHaveBeenCalled();
 });
+
+it.each(['USER', 'DOCUMENT'] as const)(
+  'rejects an Unassigned drop if another %s assignee appears before release',
+  async (entity_type) => {
+    const single = boardEntity('one', [
+      boardProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+        type: 'EntityReference',
+        value: [{ entity_id: 'alice', entity_type: 'USER' }],
+      }),
+    ]);
+    const [task, setTask] = createSignal(single);
+    const source = setup({
+      rows: () => [
+        createSoupEntityRow(task(), { groupId: 'alice' }),
+        {
+          kind: 'group-header',
+          id: 'unassigned',
+          groupId: '',
+          label: 'Unassigned',
+        },
+      ],
+    });
+    const clear = { ...move, toGroup: '' };
+    expect(source.canMove(clear)).toBe(true);
+    setTask(
+      boardEntity('one', [
+        boardProperty(SYSTEM_PROPERTY_IDS.ASSIGNEES, {
+          type: 'EntityReference',
+          value: [
+            { entity_id: 'alice', entity_type: 'USER' },
+            { entity_id: 'other', entity_type },
+          ],
+        }),
+      ])
+    );
+    expect(source.canMove(clear)).toBe(false);
+    await expect(source.moveGroup(clear)).rejects.toThrow('no longer editable');
+    expect(fixture.save).not.toHaveBeenCalled();
+    setTask(single);
+    await source.moveGroup(clear);
+    expect(fixture.save).toHaveBeenCalledWith({
+      properties: [
+        {
+          entityId: 'one',
+          entityType: 'TASK',
+          property: expect.objectContaining({
+            id: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+          }),
+          apiValues: { valueType: 'ENTITY', refs: null },
+        },
+      ],
+    });
+  }
+);
 
 it('locks overlapping writes and releases the task after a failed group save', async () => {
   let reject!: (error: Error) => void;

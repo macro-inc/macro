@@ -124,8 +124,15 @@ export function createTaskGanttQueries(options: {
         )
     )
       return false;
+    const boardTask = toBoardTask(task);
     if (
-      !isTaskBoardMove(toBoardTask(task), group, {
+      group === 'assignee' &&
+      !move.toGroup &&
+      boardTask.assigneeIds.some((id) => id !== move.fromGroup)
+    )
+      return false;
+    if (
+      !isTaskBoardMove(boardTask, group, {
         id: move.id,
         fromLane: move.fromGroup,
         toLane: move.toGroup,

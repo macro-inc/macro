@@ -164,7 +164,8 @@ If the item already belongs to the destination assignee group, its existing row
 becomes the ghost instead of creating a duplicate. Drop on a group's header
 (including collapsed groups) or its rows. The active sort determines the resulting order; same-group reordering is
 not supported. Assignee moves replace only the source assignee and preserve other
-assignments; dropping in Unassigned clears assignments. Creation-date grouping
+assignments. Unassigned accepts only a sole-assignee item; mixed-assignee drops
+are rejected so they cannot clear other assignments. Creation-date grouping
 and ungrouped views do not accept group moves. Permission and destination checks
 run again on release. Escape cancels, failed saves show an error, and neither
 Created at nor Due date changes during a group move. Active filters still apply.
