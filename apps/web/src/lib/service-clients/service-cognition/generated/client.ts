@@ -1768,11 +1768,17 @@ export const updateMcpServer = async (
 };
 
 /**
- * @summary Add a new MCP server for the authenticated user.
+ * @summary Add a new MCP server for the authenticated user. A URL the user already
+has is returned as stored, keeping its credentials.
  */
 export type addMcpServerResponse201 = {
   data: ServerResponse;
   status: 201;
+};
+
+export type addMcpServerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
 };
 
 export type addMcpServerResponse401 = {
@@ -1789,6 +1795,7 @@ export type addMcpServerResponseSuccess = addMcpServerResponse201 & {
   headers: Headers;
 };
 export type addMcpServerResponseError = (
+  | addMcpServerResponse400
   | addMcpServerResponse401
   | addMcpServerResponse500
 ) & {
