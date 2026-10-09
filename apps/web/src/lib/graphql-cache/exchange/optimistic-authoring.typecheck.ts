@@ -3,14 +3,22 @@ import { optimisticResolver } from './optimistic-resolvers';
 
 /** Compile-time contract: recipes are checked against their generated documents. */
 export function checkOptimisticMutationTypes() {
-  optimisticResolver(MarkEmailThreadSeenDocument, (variables) => {
-    // @ts-expect-error Variables must come from the generated mutation.
-    variables.threadId;
-    return {
-      id: String(variables.input.threadId),
-      isRead: true,
-    };
-  });
+  optimisticResolver(
+    MarkEmailThreadSeenDocument,
+    (args) => {
+      // @ts-expect-error Arguments are typed by the generated mutation variables.
+      args.threadId;
+      return {
+        id: String(args.input.threadId),
+        isRead: true,
+      };
+    },
+    (args) => {
+      // @ts-expect-error Options receive the same typed arguments.
+      args.threadId;
+      return {};
+    }
+  );
   // @ts-expect-error Changed records must retain their normalized identity.
   optimisticResolver(MarkEmailThreadSeenDocument, () => ({ isRead: true }));
   optimisticResolver(MarkEmailThreadSeenDocument, () => ({

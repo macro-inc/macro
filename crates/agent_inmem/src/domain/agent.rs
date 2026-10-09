@@ -34,6 +34,7 @@ use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
+use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use agent_session::domain::model::AgentSessionId;
 use ai_billing::domain::AiAdmissionService;
 use ai_tools::user_tool_review::{
@@ -888,6 +889,25 @@ async fn run_turn(
     };
     if !access.allows(&model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
+    }
+    // Check the full history as well: changing models must not send earlier
+    // images to a text-only provider or silently discard what the user attached.
+    if super::models::supports_images(&model) == Some(false)
+        && messages.iter().any(|message| {
+            message
+                .attachments
+                .as_ref()
+                .is_some_and(super::session::contains_images)
+        })
+    {
+        let notice = FailureNotice {
+            kind: FailureNoticeKind::UnsupportedImageInput,
+            title: format!("{} does not support images", super::models::display_name(&model)),
+            body: "Choose a vision model to continue this conversation, or start a conversation without images.".to_owned(),
+            link: None,
+        };
+        return Err(AcpError::new(-32602, notice.title.clone())
+            .data(serde_json::to_value(notice).expect("failure notice is serializable")));
     }
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);

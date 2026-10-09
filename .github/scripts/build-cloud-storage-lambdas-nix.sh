@@ -34,14 +34,15 @@ fi
 echo "Building Lambda artifacts for $SERVICE via nix: ${LAMBDAS[*]}"
 
 # Build every handler for this service in one nix invocation: independent
-# derivations build in parallel, unchanged ones are pure cache hits, and the
-# out paths are captured here (stdout) while build logs stream to stderr —
-# no per-handler re-invocation of nix.
+# derivations build in parallel (--max-jobs, since setup-nix's nix.conf leaves
+# the default of 1), unchanged ones are pure cache hits, and the out paths are
+# captured here (stdout) while build logs stream to stderr — no per-handler
+# re-invocation of nix.
 installables=()
 for lambda in "${LAMBDAS[@]}"; do
   installables+=(".#deploy-lambda-${lambda}")
 done
-mapfile -t outs < <(nix build --no-link --print-build-logs --print-out-paths "${installables[@]}")
+mapfile -t outs < <(nix build --max-jobs auto --no-link --print-build-logs --print-out-paths "${installables[@]}")
 
 if [[ -n "${NIX_CACHE_URL:-}" && -n "${NIX_CACHE_SIGNING_KEY:-}" ]]; then
   key="${RUNNER_TEMP:-/tmp}/nix-cache-signing-key"

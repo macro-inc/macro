@@ -3712,6 +3712,104 @@ describe('normalizedCacheExchange', () => {
           ).toEqual(['txn-1', committed ? 'restored-1' : 'restored-2']);
         }
       );
+
+      it('re-applies a confirmed head before admission hooks can discard it', async () => {
+        const events: string[] = [];
+        const commit = host.commitOptimisticWrite.bind(host);
+        let commitFailed = false;
+        vi.spyOn(host, 'commitOptimisticWrite').mockImplementation(
+          async (...args) => {
+            if (!commitFailed) {
+              commitFailed = true;
+              events.push(`commit failed ${args[0]}`);
+              throw new Error('local disk unavailable');
+            }
+            events.push(`commit ${args[0]}`);
+            return await commit(...args);
+          }
+        );
+        const rollback = host.rollbackOptimisticWrite.bind(host);
+        vi.spyOn(host, 'rollbackOptimisticWrite').mockImplementation(
+          async (...args) => {
+            events.push(`rollback ${args[0]} ${args[3]}`);
+            return await rollback(...args);
+          }
+        );
+        const onMutationAttemptResult = vi.fn(
+          async (
+            mutation: ClaimedMutation,
+            _result: OperationResult,
+            _retry: boolean
+          ) => {
+            events.push(`result ${mutation.transactionId}`);
+          }
+        );
+        let admissions = 0;
+        const { ops, forwarded } = harness(host, undefined, {
+          // Only the first admission is current; later local intent is obsolete.
+          beforeMutationAttempt: async (mutation) => {
+            events.push(`admit ${mutation.transactionId}`);
+            admissions += 1;
+            return admissions === 1;
+          },
+          onMutationAttemptResult,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(1);
+        ops.next(makeMutationOp(2, optimistic));
+        // The confirmed head is reclaimed once its lease expires.
+        await vi.advanceTimersByTimeAsync(300_000);
+
+        expect(events).toEqual([
+          'admit txn-1',
+          'result txn-1',
+          'commit failed txn-1',
+          // Re-applied without sending again or asking admission to veto it.
+          'result txn-1',
+          'commit txn-1',
+          'admit txn-2',
+          'rollback txn-2 LOCAL_SUPERSEDED',
+        ]);
+        expect(forwarded).toHaveLength(1);
+        expect(host.commits).toMatchObject([
+          { transactionId: 'txn-1', data: { from: 'network' } },
+        ]);
+        const confirmedResult = [
+          expect.objectContaining({ transactionId: 'txn-1' }),
+          expect.objectContaining({ data: { from: 'network' } }),
+          false,
+        ];
+        expect(onMutationAttemptResult.mock.calls).toEqual([
+          confirmedResult,
+          confirmedResult,
+        ]);
+      });
+
+      // The replacement queue reuses transaction id txn-1 and lease
+      // generation 1, so an unfenced stale attempt would discard the new head.
+      it('fences a recovery-failure rollback after storage resets', async () => {
+        const recording = deferred<void>();
+        let admissions = 0;
+        const { ops, forwarded } = controlledQueryHarness(host, {
+          beforeMutationAttempt: async () => {
+            admissions += 1;
+            if (admissions === 1) throw new Error('Recovery storage lost');
+            return true;
+          },
+          onMutationAttemptResult: () => recording.promise,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(1);
+        host.resetStorage();
+        ops.next(makeMutationOp(2, optimistic));
+        await vi.advanceTimersByTimeAsync(1);
+        expect(forwarded).toHaveLength(1);
+        recording.resolve();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(host.rollbacks).toEqual([]);
+      });
     });
 
     it('rolls back when a persisted replay resolves with an urql error', async () => {

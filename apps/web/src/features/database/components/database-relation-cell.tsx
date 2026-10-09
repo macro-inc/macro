@@ -279,7 +279,7 @@ export function DatabaseRelationCell(props: DatabaseRelationCellProps) {
         >
           <Popover.Portal>
             <Popover.Content
-              class="z-action-menu flex w-80 max-w-[calc(100vw-1.5rem)] min-h-0 flex-col overflow-hidden rounded-lg border border-edge bg-menu text-ink shadow-menu outline-none"
+              class="menu-surface z-action-menu flex w-80 max-w-[calc(100vw-1.5rem)] min-h-0 flex-col overflow-hidden outline-none"
               style={{
                 'max-height':
                   'min(30rem, var(--kb-popper-content-available-height, calc(100dvh - 1rem)))',

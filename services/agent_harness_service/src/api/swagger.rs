@@ -28,10 +28,10 @@ use agent_session::inbound::axum_router::pull_requests::{
 };
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
-    AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, ControlRequest,
-    ControlResponse, ControlStatusDto, CreateAgentSessionRequest, CreateAgentSessionResponse,
-    CreateSessionThread, EditQueuedActionRequest, LogDirectionDto, LogFrameDto,
-    PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
+    AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, CodingPreferencesBody,
+    ControlRequest, ControlResponse, ControlStatusDto, CreateAgentSessionRequest,
+    CreateAgentSessionResponse, CreateSessionThread, EditQueuedActionRequest, LogDirectionDto,
+    LogFrameDto, PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
     RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, SetAgentSessionArchivedRequest,
     WithAgentSessionId,
 };
@@ -86,6 +86,8 @@ impl Modify for SecurityAddon {
         axum_router::put_agent_session_sandbox_size_handler,
         axum_router::get_agent_sandbox_size_handler,
         axum_router::put_agent_sandbox_size_handler,
+        axum_router::get_agent_coding_preferences_handler,
+        axum_router::put_agent_coding_preferences_handler,
         model_load::load_agent_models_handler,
         capability_discovery::discover_agent_capabilities_handler,
         repositories::list_agent_repositories_handler,
@@ -137,6 +139,7 @@ impl Modify for SecurityAddon {
         LogDirectionDto,
         SandboxSize,
         SandboxSizeBody,
+        CodingPreferencesBody,
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
         AgentModelDto,

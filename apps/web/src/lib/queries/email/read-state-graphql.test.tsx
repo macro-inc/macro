@@ -56,12 +56,12 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ mutation: mocks.graphqlMutation }),
 }));
 
+import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
   SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
-import { stringifyDocument } from '@urql/core';
 import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import { emailKeys } from './keys';
@@ -182,12 +182,11 @@ describe('email read state with GraphQL Soup', () => {
           });
           expect(
             hasReadPatch(
-              soupOptimisticResolvers
-                .find(
-                  (resolver) =>
-                    resolver.document === stringifyDocument(document)
-                )
-                ?.resolve(variables)?.response,
+              predictOptimisticMutation(
+                soupOptimisticResolvers,
+                document,
+                variables
+              )?.response,
               read
             ),
             'A legacy Soup patch does not update GraphqlSoupEmailThread.isRead'
@@ -257,11 +256,11 @@ describe('email read state with GraphQL Soup', () => {
         expect(variables).toEqual({ input: { threadId: 'thread' } });
         expect(
           hasReadPatch(
-            soupOptimisticResolvers
-              .find(
-                (resolver) => resolver.document === stringifyDocument(document)
-              )
-              ?.resolve(variables)?.response,
+            predictOptimisticMutation(
+              soupOptimisticResolvers,
+              document,
+              variables
+            )?.response,
             false
           )
         ).toBe(true);

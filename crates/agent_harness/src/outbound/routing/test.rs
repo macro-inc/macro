@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::sandbox::SandboxResizeEffect;
 use crate::testing::helpers::egress::test_egress;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
+use agent_session::domain::coding_preferences::CodingPreferences;
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
     AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
@@ -143,6 +144,7 @@ impl AgentSessionRepo for FixedBotSessions {
         Ok(AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id,
             owner_id: model_owner::Owner::User(
                 MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
@@ -273,6 +275,21 @@ impl AgentSessionRepo for FixedBotSessions {
         _size: SandboxSize,
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn user_coding_preferences(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> SessionResult<CodingPreferences> {
+        unimplemented!("coding preferences are read when a session opens")
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _preferences: CodingPreferences,
+    ) -> SessionResult<()> {
+        unimplemented!("coding preferences are read when a session opens")
     }
 
     async fn list_queued_actions(

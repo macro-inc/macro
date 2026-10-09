@@ -1,3 +1,4 @@
+import { pressedKeys } from '@core/hotkey/state';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import {
   CommandMenuList,
@@ -88,7 +89,10 @@ export function CreateMenuPreview(props: {
       step(next ? 1 : -1);
       const item = selected();
       if (item) {
-        const option = document.getElementById(itemId(item));
+        const option =
+          props.layout === 'details'
+            ? root.querySelector<HTMLElement>('[aria-selected="true"]')
+            : document.getElementById(itemId(item));
         if (props.layout !== 'carousel')
           option?.scrollIntoView({ block: 'nearest' });
         if (
@@ -177,6 +181,7 @@ export function CreateMenuPreview(props: {
             onSelect={c.setSelectedIndexFromPointer}
             onChoose={props.onChoose}
             detailsLeft={props.detailsLeft}
+            shiftHeld={pressedKeys().has('shift')}
           />
         </Show>
         <Show when={props.layout === 'carousel'}>

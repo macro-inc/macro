@@ -594,7 +594,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                   event.preventDefault();
                   restoreFocus();
                 }}
-                class="z-action-menu flex w-60 flex-col gap-1 rounded-lg border border-edge bg-menu p-2 text-xs text-ink shadow-menu outline-none"
+                class="menu-surface z-action-menu flex w-60 flex-col gap-1 p-2 text-xs outline-none"
               >
                 <Popover.Title class="px-1 pb-1 font-medium">
                   Options
@@ -653,7 +653,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                   event.preventDefault();
                   restoreFocus();
                 }}
-                class="z-action-menu rounded-lg border border-edge bg-menu shadow-menu outline-none"
+                class="menu-surface z-action-menu outline-none"
               >
                 <Show when={formulaEditing()}>
                   {(mode) => (

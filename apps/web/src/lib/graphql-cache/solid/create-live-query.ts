@@ -1,3 +1,18 @@
+/**
+ * Reactive GraphQL reads have one default per data shape:
+ *
+ * - A GraphQL document: `createLiveQuery` (this module). Cursor-paginated
+ *   documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`.
+ * - A Soup list: `createSoupLiveQuery` is the GraphQL source. Feature code
+ *   reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag,
+ *   REST fallback, grouping, and entity mapping.
+ *
+ * `createLiveQuery` is a document-first wrapper over `createUrqlQuery`. Both
+ * are live through the normalized-cache exchange, so existing `createUrqlQuery`
+ * callers keep working without migration. See "8. Live query API" in
+ * apps/web/docs/graphql-normalized-cache-plan.md.
+ */
+
 import type { AnyVariables, DocumentInput } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';

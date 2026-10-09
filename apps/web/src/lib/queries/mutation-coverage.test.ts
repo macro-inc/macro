@@ -1,5 +1,14 @@
-import { getOperationAST, Kind, parse } from 'graphql';
+import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
+import {
+  buildSchema,
+  getOperationAST,
+  Kind,
+  type OperationDefinitionNode,
+  parse,
+  print,
+} from 'graphql';
 import { expect, it } from 'vitest';
+import schemaSource from '../../../../../static_assets/schema.graphql?raw';
 import { soupOptimisticResolvers } from './optimistic-resolvers';
 
 // New documents must choose a strategy. Exceptions describe a real server-owned
@@ -22,6 +31,8 @@ const policies = {
   UpdateCalendarEvent: 'custom: event and occurrence edits',
   DeleteCalendarEvent: 'custom: event and occurrence removal',
   RespondToCalendarEvent: 'custom: attendee response',
+  MarkWorkFeedItemsDone:
+    'custom: feed rows stay hidden until the server removes them',
   CreateInitiative: 'authoritative: server assigns the project ID',
   DeleteInitiative:
     'authoritative: boolean response; membership refresh after success',
@@ -37,6 +48,8 @@ const policies = {
   RecordChannelActivity: 'authoritative: server event identity and timestamps',
   UpdateNotificationsForEntity:
     'authoritative: exact affected notification IDs required for undo',
+  UndoWorkFeedItemsDone:
+    'authoritative: the server returns the restored feed entries',
   MoveEntities: 'inactive: UI uses other transports',
   UpdateEntitySharePolicies: 'inactive: UI uses other transports',
   TrashEntities: 'inactive: UI uses other transports',
@@ -52,33 +65,103 @@ const policies = {
   | `inactive: ${string}`
 >;
 
-it('requires an explicit optimistic strategy for every GraphQL mutation', () => {
-  const documents = import.meta.glob(
-    '../service-clients/service-storage/graphql/*.graphql',
-    {
-      query: '?raw',
-      import: 'default',
-      eager: true,
-    }
-  );
-  const mutations = Object.values(documents).flatMap((source) =>
-    parse(String(source)).definitions.flatMap((definition) =>
+// Resolvers are keyed by mutation field, so these documents reach one but must
+// stay unpredicted. A prediction for a sample means its policy has changed.
+const declinedByResolver = {
+  RenameDatabase: { id: 'database', displayName: 'Renamed' },
+  RenameForm: { id: 'form', displayName: 'Renamed' },
+} satisfies Partial<Record<keyof typeof policies, Record<string, unknown>>>;
+
+const mutations = Object.values(
+  import.meta.glob('../service-clients/service-storage/graphql/*.graphql', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  })
+).flatMap((source) =>
+  parse(String(source)).definitions.filter(
+    (definition): definition is OperationDefinitionNode =>
       definition.kind === Kind.OPERATION_DEFINITION &&
       definition.operation === 'mutation'
-        ? [definition.name?.value]
-        : []
-    )
+  )
+);
+const policyOf = (operation: OperationDefinitionNode) =>
+  policies[operation.name?.value as keyof typeof policies];
+const resolvedFields = new Set(
+  soupOptimisticResolvers.map((resolver) => resolver.field)
+);
+const reachesResolvers = (operation: OperationDefinitionNode) =>
+  operation.selectionSet.selections.every(
+    (selection) =>
+      selection.kind === Kind.FIELD &&
+      !selection.directives?.length &&
+      (selection.name.value === '__typename' ||
+        resolvedFields.has(selection.name.value))
   );
-  expect(mutations.sort()).toEqual(Object.keys(policies).sort());
-  expect(new Set(mutations).size).toBe(mutations.length);
+const names = (operations: OperationDefinitionNode[]) =>
+  operations.map((operation) => operation.name?.value).sort();
+
+it('requires an explicit optimistic strategy for every GraphQL mutation', () => {
+  expect(names(mutations)).toEqual(Object.keys(policies).sort());
+  expect(new Set(names(mutations)).size).toBe(mutations.length);
+});
+
+it('routes exactly the resolver policies through mutation field resolvers', () => {
   expect(
-    soupOptimisticResolvers
-      .map((resolver) => getOperationAST(parse(resolver.document))?.name?.value)
-      .sort()
-  ).toEqual(
-    Object.entries(policies)
-      .filter(([, policy]) => policy === 'resolver')
-      .map(([name]) => name)
-      .sort()
-  );
+    names(
+      mutations.filter(
+        (operation) =>
+          (policyOf(operation) === 'resolver') !== reachesResolvers(operation)
+      )
+    )
+  ).toEqual(Object.keys(declinedByResolver).sort());
+  expect(
+    soupOptimisticResolvers.map(
+      (resolver) =>
+        policies[
+          getOperationAST(resolver.document)?.name
+            ?.value as keyof typeof policies
+        ]
+    )
+  ).toEqual(soupOptimisticResolvers.map(() => 'resolver'));
+});
+
+it.each(Object.entries(declinedByResolver))(
+  'keeps %s unpredicted although it reaches a field resolver',
+  (name, variables) => {
+    const operation = mutations.find(
+      (mutation) => mutation.name?.value === name
+    );
+    expect(operation && reachesResolvers(operation)).toBe(true);
+    expect(
+      predictOptimisticMutation(
+        soupOptimisticResolvers,
+        { kind: Kind.DOCUMENT, definitions: [operation!] },
+        variables
+      )
+    ).toBeUndefined();
+  }
+);
+
+it('types resolver arguments with every schema argument of their field', () => {
+  const fields = buildSchema(schemaSource).getMutationType()?.getFields();
+  for (const resolver of soupOptimisticResolvers) {
+    const variables = getOperationAST(resolver.document)?.variableDefinitions;
+    expect(
+      Object.fromEntries(
+        variables?.map(({ variable, type }) => [
+          variable.name.value,
+          print(type),
+        ]) ?? []
+      ),
+      resolver.field
+    ).toEqual(
+      Object.fromEntries(
+        fields?.[resolver.field]?.args.map(({ name, type }) => [
+          name,
+          String(type),
+        ]) ?? []
+      )
+    );
+  }
 });

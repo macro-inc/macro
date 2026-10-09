@@ -367,6 +367,7 @@ apps/web/tauri/graphql_cache_plugin/ # tauri commands + engine thread wrapping
 apps/web/src/lib/graphql-cache/ # JS glue
   host/                        # CacheHost interface + worker & tauri transports
   exchange/                    # urql normalizedCacheExchange
+  solid/                       # createLiveQuery, the reactive document query
   worker/                      # SharedWorker entry + worker core
 ```
 
@@ -545,6 +546,24 @@ benchmark were **skipped by decision**.
 
 ## 8. Live query API
 
+### Choosing a reactive read
+
+Use one default per data shape:
+
+| Data shape | Default | Notes |
+| --- | --- | --- |
+| GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag, REST fallback, grouping, and entity mapping. |
+
+`createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
+document and variables are arguments, other options pass through, and the result
+and live projection path are the same. Existing `createUrqlQuery` call sites are
+already live and need no migration; new single-document reads use
+`createLiveQuery`. Soup's maintained-view binding and keyed row projection are
+internal to `src/lib/queries/soup/`, not general query APIs.
+
+### Usage
+
 Use a generated document and reactive variables. The normal urql provider can
 supply the client; pass `client` when using a service-specific client.
 
@@ -557,13 +576,6 @@ const accountQuery = createLiveQuery(
 
 // Access inside a reactive computation or JSX; don't destructure store fields.
 const accounts = () => accountQuery.data?.user.emailLinks ?? [];
-
-const soupPage = createLiveQuery(
-  SoupDocument,
-  () => ({ input: { initial: { limit: 100, sortMethod: 'UPDATED_AT' } } }),
-  () => ({ client: getGraphqlSoupClient() })
-);
-const items = () => soupPage.data?.user.soup.items ?? [];
 ```
 
 `undefined` variables pause a query. Changing variables creates a separate cache
@@ -572,7 +584,10 @@ retain the existing urql-solid contract. Existing `createUrqlQuery` and
 `createUrqlInfiniteQuery` consumers use the same live projection path without
 being rewritten; every loaded infinite-query page stays subscribed.
 
-Mutation predictions are registered once, alongside domain query definitions:
+Mutation predictions are keyed by mutation field and registered once per field,
+alongside domain query definitions. A representative generated document names
+the field, types its arguments through the document's variables, and types the
+predicted value through its selection:
 
 ```ts
 optimisticResolver(MarkEmailThreadSeenDocument, ({ input }) => ({
@@ -581,11 +596,28 @@ optimisticResolver(MarkEmailThreadSeenDocument, ({ input }) => ({
   isRead: true,
 }));
 
-// Any caller can then execute the ordinary generated mutation.
+// Any caller can then execute the ordinary generated mutation, or any other
+// document that selects markEmailThreadSeen.
 await client.mutation(MarkEmailThreadSeenDocument, {
   input: { threadId },
 }).toPromise();
 ```
+
+The representative must pass every field argument as a same-named variable, so
+its variables and the field's arguments coincide. For each mutation without an
+explicit optimistic context, the exchange evaluates every root field's arguments
+against the operation's variables (substituting variables and applying variable
+defaults) and places the resolver's value under that document's response key.
+Predictions are all or nothing: if any root field has no resolver, carries a
+directive such as `@include` or `@skip`, or its resolver returns `undefined`, the
+operation is sent without a prediction. Registering two resolvers for one field
+is an error.
+
+Cache-core normalizes the prediction through the executing document's selection.
+Fields that document does not select are ignored, and selected fields missing
+from the prediction keep their cached values on existing entities. Nested
+response keys come from the representative, so a document that selects a field
+under a different alias does not receive that field's predicted value.
 
 The durable optimistic queue owns ordering, retries, commit and rollback. The
 query author supplies no optimistic callbacks, result traversal or cache writes.
@@ -617,13 +649,20 @@ Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-33 mutation documents and fails when a document has no declared strategy:
+35 mutation documents and fails when a document has no declared strategy.
+Because predictions are keyed by mutation field, it also checks that local
+resolver documents select only resolved fields, and that any other document
+reaching a field resolver is a listed exception the resolver declines.
+RenameDatabase and RenameForm call `renameEntities` and so reach its resolver,
+which declines database and form entities; they stay authoritative, and the test
+proves they receive no prediction. Each representative document must declare
+every schema argument of its field with the schema's type:
 
 | Strategy | Operations |
 | --- | --- |
 | Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (10) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent |
-| Authoritative outcome (9) | CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity |
+| Existing domain optimistic recipe (11) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, MarkWorkFeedItemsDone |
+| Authoritative outcome (10) | CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
 | Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
 
 The project resolver predicts names and members; sharing waits for the server.
@@ -654,29 +693,38 @@ await client.mutation(DeleteEntityPropertyDocument, {
 
 Cache-core compiles response paths while reading normalized records. Bindings
 understand response aliases, argument-qualified fields, concrete fragment types,
-variable defaults and `@include`/`@skip`. Identity aliases are supported. A
-subscription retains selected-field bindings rather than another complete
-response. Bindings are bounded by count and estimated retained bytes.
+variable defaults and `@include`/`@skip`. Identity aliases are supported, and
+bindings follow list compaction when tombstoned items are omitted. A
+subscription retains its bindings and the last response it was sent; both count
+toward the bound on count and estimated retained bytes.
 
 Subsequent reads carry the last accepted engine revision. For scalar, scalar-list
 and opaque-scalar changes, the engine reads only changed dependency records and
-returns response-path patches. The JS adapter preserves immutable urql snapshots
-and applies those paths in one Solid batch. Relationships, embedded-object edits,
-list reordering, invalidation, eviction, cursor mismatch and journal gaps use a
-complete cache read to rebuild bindings. Query teardown and account/engine reset
-discard the corresponding retained state. Unknown directives, schema drift and
-incomplete cached results follow the query's normal network policy; `cache-only`
-never starts a network request.
+returns response-path patches. Relationships, embedded-object edits, list
+membership and order, tombstones, invalidation and journal gaps re-read the
+query, rebuild its bindings and diff the result against the retained response.
+Diffs only target paths present in the previous response: an object whose key
+set changed (another fragment type) or a list whose length or item identities
+(`id`, `__typename`) changed is replaced at its own path. A new root, or
+replacements larger than half of the response (such as a compacted page),
+return the complete result instead: such a patch would carry nearly as much
+and cost the engine a copy of every replaced value. Eviction and cursor
+mismatch also return a complete result. The JS adapter preserves
+immutable urql snapshots and applies those paths in one Solid batch. Query
+teardown and account/engine reset discard the corresponding retained state.
+Unknown directives, schema drift and incomplete cached results follow the
+query's normal network policy; `cache-only` never starts a network request.
 
 ### Collection semantics and limits
 
 The generic projection reflects cached GraphQL results. It does not infer server
 resolver logic, authorization, aggregates, full-text ranking, or whether an entity
 belongs in an arbitrary filtered/paginated list. Such changes need a declared
-domain collection policy or server revalidation. An explicit Soup page above
-retains its server-provided membership; the existing `createSoupLiveQuery` source
-adds Soup's local membership, ordering, pagination and Mail policy through its
-predicate adapter. That policy remains outside generic cache-core.
+domain collection policy or server revalidation. A Soup page read as a plain
+document would retain its server-provided membership, which is why Soup lists
+use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
+and Mail policy through its predicate adapter. That policy remains outside
+generic cache-core.
 
 Network responses must provide the schema's identity fields (usually `id`, and
 `__typename` for abstract types) for normalization. They are not automatically

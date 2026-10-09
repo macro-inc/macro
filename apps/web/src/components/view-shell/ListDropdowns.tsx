@@ -288,12 +288,15 @@ export function ListFilterDropdown<
                           !props.isSelected(group.id, id)
                       )
                     }
-                    closeOnSelect={group.selectionMode === 'single'}
+                    closeOnSelect={
+                      group.selectionMode === 'single' ? true : 'unless-shift'
+                    }
                     contentClass={group.contentClass}
                   />
                 }
               >
                 <SearchableFilterSubmenu
+                  onSelectionComplete={() => setOpen(false)}
                   label={group.label}
                   active={isGroupActive(group)}
                   options={() => group.options}

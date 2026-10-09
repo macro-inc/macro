@@ -7,6 +7,7 @@ use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
+use agent_session::domain::coding_preferences::CodingPreferences;
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
     AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
@@ -99,6 +100,7 @@ impl AgentSessionRepo for StubSessions {
                 .as_ref()
                 .map(|_| "https://github.com/macro-inc/macro".into()),
             pull_request_url: None,
+            task_id: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,
@@ -221,6 +223,21 @@ impl AgentSessionRepo for StubSessions {
         _size: SandboxSize,
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn user_coding_preferences(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> SessionResult<CodingPreferences> {
+        unimplemented!("coding preferences are read when a session opens")
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _preferences: CodingPreferences,
+    ) -> SessionResult<()> {
+        unimplemented!("coding preferences are read when a session opens")
     }
 
     async fn list_queued_actions(

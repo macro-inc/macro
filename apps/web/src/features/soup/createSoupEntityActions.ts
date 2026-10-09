@@ -24,6 +24,7 @@ import {
   makeRenameAction,
   makeShareAction,
 } from '@app/features/next-soup/actions';
+import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
   markCalendarNotificationSeenOnOpen,
   openEntityInSplitFromUnifiedList,
@@ -89,7 +90,12 @@ export const viewedProjectIdFromContent = (content: {
     ? content.id
     : undefined;
 
-export function createSoupEntityActions(): {
+export function createSoupEntityActions(
+  options: {
+    /** A list that completes its own rows, such as Home's work feed. */
+    markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  } = {}
+): {
   buildActionGroups: BuildActionGroups;
   isFavorited: (entity: EntityData) => boolean;
 } {
@@ -102,6 +108,7 @@ export function createSoupEntityActions(): {
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
     notificationSource: () => notificationSource,
+    delegate: options.markDoneDelegate,
   });
 
   const markNotDone = makeMarkNotDoneAction({

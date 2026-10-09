@@ -194,6 +194,8 @@ export function PrDetailActions(props: { detail?: PrForeignEntityData }) {
           <MergePullRequestButton
             target={{ ...detail().prRef, title: detail().pullRequest.name }}
             status={detail().pullRequest.status}
+            draft={detail().pullRequest.draft}
+            checks={detail().pullRequest.checks}
             onMerged={() => invalidatePrForeignEntity(detail().id)}
           />
         )}

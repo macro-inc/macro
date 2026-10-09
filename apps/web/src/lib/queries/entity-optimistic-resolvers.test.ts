@@ -1,12 +1,16 @@
-import { getOperationAST, parse } from 'graphql';
+import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
+import {
+  DeleteEntityPropertyDocument,
+  RenameEntitiesDocument,
+  UpdateInitiativeDocument,
+} from '@service-storage/graphql/generated/graphql';
+import type { AnyVariables } from '@urql/core';
+import type { DocumentNode } from 'graphql';
 import { describe, expect, it } from 'vitest';
 import { entityOptimisticResolvers } from './entity-optimistic-resolvers';
 
-const resolver = (name: string) =>
-  entityOptimisticResolvers.find(
-    (resolver) =>
-      getOperationAST(parse(resolver.document))?.name?.value === name
-  )!;
+const predict = (document: DocumentNode, variables: AnyVariables) =>
+  predictOptimisticMutation(entityOptimisticResolvers, document, variables);
 
 describe('entity local resolvers', () => {
   it.each([
@@ -21,9 +25,7 @@ describe('entity local resolvers', () => {
       const input = { entity: { type, id: 'entity' }, displayName: 'Renamed' };
       // GraphQL also accepts a singleton for a list input.
       for (const inputs of [input, [input]]) {
-        expect(
-          resolver('RenameEntities').resolve({ inputs })?.response
-        ).toEqual({
+        expect(predict(RenameEntitiesDocument, { inputs })?.response).toEqual({
           renameEntities: {
             results: [
               {
@@ -49,7 +51,7 @@ describe('entity local resolvers', () => {
 
   it('does not fabricate success for unsupported entities in a mixed batch', () => {
     expect(
-      resolver('RenameEntities').resolve({
+      predict(RenameEntitiesDocument, {
         inputs: [
           { entity: { type: 'DOCUMENT', id: 'one' }, displayName: 'A' },
           { entity: { type: 'EMAIL_THREAD', id: 'two' }, displayName: 'B' },
@@ -60,7 +62,7 @@ describe('entity local resolvers', () => {
 
   it('changes only supplied project fields, including an empty member list', () => {
     expect(
-      resolver('UpdateInitiative').resolve({
+      predict(UpdateInitiativeDocument, {
         initiativeId: 'project',
         input: { memberIds: [] },
       })?.response
@@ -72,7 +74,7 @@ describe('entity local resolvers', () => {
       },
     });
     expect(
-      resolver('UpdateInitiative').resolve({
+      predict(UpdateInitiativeDocument, {
         initiativeId: 'project',
         input: { name: 'Name' },
       })?.response
@@ -92,7 +94,7 @@ describe('entity local resolvers', () => {
       { name: 'Name', sharePermission: { teamShareAccessLevel: null } },
     ])
       expect(
-        resolver('UpdateInitiative').resolve({ initiativeId: 'project', input })
+        predict(UpdateInitiativeDocument, { initiativeId: 'project', input })
       ).toBeUndefined();
   });
 
@@ -104,7 +106,7 @@ describe('entity local resolvers', () => {
   ])(
     'removes the assignment from its %s parent without deleting it before commit',
     (entityType, typename) => {
-      const local = resolver('DeleteEntityProperty').resolve({
+      const local = predict(DeleteEntityPropertyDocument, {
         entityType,
         entityId: 'parent',
         entityPropertyId: 'assignment',
@@ -119,7 +121,7 @@ describe('entity local resolvers', () => {
         operation: { kind: 'remove', entityKey: 'GraphqlProperty:assignment' },
       });
       expect(
-        resolver('DeleteEntityProperty').resolve({
+        predict(DeleteEntityPropertyDocument, {
           entityType: 'USER',
           entityId: 'viewer',
           entityPropertyId: 'assignment',

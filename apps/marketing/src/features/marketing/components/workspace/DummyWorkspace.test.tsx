@@ -5,7 +5,13 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
+import { unwrap } from 'solid-js/store';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import {
+  CHANNEL_DOC,
+  CHANNEL_EMAIL,
+  createChannelHeroProject,
+} from '../channels/channelProject';
 import DummyWorkspace from './DummyWorkspace';
 
 beforeEach(() => {
@@ -104,10 +110,88 @@ it('clears a thread reply when switching to another conversation', () => {
     })[0]
   );
   expect(screen.getByRole('textbox', { name: 'Thread reply' })).toBeTruthy();
-  fireEvent.click(home.getByRole('button', { name: 'Julia Westphal' }));
+  fireEvent.click(home.getByRole('button', { name: 'Julia' }));
   expect(screen.queryByRole('textbox', { name: 'Thread reply' })).toBeNull();
   expect(screen.getByRole('log', { name: 'Channel dm-julia' })).toBeTruthy();
   expect(
     screen.getByRole('textbox', { name: 'Message #dm-julia' })
   ).toBeTruthy();
+});
+
+it('keeps the populated Chat sidebar while opening documents and email in independent splits', () => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1440);
+  const view = render(() => {
+    const project = createChannelHeroProject();
+    return (
+      <DummyWorkspace
+        embedded
+        initialView="messages"
+        initialData={unwrap(project.data)}
+        initialChannelThread="start"
+        chatSplits
+      />
+    );
+  });
+  const nav = within(
+    view.getByRole('complementary', { name: 'Chat navigation' })
+  );
+  expect(nav.getByRole('button', { name: 'engineering' })).toBeTruthy();
+  expect(nav.getByRole('button', { name: 'Gabriel' })).toBeTruthy();
+  expect(nav.getByRole('button', { name: 'Valentina' })).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: CHANNEL_DOC }));
+  expect(
+    view.getByRole('textbox', { name: 'Document title' }).textContent
+  ).toBe(CHANNEL_DOC);
+  expect(view.getByRole('log', { name: 'Channel launch' })).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: CHANNEL_EMAIL }));
+  expect(view.container.querySelectorAll('.channel-work-item')).toHaveLength(2);
+  expect(
+    view.container.querySelector('.channel-work-split')?.getAttribute('style')
+  ).toContain('--channel-pane-count: 3');
+  const email = view.container.querySelector(
+    '[data-pane-view="email"]'
+  ) as HTMLElement;
+  fireEvent.click(
+    within(email).getByRole('button', { name: 'Close shared work' })
+  );
+  expect(view.container.querySelectorAll('.channel-work-item')).toHaveLength(1);
+  fireEvent.click(nav.getByRole('button', { name: 'Valentina' }));
+  expect(view.getByRole('log', { name: 'Channel dm-valentina' })).toBeTruthy();
+  expect(view.getByText('looks much sharper, thanks')).toBeTruthy();
+});
+
+it('supports Chat search, collapsible groups, and opening a thread from the sidebar', () => {
+  const view = render(() => {
+    const project = createChannelHeroProject();
+    return (
+      <DummyWorkspace
+        embedded
+        initialView="messages"
+        initialData={unwrap(project.data)}
+      />
+    );
+  });
+  const nav = within(
+    view.getByRole('complementary', { name: 'Chat navigation' })
+  );
+  fireEvent.click(nav.getByRole('button', { name: 'Channels' }));
+  expect(nav.queryByRole('button', { name: 'engineering' })).toBeNull();
+  fireEvent.click(nav.getByRole('button', { name: 'Channels' }));
+  fireEvent.click(nav.getByRole('button', { name: 'Search conversations' }));
+  fireEvent.input(
+    nav.getByRole('searchbox', { name: 'Search channels and direct messages' }),
+    { target: { value: 'Gabriel' } }
+  );
+  expect(nav.getByRole('button', { name: 'Gabriel' })).toBeTruthy();
+  expect(nav.queryByRole('button', { name: 'engineering' })).toBeNull();
+  fireEvent.click(nav.getByRole('button', { name: 'Close search' }));
+  fireEvent.click(nav.getByRole('radio', { name: 'Threads' }));
+  fireEvent.click(
+    nav.getByRole('button', { name: /morning, doing a last pass on the site/ })
+  );
+  expect(
+    view.container
+      .querySelector('[data-thread-id="history-morning"]')
+      ?.getAttribute('data-thread-open')
+  ).toBe('true');
 });

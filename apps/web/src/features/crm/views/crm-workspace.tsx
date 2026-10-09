@@ -206,8 +206,13 @@ export function CrmWorkspaceView(props: {
     copyViewLink,
   } = useCrmContext();
   const view = useCrmWorkspace();
+  const { openWithSplit } = useCrmContext().createNavigation();
   const [selectedRecord, setSelectedRecord] = createSignal<CrmRecordRef>();
   const closeRecord = () => setSelectedRecord(undefined);
+  const showRecord = (record: CrmRecordRef) => {
+    view.host.captureEntryState();
+    setSelectedRecord(record);
+  };
   const openRecord = (entity: EntityData) => {
     const type = isCrmCompanyEntity(entity)
       ? 'company'
@@ -216,10 +221,17 @@ export function CrmWorkspaceView(props: {
         : undefined;
     if (!type) return false;
     view.soup.focus.set(entity.id);
-    view.host.captureEntryState();
-    setSelectedRecord({ type, id: entity.id, name: entity.name });
+    showRecord({ type, id: entity.id, name: entity.name });
     return true;
   };
+  // Touch shows records in their own split, as the lists do.
+  const openPipelineRecord = (record: {
+    type: 'company' | 'contact';
+    id: string;
+  }) =>
+    isTouchDevice()
+      ? openWithSplit(record, { activate: true })
+      : showRecord({ ...record, name: '' });
   const apply = useApplyCrmView();
   const [collapsed, setCollapsed] = usePreference(
     'macro:pref:crm:sidebar-collapsed',
@@ -392,7 +404,7 @@ export function CrmWorkspaceView(props: {
           {(record) => (
             <CrmRecordDetail
               record={record}
-              viewName={title()}
+              viewName={activePipeline()?.name ?? title()}
               onClose={closeRecord}
               navigation={
                 <NavigationToggle onExpand={() => setCollapsed(false)}>
@@ -402,7 +414,7 @@ export function CrmWorkspaceView(props: {
             />
           )}
         </Show>
-        <Show when={pipelineId()} keyed>
+        <Show when={!selectedRecord() && pipelineId()} keyed>
           {(id) => (
             <Show when={activePipeline()}>
               {(pipeline) => (
@@ -418,6 +430,7 @@ export function CrmWorkspaceView(props: {
                     })
                   }
                   onTrashed={() => navigate('active')}
+                  onOpenRecord={openPipelineRecord}
                   navigation={
                     <Show when={!isTouchDevice()}>
                       <NavigationToggle onExpand={() => setCollapsed(false)}>
@@ -517,7 +530,8 @@ export function CrmWorkspaceView(props: {
               </Suspense>
             </Show>
           </Show>
-          <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* The header above already clears the status bar on touch. */}
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col [--mobile-content-inset-top:0px]">
             {props.children({
               onOpenEntity: isTouchDevice() ? undefined : openRecord,
             })}

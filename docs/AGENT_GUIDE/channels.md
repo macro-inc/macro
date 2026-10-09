@@ -43,17 +43,21 @@ See the [rollout/recovery gates](../SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
 
 ## Collapsed reply chains
 
-Collapsed threads show the first three complete message groups. Consecutive
-replies from the same sender within the five-minute avatar-grouping window count
-as one group, so a run of short messages stays together. A different sender or a
-longer gap starts another group; returning to an earlier sender also starts a new
-group. Deleted replies and agent replies triggered by different users keep the
-same group boundaries as their avatar display.
+Collapsed channel threads show up to the first three replies from the timeline
+preview. New replies arriving while the channel is open must not enlarge that
+collapsed preview, even when they share a sender with earlier replies. Expanding
+shows the full thread; collapsing returns to the three-reply preview. The
+`N more replies` control counts individual hidden replies.
 
-The `N more replies` control counts individual hidden replies and expands the
-whole thread. Check a thread with more than three consecutive replies from one
-sender (all remain visible), then one with four groups (the first three groups
-remain visible in full). Standalone thread previews follow the same rule.
+Check a long thread that receives replies while expanded, then collapse it:
+new replies must be hidden and included in the hidden count. Repeat while it is
+already collapsed, while its full replies are loading, and after scrolling the
+row out of view and back. Expanding again must retain every incoming reply.
+
+Standalone thread previews show the first three complete message groups instead.
+Consecutive replies from the same sender within the five-minute avatar-grouping
+window count as one group. Different senders, longer gaps, deleted replies, and
+agent replies triggered by different users preserve their avatar group boundaries.
 
 Channel timelines show system updates alongside messages: participant additions
 and removals, renames, profile picture changes, and completed calls with their
@@ -229,13 +233,16 @@ one truncated line of agent output. Failure explanations replace that preview; t
 commands and other secondary details stay inside the session. There are no tooltips.
 Click the card or **Open session** to read the full response or answer a question;
 click the PR to open its Macro split (GitHub until its entity has synced). While the
-synced PR is open, a green **Merge** button sits at the end of the PR row. It asks
+synced PR is open, not a draft, and every check on its head commit has finished
+with a success, skipped, or neutral conclusion, a green **Merge** button sits at
+the end of the PR row. It asks
 **Merge pull request?** first, showing the title and repository/PR number in the
 shared confirmation dialog (a bottom drawer on phones). **Cancel** returns to the
 chip; **Merge pull request** merges on GitHub with your own linked GitHub account,
 so GitHub's permissions and branch protections apply; a refusal shows
 GitHub's reason as a toast, and success flips the chip to merged without a reload.
-Merged and closed PRs show no Merge button. Expanded session mentions retain their
+Draft PRs, PRs with no checks, and PRs whose checks are still running or failing
+show no Merge button. Merged and closed PRs show no Merge button. Expanded session mentions retain their
 collapse control. The card never expands in place.
 
 `@codex` and `@claude` are offered to every user before account setup. The built-in
@@ -284,9 +291,10 @@ service at `/mcp/internal` on its egress listener, separately from workspace MCP
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
 The shared Macro system instructions ask agents to register PRs when
-`macro_internal.set_pull_request` is available. Macro Internal MCP also advertises
-this guidance in its server instructions. It is not prepended to individual user
-messages. Cursor
+`macro_internal.set_pull_request` is available, to open them ready for review
+rather than as drafts, and to get CI passing before handing off. Macro Internal
+MCP also advertises this guidance in its server instructions. It is not prepended
+to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is
@@ -309,6 +317,12 @@ duplicate and changed metadata updates, and opening the exact PR URL were verifi
 in Chromium with mocked session snapshots and realtime invalidation. This UI check
 does not prove live provider discovery; backend tests separately cover delayed
 provider metadata.
+
+When an agent links its session to a task with `macro_internal.link_task`, the
+session header (and the side panel's **Task** row) shows a task chip before the
+PR chip: the task title, or `Task` while loading or without access. Clicking it
+opens the task in a new split (in place on touch devices). Linking a different
+task sends the same session-update notification, so mounted headers refresh.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's
@@ -399,22 +413,38 @@ A newer message navigation cancels a pending jump to latest. Scrolling manually
 or choosing another destination also cancels the initial target's delayed fallback.
 A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 
-The **Unread notification** chip points to the most recent unread notification.
-There is only one chip: above the list for a target above the viewport, or below
-for a target below it. The number counts distinct parent-message threads across
-the channel, not individual notifications. Three replies and a mention in the
-same thread count as one; reactions do not count. Clicking jumps to the target
-and expands its thread. A collapsed unread reply in a visible thread is reachable
-with the bottom chip. A visible target has no chip. Notifications are marked seen
-when their message mounts, including virtualized overscan. Collapsed replies that
-are not rendered remain unread.
-The count and target update as notifications arrive or become seen. Check an old
-thread receiving a new reply while a newer thread is also unread: the chip must
-point upward to the old thread, still show two stacks, and preserve the scroll
-position until clicked. Check a target below the viewport, loading an unloaded
-parent, and switching channels while notifications are loading. Loading this
+The **Unread notification** chip navigates unread threads whose destinations are
+outside the viewport. A collapsed thread with hidden unread replies shows a
+dot and accent border on its show-replies control. While that control is visible,
+those hidden replies do not contribute to the floating chip; scrolling it out of
+view restores the chip, pointing toward the control. Expanded threads use actual
+unread message positions. A visible unread reply does not hide other offscreen
+unread replies in the same thread.
+There is one chip, targeting the most recently active eligible unread thread.
+Its count includes only distinct offscreen unread threads, not notifications.
+Three replies and a mention in one thread count as one; reactions do not count.
+Clicking the chip expands the target thread and reveals an unread message.
+Scrolling an inline indicator into view does not expand the thread or mark its
+hidden replies seen. Notifications are still marked seen when their message mounts,
+including virtualized overscan. Collapsed replies that are not rendered remain
+unread.
+Check the last channel message with a long collapsed unread thread: at the bottom,
+the inline dot and accent border should be visible without a downward chip. With
+another unread thread above, an upward chip should remain and count only that offscreen thread.
+Scroll the disclosure out of view and back, expand and manually collapse the
+thread, and check composer/mobile insets. The indicator must appear even before
+full reply data loads. Check a target below the viewport, an unloaded parent, live
+notifications, and switching channels while notifications load. Loading this
 channel's notification edge must not delay its messages or activate the global
 GraphQL notification feed.
+
+On native iOS, tapping a thread reply push in Notification Center or on the lock
+screen should open its channel, expand the parent thread, and reveal the actual
+reply. Verify with the app backgrounded and after terminating it. Use an older
+thread with a reply hidden by the collapsed preview so opening only the channel
+or parent message cannot satisfy the check. See the
+[native notification regression procedure](../../apps/web/tests/native/ios/README.md#thread-reply-push-notifications)
+for simulator setup.
 
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.

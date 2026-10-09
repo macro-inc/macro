@@ -1,6 +1,7 @@
 import type { DBSchema } from 'idb';
 import { logSyncService } from './logger';
-import { type LoroManager, LoroManagerError } from './manager';
+import type { LoroManager } from './manager';
+import { LoroManagerError } from './manager-error';
 import { RecoverableDatabase } from './recoverable-database';
 import type { GenericRootSchema, RawUpdate } from './shared';
 import type { WALStore } from './wal';

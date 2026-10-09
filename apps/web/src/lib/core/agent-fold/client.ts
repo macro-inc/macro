@@ -11,6 +11,7 @@ import type {
   FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
+import workerUrl from './fold.worker.ts?worker&url';
 import type { FoldInput, FoldRequest, FoldResponse } from './protocol';
 
 export type { FoldInput } from './protocol';
@@ -26,6 +27,31 @@ interface Pending {
   reject: (error: Error) => void;
 }
 
+/**
+ * The worker's script never ran.
+ *
+ * Browsers can omit the error message for missing scripts, blocked scripts,
+ * or invalid packaging. Keep the URL for diagnosis without assuming a cause.
+ */
+export class AgentFoldWorkerUnavailable extends Error {
+  constructor(readonly workerUrl: string) {
+    super(`agent fold worker script could not be loaded (${workerUrl})`);
+    this.name = 'AgentFoldWorkerUnavailable';
+  }
+}
+
+/**
+ * What an `error` event from the worker means, as precisely as the browser
+ * lets us put it. The empty-message case is {@link AgentFoldWorkerUnavailable};
+ * anything else threw while starting up and says so itself.
+ */
+function workerStartupFailure(url: string, message: string): Error {
+  if (!message) return new AgentFoldWorkerUnavailable(url);
+  const error = new Error(`agent fold worker failed to start: ${message}`);
+  error.name = 'AgentFoldWorkerStartupFailed';
+  return error;
+}
+
 let worker: Worker | undefined;
 const pending = new Map<number, Pending>();
 let nextId = 0;
@@ -37,9 +63,10 @@ let nextId = 0;
 function ensureWorker(): Worker {
   if (worker) return worker;
 
-  const started = new Worker(new URL('./fold.worker.ts', import.meta.url), {
-    type: 'module',
-  });
+  // Explicitly bundle the worker while retaining its URL for diagnostics.
+  // A standalone new URL('./fold.worker.ts', import.meta.url) makes Vite
+  // emit raw TypeScript as an asset instead of compiling a worker entry.
+  const started = new Worker(workerUrl, { type: 'module' });
 
   started.addEventListener('message', (event: MessageEvent<FoldResponse>) => {
     const response = event.data;
@@ -55,7 +82,9 @@ function ensureWorker(): Worker {
 
   started.addEventListener('error', (event) => {
     // The worker itself failed, so nothing in flight will ever be answered.
-    const error = new Error(`agent fold worker failed: ${event.message}`);
+    // One error event takes down every fold in flight, which is why a single
+    // failure reports as many: the count is concurrent folds, not causes.
+    const error = workerStartupFailure(workerUrl, event.message ?? '');
     for (const waiting of pending.values()) waiting.reject(error);
     pending.clear();
     // Dropped so the next call starts a fresh one rather than waiting on a

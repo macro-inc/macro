@@ -248,7 +248,7 @@ export function FormulaEditor(props: {
                 id={listId}
                 role="listbox"
                 aria-label="Columns"
-                class="absolute top-full right-0 left-0 z-1 mt-1 max-h-48 overflow-y-auto rounded-lg border border-edge bg-menu p-1 shadow-menu"
+                class="menu-surface absolute top-full right-0 left-0 z-1 mt-1 max-h-48 overflow-y-auto p-1"
               >
                 <For each={open().matches}>
                   {(column, index) => (

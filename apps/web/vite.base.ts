@@ -130,6 +130,83 @@ function cloudFrontCompressionLimit(): Plugin {
   };
 }
 
+/**
+ * loro-crdt's `browser` export downloads its 3 MB WASM with a synchronous
+ * XMLHttpRequest and compiles it on the main thread, freezing startup for the
+ * whole download. Builds use the `bundler` export that dev already resolves
+ * through the `development` condition: vite-plugin-wasm streams and compiles it
+ * off the main thread (htmlPreloads starts its download with the HTML).
+ */
+function loroAsyncWasm(): Plugin {
+  return {
+    name: 'loro-async-wasm',
+    apply: 'build',
+    enforce: 'pre',
+    resolveId(source, importer, options) {
+      if (source !== 'loro-crdt') return null;
+      return this.resolve('loro-crdt/bundler', importer, {
+        ...options,
+        skipSelf: true,
+      });
+    },
+  };
+}
+
+/** Hashed assets the first screen needs; index.html requests them while it parses. */
+const HTML_PRELOADS = [
+  // The app waits for Loro to initialize before rendering.
+  {
+    file: /(^|\/)loro_wasm_bg-[\w-]+\.wasm$/,
+    as: 'fetch',
+    type: 'application/wasm',
+  },
+  // The UI font; otherwise it starts downloading only once text renders.
+  {
+    file: /(^|\/)inter-latin-wght-normal-[\w-]+\.woff2$/,
+    as: 'font',
+    type: 'font/woff2',
+  },
+] as const;
+
+/**
+ * Adds `<link rel="preload">` for HTML_PRELOADS, so their downloads start with
+ * the HTML instead of after the entry runs. The service worker caches preloads
+ * with the shell.
+ */
+function htmlPreloads(): Plugin {
+  let base = '/';
+  return {
+    name: 'html-preloads',
+    apply: 'build',
+    configResolved(config) {
+      base = config.base.endsWith('/') ? config.base : `${config.base}/`;
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, ctx) {
+        const files = Object.keys(ctx.bundle ?? {});
+        return HTML_PRELOADS.flatMap((preload) => {
+          const file = files.find((fileName) => preload.file.test(fileName));
+          if (!file) return [];
+          return [
+            {
+              tag: 'link',
+              attrs: {
+                rel: 'preload',
+                href: `${base}${file}`,
+                as: preload.as,
+                type: preload.type,
+                crossorigin: '',
+              },
+              injectTo: 'head' as const,
+            },
+          ];
+        });
+      },
+    },
+  };
+}
+
 export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
@@ -152,6 +229,8 @@ export const createAppViteConfig = (): UserConfigFn => {
         pureGeneratedZodSchemas(),
         solid(),
         wasm(),
+        loroAsyncWasm(),
+        htmlPreloads(),
         tailwind(),
         solidSvg({ defaultAsComponent: true }),
         tsconfigpaths({

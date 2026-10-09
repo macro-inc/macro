@@ -1,8 +1,7 @@
 ---
-source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 256
+source: crates/folds/agent_fold/src/domain/test/real_recordings.rs
 expression: machine.metadata()
-input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
+input_file: crates/folds/agent_fold/fixtures/real/real_single_turn.jsonl
 ---
 SessionMetadata {
     harness: ClaudeCode,
@@ -16,6 +15,7 @@ SessionMetadata {
             description: Some(
                 "Opus 5 with 1M context · Best for everyday, complex tasks",
             ),
+            supports_images: None,
             group: None,
         },
         ModelOption {
@@ -24,6 +24,7 @@ SessionMetadata {
             description: Some(
                 "Opus 5 with 1M context · Best for everyday, complex tasks",
             ),
+            supports_images: None,
             group: None,
         },
         ModelOption {
@@ -32,6 +33,7 @@ SessionMetadata {
             description: Some(
                 "Fable 5 · Most capable for your hardest and longest-running tasks",
             ),
+            supports_images: None,
             group: None,
         },
         ModelOption {
@@ -40,6 +42,7 @@ SessionMetadata {
             description: Some(
                 "Sonnet 5 · Efficient for routine tasks",
             ),
+            supports_images: None,
             group: None,
         },
         ModelOption {
@@ -48,6 +51,7 @@ SessionMetadata {
             description: Some(
                 "Haiku 4.5 · Fastest for quick answers",
             ),
+            supports_images: None,
             group: None,
         },
     ],

@@ -52,7 +52,7 @@ export function DocumentOutline(props: {
                   );
                 }}
                 content={
-                  <div class="w-80 max-w-[calc(100vw-3rem)] rounded-xl border border-edge bg-surface px-3 py-2 shadow-menu">
+                  <div class="menu-surface w-80 max-w-[calc(100vw-3rem)] px-3 py-2">
                     <div class="truncate text-sm font-medium text-ink">
                       {heading().text}
                     </div>

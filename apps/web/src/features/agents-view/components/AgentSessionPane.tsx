@@ -7,6 +7,7 @@ import {
   agentSessionFileOperations,
   agentSessionTitle,
 } from '@app/features/block-agent/component/AgentSplitHeader';
+import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
 import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
@@ -208,6 +209,9 @@ function SessionContent(props: {
             </>
           }
         >
+          <Show when={session()?.taskId}>
+            {(taskId) => <AgentTaskChip taskId={taskId()} />}
+          </Show>
           <Show when={session()?.pullRequestUrl}>
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>

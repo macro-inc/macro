@@ -1,5 +1,6 @@
 use std::pin::Pin;
 
+use super::coding_preferences::CodingPreferences;
 use super::error::{AgentSessionError, Result};
 use super::model::*;
 use super::session::StopReason;
@@ -539,6 +540,21 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'static>,
         size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The user's coding preferences.
+    ///
+    /// A missing row is every preference off, not an error.
+    fn user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<CodingPreferences>> + Send;
+
+    /// Upsert the user's coding preferences, replacing every field.
+    fn set_user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        preferences: CodingPreferences,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Delete an agent session by id.
@@ -1099,6 +1115,9 @@ pub struct ControlEvent {
     /// `None` means "no user is responsible", not "unknown" - a bot's own
     /// actions are attributed to the bot, which this field does not carry.
     pub actor: Option<MacroUserIdStr<'static>>,
+    /// Why the agent is being asked, when a runtime forwards a triggered
+    /// prompt. Users driving a session directly supply none.
+    pub context: Option<trigger_context::TriggerContext>,
 }
 
 /// What accepting a control operation did with it.

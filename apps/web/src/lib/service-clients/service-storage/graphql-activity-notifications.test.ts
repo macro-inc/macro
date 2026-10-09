@@ -1,6 +1,6 @@
+import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { soupOptimisticResolvers } from '@queries/optimistic-resolvers';
-import { stringifyDocument } from '@urql/core';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityData } from '../../../features/entity/types/entity';
@@ -157,10 +157,13 @@ describe('channel activity and notification GraphQL cache separation', () => {
   it('does not optimistically reopen done or overwrite a historic view on seen', async () => {
     mutationMock.mockImplementation((document, variables, context) => ({
       toPromise: async () => {
-        const resolver = soupOptimisticResolvers.find(
-          (resolver) => resolver.document === stringifyDocument(document)
-        );
-        expect(resolver?.resolve(variables)?.response).toEqual({
+        expect(
+          predictOptimisticMutation(
+            soupOptimisticResolvers,
+            document,
+            variables
+          )?.response
+        ).toEqual({
           updateNotifications: [
             { __typename: 'GraphqlNotification', id: 'done-notification' },
           ],

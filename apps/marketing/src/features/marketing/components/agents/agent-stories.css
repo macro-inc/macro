@@ -1,7 +1,7 @@
 /* Agents page demos. Window chrome comes from ProductDemo. */
 .agent-demo-frame { position: relative; }
 .agent-demo-pointer { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; transition: transform 650ms cubic-bezier(.2, .8, .2, 1); }
-.agent-session-composer { width: 100%; max-width: 952px; margin-inline: auto; padding: 4px 16px 12px; }
+.dummy-workspace .agent-session-composer { width:100%; max-width:928px; margin-inline:auto; padding:0 16px 10px; flex-shrink:0; }
 
 /* A mention opened from the answer lands in a split beside the session. */
 .agent-split { display: flex; flex: 1; min-height: 0; min-width: 0; position: relative; }
@@ -20,8 +20,8 @@
 .agent-mcp-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; }
 
 @media (max-width: 699px) {
-  .agent-session-composer { padding: 4px 8px 8px; }
-  .agent-split-item { position: absolute; inset: 0; z-index: 5; border-left: 0; }
+
+
   .agent-mcp-page { padding: 24px 16px; }
   .agent-mcp-header { padding-inline: 16px; }
   .agent-mcp-cards { margin-top: 24px; }
@@ -31,3 +31,96 @@
   .agent-split-item { animation: none; }
   .agent-demo-pointer { display: none; }
 }
+
+/* AgentSessionPane's floating detail surface and shared composer. */
+.agent-session-header {
+	display: flex !important;
+	position: relative;
+	z-index: 2;
+}
+.agent-session-header h3 {
+	margin: 0;
+}
+.agent-session-header > svg {
+	width: 16px;
+	height: 16px;
+	flex: none;
+}
+.agent-session-body {
+	display: flex;
+	position: relative;
+	flex: 1;
+	min-height: 0;
+}
+.agent-session-body > .agent-transcript {
+	flex: 1;
+	min-width: 0;
+}
+.agent-session-details {
+	position: absolute;
+	inset: 8px 8px auto auto;
+	width: 240px;
+	z-index: 4;
+	padding: 16px;
+	border: 1px solid var(--color-edge-muted);
+	border-radius: 12px;
+	background: var(--color-panel);
+	box-shadow: var(--glass-shadow);
+	font-size: 12px;
+}
+.agent-session-details h4 {
+	margin: 16px 0;
+}
+.agent-session-details dl {
+	display: grid;
+	grid-template-columns: 80px 1fr;
+	gap: 12px;
+}
+.agent-session-details dt {
+	color: var(--color-ink-muted);
+}
+.agent-session-details dd {
+	margin: 0;
+}
+.agent-repository-bar {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	padding: 4px 12px;
+	font-size: 12px;
+	color: var(--color-ink-muted);
+	border: 1px solid var(--color-edge-muted);
+	border-top: 0;
+	border-radius: 0 0 20px 20px;
+}
+
+
+
+
+.agent-split .doc-share-scrim {
+	position: absolute;
+	z-index: 30;
+}
+.agent-split-item {
+	overflow: hidden;
+}
+@media (max-width: 699px) {
+	.agent-session-header > button {
+		padding-inline: 5px;
+	}
+	.agent-session-composer .agent-composer {
+		width: 100%;
+	}
+
+
+	.agent-split-item:focus-within {
+		outline: none;
+	}
+}
+
+/* A source takes over a narrow pane, as the app's detail overlay does. */
+.agent-split[data-narrow=true] > .agent-split-item { position:absolute; inset:0; z-index:5; border-left:0; }
+.agent-session-body > .agent-transcript { overflow-y:auto; overflow-x:hidden; }
+.agent-split[data-narrow=true][data-item-open=true] > .agent-split-pane:first-child { visibility:hidden; }
+
+.agent-collaboration-frame { position:relative; display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }

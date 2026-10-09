@@ -6,8 +6,8 @@ import {
   type GraphqlSoupItem,
   mapGraphqlSoupItem,
 } from '../../../service-clients/service-storage/graphql-soup';
-import { createKeyedProjection } from '../../../urql-solid/create-keyed-projection';
 import { useInstructionsMdIdQuery } from '../../storage/instructions-md';
+import { createKeyedProjection } from '../create-keyed-projection';
 import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupEntityTimestamp } from '../page-timestamp';

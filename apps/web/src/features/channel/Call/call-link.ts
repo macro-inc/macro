@@ -15,13 +15,6 @@ export function getMeetingUrl(shareToken: string) {
   return `${getWebOrigin()}/app${getMeetingPath(shareToken)}`;
 }
 
-export function isMeetingPath(pathname: string) {
-  return (
-    /^\/(?:app\/)?meet\/new\/?$/.test(pathname) ||
-    meetingShareTokenFromPath(pathname) !== undefined
-  );
-}
-
 function meetingShareTokenFromPath(pathname: string): string | undefined {
   const match = pathname.match(/^\/(?:app\/)?meet\/(?:join\/)?([^/?#]+)\/?$/);
   if (!match) return undefined;

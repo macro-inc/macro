@@ -110,6 +110,8 @@ export type SplitRouteDefinition<
   path?: string;
   aliases?: readonly string[];
   component?: TComponent;
+  /** Shown in place of `component` while it suspends, such as while its lazy chunk loads. */
+  loading?: TComponent;
   children?: readonly SplitRouteDefinition<TComponent>[];
   params?: TParamsSchema;
   state?: StandardSchemaV1;

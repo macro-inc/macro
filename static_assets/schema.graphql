@@ -329,11 +329,26 @@ type CompleteMutationRoot {
 	Set the viewer's RSVP on an event, the whole series or one occurrence.
 	"""
 	respondToCalendarEvent(input: RespondToCalendarEventInput!): GraphqlCalendarMutationPayload!
+	"""
+	Mark work feed items done for the authenticated user: acknowledge the
+	notifications each entry showed and archive inbox email.
+	Notifications newer than an entry's `revision` stay active. Own work
+	is not acknowledged, so an item the user also worked on stays in the
+	work feed, seen. Tasks, discussions and pull requests themselves are
+	not completed.
+	"""
+	markWorkFeedItemsDone(input: MarkWorkFeedItemsDoneInput!): MarkWorkFeedItemsDonePayload!
+	"""
+	Reverse one mark-done for the authenticated user without overwriting
+	anything that happened since, and return the restored items' places
+	in the requested feed.
+	"""
+	undoWorkFeedItemsDone(input: UndoWorkFeedItemsDoneInput!): UndoWorkFeedItemsDonePayload!
 }
 
 """
-Root subscription object combining realtime Soup, notification, and
-activity adapters.
+Root subscription object combining realtime Soup, notification,
+activity, and work feed adapters.
 """
 type CompleteSubscriptionRoot {
 	"""
@@ -356,6 +371,15 @@ type CompleteSubscriptionRoot {
 	Subscribe to realtime activity for the authenticated user.
 	"""
 	activityUpdates: GraphqlActivityPatch!
+	"""
+	Changes to the authenticated user's work feed in `scope`: entries to
+	insert or move, items to remove, and an invalidation when changes may
+	have been missed. Each payload is one batch to apply together. Start
+	it before fetching the first page and refetch after an invalidation;
+	the stream ends with an error when its sources end, after which the
+	client resubscribes and refetches.
+	"""
+	workFeedUpdates(scope: WorkFeedScopeInput): [WorkFeedPatch!]!
 }
 
 """
@@ -8186,6 +8210,13 @@ type GraphqlUser {
 	"""
 	calendarChanges(input: CalendarChangesInput!): GraphqlCalendarChanges!
 	"""
+	A page of the authenticated user's work feed, newest first: items
+	with outstanding attention (notifications, inbox Signal email,
+	reminders) and, in `WORK` mode, work the user recently did. Each
+	item carries its notifications stacked for presentation.
+	"""
+	workFeed(input: WorkFeedInput): WorkFeedPage!
+	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""
 	emailLabels: [GraphqlSoupEmailLabel!]!
@@ -8461,6 +8492,31 @@ input MarkEmailThreadUnreadInput {
 	Email thread to mark unread; its inbox determines the UNREAD label.
 	"""
 	threadId: ID!
+}
+
+"""
+Input for marking work feed items done.
+"""
+input MarkWorkFeedItemsDoneInput {
+	"""
+	The items to complete, at most 200.
+	"""
+	items: [WorkFeedDoneItemInput!]!
+}
+
+"""
+The result of marking work feed items done.
+"""
+type MarkWorkFeedItemsDonePayload {
+	"""
+	The completed items; remove them from every feed. Items that were
+	already gone are included.
+	"""
+	itemIds: [ID!]!
+	"""
+	Opaque token that reverses exactly this operation.
+	"""
+	undoToken: String!
 }
 
 """
@@ -8899,6 +8955,30 @@ input TimedEventTimeInput {
 }
 
 """
+Input for undoing one mark-done.
+"""
+input UndoWorkFeedItemsDoneInput {
+	"""
+	The `undoToken` the mark-done returned.
+	"""
+	undoToken: String!
+	"""
+	The feed the restored items are placed in.
+	"""
+	scope: WorkFeedScopeInput
+}
+
+"""
+The result of undoing a mark-done.
+"""
+type UndoWorkFeedItemsDonePayload {
+	"""
+	The restored items' places in the requested feed.
+	"""
+	patches: [WorkFeedPatch!]!
+}
+
+"""
 Patch an event; omitted fields are left untouched.
 """
 input UpdateCalendarEventInput {
@@ -9062,6 +9142,348 @@ input UpdateNotificationsInput {
 	Status operation applied to every requested notification.
 	"""
 	operation: NotificationUpdateOperation!
+}
+
+"""
+One item to mark done.
+"""
+input WorkFeedDoneItemInput {
+	"""
+	The item's id.
+	"""
+	id: ID!
+	"""
+	The entry's `revision` the caller observed. Reasons newer than it
+	stay active. Omit to acknowledge everything current.
+	"""
+	revision: String
+}
+
+"""
+An item placed in one feed: where it sits, why, and what marking it done
+acknowledges.
+"""
+type WorkFeedEntry {
+	"""
+	The item.
+	"""
+	item: WorkFeedItem!
+	"""
+	Where the entry sits, in RFC 3339: the later of the item's attention
+	and own-work times in this feed.
+	"""
+	sortAt: String!
+	"""
+	The viewer's newest own work counted by this feed, in RFC 3339;
+	always absent in attention mode.
+	"""
+	touchedAt: String
+	"""
+	Opaque token of the attention this entry shows; send it with done so
+	notifications that arrive later stay active.
+	"""
+	revision: String!
+	"""
+	Why the entry is presented the way it is.
+	"""
+	primaryReason: WorkFeedPrimaryReason!
+	"""
+	Index into the item's stacks of the stack the entry presents and
+	opens, when its primary reason is attention.
+	"""
+	primaryStackIndex: Int
+}
+
+"""
+An item that no longer belongs in the subscribed feed: done, filtered out
+or inaccessible. The entity itself is not necessarily deleted.
+"""
+type WorkFeedEntryRemoved {
+	"""
+	The removed item's id.
+	"""
+	itemId: ID!
+}
+
+"""
+An item that belongs in the subscribed feed, with its current content and
+placement. Insert it, or move it to its new `sortAt`.
+"""
+type WorkFeedEntryUpserted {
+	"""
+	The entry.
+	"""
+	entry: WorkFeedEntry!
+}
+
+"""
+Page request for the viewer's work feed.
+"""
+input WorkFeedInput {
+	"""
+	Which items the feed shows.
+	"""
+	scope: WorkFeedScopeInput
+	"""
+	Page size; defaults to 50, capped at 100.
+	"""
+	limit: Int
+	"""
+	Opaque cursor from the previous page's `nextCursor`; absent for the
+	first page. Send it with the same scope.
+	"""
+	cursor: String
+}
+
+"""
+Changes may have been missed: refetch the feed.
+"""
+type WorkFeedInvalidated {
+	"""
+	Always true.
+	"""
+	refresh: Boolean!
+}
+
+"""
+One context the viewer can return to or acknowledge: an entity, a
+channel thread, or a channel's activity outside its threads. Items are
+shared across feeds; placement and primary reason live on each entry.
+"""
+type WorkFeedItem {
+	"""
+	Stable per-viewer item id: `<entity type>:<entity id>`.
+	"""
+	id: ID!
+	"""
+	The entity the item is about; a channel thread's entity is its root
+	message.
+	"""
+	entity: GraphqlSoupEntity!
+	"""
+	The item's state for the viewer.
+	"""
+	state: WorkFeedItemState!
+	"""
+	When the newest active notification in the item's scope was created,
+	in RFC 3339; absent when the item has no outstanding attention.
+	"""
+	attentionAt: String
+	"""
+	How many of the item's active notifications are unseen.
+	"""
+	unseenCount: Int!
+	"""
+	The item's active notifications grouped for presentation, newest
+	stack first.
+	"""
+	stacks: [WorkFeedStack!]!
+}
+
+"""
+An item's state for its viewer.
+"""
+enum WorkFeedItemState {
+	"""
+	At least one active reason is unseen.
+	"""
+	UNSEEN
+	"""
+	Every active reason has been seen.
+	"""
+	SEEN
+	"""
+	Every notification the viewer observed was completed.
+	"""
+	DONE
+}
+
+"""
+The kinds of item a work feed can be narrowed to.
+"""
+enum WorkFeedItemType {
+	"""
+	Documents and tasks.
+	"""
+	DOCUMENT
+	"""
+	AI chats.
+	"""
+	CHAT
+	"""
+	Projects.
+	"""
+	PROJECT
+	"""
+	Email threads.
+	"""
+	EMAIL
+	"""
+	Channel activity outside a dedicated thread item.
+	"""
+	CHANNEL
+	"""
+	One channel thread.
+	"""
+	CHANNEL_THREAD
+	"""
+	Calendar reminders.
+	"""
+	CALENDAR_EVENT
+	"""
+	GitHub pull requests.
+	"""
+	PULL_REQUEST
+	"""
+	Agent sessions.
+	"""
+	AGENT_SESSION
+}
+
+"""
+Which reasons admit items to a work feed.
+"""
+enum WorkFeedMode {
+	"""
+	Outstanding attention plus the viewer's recent own work.
+	"""
+	WORK
+	"""
+	Outstanding attention only.
+	"""
+	ATTENTION
+}
+
+"""
+One page of the viewer's work feed, newest first.
+"""
+type WorkFeedPage {
+	"""
+	The page's entries.
+	"""
+	entries: [WorkFeedEntry!]!
+	"""
+	Cursor for the next page; absent once the feed is exhausted.
+	"""
+	nextCursor: String
+}
+
+"""
+One change to a work feed's membership, placement or items.
+"""
+union WorkFeedPatch = WorkFeedEntryUpserted | WorkFeedEntryRemoved | WorkFeedInvalidated
+
+"""
+Why an entry is presented the way it is in its feed.
+"""
+enum WorkFeedPrimaryReason {
+	"""
+	The viewer's own work is the newest reason: open the entity.
+	"""
+	OWN_WORK
+	"""
+	Incoming attention is the newest reason: present and open the
+	primary stack.
+	"""
+	ATTENTION
+}
+
+"""
+Which items a work feed shows. Pages, subscriptions and undo for one feed
+send the same scope.
+"""
+input WorkFeedScopeInput {
+	"""
+	Which reasons admit items. Defaults to `WORK`.
+	"""
+	mode: WorkFeedMode
+	"""
+	Item kinds to include; omitted or empty means every kind.
+	"""
+	types: [WorkFeedItemType!]
+	"""
+	Whether snippet documents are included. Defaults to false.
+	"""
+	includeSnippets: Boolean
+}
+
+"""
+Notifications grouped the way they are presented, newest first. The
+newest notification names the stack and is its navigation target.
+"""
+type WorkFeedStack {
+	"""
+	How the stack groups its notifications.
+	"""
+	kind: WorkFeedStackKind!
+	"""
+	The conversation thread the stack belongs to, when it is one: a
+	channel thread root, document comment thread or discussion thread.
+	"""
+	threadId: String
+	"""
+	When the stack's newest notification was created, in RFC 3339.
+	"""
+	latestAt: String!
+	"""
+	Whether any notification in the stack is unseen.
+	"""
+	unseen: Boolean!
+	"""
+	How many notifications the stack holds.
+	"""
+	count: Int!
+	"""
+	The stack's notifications, newest first. Defaults to 20, capped at
+	100; `count` is the full size.
+	"""
+	notifications(limit: Int): [GraphqlNotification!]!
+}
+
+"""
+How one stack groups its notifications.
+"""
+enum WorkFeedStackKind {
+	"""
+	Replies, thread mentions and the absorbed root of one channel thread.
+	"""
+	CHANNEL_THREAD
+	"""
+	One root mention in a channel whose thread has no replies yet.
+	"""
+	CHANNEL_MENTION
+	"""
+	New root messages in a channel.
+	"""
+	CHANNEL_MESSAGES
+	"""
+	Reactions to the viewer's channel messages.
+	"""
+	CHANNEL_REACTIONS
+	"""
+	Several comments, replies or mentions in one document comment thread.
+	"""
+	COMMENT_THREAD
+	"""
+	A standalone mention in a document comment.
+	"""
+	COMMENT_MENTION
+	"""
+	Standalone root comments on a document.
+	"""
+	COMMENTS
+	"""
+	Mentions of a document in channels.
+	"""
+	DOCUMENT_MENTIONS
+	"""
+	One discussion thread on a project, company or contact.
+	"""
+	DISCUSSION
+	"""
+	Any other single event.
+	"""
+	EVENT
 }
 
 """

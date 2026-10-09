@@ -1,5 +1,5 @@
 import { getIconConfig } from '@core/component/EntityIcon';
-import { cn, Hotkey } from '@ui';
+import { Button, cn, Hotkey } from '@ui';
 import { createEffect, For, on, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -17,6 +17,7 @@ export function LauncherDetails(props: {
   onSelect: (index: number) => void;
   onChoose: (item: CreatableBlock) => void;
   showHotkeys?: boolean;
+  shiftHeld?: boolean;
   scrollSelectedIntoView?: boolean;
   detailsLeft?: boolean;
 }) {
@@ -67,57 +68,66 @@ export function LauncherDetails(props: {
           class="w-[38%] min-w-0 shrink-0 overflow-y-auto p-2 sm:w-64"
         >
           <For each={props.sections}>
-            {(section) => (
+            {(section, sectionIndex) => (
               <div role="group" aria-label={section.group.label} class="mb-1.5">
                 <div class="px-2.5 pt-2 pb-1 text-[10px] font-medium tracking-wide text-ink-extra-muted uppercase">
                   {section.group.label}
                 </div>
                 <For each={section.items}>
-                  {(item) => (
-                    <button
-                      type="button"
-                      role="option"
-                      id={props.itemId(item)}
-                      data-create-option
-                      aria-selected={selected() === item}
-                      tabindex={-1}
-                      class={cn(
-                        'flex h-9 w-full scroll-m-2 items-center gap-2.5 rounded-md px-2.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-accent',
-                        selected() === item
-                          ? 'bg-ink/6 text-ink'
-                          : 'text-ink-muted'
-                      )}
-                      onPointerMove={(event) => {
-                        if (event.movementX || event.movementY)
-                          props.onSelect(props.items.indexOf(item));
-                      }}
-                      onFocus={() => props.onSelect(props.items.indexOf(item))}
-                      onClick={() => props.onChoose(item)}
-                    >
-                      <span
+                  {(item, itemIndex) => {
+                    const index = () =>
+                      props.sections
+                        .slice(0, sectionIndex())
+                        .reduce(
+                          (offset, entry) => offset + entry.items.length,
+                          0
+                        ) + itemIndex();
+                    return (
+                      <button
+                        type="button"
+                        role="option"
+                        id={`${props.itemId(item)}-${section.group.id}`}
+                        data-create-option
+                        aria-selected={props.selectedIndex === index()}
+                        tabindex={-1}
                         class={cn(
-                          'size-4 shrink-0 [&_svg]:size-4',
-                          getIconConfig(item.blockName).foreground
+                          'flex h-9 w-full scroll-m-2 items-center gap-2.5 rounded-md px-2.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-accent',
+                          props.selectedIndex === index()
+                            ? 'bg-ink/6 text-ink'
+                            : 'text-ink-muted'
                         )}
+                        onPointerMove={(event) => {
+                          if (event.movementX || event.movementY)
+                            props.onSelect(index());
+                        }}
+                        onFocus={() => props.onSelect(index())}
+                        onClick={() => props.onChoose(item)}
                       >
-                        <Dynamic component={item.icon} />
-                      </span>
-                      <span
-                        class="min-w-0 flex-1 truncate text-sm font-medium"
-                        title={item.label}
-                      >
-                        {item.label}
-                      </span>
-                      <Show when={props.showHotkeys}>
-                        <span class="rounded-md border border-ink/12 px-1.5 py-px text-xxs font-normal text-ink-muted">
-                          <Hotkey
-                            token={item.hotkeyToken}
-                            shortcut={shortcut(item)}
-                          />
+                        <span
+                          class={cn(
+                            'size-4 shrink-0 [&_svg]:size-4',
+                            getIconConfig(item.blockName).foreground
+                          )}
+                        >
+                          <Dynamic component={item.icon} />
                         </span>
-                      </Show>
-                    </button>
-                  )}
+                        <span
+                          class="min-w-0 flex-1 truncate text-sm font-medium"
+                          title={item.label}
+                        >
+                          {item.label}
+                        </span>
+                        <Show when={props.showHotkeys}>
+                          <span class="rounded-md border border-ink/12 px-1.5 py-px text-xxs font-normal text-ink-muted">
+                            <Hotkey
+                              token={item.hotkeyToken}
+                              shortcut={shortcut(item)}
+                            />
+                          </span>
+                        </Show>
+                      </button>
+                    );
+                  }}
                 </For>
               </div>
             )}
@@ -135,7 +145,7 @@ export function LauncherDetails(props: {
             {(item) => (
               <section
                 aria-label={`${item().label} details`}
-                class="flex min-h-full flex-col px-6 pt-6 pb-2"
+                class="flex min-h-full flex-col p-6"
               >
                 <div
                   class={cn(
@@ -153,21 +163,44 @@ export function LauncherDetails(props: {
                   {createMenuDetails(item())?.details ??
                     createMenuTagline(item())}
                 </p>
-                <div class="mt-auto flex shrink-0 items-center gap-3 pt-6">
+                <div
+                  class={cn(
+                    'mt-3 flex items-center gap-1.5 text-xs text-ink-muted',
+                    !props.showHotkeys && 'invisible'
+                  )}
+                >
+                  Shortcut
+                  <Hotkey shortcut="c" theme="subtle" class="border-ink/12" />
+                  then
+                  <Hotkey
+                    token={item().hotkeyToken}
+                    shortcut={shortcut(item())}
+                    theme="subtle"
+                    class="border-ink/12"
+                  />
+                </div>
+                <div class="mt-auto flex shrink-0 flex-col items-end gap-2 pt-6">
                   <span
                     class={cn(
-                      'flex h-9 items-center gap-1.5 text-xs text-ink-muted',
-                      !props.showHotkeys && 'invisible'
+                      'text-xs text-ink-muted',
+                      !props.shiftHeld && 'invisible'
                     )}
                   >
-                    Shortcut
-                    <Hotkey
-                      token={item().hotkeyToken}
-                      shortcut={shortcut(item())}
-                      theme="subtle"
-                      class="border-ink/12"
-                    />
+                    In new split
                   </span>
+                  <Button
+                    size="lg"
+                    variant="strong"
+                    aria-label={`Create ${item().label}${props.shiftHeld ? ' in new split' : ''}`}
+                    onClick={() => props.onChoose(item())}
+                  >
+                    Create {item().label}
+                    <Hotkey
+                      shortcut={props.shiftHeld ? 'shift+enter' : 'enter'}
+                      theme="current"
+                      aria-hidden="true"
+                    />
+                  </Button>
                 </div>
               </section>
             )}

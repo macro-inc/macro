@@ -1,18 +1,28 @@
-import type { Change, ContainerID, LoroDoc } from 'loro-crdt';
-import { LoroMap } from 'loro-crdt';
+import type { Change, ContainerID, LoroDoc, LoroMap } from 'loro-crdt';
+
+// Duck-typed so the editor bundle need not load loro (and its wasm) at boot.
+function isLoroMap(c: unknown): c is LoroMap {
+  return (
+    typeof c === 'object' &&
+    c !== null &&
+    'kind' in c &&
+    typeof c.kind === 'function' &&
+    c.kind() === 'Map'
+  );
+}
 
 // Read a node-map's `$.id`, if this container is a LoroMap with that structure.
 function dollarId(c: ReturnType<LoroDoc['getContainerById']>): string | null {
-  if (!(c instanceof LoroMap)) return null;
+  if (!isLoroMap(c)) return null;
   const dollar = c.get('$');
-  if (!(dollar instanceof LoroMap)) return null;
+  if (!isLoroMap(dollar)) return null;
   const id = dollar.get('id');
   return typeof id === 'string' ? id : null;
 }
 
 // Read a node-map's lexical `type` field (paragraph/table/tablecell/…).
 function nodeType(c: ReturnType<LoroDoc['getContainerById']>): string | null {
-  if (!(c instanceof LoroMap)) return null;
+  if (!isLoroMap(c)) return null;
   const t = c.get('type');
   return typeof t === 'string' ? t : null;
 }

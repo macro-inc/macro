@@ -42,6 +42,7 @@ vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   },
 }));
 vi.mock('@core/component/LoadingBlock', () => ({ LoadingBlock: () => null }));
+vi.mock('./agents-view-skeleton', () => ({ AgentsViewSkeleton: () => null }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableChatV3Agents: { key: 'enable-chat-v3-agents' },
 }));

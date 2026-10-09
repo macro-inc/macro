@@ -5,7 +5,7 @@ import {
   type GraphqlSoupItem,
   mapGraphqlSoupItem,
 } from '../../../service-clients/service-storage/graphql-soup';
-import { createKeyedProjection } from '../../../urql-solid/create-keyed-projection';
+import { createKeyedProjection } from '../create-keyed-projection';
 import { makeGroupComparator, resolveGroupMetaForKey } from '../grouped/api';
 import type { GroupByField, GroupMeta } from '../grouped/types';
 import type { SoupAstItemsData } from '../items';

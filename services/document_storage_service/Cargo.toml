@@ -277,6 +277,7 @@ webhook = { path = "../../crates/webhook", features = [
   "outbound",
   "worker",
 ] }
+work_feed = { path = "../../crates/work_feed", features = ["outbound"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 

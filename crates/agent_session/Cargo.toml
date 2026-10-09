@@ -94,6 +94,7 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
+trigger_context = { path = "../trigger_context" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }

@@ -2,7 +2,7 @@ import { gql } from '@urql/core';
 import fc from 'fast-check';
 import { createComputed, createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import { createKeyedProjection } from '../../urql-solid/create-keyed-projection';
+import { createKeyedProjection } from '../../queries/soup/create-keyed-projection';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
 import { LiveQuery, querySnapshot } from './live-query';
 import { applyQueryPatches } from './query-patches';

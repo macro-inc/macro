@@ -19,7 +19,7 @@ use worker::{
 
 use crate::{
     ai_peer::is_ai_peer,
-    auth::{AccessLevel, TokenFrom, decode_jwt, socket_access},
+    auth::{AccessLevel, TokenFrom, WriteAccess, decode_jwt, socket_access},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
     domain::document::DocumentAttribution,
@@ -258,16 +258,16 @@ impl<'a> Wsm<'a> {
             .context("invalid signed websocket attribution")
     }
 
-    pub async fn can_edit(&mut self) -> Result<bool> {
+    pub async fn write_access(&mut self) -> Result<WriteAccess> {
         self.maybe_update_ws_meta_map().await?;
         let ws_id = self.get_ws_id()?.to_string();
         Ok(self
             .dss
             .ws_meta_map
-            .lock("Wsm::can_edit get")
+            .lock("Wsm::write_access get")
             .get(&ws_id)
             .ok_or(Error::from("missing ws metadata"))?
-            .can_edit())
+            .write_access())
     }
 
     pub async fn add_new_peerid(&mut self, peerid: u64, document_id: &str) -> Result<()> {
@@ -325,6 +325,10 @@ fn take_editors(editors: &Mutex<BTreeSet<DocumentAttribution>>) -> Vec<DocumentA
 }
 
 impl DocumentSyncSession {
+    pub(crate) fn env(&self) -> &Env {
+        &self.env
+    }
+
     pub(crate) fn socket_for(&self, ws: &WebSocket) -> Socket {
         Socket::new(ws.clone(), self.inbound.clone())
     }

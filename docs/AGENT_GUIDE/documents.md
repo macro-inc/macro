@@ -34,6 +34,23 @@ deleting the shared property definition). Pins are saved with the document.
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;
 they do not show a success toast.
+
+Embedded code files, canvases, and PDFs in Markdown documents show their content
+below the card header, including when the document opens in a drive detail view.
+Project cards remain header-only. To verify, reopen a document with existing
+embeds and check that their preview bodies load; also check that a code or canvas
+mention offers **Convert to Embed** in its preview menu.
+Drag an embed's bottom-right resize grip, then release and select the card. Its
+height should stay at the dragged size and persist after reopening the document.
+Canvas Next embeds are read-only: **Select** selects shapes without moving them,
+and **Hand** pans the canvas. The toolbar contains only those two tools; property
+inspector details and drawing/editing controls are absent. Check toolbar clicks,
+drag-to-pan, and the V/H shortcuts with focus inside the canvas. These interactions
+must keep focus in the embed and must not type into or modify the outer document.
+Embeds hide the dot grid. The bottom-left zoom toolbar has minus and plus buttons
+around the current zoom percentage. Click the percentage for the shared canvas
+zoom menu: Zoom In/Out, Zoom to fit, and 25%, 50%, 100%, or 200% presets.
+
 ## Create a document from an editor
 
 Type `/document` in a Markdown slash menu and choose **Document**. The popover
@@ -2144,7 +2161,13 @@ Status and detail slots share one TaskPropertiesPreviewProvider per card:
 GraphQL preview data is reused, and REST fallback property/access queries are
 owned once, not separately by each slot. Non-task cards do not load task properties.
 Use the title to open the referenced document and the
-actions menu to copy its link, convert it to an inline mention, or delete the card.
+actions menu for the same applicable actions as a mention: Copy Link, Ask Macro
+for supported document types outside chat, Copy Branch Name for tasks, and
+Open in New Split when the reference is not already open. Editable cards also
+offer Convert to Inline Mention and Delete; these actions update when the editor
+becomes editable after loading. Converting back preserves the referenced document
+and its location parameters. Collapse/Expand Reference is only
+available on mentions; cards (including sent-message cards) never offer collapse.
 Title navigation preserves the reference's block parameters, including message,
 thread, annotation, and document locations.
 Click the card frame to select its editor node; controls and embedded content

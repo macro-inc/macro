@@ -294,7 +294,7 @@ impl Subscriber {
             .unwrap();
         let revision = match update {
             QueryUpdate::Hit { data, revision } => {
-                self.data = data;
+                self.data = Json::clone(&data);
                 revision
             }
             QueryUpdate::Patch { patches, revision } => {

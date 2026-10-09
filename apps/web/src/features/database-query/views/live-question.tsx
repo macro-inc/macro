@@ -208,7 +208,7 @@ export function LiveQuestion(props: {
       <ScopedPortal scope="local">
         <Popover.Content
           ref={content}
-          class="z-action-menu w-[min(440px,calc(100vw-2rem))] max-h-[min(720px,var(--kb-popper-content-available-height,100dvh),calc(100dvh-1rem))] overflow-auto rounded-xl border border-edge-muted bg-panel text-ink shadow-xl"
+          class="menu-surface z-action-menu w-[min(440px,calc(100vw-2rem))] max-h-[min(720px,var(--kb-popper-content-available-height,100dvh),calc(100dvh-1rem))] overflow-auto"
           contentEditable={false}
           onOpenAutoFocus={(event) => {
             if (!props.editor) return;

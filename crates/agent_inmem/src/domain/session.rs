@@ -264,3 +264,19 @@ pub fn messages_for_turn(history: &[HistoryEntry], prompt: &UserPrompt) -> Vec<C
         .chain(std::iter::once(prompt.to_chat_message()))
         .collect()
 }
+
+/// Whether resolved attachments contain images, including nested attachments.
+pub(super) fn contains_images(attachments: &Attachments<'_>) -> bool {
+    fn content_has_images(content: &AttachmentContent<'_>) -> bool {
+        content.content.iter().any(|part| match part {
+            AttachmentPart::Image(_) => true,
+            AttachmentPart::Child(child) => child.as_ref().as_ref().is_ok_and(content_has_images),
+            _ => false,
+        })
+    }
+    attachments
+        .parts()
+        .iter()
+        .filter_map(|part| part.as_ref().ok())
+        .any(content_has_images)
+}

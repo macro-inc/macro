@@ -65,6 +65,10 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 
 - Always use Conventional Commit syntax for PR titles: `type(scope): description`
   (scope optional), for example `fix(onboarding): preserve team inputs`.
+- Open pull requests ready for review. If one is created as a draft, mark it
+  ready for review before handing off.
+- Get CI passing before handing off. A pull request whose checks are failing
+  or still running is not done.
 - Test the affected packages/services individually before committing. Use the
   relevant guide for setup; there is no root `just test` recipe.
 - For code changes, run `just check` (format/lint/code rules scoped to changes).
