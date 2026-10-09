@@ -2,6 +2,7 @@ import { pendingWebUpdate } from '@core/util/reloadForNewerBuild';
 import { useTauri } from '@macro/tauri';
 import { invoke } from '@tauri-apps/api/core';
 import { type Accessor, createMemo } from 'solid-js';
+import { debugAppUpdate } from './app-update-debug';
 
 /** An update this app can apply now, as the rail's update button offers it. */
 export type AppUpdate = {
@@ -31,6 +32,10 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
   const tauri = useTauri();
 
   return createMemo(() => {
+    // TEMPORARY: simulated updates from the debug panel.
+    const simulated = debugAppUpdate();
+    if (simulated) return simulated;
+
     const native = tauri?.nativeUpdateStatus();
     if (tauri && native?.status === 'Ready') {
       const preparing = tauri.nativeUpdatePreparing();

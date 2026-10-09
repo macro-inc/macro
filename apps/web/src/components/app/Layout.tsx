@@ -32,6 +32,7 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
+import { AppUpdateDebugPanel } from '@components/app/sidebar-next/app-update-debug';
 import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
 import {
   isSidebarVisible,
@@ -342,6 +343,8 @@ export function AppChrome(props: ParentProps) {
           </FloatRegion>
         </Show>
         <InitialInteractiveOnboardingModal />
+        {/* TEMPORARY: update button debug controls (?debug-updates). */}
+        <AppUpdateDebugPanel />
         <Suspense>
           <Show when={isAuthenticated()}>
             <Launcher
