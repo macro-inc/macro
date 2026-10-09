@@ -17,56 +17,83 @@ async function read(path: string): Promise<unknown> {
 const destination = process.argv[2];
 if (!destination) throw new Error('Provide an output directory');
 await mkdir(destination, { recursive: true });
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Export failed';
+}
 const exports = await Promise.allSettled([
   (async () => {
     const monitors: unknown[] = [];
-    for (let page = 0; ; page++) {
-      const batch = await read(`monitor?page=${page}&page_size=100`);
-      if (!Array.isArray(batch)) throw new Error('Invalid monitor response');
-      monitors.push(...batch);
-      if (batch.length < 100) break;
+    const errors: string[] = [];
+    try {
+      for (let page = 0; ; page++) {
+        const batch = await read(`monitor?page=${page}&page_size=100`);
+        if (!Array.isArray(batch)) throw new Error('Invalid monitor response');
+        monitors.push(...batch);
+        if (batch.length < 100) break;
+      }
+    } catch (error) {
+      errors.push(errorMessage(error));
     }
     await writeFile(
       `${destination}/monitors.json`,
       JSON.stringify(monitors, null, 2)
     );
-    return { kind: 'monitors', count: monitors.length };
+    return {
+      kind: 'monitors',
+      count: monitors.length,
+      complete: errors.length === 0,
+      errors,
+    };
   })(),
   (async () => {
     const dashboards: { id: string }[] = [];
-    for (let start = 0; ; start += 100) {
-      const response = await read(`dashboard?count=100&start=${start}`);
-      if (
-        !response ||
-        typeof response !== 'object' ||
-        !('dashboards' in response) ||
-        !Array.isArray(response.dashboards)
-      )
-        throw new Error('Invalid dashboard response');
-      const entries: unknown[] = response.dashboards;
-      for (const dashboard of entries) {
+    const errors: string[] = [];
+    try {
+      for (let start = 0; ; start += 100) {
+        const response = await read(`dashboard?count=100&start=${start}`);
         if (
-          !dashboard ||
-          typeof dashboard !== 'object' ||
-          !('id' in dashboard) ||
-          typeof dashboard.id !== 'string' ||
-          !/^[a-zA-Z0-9-]+$/.test(dashboard.id)
+          !response ||
+          typeof response !== 'object' ||
+          !('dashboards' in response) ||
+          !Array.isArray(response.dashboards)
         )
-          throw new Error('Invalid dashboard ID');
-        dashboards.push({ id: dashboard.id });
-        const definition = await read(`dashboard/${dashboard.id}`);
-        await writeFile(
-          `${destination}/dashboard-${dashboard.id}.json`,
-          JSON.stringify(definition, null, 2)
-        );
+          throw new Error('Invalid dashboard response');
+        const entries: unknown[] = response.dashboards;
+        for (const dashboard of entries) {
+          if (
+            !dashboard ||
+            typeof dashboard !== 'object' ||
+            !('id' in dashboard) ||
+            typeof dashboard.id !== 'string' ||
+            !/^[a-zA-Z0-9-]+$/.test(dashboard.id)
+          )
+            throw new Error('Invalid dashboard ID');
+          try {
+            const definition = await read(`dashboard/${dashboard.id}`);
+            await writeFile(
+              `${destination}/dashboard-${dashboard.id}.json`,
+              JSON.stringify(definition, null, 2)
+            );
+            dashboards.push({ id: dashboard.id });
+          } catch (error) {
+            errors.push(`Dashboard ${dashboard.id}: ${errorMessage(error)}`);
+          }
+        }
+        if (response.dashboards.length < 100) break;
       }
-      if (response.dashboards.length < 100) break;
+    } catch (error) {
+      errors.push(errorMessage(error));
     }
     await writeFile(
       `${destination}/dashboards.json`,
       JSON.stringify(dashboards, null, 2)
     );
-    return { kind: 'dashboards', count: dashboards.length };
+    return {
+      kind: 'dashboards',
+      count: dashboards.length,
+      complete: errors.length === 0,
+      errors,
+    };
   })(),
 ]);
 await writeFile(
@@ -87,12 +114,17 @@ await writeFile(
   )
 );
 for (const result of exports) {
-  if (result.status === 'fulfilled')
+  if (result.status === 'fulfilled') {
     console.log(`Exported ${result.value.count} ${result.value.kind}`);
-  else
+    for (const error of result.value.errors) console.error(error);
+  } else
     console.error(
       result.reason instanceof Error ? result.reason.message : 'Export failed'
     );
 }
-if (exports.some((result) => result.status === 'rejected'))
+if (
+  exports.some(
+    (result) => result.status === 'rejected' || !result.value.complete
+  )
+)
   process.exitCode = 1;

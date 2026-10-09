@@ -73,15 +73,23 @@ async function handleProxy(
   return await fetch(originRequest);
 }
 
+// Each mirror can retain 8 MiB of chunks plus its assembled request body.
+// Reserve before cloning so concurrent requests cannot accumulate extra copies.
+const maximumConcurrentTelemetryCopies = 2;
+let activeTelemetryCopies = 0;
+
 async function copyTelemetry(
   request: Request,
   endpoint: string,
   path: string,
   token: string
 ): Promise<void> {
+  if (activeTelemetryCopies >= maximumConcurrentTelemetryCopies) return;
+  activeTelemetryCopies++;
   try {
+    const copy = request.clone();
     const maximumBytes = 8 * 1024 * 1024;
-    const reader = request.body?.getReader();
+    const reader = copy.body?.getReader();
     const chunks: Uint8Array[] = [];
     let length = 0;
     if (reader) {
@@ -127,6 +135,8 @@ async function copyTelemetry(
     await response.body?.cancel();
   } catch {
     console.warn('Grafana telemetry copy failed', { signal: path });
+  } finally {
+    activeTelemetryCopies--;
   }
 }
 
@@ -178,7 +188,7 @@ app.all(`${OTLP_PREFIX}/*`, async (c) => {
     mirrorToken
   ) {
     c.executionCtx.waitUntil(
-      copyTelemetry(c.req.raw.clone(), mirrorEndpoint, path, mirrorToken)
+      copyTelemetry(c.req.raw, mirrorEndpoint, path, mirrorToken)
     );
   }
 

@@ -348,7 +348,9 @@ durable, and sharing a process still creates a resource-failure dependency.
 
 The dev analytics proxy mirrors existing browser and worker OTLP traces/logs in
 `waitUntil`, using a server-side token and a five-second export timeout. Browsers
-send once. Payloads above 8 MiB skip only the mirror. Datadog's response remains
+send once. Payloads above 8 MiB skip only the mirror. Each Worker isolate admits
+at most two concurrent copies; additional requests skip mirroring to bound
+aggregate buffering. Datadog's response remains
 the client response. `deploy-analytics-proxy-dev.yml` installs the token from
 Secrets Manager and deploys only the dev Worker.
 
