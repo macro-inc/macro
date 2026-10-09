@@ -99,6 +99,30 @@ describe('parseNaturalDate', () => {
     expect(fri?.getDate()).toBe(21);
   });
 
+  it('should parse day of week abbreviations', () => {
+    // Base date is Saturday June 15, 2024
+    // Test common abbreviations
+    expect(parseNaturalDate('mon', baseDate)?.getDate()).toBe(17);
+    expect(parseNaturalDate('tue', baseDate)?.getDate()).toBe(18);
+    expect(parseNaturalDate('tues', baseDate)?.getDate()).toBe(18);
+    expect(parseNaturalDate('wed', baseDate)?.getDate()).toBe(19);
+    expect(parseNaturalDate('weds', baseDate)?.getDate()).toBe(19);
+    expect(parseNaturalDate('thu', baseDate)?.getDate()).toBe(20);
+    expect(parseNaturalDate('thur', baseDate)?.getDate()).toBe(20);
+    expect(parseNaturalDate('thurs', baseDate)?.getDate()).toBe(20);
+    expect(parseNaturalDate('fri', baseDate)?.getDate()).toBe(21);
+    expect(parseNaturalDate('sat', baseDate)?.getDate()).toBe(22);
+    expect(parseNaturalDate('sun', baseDate)?.getDate()).toBe(16);
+  });
+
+  it('should be case insensitive for day abbreviations', () => {
+    // Base date is Saturday June 15, 2024
+    expect(parseNaturalDate('MON', baseDate)?.getDate()).toBe(17);
+    expect(parseNaturalDate('Mon', baseDate)?.getDate()).toBe(17);
+    expect(parseNaturalDate('THU', baseDate)?.getDate()).toBe(20);
+    expect(parseNaturalDate('FRI', baseDate)?.getDate()).toBe(21);
+  });
+
   it('should handle case insensitivity', () => {
     const date1 = parseNaturalDate('FEB 17', baseDate);
     const date2 = parseNaturalDate('feb 17', baseDate);
@@ -251,6 +275,82 @@ describe('useDateSearch', () => {
         opt.displayText.toLowerCase().includes('tomorrow')
       );
       expect(tomorrowOption).toBeTruthy();
+
+      dispose();
+    });
+  });
+
+  it('should find tomorrow with shorthand "tmrw"', () => {
+    createRoot((dispose) => {
+      const [query] = createSignal('tmrw');
+      const options = useDateSearch({ query });
+
+      const result = options();
+      const tomorrowOption = result.find((opt) =>
+        opt.displayText.toLowerCase().includes('tomorrow')
+      );
+      expect(tomorrowOption).toBeTruthy();
+
+      dispose();
+    });
+  });
+
+  it('should find tomorrow with various aliases', () => {
+    createRoot((dispose) => {
+      const aliases = ['tmrw', 'tmr', 'tom'];
+      aliases.forEach((alias) => {
+        const [query] = createSignal(alias);
+        const options = useDateSearch({ query });
+
+        const result = options();
+        const tomorrowOption = result.find((opt) =>
+          opt.displayText.toLowerCase().includes('tomorrow')
+        );
+        expect(tomorrowOption).toBeTruthy();
+      });
+
+      dispose();
+    });
+  });
+
+  it('should find weekday presets by abbreviation', () => {
+    createRoot((dispose) => {
+      const [query] = createSignal('mon');
+      const options = useDateSearch({ query });
+
+      const result = options();
+      const mondayOption = result.find((opt) =>
+        opt.displayText.toLowerCase().includes('monday')
+      );
+      expect(mondayOption).toBeTruthy();
+
+      dispose();
+    });
+  });
+
+  it('should find weekday presets by various abbreviations', () => {
+    createRoot((dispose) => {
+      const testCases = [
+        { abbr: 'thu', day: 'thursday' },
+        { abbr: 'thur', day: 'thursday' },
+        { abbr: 'thurs', day: 'thursday' },
+        { abbr: 'fri', day: 'friday' },
+        { abbr: 'wed', day: 'wednesday' },
+        { abbr: 'weds', day: 'wednesday' },
+        { abbr: 'tue', day: 'tuesday' },
+        { abbr: 'tues', day: 'tuesday' },
+      ];
+
+      testCases.forEach(({ abbr, day }) => {
+        const [query] = createSignal(abbr);
+        const options = useDateSearch({ query });
+
+        const result = options();
+        const dayOption = result.find((opt) =>
+          opt.displayText.toLowerCase().includes(day)
+        );
+        expect(dayOption).toBeTruthy();
+      });
 
       dispose();
     });

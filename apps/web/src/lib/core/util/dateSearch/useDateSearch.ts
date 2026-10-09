@@ -120,11 +120,42 @@ function parseNaturalDate(
     'saturday',
   ];
 
-  const dayIndex = daysOfWeek.findIndex(
-    (day) => lowerInput === day || lowerInput === day.slice(0, 3)
-  );
+  // Map of common abbreviations and misspellings to day index
+  const dayAbbreviations: Record<string, number> = {
+    sun: 0,
+    sunday: 0,
+    mon: 1,
+    monday: 1,
+    mndy: 1,
+    tue: 2,
+    tues: 2,
+    tuesday: 2,
+    tu: 2,
+    wed: 3,
+    weds: 3,
+    wednes: 3,
+    wednesday: 3,
+    thu: 4,
+    thur: 4,
+    thurs: 4,
+    thursday: 4,
+    fri: 5,
+    friday: 5,
+    sat: 6,
+    saturday: 6,
+  };
 
-  if (dayIndex !== -1) {
+  // Check against the abbreviation map first
+  let dayIndex = dayAbbreviations[lowerInput];
+
+  // Fallback to prefix matching if no exact match
+  if (dayIndex === undefined) {
+    dayIndex = daysOfWeek.findIndex(
+      (day) => day.startsWith(lowerInput) && lowerInput.length >= 2
+    );
+  }
+
+  if (dayIndex !== undefined && dayIndex !== -1) {
     const currentDay = now.getDay();
     let daysToAdd = dayIndex - currentDay;
 
@@ -143,13 +174,27 @@ function parseNaturalDate(
 /**
  * Score how well an option matches the query
  */
-function scoreMatch(option: DateOption, query: string): number {
+function scoreMatch(
+  option: DateOption,
+  query: string,
+  keywords?: string[]
+): number {
   const lowerQuery = query.toLowerCase();
   const lowerDisplay = option.displayText.toLowerCase();
 
   if (lowerDisplay === lowerQuery) return 100;
   if (lowerDisplay.startsWith(lowerQuery)) return 90;
   if (lowerDisplay.includes(lowerQuery)) return 70;
+
+  // Check if query matches any keyword exactly
+  if (keywords) {
+    const queryMatchesKeyword = keywords.some((kw) => {
+      const lowerKw = kw.toLowerCase();
+      return lowerKw === lowerQuery || lowerKw.startsWith(lowerQuery);
+    });
+    if (queryMatchesKeyword) return 85;
+  }
+
   if (option.secondaryText) {
     const lowerSecondary = option.secondaryText.toLowerCase();
     if (lowerSecondary.includes(lowerQuery)) return 50;
@@ -338,7 +383,7 @@ export function useDateSearch(params: {
         score: 0,
       };
 
-      option.score = scoreMatch(option, presetQuery);
+      option.score = scoreMatch(option, presetQuery, preset.keywords);
 
       if (option.score > 0) {
         options.push(option);
