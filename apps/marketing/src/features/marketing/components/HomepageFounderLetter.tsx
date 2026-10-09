@@ -101,7 +101,7 @@ export function HomepageFounderLetter() {
           <p class="m-0">{LETTER}</p>
         </blockquote>
         <figcaption class="mt-5 flex flex-col gap-0.5 md:mt-[25px]">
-          <span>Jacob Beckerman</span>
+          <span>Jacob</span>
           <span>Co-Founder &amp; CEO at Macro</span>
         </figcaption>
       </figure>

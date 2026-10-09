@@ -94,13 +94,17 @@ export function DocumentShareSheet(props: {
   open: boolean;
   title: string;
   /** The channel the doc was mentioned in, labeled by its other members. */
-  channel: { members: string; level: Level; fresh?: boolean };
+  channel?: { members: string; level: Level; fresh?: boolean };
+  entityLabel?: string;
+  autoFocus?: boolean;
   onClose: () => void;
 }) {
   const titleId = createUniqueId();
   const [recipient, setRecipient] = createSignal('');
   const [level, setLevel] = createSignal<Level>('edit');
-  const [channelLevel, setChannelLevel] = createSignal(props.channel.level);
+  const [channelLevel, setChannelLevel] = createSignal(
+    props.channel?.level ?? 'view'
+  );
   const [shared, setShared] = createSignal<
     { id: string; name: string; person?: HomepagePersonId; level: Level }[]
   >([]);
@@ -134,12 +138,21 @@ export function DocumentShareSheet(props: {
         <section
           class="doc-share-card"
           role="dialog"
+          ref={(element) => {
+            if (props.autoFocus)
+              queueMicrotask(() => element.querySelector('input')?.focus());
+          }}
           aria-modal="false"
           aria-labelledby={titleId}
         >
           <header id={titleId}>
             <span>Share:</span>
-            <FileText class="text-note" />
+            <Show
+              when={props.entityLabel === 'conversation'}
+              fallback={<FileText class="text-note" />}
+            >
+              <ChatTeardrop />
+            </Show>
             <span>{props.title}</span>
           </header>
           <div class="doc-share-to">
@@ -191,7 +204,9 @@ export function DocumentShareSheet(props: {
         </section>
         <section class="doc-share-card" aria-label="People with access">
           <header>
-            <span>People with access to this document</span>
+            <span>
+              People with access to this {props.entityLabel ?? 'document'}
+            </span>
           </header>
           <div class="doc-share-people">
             <div class="doc-share-person">
@@ -201,21 +216,25 @@ export function DocumentShareSheet(props: {
               </span>
               <span class="doc-share-owner">Owner</span>
             </div>
-            <div
-              class="doc-share-person"
-              data-new={props.channel.fresh ? 'true' : undefined}
-              data-channel-access
-            >
-              <span>
-                <Users />
-                <span>{props.channel.members}</span>
-              </span>
-              <AccessLevel
-                label={`Access for ${props.channel.members}`}
-                value={channelLevel()}
-                onChange={setChannelLevel}
-              />
-            </div>
+            <Show when={props.channel}>
+              {(channel) => (
+                <div
+                  class="doc-share-person"
+                  data-new={channel().fresh ? 'true' : undefined}
+                  data-channel-access
+                >
+                  <span>
+                    <Users />
+                    <span>{channel().members}</span>
+                  </span>
+                  <AccessLevel
+                    label={`Access for ${channel().members}`}
+                    value={channelLevel()}
+                    onChange={setChannelLevel}
+                  />
+                </div>
+              )}
+            </Show>
             <For each={shared()}>
               {(row) => (
                 <div class="doc-share-person" data-new="true">

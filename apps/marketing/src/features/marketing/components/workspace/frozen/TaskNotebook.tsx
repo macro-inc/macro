@@ -32,6 +32,14 @@ export function TaskNotebook(props: {
   workspace: DummyWorkspace;
   task: WorkspaceTask;
   relatedContent?: JSX.Element;
+  /** Frozen rich task descriptions can include native inline mentions. */
+  descriptionContent?: JSX.Element;
+  navigation?: JSX.Element;
+  onShare?: () => void;
+  /** A document-created task can reference its source document here. */
+  sourceContent?: JSX.Element;
+  /** A linked split has no task-list navigation history. */
+  hideCollectionNavigation?: boolean;
   /** Extra pills in the property row, e.g. linked GitHub pull requests. */
   pills?: JSX.Element;
 }) {
@@ -41,20 +49,25 @@ export function TaskNotebook(props: {
   return (
     <>
       <ViewShell.TopBar>
-        <Button
-          variant="plain"
-          size="icon-sm"
-          label={
-            props.workspace.view() === 'home' ? 'Back to Home' : 'Back to tasks'
-          }
-          onClick={() => props.workspace.backToCollection('tasks')}
-        >
-          <ArrowLeft />
-        </Button>
-        <span class="text-sm text-ink-muted">
-          {props.workspace.view() === 'home' ? 'Home' : 'All Tasks'}
-        </span>
-        <span class="text-ink-muted mx-1">›</span>
+        {props.navigation}
+        <Show when={!props.hideCollectionNavigation}>
+          <Button
+            variant="plain"
+            size="icon-sm"
+            label={
+              props.workspace.view() === 'home'
+                ? 'Back to Home'
+                : 'Back to tasks'
+            }
+            onClick={() => props.workspace.backToCollection('tasks')}
+          >
+            <ArrowLeft />
+          </Button>
+          <span class="shrink-0 whitespace-nowrap text-sm text-ink-muted">
+            {props.workspace.view() === 'home' ? 'Home' : 'All Tasks'}
+          </span>
+          <span class="text-ink-muted mx-1">›</span>
+        </Show>
         <ListChecks class="size-4 text-task" />
         <span class="truncate text-sm font-medium">{props.task.title}</span>
         <Dropdown modal={false}>
@@ -79,6 +92,9 @@ export function TaskNotebook(props: {
                     priority: source.priority,
                     owner: source.owner,
                     tags: [...source.tags],
+                    relatedDocumentIds: source.relatedDocumentIds
+                      ? [...source.relatedDocumentIds]
+                      : undefined,
                     steps: source.steps.map((step) => ({ ...step })),
                   });
                 }}
@@ -103,6 +119,10 @@ export function TaskNotebook(props: {
           size="sm"
           variant="plain"
           onClick={() => {
+            if (props.onShare) {
+              props.onShare();
+              return;
+            }
             props.workspace.post(
               `Shared task: ${props.task.title}`,
               undefined,
@@ -274,30 +294,44 @@ export function TaskNotebook(props: {
                 </Show>
               </div>
               <div class="website-demo-markdown md text-base">
-                <div
-                  role="textbox"
-                  aria-label="Task description"
-                  contentEditable
-                  class="my-4 first:mt-1.5 last:mb-1.5 md-p text-[1em] whitespace-pre-wrap outline-none"
-                  onBlur={(e) =>
-                    save({ description: e.currentTarget.innerText })
+                <Show
+                  when={props.descriptionContent}
+                  fallback={
+                    <div
+                      role="textbox"
+                      aria-label="Task description"
+                      contentEditable
+                      class="my-4 first:mt-1.5 last:mb-1.5 md-p text-[1em] whitespace-pre-wrap outline-none"
+                      onBlur={(e) =>
+                        save({ description: e.currentTarget.innerText })
+                      }
+                    >
+                      {props.task.description}
+                    </div>
                   }
                 >
-                  {props.task.description}
-                </div>
-                <button
-                  type="button"
-                  class="my-4 flex items-center gap-1.5 text-sm text-ink-muted"
-                  onClick={() => {
-                    props.workspace.setChannel(props.task.channel);
-                    props.workspace.openItem('messages');
-                  }}
+                  {props.descriptionContent}
+                </Show>
+                <Show
+                  when={props.sourceContent}
+                  fallback={
+                    <button
+                      type="button"
+                      class="my-4 flex items-center gap-1.5 text-sm text-ink-muted"
+                      onClick={() => {
+                        props.workspace.setChannel(props.task.channel);
+                        props.workspace.openItem('messages');
+                      }}
+                    >
+                      From <Hash class="size-4" />
+                      <span class="underline underline-offset-4">
+                        {props.task.channel}
+                      </span>
+                    </button>
+                  }
                 >
-                  From <Hash class="size-4" />
-                  <span class="underline underline-offset-4">
-                    {props.task.channel}
-                  </span>
-                </button>
+                  {props.sourceContent}
+                </Show>
                 <ul class="my-4 first:mt-1.5 last:mb-1.5 list-none md-list md-check">
                   <For each={props.task.steps}>
                     {(step) => (

@@ -31,45 +31,38 @@ export type DemoPullRequest = {
   comments: DemoGithubComment[];
 };
 
-/** The same pull request the Tasks page links to its task. */
-export const invitePr: DemoPullRequest = {
+/** One original PR shared by the GitHub page’s independent scenes. */
+export const signInPr: DemoPullRequest = {
   id: 'pr-491',
-  title: 'Keep the invited team through sign-up',
-  repo: 'launch-team/web',
+  title: 'Fix mobile sign-in',
+  repo: 'macro-inc/website',
   number: 491,
   status: 'open',
   author: 'teo',
   login: 'teo',
-  additions: 38,
-  deletions: 6,
-  checksPassed: 12,
+  additions: 14,
+  deletions: 3,
+  checksPassed: 6,
   description:
-    '## What changed\n\nNew teammates who accept an invite now stay in the invited team through sign-up. Existing accounts switch to that team after they sign in.\n\nFixes LAUNCH-42.\n\n## Testing\n\n- New account from an invite link\n- Existing account from an invite link\n- Expired invite still shows the error page',
+    '## What changed\n\nThe mobile sign-in button now submits the form, just like the desktop button. Both layouts use the same submit handler.\n\nFixes WEB-42.\n\n## Tested\n\n- Sign in at mobile and desktop widths\n- Submit with the Enter key\n- Show an error for incorrect passwords',
   comments: [
     {
-      id: 'expired',
+      id: 'keyboard',
       person: 'julia',
-      login: 'juliawestphal',
+      login: 'julia',
       time: '10:21 AM',
-      badge: 'src/invite/accept-invite.ts:42',
+      badge: 'src/auth/SignIn.tsx:18',
       anchor: true,
-      body: 'If the invite has expired this still falls through to the personal workspace. Can we keep the error page for that case?',
+      body: 'does enter still work on desktop?',
       replies: [
         {
-          id: 'expired-reply',
+          id: 'keyboard-reply',
           person: 'teo',
           login: 'teo',
-          time: '10:34 AM',
-          body: 'Good catch. Expired invites go to the error page again, and there’s a test for it now.',
+          time: '10:24 AM',
+          body: 'yep, both go through the form now. added a test for enter too',
         },
       ],
-    },
-    {
-      id: 'bugbot',
-      person: 'cursor',
-      login: 'cursor[bot]',
-      time: '10:36 AM',
-      body: 'Bugbot reviewed this pull request and found no new issues.',
     },
   ],
 };
@@ -77,11 +70,11 @@ export const invitePr: DemoPullRequest = {
 export const onboardingPr: DemoPullRequest = {
   id: 'pr-479',
   title: 'Shorten the onboarding checklist',
-  repo: 'launch-team/web',
+  repo: 'macro-inc/website',
   number: 479,
   status: 'merged',
   author: 'jacob',
-  login: 'jbeckerman',
+  login: 'jacob',
   additions: 12,
   deletions: 31,
   checksPassed: 9,

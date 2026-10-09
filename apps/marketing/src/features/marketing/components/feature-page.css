@@ -68,3 +68,52 @@
   .feature-page-jump-links a { gap: 10px; }
   .email-feature-graphic { width: 128px; height: 80px; }
 }
+
+
+/* One spacing owner per boundary; do not stack section padding with margins. */
+.feature-page[data-product-spacing=true] {
+  --feature-section-space: 96px;
+  --feature-demo-space: 40px;
+}
+.feature-page[data-product-spacing=true] .feature-page-section {
+  margin-block: var(--feature-section-space) 0;
+  padding-block: 0;
+}
+.feature-page[data-product-spacing=true] .feature-page-section .homepage-feature-heading {
+  margin-bottom: var(--feature-demo-space);
+}
+.feature-page[data-product-spacing=true] .feature-page-visual .product-demo-stage {
+  padding-top: 0;
+}
+.feature-page[data-product-spacing=true] .feature-page-reading {
+  margin-block: var(--feature-section-space) 0;
+  padding-block: 0;
+}
+.feature-page[data-product-spacing=true] .feature-page-reading-rule { display: none; }
+.feature-page[data-product-spacing=true] .feature-page-reading > h2 {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+.feature-page[data-product-spacing=true] .homepage-feature-end {
+  margin-top: var(--feature-section-space);
+  padding-top: 64px;
+  padding-bottom: 56px;
+}
+.feature-page[data-product-spacing=true] .feature-page-jump-links {
+  padding-block: 0;
+}
+.feature-page[data-product-spacing=true] .email-desktop-demo {
+  margin-bottom: 64px;
+}
+.feature-page[data-product-spacing=true] .tasks-founder-letter {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+@media (max-width: 699px) {
+  .feature-page[data-product-spacing=true] {
+    --feature-section-space: 64px;
+    --feature-demo-space: 28px;
+  }
+  .feature-page[data-product-spacing=true] .email-desktop-demo { margin-bottom: 40px; }
+  .feature-page[data-product-spacing=true] .homepage-feature-end { padding-block: 48px; }
+}

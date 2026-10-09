@@ -1,0 +1,22 @@
+/* Cursor reply anatomy from the supplied app screenshot, using shared theme tokens. */
+.demo-cursor-response { min-width:0; width:100%; }
+.demo-cursor-origin { font-size:13px; line-height:20px; color:var(--color-ink-muted); }
+.demo-cursor-origin span { color:var(--color-accent); }
+.demo-cursor-quote { display:flex; align-items:baseline; gap:6px; position:relative; min-width:0; margin:12px 0 18px; padding-left:24px; font-size:13px; line-height:20px; color:var(--color-ink-muted); }
+.demo-cursor-quote::before { content:''; position:absolute; top:8px; left:2px; width:18px; height:10px; border-top:2px solid var(--color-edge); border-left:2px solid var(--color-edge); border-top-left-radius:8px; }
+.demo-cursor-quote strong { flex:none; font-weight:600; }
+.demo-cursor-quote > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-style:italic; }
+.demo-cursor-card { container-type:inline-size; min-width:0; padding:12px; border:1px solid var(--color-edge); border-radius:16px; color:var(--color-ink); }
+.demo-cursor-check { display:flex; align-items:center; justify-content:center; flex:none; width:18px; height:18px; border-radius:50%; background:var(--color-success); color:var(--color-panel); }
+.demo-cursor-model { font-size:12px; color:var(--color-ink-muted); }
+.demo-cursor-status { border-radius:999px; padding:2px 8px; font-size:12px; color:var(--color-success); background:color-mix(in oklch,var(--color-success) 14%,transparent); }
+.demo-cursor-open { border-radius:999px; padding:3px 8px; font-size:12px; gap:4px; }
+.demo-cursor-output { display:flex; align-items:center; min-width:0; margin-top:8px; min-height:32px; border-radius:8px; background:var(--color-hover); }
+.demo-cursor-output > button { display:flex; align-items:center; gap:8px; width:100%; min-width:0; border:0; border-radius:8px; padding:6px 10px; margin:0; background:transparent; color:var(--color-ink-muted); text-align:left; font-size:13px; }
+.demo-cursor-output > button:hover { background:var(--color-active); }
+.demo-cursor-pr-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.demo-cursor-pr-stats { display:flex; gap:6px; margin-left:auto; flex:none; font-size:12px; }
+.demo-cursor-pr-stats span:first-child { color:var(--color-success); }
+.demo-cursor-pr-stats span:last-child { color:var(--color-failure); }
+.demo-cursor-result { padding:6px 10px; font-size:13px; line-height:20px; margin:0; }
+@container (max-width:400px) { .demo-cursor-open-label { display:none; } .demo-cursor-model { display:none; } }

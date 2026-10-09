@@ -11,9 +11,6 @@
 .homepage-agent-pr-link:hover { text-decoration-color: currentColor; }
 .homepage-agent-pr-link:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 .homepage-agent-chip { border-radius: 14px; }
-.homepage-agent-story [data-magic-chip] { margin: 0; border: 0; border-radius: 14px; background: var(--color-panel); text-align: left; }
-.homepage-agent-story [data-magic-chip-fade] { background: linear-gradient(to top, var(--color-panel), transparent); }
-.homepage-agent-story [data-magic-chip-header] { height: auto; min-height: 44px; padding-block: 6px; padding-right: 6px; }
 .homepage-agent-merge { height: 32px; border-radius: 8px; padding-inline: 10px; }
 
 .homepage-agent-dialog { --glass-scale: 1.5; display: flex; flex-direction: column; width: min(860px, calc(100vw - 32px)); height: min(760px, calc(100dvh - 64px)); overflow: hidden; font: 400 14px/1.6 var(--font-sans), sans-serif; color: var(--color-ink); background: var(--color-surface-2); }
@@ -24,9 +21,6 @@
   .homepage-agent-story .homepage-message { max-width: 100%; }
   .homepage-message-reply { margin-left: 0; padding-left: 0; }
   .homepage-message-reply::before { left: -26px; width: 16px; }
-  .homepage-agent-story [data-magic-chip-header] { flex-wrap: wrap; row-gap: 4px; padding-block: 8px; }
-  .homepage-agent-story [data-magic-chip-header] > button:first-child { min-width: 130px; }
-  .homepage-agent-story [data-magic-chip-header] > div { max-width: none; }
   .homepage-agent-dialog { width: calc(100vw - 16px); height: auto; max-height: 94dvh; }
   .homepage-agent-dialog-header { padding: 14px 16px; }
   .homepage-agent-dialog-tabs { padding: 8px 16px; }

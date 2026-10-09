@@ -191,9 +191,9 @@ export function sampleCompanies(): SampleCompany[] {
         '18,000'
       ),
       contacts: [
-        { name: 'Dana Whitfield', email: 'dana@meadow.example' },
-        { name: 'Alex Chen', email: 'alex@meadow.example' },
-        { name: 'Priya Raman', email: 'priya@meadow.example' },
+        { name: 'Dana', email: 'dana@meadow.example' },
+        { name: 'Alex', email: 'alex@meadow.example' },
+        { name: 'Priya', email: 'priya@meadow.example' },
       ],
       comments: [
         {
@@ -221,7 +221,7 @@ export function sampleCompanies(): SampleCompany[] {
       emails: [
         {
           id: 'meadow-seats',
-          sender: 'Alex Chen',
+          sender: 'Alex',
           subject: 'Seats for the studio team',
           snippet: 'We’d start with 12 and add the print shop in November.',
           time: 'Sep 28',
@@ -229,7 +229,7 @@ export function sampleCompanies(): SampleCompany[] {
         },
         {
           id: 'meadow-order',
-          sender: 'Julia Westphal',
+          sender: 'Julia',
           subject: 'Re: Pricing for 12 seats',
           snippet: 'Attached is the order form with the annual team rate.',
           time: 'Sep 27',
@@ -237,7 +237,7 @@ export function sampleCompanies(): SampleCompany[] {
         },
         {
           id: 'meadow-invite',
-          sender: 'Dana Whitfield',
+          sender: 'Dana',
           subject: 'Invitation: The Meadow · Demo',
           snippet: 'Thursday, October 1 · 9:00 – 10:00 AM',
           time: 'Sep 26',
@@ -245,7 +245,7 @@ export function sampleCompanies(): SampleCompany[] {
         },
         {
           id: 'meadow-security',
-          sender: 'Priya Raman',
+          sender: 'Priya',
           subject: 'Security questionnaire',
           snippet: 'Our IT contractor sent over a few questions about SSO.',
           time: 'Sep 25',
@@ -253,7 +253,7 @@ export function sampleCompanies(): SampleCompany[] {
         },
         {
           id: 'meadow-recap',
-          sender: 'Jacob Beckerman',
+          sender: 'Jacob',
           subject: 'Recap from today',
           snippet: 'Thanks for the time, Dana. Here’s what we covered.',
           time: 'Sep 22',
@@ -262,7 +262,7 @@ export function sampleCompanies(): SampleCompany[] {
         },
         {
           id: 'meadow-intro',
-          sender: 'Dana Whitfield',
+          sender: 'Dana',
           subject: 'Intro from Sam',
           snippet:
             'Sam mentioned you’re building something for studios like ours.',
@@ -278,7 +278,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 28',
           duration: '18m 40s',
           people: ['jacob', 'julia'],
-          guests: ['Dana Whitfield', 'Alex Chen'],
+          guests: ['Dana', 'Alex'],
         },
         {
           id: 'meadow-pricing-call',
@@ -286,7 +286,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 25',
           duration: '12m 4s',
           people: ['julia'],
-          guests: ['Dana Whitfield'],
+          guests: ['Dana'],
         },
         {
           id: 'meadow-design-review',
@@ -294,7 +294,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 24',
           duration: '46m 31s',
           people: ['jacob', 'teo'],
-          guests: ['Alex Chen', 'Priya Raman'],
+          guests: ['Alex', 'Priya'],
         },
         {
           id: 'meadow-intro-call',
@@ -302,7 +302,7 @@ export function sampleCompanies(): SampleCompany[] {
           time: 'Sep 22',
           duration: '31m 12s',
           people: ['jacob'],
-          guests: ['Dana Whitfield'],
+          guests: ['Dana'],
         },
       ],
       files: [

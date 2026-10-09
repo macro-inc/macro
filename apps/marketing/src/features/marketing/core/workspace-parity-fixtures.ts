@@ -3,6 +3,16 @@ import type { WorkspaceDocument } from './dummy-workspace';
 /** Fictional examples, shaped like the mixed files and sessions in Macro. */
 export const sampleAgentSessions = [
   {
+    id: 'northwind',
+    title: 'Northwind rollout',
+    time: 'Now',
+    runtime: 'Macro',
+    provider: 'claude',
+    prompt: 'What’s putting Northwind’s Friday rollout at risk?',
+    answer:
+      'The plan now reflects the phased rollout. Teo owns SSO verification and Julia owns training. The pilot stays gated until access is confirmed.',
+  },
+  {
     id: 'deploy',
     title: 'Fix the deploy pipeline',
     time: '12m',
