@@ -66,6 +66,9 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - All API/network calls live in service-clients.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
+- Reactive GraphQL reads use `createLiveQuery` for a document and
+  `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
+  [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
 - When adding or changing a feature flag, follow the `define-feature-flag` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 

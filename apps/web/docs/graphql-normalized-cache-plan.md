@@ -367,6 +367,7 @@ apps/web/tauri/graphql_cache_plugin/ # tauri commands + engine thread wrapping
 apps/web/src/lib/graphql-cache/ # JS glue
   host/                        # CacheHost interface + worker & tauri transports
   exchange/                    # urql normalizedCacheExchange
+  solid/                       # createLiveQuery, the reactive document query
   worker/                      # SharedWorker entry + worker core
 ```
 
@@ -545,6 +546,24 @@ benchmark were **skipped by decision**.
 
 ## 8. Live query API
 
+### Choosing a reactive read
+
+Use one default per data shape:
+
+| Data shape | Default | Notes |
+| --- | --- | --- |
+| GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag, REST fallback, grouping, and entity mapping. |
+
+`createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
+document and variables are arguments, other options pass through, and the result
+and live projection path are the same. Existing `createUrqlQuery` call sites are
+already live and need no migration; new single-document reads use
+`createLiveQuery`. Soup's maintained-view binding and keyed row projection are
+internal to `src/lib/queries/soup/`, not general query APIs.
+
+### Usage
+
 Use a generated document and reactive variables. The normal urql provider can
 supply the client; pass `client` when using a service-specific client.
 
@@ -557,13 +576,6 @@ const accountQuery = createLiveQuery(
 
 // Access inside a reactive computation or JSX; don't destructure store fields.
 const accounts = () => accountQuery.data?.user.emailLinks ?? [];
-
-const soupPage = createLiveQuery(
-  SoupDocument,
-  () => ({ input: { initial: { limit: 100, sortMethod: 'UPDATED_AT' } } }),
-  () => ({ client: getGraphqlSoupClient() })
-);
-const items = () => soupPage.data?.user.soup.items ?? [];
 ```
 
 `undefined` variables pause a query. Changing variables creates a separate cache
@@ -673,10 +685,11 @@ never starts a network request.
 The generic projection reflects cached GraphQL results. It does not infer server
 resolver logic, authorization, aggregates, full-text ranking, or whether an entity
 belongs in an arbitrary filtered/paginated list. Such changes need a declared
-domain collection policy or server revalidation. An explicit Soup page above
-retains its server-provided membership; the existing `createSoupLiveQuery` source
-adds Soup's local membership, ordering, pagination and Mail policy through its
-predicate adapter. That policy remains outside generic cache-core.
+domain collection policy or server revalidation. A Soup page read as a plain
+document would retain its server-provided membership, which is why Soup lists
+use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
+and Mail policy through its predicate adapter. That policy remains outside
+generic cache-core.
 
 Network responses must provide the schema's identity fields (usually `id`, and
 `__typename` for abstract types) for normalization. They are not automatically

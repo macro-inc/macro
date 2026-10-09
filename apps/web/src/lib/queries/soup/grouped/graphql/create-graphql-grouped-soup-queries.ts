@@ -1,6 +1,6 @@
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
-import { createKeyedProjection } from '@app/lib/urql-solid/create-keyed-projection';
 import type { EntityData } from '@entity';
+import { createKeyedProjection } from '@queries/soup/create-keyed-projection';
 import {
   makeGraphqlGroupedSoupContinuationInput,
   makeGraphqlGroupedSoupInput,

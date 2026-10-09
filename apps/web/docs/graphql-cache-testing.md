@@ -54,7 +54,8 @@ nix develop --command env -u SQLX_OFFLINE cargo test -p cache-turso
 From `apps/web`:
 
 ```sh
-nix develop --command bunx vitest run src/lib/graphql-cache src/lib/urql-solid src/lib/queries/properties
+nix develop --command bunx vitest run src/lib/graphql-cache src/lib/urql-solid src/lib/queries/properties \
+  src/lib/queries/soup/graphql/create-predicate-query.test.ts src/lib/queries/soup/create-keyed-projection.test.ts
 ```
 
 By default, Proptest generates 256 sequences and fast-check generates 250. The

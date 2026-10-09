@@ -26,6 +26,43 @@ interface Pending {
   reject: (error: Error) => void;
 }
 
+/**
+ * The worker's script never ran.
+ *
+ * A dedicated worker reports a script it could not load as an `error` event
+ * carrying no message at all; one that loaded and then threw reports what it
+ * threw, and anything failing *inside* the worker comes back as an ordinary
+ * `{ok: false}` reply. So an empty message is a precise signal, and it has
+ * one overwhelmingly likely cause: this tab is running a build whose assets
+ * are no longer served. Deploys replace the content-hashed bundle and the
+ * worker chunk is fetched lazily, on the first fold, which is often after
+ * the build that owns it has been superseded.
+ *
+ * Named rather than folded into a generic failure so it groups on its own in
+ * error tracking: the fix for it is a deploy/retention question, not a bug
+ * in the fold.
+ */
+export class AgentFoldWorkerUnavailable extends Error {
+  constructor(readonly workerUrl: string) {
+    super(
+      `agent fold worker script could not be loaded (${workerUrl}) - this tab is running a build that is no longer served; reloading will pick up the current one`
+    );
+    this.name = 'AgentFoldWorkerUnavailable';
+  }
+}
+
+/**
+ * What an `error` event from the worker means, as precisely as the browser
+ * lets us put it. The empty-message case is {@link AgentFoldWorkerUnavailable};
+ * anything else threw while starting up and says so itself.
+ */
+function workerStartupFailure(url: string, message: string): Error {
+  if (!message) return new AgentFoldWorkerUnavailable(url);
+  const error = new Error(`agent fold worker failed to start: ${message}`);
+  error.name = 'AgentFoldWorkerStartupFailed';
+  return error;
+}
+
 let worker: Worker | undefined;
 const pending = new Map<number, Pending>();
 let nextId = 0;
@@ -37,9 +74,10 @@ let nextId = 0;
 function ensureWorker(): Worker {
   if (worker) return worker;
 
-  const started = new Worker(new URL('./fold.worker.ts', import.meta.url), {
-    type: 'module',
-  });
+  // Held so a failure can name the file that did not load: its content hash
+  // identifies the build this tab is running, which is the whole diagnosis.
+  const url = new URL('./fold.worker.ts', import.meta.url);
+  const started = new Worker(url, { type: 'module' });
 
   started.addEventListener('message', (event: MessageEvent<FoldResponse>) => {
     const response = event.data;
@@ -55,7 +93,9 @@ function ensureWorker(): Worker {
 
   started.addEventListener('error', (event) => {
     // The worker itself failed, so nothing in flight will ever be answered.
-    const error = new Error(`agent fold worker failed: ${event.message}`);
+    // One error event takes down every fold in flight, which is why a single
+    // failure reports as many: the count is concurrent folds, not causes.
+    const error = workerStartupFailure(url.href, event.message ?? '');
     for (const waiting of pending.values()) waiting.reject(error);
     pending.clear();
     // Dropped so the next call starts a fresh one rather than waiting on a
