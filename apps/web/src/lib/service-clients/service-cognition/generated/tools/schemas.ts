@@ -9970,6 +9970,7 @@ export const DescribeCodeTools = z
   .strict();
 
 export const CodeToolsDescription = z.object({
+  sdk_guide: z.union([z.string(), z.null()]).optional(),
   instructions: z.string(),
   tools: z.array(
     z.object({
@@ -10017,6 +10018,30 @@ export const ExecutionReceipt = z.object({
   }),
   result: z.any().optional(),
   error: z.union([z.string(), z.null()]).optional(),
+});
+
+export const ApplyDocumentOperations = z
+  .object({
+    documentId: z.string(),
+    expectedRevision: z.string(),
+    operations: z.array(z.any()),
+  })
+  .strict();
+
+export const DocumentUpdate = z.object({
+  documentId: z.string(),
+  revision: z.string(),
+  applied: z.boolean(),
+});
+
+export const ReadDocumentState = z.object({ documentId: z.string() }).strict();
+
+export const DocumentState = z.object({
+  documentId: z.string(),
+  revision: z.string(),
+  xml: z.string(),
+  state: z.any(),
+  nodeIds: z.array(z.string()),
 });
 
 export const ReadThread = z.object({

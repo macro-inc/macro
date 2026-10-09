@@ -91,7 +91,7 @@ impl ServerHandler for InternalTools {
         );
         if self.code_mode.is_some() {
             info.instructions.as_mut().expect("instructions are set").push_str(
-                " For multi-step Macro workflows, use macro_internal.DescribeCodeTools to discover SDK methods, then macro_internal.ExecuteCode to await them in TypeScript and return a compact JSON result. Inner calls retain their Macro components. Human-interactive tools and subagents remain direct tool calls.",
+                " For multi-step Macro workflows, use macro_internal.DescribeCodeTools to discover SDK methods and the curated documents/ai/templates namespaces. Inside code, await sdk.help('documents.editor') for the full editing library or sdk.help('tools') for the callable catalog. Use macro_internal.ExecuteCode to await them in TypeScript and return a compact JSON result. Inner calls retain their Macro components. Human-interactive tools and subagents remain direct tool calls.",
             );
         }
         info

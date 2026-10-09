@@ -10,7 +10,9 @@
 		"deploy-dev": "bun run prebuild && wrangler deploy --env dev",
 		"deploy-prod": "bun run prebuild && wrangler deploy --env prod",
 		"test:spreadsheet": "vitest run --config src/spreadsheet/vitest.config.ts",
-		"test:spreadsheet:integration": "vitest run --config src/spreadsheet/integration.config.ts"
+		"test:spreadsheet:integration": "vitest run --config src/spreadsheet/integration.config.ts",
+		"generate:code-sdk": "bun scripts/generate-code-sdk.ts",
+		"test:code-mode": "bun scripts/generate-code-sdk.ts --check && vitest run --config src/code-mode/vitest.config.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.85",
@@ -18,24 +20,25 @@
 		"@ai-sdk/google": "^3.0.83",
 		"@ai-sdk/openai": "^3.0.73",
 		"@hono/zod-validator": "^0.8.0",
+		"@ironcalc/wasm": "workspace:*",
 		"@loro-mirror/core": "workspace:*",
 		"@macro-inc/collaboration": "workspace:*",
 		"@macro-inc/lexical-core": "workspace:*",
 		"@macro-inc/observability": "workspace:*",
+		"@macro-inc/spreadsheet": "workspace:*",
 		"ai": "^6.0.207",
 		"ai-fallback": "2",
 		"bitf": "^1.0.2",
 		"envsafe": "^2.0.3",
 		"flat": "^6.0.1",
+		"handlebars": "4.7.9",
 		"hono": "^4.6.20",
 		"loro-crdt": "catalog:",
 		"p-queue": "^9.3.0",
 		"quickjs-emscripten": "^0.31.0",
 		"random-js": "^2.1.0",
 		"yargs": "^18.0.0",
-		"zod": "^4.4.3",
-		"@macro-inc/spreadsheet": "workspace:*",
-		"@ironcalc/wasm": "workspace:*"
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@types/node": "^25.9.3",

@@ -297,7 +297,7 @@ describe('deterministic spreadsheet worker runtime', () => {
         runSpreadsheetRequest({ action: 'read' }, storage, calculator, signal())
       ).rejects.toMatchObject({
         status,
-        message: 'You do not have the required access to this spreadsheet.',
+        message: 'You do not have the required access to this document.',
       });
       expect(fetcher).toHaveBeenCalledOnce();
     }

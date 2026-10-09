@@ -5,6 +5,9 @@ pub mod activity;
 #[cfg(feature = "ai_tools")]
 pub mod ai_editing;
 pub mod branch_name;
+/// Deterministic markdown state access and revision-checked editing.
+#[cfg(feature = "ai_tools")]
+pub mod code_editing;
 /// A document's comment threads, read through the shared message service.
 #[cfg(feature = "ai_tools")]
 pub mod comments;

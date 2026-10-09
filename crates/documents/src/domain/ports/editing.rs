@@ -72,6 +72,15 @@ pub enum CommentMarkPlacement {
 /// Port for applying AI-driven edits to a document via the editing worker.
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
+    /// Read or apply deterministic operations to a permission-scoped markdown document.
+    #[cfg(feature = "ai_tools")]
+    fn code_document(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        request: &crate::domain::code_editing::CodeDocumentRequest,
+    ) -> impl Future<Output = anyhow::Result<crate::domain::code_editing::CodeDocumentResponse>> + Send;
+
     /// Run a deterministic spreadsheet operation with a scoped document token.
     #[cfg(feature = "ai_tools")]
     fn spreadsheet(

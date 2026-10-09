@@ -678,6 +678,17 @@ server exposes `DescribeCodeTools` and `ExecuteCode`. Ask the agent to discover
 SDK methods, run a TypeScript body using `await sdk.ToolName(input)`, and return a
 small JSON result. Independent calls may use `Promise.all`.
 
+The curated SDK also provides `sdk.documents.open({ documentId })`,
+`sdk.ai.generateText` / `generateObject`, and local Handlebars through
+`sdk.templates.render`. `await sdk.help()` lists these namespaces;
+`sdk.help('documents.editor')` returns the real editing library reference, and
+`sdk.help('tools')` / `sdk.help('ExactToolName')` discover registered tools and
+their schemas from inside code. Document handles expose the full Lexical state,
+readable XML with durable IDs, and the existing `DocumentEditor` as `doc.editor`.
+Queue edits through the editor, then `await doc.save()` once. This supports Macro
+markdown documents; a stale revision rejects the whole batch. Read again before
+retrying. Directly changing `doc.state` does not save anything.
+
 The transcript shows **Run code** while execution is in flight. Inner activity
 appears after the awaited call finishes: its recorded tool calls use the ordinary
 Macro components, and `DisplayResults` remains visible as a dashboard. Expand
@@ -692,6 +703,17 @@ must retain results from calls that already finished; writes are not rolled back
 Interactive tools such as sending email and creating a calendar event still use
 their ordinary direct approval/review flow. In a shared session, code-mode calls
 also obey the session owner's normal tool approvals.
+
+To verify the curated SDK, create and open a small markdown document first. Ask
+the agent to explore `sdk.help('documents.editor')`, open that document, generate
+one short sentence with `sdk.ai.generateText`, render it into a Handlebars
+template, append it through `doc.editor`, and save. Confirm the transcript's Read
+and Edit document cards link to the document, then open and reload it to verify
+the saved content. Check an independent `generateObject` call returns a validated
+object. Concurrent independent calls use `Promise.all`; each remote call still
+passes the owner's approval and admission checks. Stop prevents further code
+execution; already dispatched generation may finish within 28 seconds to record
+actual usage. Completed document saves remain committed.
 
 ## Start a doc-scoped chat
 

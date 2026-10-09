@@ -531,6 +531,15 @@ pub(in crate::inbound::toolset) struct AddedCommentMark {
 }
 
 impl EditingWorkerService for FakeEditingWorker {
+    async fn code_document(
+        &self,
+        _: &str,
+        _: &DocumentPermissionToken,
+        _: &crate::domain::code_editing::CodeDocumentRequest,
+    ) -> anyhow::Result<crate::domain::code_editing::CodeDocumentResponse> {
+        panic!("unexpected code document call")
+    }
+
     async fn spreadsheet(
         &self,
         _document_id: &str,

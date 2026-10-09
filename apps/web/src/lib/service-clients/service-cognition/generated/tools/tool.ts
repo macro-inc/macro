@@ -9,6 +9,10 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  ApplyDocumentOperations: {
+    call: types.ApplyDocumentOperations;
+    response: types.DocumentUpdate;
+  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -250,6 +254,10 @@ type ToolParserMap = {
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
+  ReadDocumentState: {
+    call: types.ReadDocumentState;
+    response: types.DocumentState;
+  };
   ReadIllustratorDocument: {
     call: types.ReadIllustratorDocument;
     response: types.ReadIllustratorDocumentResponse;
@@ -363,6 +371,10 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  ApplyDocumentOperations: {
+    call: schemas.ApplyDocumentOperations,
+    response: schemas.DocumentUpdate,
+  },
   BashCodeExecution: {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
@@ -631,6 +643,10 @@ const toolParserMap = {
     call: schemas.ReadDesign,
     response: schemas.ReadDesignResponse,
   },
+  ReadDocumentState: {
+    call: schemas.ReadDocumentState,
+    response: schemas.DocumentState,
+  },
   ReadIllustratorDocument: {
     call: schemas.ReadIllustratorDocument,
     response: schemas.ReadIllustratorDocumentResponse,
@@ -761,6 +777,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  ApplyDocumentOperations: {
+    call: types.ApplyDocumentOperations;
+    response: types.DocumentUpdate;
+  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -1002,6 +1022,10 @@ type ToolDataMap = {
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
+  ReadDocumentState: {
+    call: types.ReadDocumentState;
+    response: types.DocumentState;
+  };
   ReadIllustratorDocument: {
     call: types.ReadIllustratorDocument;
     response: types.ReadIllustratorDocumentResponse;

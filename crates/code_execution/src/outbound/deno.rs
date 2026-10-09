@@ -22,6 +22,7 @@ use tokio_util::{
 };
 
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
+const SDK: &str = include_str!("deno/sdk.mjs");
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
 
@@ -115,6 +116,9 @@ impl DenoRunner {
         .map_err(internal)?;
         let bootstrap = root.join("bootstrap.mjs");
         tokio::fs::write(&bootstrap, BOOTSTRAP)
+            .await
+            .map_err(internal)?;
+        tokio::fs::write(root.join("sdk.mjs"), SDK)
             .await
             .map_err(internal)?;
 

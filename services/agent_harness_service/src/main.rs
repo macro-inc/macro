@@ -557,17 +557,27 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(agent_code_mode::domain::CodeModeService::new(
             code_executor,
             Arc::new(code_mode::ApprovedCodeTools::new(
-                Arc::new(agent_code_mode::outbound::tools::ToolsetDispatcher::new(
-                    ai_tools::tools_for(ai_tools::AiHost::AgentSession).toolset,
-                    tool_context.clone(),
-                    |base, identity| {
-                        let mut context = base.clone().with_actor(identity.bot);
-                        context.usage_context = ai_usage::UsageContext::new(
-                            ai_usage::AiFeature::AgentSession,
-                            identity.owner.clone(),
-                        );
-                        context
-                    },
+                Arc::new(agent_code_mode::domain::SdkTools::new(
+                    Arc::new(agent_code_mode::outbound::tools::ToolsetDispatcher::new(
+                        ai_tools::code_mode_tools(),
+                        tool_context.clone(),
+                        |base, identity| {
+                            let mut context = base.clone().with_actor(identity.bot);
+                            context.usage_context = ai_usage::UsageContext::new(
+                                ai_usage::AiFeature::AgentSession,
+                                identity.owner.clone(),
+                            );
+                            context
+                        },
+                    )),
+                    agent_code_mode::domain::ai::CodeAiService::new(
+                        Arc::new(agent_code_mode::outbound::ai_worker::AiWorker::new(
+                            macro_service_urls::AiEditingWorkerUrl::new()?.to_string(),
+                            config.internal_api_key.clone(),
+                        )),
+                        admission.clone(),
+                        recorder.clone(),
+                    ),
                 )),
                 owner_tool_gate.clone(),
             )),

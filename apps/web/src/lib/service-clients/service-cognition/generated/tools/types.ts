@@ -11197,6 +11197,10 @@ export interface DescribeCodeTools {
  */
 export interface CodeToolsDescription {
   /**
+   * Curated namespaces and runnable examples; explore details with sdk.help(topic).
+   */
+  sdk_guide?: string | null;
+  /**
    * How to execute methods and interpret discovery results.
    */
   instructions: string;
@@ -11257,6 +11261,76 @@ export interface ExecutionReceipt {
    * Safe failure text, when execution did not succeed.
    */
   error?: string | null;
+}
+/**
+ * Apply up to 200 shared DocumentEditor operations atomically against a read revision. In code use doc.editor methods then await doc.save(). Stale revisions or invalid operations change nothing. Never blindly retry a write.
+ */
+export interface ApplyDocumentOperations {
+  /**
+   * Macro markdown document ID.
+   */
+  documentId: string;
+  /**
+   * Revision obtained by ReadDocumentState.
+   */
+  expectedRevision: string;
+  /**
+   * Use DocumentEditor to construct operations; see sdk.help("documents.editor").
+   */
+  operations: unknown[];
+}
+/**
+ * A batch acknowledged by the sync service.
+ */
+export interface DocumentUpdate {
+  /**
+   * Document changed by this batch.
+   */
+  documentId: string;
+  /**
+   * Committed revision.
+   */
+  revision: string;
+  /**
+   * Whether this request added changes.
+   */
+  applied: boolean;
+}
+/**
+ * Read complete Macro markdown state, XML, durable node IDs and opaque revision. In code use sdk.documents.open({documentId}); explore sdk.help("documents").
+ */
+export interface ReadDocumentState {
+  /**
+   * Macro markdown document ID.
+   */
+  documentId: string;
+}
+/**
+ * Exact state at the revision used by a later edit.
+ */
+export interface DocumentState {
+  /**
+   * Authorized document.
+   */
+  documentId: string;
+  /**
+   * Opaque sync revision; do not construct or modify it.
+   */
+  revision: string;
+  /**
+   * Readable content with durable node IDs.
+   */
+  xml: string;
+  /**
+   * Complete serialized Lexical state.
+   */
+  state: {
+    [k: string]: unknown;
+  };
+  /**
+   * IDs accepted by the editing library.
+   */
+  nodeIds: string[];
 }
 /**
  * Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.

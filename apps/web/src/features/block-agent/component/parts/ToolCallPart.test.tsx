@@ -1493,6 +1493,24 @@ describe('code execution results', () => {
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
   });
 
+  it('loads server-accepted UUIDs with reserved variant bits', () => {
+    const id = '35e6f7a8-b9c0-4d1e-2f3a-4b5c6d7e8f90';
+    const part = codePart('macro_internal');
+    if (part.detail.kind === 'other') {
+      part.detail.input = { execution_id: id, source: 'return { count: 1 };' };
+      part.detail.result = null;
+    }
+    codeQuery.record = { ...codeQuery.record!, executionId: id };
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', id);
+    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+    expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
+      'Failed'
+    );
+  });
+
   it('does not let an external MCP server select the code-mode record view', () => {
     codeQuery.read.mockClear();
     const rendered = render(() => (
