@@ -110,6 +110,17 @@ export function parseDatabaseQueries(text: string): string {
   });
 }
 
+/**
+ * An agent's steps are not prose: a preview of its reply quotes what it
+ * wrote, not every command it ran.
+ */
+export function parseAgentActivities(text: string): string {
+  return text.replace(
+    /<m-agent-activity>.*?<\/m-agent-activity>(?:\r?\n)*/gs,
+    ''
+  );
+}
+
 /** A Cursor `<system_notification …>` block reads as its summary line. */
 export function parseCursorSystemNotifications(text: string): string {
   return text.replace(
@@ -233,9 +244,11 @@ export function stripAgentContext(text: string): string {
  * - Links: text (fallback to url)
  * - Reply targets: displayText
  * - Cursor system notifications: the summary between the tags
+ * - Agent activity: nothing; the steps of a reply are not its text
  */
 export function markdownToPlainText(markdown: string): string {
   const transforms: Array<(text: string) => string> = [
+    parseAgentActivities,
     parseUserMentions,
     parseContactMentions,
     parseDateMentions,

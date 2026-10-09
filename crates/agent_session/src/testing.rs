@@ -259,9 +259,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
-        self.find(id).await?.ok_or_else(|| {
-            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
-        })
+        self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {

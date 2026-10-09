@@ -1151,6 +1151,8 @@ describe('AgentSession', () => {
           parts: [{ kind: 'text', text: 'Hi' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
         },
         {
           agentSessionId: SESSION,
@@ -1163,6 +1165,8 @@ describe('AgentSession', () => {
           ],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
         },
       ]);
       const [span] = renderSpans();
@@ -1288,6 +1292,8 @@ describe('AgentSession', () => {
             parts: [{ kind: 'text', text: 'hi' }],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
           },
         },
         {
@@ -1300,6 +1306,8 @@ describe('AgentSession', () => {
             parts: [{ kind: 'thought', text: 'thinking' }],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
           },
         },
       ] satisfies FoldedStreamEvent[]);
@@ -1351,6 +1359,8 @@ describe('AgentSession', () => {
             ],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
           },
         },
       ] satisfies FoldedStreamEvent[]);

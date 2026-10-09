@@ -4,6 +4,7 @@
 //! is what the domain asked of it and when.
 
 use super::*;
+mod direct_messages;
 use crate::domain::model::{
     HeldToolCall, ReplyOutcome, ResolvedReply, TaskAssignmentOrigin, ToolApprovalChange,
 };
@@ -142,6 +143,50 @@ fn says(agent: &FakeAgent, text: &str) {
                     "sessionUpdate": "agent_message_chunk",
                     "content": {"type": "text", "text": text}
                 }
+            }),
+        )
+        .expect("notification params are an object"),
+    );
+}
+
+/// Wait until `condition` holds; signals reach the harness asynchronously.
+async fn eventually(what: &str, condition: impl Fn() -> bool) {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !condition() {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("timed out waiting until {what}"));
+}
+
+fn runs(agent: &FakeAgent, id: &str, status: &str, command: &str) {
+    agent.sends_raw(
+        RawJsonRpcMessage::notification(
+            "session/update".to_owned(),
+            serde_json::json!({
+                "sessionId": "acp-test",
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": id,
+                    "title": "Bash",
+                    "kind": "execute",
+                    "status": status,
+                    "rawInput": {"command": command}
+                }
+            }),
+        )
+        .expect("notification params are an object"),
+    );
+}
+
+fn finishes(agent: &FakeAgent, id: &str) {
+    agent.sends_raw(
+        RawJsonRpcMessage::notification(
+            "session/update".to_owned(),
+            serde_json::json!({
+                "sessionId": "acp-test",
+                "update": {"sessionUpdate": "tool_call_update", "toolCallId": id, "status": "completed"}
             }),
         )
         .expect("notification params are an object"),
@@ -631,4 +676,70 @@ async fn task_assignment_links_the_session_without_copying_its_answer_to_discuss
         one_resolved(&announcer).outcome,
         ReplyOutcome::Answered("Here is the requested summary.".to_owned())
     );
+}
+
+#[tokio::test]
+async fn a_thread_reply_grows_in_place_with_its_steps_and_resolves_with_them() {
+    use agent_fold::domain::model::SegmentKind;
+    let ((service, _, containers, announcer, _), turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = chat_session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+    let pending = announcer.announced_messages()[0].message_id;
+
+    says(&agent, "Looking into it.");
+    runs(&agent, "t1", "in_progress", "rg TODO");
+    eventually("the pending reply shows the passage and its steps", || {
+        announcer
+            .presented()
+            .iter()
+            .any(|reply| reply.segments.len() == 2)
+    })
+    .await;
+    assert!(
+        announcer
+            .presented()
+            .iter()
+            .all(|reply| !reply.segments.is_empty()),
+        "the pending reply is not rewritten before there is something to add"
+    );
+    let grown = announcer.presented().last().unwrap().clone();
+    assert_eq!(grown.message_id, pending, "the thread reply grows in place");
+    assert!(grown.pending && grown.link && !grown.notify);
+    assert_eq!(
+        grown
+            .segments
+            .iter()
+            .map(|s| s.segment.kind)
+            .collect::<Vec<_>>(),
+        [SegmentKind::Prose, SegmentKind::Activity]
+    );
+    assert!(
+        announcer
+            .typed()
+            .iter()
+            .any(|typing| typing.active && typing.thread_id.is_some()),
+        "the bot types in the thread"
+    );
+
+    finishes(&agent, "t1");
+    says(&agent, "Found three.");
+    agent.completes_prompt().await;
+    turns.lifecycle_published(4).await;
+    let resolved = one_resolved(&announcer);
+    assert_eq!(resolved.message_id, pending);
+    assert_eq!(
+        resolved
+            .segments
+            .iter()
+            .map(|s| (s.segment.kind, s.text.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            (SegmentKind::Prose, Some("Looking into it.")),
+            (SegmentKind::Activity, None),
+            (SegmentKind::Prose, Some("Found three.")),
+        ]
+    );
+    assert!(matches!(announcer.typed().last(), Some(typing) if !typing.active));
 }

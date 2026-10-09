@@ -4,7 +4,7 @@ use agent_runtime_protocol::domain::action::{AgentAction, PromptAttachment};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use super::AnnounceOrigin;
+use super::{AnnounceOrigin, ReplyPlacement};
 
 #[cfg(test)]
 mod test;
@@ -12,6 +12,9 @@ mod test;
 /// Where a mention happened.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
+    /// Whether the reply belongs in a thread or the private DM timeline.
+    #[serde(default, skip_serializing_if = "ReplyPlacement::is_thread")]
+    pub reply_placement: ReplyPlacement,
     /// Channel or document the mentioning message was posted in.
     pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into: the mention's thread root.
@@ -86,12 +89,14 @@ impl SessionOrigin {
     pub(crate) fn announcement(&self) -> AnnounceOrigin {
         match self {
             Self::Mention(origin) => AnnounceOrigin {
+                reply_placement: origin.reply_placement,
                 reuse_origin_message: false,
                 parent: origin.parent.clone(),
                 thread_id: origin.thread_id,
                 message_id: origin.message_id,
             },
             Self::TaskAssignment(origin) => AnnounceOrigin {
+                reply_placement: ReplyPlacement::Thread,
                 reuse_origin_message: true,
                 parent: origin.parent.clone(),
                 thread_id: origin.discussion_id,

@@ -2,6 +2,7 @@ export * from './constants';
 export * from './decoratorRegistry';
 export * from './domFactoryRegistry';
 export * from './node-list';
+export * from './nodes/AgentActivityNode';
 export * from './nodes/AgentContextNode';
 export * from './nodes/AgentSessionMentionNode';
 export * from './nodes/AwaitNode';

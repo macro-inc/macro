@@ -7,6 +7,7 @@
 
 import type { ApiChannelListParticipant } from './apiChannelListParticipant';
 import type { ApiChannelListType } from './apiChannelListType';
+import type { ApiChannelWithLatestAgentDm } from './apiChannelWithLatestAgentDm';
 import type { ApiChannelWithLatestFrecencyScore } from './apiChannelWithLatestFrecencyScore';
 import type { ApiChannelWithLatestInteractedAt } from './apiChannelWithLatestInteractedAt';
 import type { ApiChannelWithLatestLatestMessage } from './apiChannelWithLatestLatestMessage';
@@ -20,6 +21,7 @@ import type { ApiChannelWithLatestViewedAt } from './apiChannelWithLatestViewedA
  * Channel list response item.
  */
 export interface ApiChannelWithLatest {
+  agent_dm?: ApiChannelWithLatestAgentDm;
   /** Whether team members automatically join the channel. */
   auto_join_team: boolean;
   /** Channel type. */

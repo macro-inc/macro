@@ -13,6 +13,8 @@ use messages::domain::models::Message;
 
 fn announcement() -> SessionAnnouncement {
     SessionAnnouncement {
+        reply_message_id: None,
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         bot_id: BotId::TEST_A,
         is_coding: true,
@@ -112,6 +114,7 @@ fn markdown(body: AgentChatReplyBody) -> String {
     match body {
         AgentChatReplyBody::Markdown { markdown } => markdown,
         AgentChatReplyBody::Pending => panic!("expected prose, got the spinner"),
+        AgentChatReplyBody::Segments { .. } => panic!("expected prose, got segments"),
     }
 }
 
@@ -129,6 +132,7 @@ fn every_reply_names_its_session() {
         AgentChatReply {
             session_id: "00000000-0000-0000-0000-00000000000a".to_owned(),
             body: AgentChatReplyBody::Pending,
+            link: None,
         }
     );
 }
@@ -419,6 +423,8 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
             origin_parent: parent,
             triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
             outcome: ReplyOutcome::Answered("Your emails: <m-document-mention/>".to_owned()),
+            turn: agent_fold::domain::model::TurnId(0),
+            segments: Vec::new(),
         })
         .await
         .expect("the pointer replaces the spinner");

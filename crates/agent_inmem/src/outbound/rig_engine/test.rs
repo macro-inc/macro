@@ -9,6 +9,40 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use std::sync::Mutex;
 
+#[tokio::test]
+async fn a_runtime_panic_is_reported_as_failure_instead_of_an_empty_success() {
+    let (parts, mut receiver) = mpsc::channel(2);
+    forward_turn_result(async { panic!("provider initialization failed") }, &parts).await;
+    drop(parts);
+    let error = receiver.recv().await.unwrap().unwrap_err();
+    assert!(error.to_string().contains("runtime ended unexpectedly"));
+    assert!(receiver.recv().await.is_none());
+}
+
+#[tokio::test]
+async fn a_failure_after_partial_output_is_still_forwarded_to_the_consumer() {
+    let (parts, mut receiver) = mpsc::channel(2);
+    forward_turn_result(
+        async {
+            parts
+                .send(Ok(StreamPart::Content("Partial answer".into())))
+                .await
+                .unwrap();
+            Err(AgentError::Other(anyhow::anyhow!("provider unavailable")))
+        },
+        &parts,
+    )
+    .await;
+    assert!(matches!(
+        receiver.recv().await.unwrap(),
+        Ok(StreamPart::Content(_))
+    ));
+    assert_eq!(
+        receiver.recv().await.unwrap().unwrap_err().to_string(),
+        "provider unavailable"
+    );
+}
+
 /// A stand-in for the toolset prompt, short enough to assert on positionally.
 const TOOLS: &str = "TOOLS";
 
@@ -282,6 +316,14 @@ async fn opening_without_a_verdict_is_dropped() {
         .await
         .unwrap();
     drop(lines);
+
+    assert!(opener::verdict(&mut receiver).await.is_none());
+}
+
+#[tokio::test]
+async fn a_summary_turns_closed_opener_has_no_verdict() {
+    // A summary turn races nothing: its opener is closed before it speaks.
+    let mut receiver = mpsc::channel::<String>(1).1;
 
     assert!(opener::verdict(&mut receiver).await.is_none());
 }

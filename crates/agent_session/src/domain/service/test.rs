@@ -2337,12 +2337,21 @@ mod fold_signals {
             signals.extend(logs.append(frame).await.expect("append succeeds").signals);
         }
 
+        // Progress is reported while the turn runs; its end comes once, last.
+        let (ends, progress): (Vec<_>, Vec<_>) = signals
+            .iter()
+            .partition(|signal| !matches!(signal, TurnSignal::Progressed { .. }));
+        assert!(!progress.is_empty(), "{signals:#?}");
         assert!(
             matches!(
-                signals.as_slice(),
+                ends.as_slice(),
                 [TurnSignal::TurnEnded { stop: FoldStop::EndTurn, last_text: Some(text), .. }]
                     if !text.is_empty()
             ),
+            "{signals:#?}"
+        );
+        assert!(
+            matches!(signals.last(), Some(TurnSignal::TurnEnded { .. })),
             "{signals:#?}"
         );
     }

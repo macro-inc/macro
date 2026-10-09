@@ -14,6 +14,8 @@ function message(turn: number, parts: MessagePart[]): FoldedMessage {
     agentSessionId: 'session',
     requestId: null,
     pending: false,
+    segments: [],
+    phase: null,
     turn,
     author: { kind: 'agent' },
     parts,

@@ -64,6 +64,7 @@ async fn typing_only_reaches_the_parent_transport() {
         .publish(event(MessageChange::Typing {
             thread_id: None,
             active: true,
+            agent: None,
         }))
         .await
         .unwrap();

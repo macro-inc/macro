@@ -101,6 +101,7 @@ fn open_command() -> OpenSession {
             mcp_servers: AgentMcpServers::OwnerConnections,
         },
         origin: SessionOrigin::Mention(MentionOrigin {
+            reply_placement: Default::default(),
             parent: MessageParent::Channel(macro_uuid::generate_uuid_v7()),
             thread_id,
             message_id: thread_id,
@@ -134,6 +135,7 @@ fn forward_message(content: &str) -> DeliverAction {
         AgentAction::prompt(content),
         Some(staff_sender()),
         Some(AnnounceOrigin {
+            reply_placement: Default::default(),
             reuse_origin_message: false,
             parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xf0)),
             thread_id: macro_uuid::Uuid::from_u128(0xf1),
@@ -473,6 +475,24 @@ fn harness_with_ports(
     coding_agents: impl crate::domain::ports::CodingAgentSource,
     mentions: PromptMentionsMock,
 ) -> (TestBench, TurnSignals) {
+    harness_with_ports_and_journal(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        coding_agents,
+        mentions,
+        None,
+    )
+}
+
+fn harness_with_ports_and_journal(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    mentions: PromptMentionsMock,
+    journal: Option<Arc<dyn crate::domain::dm_turns::DmTurnStore>>,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
@@ -485,6 +505,7 @@ fn harness_with_ports(
     let lifecycle = RecordingLifecyclePublisher::new();
     let notifier = NotifierMock::new();
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
@@ -523,6 +544,10 @@ fn harness_with_ports(
         mentions,
         notifier.clone(),
     );
+    let service = match journal {
+        Some(journal) => service.with_dm_turns(journal),
+        None => service,
+    };
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
         harness: service.clone(),
@@ -562,6 +587,7 @@ fn harness_sharing_repo(repo: InMemoryAgentSessionRepo) -> TestHarness {
     let lifecycle = RecordingLifecyclePublisher::new();
     let runtimes = RuntimeRegistry::new();
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo),
@@ -1155,6 +1181,7 @@ async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
             [DeclinedMention {
                 bot_id,
                 origin: AnnounceOrigin {
+                    reply_placement: Default::default(),
                     reuse_origin_message: false,
                     parent: origin.parent,
                     thread_id: origin.thread_id,
@@ -3209,6 +3236,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
     let containers = MockContainerManager::new();
     let inmem_bot = BotId::TEST_B;
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
@@ -3394,6 +3422,7 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: bot,
                 origin: AnnounceOrigin {
+                    reply_placement: Default::default(),
                     reuse_origin_message: false,
                     parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
@@ -3435,6 +3464,7 @@ async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
                 origin: AnnounceOrigin {
+                    reply_placement: Default::default(),
                     reuse_origin_message: false,
                     parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
@@ -3772,6 +3802,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
     let claim = claim_as_peer(&repo, id).await;
     let forwarder = RecordingForwarder::default();
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
@@ -3825,6 +3856,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
     let runtimes = TestConnections::new(MirrorBindings, RuntimeRegistry::new());
     let forwarder = RecordingForwarder::default();
     let service = AgentHarnessService::new(
+        None,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),

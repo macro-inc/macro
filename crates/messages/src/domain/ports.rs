@@ -289,7 +289,39 @@ pub enum MessageChange {
         thread_id: Option<Uuid>,
         /// Whether the user is currently typing.
         active: bool,
+        /// Present when an agent session is typing through the bot that
+        /// speaks for it. Names the session, so a viewer who can read it can
+        /// show the turn live in place of the bare indicator.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent: Option<AgentTyping>,
     },
+}
+
+/// An agent session typing through its bot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct AgentTyping {
+    /// The session whose turn the bot is speaking for.
+    pub session_id: Uuid,
+    /// What the agent is doing. Deliberately coarse: a typing event reaches
+    /// everyone in the conversation, and which tool runs on what is for
+    /// viewers who can read the session itself.
+    pub phase: AgentTypingPhase,
+}
+
+/// What a typing agent is doing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum AgentTypingPhase {
+    /// Working out what to do, or between steps.
+    Thinking,
+    /// Writing a reply.
+    Writing,
+    /// Using a tool.
+    Working,
+    /// Waiting on someone to answer a question or approve an action.
+    Waiting,
 }
 
 /// Persisted reaction state and whether this operation changed membership.

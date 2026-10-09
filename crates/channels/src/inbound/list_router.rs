@@ -254,6 +254,9 @@ impl ApiChannelListParticipant {
 /// Channel list response item.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApiChannelWithLatest {
+    /// Persona identity when this is the viewer's private agent DM.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_dm: Option<crate::domain::agent_dm::AgentDmProfile>,
     /// Channel id.
     pub id: Uuid,
     /// Channel name.
@@ -303,6 +306,7 @@ impl ApiChannelWithLatest {
         let ch = ApiChannelListItem::new_from_domain(value.channel.channel);
         let latest = ApiLatestMessage::new_from_domain(value.latest_message);
         Self {
+            agent_dm: value.agent_dm,
             id: ch.id,
             name: ch.name,
             channel_type: ch.channel_type,

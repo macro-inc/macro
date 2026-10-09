@@ -1,5 +1,7 @@
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+#[cfg(feature = "ports")]
+pub mod agent_dm;
 /// Kafka event models for the `macro.channels` topic.
 pub mod broker_events;
 /// Direct-message identity and batch commands.

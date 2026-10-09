@@ -28,6 +28,8 @@ anyhow = { workspace = true }
 axum = { workspace = true, features = ["ws"] }
 base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
+bots = { path = "../bots", default-features = false, features = ["ports"] }
+channels = { path = "../channels", default-features = false, features = ["ports"] }
 harness_id = { path = "../harness_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
@@ -82,7 +84,11 @@ utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-channels = { path = "../channels", default-features = false }
+entity_registry = { path = "../entity_registry/entity_registry" }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
+macro_db_migrator = { path = "../macro_db_migrator" }
+bots = { path = "../bots", default-features = false, features = ["test-utils"] }
+channels = { path = "../channels", default-features = false, features = ["outbound"] }
 messages = { path = "../messages", features = ["test-utils"] }
 uuid = { workspace = true }
 agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }

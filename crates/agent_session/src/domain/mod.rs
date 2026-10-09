@@ -1,3 +1,4 @@
+pub mod agent_dm;
 /// Current authorization for agent session streams.
 pub mod audience;
 pub mod coding_agents;

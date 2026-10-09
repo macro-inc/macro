@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentDmConversationDto,
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
@@ -34,10 +35,12 @@ import type {
   PullRequestUrl,
   PullRequestUrls,
   RenameAgentSessionRequest,
+  RetryAgentDmRequest,
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
+  StartFreshAgentDmRequest,
   StartResponse,
   StatusResponse,
   UnlinkAgentSessionPullRequestParams,
@@ -128,6 +131,190 @@ export const discoverAgentCapabilitiesHandler = async (
     status: res.status,
     headers: res.headers,
   } as discoverAgentCapabilitiesHandlerResponse;
+};
+
+/**
+ * @summary Ordinary channels and another user's agent DMs are both not found.
+ */
+export type getAgentDmResponse200 = {
+  data: AgentDmConversationDto;
+  status: 200;
+};
+
+export type getAgentDmResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getAgentDmResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type getAgentDmResponseSuccess = getAgentDmResponse200 & {
+  headers: Headers;
+};
+export type getAgentDmResponseError = (
+  | getAgentDmResponse404
+  | getAgentDmResponse503
+) & {
+  headers: Headers;
+};
+
+export type getAgentDmResponse =
+  | getAgentDmResponseSuccess
+  | getAgentDmResponseError;
+
+export const getGetAgentDmUrl = (channelId: string) => {
+  return `/agent-dms/${channelId}`;
+};
+
+export const getAgentDm = async (
+  channelId: string,
+  options?: RequestInit
+): Promise<getAgentDmResponse> => {
+  const res = await fetch(getGetAgentDmUrl(channelId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentDmResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentDmResponse;
+};
+
+/**
+ * @summary Start a fresh agent context, retaining the channel transcript.
+ */
+export type startFreshAgentDmResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type startFreshAgentDmResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type startFreshAgentDmResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type startFreshAgentDmResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type startFreshAgentDmResponseSuccess = startFreshAgentDmResponse204 & {
+  headers: Headers;
+};
+export type startFreshAgentDmResponseError = (
+  | startFreshAgentDmResponse404
+  | startFreshAgentDmResponse409
+  | startFreshAgentDmResponse503
+) & {
+  headers: Headers;
+};
+
+export type startFreshAgentDmResponse =
+  | startFreshAgentDmResponseSuccess
+  | startFreshAgentDmResponseError;
+
+export const getStartFreshAgentDmUrl = (channelId: string) => {
+  return `/agent-dms/${channelId}/start-fresh`;
+};
+
+export const startFreshAgentDm = async (
+  channelId: string,
+  startFreshAgentDmRequest: StartFreshAgentDmRequest,
+  options?: RequestInit
+): Promise<startFreshAgentDmResponse> => {
+  const res = await fetch(getStartFreshAgentDmUrl(channelId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(startFreshAgentDmRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startFreshAgentDmResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startFreshAgentDmResponse;
+};
+
+/**
+ * @summary Explicitly retry a failed DM message in its current context segment.
+ */
+export type retryAgentDmResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type retryAgentDmResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type retryAgentDmResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type retryAgentDmResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type retryAgentDmResponseSuccess = retryAgentDmResponse204 & {
+  headers: Headers;
+};
+export type retryAgentDmResponseError = (
+  | retryAgentDmResponse404
+  | retryAgentDmResponse409
+  | retryAgentDmResponse503
+) & {
+  headers: Headers;
+};
+
+export type retryAgentDmResponse =
+  | retryAgentDmResponseSuccess
+  | retryAgentDmResponseError;
+
+export const getRetryAgentDmUrl = (channelId: string, source: string) => {
+  return `/agent-dms/${channelId}/turns/${source}/retry`;
+};
+
+export const retryAgentDm = async (
+  channelId: string,
+  source: string,
+  retryAgentDmRequest: RetryAgentDmRequest,
+  options?: RequestInit
+): Promise<retryAgentDmResponse> => {
+  const res = await fetch(getRetryAgentDmUrl(channelId, source), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(retryAgentDmRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryAgentDmResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryAgentDmResponse;
 };
 
 /**

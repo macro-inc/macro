@@ -75,6 +75,7 @@ fn actor() -> MacroUserIdStr<'static> {
 }
 fn origin() -> AnnounceOrigin {
     AnnounceOrigin {
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         parent: MessageParent::parse("document", "doc").unwrap(),
         thread_id: Uuid::from_u128(1),
@@ -155,6 +156,7 @@ async fn document_origin_checks_its_parent_capability_and_root() {
 async fn initiative_origin_mints_parent_capability_and_rechecks_revocation() {
     let parent = MessageParent::Initiative(Uuid::from_u128(901));
     let origin = AnnounceOrigin {
+        reply_placement: Default::default(),
         parent: parent.clone(),
         ..origin()
     };
@@ -374,6 +376,7 @@ async fn a_channel_thread_reply_is_about_its_thread_not_the_latest_message() {
         20,
     );
     let origin = AnnounceOrigin {
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         parent: parent.clone(),
         thread_id: calendar.id,
@@ -476,6 +479,7 @@ async fn a_top_level_channel_prompt_replies_to_nothing_and_ends_the_channel() {
         3,
     );
     let origin = AnnounceOrigin {
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         parent: parent.clone(),
         thread_id: prompt.id,
@@ -496,6 +500,7 @@ async fn a_top_level_channel_prompt_replies_to_nothing_and_ends_the_channel() {
 
     let context = context_from(source, Lexical::none(), &origin).await;
 
+    assert!(!context.direct_message);
     assert_eq!(context.thread, None);
     assert_eq!(context.anchor, None);
     assert_eq!(context.reply_target, Some(ReplyTarget::None));
@@ -542,6 +547,7 @@ async fn a_quote_reply_carries_the_quoted_message_even_outside_the_window() {
         30,
     );
     let origin = AnnounceOrigin {
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         parent: parent.clone(),
         thread_id: prompt.id,
@@ -602,6 +608,7 @@ async fn a_quote_from_another_conversation_travels_as_its_preview() {
         30,
     );
     let origin = AnnounceOrigin {
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         parent: parent.clone(),
         thread_id: prompt.id,
@@ -679,6 +686,7 @@ async fn a_long_thread_keeps_its_root_and_the_messages_nearest_the_prompt() {
         .collect();
     let prompt = replies.last().unwrap().clone();
     let origin = AnnounceOrigin {
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         parent: parent.clone(),
         thread_id: root.id,
@@ -861,6 +869,35 @@ async fn spreadsheet_discussions_carry_the_range_without_resolving_a_mark() {
             range: "B4:C9".into()
         })
     );
+}
+
+/// A private DM is read live and carries its own history in the session, so
+/// it is marked as one and brings no ambient channel messages along.
+#[tokio::test]
+async fn a_direct_message_is_marked_and_reads_no_channel_history() {
+    let parent = channel();
+    let prompt = posted(&parent, 50, None, "wolf@example.com", "what changed?", 3);
+    let origin = AnnounceOrigin {
+        reply_placement: crate::domain::model::ReplyPlacement::Timeline,
+        reuse_origin_message: false,
+        parent: parent.clone(),
+        thread_id: prompt.id,
+        message_id: prompt.id,
+    };
+
+    let mut source = MockMessageReader::new();
+    let prompt_message = prompt.clone();
+    source
+        .expect_get()
+        .returning(move |_, _| Ok(prompt_message.clone()));
+    source.expect_get_thread().never();
+    source.expect_preceding().never();
+
+    let context = context_from(source, Lexical::none(), &origin).await;
+
+    assert!(context.direct_message);
+    assert!(context.channel.is_empty());
+    assert_eq!(context.reply_target, Some(ReplyTarget::None));
 }
 
 #[tokio::test]

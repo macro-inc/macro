@@ -8,6 +8,7 @@ fn actor() -> MacroUserIdStr<'static> {
 #[test]
 fn existing_mention_commands_keep_their_wire_shape_and_reply_behavior() {
     let mention = MentionOrigin {
+        reply_placement: Default::default(),
         parent: MessageParent::Channel(Uuid::from_u128(1)),
         thread_id: Uuid::from_u128(2),
         message_id: Uuid::from_u128(3),

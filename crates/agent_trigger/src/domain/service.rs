@@ -1,14 +1,14 @@
 //! Orchestration for evaluating one posted message.
 
+use super::direct_messages::{DirectMessageDecision, DirectMessageRouting};
 use std::collections::HashSet;
+use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
 
 #[cfg(feature = "admission")]
 use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
-#[cfg(feature = "admission")]
-use std::sync::Arc;
 
 use agent_session::domain::error::Result;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ThreadSession};
@@ -175,6 +175,7 @@ pub struct AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, Hist
     replies: Replies,
     judge: Judge,
     history: History,
+    direct_messages: Option<Arc<dyn DirectMessageRouting>>,
     #[cfg(feature = "admission")]
     admission: Arc<dyn AiAdmissionService>,
 }
@@ -209,9 +210,16 @@ where
             replies,
             judge,
             history,
+            direct_messages: None,
             #[cfg(feature = "admission")]
             admission: Arc::new(DisabledAiAdmissionService),
         }
+    }
+
+    /// Route private persona DMs before interpreting mentions or thread replies.
+    pub fn with_direct_messages(mut self, router: Arc<dyn DirectMessageRouting>) -> Self {
+        self.direct_messages = Some(router);
+        self
     }
 
     /// Configure admission for implicit classification, including image captions.
@@ -363,6 +371,13 @@ where
         else {
             return Ok(Vec::new());
         };
+        if let Some(router) = &self.direct_messages {
+            match router.evaluate(posted).await? {
+                DirectMessageDecision::NotDirectMessage => {}
+                DirectMessageDecision::Unavailable => return Ok(Vec::new()),
+                DirectMessageDecision::Deliver(decision) => return Ok(vec![*decision]),
+            }
+        }
         let mut mentioned = bot_mention_ids(&posted.mentions);
         mentioned.sort_by_key(ToString::to_string);
         tracing::Span::current().record(

@@ -109,6 +109,36 @@ describe('agent announcements', () => {
       markdown: `${link}\n\nSure.\n\n- done`,
     });
   });
+  it('composes a private reply from segments, with steps as a live node', async () => {
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        link: false,
+        body: {
+          kind: 'segments',
+          segments: [
+            { kind: 'prose', markdown: 'Checking first.' },
+            {
+              kind: 'activity',
+              turn: 2,
+              segment: 1,
+              sealed: true,
+              rows: [
+                { id: 't1', label: 'Ran', detail: 'ls', status: 'completed' },
+                { id: 't2', label: 'Read', detail: null, status: 'completed' },
+              ],
+            },
+          ],
+          footer: null,
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown } = await response.json<{ markdown: string }>();
+    expect(markdown).toBe(
+      'Checking first.\n\n<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":1,"rows":[{"id":"t1","label":"Ran","status":"completed","detail":"ls"},{"id":"t2","label":"Read","status":"completed"}],"sealed":true}</m-agent-activity>'
+    );
+  });
   it('rejects a chat reply body it does not know', async () => {
     const response = await request({
       chatReply: { sessionId: 'session', body: { kind: 'spinner' } },

@@ -30,4 +30,15 @@ describe('agent context', () => {
     const { markdown } = await response.json<{ markdown: string }>();
     expect(markdown).toContain(`conversation type=\\"${type}\\"`);
   });
+
+  it('accepts and keeps a private conversation marker', async () => {
+    const response = await request({
+      promptMarkdown: 'what changed?',
+      parent: { type: 'channel', id: 'dm-1' },
+      directMessage: true,
+    });
+    expect(response.status).toBe(200);
+    const { markdown } = await response.json<{ markdown: string }>();
+    expect(markdown).toContain('your private conversation with the user');
+  });
 });

@@ -47,7 +47,21 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
                 }
             }],
             "stop": null,
-            "pending": false
+            "pending": false,
+            "segments": [{
+                "index": 0,
+                "kind": "activity",
+                "start": 0,
+                "end": 1,
+                "sealed": false,
+                "rows": [{
+                    "id": "tool-1",
+                    "label": "Running",
+                    "detail": "ls",
+                    "status": "running"
+                }]
+            }],
+            "phase": "working"
         })
     );
 

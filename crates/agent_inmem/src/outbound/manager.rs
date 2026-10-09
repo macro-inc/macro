@@ -139,21 +139,15 @@ impl InMemAgentManager {
     ///
     /// `session_token` is the egress token minted at spawn; a resume passes
     /// `None` and keeps whatever spawn stored.
-    #[must_use]
     pub async fn attach(
         &self,
         facts: SessionFacts,
         session_token: Option<String>,
-    ) -> ServerChannel {
-        // A replaced agent must die before its successor serves the session.
-        self.live.remove(&facts.id);
-        if let Some(token) = session_token {
-            self.tokens.insert(facts.id, token);
-        }
+    ) -> agent_session::domain::error::Result<ServerChannel> {
         if !self.store.contains_key(&facts.id) {
             // Loaded before taking the entry so the read never blocks the
             // map; `or_insert_with` still wins any race to create it.
-            let frames = self.frames.frames(facts.id).await;
+            let frames = self.frames.frames(facts.id).await?;
             let restored_effort = replay_reasoning_effort(&frames);
             let reasoning_effort =
                 if agent::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
@@ -177,6 +171,13 @@ impl InMemAgentManager {
                 instructions: facts.instructions.clone(),
                 history,
             });
+        }
+
+        // Do not replace a runtime or cache a credential until its history is
+        // available. A failed cold restore can safely be retried.
+        self.live.remove(&facts.id);
+        if let Some(token) = session_token {
+            self.tokens.insert(facts.id, token);
         }
 
         let (server_half, runtime_half) = Channel::duplex();
@@ -215,7 +216,7 @@ impl InMemAgentManager {
                 task: task.abort_handle(),
             },
         );
-        server_half
+        Ok(server_half)
     }
 
     /// End the session for good: kill its agent task, drop its conversation,

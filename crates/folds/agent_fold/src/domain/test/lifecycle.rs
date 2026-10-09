@@ -3,7 +3,9 @@ use super::util::{TURN, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::lifecycle::LifecycleFold;
 use crate::domain::log::AgentSessionLog;
-use crate::domain::model::{FoldEvent, FoldedMessage, StopReason, TurnSignal};
+use crate::domain::model::{
+    FoldEvent, FoldedMessage, SegmentKind, StopReason, TurnPhase, TurnSignal,
+};
 use crate::domain::ports::FoldMachine as _;
 use crate::testing::fixtures::{ELICITATION_CLAUDE_SINGLE_SELECT, RESUMED_NO_PROMPT};
 use serde_json::{Value, json};
@@ -38,14 +40,52 @@ fn update(kind: &str, text: &str) -> AgentSessionLog {
     )
 }
 
-/// Push a whole log live and collect every signal, in order.
+/// Push a whole log live and collect every lifecycle signal, in order. A
+/// reply's [`TurnSignal::Progressed`] reports are left out: they have their
+/// own tests below, and the lifecycle facts are what these assert.
 fn signals_of(log: &[AgentSessionLog]) -> (LifecycleFold, Vec<TurnSignal>) {
+    let (machine, signals) = every_signal_of(log);
+    (machine, lifecycle_only(signals))
+}
+
+/// Push a whole log live and collect every signal, progress included.
+fn every_signal_of(log: &[AgentSessionLog]) -> (LifecycleFold, Vec<TurnSignal>) {
     let mut machine = LifecycleFold::new();
     let mut signals = Vec::new();
     for entry in log {
         signals.extend(machine.push(entry.clone()).signals);
     }
     (machine, signals)
+}
+
+fn lifecycle_only(signals: Vec<TurnSignal>) -> Vec<TurnSignal> {
+    signals
+        .into_iter()
+        .filter(|signal| !matches!(signal, TurnSignal::Progressed { .. }))
+        .collect()
+}
+
+fn tool_call(id: &str, status: &str, command: &str) -> AgentSessionLog {
+    frame(
+        "to_server",
+        json!({"method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":id,"title":"Bash","kind":"execute","status":status,"rawInput":{"command":command}}}}),
+    )
+}
+
+fn tool_update(id: &str, status: &str) -> AgentSessionLog {
+    frame(
+        "to_server",
+        json!({"method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":id,"status":status}}}),
+    )
+}
+
+fn opened() -> Vec<AgentSessionLog> {
+    vec![
+        request("initialize", json!(0)),
+        result(json!(0)),
+        request("session/new", json!(1)),
+        frame("to_server", json!({"id":1,"result":{"sessionId":"s"}})),
+    ]
 }
 
 fn apply(visible: &mut Vec<FoldedMessage>, event: FoldEvent<'_>) {
@@ -149,6 +189,7 @@ fn a_question_is_raised_then_cleared_before_the_turn_ends() {
             TurnSignal::ElicitationRaised { .. } => "raised",
             TurnSignal::ElicitationCleared { .. } => "cleared",
             TurnSignal::TurnEnded { .. } => "ended",
+            TurnSignal::Progressed { .. } => unreachable!("filtered by signals_of"),
         })
         .collect();
     assert_eq!(kinds, ["raised", "cleared", "ended"], "{signals:#?}");
@@ -190,14 +231,14 @@ fn history_pushed_and_ignored_leaves_a_live_turn_signalling_normally() {
         "to_server",
         json!({"id":7,"result":{"stopReason":"end_turn"}}),
     ));
+    let signals = lifecycle_only(pushed.signals);
     assert!(
         matches!(
-            pushed.signals.as_slice(),
+            signals.as_slice(),
             [TurnSignal::TurnEnded { stop: StopReason::EndTurn, last_text: Some(text), .. }]
                 if text == "again"
         ),
-        "{:#?}",
-        pushed.signals
+        "{signals:#?}"
     );
 }
 
@@ -212,7 +253,7 @@ fn a_load_replacement_signals_nothing_for_the_replaced_history() {
         update("agent_message_chunk", "answer"),
         result(load),
     ];
-    let (machine, signals) = signals_of(&log);
+    let (machine, signals) = every_signal_of(&log);
 
     assert!(signals.is_empty(), "{signals:#?}");
     assert_eq!(machine.inner().messages().len(), 2);
@@ -223,7 +264,7 @@ fn a_load_replacement_signals_nothing_for_the_replaced_history() {
 #[test]
 fn a_resumed_sessions_history_signals_nothing() {
     let log = parse_log(RESUMED_NO_PROMPT);
-    let (machine, signals) = signals_of(&log);
+    let (machine, signals) = every_signal_of(&log);
 
     assert!(signals.is_empty(), "{signals:#?}");
     assert!(
@@ -261,5 +302,123 @@ fn an_unprompted_turn_ends_on_turn_complete_with_no_action_id() {
                 if text == "picking up where we left off"
         ),
         "{signals:#?}"
+    );
+}
+
+fn progress(signals: &[TurnSignal]) -> Vec<(Option<TurnPhase>, Vec<(SegmentKind, bool)>)> {
+    signals
+        .iter()
+        .filter_map(|signal| match signal {
+            TurnSignal::Progressed {
+                phase, segments, ..
+            } => Some((
+                *phase,
+                segments
+                    .iter()
+                    .map(|projected| (projected.segment.kind, projected.segment.sealed))
+                    .collect(),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_reply_reports_each_change_of_shape_but_not_each_streamed_chunk() {
+    let mut log = opened();
+    log.extend([
+        prompt(json!(7), "run the tests"),
+        update("agent_message_chunk", "Checking"),
+        update("agent_message_chunk", " the tests first."),
+        tool_call("t1", "in_progress", "cargo test"),
+        tool_update("t1", "completed"),
+        update("agent_message_chunk", "All "),
+        update("agent_message_chunk", "green."),
+        frame(
+            "to_server",
+            json!({"id":7,"result":{"stopReason":"end_turn"}}),
+        ),
+    ]);
+    let (_, signals) = every_signal_of(&log);
+
+    use SegmentKind::{Activity, Prose};
+    assert_eq!(
+        progress(&signals),
+        [
+            // The first chunk opens a passage; the second only lengthens it.
+            (Some(TurnPhase::Writing), vec![(Prose, false)]),
+            // The tool call seals the passage and opens the activity.
+            (
+                Some(TurnPhase::Working),
+                vec![(Prose, true), (Activity, false)]
+            ),
+            // The step finishing is a change of shape.
+            (
+                Some(TurnPhase::Thinking),
+                vec![(Prose, true), (Activity, false)]
+            ),
+            (
+                Some(TurnPhase::Writing),
+                vec![(Prose, true), (Activity, true), (Prose, false)]
+            ),
+            // The reply closing seals everything, before the turn ends.
+            (None, vec![(Prose, true), (Activity, true), (Prose, true)]),
+        ],
+        "{signals:#?}"
+    );
+    assert!(matches!(signals.last(), Some(TurnSignal::TurnEnded { .. })));
+}
+
+#[test]
+fn sealed_prose_carries_its_text_and_steps_carry_their_rows() {
+    let mut log = opened();
+    log.extend([
+        prompt(json!(7), "run the tests"),
+        update("agent_message_chunk", "Checking the tests first."),
+        tool_call("t1", "in_progress", "cargo test"),
+    ]);
+    let (_, signals) = every_signal_of(&log);
+    let Some(TurnSignal::Progressed { segments, .. }) = signals.last() else {
+        panic!("{signals:#?}");
+    };
+    assert_eq!(
+        segments[0].text.as_deref(),
+        Some("Checking the tests first.")
+    );
+    assert_eq!(segments[1].text, None);
+    assert_eq!(
+        segments[1]
+            .segment
+            .rows
+            .iter()
+            .map(|row| (row.label.as_str(), row.detail.as_deref()))
+            .collect::<Vec<_>>(),
+        [("Running", Some("cargo test"))]
+    );
+}
+
+#[test]
+fn a_closed_reply_reports_nothing_more() {
+    let mut log = opened();
+    log.extend([
+        prompt(json!(7), "hi"),
+        update("agent_message_chunk", "hello"),
+        frame(
+            "to_server",
+            json!({"id":7,"result":{"stopReason":"end_turn"}}),
+        ),
+    ]);
+    let mut machine = LifecycleFold::new();
+    for entry in &log {
+        let _ = machine.push(entry.clone());
+    }
+    let late = machine.push(update("agent_message_chunk", " again"));
+    assert!(
+        !late
+            .signals
+            .iter()
+            .any(|signal| matches!(signal, TurnSignal::Progressed { turn, .. } if turn.0 == 0)),
+        "{:#?}",
+        late.signals
     );
 }

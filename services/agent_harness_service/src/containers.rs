@@ -172,7 +172,7 @@ where
                     self.inmem()
                         .manager
                         .attach(*facts, Some(command.egress.session_token))
-                        .await,
+                        .await?,
                 ),
             )),
             Route::Sandbox => self
@@ -206,7 +206,7 @@ where
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match self.route(session).await? {
             Route::InMem(facts) => Ok(agent_session::domain::connection::RuntimeAttachment::solo(
-                RoutedTransport::InMem(self.inmem().manager.attach(*facts, None).await),
+                RoutedTransport::InMem(self.inmem().manager.attach(*facts, None).await?),
             )),
             Route::Sandbox => self
                 .sandbox

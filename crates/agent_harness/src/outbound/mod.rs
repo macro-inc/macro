@@ -7,6 +7,8 @@ pub mod channel_prompt_context;
 pub mod containers;
 pub mod cursor;
 pub mod daytona;
+/// Durable persona-DM execution journal.
+pub mod dm_turns;
 pub mod egress;
 pub mod forward;
 pub mod github_branches;

@@ -359,6 +359,21 @@ describe('composeAgentContextPrompt', () => {
     expect(text?.match(/<\/thread>/g)).toHaveLength(1);
   });
 
+  it('tells the agent a private conversation is read live', () => {
+    const text = composedContext({
+      promptMarkdown: 'what changed?',
+      parent: { type: 'channel', id: 'dm-1' },
+      replyTarget: { kind: 'none' },
+      directMessage: true,
+    });
+
+    expect(text).toContain(
+      'This prompt was posted in your private conversation with the user'
+    );
+    expect(text).toContain('AskUser');
+    expect(text).not.toContain(origin);
+  });
+
   it('names the owner and says an owner prompt is theirs', () => {
     const owner = { id: 'macro|wolf@macro.com', name: 'wolf@macro.com' };
     expect(

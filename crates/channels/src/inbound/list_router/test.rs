@@ -200,6 +200,7 @@ async fn standard_internal_credentials_pass_acting_user_to_channel_list_service(
 fn list_channel(id: Uuid, updated_at_seconds: i64) -> ChannelWithLatest {
     let timestamp = Utc.timestamp_opt(updated_at_seconds, 0).unwrap();
     ChannelWithLatest {
+        agent_dm: None,
         channel: ChannelWithParticipants {
             channel: ChannelListItem {
                 id,

@@ -44,6 +44,7 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
             prompt_message_id: context.prompt_message_id.map(|id| id.to_string()),
             thread: context.thread.as_ref().map(thread),
             channel: context.channel.iter().map(thread).collect(),
+            direct_message: context.direct_message,
         });
 
         self.lexical

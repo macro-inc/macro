@@ -11,6 +11,12 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/agent-activity/queries/**
+  - apps/web/src/features/agent-dms/queries/**
+  - apps/web/src/features/agent-activity/primitives/**
+  - apps/web/src/features/agent-dms/primitives/**
+  - apps/web/src/features/agent-interactions/queries/**
+  - apps/web/src/features/agent-interactions/primitives/**
   - apps/web/src/features/calendar-team/queries/**
   - apps/web/src/features/calendar-team/primitives/**
   - apps/web/src/features/tasks-view/queries/task-board*

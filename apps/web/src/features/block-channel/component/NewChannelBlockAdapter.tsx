@@ -281,7 +281,9 @@ function NewTop(props: { channelId: string }) {
         )}
       </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
-      <Show when={ENABLE_CALLS && !call.isInThisChannel()}>
+      <Show
+        when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+      >
         <SplitHeaderRight>
           <HeaderIsland
             class={cn(
@@ -319,6 +321,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
+  const conversationChannel = useChannel(channelId);
+  const canCall = () =>
+    conversationChannel() ? !conversationChannel()?.agent_dm : undefined;
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
   const [routeSearch] = createSearchParams(channelsSearch);
@@ -397,6 +402,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         : undefined,
     })
   );
+  createComputed(() => {
+    if (
+      conversationChannel()?.agent_dm &&
+      ['call', 'calls', 'participants'].includes(activeTab())
+    )
+      setActiveTabInternal(DEFAULT_CHANNEL_TAB);
+  });
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
   // Navigation flows into the surface as state; the messages part navigates
@@ -408,7 +420,12 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   let surfaceApi: ChannelSurfaceApi | undefined;
 
   const setActiveTab = (tab: ChannelTabId) => {
-    setActiveTabInternal(normalizeChannelTab(tab));
+    setActiveTabInternal(
+      conversationChannel()?.agent_dm &&
+        ['call', 'calls', 'participants'].includes(tab)
+        ? DEFAULT_CHANNEL_TAB
+        : normalizeChannelTab(tab)
+    );
   };
 
   createEffect(
@@ -528,6 +545,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       <CallEventSync />
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
         <ChannelCallAutoJoin
+          canCall={canCall}
           channelId={channelId}
           pendingJoinCall={pendingJoinCall}
           onHandled={() => setPendingJoinCall(false)}

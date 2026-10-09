@@ -354,6 +354,33 @@ where
             .unwrap_or(PermissionPolicy::Prompt)
     }
 
+    /// DM contexts keep the adopted persona choice across reconnects. Current
+    /// harness operator restrictions can always tighten that choice.
+    pub(super) async fn permission_policy_for_session(
+        &self,
+        session: AgentSessionId,
+        bot: BotId,
+    ) -> agent_session::domain::error::Result<PermissionPolicy> {
+        if let Some(policy) = &self.direct_messages
+            && policy.is_dm_session(session).await?
+            && let Some(store) = &self.dm_turns
+        {
+            let Some(settings) = store.settings(session).await? else {
+                return Ok(PermissionPolicy::Prompt);
+            };
+            let current = self.permission_policies.permission_policy(bot).await;
+            return Ok(match current {
+                Ok(crate::domain::model::PermissionPolicyConfig::Persona {
+                    harness_allows_bypass: Some(false),
+                    ..
+                })
+                | Err(_) => PermissionPolicy::Prompt,
+                Ok(_) => settings.permissions.resolve(),
+            });
+        }
+        Ok(self.permission_policy_for(bot).await)
+    }
+
     /// The MCP servers to advertise when reattaching to an existing container.
     ///
     /// The raw session token exists in exactly one place after spawn - the
@@ -425,7 +452,9 @@ where
                 let mcp_servers = self
                     .resumed_mcp_servers(session_id, owner, &session.mcp_servers)
                     .await?;
-                let permission_policy = self.permission_policy_for(session.bot_id).await;
+                let permission_policy = self
+                    .permission_policy_for_session(session_id, session.bot_id)
+                    .await?;
                 self.sessions
                     .attach_session(
                         session_id,

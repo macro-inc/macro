@@ -22,6 +22,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
+use std::sync::Arc;
 use uuid::Uuid;
 
 mod import;
@@ -41,6 +42,7 @@ pub struct ChannelServiceImpl<
     events: E,
     reference_share_permissions: P,
     picture_files: F,
+    agent_direct_messages: Option<Arc<dyn super::agent_dm::AgentDirectMessages>>,
 }
 
 /// Fail-closed picture metadata source for contexts that do not wire uploads.
@@ -89,6 +91,7 @@ where
             events: NoopChannelEventDispatcher,
             reference_share_permissions: NoopChannelReferenceSharePermissions,
             picture_files: UnavailableChannelPictureFiles,
+            agent_direct_messages: None,
         }
     }
 }
@@ -101,11 +104,21 @@ impl<R, E, P> ChannelServiceImpl<R, E, P> {
             events,
             reference_share_permissions,
             picture_files: UnavailableChannelPictureFiles,
+            agent_direct_messages: None,
         }
     }
 }
 
 impl<R, E, P, F> ChannelServiceImpl<R, E, P, F> {
+    /// Enable private conversations with authorized agent personas.
+    pub fn with_agent_direct_messages(
+        mut self,
+        service: Arc<dyn super::agent_dm::AgentDirectMessages>,
+    ) -> Self {
+        self.agent_direct_messages = Some(service);
+        self
+    }
+
     /// Wire the static-file metadata source used to authorize channel pictures.
     pub fn with_picture_files<F2: ChannelPictureFiles>(
         self,
@@ -116,6 +129,7 @@ impl<R, E, P, F> ChannelServiceImpl<R, E, P, F> {
             events: self.events,
             reference_share_permissions: self.reference_share_permissions,
             picture_files,
+            agent_direct_messages: self.agent_direct_messages,
         }
     }
 }
@@ -272,6 +286,15 @@ where
         GetOrCreateDmRequest { recipient_id }: GetOrCreateDmRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
+        if let Some(bot) = recipient_id.as_bot() {
+            let service = self.agent_direct_messages.as_ref().ok_or_else(|| {
+                ChannelMutationErr::BadRequest("Agent direct messages are unavailable".to_owned())
+            })?;
+            return service.get_or_create(actor, bot.bot_id()).await;
+        }
+        let recipient_id = recipient_id.into_user().ok_or_else(|| {
+            ChannelMutationErr::BadRequest("Invalid direct message recipient".to_owned())
+        })?;
         let pair = DmPair::new(actor.clone(), recipient_id).map_err(|_| {
             ChannelMutationErr::BadRequest(
                 "recipient_id cannot be the same as the user_id".to_string(),

@@ -745,6 +745,13 @@ export const enableChatV3Agents = defineFlag({
   default: onInDev,
 });
 
+// Private conversations with agent personas. Explicit environment opt-in;
+// this flag has no remote PostHog source. VITE_ENABLE_AGENT_DMS=true enables it.
+export const ENABLE_AGENT_DMS = defineFlag({
+  env: 'ENABLE_AGENT_DMS',
+  default: false,
+}).enabled;
+
 // The built-in @cursor mention, using the mentioning user's own Cursor account.
 // Account setup is checked after the mention; this flag controls discovery.
 // Override with VITE_ENABLE_CURSOR_AGENTS.

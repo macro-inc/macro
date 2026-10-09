@@ -17658,6 +17658,25 @@
         "description": "Whether an agent is available everywhere or only in selected channels.",
         "enum": ["all", "selected"]
       },
+      "AgentDmProfile": {
+        "type": "object",
+        "description": "Historical persona identity displayed beside a private conversation.",
+        "required": ["bot_id", "name"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Persona avatar, when supplied."
+          },
+          "bot_id": {
+            "type": "string",
+            "description": "Persona id without the bot principal prefix."
+          },
+          "name": {
+            "type": "string",
+            "description": "Persona display name."
+          }
+        }
+      },
       "AgentMcpServer": {
         "type": "object",
         "description": "One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.",
@@ -17905,6 +17924,27 @@
           }
         ],
         "description": "Events publishable to [`MacroAgentSessionLifecycleTopic`].\n\nThe serde tag and [`AgentSessionLifecycleEventName`] spell the same wire\nnames: subscribers filter on them, so they are API. The\n`event_names_match_the_wire` test holds the two in step. Exhaustive on\npurpose: a consumer's match should break when a variant is added."
+      },
+      "AgentTyping": {
+        "type": "object",
+        "description": "An agent session typing through its bot.",
+        "required": ["session_id", "phase"],
+        "properties": {
+          "phase": {
+            "$ref": "#/components/schemas/AgentTypingPhase",
+            "description": "What the agent is doing. Deliberately coarse: a typing event reaches\neveryone in the conversation, and which tool runs on what is for\nviewers who can read the session itself."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session whose turn the bot is speaking for."
+          }
+        }
+      },
+      "AgentTypingPhase": {
+        "type": "string",
+        "description": "What a typing agent is doing.",
+        "enum": ["thinking", "writing", "working", "waiting"]
       },
       "Anchor": {
         "oneOf": [
@@ -18467,6 +18507,17 @@
           "is_participant"
         ],
         "properties": {
+          "agent_dm": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentDmProfile",
+                "description": "Persona identity when this is the viewer's private agent DM."
+              }
+            ]
+          },
           "auto_join_team": {
             "type": "boolean",
             "description": "Whether team members automatically join the channel."
@@ -28544,7 +28595,7 @@
         "properties": {
           "recipient_id": {
             "type": "string",
-            "description": "Recipient user id."
+            "description": "Recipient user id (`macro|...`) or agent persona id (`bot|...`)."
           }
         }
       },
@@ -30997,6 +31048,17 @@
               "active": {
                 "type": "boolean",
                 "description": "Whether the user is currently typing."
+              },
+              "agent": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentTyping",
+                    "description": "Present when an agent session is typing through the bot that\nspeaks for it. Names the session, so a viewer who can read it can\nshow the turn live in place of the bare indicator."
+                  }
+                ]
               },
               "thread_id": {
                 "type": ["string", "null"],

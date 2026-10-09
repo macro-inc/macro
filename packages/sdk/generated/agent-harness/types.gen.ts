@@ -109,6 +109,92 @@ export type AgentConfigSelectOptionDto = {
 };
 
 /**
+ * Metadata visible only to the user who owns the DM.
+ */
+export type AgentDmConversationDto = {
+    /**
+     * Whether the owner may currently send a new prompt.
+     */
+    available: boolean;
+    /**
+     * Optional persona avatar.
+     */
+    avatarUrl?: string | null;
+    /**
+     * Persona id (without the bot principal prefix).
+     */
+    botId: string;
+    /**
+     * The channel containing the visible transcript.
+     */
+    channelId: string;
+    /**
+     * Persona's historical display name.
+     */
+    name: string;
+    /**
+     * Context segments in chronological order.
+     */
+    segments: Array<AgentDmSegmentDto>;
+    /**
+     * Whether new persona settings are available to adopt explicitly.
+     */
+    settingsChanged: boolean;
+    /**
+     * Persistent state of each accepted message and its current attempt.
+     */
+    turns: Array<AgentDmTurnDto>;
+};
+
+/**
+ * An explicit context boundary; all channel messages remain visible.
+ */
+export type AgentDmSegmentDto = {
+    /**
+     * When the segment began.
+     */
+    createdAt: string;
+    /**
+     * Whether this is the current agent context.
+     */
+    isCurrent: boolean;
+    /**
+     * Session whose controls and live events belong to this segment.
+     */
+    sessionId: string;
+};
+
+/**
+ * Execution status without exposing the persona prompt or stored credentials.
+ */
+export type AgentDmTurnDto = {
+    /**
+     * Current runtime attempt identity.
+     */
+    actionId: string;
+    /**
+     * When the source message was first accepted.
+     */
+    createdAt: string;
+    /**
+     * The associated agent reply, if it has been posted.
+     */
+    replyMessageId?: string | null;
+    /**
+     * Context segment carrying this turn.
+     */
+    sessionId: string;
+    /**
+     * The user's message in the channel timeline.
+     */
+    sourceMessageId: string;
+    /**
+     * Durable execution state.
+     */
+    state: DmTurnState;
+};
+
+/**
  * One model picker option.
  */
 export type AgentModelDto = {
@@ -884,6 +970,11 @@ export type DiscoverAgentCapabilitiesResponse = {
 };
 
 /**
+ * The state of one source message, retained after completion for deduplication.
+ */
+export type DmTurnState = 'queued' | 'running' | 'succeeded' | 'failed' | 'stopped' | 'interrupted';
+
+/**
  * A validated document identifier. Historical document ids need not be UUIDs.
  */
 export type DocumentId = string;
@@ -1288,6 +1379,16 @@ export type RenameAgentSessionRequest = {
 };
 
 /**
+ * The attempt the user saw and chose to retry; prevents double-click reruns.
+ */
+export type RetryAgentDmRequest = {
+    /**
+     * Current failed attempt identity.
+     */
+    actionId: string;
+};
+
+/**
  * Named compute tier for a managed sandbox.
  *
  * The API and database store the name. CPU, RAM, and disk live in
@@ -1405,6 +1506,16 @@ export type SharePermissionV2 = {
      */
     owner: string;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * The context the user is choosing to leave behind.
+ */
+export type StartFreshAgentDmRequest = {
+    /**
+     * Current session id shown in the conversation metadata.
+     */
+    sessionId: string;
 };
 
 /**
@@ -1549,6 +1660,105 @@ export type DiscoverAgentCapabilitiesHandlerResponses = {
 };
 
 export type DiscoverAgentCapabilitiesHandlerResponse = DiscoverAgentCapabilitiesHandlerResponses[keyof DiscoverAgentCapabilitiesHandlerResponses];
+
+export type GetAgentDmData = {
+    body?: never;
+    path: {
+        /**
+         * Conversation channel
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/agent-dms/{channel_id}';
+};
+
+export type GetAgentDmErrors = {
+    /**
+     * Conversation not found
+     */
+    404: unknown;
+    /**
+     * Conversation temporarily unavailable
+     */
+    503: unknown;
+};
+
+export type GetAgentDmResponses = {
+    /**
+     * Owner's agent conversation
+     */
+    200: AgentDmConversationDto;
+};
+
+export type GetAgentDmResponse = GetAgentDmResponses[keyof GetAgentDmResponses];
+
+export type StartFreshAgentDmData = {
+    body: StartFreshAgentDmRequest;
+    path: {
+        channel_id: string;
+    };
+    query?: never;
+    url: '/agent-dms/{channel_id}/start-fresh';
+};
+
+export type StartFreshAgentDmErrors = {
+    /**
+     * Conversation not found
+     */
+    404: unknown;
+    /**
+     * Context is busy, stale or unavailable
+     */
+    409: unknown;
+    /**
+     * Temporarily unavailable
+     */
+    503: unknown;
+};
+
+export type StartFreshAgentDmResponses = {
+    /**
+     * New context reserved
+     */
+    204: void;
+};
+
+export type StartFreshAgentDmResponse = StartFreshAgentDmResponses[keyof StartFreshAgentDmResponses];
+
+export type RetryAgentDmData = {
+    body: RetryAgentDmRequest;
+    path: {
+        channel_id: string;
+        source: string;
+    };
+    query?: never;
+    url: '/agent-dms/{channel_id}/turns/{source}/retry';
+};
+
+export type RetryAgentDmErrors = {
+    /**
+     * Conversation or turn not found
+     */
+    404: unknown;
+    /**
+     * Attempt cannot be retried
+     */
+    409: unknown;
+    /**
+     * Temporarily unavailable
+     */
+    503: unknown;
+};
+
+export type RetryAgentDmResponses = {
+    /**
+     * Retry queued
+     */
+    204: void;
+};
+
+export type RetryAgentDmResponse = RetryAgentDmResponses[keyof RetryAgentDmResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;

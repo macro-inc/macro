@@ -1,6 +1,6 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { createSearchState } from '@app/features/soup/search/create-search-state';
-import { isChannelEntity } from '@entity';
+import { type ChannelEntity, isChannelEntity } from '@entity';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -14,17 +14,23 @@ export function createChannelSearchSource(options: {
   enabled?: Accessor<boolean>;
   scope: Accessor<ChannelsSourceScope>;
   source: Accessor<ChannelsDataSource>;
+  additionalLocalChannels?: Accessor<readonly ChannelEntity[]>;
 }): ChannelsDataSource {
   const enabled = () => options.enabled?.() ?? true;
   const searching = () => options.text().trim().length > 0;
+  const localChannels = createMemo(
+    () =>
+      new Map(
+        [
+          ...(options.additionalLocalChannels?.() ?? []),
+          ...options.source().items(),
+        ].map((channel) => [channel.id, channel])
+      )
+  );
   const search = createSearchState({
     enabled,
     text: options.text,
-    localPool: () =>
-      options
-        .source()
-        .items()
-        .map((data) => ({ data })),
+    localPool: () => [...localChannels().values()].map((data) => ({ data })),
     buildRequest: ({ query, matchType }) => ({
       params: { page_size: 100 },
       body: {
@@ -50,12 +56,7 @@ export function createChannelSearchSource(options: {
     if (!searching()) return [...options.source().items()];
 
     // Search records lack loaded conversation metadata, including message previews.
-    const loadedById = new Map(
-      options
-        .source()
-        .items()
-        .map((channel) => [channel.id, channel])
-    );
+    const loadedById = localChannels();
     const matches = search
       .data()
       .filter(isChannelEntity)

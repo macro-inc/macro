@@ -235,6 +235,15 @@ mod tests {
     }
 
     #[test]
+    fn session_tool_use_prompt_treats_a_private_conversation_like_the_session_view() {
+        // A DM with the agent is read live: its questions and review cards
+        // appear there, so the thread rule does not apply to it.
+        let session = SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(session.contains("private conversation with the user is the exception"));
+        assert!(session.contains("like one typed in the agent session view"));
+    }
+
+    #[test]
     fn session_tool_use_prompt_keeps_the_thread_mechanics_away_from_the_user() {
         // The thread rule explains review cards and the session view so the
         // model knows why it writes the draft out. None of that is for the

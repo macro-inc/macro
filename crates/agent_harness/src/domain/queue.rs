@@ -28,6 +28,7 @@ use agent_session::domain::events::{InFlightTurnSummary, TurnSummary};
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::model::StoredQueuedAction;
 use agent_session::domain::ports::QueuedControl;
+use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -71,7 +72,7 @@ pub struct QueuedEntry {
 /// end is then observed without a record. `turn` is the fold's next turn id
 /// at dispatch, which for a compaction (no user message) is the turn the
 /// fold would assign to the next prompt.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct InFlightTurn {
     /// The action that opened the turn.
     pub action_id: AgentActionId,
@@ -94,8 +95,23 @@ pub struct InFlightTurn {
     /// turn hours old with nothing streaming is the shape of a wedged
     /// session, and without this it looks exactly like a long one.
     pub dispatched_at: DateTime<Utc>,
+    /// The bot the session speaks as, for the turn's typing and reply
+    /// messages. Absent on a turn recorded before it was kept.
+    #[serde(default)]
+    pub bot_id: Option<BotId>,
+    /// Whether the turn was announced as a session chip (a coding agent or an
+    /// assignment), which renders the turn itself: its message is never
+    /// rewritten into a reply.
+    #[serde(default)]
+    pub speaks_as_chip: bool,
+    /// The messages a reply shown in segments is posted as, in order. Each id
+    /// is allocated, and saved with the turn, before the message is first
+    /// posted, so showing the reply again updates the same messages.
+    #[serde(default)]
+    pub presented: Vec<Uuid>,
     /// Tool calls this turn made that wait on the owner's approval, oldest
     /// first. The reply names the oldest while any wait.
+    #[serde(default)]
     pub held_tool_calls: Vec<HeldToolCall>,
 }
 
@@ -201,6 +217,27 @@ impl SessionQueues {
     /// Append an entry to its session's queue.
     pub fn enqueue(&self, session: AgentSessionId, entry: QueuedEntry) -> Result<(), QueueError> {
         self.insert(session, entry, VecDeque::push_back)
+    }
+
+    /// Recover a DM's durable admission order even when broker deliveries arrive out of order.
+    pub fn enqueue_chronological(
+        &self,
+        session: AgentSessionId,
+        entry: QueuedEntry,
+    ) -> Result<(), QueueError> {
+        self.insert(session, entry, |queue, entry| {
+            let key = |entry: &QueuedEntry| {
+                (
+                    entry.created_at,
+                    entry.announce.as_ref().map(|origin| origin.message_id),
+                )
+            };
+            let index = queue
+                .iter()
+                .position(|queued| key(queued) > key(&entry))
+                .unwrap_or(queue.len());
+            queue.insert(index, entry);
+        })
     }
 
     /// Put an entry ahead of everything already waiting, for a channel

@@ -1,5 +1,8 @@
 /// Fresh ACP capability discovery without creating an agent session.
 pub mod capability_discovery;
+/// Owner-only metadata and context boundaries for agent DMs.
+pub mod direct_messages;
+pub mod dm_turns;
 pub mod error;
 pub mod model;
 /// Which lifecycle facts become notifications for people, and for whom.
@@ -8,6 +11,8 @@ pub mod notifications;
 /// consulted by container managers' idle reapers.
 pub mod pending;
 pub mod ports;
+/// Which channel messages an agent's reply is shown through.
+pub mod presenter;
 /// The per-session queue of turn-occupying actions awaiting their turn.
 pub mod queue;
 /// Compute resources for a sandbox size.

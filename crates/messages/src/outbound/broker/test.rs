@@ -209,6 +209,7 @@ async fn deletions_publish_and_reactions_typing_and_thread_state_stay_off_the_to
         MessageChange::Typing {
             thread_id: Some(ROOT),
             active: true,
+            agent: None,
         },
         MessageChange::ThreadUpdated {
             state: crate::domain::models::ThreadState {

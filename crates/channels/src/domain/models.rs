@@ -609,9 +609,9 @@ pub struct CreateChannelResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct GetOrCreateDmRequest {
-    /// Recipient user id.
+    /// Recipient user id (`macro|...`) or agent persona id (`bot|...`).
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
-    pub recipient_id: MacroUserIdStr<'static>,
+    pub recipient_id: Sender,
 }
 
 /// Request to get or create a private channel.
@@ -1066,6 +1066,8 @@ pub struct LatestMessage {
 #[cfg(feature = "list")]
 #[derive(Debug, Clone)]
 pub struct ChannelWithLatest {
+    /// Persona identity for the viewer's private agent conversation.
+    pub agent_dm: Option<super::agent_dm::AgentDmProfile>,
     /// Channel plus participants.
     pub channel: ChannelWithParticipants,
     /// Latest message data.

@@ -1174,6 +1174,106 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
     }
 }
 
+#[tokio::test]
+async fn reconciling_an_unchanged_bot_reply_does_not_publish_a_second_completion() {
+    let mut repo = fixture();
+    let bot = bot_id::MACRO_AI_BOT_ID;
+    repo.message.sender_id = ChannelSender::new_from_bot(bot);
+    let receipt = EntityAccessReceipt::try_new_bot(
+        bot.into_storage_id(),
+        entity_access::domain::models::BotReceiptScope::User {
+            acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
+        },
+        access("macro|author@example.com", "doc", AccessLevel::Comment)
+            .entity()
+            .clone(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Comment,
+        },
+    )
+    .unwrap();
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let result = service
+        .patch(
+            receipt,
+            repo.message.id,
+            MessagePatch {
+                content: Some(repo.message.content.clone()),
+                notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.id, repo.message.id);
+    assert!(repo.edits.lock().unwrap().is_empty());
+    assert!(events.0.lock().unwrap().is_empty());
+}
+
+fn bot_receipt() -> EntityAccessReceipt<MessageWrite> {
+    EntityAccessReceipt::try_new_bot(
+        bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+        entity_access::domain::models::BotReceiptScope::User {
+            acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
+        },
+        access("macro|author@example.com", "doc", AccessLevel::Comment)
+            .entity()
+            .clone(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Comment,
+        },
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn an_agent_types_through_its_bot_naming_the_session() {
+    let repo = fixture();
+    let events = Events::default();
+    let service = MessageService::new(repo, events.clone());
+    let agent = AgentTyping {
+        session_id: Uuid::from_u128(77),
+        phase: AgentTypingPhase::Working,
+    };
+    service
+        .agent_typing(bot_receipt(), None, true, agent)
+        .await
+        .unwrap();
+    let published = events.0.lock().unwrap();
+    assert!(
+        matches!(
+            published.as_slice(),
+            [MessageEvent {
+                actor,
+                change: MessageChange::Typing { thread_id: None, active: true, agent: Some(sent) },
+                ..
+            }] if actor.starts_with("bot|") && *sent == agent
+        ),
+        "{published:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_person_cannot_say_an_agent_session_is_typing() {
+    let repo = fixture();
+    let events = Events::default();
+    let service = MessageService::new(repo, events.clone());
+    let result = service
+        .agent_typing(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            None,
+            true,
+            AgentTyping {
+                session_id: Uuid::from_u128(77),
+                phase: AgentTypingPhase::Thinking,
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(MessageError::Forbidden)));
+    assert!(events.0.lock().unwrap().is_empty());
+}
+
 #[derive(Clone)]
 struct StrictRepo {
     inner: Repo,

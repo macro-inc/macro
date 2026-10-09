@@ -155,6 +155,8 @@ describe('pending navigation ownership', () => {
           parts: [{ kind: 'text', text: 'Hello' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
         },
       },
       {
@@ -167,6 +169,8 @@ describe('pending navigation ownership', () => {
           parts: [{ kind: 'text', text: 'Ready' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
         },
       },
     ] satisfies FoldedStreamEvent[]);

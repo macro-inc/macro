@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_dm_turn_journal AS candidate SET state = 'running', in_flight = $2, updated_at = now() WHERE action_id = $1 AND state = 'queued' AND NOT EXISTS (SELECT 1 FROM agent_dm_turn_journal other WHERE other.session_id = candidate.session_id AND (other.state IN ('running', 'interrupted') OR (other.state = 'queued' AND (other.created_at, other.source_message_id) < (candidate.created_at, candidate.source_message_id))))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d435c812bee35e95953c69a8fa37443c10e187662fafc2450581c7482d17993"
+}

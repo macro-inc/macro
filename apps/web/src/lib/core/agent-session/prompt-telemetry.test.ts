@@ -97,6 +97,8 @@ function withText(text = 'Hello'): PromptTrace {
         parts: [{ kind: 'text', text: 'Question' }],
         stop: null,
         pending: false,
+        segments: [],
+        phase: null,
       },
     },
     {
@@ -109,6 +111,8 @@ function withText(text = 'Hello'): PromptTrace {
         parts: [{ kind: 'text', text }],
         stop: null,
         pending: false,
+        segments: [],
+        phase: null,
       },
     },
   ]);
@@ -362,6 +366,8 @@ describe('PromptTrace', () => {
           parts: [{ kind: 'text', text: 'hi' }],
           stop: null,
           pending: true,
+          segments: [],
+          phase: null,
         },
       },
     ];
@@ -377,6 +383,8 @@ describe('PromptTrace', () => {
           parts: [{ kind: 'text', text: 'hi' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
         },
       },
     ];
@@ -392,6 +400,8 @@ describe('PromptTrace', () => {
           parts: [{ kind: 'text', text: 'hello' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
         },
       },
     ];
@@ -460,6 +470,8 @@ describe('PromptTrace', () => {
           parts: [{ kind: 'text', text: 'hi' }],
           stop: null,
           pending: false,
+          segments: [],
+          phase: null,
         },
       },
       {
@@ -472,6 +484,8 @@ describe('PromptTrace', () => {
           parts: [{ kind: 'thought', text: 'nothing to say' }],
           stop: { kind: 'end_turn' },
           pending: false,
+          segments: [],
+          phase: null,
         },
       },
     ]);
@@ -510,6 +524,8 @@ describe('PromptTrace', () => {
             parts: [{ kind: 'text', text: 'hi' }],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
           },
         },
         {
@@ -522,6 +538,8 @@ describe('PromptTrace', () => {
             parts: [{ kind: 'text', text: 'Hello' }],
             stop: null,
             pending: false,
+            segments: [],
+            phase: null,
           },
         },
       ],
@@ -559,6 +577,8 @@ describe('PromptTrace', () => {
             parts: [{ kind: 'text', text: 'an earlier turn' }],
             stop: { kind: 'end_turn' },
             pending: false,
+            segments: [],
+            phase: null,
           },
           {
             agentSessionId: SESSION,
@@ -568,6 +588,8 @@ describe('PromptTrace', () => {
             parts: [{ kind: 'text', text: 'hi' }],
             stop: { kind: 'cancelled' },
             pending: false,
+            segments: [],
+            phase: null,
           },
         ],
       },

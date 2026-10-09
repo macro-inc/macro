@@ -217,6 +217,17 @@ pub trait BotRepo: Send + Sync + 'static {
     -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// Eligibility for private conversations with an agent persona.
+pub trait AgentDmEligibility: Send + Sync + 'static {
+    /// Require a runnable persona owned by the caller or their current team.
+    /// Channel placement does not confer or restrict private DM eligibility.
+    fn authorize_agent_dm(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<(), BotError>> + Send;
+}
+
 /// Bot service.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait BotService: Send + Sync + 'static {

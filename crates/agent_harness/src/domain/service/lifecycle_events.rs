@@ -65,7 +65,11 @@ where
         let session = self.sessions.get_session(session_id).await?;
         let (identity, persona) =
             tokio::try_join!(self.identity_of(&session), self.reply_persona(&session))?;
-        Ok((identity, persona.is_coding))
+        let is_dm = match &self.direct_messages {
+            Some(policy) => policy.is_dm_session(session_id).await?,
+            None => false,
+        };
+        Ok((identity, !is_dm && persona.is_coding))
     }
 
     /// The persona a session's thread replies speak as: its bot's name, and

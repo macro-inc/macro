@@ -7,8 +7,74 @@
 3. For a team channel, click `Create`. For a private channel, select `Private — only specific people` and click `Create`. Creation navigates to the channel (as a split pane: `.../channel/<uuid>`); a system row `Channel <name> created` appears.
 4. Step 3 of 3 is an optional invite dialog for either channel type. The recipient combobox searches people and saved agents by name; it also accepts complete email addresses. Select a suggestion or press **Enter** to tokenize it. An unknown complete email appears as **Invite** with a paper airplane icon. Raw text left in the input is not submitted. Click `Add` when recipients are selected, or `Skip for now` to finish without invitees. Selected agents are added through the channel's agent membership endpoint. For team channels, `Automatically add teammates` defaults on; turning it off leaves the channel discoverable without automatically adding current or future teammates. The switch choice is applied when the invite dialog is finished or closed.
 
-Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a channel between two users.
+Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
+
+## Private conversations with an agent
+
+Agent DM discovery is enabled with the local/environment flag
+`VITE_ENABLE_AGENT_DMS=true`; it defaults off and has no PostHog flag. Set it
+before starting Vite or building the frontend. Disabling discovery does not
+delete existing conversations or cancel their work.
+
+Choose an agent in **Create → Message**, or click **Message** in its settings or
+bot profile. The picker offers your agents, eligible team agents, and Macro.
+Choosing an agent removes other recipients. Reopening the same persona returns
+to your existing private channel. Team ownership of an agent does not share
+your DM with teammates. Calls and additional participants are unavailable.
+
+Send normally: no `@` mention is needed. Attachments, references, and quoted
+messages use the channel composer. While the agent works, a typing row with its
+avatar sits under the newest message: `<name> is thinking`, `is typing`,
+`is working`, or `is waiting for an answer`. Below that row, the owner sees the
+passage being written as it streams. They also see any live question or
+permission request and **Stop**, which cancels the active turn. Answer those
+controls to continue.
+
+The reply is posted as ordinary messages while the turn runs. Each finished
+passage becomes a message. The steps taken between passages show inside the
+message as compact rows: a status icon (spinner, check, cross, or warning for
+interrupted), a label such as `Ran`, `Read`, `Edited`, or `Searching`, and a
+short detail like the program or file name. Commands that look like they carry
+secrets show only the program. A long run shows its latest six steps behind an
+`N earlier steps` control. Rows tick live while the run is open, then freeze
+into the snapshot saved in the message. Readers without session access always
+see that snapshot. Only the turn's last message notifies. Previews and search
+quote the passages, not the steps. Typing refreshes every 3 seconds and clears
+on its own if the agent's replica dies. Follow-up messages queue in order, and
+the bar above the composer counts them (`1 queued`). Editing a sent message
+does not invoke the agent again.
+
+Each failed, stopped, or interrupted source message has its own **Retry message**
+action in the current context. Retry is explicit because an interrupted attempt
+may already have performed an external action. Refreshing or reopening the
+channel does not rerun completed messages. A disconnected live display offers
+**Reconnect** without issuing another prompt.
+
+The conversation has no control for resetting the agent's context; it
+continues in one context, and long in-memory conversations summarize old
+context automatically while keeping the complete channel transcript visible.
+A context keeps the persona instructions, model, tools, and permission choice
+it started with, across reconnects; later persona edits do not reach it. A
+harness operator can still revoke permission bypass. Contexts started earlier
+through the API stay marked by a divider before their first message.
+
+If access to the persona is revoked or the persona is deleted, the transcript
+remains readable and the composer explains that the agent is unavailable. New
+prompts, retries, and answers to pending approvals require current access.
+
+For rollout verification, cover a private persona, a team persona as two
+different users, simultaneous opens, queued follow-ups, reload during a turn
+(the typing row and live steps return without a duplicate reply), a multi-step
+turn whose steps tick from running to done, attachments, an inline question,
+an approval, and Stop/Retry.
+Check both desktop and a narrow viewport. Search the Channels view by persona
+name to reopen older DMs, including ones outside the currently loaded page.
+Harness traces use `macro.event.type=agent_trigger.direct_message` and
+`agent.session.id`; the durable turn journal distinguishes queued, running,
+succeeded, failed, stopped, and interrupted attempts. Check completion latency,
+failed/interrupted turns, queue age, and duplicate source admissions during
+internal rollout. Model usage continues through the existing session metering.
 
 ## Imported Slack history
 

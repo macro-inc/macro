@@ -267,21 +267,22 @@ async fn deterministic_commands_skip_admission_but_provider_commands_do_not() {
         engine.clone(),
         admission.clone(),
         async |connection, session, _| {
-            for command in ["/compact", "/ask choose | a | b"] {
+            connection
+                .send_request(text_prompt(&session, "/ask choose | a | b"))
+                .block_task()
+                .await
+                .unwrap();
+            assert!(admission.calls.lock().unwrap().is_empty());
+            // Compaction now summarizes through the provider and needs admission,
+            // as does unknown/development command text sent to the provider.
+            for command in ["/compact", "/develop something"] {
                 connection
                     .send_request(text_prompt(&session, command))
                     .block_task()
                     .await
-                    .unwrap();
+                    .unwrap_err();
             }
-            assert!(admission.calls.lock().unwrap().is_empty());
-            // Unknown/development command text that reaches the provider is still gated.
-            connection
-                .send_request(text_prompt(&session, "/develop something"))
-                .block_task()
-                .await
-                .unwrap_err();
-            assert_eq!(admission.calls.lock().unwrap().len(), 1);
+            assert_eq!(admission.calls.lock().unwrap().len(), 2);
         },
     )
     .await;
@@ -719,7 +720,7 @@ async fn attached_files_reach_the_model_and_stay_in_history() {
 }
 
 #[tokio::test]
-async fn compact_clears_history_without_running_a_turn() {
+async fn compact_summarizes_history_and_carries_the_summary_into_the_next_turn() {
     let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
 
     with_agent(Arc::clone(&engine), async |connection, session| {
@@ -743,12 +744,114 @@ async fn compact_clears_history_without_running_a_turn() {
     .await;
 
     let requests = engine.requests();
-    assert_eq!(requests.len(), 2, "/compact must not reach the engine");
+    assert_eq!(requests.len(), 3);
+    assert_eq!(requests[1].purpose, TurnPurpose::Summary);
+    assert!(requests[1].messages[0].contains("remember this"));
     assert_eq!(
-        requests[1].messages,
-        vec!["after".to_owned()],
-        "compaction empties the conversation"
+        &requests[2].messages[1..],
+        ["ok".to_owned(), "after".to_owned()],
+        "the next prompt keeps the summary"
     );
+}
+
+struct FailedSummaryEngine(ScriptedEngine);
+
+impl TurnEngine for FailedSummaryEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        if request.purpose == TurnPurpose::Summary {
+            let (parts, receiver) = tokio::sync::mpsc::channel(1);
+            parts
+                .try_send(Err(agent::AgentError::Other(anyhow::anyhow!(
+                    "summary unavailable"
+                ))))
+                .unwrap();
+            receiver
+        } else {
+            self.0.run_turn(request)
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_failed_summary_preserves_context_and_reports_failure() {
+    let engine = Arc::new(FailedSummaryEngine(ScriptedEngine::new(vec![
+        StreamPart::Content("noted".into()),
+    ])));
+    let (notifications, _, ()) = with_agent(engine.clone(), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "remember this"))
+            .block_task()
+            .await
+            .unwrap();
+        assert!(
+            connection
+                .send_request(text_prompt(&session, "/compact"))
+                .block_task()
+                .await
+                .is_err()
+        );
+        connection
+            .send_request(text_prompt(&session, "after"))
+            .block_task()
+            .await
+            .unwrap();
+    })
+    .await;
+    assert_eq!(
+        engine.0.requests()[1].messages,
+        ["remember this", "noted", "after"]
+    );
+    assert!(notifications.iter().all(|notification| {
+        notification
+            .meta
+            .as_ref()
+            .is_none_or(|meta| !meta.contains_key(META_NAMESPACE))
+    }));
+}
+
+#[tokio::test]
+async fn a_long_conversation_is_summarized_in_bounded_calls_before_the_next_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "preserved facts".into(),
+    )]));
+    with_agent(engine.clone(), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, &"x".repeat(110_000)))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "continue"))
+            .block_task()
+            .await
+            .unwrap();
+    })
+    .await;
+    let requests = engine.requests();
+    assert!(
+        requests
+            .iter()
+            .filter(|request| request.purpose == TurnPurpose::Summary)
+            .count()
+            >= 3
+    );
+    assert!(
+        requests
+            .iter()
+            .filter(|request| request.purpose == TurnPurpose::Summary)
+            .all(|request| request.messages[0].len() < 65_000)
+    );
+    let last = requests.last().unwrap();
+    assert_eq!(last.purpose, TurnPurpose::Conversation);
+    assert!(last.messages.join("\n").len() < 1000);
+    assert_eq!(last.messages.last().unwrap(), "continue");
 }
 
 #[tokio::test]

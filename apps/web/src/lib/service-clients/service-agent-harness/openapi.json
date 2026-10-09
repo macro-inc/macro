@@ -62,6 +62,151 @@
         ]
       }
     },
+    "/agent-dms/{channel_id}": {
+      "get": {
+        "tags": ["agent-dms"],
+        "summary": "Ordinary channels and another user's agent DMs are both not found.",
+        "operationId": "get_agent_dm",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Conversation channel",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner's agent conversation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentDmConversationDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation not found"
+          },
+          "503": {
+            "description": "Conversation temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-dms/{channel_id}/start-fresh": {
+      "post": {
+        "tags": ["agent-dms"],
+        "summary": "Start a fresh agent context, retaining the channel transcript.",
+        "operationId": "start_fresh_agent_dm",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartFreshAgentDmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "New context reserved"
+          },
+          "404": {
+            "description": "Conversation not found"
+          },
+          "409": {
+            "description": "Context is busy, stale or unavailable"
+          },
+          "503": {
+            "description": "Temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-dms/{channel_id}/turns/{source}/retry": {
+      "post": {
+        "tags": ["agent-dms"],
+        "summary": "Explicitly retry a failed DM message in its current context segment.",
+        "operationId": "retry_agent_dm",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryAgentDmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Retry queued"
+          },
+          "404": {
+            "description": "Conversation or turn not found"
+          },
+          "409": {
+            "description": "Attempt cannot be retried"
+          },
+          "503": {
+            "description": "Temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent-models/load": {
       "post": {
         "tags": ["agent-models"],
@@ -2397,6 +2542,124 @@
           }
         }
       },
+      "AgentDmConversationDto": {
+        "type": "object",
+        "description": "Metadata visible only to the user who owns the DM.",
+        "required": [
+          "channelId",
+          "botId",
+          "name",
+          "available",
+          "settingsChanged",
+          "segments",
+          "turns"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Whether the owner may currently send a new prompt."
+          },
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Optional persona avatar."
+          },
+          "botId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persona id (without the bot principal prefix)."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel containing the visible transcript."
+          },
+          "name": {
+            "type": "string",
+            "description": "Persona's historical display name."
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentDmSegmentDto"
+            },
+            "description": "Context segments in chronological order."
+          },
+          "settingsChanged": {
+            "type": "boolean",
+            "description": "Whether new persona settings are available to adopt explicitly."
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentDmTurnDto"
+            },
+            "description": "Persistent state of each accepted message and its current attempt."
+          }
+        }
+      },
+      "AgentDmSegmentDto": {
+        "type": "object",
+        "description": "An explicit context boundary; all channel messages remain visible.",
+        "required": ["sessionId", "createdAt", "isCurrent"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the segment began."
+          },
+          "isCurrent": {
+            "type": "boolean",
+            "description": "Whether this is the current agent context."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Session whose controls and live events belong to this segment."
+          }
+        }
+      },
+      "AgentDmTurnDto": {
+        "type": "object",
+        "description": "Execution status without exposing the persona prompt or stored credentials.",
+        "required": [
+          "sourceMessageId",
+          "actionId",
+          "sessionId",
+          "state",
+          "createdAt"
+        ],
+        "properties": {
+          "actionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Current runtime attempt identity."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the source message was first accepted."
+          },
+          "replyMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The associated agent reply, if it has been posted."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Context segment carrying this turn."
+          },
+          "sourceMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The user's message in the channel timeline."
+          },
+          "state": {
+            "$ref": "#/components/schemas/DmTurnState",
+            "description": "Durable execution state."
+          }
+        }
+      },
       "AgentModelDto": {
         "type": "object",
         "description": "One model picker option.",
@@ -3323,6 +3586,18 @@
           }
         }
       },
+      "DmTurnState": {
+        "type": "string",
+        "description": "The state of one source message, retained after completion for deduplication.",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "stopped",
+          "interrupted"
+        ]
+      },
       "DocumentId": {
         "type": "string",
         "description": "A validated document identifier. Historical document ids need not be UUIDs."
@@ -3880,6 +4155,18 @@
           }
         }
       },
+      "RetryAgentDmRequest": {
+        "type": "object",
+        "description": "The attempt the user saw and chose to retry; prevents double-click reruns.",
+        "required": ["actionId"],
+        "properties": {
+          "actionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Current failed attempt identity."
+          }
+        }
+      },
       "SandboxSize": {
         "type": "string",
         "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agent_harness/sandbox_sizes.json`.",
@@ -4065,6 +4352,18 @@
                 "description": "The explicit access level granted to the owner's team, or `null` when disabled."
               }
             ]
+          }
+        }
+      },
+      "StartFreshAgentDmRequest": {
+        "type": "object",
+        "description": "The context the user is choosing to leave behind.",
+        "required": ["sessionId"],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Current session id shown in the conversation metadata."
           }
         }
       },

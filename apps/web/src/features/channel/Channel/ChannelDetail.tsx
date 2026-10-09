@@ -27,7 +27,11 @@ import {
 import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
 import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { useChannelName, useChannelType } from '@core/context/channels';
+import {
+  useChannel,
+  useChannelName,
+  useChannelType,
+} from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
@@ -142,6 +146,7 @@ export function ChannelDetailTabs(props: {
 }
 
 export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
+  const channel = useChannel(props.channelId);
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
   const call = useCall(() => props.channelId);
@@ -170,7 +175,9 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           channelType={channelType()}
         />
       </DebugSuspense>
-      <Show when={ENABLE_CALLS && !call.isInThisChannel()}>
+      <Show
+        when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+      >
         <DebugSuspense name="ChannelDetail.call-button">
           <ChannelCallButton channelId={props.channelId} />
         </DebugSuspense>
@@ -246,6 +253,9 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const channelId = props.channelId;
+  const conversationChannel = useChannel(channelId);
+  const canCall = () =>
+    conversationChannel() ? !conversationChannel()?.agent_dm : undefined;
   const channelName = useChannelName(channelId, props.fallbackName);
   useSplitDisplayName(() => channelName() ?? 'New Channel');
 
@@ -288,8 +298,20 @@ function ChannelDetailContent(props: ChannelDetailProps) {
     normalizeChannelTab(hasActiveCallHere ? 'call' : DEFAULT_CHANNEL_TAB)
   );
   const setActiveTab = (tab: ChannelTabId) => {
-    setActiveTabInternal(normalizeChannelTab(tab));
+    setActiveTabInternal(
+      conversationChannel()?.agent_dm &&
+        ['call', 'calls', 'participants'].includes(tab)
+        ? DEFAULT_CHANNEL_TAB
+        : normalizeChannelTab(tab)
+    );
   };
+  createComputed(() => {
+    if (
+      conversationChannel()?.agent_dm &&
+      ['call', 'calls', 'participants'].includes(activeTab())
+    )
+      setActiveTabInternal(DEFAULT_CHANNEL_TAB);
+  });
   const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
 
   // A new target within the already-mounted channel (a notification jump)
@@ -351,6 +373,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
         <DebugSuspense name="ChannelDetail.auto-join">
           <ChannelCallAutoJoin
+            canCall={canCall}
             channelId={channelId}
             pendingJoinCall={pendingJoinCall}
             onHandled={() => setPendingJoinCall(false)}

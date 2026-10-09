@@ -13,6 +13,7 @@ import { Message } from './Message';
 import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
 
 type ChannelMessageProps = {
+  renderContent?: (content: JSX.Element) => JSX.Element;
   parent: MessageParent;
   inputMode?: 'inline' | 'unified';
   message: MessageData;
@@ -25,6 +26,11 @@ type ChannelMessageProps = {
    * navigation, points at this message.
    */
   targeted?: boolean;
+  /**
+   * Leave out who triggered a bot's message. In a private conversation with
+   * an agent that is always the viewer, so it says nothing.
+   */
+  hideTriggeredBy?: boolean;
   onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
 };
 
@@ -36,6 +42,7 @@ function isEditingMessage(
 }
 
 function MessageContentSlot(props: {
+  renderContent?: (content: JSX.Element) => JSX.Element;
   parent: MessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
@@ -44,7 +51,7 @@ function MessageContentSlot(props: {
   const message = useMessage();
   const isEditing = () => isEditingMessage(props.messageEditor, message().id);
 
-  return (
+  const content = (
     <Switch>
       <Match
         when={
@@ -65,6 +72,7 @@ function MessageContentSlot(props: {
       </Match>
     </Switch>
   );
+  return props.renderContent ? props.renderContent(content) : content;
 }
 
 function MessageFooter(props: { messageEditor?: MessageEditor }) {
@@ -110,9 +118,11 @@ function DeletedMessageLayout() {
 }
 
 function RegularMessageLayout(props: {
+  renderContent?: (content: JSX.Element) => JSX.Element;
   parent: MessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
+  hideTriggeredBy?: boolean;
 }) {
   return (
     <Message.Layout class="pt-(--regular-message-padding-t)">
@@ -130,10 +140,13 @@ function RegularMessageLayout(props: {
           <Message.EditedIndicator class="shrink-0" />
           <Message.AgentSessionLink class="ml-auto" />
         </div>
-        <Message.FromPill />
+        <Show when={!props.hideTriggeredBy}>
+          <Message.FromPill />
+        </Show>
       </Message.Slot>
       <Message.Slot placement="content" class="ph-no-capture">
         <MessageContentSlot
+          renderContent={props.renderContent}
           parent={props.parent}
           inputMode={props.inputMode}
           messageEditor={props.messageEditor}
@@ -151,6 +164,7 @@ function RegularMessageLayout(props: {
 }
 
 function GroupedMessageLayout(props: {
+  renderContent?: (content: JSX.Element) => JSX.Element;
   parent: MessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
@@ -163,6 +177,7 @@ function GroupedMessageLayout(props: {
       <Message.Slot placement="content">
         <div class="ph-no-capture flex gap-3 min-w-0 items-start">
           <MessageContentSlot
+            renderContent={props.renderContent}
             parent={props.parent}
             inputMode={props.inputMode}
             messageEditor={props.messageEditor}
@@ -219,6 +234,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Match>
           <Match when={isGrouped()}>
             <GroupedMessageLayout
+              renderContent={props.renderContent}
               parent={props.parent}
               inputMode={props.inputMode}
               messageEditor={props.messageEditor}
@@ -226,9 +242,11 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Match>
           <Match when={true}>
             <RegularMessageLayout
+              renderContent={props.renderContent}
               parent={props.parent}
               inputMode={props.inputMode}
               messageEditor={props.messageEditor}
+              hideTriggeredBy={props.hideTriggeredBy}
             />
           </Match>
         </Switch>

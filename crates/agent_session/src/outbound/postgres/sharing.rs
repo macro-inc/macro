@@ -31,6 +31,12 @@ fn team_error(error: rootcause::Report<TeamShareError>) -> AgentSessionError {
 }
 
 impl<B: BotFacts + 'static> SessionSharingRepo for PgAgentSessionRepo<B> {
+    async fn is_private_conversation(&self, id: AgentSessionId) -> Result<bool> {
+        Ok(sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM agent_dm_conversations WHERE session_id = $1) AS \"exists!\"",
+            id.as_uuid()
+        ).fetch_one(&self.pool).await.context("read session conversation provenance")?)
+    }
     #[tracing::instrument(skip(self), err)]
     async fn permissions(&self, id: AgentSessionId) -> Result<SharePermissionV2> {
         let row = sqlx::query!(

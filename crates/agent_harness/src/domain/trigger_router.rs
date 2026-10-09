@@ -57,6 +57,33 @@ pub fn route_agent_trigger(
     links: &StaticFileLinks,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::DirectMessage(event)) => {
+            let Some(runtime) = runtime else {
+                return Err(Skipped::ForeignBot);
+            };
+            let sender = event
+                .message
+                .sender
+                .as_user()
+                .cloned()
+                .ok_or(Skipped::NotFromUser)?;
+            Ok(RoutedTrigger::Command(
+                event.session_id,
+                HarnessCommand::DirectMessage(OpenSession {
+                    bot_id: event.bot_id,
+                    runtime,
+                    origin: SessionOrigin::Mention(MentionOrigin {
+                        reply_placement: super::model::ReplyPlacement::Timeline,
+                        parent: event.message.parent,
+                        thread_id: event.message.thread_id.unwrap_or(event.message.message_id),
+                        message_id: event.message.message_id,
+                        sender,
+                        content: event.message.content,
+                        attachments: links.prompt_attachments(&event.message.attachments),
+                    }),
+                }),
+            ))
+        }
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
             let Some(runtime) = runtime.filter(|runtime| runtime.kind.is_managed()) else {
                 return Err(Skipped::ForeignBot);
@@ -93,6 +120,7 @@ pub fn route_agent_trigger(
                     bot_id,
                     runtime,
                     origin: SessionOrigin::Mention(MentionOrigin {
+                        reply_placement: Default::default(),
                         parent: message.parent,
                         // A top-level mention roots its own thread; a mention
                         // inside a thread answers into that thread.
@@ -116,6 +144,7 @@ pub fn route_agent_trigger(
                 return Err(Skipped::Unrecognized);
             };
             let origin = AnnounceOrigin {
+                reply_placement: Default::default(),
                 reuse_origin_message: false,
                 parent: message.parent,
                 thread_id: message.thread_id.unwrap_or(message.message_id),

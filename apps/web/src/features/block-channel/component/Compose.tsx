@@ -1,3 +1,5 @@
+import { useAgentDmRecipients } from '@app/features/agent-dms/agent-dm-recipients';
+import { selectConversationRecipients } from '@app/features/agent-dms/core/personas';
 import {
   applyInlineFormat,
   applyNodeFormat,
@@ -23,6 +25,7 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
@@ -41,6 +44,7 @@ import {
 } from '@core/util/upload';
 import InfoIcon from '@phosphor/info.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { ComposerSurface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
@@ -48,10 +52,18 @@ export function ChannelCompose() {
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [channelName, setChannelName] = createSignal<string>('');
 
-  const { users: destinationOptions } = useCombinedRecipients();
+  const { users: humanOptions } = useCombinedRecipients();
+  const agentOptions = ENABLE_AGENT_DMS ? useAgentDmRecipients() : () => [];
+  const destinationOptions = () => [...humanOptions(), ...agentOptions()];
   const [selectedRecipients, setSelectedRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
+    WithCustomUserInput<'user' | 'contact' | 'agent'>[]
   >([]);
+
+  const selectRecipients = (
+    next: WithCustomUserInput<'user' | 'contact' | 'agent'>[]
+  ) => {
+    setSelectedRecipients(selectConversationRecipients(next));
+  };
 
   const selectedRecipientCount = createMemo(() => selectedRecipients().length);
 
@@ -73,6 +85,8 @@ export function ChannelCompose() {
   });
 
   const dmUserName = createMemo(() => {
+    const recipient = selectedRecipients()[0];
+    if (recipient?.kind === 'agent') return recipient.data.name;
     const id = dmUserId();
     return id ? getDisplayName(tryMacroId(id)) : undefined;
   });
@@ -90,6 +104,7 @@ export function ChannelCompose() {
       const names = recipients
         .slice(0, 2)
         .map((r) => {
+          if (r.kind === 'agent') return r.data.name;
           if (r.kind === 'user') {
             return getDisplayName(tryMacroId(r.data.id));
           }
@@ -109,6 +124,7 @@ export function ChannelCompose() {
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const createChannelMutation = useCreateChannelMutation();
+  const createDm = useGetOrCreateDirectMessageMutation();
 
   async function handleSend(snapshot: InputSnapshot) {
     setError(undefined);
@@ -125,6 +141,26 @@ export function ChannelCompose() {
     });
 
     try {
+      const persona = recipients.find(
+        (recipient) => recipient.kind === 'agent'
+      );
+      if (persona) {
+        const dm = await createDm.mutateAsync({
+          recipient_id: `bot|${persona.data.id}`,
+        });
+        const sent = await sendToChannel({
+          channelId: dm.channel_id,
+          content,
+          mentions,
+          attachments,
+          navigate: { navigate: true, mergeHistory: true },
+        });
+        if (!sent)
+          throw new Error(
+            'Could not send your message. Your draft has been kept.'
+          );
+        return;
+      }
       if (
         destination.type === 'users' &&
         channelName() &&
@@ -249,11 +285,15 @@ export function ChannelCompose() {
                 }
               }}
             />
-            <RecipientSelector<'user' | 'contact'>
+            <RecipientSelector<'user' | 'contact' | 'agent'>
               options={destinationOptions}
               selectedOptions={selectedRecipients()}
-              setSelectedOptions={setSelectedRecipients}
-              placeholder="To: Macro users or email addresses"
+              setSelectedOptions={selectRecipients}
+              placeholder={
+                ENABLE_AGENT_DMS
+                  ? 'To: People, agents, or email addresses'
+                  : 'To: Macro users or email addresses'
+              }
               triedToSubmit={triedToSubmit}
               focusOnMount
               hideMenuOnEscape

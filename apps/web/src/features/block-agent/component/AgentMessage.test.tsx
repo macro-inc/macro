@@ -162,6 +162,8 @@ const message = (
   agentSessionId: 'session',
   requestId: null,
   pending: false,
+  segments: [],
+  phase: null,
   turn: 0,
   author: { kind: 'agent' },
   parts,

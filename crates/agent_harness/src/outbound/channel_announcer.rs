@@ -18,6 +18,7 @@ mod test;
 use std::sync::Arc;
 
 use agent_egress::domain::approval::MACRO_SERVER_SLUG;
+use agent_fold::domain::model::{ActivityStatus, ProjectedSegment, SegmentKind, TurnId, TurnPhase};
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
 use entity_access::domain::{
@@ -26,8 +27,9 @@ use entity_access::domain::{
 };
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{
-    AgentAnnouncementChip, AgentAnnouncementReplyTarget, AgentChatReply, AgentChatReplyBody,
-    AgentConnectionChip, AgentConnectionPrompt,
+    AgentActivityRow, AgentActivityStatus, AgentAnnouncementChip, AgentAnnouncementReplyTarget,
+    AgentChatReply, AgentChatReplyBody, AgentConnectionChip, AgentConnectionPrompt,
+    AgentReplySegment,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
@@ -36,14 +38,14 @@ use messages::domain::{
         MessageAttribution, MessageParent, PatchMessageNotificationPolicy, PostMessage,
         PostMessageNotificationPolicy,
     },
-    ports::{MessageError, MessagePatch},
+    ports::{AgentTyping, AgentTypingPhase, MessageError, MessagePatch},
     service::MessageWrite,
 };
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AnnouncedMessage, DeclinedMention, HeldToolCall, ReplyOutcome, ResolvedReply,
-    SessionAnnouncement, SessionBlocker,
+    AgentTypingUpdate, AnnouncedMessage, DeclinedMention, HeldToolCall, ReplyOutcome,
+    ReplyPresentation, ResolvedReply, SessionAnnouncement, SessionBlocker,
 };
 use crate::domain::ports::SessionAnnouncer;
 
@@ -73,6 +75,108 @@ fn chat_reply(session_id: AgentSessionId, body: AgentChatReplyBody) -> AgentChat
     AgentChatReply {
         session_id: session_id.to_string(),
         body,
+        link: None,
+    }
+}
+
+/// A reply's segments as the message composer takes them: passages as the
+/// agent wrote them, and runs of steps with their rows. Requests for the
+/// user are answered live and are not part of a message.
+fn reply_segments(turn: TurnId, segments: &[ProjectedSegment]) -> Vec<AgentReplySegment> {
+    segments
+        .iter()
+        .filter_map(|projected| match projected.segment.kind {
+            SegmentKind::Prose => projected
+                .text
+                .clone()
+                .map(|markdown| AgentReplySegment::Prose { markdown }),
+            SegmentKind::Activity => Some(AgentReplySegment::Activity {
+                turn: turn.0,
+                segment: projected.segment.index,
+                rows: projected
+                    .segment
+                    .rows
+                    .iter()
+                    .map(|row| AgentActivityRow {
+                        id: row.id.clone(),
+                        label: row.label.clone(),
+                        detail: row.detail.clone(),
+                        status: match row.status {
+                            ActivityStatus::Running => AgentActivityStatus::Running,
+                            ActivityStatus::Completed => AgentActivityStatus::Completed,
+                            ActivityStatus::Failed => AgentActivityStatus::Failed,
+                            ActivityStatus::Interrupted => AgentActivityStatus::Interrupted,
+                        },
+                    })
+                    .collect(),
+                sealed: projected.segment.sealed,
+            }),
+            SegmentKind::Interaction => None,
+        })
+        .collect()
+}
+
+/// What a message showing a reply's segments says, with how the turn ended
+/// or what it is waiting on. Never blank, like [`reply_body`]: a turn that
+/// said nothing and did nothing is told as such.
+fn segments_body(
+    turn: TurnId,
+    segments: &[ProjectedSegment],
+    outcome: Option<&ReplyOutcome>,
+    pending: bool,
+) -> AgentChatReplyBody {
+    let mut shown = reply_segments(turn, segments);
+    let has_prose = shown
+        .iter()
+        .any(|segment| matches!(segment, AgentReplySegment::Prose { .. }));
+    let mut pending = pending;
+    let footer = match outcome {
+        None => None,
+        // The answer is the reply's last passage; told again only when the
+        // segments do not carry it.
+        Some(ReplyOutcome::Answered(text)) => {
+            if !has_prose {
+                shown.push(AgentReplySegment::Prose {
+                    markdown: text.clone(),
+                });
+            }
+            None
+        }
+        Some(ReplyOutcome::Empty) => {
+            (!has_prose && shown.is_empty()).then(|| EMPTY_RESPONSE_FALLBACK.to_owned())
+        }
+        Some(ReplyOutcome::Cancelled) => Some(CANCELLED_FALLBACK.to_owned()),
+        Some(ReplyOutcome::Failed) => Some(ERROR_FALLBACK.to_owned()),
+        Some(ReplyOutcome::NeedsInput { question }) => {
+            shown.push(AgentReplySegment::Prose {
+                markdown: format!("{NEEDS_INPUT_LEAD}\n\n{question}"),
+            });
+            pending = false;
+            None
+        }
+        // The steps so far, then who the turn waits on.
+        Some(ReplyOutcome::AwaitingApproval(call)) => {
+            pending = false;
+            Some(awaiting_approval(call))
+        }
+        Some(ReplyOutcome::Resumed) => {
+            pending = true;
+            None
+        }
+    };
+    AgentChatReplyBody::Segments {
+        segments: shown,
+        pending,
+        footer,
+    }
+}
+
+fn typing_phase(phase: TurnPhase) -> AgentTypingPhase {
+    match phase {
+        TurnPhase::Thinking => AgentTypingPhase::Thinking,
+        TurnPhase::Writing => AgentTypingPhase::Writing,
+        TurnPhase::Working => AgentTypingPhase::Working,
+        TurnPhase::Waiting => AgentTypingPhase::Waiting,
     }
 }
 
@@ -296,7 +400,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .post(
                 access,
                 PostMessage {
-                    id: None,
+                    id: announcement.reply_message_id,
                     attribution: MessageAttribution::ActingUser,
                     // Neither shape is news yet. The chip is a pointer: the
                     // thread hears about the session when it finishes or
@@ -305,7 +409,9 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                     // answer, as the answer.
                     notification_policy: PostMessageNotificationPolicy::Silent,
                     content,
-                    thread_id: Some(announcement.origin_thread_id),
+                    thread_id: announcement
+                        .reply_placement
+                        .thread_id(announcement.origin_thread_id),
                     anchor: None,
                     mentions: Vec::new(),
                     attachments: Vec::new(),
@@ -332,8 +438,20 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .await?;
         let message_id = resolution.message_id;
         let notification_policy = patch_policy(&resolution.outcome);
-        let body = reply_body(resolution.outcome);
-        let carries_answer = matches!(body, AgentChatReplyBody::Markdown { .. });
+        let body = if resolution.segments.is_empty() {
+            reply_body(resolution.outcome)
+        } else {
+            segments_body(
+                resolution.turn,
+                &resolution.segments,
+                Some(&resolution.outcome),
+                false,
+            )
+        };
+        let carries_answer = matches!(
+            body,
+            AgentChatReplyBody::Markdown { .. } | AgentChatReplyBody::Segments { .. }
+        );
         let patch = |content| MessagePatch {
             notification_policy,
             content: Some(content),
@@ -413,7 +531,10 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                     anchor: None,
                     content,
                     mentions: Vec::new(),
-                    thread_id: Some(declined.origin.thread_id),
+                    thread_id: declined
+                        .origin
+                        .reply_placement
+                        .thread_id(declined.origin.thread_id),
                     attachments: Vec::new(),
                     nonce: None,
                     // Unlike a session chip, this is the whole answer: the
@@ -425,5 +546,105 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
         Ok(())
+    }
+
+    async fn present(&self, presentation: ReplyPresentation) -> Result<()> {
+        let access = self
+            .bot_write(
+                presentation.bot_id,
+                presentation.triggered_by.clone(),
+                &presentation.parent,
+            )
+            .await?;
+        let body = match (&presentation.outcome, presentation.segments.is_empty()) {
+            // Nothing to show but how the turn ended.
+            (Some(outcome), true) => reply_body(outcome.clone()),
+            (outcome, _) => segments_body(
+                presentation.turn,
+                &presentation.segments,
+                outcome.as_ref(),
+                presentation.pending,
+            ),
+        };
+        let content = self
+            .lexical
+            .compose_agent_chat_reply(&AgentChatReply {
+                session_id: presentation.session_id.to_string(),
+                body,
+                link: Some(presentation.link),
+            })
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+        let message_id = presentation.message_id;
+        // Posted under its allocated id; a message already there under it is
+        // the same reply shown before, and is returned instead.
+        let shown = self
+            .messages
+            .post_from_event(
+                access.clone(),
+                message_id,
+                PostMessage {
+                    id: None,
+                    attribution: MessageAttribution::ActingUser,
+                    // Only the reply's last message is news. Earlier ones are
+                    // posted as the agent works, the way a teammate's
+                    // messages arrive while you watch.
+                    notification_policy: if presentation.notify {
+                        PostMessageNotificationPolicy::Default
+                    } else {
+                        PostMessageNotificationPolicy::Silent
+                    },
+                    content: content.clone(),
+                    thread_id: presentation.thread_id,
+                    anchor: None,
+                    mentions: Vec::new(),
+                    attachments: Vec::new(),
+                    nonce: None,
+                },
+            )
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+        // A participant deleted it while the agent ran: they did not want it.
+        if shown.deleted_at.is_some() || shown.content == content {
+            return Ok(());
+        }
+        match self
+            .messages
+            .patch(
+                access,
+                message_id,
+                MessagePatch {
+                    content: Some(content),
+                    notification_policy: if presentation.notify {
+                        PatchMessageNotificationPolicy::NotifyAsPostedMessage
+                    } else {
+                        PatchMessageNotificationPolicy::Default
+                    },
+                    ..Default::default()
+                },
+            )
+            .await
+        {
+            Ok(_) | Err(MessageError::NotFound) => Ok(()),
+            Err(error) => Err(HarnessError::Announce(rootcause::report!(error).into())),
+        }
+    }
+
+    async fn typing(&self, typing: AgentTypingUpdate) -> Result<()> {
+        let access = self
+            .bot_write(typing.bot_id, typing.triggered_by, &typing.parent)
+            .await?;
+        self.messages
+            .agent_typing(
+                access,
+                typing.thread_id,
+                typing.active,
+                AgentTyping {
+                    session_id: typing.session_id.as_uuid(),
+                    phase: typing_phase(typing.phase),
+                },
+            )
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))
     }
 }

@@ -14,6 +14,8 @@ const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
   parts: [{ kind: 'thought', text: 'Inspecting the repository' }],
   stop: null,
   pending: false,
+  segments: [],
+  phase: null,
   ...overrides,
 });
 

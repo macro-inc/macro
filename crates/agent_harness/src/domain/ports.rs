@@ -299,6 +299,20 @@ pub trait SessionAnnouncer: Send + Sync + 'static {
     /// session" but "here is what you need first". Same channel, same
     /// sender, no session to point at.
     fn decline(&self, declined: DeclinedMention) -> impl Future<Output = Result<()>> + Send;
+
+    /// Show one message of a reply as it should read now: post it under its
+    /// allocated id if it is not there yet, or update it if it reads
+    /// differently. Posting the same presentation twice changes nothing.
+    fn present(
+        &self,
+        presentation: crate::domain::model::ReplyPresentation,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Say that the session is typing through its bot, or that it stopped.
+    fn typing(
+        &self,
+        typing: crate::domain::model::AgentTypingUpdate,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Told when a tool call in a session's turn starts or stops waiting for the

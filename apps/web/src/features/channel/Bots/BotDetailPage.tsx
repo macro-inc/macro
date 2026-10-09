@@ -1,5 +1,8 @@
+import { canDirectMessagePersona } from '@app/features/agent-dms/core/personas';
+import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
@@ -35,6 +38,7 @@ import { CreateBotTokenDialog } from './CreateBotTokenDialog';
 import { createBotAvatarUpload } from './createBotAvatarUpload';
 
 export function BotDetail(props: { botId: string; onBack: () => void }) {
+  const agentDm = ENABLE_AGENT_DMS ? useOpenAgentDm() : undefined;
   const channelsContext = useChannelsContext();
   const currentUserId = useUserId();
   const currentTeamQuery = useCurrentTeamQuery();
@@ -237,6 +241,28 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                       @{form.handle || bot().handle}
                     </p>
                   </div>
+                  <Show
+                    when={
+                      agentDm &&
+                      bot().has_agent &&
+                      canDirectMessagePersona(
+                        bot().owner,
+                        currentUserId(),
+                        currentTeamQuery.data?.team.id
+                      )
+                    }
+                  >
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      class="ml-auto"
+                      disabled={agentDm?.pending()}
+                      onClick={() => void agentDm?.open(props.botId)}
+                    >
+                      Message
+                    </Button>
+                  </Show>
                 </header>
 
                 <BotFormSection

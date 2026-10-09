@@ -5,6 +5,8 @@
 
 /// Authenticated ACP capability discovery.
 pub mod capability_discovery;
+/// Authenticated agent DM metadata.
+pub mod direct_messages;
 pub mod kafka;
 /// Authenticated model discovery.
 pub mod model_load;

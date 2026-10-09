@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
+import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentDmData, GetAgentDmErrors, GetAgentDmResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, RetryAgentDmData, RetryAgentDmErrors, RetryAgentDmResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartData, StartErrors, StartFreshAgentDmData, StartFreshAgentDmErrors, StartFreshAgentDmResponses, StartResponses, StatusData, StatusErrors, StatusResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -64,6 +64,47 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).post<DiscoverAgentCapabilitiesHandlerResponses, DiscoverAgentCapabilitiesHandlerErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent-capabilities/discover',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Ordinary channels and another user's agent DMs are both not found.
+     */
+    public getAgentDm<ThrowOnError extends boolean = false>(options: Options<GetAgentDmData, ThrowOnError>): RequestResult<GetAgentDmResponses, GetAgentDmErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentDmResponses, GetAgentDmErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/agent-dms/{channel_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Start a fresh agent context, retaining the channel transcript.
+     */
+    public startFreshAgentDm<ThrowOnError extends boolean = false>(options: Options<StartFreshAgentDmData, ThrowOnError>): RequestResult<StartFreshAgentDmResponses, StartFreshAgentDmErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<StartFreshAgentDmResponses, StartFreshAgentDmErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/agent-dms/{channel_id}/start-fresh',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Explicitly retry a failed DM message in its current context segment.
+     */
+    public retryAgentDm<ThrowOnError extends boolean = false>(options: Options<RetryAgentDmData, ThrowOnError>): RequestResult<RetryAgentDmResponses, RetryAgentDmErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RetryAgentDmResponses, RetryAgentDmErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/agent-dms/{channel_id}/turns/{source}/retry',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

@@ -3301,7 +3301,11 @@ export const getAttachmentReferencesResponse = zod
  */
 export const getOrCreateDmBody = zod
   .object({
-    recipient_id: zod.string().describe('Recipient user id.'),
+    recipient_id: zod
+      .string()
+      .describe(
+        'Recipient user id (`macro|...`) or agent persona id (`bot|...`).'
+      ),
   })
   .describe('Request to get or create a direct message channel.');
 
@@ -3909,6 +3913,25 @@ export const getChannelsResponse = zod
       .array(
         zod
           .object({
+            agent_dm: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    avatar_url: zod
+                      .string()
+                      .nullish()
+                      .describe('Persona avatar, when supplied.'),
+                    bot_id: zod
+                      .string()
+                      .describe('Persona id without the bot principal prefix.'),
+                    name: zod.string().describe('Persona display name.'),
+                  })
+                  .describe(
+                    'Historical persona identity displayed beside a private conversation.'
+                  ),
+              ])
+              .optional(),
             auto_join_team: zod
               .boolean()
               .describe('Whether team members automatically join the channel.'),

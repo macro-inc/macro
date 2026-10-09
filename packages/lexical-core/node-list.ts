@@ -13,6 +13,7 @@ import {
   TabNode,
   TextNode,
 } from 'lexical';
+import { AgentActivityNode } from './nodes/AgentActivityNode';
 import { AgentContextNode } from './nodes/AgentContextNode';
 import { AgentSessionMentionNode } from './nodes/AgentSessionMentionNode';
 import { AwaitNode } from './nodes/AwaitNode';
@@ -122,6 +123,7 @@ export const SupportedNodeTypes = [
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,
+  AgentActivityNode,
   AgentContextNode,
   CursorSystemNotificationNode,
 ] as const;

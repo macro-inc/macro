@@ -34,6 +34,8 @@ mod permission;
 mod plan;
 /// Plain text derived from renderable messages for search.
 mod search;
+/// How a reply reads as a conversation: prose, activity, interactions.
+mod segment;
 /// Turn-level facts derived from the fold.
 mod signal;
 /// Delegated agents.
@@ -55,6 +57,10 @@ pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata, Turn
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
+pub use segment::{
+    ActivityRow, ActivityStatus, ProjectedSegment, Segment, SegmentKind, TurnPhase, phase, project,
+    prose_text, segments,
+};
 pub use signal::TurnSignal;
 pub use subagent::{SubagentResult, ToolStats};
 pub use tool::{AnsiText, FileDiff, ToolDetail, ToolName, ToolStatus};

@@ -32,6 +32,9 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(async () => {}),
 }));
 
+vi.mock('@app/features/agent-dms/queries/search-pool', () => ({
+  useAgentDmSearchPool: () => () => [],
+}));
 vi.mock('@app/features/command/mobile/mobileSearchState', () => ({
   SearchState: {
     isOpen: () => mocks.searchOpen(),

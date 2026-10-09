@@ -78,6 +78,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 }));
 vi.mock('@ui/components/Tabs', () => ({ Tabs: () => null }));
 vi.mock('@core/context/channels', () => ({
+  useChannel: () => () => undefined,
   useChannelName: () => () => 'channel-name',
   useChannelType: () => () => 'private',
 }));

@@ -31,5 +31,6 @@
  * Version 7.0 - Oct 2026. Added TaskListNode: replaces ListNode at runtime, serializes as
  *   `task-list` with the `list` wire shape plus optional `$.taskListView` node state
  *   (persisted check-list task filters).
+ * Version 8.0 - Oct 2026. Added AgentActivityNode: the steps of an agent's reply between two passages, with a snapshot of its rows and live rendering where the session is readable.
  */
-export const MARKDOWN_VERSION_COUNTER = 7.0;
+export const MARKDOWN_VERSION_COUNTER = 8.0;

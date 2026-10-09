@@ -335,3 +335,50 @@ async fn the_owner_and_sender_reach_the_lexical_service() {
     assert!(body.get("sender").is_none());
     server.abort();
 }
+
+/// A DM's prompt says so to the lexical service, and nothing else does.
+#[tokio::test]
+async fn only_a_direct_message_is_marked_for_the_lexical_service() {
+    let received: Arc<Mutex<Option<serde_json::Value>>> = Arc::default();
+    let seen = received.clone();
+    let app = Router::new().route(
+        "/agent-context",
+        post(move |Json(body): Json<serde_json::Value>| {
+            let seen = seen.clone();
+            async move {
+                *seen.lock().unwrap() = Some(body);
+                Json(serde_json::json!({ "markdown": "composed" }))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let composer = LexicalAgentPromptComposer::new(LexicalClient::new(
+        "test".into(),
+        format!("http://{address}"),
+    ));
+
+    for (direct_message, expected) in [(true, Some(true)), (false, None)] {
+        composer
+            .compose(
+                "Raw prompt",
+                None,
+                None,
+                None,
+                Some(&ConversationContext {
+                    reply_target: Some(ReplyTarget::None),
+                    direct_message,
+                    ..ConversationContext::default()
+                }),
+            )
+            .await
+            .unwrap();
+        let body = received.lock().unwrap().clone().unwrap();
+        assert_eq!(
+            body.get("directMessage").and_then(|v| v.as_bool()),
+            expected
+        );
+    }
+    server.abort();
+}

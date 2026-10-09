@@ -644,6 +644,9 @@ where
                         "agent session elicitation cleared"
                     );
                 }
+                // A reply's shape changes several times a turn; the turn's
+                // own span already covers it, so this is not logged.
+                TurnSignal::Progressed { .. } => {}
             }
             self.turn_observer.signal(self.machine.id(), signal);
         }

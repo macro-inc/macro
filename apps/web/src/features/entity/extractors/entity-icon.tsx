@@ -1,3 +1,4 @@
+import { PersonaAvatar } from '@app/features/agent-dms/components/persona-avatar';
 import { ChannelAvatar } from '@channel/channel-avatar';
 import {
   EntityIcon as CoreEntityIcon,
@@ -5,6 +6,7 @@ import {
   getEntityIconType,
 } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { Match, Show, Switch } from 'solid-js';
@@ -29,6 +31,8 @@ function DirectMessageIcon(props: {
   weight?: CoreEntityIconProps['weight'];
 }) {
   const userId = useUserId();
+  const channels = useChannelsContext();
+  const agentDm = () => channels.channelsById()[props.entity.id]?.agent_dm;
   const participantId = () => {
     const participants = props.entity.participantIds ?? [];
     return participants.find((id) => id !== userId());
@@ -37,24 +41,51 @@ function DirectMessageIcon(props: {
   return (
     <div class="size-full flex">
       <Show
-        when={participantId()}
+        when={agentDm()}
         fallback={
-          <CoreEntityIcon
-            targetType="direct_message"
-            size="fill"
-            class={props.class}
-            weight={props.weight}
-          />
+          <Show
+            when={participantId()}
+            fallback={
+              <CoreEntityIcon
+                targetType="direct_message"
+                size="fill"
+                class={props.class}
+                weight={props.weight}
+              />
+            }
+          >
+            {(id) => (
+              <Show
+                when={id().startsWith('bot|')}
+                fallback={
+                  <UserIcon
+                    id={id()}
+                    isDeleted={false}
+                    size="fill"
+                    class={props.class}
+                    suppressClick={props.suppressClick}
+                    showTooltip={props.showTooltip}
+                  />
+                }
+              >
+                <PersonaAvatar
+                  botId={id().slice(4)}
+                  name={props.entity.name}
+                  size="fill"
+                  class={props.class}
+                />
+              </Show>
+            )}
+          </Show>
         }
       >
-        {(id) => (
-          <UserIcon
-            id={id()}
-            isDeleted={false}
+        {(persona) => (
+          <PersonaAvatar
+            botId={persona().bot_id}
+            name={persona().name}
+            avatarUrl={persona().avatar_url}
             size="fill"
             class={props.class}
-            suppressClick={props.suppressClick}
-            showTooltip={props.showTooltip}
           />
         )}
       </Show>

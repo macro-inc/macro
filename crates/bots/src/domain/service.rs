@@ -1,5 +1,7 @@
 //! Bot service implementation.
 
+mod agent_dm;
+
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{

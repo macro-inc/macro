@@ -2,7 +2,7 @@ import type { MessageEditor } from '@channel/Channel/create-message-editor';
 import type { NewMessageCheckable } from '@channel/Channel/util';
 import type { InputHandle, InputSnapshot } from '@channel/Input';
 import type { MessageListItem, MessageParent } from '@service-storage/messages';
-import type { Accessor, Setter } from 'solid-js';
+import type { Accessor, JSX, Setter } from 'solid-js';
 import type {
   ChannelMessageListMeta,
   MessageActions,
@@ -53,6 +53,12 @@ export type ThreadTargetNavigation = {
 };
 
 export type ThreadProps = {
+  /** Optional host-specific timeline decorations and live content. */
+  beforeMessage?: JSX.Element;
+  afterMessage?: JSX.Element;
+  renderMessageContent?: (content: JSX.Element) => JSX.Element;
+  /** See `hideTriggeredBy` on the channel message. */
+  hideTriggeredBy?: boolean;
   data: Accessor<MessageListItem>;
   parent: Accessor<MessageParent>;
   /** The enclosing view owns a floating input only in unified mode. */

@@ -1,4 +1,5 @@
 pub mod broker_events;
+pub mod direct_messages;
 pub mod processing;
 pub mod project_assignment;
 pub mod service;

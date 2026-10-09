@@ -38,6 +38,7 @@ pub struct ChannelListServiceImpl<Channels, Users, Frec> {
     channels: Channels,
     users: Users,
     frecency: Frec,
+    agent_dms: Option<std::sync::Arc<dyn super::agent_dm::AgentDmProfiles>>,
 }
 
 impl<Channels, Users, Frec> ChannelListServiceImpl<Channels, Users, Frec>
@@ -52,7 +53,17 @@ where
             channels,
             users,
             frecency,
+            agent_dms: None,
         }
+    }
+
+    /// Supply batched persona presentation for private agent DMs.
+    pub fn with_agent_dm_profiles(
+        mut self,
+        profiles: std::sync::Arc<dyn super::agent_dm::AgentDmProfiles>,
+    ) -> Self {
+        self.agent_dms = Some(profiles);
+        self
     }
 }
 
@@ -82,6 +93,14 @@ where
             .collect();
 
         let channel_ids: Vec<_> = channels.iter().map(|chan| chan.channel.id).collect();
+        let mut agent_profiles = match &self.agent_dms {
+            Some(profiles) => {
+                profiles
+                    .for_channels(user.clone().into_owned(), &channel_ids)
+                    .await?
+            }
+            None => HashMap::new(),
+        };
 
         let participant_ids = channels
             .iter()
@@ -144,6 +163,7 @@ where
         Ok(channels
             .into_iter()
             .map(|mut channel| {
+                let agent_dm = agent_profiles.remove(&channel.channel.id);
                 let resolved_name = resolve_channel_name(
                     channel.channel.channel_type,
                     channel.channel.name.as_deref(),
@@ -152,12 +172,18 @@ where
                     &channel.participants,
                     &name_lookup,
                 );
-                channel.channel.name = Some(resolved_name);
+                channel.channel.name = Some(
+                    agent_dm
+                        .as_ref()
+                        .map(|profile| profile.name.clone())
+                        .unwrap_or(resolved_name),
+                );
                 let activity = activity_lookup.remove(&channel.channel.id);
                 let viewed_at = activity.as_ref().and_then(|a| a.viewed_at);
                 let interacted_at = activity.as_ref().and_then(|a| a.interacted_at);
                 let channel_id = channel.channel.id;
                 ChannelWithLatest {
+                    agent_dm,
                     channel,
                     latest_message: latest_messages.remove(&channel_id).unwrap_or_default(),
                     viewed_at,

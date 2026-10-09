@@ -41,9 +41,9 @@ import {
   initialValues,
   toContent,
   validate,
-} from '../../state/elicitation-form';
-import { createElicitationReviewSink } from '../../state/elicitation-review-sink';
-import { ElicitationForm } from '../../ui';
+} from '../state/elicitation-form';
+import { createElicitationReviewSink } from '../state/elicitation-review-sink';
+import { ElicitationForm } from './ElicitationForm';
 
 export type RespondToElicitation = (
   answer: ElicitationAnswer

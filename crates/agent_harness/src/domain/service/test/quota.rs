@@ -354,6 +354,9 @@ async fn retries_of_queued_and_in_flight_actions_do_not_recheck_quota() {
             announce: None,
             announcement_message_id: None,
             dispatched_at: chrono::Utc::now(),
+            bot_id: None,
+            speaks_as_chip: false,
+            presented: Vec::new(),
             held_tool_calls: Vec::new(),
         },
     );
@@ -616,6 +619,9 @@ async fn denying_a_steering_follow_up_does_not_cancel_the_running_turn() {
         announce: None,
         announcement_message_id: None,
         dispatched_at: chrono::Utc::now(),
+        bot_id: None,
+        speaks_as_chip: false,
+        presented: Vec::new(),
         held_tool_calls: Vec::new(),
     };
     service.inner.busy.mark_turn(id, running.clone());
@@ -744,6 +750,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
                 })
             });
         let service = AgentHarnessService::new(
+            None,
             sessions,
             MockContainerManager::new(),
             AnnouncerMock::new(),

@@ -9,6 +9,7 @@ use sqlx::types::Json;
 #[cfg(test)]
 mod test;
 
+mod agent_dm;
 mod pull_request;
 mod queue;
 mod recovery;
@@ -477,7 +478,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
-        Ok(self.find(id).await?.context("agent session not found")?)
+        self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
