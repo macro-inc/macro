@@ -122,6 +122,10 @@ toolbar, consistent at narrow and wide composer widths.
 The new-message compose screen and channel message/reply inputs use the same
 attachment and send controls on mobile and desktop, with no format toggle.
 iOS uses the native media attachment picker.
+On touch devices, the collapsed channel composer and focused single-line composer
+share the AI input's 46px mobile chrome height. Opening a channel from soup, then
+focusing and blurring its empty input, should not shift the bottom chrome. Check
+multiline drafts and attachments separately: those still expand the composer.
 Short top-level drafts place attachment, message text, and send on one row on
 both mobile and desktop. Text that wraps onto a second line, explicit line
 breaks, non-paragraph blocks (lists, blockquotes, headings, etc.), and attachments
