@@ -328,7 +328,8 @@ still receives the authoritative copy.
 
 Nix provisions the `Macro` dashboard folder, a dev telemetry dashboard, and a
 CloudWatch database/Lambda dashboard. CloudWatch reads native metrics in Virginia;
-these are not a replacement for Datadog database query monitoring, RUM, or anomaly
+it does not replicate their history to Ohio, so these panels depend on Virginia
+remaining available. These are not a replacement for Datadog database query monitoring, RUM, or anomaly
 models. Grafana uses the EC2 role for regional metric reads and publishing to the
 configured alarm SNS topic. Other unprivileged HTTP/ingest services still cannot
 access instance metadata.
