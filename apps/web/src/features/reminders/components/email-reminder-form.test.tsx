@@ -40,6 +40,25 @@ it('selects a typed time with Enter, defaulting to if no reply', () => {
     'if_no_reply'
   );
 });
+it('resolves reminder shorthand like tmrw 8 and tmrw 8p', () => {
+  setup();
+  const input = screen.getByRole('combobox', { name: 'Remind me when' });
+
+  fireEvent.input(input, { target: { value: 'tmrw' } });
+  expect(screen.getByRole('option', { name: /Tomorrow/i })).toBeTruthy();
+  expect(
+    screen.queryByText('Enter a future time, like in 2 hours or tomorrow 9am.')
+  ).toBeNull();
+
+  fireEvent.input(input, { target: { value: 'tmrw 8' } });
+  expect(screen.getByRole('option', { name: /Tomorrow at 8 AM/i })).toBeTruthy();
+
+  fireEvent.input(input, { target: { value: 'tmrw 8p' } });
+  expect(screen.getByRole('option', { name: /Tomorrow at 8 PM/i })).toBeTruthy();
+
+  fireEvent.input(input, { target: { value: 'fri' } });
+  expect(screen.getByRole('option', { name: /fri|Friday/i })).toBeTruthy();
+});
 it('supports arrow-key selection and preserves the condition when editing', () => {
   const { onSave } = setup({
     initialTime: '2026-11-01T06:30:15Z',
