@@ -42,6 +42,7 @@ import { createMemo, createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
+import { createHeldThreadSource } from '../primitives/held-thread-source';
 import type { EmailThreadTarget } from '../types';
 import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
 
@@ -127,7 +128,20 @@ export function EmailDetailView(props: {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
-  const source = createEmailThreadSource(threadId, threadQuery);
+  const listNavigation = useEmailDetailListNavigation(threadId);
+  const { held: navigationHeld } = useListNavigationHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () =>
+      panel.isPanelActive() && selectedThread()?.id === props.thread.id,
+    navigation: listNavigation,
+    arrowKeys: true,
+  });
+  const display = createHeldThreadSource({
+    threadId,
+    source: createEmailThreadSource(threadId, threadQuery),
+    holding: navigationHeld,
+  });
+  const source = display.source;
   const threadData = source.thread;
   const title = () => {
     const thread = threadData();
@@ -145,7 +159,7 @@ export function EmailDetailView(props: {
     const thread = threadData();
     if (!thread) return;
     return {
-      id: props.thread.id,
+      id: display.threadId(),
       blockAlias: 'email',
       itemType: 'email',
       name: title(),
@@ -153,7 +167,7 @@ export function EmailDetailView(props: {
     };
   });
   const commandEntity = createMemo(() => {
-    if (!threadQuery.isSuccess) return undefined;
+    if (!threadQuery.isSuccess || display.isHeld()) return undefined;
     const thread = threadData();
     if (!thread) return undefined;
     return buildEntityData({
@@ -182,7 +196,6 @@ export function EmailDetailView(props: {
     element: () => container ?? null,
     enabled: () => canAutofocus && panel.isPanelActive() && !isTouchDevice(),
   });
-  const listNavigation = useEmailDetailListNavigation(threadId);
   const hotkeyScope = () => panel.splitHotkeyScope;
   const host: EmailThreadHost = {
     returnToList: closeThread,
@@ -217,18 +230,13 @@ export function EmailDetailView(props: {
     },
   };
   const breadcrumbValue = () => `email-thread:${props.thread.id}`;
-  useListNavigationHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: () =>
-      panel.isPanelActive() && selectedThread()?.id === props.thread.id,
-    navigation: listNavigation,
-    arrowKeys: true,
-  });
   const loadResult = {
     data: threadData,
     error: () =>
-      threadQuery.isError ? toEntityLoadError(threadQuery.error) : undefined,
-    isPending: () => threadQuery.isLoading,
+      threadQuery.isError && !display.isHeld()
+        ? toEntityLoadError(threadQuery.error)
+        : undefined,
+    isPending: () => threadQuery.isLoading && !display.isHeld(),
   };
 
   return (
@@ -262,35 +270,41 @@ export function EmailDetailView(props: {
           <EmailThreadLoadGate
             result={loadResult}
             notificationSource={notificationSource}
-            threadId={props.thread.id}
+            threadId={display.threadId()}
             linkId={threadData()?.link_id}
             debounceTime={100}
             onRetry={() => void threadQuery.refetch()}
           >
-            <EmailThreadHostView
-              title={title()}
-              threadId={threadId}
-              source={source}
-              threadTransport={() => threadQuery.transport}
-              host={host}
-              chrome={({ createTask }) => (
-                <EmailDetailHeader
-                  onEmailReminderSaved={async () => {
-                    await listNavigation.afterReminderSaved?.();
-                  }}
-                  id={props.thread.id}
+            {/* A held thread hands over without a loading state in between,
+                so remount per thread as the loading state otherwise would. */}
+            <Show when={display.threadId()} keyed>
+              {(shownId) => (
+                <EmailThreadHostView
                   title={title()}
-                  onCreateTask={createTask}
-                  onMarkedUnread={closeThread}
-                  onDeleted={closeThread}
-                  listNavigation={listNavigation}
-                  value={breadcrumbValue()}
-                  focusThread={focusContainer}
-                  controlsMount={controlsMount()}
+                  threadId={display.threadId}
+                  source={source}
+                  threadTransport={() => threadQuery.transport}
+                  host={host}
+                  chrome={({ createTask }) => (
+                    <EmailDetailHeader
+                      onEmailReminderSaved={async () => {
+                        await listNavigation.afterReminderSaved?.();
+                      }}
+                      id={shownId}
+                      title={title()}
+                      onCreateTask={createTask}
+                      onMarkedUnread={closeThread}
+                      onDeleted={closeThread}
+                      listNavigation={listNavigation}
+                      value={breadcrumbValue()}
+                      focusThread={focusContainer}
+                      controlsMount={controlsMount()}
+                    />
+                  )}
+                  sidePanelHeaderToggle={false}
                 />
               )}
-              sidePanelHeaderToggle={false}
-            />
+            </Show>
           </EmailThreadLoadGate>
         </div>
       </div>
