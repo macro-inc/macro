@@ -101,16 +101,16 @@ let
   database =
     (dashboard "macro-database" "Macro database and Lambda health" [
       (panel 1 "Database CPU" cloudwatch [
-        (cwTarget "AWS/RDS" "CPUUtilization" { DBInstanceIdentifier = [ "$database" ]; } "Average")
+        (cwTarget "AWS/RDS" "CPUUtilization" { DBInstanceIdentifier = "$database"; } "Average")
       ] "percent")
       (panel 2 "Database connections" cloudwatch [
-        (cwTarget "AWS/RDS" "DatabaseConnections" { DBInstanceIdentifier = [ "$database" ]; } "Average")
+        (cwTarget "AWS/RDS" "DatabaseConnections" { DBInstanceIdentifier = "$database"; } "Average")
       ] "short")
       (panel 3 "Freeable memory" cloudwatch [
-        (cwTarget "AWS/RDS" "FreeableMemory" { DBInstanceIdentifier = [ "$database" ]; } "Average")
+        (cwTarget "AWS/RDS" "FreeableMemory" { DBInstanceIdentifier = "$database"; } "Average")
       ] "bytes")
       (panel 4 "Free storage" cloudwatch [
-        (cwTarget "AWS/RDS" "FreeStorageSpace" { DBInstanceIdentifier = [ "$database" ]; } "Average")
+        (cwTarget "AWS/RDS" "FreeStorageSpace" { DBInstanceIdentifier = "$database"; } "Average")
       ] "bytes")
       (panel 5 "Text extractor errors" cloudwatch [
         (cwTarget "AWS/Lambda" "Errors" { FunctionName = [ "document-text-extractor-dev" ]; } "Sum")
