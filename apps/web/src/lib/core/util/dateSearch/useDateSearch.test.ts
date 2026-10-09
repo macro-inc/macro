@@ -295,6 +295,36 @@ describe('useDateSearch', () => {
     });
   });
 
+  it('should resolve "tmrw 8" and "tmrw 8p" with times', () => {
+    createRoot((dispose) => {
+      const baseDate = new Date('2024-06-15T10:00:00');
+
+      const morning = useDateSearch({
+        query: () => 'tmrw 8',
+        baseDate,
+      })();
+      const morningOption = morning.find((opt) =>
+        opt.displayText.toLowerCase().includes('tomorrow')
+      );
+      expect(morningOption).toBeTruthy();
+      expect(morningOption?.date.getDate()).toBe(16);
+      expect(morningOption?.date.getHours()).toBe(8);
+
+      const evening = useDateSearch({
+        query: () => 'tmrw 8p',
+        baseDate,
+      })();
+      const eveningOption = evening.find((opt) =>
+        opt.displayText.toLowerCase().includes('tomorrow')
+      );
+      expect(eveningOption).toBeTruthy();
+      expect(eveningOption?.displayText).toContain('at 8 PM');
+      expect(eveningOption?.date.getHours()).toBe(20);
+
+      dispose();
+    });
+  });
+
   it('should find tomorrow with various aliases', () => {
     createRoot((dispose) => {
       const aliases = ['tmrw', 'tmr', 'tom'];
@@ -503,6 +533,59 @@ describe('parseTime', () => {
     expect(result2?.time.hours).toBe(15);
     expect(result2?.time.minutes).toBe(0);
     expect(result2?.rest).toBe('');
+  });
+
+  it('should parse short meridiem forms like 8p and 8a', () => {
+    expect(parseTime('8p')).toEqual({
+      time: { hours: 20, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('8a')).toEqual({
+      time: { hours: 8, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('12p')).toEqual({
+      time: { hours: 12, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('12a')).toEqual({
+      time: { hours: 0, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('3:30p')).toEqual({
+      time: { hours: 15, minutes: 30 },
+      rest: '',
+    });
+  });
+
+  it('should parse compact times like 830p', () => {
+    expect(parseTime('830p')).toEqual({
+      time: { hours: 20, minutes: 30 },
+      rest: '',
+    });
+    expect(parseTime('1230am')).toEqual({
+      time: { hours: 0, minutes: 30 },
+      rest: '',
+    });
+  });
+
+  it('should parse bare hours after a date word like tmrw 8', () => {
+    expect(parseTime('tmrw 8')).toEqual({
+      time: { hours: 8, minutes: 0 },
+      rest: 'tmrw',
+    });
+    expect(parseTime('tmrw 8p')).toEqual({
+      time: { hours: 20, minutes: 0 },
+      rest: 'tmrw',
+    });
+    expect(parseTime('friday 9')).toEqual({
+      time: { hours: 9, minutes: 0 },
+      rest: 'friday',
+    });
+    expect(parseTime('8 tmrw')).toEqual({
+      time: { hours: 8, minutes: 0 },
+      rest: 'tmrw',
+    });
   });
 
   it('should parse times with spaces before meridiem', () => {

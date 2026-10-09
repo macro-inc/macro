@@ -186,11 +186,17 @@ function scoreMatch(
   if (lowerDisplay.startsWith(lowerQuery)) return 90;
   if (lowerDisplay.includes(lowerQuery)) return 70;
 
-  // Check if query matches any keyword exactly
+  // Keyword matches: exact, prefix while typing, or leading token ("tmrw 8")
   if (keywords) {
+    const queryTokens = lowerQuery.split(/\s+/).filter(Boolean);
     const queryMatchesKeyword = keywords.some((kw) => {
       const lowerKw = kw.toLowerCase();
-      return lowerKw === lowerQuery || lowerKw.startsWith(lowerQuery);
+      return (
+        lowerKw === lowerQuery ||
+        lowerKw.startsWith(lowerQuery) ||
+        lowerQuery.startsWith(`${lowerKw} `) ||
+        queryTokens.includes(lowerKw)
+      );
     });
     if (queryMatchesKeyword) return 85;
   }
