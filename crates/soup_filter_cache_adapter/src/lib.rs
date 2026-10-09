@@ -26,6 +26,7 @@ use std::collections::HashSet;
 mod channels;
 mod database_rows;
 mod direct_patch;
+pub mod live_query;
 pub mod mail;
 mod notifications;
 pub mod properties;
@@ -352,6 +353,7 @@ fn collect_applicable_fields<'a>(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } if type_condition
                 .as_deref()
                 .is_none_or(|condition| schema.type_matches(concrete_type, condition)) =>

@@ -6,6 +6,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import {
   entityPropertyFromApi,
   propertyValueToApi,
@@ -400,14 +401,22 @@ export function useDeleteEntityPropertyMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: DeleteEntityPropertyParams) => {
-      if (vars.entityType === 'INITIATIVE') {
+      if (
+        vars.entityType === 'INITIATIVE' ||
+        (isFeatureEnabled(enableGraphqlSoup) &&
+          vars.entityType !== 'USER' &&
+          vars.entityType !== 'CALENDAR_EVENT')
+      ) {
         const result = await getGraphqlSoupClient()
           .mutation(DeleteEntityPropertyDocument, {
-            entityType: 'INITIATIVE',
+            entityType: toPropertyTargetEntityType(vars.entityType),
             entityId: vars.entityId,
             entityPropertyId: vars.entityPropertyId,
           })
           .toPromise();
+        const disposition = optimisticMutationDispositionOf(result);
+        if (disposition?.kind === 'queued') return;
+        if (disposition?.kind === 'permanently-failed') throw disposition.error;
         if (result.error) throw result.error;
         if (!result.data) throw new Error('Property removal returned no data');
         return;

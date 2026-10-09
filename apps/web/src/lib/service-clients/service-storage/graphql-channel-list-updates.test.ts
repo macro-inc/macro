@@ -1,7 +1,4 @@
-import {
-  optimisticContextOf,
-  withOptimisticMutationDisposition,
-} from '@graphql-cache/exchange/optimistic';
+import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import type { Client, Operation } from '@urql/core';
@@ -76,6 +73,7 @@ const deleted: GraphqlNotificationPatch = {
 const newNotification: GraphqlNotificationPatch = {
   __typename: 'GraphqlNewNotification',
   notification: {
+    __typename: 'GraphqlNotification',
     id: 'new',
     entityType: 'CHANNEL',
     entityId: 'channel',
@@ -243,7 +241,7 @@ describe('channel unread edge revalidation', () => {
     expect(query).toHaveBeenCalledOnce();
   });
 
-  it('persists bounded revalidations with queued notification writes', async () => {
+  it('passes bounded revalidations to the local resolver for queued notification writes', async () => {
     const { query } = setup();
     const mutation = vi.fn((_document, _variables, context) => ({
       toPromise: async () =>
@@ -264,12 +262,12 @@ describe('channel unread edge revalidation', () => {
         operation: 'MARK_SEEN',
       }
     );
-    const context = optimisticContextOf({
-      context: mutation.mock.calls[0][2],
-    } as Operation);
-    expect(context?.revalidations).toHaveLength(1);
-    expect(context?.revalidations[0].operationName).toBe('ChannelListSoup');
-    expect(context?.revalidations[0].query).toMatch(/limit:\s*1/);
+    expect(mutation.mock.calls[0][2].optimisticMutation.revalidations).toEqual([
+      {
+        document: ChannelListSoupDocument,
+        variables: { input: { initial: { limit: 100 } } },
+      },
+    ]);
     expect(query).not.toHaveBeenCalled();
   });
   it('coalesces updates into bounded-query refreshes, never full history', async () => {

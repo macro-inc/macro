@@ -1,3 +1,4 @@
+import { withOptimisticMutationDisposition } from '@graphql-cache/exchange/optimistic';
 import {
   CombinedError,
   createClient,
@@ -48,7 +49,9 @@ const project = {
 } satisfies InitiativeDetailFieldsFragment;
 
 function clientWith(
-  reply: (operation: Operation) => Pick<OperationResult, 'data' | 'error'>
+  reply: (
+    operation: Operation
+  ) => Pick<OperationResult, 'data' | 'error' | 'extensions'>
 ) {
   const requests: Operation[] = [];
   const exchange: Exchange = () => (operations) =>
@@ -68,6 +71,50 @@ function clientWith(
 }
 
 describe('initiative GraphQL transport', () => {
+  it('acknowledges a queued partial update without treating it as a full detail record', async () => {
+    const { client } = clientWith((operation) =>
+      withOptimisticMutationDisposition(
+        {
+          operation,
+          data: {
+            updateInitiative: {
+              __typename: 'GraphqlSoupInitiative',
+              id: 'project-1',
+              displayName: 'Queued',
+            },
+          },
+          stale: false,
+          hasNext: false,
+        },
+        { kind: 'queued', transactionId: 'queued-update' }
+      )
+    );
+    const result = await client.update('project-1', { name: 'Queued' });
+    expect(result.isOk()).toBe(true);
+    expect(result.isOk() && result.value).toBeUndefined();
+  });
+
+  it('reports a rejected edit instead of acknowledging it', async () => {
+    const { client } = clientWith((operation) =>
+      withOptimisticMutationDisposition(
+        {
+          operation,
+          stale: false,
+          hasNext: false,
+          error: new CombinedError({
+            graphQLErrors: [
+              { message: 'Forbidden', extensions: { code: 'FORBIDDEN' } },
+            ],
+          }),
+        },
+        { kind: 'permanently-failed' }
+      )
+    );
+    const result = await client.update('project-1', { name: 'Rejected' });
+    expect(result.isErr() && result.error).toEqual([
+      { code: 'FORBIDDEN', message: 'Forbidden' },
+    ]);
+  });
   it('preserves project identity and sharing levels on detail reads', async () => {
     const { client, requests } = clientWith(() => ({
       data: { user: { initiative: project } },

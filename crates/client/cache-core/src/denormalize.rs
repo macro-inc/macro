@@ -20,8 +20,10 @@ use std::collections::BTreeSet;
 use thiserror::Error;
 
 mod plan;
+mod projection;
 pub(crate) use plan::ReadPlans;
 use plan::{Field, FieldSource};
+pub(crate) use projection::QueryProjection;
 
 /// Synchronous view over records available right now (hot tier + any
 /// batch-fetched records).
@@ -43,6 +45,8 @@ impl RecordSource for std::collections::HashMap<EntityKey<'static>, Record> {
 
 #[derive(Debug, Error)]
 pub enum DenormalizeError {
+    #[error(transparent)]
+    Document(#[from] crate::document::DocumentError),
     #[error(transparent)]
     MissingVariable(#[from] MissingVariable),
     #[error("unknown field `{type_name}.{field}` (schema drift?)")]
@@ -93,6 +97,7 @@ pub fn denormalize_with_entity_resolvers(
     deps: &mut impl DependencyTracker,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
+    let op = op.prepare(variables)?;
     denormalize_record_with_entity_resolvers(
         schema,
         &EntityKey::root(),
@@ -156,6 +161,7 @@ fn denormalize_record_with_entity_resolvers(
 pub(crate) struct ReadSession<'a> {
     schema: &'a crate::meta::Schema,
     data: Json,
+    pub(crate) projection: Option<QueryProjection>,
     pending: Vec<PendingRecord<'a>>,
     deleted_items: BTreeSet<Vec<ResponsePath<'a>>>,
     miss: Option<(EntityKey<'static>, String)>,
@@ -195,6 +201,7 @@ impl<'a> ReadSession<'a> {
         Self {
             schema,
             data: Json::Null,
+            projection: None,
             pending: vec![PendingRecord {
                 key: key.clone(),
                 type_name,
@@ -230,6 +237,7 @@ impl<'a> ReadSession<'a> {
                 miss: &mut self.miss,
                 path: pending.destination.unwrap_or_default(),
                 retain_output,
+                projection: &mut self.projection,
             };
             let data = walk.read_record(
                 &pending.key,
@@ -247,7 +255,7 @@ impl<'a> ReadSession<'a> {
                     }
                     .expect("suspended response slot remains present");
                 }
-                *slot = data;
+                merge_response(slot, data);
             }
         }
         if !self.pending.is_empty() {
@@ -263,6 +271,10 @@ impl<'a> ReadSession<'a> {
         }
         // Keep array positions stable until every suspended branch has finished.
         // Remove later indices and deeper paths first so earlier paths stay valid.
+        // Compaction moves response indices. Recompile on subsequent updates.
+        if !self.deleted_items.is_empty() {
+            self.projection = None;
+        }
         for path in std::mem::take(&mut self.deleted_items).into_iter().rev() {
             let Some((ResponsePath::Index(index), parent)) = path.split_last() else {
                 continue;
@@ -295,6 +307,7 @@ struct Walk<'a, 'document, S: RecordSource, D: DependencyTracker> {
     miss: &'a mut Option<(EntityKey<'static>, String)>,
     path: Vec<ResponsePath<'document>>,
     retain_output: bool,
+    projection: &'a mut Option<QueryProjection>,
 }
 
 impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D> {
@@ -324,6 +337,9 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                 });
                 return Ok(Json::Null);
             };
+            if let Some(projection) = self.projection.as_mut() {
+                projection.record(&key, record);
+            }
             if let Some(target) = crate::identity::alias_target(record) {
                 aliases.push(key);
                 key = target.clone();
@@ -343,7 +359,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         }
         let concrete = record.typename().unwrap_or(type_name);
         self.deps.field(&key, concrete, "__typename");
-        self.read_fields(&key, &record.fields, concrete, selections)
+        self.read_fields(&key, &record.fields, concrete, selections, true)
     }
 
     fn read_fields(
@@ -352,6 +368,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         fields: &std::collections::BTreeMap<String, CacheValue>,
         concrete: &str,
         selections: &'document [Selection],
+        normalized: bool,
     ) -> Result<Json, DenormalizeError> {
         let fields_plan = self.plans.fields(
             self.schema,
@@ -360,30 +377,41 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
             self.variables,
             self.entity_resolvers,
         )?;
-        let pending_start = self.pending.len();
         let mut out = serde_json::Map::new();
         for planned_field in fields_plan.iter() {
             let field = planned_field.node;
             self.path.push(ResponsePath::Field(&field.response_key));
-            if self.pending.len() > pending_start && out.contains_key(&field.response_key) {
-                for pending in &mut self.pending[pending_start..] {
-                    if pending
-                        .destination
-                        .as_ref()
-                        .is_some_and(|path| path.starts_with(&self.path))
-                    {
-                        pending.destination = None;
+            if normalized
+                && self.retain_output
+                && let Some(projection) = self.projection.as_mut()
+            {
+                match &planned_field.source {
+                    FieldSource::Stored { key, ty } => {
+                        let value = fields.get(key.as_ref());
+                        let selection = projection::ValueProjection::compile(
+                            self.schema,
+                            value,
+                            field,
+                            ty,
+                            self.variables,
+                            self.entity_resolvers,
+                            self.plans,
+                        )?;
+                        projection.selected_field(owner, key, value, &self.path, selection);
                     }
+                    FieldSource::Entity { storage_key, .. } | FieldSource::Missing(storage_key) => {
+                        projection.guard(owner, storage_key, fields.get(storage_key.as_ref()))
+                    }
+                    _ => {}
                 }
-            }
-            if out.contains_key(&field.response_key) {
-                self.deleted_items
-                    .retain(|path| !path.starts_with(&self.path));
             }
             let value = self.read_field(owner, fields, concrete, planned_field)?;
             self.path.pop();
             if let Some(value) = value {
-                out.insert(field.response_key.clone(), value);
+                merge_response(
+                    out.entry(field.response_key.clone()).or_insert(Json::Null),
+                    value,
+                );
             }
         }
         Ok(Json::Object(out))
@@ -485,9 +513,27 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                     Some(CacheValue::String(typename)) => typename.as_str(),
                     _ => ty.name,
                 };
-                self.read_fields(owner, map, concrete, &field.selection_set)?
+                self.read_fields(owner, map, concrete, &field.selection_set, false)?
             }
         })
+    }
+}
+
+// GraphQL merges repeated response keys, including selections contributed by
+// different fragments and records that finish in different hydration rounds.
+fn merge_response(target: &mut Json, value: Json) {
+    match (target, value) {
+        (Json::Object(target), Json::Object(values)) => {
+            for (key, value) in values {
+                merge_response(target.entry(key).or_insert(Json::Null), value);
+            }
+        }
+        (Json::Array(target), Json::Array(values)) if target.len() == values.len() => {
+            for (target, value) in target.iter_mut().zip(values) {
+                merge_response(target, value);
+            }
+        }
+        (target, value) => *target = value,
     }
 }
 
@@ -503,6 +549,7 @@ fn collect_fields<'a>(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } => {
                 let applies = match type_condition {
                     None => true,

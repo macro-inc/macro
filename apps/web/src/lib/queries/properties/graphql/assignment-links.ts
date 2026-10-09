@@ -1,6 +1,8 @@
 import {
   type OptimisticUpdate,
+  remove,
   selectRecord,
+  update,
   upsertByField,
 } from '@graphql-cache/index';
 import type { PropertyTargetEntityType } from '@service-properties/generated/schemas/propertyTargetEntityType';
@@ -12,12 +14,10 @@ import { match } from 'ts-pattern';
  * list/detail queries. The durable recipe resolves the server assignment ID on
  * commit and still applies when the parent exists only in cold storage.
  */
-export function buildPropertyAssignmentLinks(
+function propertyParent(
   entityType: PropertyTargetEntityType,
-  entityId: string,
-  propertyId: string,
-  propertyDefinitionId: string
-): OptimisticUpdate[] {
+  entityId: string
+) {
   const typename = match(entityType)
     .with('DOCUMENT', () => 'GraphqlSoupDocument' as const)
     .with('CHAT', () => 'GraphqlSoupChat' as const)
@@ -30,19 +30,45 @@ export function buildPropertyAssignmentLinks(
     .with('DATABASE_ROW', () => 'GraphqlSoupDatabaseRow' as const)
     .with('USER', () => undefined)
     .exhaustive();
-  if (!typename) return [];
-
-  return [
-    upsertByField(
-      selectRecord(PropertyAssignmentParentFragmentDoc, {
+  return typename
+    ? selectRecord(PropertyAssignmentParentFragmentDoc, {
         __typename: typename,
         id: entityId,
-      }).field('properties'),
-      {
-        entity: { __typename: 'GraphqlProperty', id: propertyId },
-        whereField: 'propertyDefinitionId',
-        equals: propertyDefinitionId,
-      }
-    ),
+      }).field('properties')
+    : undefined;
+}
+
+export function buildPropertyAssignmentLinks(
+  entityType: PropertyTargetEntityType,
+  entityId: string,
+  propertyId: string,
+  propertyDefinitionId: string
+): OptimisticUpdate[] {
+  const parent = propertyParent(entityType, entityId);
+  if (!parent) return [];
+
+  return [
+    upsertByField(parent, {
+      entity: { __typename: 'GraphqlProperty', id: propertyId },
+      whereField: 'propertyDefinitionId',
+      equals: propertyDefinitionId,
+    }),
   ];
+}
+
+/** Remove only this assignment; rollback restores the original parent link. */
+export function buildPropertyRemovalLinks(
+  entityType: PropertyTargetEntityType,
+  entityId: string,
+  propertyId: string
+): OptimisticUpdate[] {
+  const parent = propertyParent(entityType, entityId);
+  return parent
+    ? [
+        update(
+          parent,
+          remove({ __typename: 'GraphqlProperty', id: propertyId })
+        ),
+      ]
+    : [];
 }
