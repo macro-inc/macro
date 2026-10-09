@@ -160,9 +160,7 @@ function declaredRelations(): string[] {
     membershipSource.indexOf('pub const RELATIONS'),
     membershipSource.indexOf('/// Stable index of a compiled relation')
   );
-  return [
-    ...table.matchAll(/parent_type: "(\w+)",\s*field: "(\w+)"/g),
-  ]
+  return [...table.matchAll(/parent_type: "(\w+)",\s*field: "(\w+)"/g)]
     .map(([, parent, field]) => `${parent}.${field}`)
     .sort();
 }

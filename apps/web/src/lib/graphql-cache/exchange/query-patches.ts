@@ -1,8 +1,8 @@
 import type {
   QueryFieldPatch,
   QueryPatch,
-  QuerySplicePatch,
   QuerySpliceOp,
+  QuerySplicePatch,
 } from '../protocol';
 
 type QueryObject = Record<string, unknown>;
@@ -131,7 +131,8 @@ export function applyQueryPatches(
     let target = next;
     for (const part of path) {
       const value = child(target, part);
-      if (!isContainer(value)) throw new Error('query patch has no matching base');
+      if (!isContainer(value))
+        throw new Error('query patch has no matching base');
       const copy = own(value);
       target[part] = copy;
       target = copy;

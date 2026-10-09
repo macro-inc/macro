@@ -5,7 +5,7 @@ import {
 } from '@queries/favorites/graphql';
 import type { FavoriteEntityType } from '@service-storage/generated/schemas/favoriteEntityType';
 import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
-import { createComputed } from 'solid-js';
+import { createComputed, For } from 'solid-js';
 import { render } from 'solid-js/web';
 
 /** Mounted lists: every favorite, documents only, and channels only. */
@@ -57,9 +57,9 @@ function Readers() {
   remove = (favorite) => track(removeMutation.mutateAsync(favorite));
   return (
     <>
-      {LISTS.map((list) => (
-        <output data-testid={list}>{ids(list).join(',')}</output>
-      ))}
+      <For each={LISTS}>
+        {(list) => <output data-testid={list}>{ids(list).join(',')}</output>}
+      </For>
       <output data-testid="ready">
         {LISTS.every((list) => queries[list].data) ? 'ready' : 'loading'}
       </output>

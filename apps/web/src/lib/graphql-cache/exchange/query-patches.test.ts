@@ -27,11 +27,7 @@ describe('query splice patches', () => {
       },
       { path: ['user', 'rows', 1, 'label'], value: 'moved' },
     ]) as typeof base;
-    expect(next.user.rows).toEqual([
-      row('d'),
-      row('c', 'moved'),
-      row('a'),
-    ]);
+    expect(next.user.rows).toEqual([row('d'), row('c', 'moved'), row('a')]);
     // Unchanged rows and unrelated branches keep their objects; changed paths
     // are copies, so the earlier snapshot stays intact.
     expect(next.user.rows[2]).toBe(base.user.rows[0]);

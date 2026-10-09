@@ -232,7 +232,10 @@ export function executeGraphqlSetFavoriteMutation(
             {
               document: FavoritesDocument,
               variables: {
-                filter: { entityTypes: [entityType], entityIds: [args.entityId] },
+                filter: {
+                  entityTypes: [entityType],
+                  entityIds: [args.entityId],
+                },
               },
             },
           ]
