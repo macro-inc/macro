@@ -10,7 +10,6 @@ import {
   useParams,
 } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { LoadingBlock } from '@core/component/LoadingBlock';
 import { useUserId } from '@core/context/user';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import deepEqual from 'fast-deep-equal';
@@ -27,6 +26,7 @@ import { CalendarFocusContextProvider } from './calendar-focus-target';
 import { resolveCalendarTarget } from './calendar-target';
 import { createCalendarTargetAim } from './calendar-target-request';
 import { calendarSearch, calendarSearchTarget } from './calendar-url';
+import { CalendarViewSkeleton } from './calendar-view-skeleton';
 import { Workspace } from './components/Workspace';
 import { CALENDAR_VIEW_ID, type CalendarViewTarget } from './types';
 
@@ -213,7 +213,7 @@ export function CalendarView(props: CalendarViewProps) {
     <Show
       when={calendarUiEnabled()}
       fallback={
-        <Show when={posthog.flagsLoaded()} fallback={<LoadingBlock />}>
+        <Show when={posthog.flagsLoaded()} fallback={<CalendarViewSkeleton />}>
           <CalendarDisabledRedirect />
         </Show>
       }

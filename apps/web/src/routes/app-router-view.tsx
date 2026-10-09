@@ -1,6 +1,11 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { AgentsViewSkeleton } from '@app/features/agents-view/agents-view-skeleton';
 import { MobileWebSignup } from '@app/features/auth/auth';
+import { CalendarViewSkeleton } from '@app/features/calendar-view/calendar-view-skeleton';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
+import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
+import { DriveViewSkeleton } from '@app/features/drive-view/drive-view-skeleton';
+import { EmailViewSkeleton } from '@app/features/email-view/email-view-skeleton';
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import {
@@ -8,6 +13,8 @@ import {
   HomeDetailRouteView,
 } from '@app/features/home/home-view';
 import { HomeRouteView } from '@app/features/home/route-views';
+import { ReviewsViewSkeleton } from '@app/features/reviews-view/reviews-view-skeleton';
+import { TasksViewSkeleton } from '@app/features/tasks-view/tasks-view-skeleton';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   createMemoryPaneStore,
@@ -242,7 +249,11 @@ export function AppRouterView() {
       </Route>
 
       <Route definition={appRoute} component={AppShell}>
-        <Route definition={driveSplitRoute} component={DriveRouteView}>
+        <Route
+          definition={driveSplitRoute}
+          component={DriveRouteView}
+          loading={DriveViewSkeleton}
+        >
           <Route definition={driveFolderRoute}>
             <Route
               definition={driveFolderDocumentRoute}
@@ -266,11 +277,31 @@ export function AppRouterView() {
           definition={routineCreateRoute}
           component={RoutineCreateRouteView}
         />
-        <Route definition={routineDetailRoute} component={AgentsRouteView} />
-        <Route definition={routinesRoute} component={AgentsRouteView} />
-        <Route definition={agentsRoute} component={AgentsRouteView} />
-        <Route definition={codersRoute} component={AgentsRouteView} />
-        <Route definition={agentChatsRoute} component={AgentsRouteView} />
+        <Route
+          definition={routineDetailRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={routinesRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={agentsRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={codersRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={agentChatsRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
         <Route definition={homeSplitRoute} component={HomeRouteView}>
           {/* The period path is matched before the block pattern can claim `calendar`. */}
           <Route
@@ -292,14 +323,26 @@ export function AppRouterView() {
         </Route>
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
-        <Route definition={agentsViewRoute} component={AgentsRouteView} />
-        <Route definition={emailSplitRoute} component={MailRouteView}>
+        <Route
+          definition={agentsViewRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={emailSplitRoute}
+          component={MailRouteView}
+          loading={EmailViewSkeleton}
+        >
           <Route
             definition={emailThreadRoute}
             component={EmailDetailRouteView}
           />
         </Route>
-        <Route definition={tasksSplitRoute} component={TasksRouteView}>
+        <Route
+          definition={tasksSplitRoute}
+          component={TasksRouteView}
+          loading={TasksViewSkeleton}
+        >
           <Route
             definition={projectDetailRoute}
             component={ProjectDetailRouteView}
@@ -315,14 +358,26 @@ export function AppRouterView() {
             component={TasksDetailRouteView}
           />
         </Route>
-        <Route definition={reviewsSplitRoute} component={ReviewsRouteView}>
+        <Route
+          definition={reviewsSplitRoute}
+          component={ReviewsRouteView}
+          loading={ReviewsViewSkeleton}
+        >
           <Route
             definition={reviewsPrRoute}
             component={ReviewsPrDetailRouteView}
           />
         </Route>
-        <Route definition={calendarSplitRoute} component={CalendarRouteView} />
-        <Route definition={channelsSplitRoute} component={ChannelsRouteView}>
+        <Route
+          definition={calendarSplitRoute}
+          component={CalendarRouteView}
+          loading={CalendarViewSkeleton}
+        />
+        <Route
+          definition={channelsSplitRoute}
+          component={ChannelsRouteView}
+          loading={ChannelsViewSkeleton}
+        >
           <Route
             definition={channelDetailRoute}
             component={ChannelDetailRouteView}
