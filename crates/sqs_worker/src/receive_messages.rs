@@ -1,11 +1,4 @@
-use std::time::Duration;
-
-#[cfg(test)]
-mod test;
-
-const RECEIVE_ERROR_DELAY: Duration = Duration::from_secs(5);
-
-/// Receives messages from the queue, delaying failures to prevent busy retry loops.
+/// Receives messages from the queue.
 #[tracing::instrument(skip(inner))]
 pub async fn receive_messages(
     inner: &aws_sdk_sqs::Client,
@@ -22,17 +15,7 @@ pub async fn receive_messages(
         .set_message_attribute_names(Some(vec!["*".to_string()])) // Needed to get all the message
         // attributes
         .send()
-        .await;
-
-    let recv_output = match recv_output {
-        Ok(output) => output,
-        Err(error) => {
-            // DNS and connection failures can return immediately. Callers poll
-            // continuously, so impose a floor even after SDK retries are exhausted.
-            tokio::time::sleep(RECEIVE_ERROR_DELAY).await;
-            return Err(error.into());
-        }
-    };
+        .await?;
 
     Ok(recv_output.messages.unwrap_or_default())
 }
