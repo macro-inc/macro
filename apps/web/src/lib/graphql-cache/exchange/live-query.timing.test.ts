@@ -1,12 +1,13 @@
 // Opt-in main-thread timings for a Soup-like page: a full result (parse plus
 // keyed reconcile) vs the patches cache-core sends for leaf, link and
-// tombstone edits. Mirrors crates/client/cache-core/tests/watch_query_timing.rs.
+// tombstone edits, and keyed list splices vs list replacements. Mirrors
+// crates/client/cache-core/tests/watch_query_timing.rs and membership_timing.rs.
 // LIVE_QUERY_TIMINGS=1 bunx vitest run --project graphql-cache \
 //   --reporter=default live-query.timing
 import { gql } from '@urql/core';
 import { createComputed, createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import type { QueryFieldPatch } from '../protocol';
+import type { QueryFieldPatch, QueryPatch } from '../protocol';
 import { LiveQuery } from './live-query';
 import { applyQueryPatches } from './query-patches';
 import { queryShape } from './query-shape';
@@ -223,5 +224,129 @@ describe.skipIf(!process.env.LIVE_QUERY_TIMINGS)(
       }
       console.log(lines.join('\n'));
     }, 120_000);
+
+    it('prints keyed splice and list replacement costs', () => {
+      const lines = [
+        '| rows | edit | update | main thread: parse + apply | row observers rerun | payload |',
+        '|---:|---|---|---:|---:|---:|',
+      ];
+      const path = ['user', 'soup', 'items'];
+      type Item = Page['user']['soup']['items'][number];
+      for (const rows of [100, 500]) {
+        const base = page(rows).user.soup.items;
+        const middle = rows >> 1;
+        const extra: Item = {
+          ...base[0],
+          id: 'doc-extra',
+          documentName: 'New',
+        };
+        const inserted = [
+          ...base.slice(0, middle),
+          extra,
+          ...base.slice(middle),
+        ];
+        const removed = base.filter((_, row) => row !== middle);
+        const moved = [...base];
+        const [item] = moved.splice(rows >> 2, 1);
+        moved.splice((3 * rows) >> 2, 0, item);
+        const edits: Array<[string, Item[], QueryPatch[], QueryPatch[]]> = [
+          [
+            'insert',
+            inserted,
+            [{ path, splice: [{ insert: middle, value: extra }] }],
+            [{ path, splice: [{ remove: middle }] }],
+          ],
+          [
+            'remove',
+            removed,
+            [{ path, splice: [{ remove: middle }] }],
+            [{ path, splice: [{ insert: middle, value: base[middle] }] }],
+          ],
+          [
+            'move',
+            moved,
+            [{ path, splice: [{ move: rows >> 2, to: (3 * rows) >> 2 }] }],
+            [{ path, splice: [{ move: (3 * rows) >> 2, to: rows >> 2 }] }],
+          ],
+        ];
+        const full = (items: Item[]) =>
+          JSON.stringify({
+            user: { id: 'viewer', soup: { items, nextCursor: null } },
+          });
+        for (const [edit, after, splice, revert] of edits) {
+          // The engine resends a list replacing most of the result whole.
+          for (const kind of [
+            'full result',
+            'replace list',
+            'splice',
+          ] as const) {
+            const payload = (items: Item[], patches: QueryPatch[]) =>
+              kind === 'full result'
+                ? full(items)
+                : JSON.stringify(
+                    kind === 'splice' ? patches : [{ path, value: items }]
+                  );
+            const forward = payload(after, splice);
+            const backward = payload(base, revert);
+            const { view, reruns } = mountCounted(rows);
+            const apply = (encoded: string) =>
+              view.replace(
+                kind === 'full result'
+                  ? (JSON.parse(encoded) as Page)
+                  : applyQueryPatches(
+                      view.snapshot,
+                      JSON.parse(encoded) as QueryPatch[]
+                    )
+              );
+            const times: number[] = [];
+            const observed: number[] = [];
+            for (let sample = 0; sample < WARMUP + SAMPLES; sample++) {
+              const before = reruns();
+              const start = performance.now();
+              apply(forward);
+              const elapsed = performance.now() - start;
+              if (sample >= WARMUP) {
+                times.push(elapsed);
+                observed.push(reruns() - before);
+              }
+              apply(backward);
+            }
+            expect(
+              (view.data as Page).user.soup.items.map(({ id }) => id)
+            ).toEqual(base.map(({ id }) => id));
+            times.sort((a, b) => a - b);
+            observed.sort((a, b) => a - b);
+            lines.push(
+              `| ${rows} | ${edit} | ${kind} | ${(times[times.length >> 1] * 1000).toFixed(1)} µs | ${observed[observed.length >> 1]} | ${forward.length} B |`
+            );
+          }
+        }
+      }
+      console.log(lines.join('\n'));
+    }, 120_000);
   }
 );
+
+/** `mount`, counting how often per-row observers rerun. */
+function mountCounted(rows: number) {
+  let count = 0;
+  const view = createRoot(() => {
+    const view = new LiveQuery(page(rows), SHAPE);
+    const items = () => (view.data as Page).user.soup.items;
+    createComputed(() => {
+      for (const item of items()) void item.id;
+    });
+    for (const item of items()) {
+      createComputed(() => {
+        count++;
+        void item.documentName;
+        void item.updatedAt;
+        void item.subType.isCompleted;
+        for (const { value } of item.properties)
+          void (value.optionIds?.join(',') ?? value.value);
+      });
+    }
+    return view;
+  });
+  return { view, reruns: () => count };
+}
