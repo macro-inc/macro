@@ -55,36 +55,37 @@ let
       to = "now";
     };
   };
+  # ECS uses "dev"; browser and sync telemetry use "development".
   applications = dashboard "macro-dev-telemetry" "Macro dev telemetry" [
     (panel 1 "Logs per second by service" loki [
       {
         refId = "A";
-        expr = ''sum by (service_name) (rate({deployment_environment="dev"}[1m]))'';
+        expr = ''sum by (service_name) (rate({deployment_environment=~"dev|development"}[1m]))'';
       }
     ] "ops")
     (panel 2 "Error logs in five minutes" loki [
       {
         refId = "A";
-        expr = ''sum by (service_name) (count_over_time({deployment_environment="dev"} | json parsed_level="level" | drop __error__, __error_details__ | parsed_level=~"(?i)error|fatal|critical" or severity_text=~"(?i)error|fatal|critical" [5m]))'';
+        expr = ''sum by (service_name) (count_over_time({deployment_environment=~"dev|development"} | json parsed_level="level" | drop __error__, __error_details__ | parsed_level=~"(?i)error|fatal|critical" or severity_text=~"(?i)error|fatal|critical" [5m]))'';
       }
     ] "short")
     (panel 3 "Task CPU usage" prometheus [
       {
         refId = "A";
-        expr = ''sum by (job) (ecs_task_cpu_usage_vcpu_vCPU{deployment_environment="dev"})'';
+        expr = ''sum by (job) (ecs_task_cpu_usage_vcpu_vCPU{deployment_environment=~"dev|development"})'';
       }
     ] "short")
     (panel 4 "Task memory usage" prometheus [
       {
         refId = "A";
-        expr = ''sum by (job) (ecs_task_memory_usage_Bytes{deployment_environment="dev"})'';
+        expr = ''sum by (job) (ecs_task_memory_usage_Bytes{deployment_environment=~"dev|development"})'';
       }
     ] "bytes")
     (
       (panel 5 "Recent dev logs" loki [
         {
           refId = "A";
-          expr = ''{deployment_environment="dev"}'';
+          expr = ''{deployment_environment=~"dev|development"}'';
         }
       ] "short")
       // {
