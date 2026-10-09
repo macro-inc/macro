@@ -22,6 +22,8 @@ const policies = {
   UpdateCalendarEvent: 'custom: event and occurrence edits',
   DeleteCalendarEvent: 'custom: event and occurrence removal',
   RespondToCalendarEvent: 'custom: attendee response',
+  MarkWorkFeedItemsDone:
+    'custom: feed rows stay hidden until the server removes them',
   CreateInitiative: 'authoritative: server assigns the project ID',
   DeleteInitiative:
     'authoritative: boolean response; membership refresh after success',
@@ -37,6 +39,8 @@ const policies = {
   RecordChannelActivity: 'authoritative: server event identity and timestamps',
   UpdateNotificationsForEntity:
     'authoritative: exact affected notification IDs required for undo',
+  UndoWorkFeedItemsDone:
+    'authoritative: the server returns the restored feed entries',
   MoveEntities: 'inactive: UI uses other transports',
   UpdateEntitySharePolicies: 'inactive: UI uses other transports',
   TrashEntities: 'inactive: UI uses other transports',
