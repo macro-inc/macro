@@ -1,6 +1,11 @@
 //! Adapters for the owner-bound Microsoft OAuth lifecycle.
 
-use crate::domain::microsoft::{token::MicrosoftRefreshToken, *};
+use crate::{
+    account_link_state::{
+        AccountLinkState, AccountLinkStateKey, LinkProvider, sign_account_link_state,
+    },
+    domain::microsoft::{token::MicrosoftRefreshToken, *},
+};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -11,11 +16,15 @@ pub use repository::PgMicrosoftGrants;
 
 pub struct MicrosoftOAuthProvider {
     client: Arc<fusionauth::FusionAuthClient>,
+    state_key: AccountLinkStateKey,
 }
 
 impl MicrosoftOAuthProvider {
-    pub fn new(client: Arc<fusionauth::FusionAuthClient>) -> Self {
-        Self { client }
+    pub(crate) fn new(
+        client: Arc<fusionauth::FusionAuthClient>,
+        state_key: AccountLinkStateKey,
+    ) -> Self {
+        Self { client, state_key }
     }
 }
 
@@ -30,11 +39,18 @@ impl MicrosoftIdentityProvider for MicrosoftOAuthProvider {
 
     fn authorize(&self, attempt: &LinkAttempt) -> Result<String, MicrosoftAuthError> {
         let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(attempt.verifier.as_bytes()));
-        let state = serde_json::json!({
-            "identity_provider_id":attempt.identity_provider_id,
-            "link_id":attempt.id,
-            "original_url":attempt.return_uri,
-        });
+        // Bind the signed callback state to the same owner and expiration as
+        // the server-owned PKCE attempt; the callback rejects unsigned links.
+        let state = AccountLinkState {
+            provider: LinkProvider::Microsoft,
+            identity_provider_id: attempt.identity_provider_id.clone(),
+            link_id: attempt.id,
+            fusion_user_id: attempt.owner,
+            original_url: attempt.return_uri.clone(),
+            exp: attempt.expires_at.timestamp(),
+        };
+        let state = sign_account_link_state(&state, &self.state_key)
+            .map_err(|_| MicrosoftAuthError::Unavailable)?;
         self.client
             .construct_bound_microsoft_authorize_url(
                 &attempt.redirect_uri,

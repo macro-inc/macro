@@ -12,6 +12,11 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { listCalendarOccurrences: vi.fn() },
 }));
 
+vi.mock('@queries/calendar/graphql/flag', () => ({
+  useGraphqlCalendarHost: () => () => undefined,
+  markCalendarCacheUnsupported: vi.fn(),
+}));
+
 let client: QueryClient;
 vi.mock('@queries/client', () => ({
   get queryClient() {
@@ -68,18 +73,20 @@ function respond(items: CalendarOccurrenceItem[]) {
   list.mockResolvedValue(ok({ items, hasMore: false, syncStatus: 'ready' }));
 }
 
-function setup() {
+function setup(metadataReady = true) {
   const [now, setNow] = createSignal(today);
   const [userId, setUserId] = createSignal<string | undefined>(
     'macro|self@example.com'
   );
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
+  const [sourcesReady, setSourcesReady] = createSignal(metadataReady);
   let result!: ReturnType<typeof useUpcomingCalendarEventsSource>;
   const Harness = () => {
     result = useUpcomingCalendarEventsSource({
       userId,
       now,
       sourceById: () => sources,
+      sourcesReady,
       isSourceVisible: (id) => !hidden().has(id),
     });
     return null;
@@ -94,7 +101,7 @@ function setup() {
     return dispose;
   });
   disposers.push(dispose);
-  return { result, setNow, setUserId, setHidden };
+  return { result, setNow, setUserId, setHidden, setSourcesReady };
 }
 
 beforeEach(() => {
@@ -109,6 +116,25 @@ afterEach(() => {
 });
 
 describe('upcoming calendar events source', () => {
+  it('waits to display agenda colors without delaying occurrence fetches', async () => {
+    respond([1, 2, 3, 4, 5].map((day) => occurrence(day)));
+    const { result, setSourcesReady } = setup(false);
+    await vi.waitFor(() =>
+      expect(client.getQueryCache().getAll()[0]?.state.status).toBe('success')
+    );
+    expect(result.events()).toEqual([]);
+    expect(result.loading()).toBe(true);
+    expect(list).toHaveBeenCalledTimes(1);
+
+    setSourcesReady(true);
+    expect(result.events()).toHaveLength(5);
+    expect(result.events().every((event) => event.color === source.color)).toBe(
+      true
+    );
+    expect(result.loading()).toBe(false);
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
   it('skips working locations and keeps looking for upcoming events', async () => {
     const locations = [0, 1, 2, 3, 4].map((day) =>
       occurrence(day, { title: 'Office', eventType: 'working_location' })

@@ -22,7 +22,7 @@ use graphql_activity::{
     resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
     resolve_form_activity,
 };
-use graphql_calendar::GraphqlCalendarQuery;
+use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
@@ -57,6 +57,10 @@ use graphql_soup::{
     GroupedSoupInput, SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage,
     SoupPatch, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,
     resolve_soup_email_thread, resolve_soup_updates,
+};
+use graphql_work_feed::{
+    GraphqlWorkFeedPage, WorkFeedInput, WorkFeedMutationRoot, WorkFeedSubscriptionRoot,
+    resolve_work_feed,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -96,6 +100,8 @@ pub struct CompleteMutationRoot<
     NotificationMutationRoot<N>,
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
+    CalendarMutationRoot,
+    WorkFeedMutationRoot<E>,
 );
 
 impl<
@@ -119,17 +125,20 @@ impl<
             NotificationMutationRoot::<N>::new(),
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
             InitiativeMutationRoot::<E>::default(),
+            CalendarMutationRoot,
+            WorkFeedMutationRoot::<E>::default(),
         )
     }
 }
 
-/// Root subscription object combining realtime Soup, notification, and
-/// activity adapters.
+/// Root subscription object combining realtime Soup, notification,
+/// activity, and work feed adapters.
 #[derive(MergedSubscription)]
 pub struct CompleteSubscriptionRoot<R, NS, AS, Auth, St, NR, PR, ER, FR, AR, AcR>(
     SoupSubscriptionRoot<R, Auth, St, NR, PR, ER, FR, AR, AcR>,
     NotificationSubscriptionRoot<NS>,
     ActivitySubscriptionRoot<AS>,
+    WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
 )
 where
     R: SoupRealtimeSubscriptionService,
@@ -434,6 +443,7 @@ where
             SoupSubscriptionRoot::new(realtime_service),
             NotificationSubscriptionRoot::new(notification_subscription_service),
             ActivitySubscriptionRoot::new(activity_subscription_service),
+            WorkFeedSubscriptionRoot::default(),
         ),
     )
     .finish()
@@ -793,6 +803,23 @@ where
     #[graphql(flatten)]
     async fn calendar(&self) -> GraphqlCalendarQuery {
         GraphqlCalendarQuery::new(self.user_id.clone())
+    }
+
+    /// A page of the authenticated user's work feed, newest first: items
+    /// with outstanding attention (notifications, inbox Signal email,
+    /// reminders) and, in `WORK` mode, work the user recently did. Each
+    /// item carries its notifications stacked for presentation.
+    async fn work_feed(
+        &self,
+        ctx: &Context<'_>,
+        input: Option<WorkFeedInput>,
+    ) -> async_graphql::Result<GraphqlWorkFeedPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        resolve_work_feed::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            input.unwrap_or_default(),
+        )
+        .await
     }
 
     /// Authenticated user email catalog fields supplied by `graphql_email`.

@@ -33,3 +33,30 @@ fn allows_static_origins() {
     assert!(is_allowed_origin("https://macro.com"));
     assert!(is_allowed_origin("tauri://localhost"));
 }
+
+#[tokio::test]
+async fn preflight_is_cacheable_for_two_hours() {
+    use axum::{
+        Router,
+        body::Body,
+        http::{Request, header},
+        routing::post,
+    };
+    use tower::ServiceExt;
+
+    let app = Router::new()
+        .route("/items/soup/graphql", post(|| async {}))
+        .layer(cors_layer());
+    let preflight = Request::builder()
+        .method(Method::OPTIONS)
+        .uri("/items/soup/graphql")
+        .header(header::ORIGIN, "https://macro.com")
+        .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+        .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "content-type")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(preflight).await.unwrap();
+
+    assert_eq!(response.headers()[header::ACCESS_CONTROL_MAX_AGE], "7200");
+}

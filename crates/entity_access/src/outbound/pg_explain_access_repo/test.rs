@@ -332,3 +332,38 @@ async fn form_explanation_lists_grants_and_the_public_audience(pool: PgPool) {
     assert_eq!(members.effective_access_level(), None);
     assert!(members.grants.is_empty());
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn pipeline_explanation_uses_pipeline_grants_without_database_grants(pool: PgPool) {
+    let pipeline_id = Uuid::now_v7();
+    let member = MacroUserIdStr::try_from_email("member@team.com").unwrap();
+    let outsider = MacroUserIdStr::try_from_email("noteam@team.com").unwrap();
+    sqlx::query!(
+        "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+         VALUES ($1, 'crm_pipeline', $2, 'user', 'view'),
+                ($1, 'database', $2, 'user', 'owner')",
+        pipeline_id,
+        member.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let service = ExplainAccessServiceImpl::new(PgExplainAccessRepository::new(pool));
+    let explanation = service
+        .explain_access(&member, &pipeline_id.to_string(), EntityType::CrmPipeline)
+        .await
+        .unwrap();
+    assert_eq!(
+        explanation.effective_access_level(),
+        Some(AccessLevel::View)
+    );
+    assert_eq!(explanation.grants.len(), 1);
+    let denied = service
+        .explain_access(&outsider, &pipeline_id.to_string(), EntityType::CrmPipeline)
+        .await
+        .unwrap();
+    assert!(denied.grants.is_empty());
+}

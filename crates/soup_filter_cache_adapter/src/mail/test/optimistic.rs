@@ -49,9 +49,16 @@ async fn replacement_removals<S: PredicateIndexStorage>(storage: S) {
             }
         }
         let vars = Map::new();
-        let updates = projection_updates(engine.storage(), QUERY, None, &vars, &data)
-            .await
-            .unwrap();
+        let updates = projection_updates(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            QUERY,
+            None,
+            &vars,
+            &data,
+        )
+        .await
+        .unwrap();
         assert!(matches!(
             updates.as_slice(),
             [ProjectionMutation::Replace(_)]
@@ -140,9 +147,16 @@ async fn optional_sorts<S: PredicateIndexStorage>(storage: S) {
     // must be cleared even though the unrelated SENT sort is absent.
     data["user"]["soup"]["items"][0]["mailDraftPreview"] = Value::Null;
     let vars = Map::new();
-    let updates = projection_updates(engine.storage(), QUERY, None, &vars, &data)
-        .await
-        .unwrap();
+    let updates = projection_updates(
+        cache_core::meta::bundled_schema_ref(),
+        engine.storage(),
+        QUERY,
+        None,
+        &vars,
+        &data,
+    )
+    .await
+    .unwrap();
     assert_eq!(updates.len(), 3);
     assert!(
         updates
@@ -216,9 +230,16 @@ fn full_optimism_does_not_create_completeness_without_authority() {
     pollster::block_on(async {
         let mut data = seed();
         data["user"]["soup"]["items"] = json!([row(6)]);
-        let updates = projection_updates(&InMemoryStorage::new(), QUERY, None, &Map::new(), &data)
-            .await
-            .unwrap();
+        let updates = projection_updates(
+            cache_core::meta::bundled_schema_ref(),
+            &InMemoryStorage::new(),
+            QUERY,
+            None,
+            &Map::new(),
+            &data,
+        )
+        .await
+        .unwrap();
         let mutations = optimistic_updates(updates);
         let key = RecordKey::new(format!("{TYPE}:{}", id(6))).unwrap();
         for authority in [

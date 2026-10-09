@@ -524,7 +524,7 @@ where
     async fn columns_for_tables(&self, table_ids: &[TableId]) -> Result<Vec<Column>, Self::Error> {
         let rows = sqlx::query!(
             r#"
-            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type,
+            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type, nullable,
                    ARRAY(SELECT capability FROM database_column_protections p WHERE p.column_id = database_columns.id ORDER BY capability) AS "protections!"
             FROM database_columns
             WHERE table_id = ANY($1)
@@ -552,6 +552,7 @@ where
                     config: row.config.map(serde_json::from_value).transpose()?,
                     display_name: row.display_name,
                     infer_type: row.infer_type,
+                    nullable: row.nullable,
                 })
             })
             .collect()

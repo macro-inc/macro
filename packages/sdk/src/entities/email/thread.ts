@@ -49,7 +49,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       await this.client.email.getThread({
         path: { thread_id: this.id },
         query: { limit: 100 },
-      })
+      }),
     );
     return thread;
   }
@@ -79,12 +79,12 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
 
   /** The inbox (email link) that owns this thread. */
   readonly link = this.mappedField('link_id', (id) =>
-    Link.byId(this.client, id)
+    Link.byId(this.client, id),
   );
 
   /** The project this thread is attached to, if any. */
   readonly project = this.mappedField('project_id', (id) =>
-    id ? Project.byId(this.client, id) : undefined
+    id ? Project.byId(this.client, id) : undefined,
   );
 
   /** Timestamp of the latest inbound message, if any. */
@@ -130,7 +130,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
           ...(opts?.since ? { since: opts.since } : {}),
           ...(opts?.limit ? { limit: opts.limit } : {}),
         },
-      })
+      }),
     );
     return records.map((r) => EmailMessage.from(this.client, r));
   }
@@ -139,7 +139,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   async attachments(): Promise<EmailAttachment[]> {
     const { messages } = await this.detail.get();
     return messages.flatMap((m) =>
-      m.attachments.map((a) => EmailAttachment.from(this.client, a))
+      m.attachments.map((a) => EmailAttachment.from(this.client, a)),
     );
   }
 
@@ -159,7 +159,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
             body_text: opts.bodyText,
           },
         },
-      })
+      }),
     );
     return message.db_id
       ? EmailMessage.byId(this.client, message.db_id)
@@ -172,21 +172,21 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       c.email.archiveThread({
         path: { id: this.id },
         body: { value: archived },
-      })
+      }),
     );
   }
 
   /** Update provider-neutral read, trash, spam, or star state. */
   async updateState(request: UpdateThreadStateRequest): Promise<void> {
     await this.mutate((c) =>
-      c.email.updateThreadState({ path: { id: this.id }, body: request })
+      c.email.updateThreadState({ path: { id: this.id }, body: request }),
     );
   }
 
   /** Read pending or failed mailbox changes without initiating a retry. */
   async operations(): Promise<MailboxOperation[]> {
     return unwrap(
-      await this.client.email.threadOperations({ path: { id: this.id } })
+      await this.client.email.threadOperations({ path: { id: this.id } }),
     );
   }
 
@@ -201,7 +201,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       c.email.addRemoveThreadLabel({
         path: { id: this.id },
         body: { label_id: label.id, value: true },
-      })
+      }),
     );
   }
 
@@ -211,7 +211,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       c.email.addRemoveThreadLabel({
         path: { id: this.id },
         body: { label_id: label.id, value: false },
-      })
+      }),
     );
   }
 
@@ -221,7 +221,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       c.email.updateThreadProject({
         path: { thread_id: this.id },
         body: { projectId: project?.id ?? null },
-      })
+      }),
     );
   }
 

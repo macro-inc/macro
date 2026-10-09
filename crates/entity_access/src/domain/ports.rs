@@ -104,6 +104,31 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         agent_session_id: &str,
     ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
 
+    /// Whether a session row exists at all, for anyone.
+    ///
+    /// Asked only once a viewer has turned out to hold no grant, to tell
+    /// "there is no such session" apart from "this one is not yours". The two
+    /// used to answer alike, which made a session read before its create had
+    /// landed - and a session that had since been deleted - indistinguishable
+    /// from a refusal.
+    fn agent_session_exists(
+        &self,
+        agent_session_id: &str,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
+    /// Highest grant on a CRM pipeline.
+    fn get_pipeline_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// All pipeline grants for the caller's current sharing sources.
+    fn list_pipeline_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
     /// Get the highest access level a user has for a database.
     fn get_database_access(
         &self,
@@ -716,4 +741,13 @@ impl EntityAccessService for NoOpEntityAccessService {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         Ok(None)
     }
+}
+
+/// Directory of pipeline grants for CRM navigation.
+pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
+    /// Highest effective grant on each accessible pipeline.
+    fn accessible_pipelines(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 }

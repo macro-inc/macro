@@ -724,6 +724,8 @@ async fn replaying_the_log_reproduces_what_the_viewer_reads(pool: PgPool) {
     series.overrides = vec![CalendarEventOverride {
         reminders: None,
         automatic_decline: None,
+        visibility: None,
+        transparency: None,
         sequence: None,
         source_updated_at: None,
         recurrence_id: declined_start.to_rfc3339(),

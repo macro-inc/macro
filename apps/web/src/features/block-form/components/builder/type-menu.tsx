@@ -119,6 +119,7 @@ export function TypeMenu(props: {
 export function AddQuestionMenu(props: {
   trigger: JSX.Element;
   triggerRef?: (element: HTMLButtonElement) => void;
+  triggerClass?: string;
   disabled?: boolean;
   children?: JSX.Element;
   tables: readonly RelationTable[];
@@ -133,12 +134,11 @@ export function AddQuestionMenu(props: {
       <Dropdown.Trigger
         variant="outline"
         size="md"
-        class="w-full justify-start gap-2"
+        class={`w-full justify-start gap-2 ${props.triggerClass ?? ''}`}
         ref={props.triggerRef}
         disabled={props.disabled}
       >
         {props.trigger}
-        <CaretDown class="ml-auto size-3.5" aria-hidden="true" />
       </Dropdown.Trigger>
       <Dropdown.Content
         class="max-h-[min(32rem,75vh)] w-64 overflow-y-auto"

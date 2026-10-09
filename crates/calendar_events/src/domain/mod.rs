@@ -27,3 +27,7 @@ pub mod providers;
 /// Microsoft calendar synchronization policy and ports.
 #[cfg(feature = "outlook")]
 pub mod outlook;
+/// Source-aware, read-only team calendar sharing.
+pub mod team;
+/// Coverage-aware personal availability from authorized team sources.
+pub mod team_availability;

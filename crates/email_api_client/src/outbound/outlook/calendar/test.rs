@@ -19,6 +19,7 @@ pub(super) fn target() -> ProviderCalendarTarget {
         account_id: Uuid::now_v7(),
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "calendar".into(),
+        observed_access_role: Some("owner".into()),
         is_read_only: false,
         range: OccurrenceRange {
             starts_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),

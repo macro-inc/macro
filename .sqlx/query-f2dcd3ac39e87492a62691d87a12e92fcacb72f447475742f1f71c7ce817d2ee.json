@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO team_user(user_id,team_id,team_role) VALUES($1,$2,'member')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f2dcd3ac39e87492a62691d87a12e92fcacb72f447475742f1f71c7ce817d2ee"
+}

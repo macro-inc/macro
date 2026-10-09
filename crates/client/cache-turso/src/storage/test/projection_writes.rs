@@ -134,6 +134,7 @@ fn unchanged_authority_still_rebases_durable_optimistic_intent() {
                 projection_mutations: vec![predicate_index::OptimisticProjectionMutation::Replace(
                     optimistic.clone(),
                 )],
+                uncertain_calendar_event_keys: Vec::new(),
             });
         let owner = storage.enqueue_mutation(mutation).await.unwrap();
         assert_eq!(

@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for reminder return timestamps in the local Mail index.
-version = "0.6.39"
+# Rebuild live queries and optimistic transactions on runtime-loaded GraphQL SDL.
+version = "0.6.44"
 
 [features]
 default = []

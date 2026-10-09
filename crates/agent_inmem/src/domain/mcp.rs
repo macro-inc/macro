@@ -9,7 +9,20 @@
 //! app they have not connected with a result the model can act on.
 
 use agent_client_protocol::schema::v1::{McpServer as AcpMcpServer, McpServerHttp};
+use agent_session::domain::model::AgentSessionId;
+use futures::future::BoxFuture;
 use mcp_toolset::RemoteMcpToolSet;
+
+/// Resolves the session's current permitted servers before a new turn.
+pub trait SessionMcpSource: Send + Sync + 'static {
+    /// The advertised list carries the existing session credential. Implementations
+    /// must resolve its owner and policy before adding any connected app.
+    fn servers<'a>(
+        &'a self,
+        session: AgentSessionId,
+        advertised: Vec<AcpMcpServer>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Vec<AcpMcpServer>>> + Send + 'a>>;
+}
 
 #[cfg(test)]
 mod test;
@@ -49,6 +62,14 @@ pub fn dialable_servers(servers: Vec<AcpMcpServer>) -> Vec<McpServerHttp> {
 /// A port because it is transport work: the production adapter speaks
 /// streamable HTTP through the egress proxy, tests hand back nothing.
 pub trait McpToolConnector: Send + Sync + 'static {
+    /// Refresh supported runtimes; other connectors retain their attached list.
+    fn refresh(
+        &self,
+        _session: AgentSessionId,
+        _advertised: Vec<AcpMcpServer>,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<AcpMcpServer>>>> + Send {
+        async { Ok(None) }
+    }
     /// Connect to every server, skipping any that fail, and return the tools
     /// found. `None` when no server yielded any tool.
     ///
@@ -70,6 +91,12 @@ pub trait McpToolConnector: Send + Sync + 'static {
 
 /// Erased form of [`McpToolConnector`] for storage on the agent state.
 pub trait DynMcpToolConnector: Send + Sync + 'static {
+    /// See [`McpToolConnector::refresh`].
+    fn refresh_dyn(
+        &self,
+        session: AgentSessionId,
+        advertised: Vec<AcpMcpServer>,
+    ) -> BoxFuture<'_, anyhow::Result<Option<Vec<AcpMcpServer>>>>;
     /// See [`McpToolConnector::connect`].
     fn connect_dyn(
         &self,
@@ -81,6 +108,13 @@ pub trait DynMcpToolConnector: Send + Sync + 'static {
 }
 
 impl<C: McpToolConnector> DynMcpToolConnector for C {
+    fn refresh_dyn(
+        &self,
+        session: AgentSessionId,
+        advertised: Vec<AcpMcpServer>,
+    ) -> BoxFuture<'_, anyhow::Result<Option<Vec<AcpMcpServer>>>> {
+        Box::pin(self.refresh(session, advertised))
+    }
     fn connect_dyn(
         &self,
         servers: Vec<McpServerHttp>,

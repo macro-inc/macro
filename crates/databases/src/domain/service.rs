@@ -9,6 +9,7 @@ mod ops;
 mod reads;
 mod saved_queries;
 mod sharing;
+mod storage;
 #[cfg(test)]
 mod test;
 mod transfer;

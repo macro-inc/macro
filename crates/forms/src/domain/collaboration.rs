@@ -129,6 +129,9 @@ pub enum LayoutDraftError {
     /// The layout names one question twice.
     #[error("question {0:?} appears twice")]
     DuplicateQuestion(FormQuestionId),
+    /// The worker returned an unsupported or excessive update.
+    #[error("invalid layout update: {0}")]
+    InvalidUpdate(&'static str),
     /// The revision is not an encoded version vector.
     #[error("the revision is not a Loro version")]
     Revision(#[source] loro::LoroError),
@@ -216,6 +219,46 @@ fn replace_in(
     Ok(LayoutDraftUpdate {
         expected_revision: expected.encode(),
         update,
+    })
+}
+
+/// Merge an existing peer's update into a fresh snapshot for validation before commit.
+pub fn merged_layout(
+    snapshot: &[u8],
+    update: &[u8],
+) -> Result<DecodedLayoutDraft, LayoutDraftError> {
+    if update.len() > MAXIMUM_DOCUMENT_BYTES {
+        return Err(LayoutDraftError::TooLarge {
+            length: update.len(),
+            maximum: MAXIMUM_DOCUMENT_BYTES,
+        });
+    }
+    // Match Sync's update preflight before authoring performs schema writes.
+    let meta = LoroDoc::decode_import_blob_meta(update, true).map_err(LayoutDraftError::Decode)?;
+    if meta.mode.is_snapshot() {
+        return Err(LayoutDraftError::InvalidUpdate(
+            "expected an incremental update",
+        ));
+    }
+    let operations = meta
+        .partial_end_vv
+        .iter()
+        .try_fold(0_u64, |total, (peer, end)| {
+            let count = end.checked_sub(meta.partial_start_vv.get(peer).copied().unwrap_or(0))?;
+            total.checked_add(u64::try_from(count).ok()?)
+        });
+    if operations.is_none_or(|count| count > 100_000) || meta.change_num > 10_000 {
+        return Err(LayoutDraftError::InvalidUpdate("too many operations"));
+    }
+    let document = load(snapshot)?;
+    let imported = document.import(update).map_err(LayoutDraftError::Decode)?;
+    if imported.pending.is_some() || document.state_vv() != document.oplog_vv() {
+        return Err(LayoutDraftError::IncompleteHistory);
+    }
+    let layout = layout_from_records(read_records(&document)?)?;
+    Ok(DecodedLayoutDraft {
+        layout,
+        revision: document.oplog_vv().encode(),
     })
 }
 

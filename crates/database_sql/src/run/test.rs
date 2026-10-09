@@ -858,3 +858,104 @@ fn a_result_of_another_kind_than_the_op_is_refused() {
         "a column type change was sent, but rows updated came back"
     );
 }
+
+/// `crm.deals` with `doubled = amount * 2` and `follow up = "closed at" + 7`.
+fn catalog_with_derived() -> Catalog {
+    use models_databases::{Formula, Operator};
+    let mut catalog = catalog();
+    let deals = catalog
+        .tables
+        .iter_mut()
+        .find(|table| table.id == DEALS)
+        .unwrap();
+    deals.columns.push(crate::catalog::Column {
+        id: DOUBLED,
+        placement: ColumnId::from_uuid(DOUBLED),
+        name: "doubled".into(),
+        kind: crate::catalog::ColumnKind::Number,
+        formula: Some(Formula::Binary {
+            operator: Operator::Multiply,
+            left: Box::new(Formula::Column {
+                column: ColumnId::from_uuid(AMOUNT),
+            }),
+            right: Box::new(Formula::Number { value: 2.0 }),
+        }),
+    });
+    deals.columns.push(crate::catalog::Column {
+        id: FOLLOW_UP,
+        placement: ColumnId::from_uuid(FOLLOW_UP),
+        name: "follow up".into(),
+        kind: crate::catalog::ColumnKind::Date,
+        formula: Some(Formula::Binary {
+            operator: Operator::Add,
+            left: Box::new(Formula::Column {
+                column: ColumnId::from_uuid(CLOSED_AT),
+            }),
+            right: Box::new(Formula::Number { value: 7.0 }),
+        }),
+    });
+    catalog
+}
+
+const DOUBLED: Uuid = Uuid::from_u128(0x0d);
+const FOLLOW_UP: Uuid = Uuid::from_u128(0x0e);
+
+#[test]
+fn derived_columns_are_computed_filtered_and_sorted_in_the_fold() {
+    let source = source(deals());
+    let sink = FakeSink::new();
+
+    let outcome = pollster::block_on(run(
+        &catalog_with_derived(),
+        "SELECT name, doubled, \"follow up\" FROM crm.deals WHERE doubled > 10000 OR \"follow up\" IS NOT NULL ORDER BY doubled DESC",
+        &source,
+        &sink,
+    ))
+    .unwrap();
+
+    assert_eq!(
+        outcome.rows,
+        vec![
+            vec![
+                Some(Cell::Text("Acme".into())),
+                Some(Cell::Number(24000.0)),
+                None,
+            ],
+            vec![
+                Some(Cell::Text("Initech".into())),
+                Some(Cell::Number(14000.0)),
+                None,
+            ],
+            // Hooli has no amount: with every input empty, `doubled` is
+            // empty and sorts last.
+            vec![
+                Some(Cell::Text("Hooli".into())),
+                None,
+                Some(Cell::Date(
+                    Utc.with_ymd_and_hms(2026, 9, 22, 0, 0, 0).unwrap()
+                )),
+            ],
+        ]
+    );
+    assert_eq!(outcome.row_ids, vec![ACME, INITECH, HOOLI]);
+}
+
+#[test]
+fn derived_columns_cannot_be_written() {
+    let source = source(deals());
+    let sink = FakeSink::new();
+
+    let error = pollster::block_on(run(
+        &catalog_with_derived(),
+        "UPDATE crm.deals SET doubled = 1 WHERE name = 'Acme'",
+        &source,
+        &sink,
+    ))
+    .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "\"doubled\" is computed by its formula and can't be written; write the columns it reads instead"
+    );
+    assert!(sink.applied.lock().unwrap().is_empty());
+}

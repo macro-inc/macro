@@ -108,3 +108,10 @@ pub trait Directory: Send + Sync + 'static {
     /// All current members, including the owner.
     fn members(&self, team: Uuid) -> impl Future<Output = Result<Vec<TeamMember>, Error>> + Send;
 }
+
+/// Read-only calendar readiness needed to attach an existing booking link.
+/// Authoring hosts need no provider write or creation-recovery capability.
+pub trait AttachmentReadiness: Send + Sync + 'static {
+    /// Require a connected writable primary calendar and complete sync.
+    fn ready(&self, host: &str) -> impl Future<Output = Result<(), Error>> + Send;
+}

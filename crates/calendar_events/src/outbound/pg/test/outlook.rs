@@ -57,6 +57,7 @@ fn upsert(lease: &OutlookCalendarLease, uid: &str) -> CalendarEventUpsert {
     );
     let mut source = upsert.source.details().clone();
     source.binding = Some(lease.binding);
+    source.observed_access_role = target.observed_access_role.clone();
     upsert.source = CalendarEventSource::Outlook(source);
     upsert.event.is_read_only = false;
     upsert
@@ -124,6 +125,44 @@ async fn outlook_projection_uses_existing_reads_and_mutation_authorization(pool:
         .unwrap()
         .unwrap();
     assert_eq!(change.event_id, id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn outlook_discovery_preserves_coverage_without_google_snapshot_certification(pool: PgPool) {
+    let (repo, link, _) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    let target = lease.target.as_ref().unwrap();
+    assert_eq!(target.observed_access_role.as_deref(), Some("writer"));
+    repo.commit_outlook_calendar(&lease, Some(vec![]), Some("cursor".into()))
+        .await
+        .unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    let mut log = ChangeLogBatch::default();
+    let stored = upsert_calendar_tx(
+        &mut tx,
+        &mut log,
+        link,
+        lease.account_id,
+        ProviderCalendar {
+            provider_calendar_id: target.provider_calendar_id.clone(),
+            name: "Outlook calendar".into(),
+            description: None,
+            time_zone: Some("America/Los_Angeles".into()),
+            color: None,
+            access_role: target.observed_access_role.clone(),
+            is_primary: true,
+            is_selected: true,
+            default_reminders: vec![],
+        },
+        Some(CalendarProvider::Outlook),
+    )
+    .await
+    .unwrap();
+    assert!(stored.synced_at.is_some());
+    assert_eq!(stored.materialized_starts_at, Some(target.range.starts_at));
+    assert_eq!(stored.materialized_ends_at, Some(target.range.ends_at));
+    log.commit(tx).await.unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -852,6 +891,8 @@ async fn occurrence_reminders_override_series_and_survive_calendar_default_chang
                     },
                 }),
                 automatic_decline: None,
+                visibility: None,
+                transparency: None,
                 sequence: None,
                 source_updated_at: None,
                 recurrence_id: key,
@@ -1033,6 +1074,8 @@ async fn automatic_decline_candidates_are_fair_bounded_and_respect_disabled_occu
             event.overrides.push(CalendarEventOverride {
                 reminders: None,
                 automatic_decline: Some(disabled.clone()),
+                visibility: None,
+                transparency: None,
                 sequence: None,
                 source_updated_at: None,
                 recurrence_id: key,

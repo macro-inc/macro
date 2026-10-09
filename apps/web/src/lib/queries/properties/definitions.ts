@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { CreatePropertyDefinitionRequest } from '../../service-clients/service-properties/generated/schemas/createPropertyDefinitionRequest';
@@ -18,33 +18,35 @@ type ListPropertiesQueryParams = {
   forEntityType?: EntityType;
 };
 
+// Cached callbacks outlive the caller; only plain request values enter here.
+function listPropertiesQueryOptions(
+  { scope, includeOptions, forEntityType }: ListPropertiesQueryParams,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: propertiesKeys.definitions({
+      scope,
+      includeOptions,
+      forEntityType,
+    }).queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        propertiesServiceClient.listProperties({
+          scope,
+          include_options: includeOptions,
+          for_entity_type: forEntityType,
+        })
+      ),
+    enabled,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
 export function useListPropertiesQuery(
   params: Accessor<ListPropertiesQueryParams>,
   enabled: Accessor<boolean> = () => true
 ) {
-  return useQuery(() => {
-    const { scope, includeOptions, forEntityType } = params();
-    return {
-      queryKey: propertiesKeys.definitions({
-        scope,
-        includeOptions,
-        forEntityType,
-      }).queryKey,
-      queryFn: async () => {
-        const data = await throwOnErr(
-          async () =>
-            await propertiesServiceClient.listProperties({
-              scope,
-              include_options: includeOptions,
-              for_entity_type: forEntityType,
-            })
-        );
-        return data;
-      },
-      enabled: enabled(),
-      staleTime: 1000 * 60 * 5, // 5 minutes
-    };
-  });
+  return useQuery(() => listPropertiesQueryOptions(params(), enabled()));
 }
 
 export async function fetchPropertyDefinitionWithOptions(

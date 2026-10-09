@@ -697,6 +697,49 @@ test('double-click renames tabs and right-click actions target the clicked sheet
     ).toBeDisabled();
 });
 
+test('dragging a tab reorders sheets, keeps formulas, and undoes', async ({
+  page,
+}) => {
+  const add = page.getByRole('button', { name: 'Add sheet', exact: true });
+  await add.click();
+  await edit(page, 'A1', '=Sheet1!B4*2');
+  await add.click();
+  const tabs = page.getByRole('tab');
+  await expect(tabs).toHaveText(['Sheet1', 'Sheet2', 'Sheet3']);
+
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
+  const first = await tab('Sheet1').boundingBox();
+  const third = await tab('Sheet3').boundingBox();
+  if (!first || !third) throw new Error('Tabs are not laid out.');
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(third.x + third.width - 4, third.y + 4, { steps: 8 });
+  await expect(page.locator('[data-sheet-drop-indicator]')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(tabs).toHaveText(['Sheet2', 'Sheet3', 'Sheet1']);
+  await expect(tab('Sheet1')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-address="B4"]')).toHaveText('30');
+
+  await tab('Sheet2').click();
+  await expect(page.locator('[data-address="A1"]')).toHaveText('60');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(tabs).toHaveText(['Sheet1', 'Sheet2', 'Sheet3']);
+
+  await tab('Sheet3').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move left', exact: true }).click();
+  await expect(tabs).toHaveText(['Sheet1', 'Sheet3', 'Sheet2']);
+  await expect(tab('Sheet3')).toBeFocused();
+
+  await page.evaluate(() => window.spreadsheetFixture.setReadonly(true));
+  const before = await tab('Sheet1').boundingBox();
+  if (!before) throw new Error('Tabs are not laid out.');
+  await page.mouse.move(before.x + 8, before.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 400, before.y + 8, { steps: 8 });
+  await page.mouse.up();
+  await expect(tabs).toHaveText(['Sheet1', 'Sheet3', 'Sheet2']);
+});
+
 test('imports, edits and exports an independent financial workbook using real workers', async ({
   page,
 }) => {

@@ -12,8 +12,8 @@ import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import pins from './android-firebase.lock.json';
 
-// These projects match the dev/prod FCM credentials used by notification-service.
-const projects = { dev: 'macro-app-dev-12ae0', build: 'macro-app-955f1' };
+// The notification service must use FCM credentials from the matching project.
+const projects = { dev: 'macro-app-dev-12ae0', build: 'macro-app-prod' };
 const configSchema = z.object({
   project_info: z.object({
     project_id: z.string().min(1),
@@ -42,10 +42,10 @@ export function validateAndroidFirebase(
     !parsed.data.client.some(
       (client) =>
         client.client_info.android_client_info.package_name ===
-        'com.macro.app.prod'
+        'com.macro.workspace.mobile'
     )
   )
-    throw new Error('Firebase config must contain com.macro.app.prod');
+    throw new Error('Firebase config must contain com.macro.workspace.mobile');
   const project = parsed.data.project_info.project_id;
   if (
     project !== projects[action] &&

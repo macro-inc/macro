@@ -136,7 +136,13 @@ fn response_data() -> Json {
 
 fn write(records: &mut BTreeMap<EntityKey<'static>, Record>, doc: &Document, data: &Json) {
     let op = doc.operation(Some("Soup")).unwrap();
-    let updates = normalize(op, &variables(), data).unwrap();
+    let updates = normalize(
+        cache_core::meta::bundled_schema_ref(),
+        op,
+        &variables(),
+        data,
+    )
+    .unwrap();
     for (key, record) in updates {
         records.entry(key).or_default().merge(record);
     }
@@ -204,7 +210,14 @@ fn round_trip_reproduces_response() {
 
     let op = doc.operation(Some("Soup")).unwrap();
     let mut deps = BTreeSet::new();
-    let outcome = denormalize(op, &variables(), &records, &mut deps).unwrap();
+    let outcome = denormalize(
+        cache_core::meta::bundled_schema_ref(),
+        op,
+        &variables(),
+        &records,
+        &mut deps,
+    )
+    .unwrap();
     let ReadOutcome::Complete(data) = outcome else {
         panic!("expected complete read, got {outcome:?}");
     };
@@ -257,7 +270,13 @@ fn entity_update_visible_through_other_query() {
         }
     });
     let op = rename_doc.operation(Some("Doc")).unwrap();
-    let updates = normalize(op, &variables(), &rename_data).unwrap();
+    let updates = normalize(
+        cache_core::meta::bundled_schema_ref(),
+        op,
+        &variables(),
+        &rename_data,
+    )
+    .unwrap();
     let mut changed = Vec::new();
     for (key, record) in updates {
         let entry = records.entry(key.clone()).or_default();
@@ -271,8 +290,14 @@ fn entity_update_visible_through_other_query() {
     // Original query now sees the new name everywhere.
     let op = doc.operation(Some("Soup")).unwrap();
     let mut deps = BTreeSet::new();
-    let ReadOutcome::Complete(data) = denormalize(op, &variables(), &records, &mut deps).unwrap()
-    else {
+    let ReadOutcome::Complete(data) = denormalize(
+        cache_core::meta::bundled_schema_ref(),
+        op,
+        &variables(),
+        &records,
+        &mut deps,
+    )
+    .unwrap() else {
         panic!("expected complete read");
     };
     assert_eq!(
@@ -292,7 +317,14 @@ fn different_args_are_a_miss() {
         unreachable!()
     };
     let mut deps = BTreeSet::new();
-    let outcome = denormalize(op, &other_vars, &records, &mut deps).unwrap();
+    let outcome = denormalize(
+        cache_core::meta::bundled_schema_ref(),
+        op,
+        &other_vars,
+        &records,
+        &mut deps,
+    )
+    .unwrap();
     assert!(
         matches!(&outcome, ReadOutcome::Miss { entity, field }
             if entity.0 == "GraphqlUser:user-1" && field == r#"soup({"input":{"limit":50}})"#),
@@ -311,7 +343,14 @@ fn missing_records_reported_for_batch_fetch() {
 
     let op = doc.operation(Some("Soup")).unwrap();
     let mut deps = BTreeSet::new();
-    let outcome = denormalize(op, &variables(), &records, &mut deps).unwrap();
+    let outcome = denormalize(
+        cache_core::meta::bundled_schema_ref(),
+        op,
+        &variables(),
+        &records,
+        &mut deps,
+    )
+    .unwrap();
     let ReadOutcome::NeedRecords(missing) = outcome else {
         panic!("expected NeedRecords, got {outcome:?}");
     };

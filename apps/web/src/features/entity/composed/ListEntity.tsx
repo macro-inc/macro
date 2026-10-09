@@ -98,6 +98,8 @@ export function ListEntity(props: ListEntityProps) {
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
   const leadingAction = children(() => props.leadingAction);
+  const titleLeading = children(() => props.titleLeading);
+  const meta = children(() => props.meta);
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
@@ -156,6 +158,8 @@ export function ListEntity(props: ListEntityProps) {
     entity: props.entity,
     actions: !isTouchDevice() ? rowActions() : undefined,
     leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    titleLeading: titleLeading(),
+    meta: meta(),
     scheduleStatus: scheduleStatus(),
     authorDisplayName: props.authorDisplayName,
     checked: props.checked,

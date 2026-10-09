@@ -7,6 +7,7 @@
  */
 
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -45,8 +46,16 @@ import { createFormShareInput } from './form-global-sharing';
 import { reservePreviewTab } from './form-preview-tab';
 import { createPreview } from './primitives/create-preview';
 import { FormCardView } from './views/form-card-view';
-import { FormPageView } from './views/form-page-view';
+import { type FormHeaderProps, FormPageView } from './views/form-page-view';
 import { RespondView } from './views/respond-view';
+
+function FormHeader(props: FormHeaderProps) {
+  return (
+    <SplitHeaderLeft>
+      <div class="ml-2 min-w-0 max-w-xl shrink">{props.tabs}</div>
+    </SplitHeaderLeft>
+  );
+}
 
 function FormBlockContent(props: {
   respondOnly: boolean;
@@ -124,10 +133,11 @@ function FormBlockContent(props: {
     <Show
       when={published()}
       fallback={
-        <Button variant="cta" size="sm" onClick={openShare}>
-          <PaperPlaneTilt class="size-3.5" />
-          Publish
-        </Button>
+        <HeaderActionButton
+          label="Publish"
+          icon={<PaperPlaneTilt />}
+          onClick={openShare}
+        />
       }
     >
       <Button variant="outline" size="sm" onClick={openRespond}>
@@ -186,6 +196,7 @@ function FormBlockContent(props: {
         when={props.respondOnly}
         fallback={
           <FormPageView
+            header={FormHeader}
             source={source}
             tab={tab()}
             respondLink={link()}

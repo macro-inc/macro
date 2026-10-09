@@ -11,7 +11,6 @@ export type CrmViewConfig = {
   groupBy?: string | null;
   /** Sort ids (soup sort state). */
   sort?: string[];
-  viewMode?: 'list' | 'board';
   /** Stage option ids selected in the Stage filter (may include NO_STAGE). */
   stageFilter?: string[];
   /** Owner ids selected in the Owner filter. */
@@ -50,12 +49,6 @@ export function isCrmViewConfig(value: unknown): value is CrmViewConfig {
     value.groupBy !== undefined &&
     value.groupBy !== null &&
     typeof value.groupBy !== 'string'
-  )
-    return false;
-  if (
-    value.viewMode !== undefined &&
-    value.viewMode !== 'list' &&
-    value.viewMode !== 'board'
   )
     return false;
   if (value.isDefault !== undefined && typeof value.isDefault !== 'boolean')

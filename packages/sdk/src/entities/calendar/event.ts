@@ -95,7 +95,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
   protected async fetch(): Promise<CalendarEventRecord> {
     throw new MacroError(
       `calendar event ${this.id} has no fetch-by-id endpoint; read the record ` +
-        `returned by calendar.createEvent / event.update / event.rsvp instead`
+        `returned by calendar.createEvent / event.update / event.rsvp instead`,
     );
   }
 
@@ -108,7 +108,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
   /** A handle seeded with a synced event record; reads resolve without a fetch. */
   static fromRecord(
     client: MacroClient,
-    record: CalendarEventRecord
+    record: CalendarEventRecord,
   ): CalendarEvent {
     return new CalendarEvent(client, record.id, record);
   }
@@ -142,7 +142,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
 
   /** The calendar the canonical source belongs to, when known. */
   readonly calendar = this.mappedField('calendarId', (id) =>
-    id ? Calendar.byId(this.client, id) : undefined
+    id ? Calendar.byId(this.client, id) : undefined,
   );
 
   /** The full synced event record. Available on a seeded handle (from create /
@@ -157,7 +157,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
       client.calendar.updateCalendarEvent({
         path: { event_id: this.id },
         body: toUpdateBody(options),
-      })
+      }),
     );
     return CalendarEvent.fromRecord(this.client, record);
   }
@@ -172,7 +172,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
           scope: options.scope,
           recurrenceId: options.recurrenceId,
         },
-      })
+      }),
     );
   }
 
@@ -191,14 +191,14 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
           recurrenceId: options.recurrenceId,
           calendarId: options.calendar?.id,
         },
-      })
+      }),
     );
     return new CalendarReplacement(this.client, preview.operationId);
   }
 
   /** Open this calendar copy in its provider for actions unavailable through its API. */
   async providerUrl(
-    options: { recurrenceId?: string; calendar?: Calendar } = {}
+    options: { recurrenceId?: string; calendar?: Calendar } = {},
   ): Promise<string | undefined> {
     const result = unwrap(
       await this.client.calendar.calendarEventProviderUrl({
@@ -207,7 +207,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
           recurrenceId: options.recurrenceId,
           calendarId: options.calendar?.id,
         },
-      })
+      }),
     );
     return result.url ?? undefined;
   }
@@ -223,7 +223,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
           recurrenceId: options.recurrenceId,
           calendarId: options.calendar?.id,
         },
-      })
+      }),
     );
     return CalendarEvent.fromRecord(this.client, record);
   }

@@ -37,7 +37,7 @@ export interface SendEmailOptions {
 export class EmailMessage extends MacroEntity<EmailMessageData> {
   protected async fetch(): Promise<EmailMessageData> {
     return unwrap(
-      await this.client.email.getMessage({ path: { id: this.id } })
+      await this.client.email.getMessage({ path: { id: this.id } }),
     );
   }
 
@@ -54,7 +54,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
   /** Send a new email message. Returns a handle when the API reports the created message's id. */
   static async send(
     client: MacroClient,
-    opts: SendEmailOptions
+    opts: SendEmailOptions,
   ): Promise<EmailMessage | undefined> {
     const { message } = unwrap(
       await client.email.sendMessage({
@@ -67,7 +67,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
             body_text: opts.bodyText,
           },
         },
-      })
+      }),
     );
     return message.db_id ? EmailMessage.byId(client, message.db_id) : undefined;
   }
@@ -98,23 +98,23 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
 
   /** The inbox (email link) this message belongs to. */
   readonly link = this.mappedField('link_id', (id) =>
-    Link.byId(this.client, id)
+    Link.byId(this.client, id),
   );
 
   /** Read the draft's durable send, upload, or conflict status without retrying it. */
   async operationStatus(): Promise<MessageOperationResponse> {
     return unwrap(
-      await this.client.email.messageOperationStatus({ path: { id: this.id } })
+      await this.client.email.messageOperationStatus({ path: { id: this.id } }),
     );
   }
 
   /** Resolve the displayed operation revision after the user chooses an action.
    * Retrying an uncertain send requires explicit duplicate-risk acceptance. */
   async resolveOperation(
-    request: ResolveMessageOperationRequest
+    request: ResolveMessageOperationRequest,
   ): Promise<void> {
     await this.mutate((c) =>
-      c.email.resolveMessageOperation({ path: { id: this.id }, body: request })
+      c.email.resolveMessageOperation({ path: { id: this.id }, body: request }),
     );
   }
 
@@ -125,7 +125,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       c.email.completeDraftAttachment({
         path: { id: this.id, attachment_id: attachmentId },
         headers: { 'X-Email-Link-Id': link.id },
-      })
+      }),
     );
   }
 
@@ -133,7 +133,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
    * Continue editing the returned message_id; the original identity is retired.
    * On an interrupted response, use email.recoverDraftTransfer(operation_id). */
   async transferDraft(
-    request: TransferDraftRequest
+    request: TransferDraftRequest,
   ): Promise<TransferDraftResponse> {
     const link = await this.link();
     return this.mutate((c) =>
@@ -141,7 +141,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
         path: { id: this.id },
         body: request,
         headers: { 'X-Email-Link-Id': link.id },
-      })
+      }),
     );
   }
 
@@ -154,7 +154,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
           message_ids: [this.id],
           value: true,
         },
-      })
+      }),
     );
   }
 
@@ -167,7 +167,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
           message_ids: [this.id],
           value: false,
         },
-      })
+      }),
     );
   }
 
@@ -175,7 +175,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
   async thread(): Promise<EmailThread> {
     return EmailThread.byId(
       this.client,
-      (await this.detail.get()).thread_db_id
+      (await this.detail.get()).thread_db_id,
     );
   }
 }

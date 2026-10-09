@@ -151,6 +151,7 @@ async fn picture_changes_refresh_all_participant_sessions_without_notifications(
     let recipients = users(&["owner@test.com", "member@test.com"]);
     service
         .handle(ChannelEvent::PictureChanged {
+            actor: user("owner@test.com"),
             channel_id,
             recipients: recipients.clone(),
         })
@@ -1275,6 +1276,7 @@ fn mention_broker_events_map_entity_mention_created_and_deleted() {
 #[test]
 fn mention_broker_events_skip_unrelated_events() {
     let events = mention_broker_events_for_event(&ChannelEvent::PictureChanged {
+        actor: user("owner@test.com"),
         channel_id: Uuid::new_v4(),
         recipients: Vec::new(),
     });

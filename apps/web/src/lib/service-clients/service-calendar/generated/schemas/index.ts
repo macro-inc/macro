@@ -6,6 +6,9 @@
  */
 
 export * from './attendeeResponseStatus';
+export * from './availabilityCalendar';
+export * from './availabilityCalendarBody';
+export * from './availabilityCalendarsResponse';
 export * from './calendarAttendee';
 export * from './calendarAttendeeComment';
 export * from './calendarAttendeeDisplayName';
@@ -76,12 +79,16 @@ export * from './prepareCalendarReplacementRequestRecurrenceId';
 export * from './refreshCalendarEvent';
 export * from './refreshCalendarEventOneOf';
 export * from './refreshCalendarEventOneOfEvent';
+export * from './refreshCalendarEventOneOfThree';
+export * from './refreshCalendarEventOneOfThreeEvent';
 export * from './replacementStatus';
 export * from './rsvpCalendarEventRequest';
 export * from './rsvpCalendarEventRequestCalendarId';
 export * from './rsvpCalendarEventRequestRecurrenceId';
 export * from './rsvpCalendarEventRequestRespondingEmail';
 export * from './rsvpCalendarEventRequestScope';
+export * from './teamCalendarSharing';
+export * from './teamCalendarSharingBody';
 export * from './updateCalendarEventRequest';
 export * from './updateCalendarEventRequestAttendees';
 export * from './updateCalendarEventRequestCalendarId';

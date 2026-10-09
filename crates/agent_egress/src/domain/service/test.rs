@@ -876,16 +876,16 @@ async fn strips_hop_by_hop_headers_from_the_response() {
     assert_eq!(names(response.headers()), ["mcp-session-id"]);
 }
 
-/// The proxy is staff-only for now: a session owned outside macro.com gets
-/// nothing, whatever its token says - told only, in our words, that staff
-/// membership is what it lacks.
+/// Egress is open to every session owner, not only Macro staff: an outside
+/// owner's call resolves against their own connections and goes through.
 #[tokio::test]
-async fn a_session_owned_outside_macro_gets_nothing() {
+async fn a_session_owned_outside_macro_is_proxied_with_its_owners_credentials() {
+    let visitor = MacroUserIdStr::try_from_email("visitor@example.com").expect("a valid user id");
     let service = EgressServiceImpl::new(
         StubSessions(Ok(SessionGrant {
             session: AgentSessionId::new(),
-            owner: MacroUserIdStr::try_from_email("visitor@example.com").expect("a valid user id"),
-            repo: Some(session_repo()),
+            owner: visitor.clone(),
+            repo: None,
             mcp_servers: Vec::new(),
             prompter: None,
         })),
@@ -894,24 +894,27 @@ async fn a_session_owned_outside_macro_gets_nothing() {
         SpyForwarder::answering(&[]),
     );
 
-    let refusal = service
+    service
         .proxy(
             &SessionToken::new("token"),
             datadog(),
             request(Method::POST, &[]),
         )
         .await
-        .expect_err("refused");
+        .expect("proxied");
 
-    assert!(
-        matches!(refusal, EgressError::Unauthenticated(_)),
-        "{refusal}"
+    assert_eq!(
+        service
+            .credentials
+            .asked
+            .lock()
+            .expect("lock")
+            .iter()
+            .map(|(owner, _)| owner.clone())
+            .collect::<Vec<_>>(),
+        [visitor.to_string()]
     );
-    assert!(
-        service.credentials.asked.lock().expect("lock").is_empty(),
-        "an outside owner must never reach credential resolution"
-    );
-    assert!(!service.forward.was_called());
+    assert!(service.forward.was_called());
 }
 
 /// Resolution reads the owner's connected servers, so an unverified token
@@ -1261,57 +1264,6 @@ async fn preview_uses_only_the_authenticated_session_token_at_a_fixed_destinatio
         "Bearer session-token"
     );
     assert!(service.credentials.asked.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn non_staff_session_owners_can_share_previews_without_workspace_or_git_access() {
-    let service = EgressServiceImpl::new(
-        StubSessions(Ok(SessionGrant {
-            session: AgentSessionId::new(),
-            owner: MacroUserIdStr::try_from_email("viewer@example.com").unwrap(),
-            repo: None,
-            prompter: None,
-            mcp_servers: Vec::new(),
-        })),
-        SpyCredentials::knowing(),
-        SpyGithubTokens::default(),
-        SpyForwarder::answering(&[]),
-    )
-    .with_preview_mcp(
-        "https://preview-control.example/mcp".parse().unwrap(),
-        false,
-    )
-    .unwrap();
-    service
-        .proxy(
-            &SessionToken::new("session-token"),
-            EgressTarget::McpServer(McpDestination::Preview),
-            request(Method::POST, &[]),
-        )
-        .await
-        .unwrap();
-    assert!(matches!(
-        service
-            .proxy(
-                &SessionToken::new("session-token"),
-                EgressTarget::McpServer(McpDestination::Macro),
-                request(Method::POST, &[])
-            )
-            .await,
-        Err(EgressError::Unauthenticated(_))
-    ));
-    assert!(matches!(
-        service
-            .proxy(
-                &SessionToken::new("session-token"),
-                git(GitEndpoint::UploadPack),
-                request(Method::POST, &[])
-            )
-            .await,
-        Err(EgressError::Unauthenticated(_))
-    ));
-    assert!(service.credentials.asked.lock().unwrap().is_empty());
-    assert!(service.tokens.asked.lock().unwrap().is_empty());
 }
 
 fn asker() -> MacroUserIdStr<'static> {

@@ -6,7 +6,7 @@ import type { MacroClient } from '../../utils/client';
 export class CalendarReplacement {
   constructor(
     private readonly client: MacroClient,
-    readonly id: string
+    readonly id: string,
   ) {}
 
   /** Read progress without initiating provider writes. */
@@ -14,7 +14,7 @@ export class CalendarReplacement {
     return unwrap(
       await this.client.calendar.calendarReplacementStatus({
         path: { operation_id: this.id },
-      })
+      }),
     );
   }
 
@@ -24,7 +24,7 @@ export class CalendarReplacement {
     return unwrap(
       await this.client.calendar.confirmCalendarReplacement({
         path: { operation_id: this.id },
-      })
+      }),
     );
   }
 
@@ -33,7 +33,7 @@ export class CalendarReplacement {
     unwrap(
       await this.client.calendar.discardCalendarReplacement({
         path: { operation_id: this.id },
-      })
+      }),
     );
   }
 }

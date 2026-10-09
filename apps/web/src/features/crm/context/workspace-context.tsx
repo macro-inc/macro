@@ -38,7 +38,7 @@ export type CrmWorkspace = {
     hasNextPage: Accessor<boolean>;
     fetchNextPage(): Promise<void>;
   };
-  queryFilters: Pick<QueryStore, 'state' | 'replace'>;
+  queryFilters: Pick<QueryStore, 'state' | 'set' | 'replace'>;
   searchText: Accessor<string>;
   setSearchText(value: string): void;
   activeTab: Accessor<string | undefined>;
@@ -47,8 +47,6 @@ export type CrmWorkspace = {
   setStageFilter: Setter<string[]>;
   ownerFilter: Accessor<string[]>;
   setOwnerFilter: Setter<string[]>;
-  viewMode: Accessor<'list' | 'board'>;
-  setViewMode: Setter<'list' | 'board'>;
 };
 const Context = createContext<CrmWorkspace>();
 export const CrmWorkspaceProvider = Context.Provider;

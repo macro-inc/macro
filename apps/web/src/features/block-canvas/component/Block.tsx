@@ -56,7 +56,7 @@ export default function BlockCanvas(props: BlockCanvasProps) {
             return (
               <div
                 class="size-full select-none flex flex-col"
-                on:click={(event) => {
+                onClick={(event) => {
                   if (isNested) event.stopPropagation();
                 }}
               >

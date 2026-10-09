@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type, nullable,\n                   ARRAY(SELECT capability FROM database_column_protections p WHERE p.column_id = database_columns.id ORDER BY capability) AS \"protections!\"\n            FROM database_columns\n            WHERE table_id = ANY($1)\n            ORDER BY table_id, position\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "infer_type",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "nullable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "protections!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "a920e0df460f481ee4ae05606fa7e50c404dc5e2a90beaeca08c531b639a216d"
+}

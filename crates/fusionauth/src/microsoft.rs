@@ -48,14 +48,13 @@ impl FusionAuthClient {
     }
 
     /// Constructs a tenant-specific Microsoft OAuth authorization URL.
-    pub fn construct_microsoft_authorize_url<T>(
+    ///
+    /// `state` is opaque and is only URL-encoded, never JSON-serialized.
+    pub fn construct_microsoft_authorize_url(
         &self,
         redirect_uri: &str,
-        state: &T,
-    ) -> Result<String>
-    where
-        T: serde::Serialize + ?Sized,
-    {
+        state: &str,
+    ) -> Result<String> {
         let credentials = self.microsoft_credentials()?;
         oauth::construct_authorize_url(
             &credentials.client_id,
@@ -67,10 +66,12 @@ impl FusionAuthClient {
     }
 
     /// Binds an authorization request to a server-owned PKCE verifier and nonce.
-    pub fn construct_bound_microsoft_authorize_url<T: serde::Serialize + ?Sized>(
+    ///
+    /// `state` is opaque and is only URL-encoded, never JSON-serialized.
+    pub fn construct_bound_microsoft_authorize_url(
         &self,
         redirect_uri: &str,
-        state: &T,
+        state: &str,
         challenge: &str,
         nonce: &str,
         calendar: bool,

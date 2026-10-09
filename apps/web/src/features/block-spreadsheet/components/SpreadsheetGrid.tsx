@@ -10,6 +10,8 @@ import type {
   SheetChart,
   SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
+import { sqrefBounds } from '@macro-inc/spreadsheet/sheet-rules';
+import CaretDown from '@phosphor/caret-down.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -197,6 +199,8 @@ export function SpreadsheetGrid(props: {
   /** The active cell's list of allowed values, offered in a dropdown. */
   listItems?: string[];
   onPickListItem?: (item: string) => void;
+  /** Ranges (Excel sqrefs) whose cells show a dropdown arrow. */
+  dropdownRanges?: string[];
   /** Images and charts over the sheet. */
   drawings?: SheetDrawing[];
   image?: (key: string) => string | undefined;
@@ -238,6 +242,8 @@ export function SpreadsheetGrid(props: {
   onKeyDown: (event: KeyboardEvent) => void;
   onCopy: (cut?: boolean) => string;
   onPaste: (text: string, metadata?: string) => void;
+  /** Whether a clipboard shortcut fired outside the grid is meant for it. */
+  ownsClipboard?: (event: ClipboardEvent) => boolean;
   onClear: () => void;
   onGridReady: (element: HTMLDivElement) => void;
 }) {
@@ -258,6 +264,22 @@ export function SpreadsheetGrid(props: {
   const [fillTarget, setFillTarget] = createSignal<CellSelection>();
   // The cell whose list is open; moving the selection closes it.
   const [listOpenAt, setListOpenAt] = createSignal<string>();
+  const listButtonShown = () =>
+    !props.readonly &&
+    !props.editing &&
+    !props.formulaEditing &&
+    !!props.listItems?.length;
+  const dropdownBounds = createMemo(() =>
+    (props.dropdownRanges ?? []).flatMap(sqrefBounds)
+  );
+  const hasDropdown = (row: number, column: number) =>
+    dropdownBounds().some(
+      (bounds) =>
+        row >= bounds.top &&
+        row <= bounds.bottom &&
+        column >= bounds.left &&
+        column <= bounds.right
+    );
   const [selectedDrawing, setSelectedDrawing] = createSignal<string>();
   const [resizing, setResizing] = createSignal<{
     column: number;
@@ -960,17 +982,97 @@ export function SpreadsheetGrid(props: {
     }
   }
 
+  function copyCells(event: ClipboardEvent) {
+    event.preventDefault();
+    event.clipboardData?.setData('text/plain', props.onCopy());
+    if (props.onCopyMetadata)
+      event.clipboardData?.setData(
+        SPREADSHEET_CLIPBOARD_TYPE,
+        props.onCopyMetadata()
+      );
+  }
+  function cutCells(event: ClipboardEvent) {
+    if (!event.clipboardData) return;
+    event.preventDefault();
+    // A viewer can copy with the cut shortcut, but no cells move. Mark its
+    // metadata as a copy so formulas still translate on a later paste.
+    const cut = !props.readonly;
+    event.clipboardData.setData('text/plain', props.onCopy(cut));
+    if (props.onCopyMetadata)
+      event.clipboardData.setData(
+        SPREADSHEET_CLIPBOARD_TYPE,
+        props.onCopyMetadata(cut)
+      );
+    if (cut) props.onClear();
+  }
+  function pasteCells(event: ClipboardEvent) {
+    event.preventDefault();
+    if (!props.readonly && event.clipboardData?.types.includes('text/plain'))
+      props.onPaste(
+        event.clipboardData.getData('text/plain'),
+        event.clipboardData.getData(SPREADSHEET_CLIPBOARD_TYPE) || undefined
+      );
+  }
+  // Focus often rests on the toolbar, sheet tabs, split chrome, or the body
+  // while the sheet is the active block; the shortcut still targets cells.
+  function claimsClipboard(event: ClipboardEvent) {
+    const target = event.target;
+    if (
+      event.defaultPrevented ||
+      props.editing ||
+      !(target instanceof Element) ||
+      grid.contains(target) ||
+      isInput(target) ||
+      target.closest('[role="dialog"], [role="menu"], [role="listbox"]')
+    )
+      return false;
+    // Leave a text selection outside the grid to the browser's own copy.
+    const selection = document.getSelection();
+    if (
+      !event.type.endsWith('paste') &&
+      selection &&
+      !selection.isCollapsed &&
+      !grid.contains(selection.anchorNode)
+    )
+      return false;
+    return props.ownsClipboard?.(event) ?? false;
+  }
+  const onDocumentClipboard = (event: ClipboardEvent) => {
+    if (!claimsClipboard(event)) return;
+    if (event.type === 'copy') copyCells(event);
+    else if (event.type === 'cut') cutCells(event);
+    else if (event.type === 'paste') pasteCells(event);
+    // WebKit only dispatches the clipboard event from a non-editable focus
+    // when its before* event is cancelled.
+    else event.preventDefault();
+  };
+  const clipboardEvents = [
+    'beforecopy',
+    'beforecut',
+    'beforepaste',
+    'copy',
+    'cut',
+    'paste',
+  ] as const;
+
   onMount(() => {
     props.onGridReady(grid);
     window.addEventListener('pointerup', endPointer);
     window.addEventListener('pointermove', movePointer, { passive: false });
     window.addEventListener('pointercancel', cancelPointer);
     window.addEventListener('blur', cancelPointer);
+    for (const type of clipboardEvents)
+      document.addEventListener(type, onDocumentClipboard as EventListener);
     onCleanup(() => {
       window.removeEventListener('pointerup', endPointer);
       window.removeEventListener('pointermove', movePointer);
       window.removeEventListener('pointercancel', cancelPointer);
       window.removeEventListener('blur', cancelPointer);
+      for (const type of clipboardEvents)
+        document.removeEventListener(
+          type,
+          onDocumentClipboard as EventListener
+        );
       stopTouchGesture();
     });
   });
@@ -1162,42 +1264,13 @@ export function SpreadsheetGrid(props: {
               revealSelection();
           }}
           onCopy={(event) => {
-            if (isInput(event.target)) return;
-            event.preventDefault();
-            event.clipboardData?.setData('text/plain', props.onCopy());
-            if (props.onCopyMetadata)
-              event.clipboardData?.setData(
-                SPREADSHEET_CLIPBOARD_TYPE,
-                props.onCopyMetadata()
-              );
+            if (!isInput(event.target)) copyCells(event);
           }}
           onCut={(event) => {
-            if (isInput(event.target)) return;
-            if (!event.clipboardData) return;
-            event.preventDefault();
-            // A viewer can copy with the cut shortcut, but no cells move. Mark its
-            // metadata as a copy so formulas still translate on a later paste.
-            const cut = !props.readonly;
-            event.clipboardData.setData('text/plain', props.onCopy(cut));
-            if (props.onCopyMetadata)
-              event.clipboardData.setData(
-                SPREADSHEET_CLIPBOARD_TYPE,
-                props.onCopyMetadata(cut)
-              );
-            if (cut) props.onClear();
+            if (!isInput(event.target)) cutCells(event);
           }}
           onPaste={(event) => {
-            if (isInput(event.target)) return;
-            event.preventDefault();
-            if (
-              !props.readonly &&
-              event.clipboardData?.types.includes('text/plain')
-            )
-              props.onPaste(
-                event.clipboardData.getData('text/plain'),
-                event.clipboardData.getData(SPREADSHEET_CLIPBOARD_TYPE) ||
-                  undefined
-              );
+            if (!isInput(event.target)) pasteCells(event);
           }}
         >
           <div
@@ -1802,6 +1875,46 @@ export function SpreadsheetGrid(props: {
                               class="pointer-events-none absolute right-0 top-0 size-0 border-t-[6px] border-l-[6px] border-t-failure border-l-transparent"
                             />
                           </Show>
+                          <Show
+                            when={
+                              hasDropdown(row, column) &&
+                              !(active() && listButtonShown()) &&
+                              !(active() && props.editing)
+                            }
+                          >
+                            <Show
+                              when={!props.readonly}
+                              fallback={
+                                <span
+                                  aria-hidden="true"
+                                  data-dropdown-marker
+                                  class="pointer-events-none absolute right-0.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-ink-muted"
+                                >
+                                  <CaretDown class="size-3" />
+                                </span>
+                              }
+                            >
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                data-dropdown-marker
+                                aria-label={`Choose a value for ${address}`}
+                                class="absolute right-0.5 top-1/2 z-[2] flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-transparent p-0 text-ink-muted hover:bg-hover hover:text-ink touch:size-6"
+                                onPointerDown={(event) => {
+                                  if (event.button !== 0) return;
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  props.onCommit();
+                                  props.onSelect(position);
+                                  focusGrid();
+                                  queueMicrotask(() => setListOpenAt(address));
+                                }}
+                                onDblClick={(event) => event.stopPropagation()}
+                              >
+                                <CaretDown class="size-3" />
+                              </button>
+                            </Show>
+                          </Show>
                           <Show when={props.comments?.hasComment(address)}>
                             <button
                               type="button"
@@ -1931,15 +2044,7 @@ export function SpreadsheetGrid(props: {
               class="pointer-events-none absolute z-[2] border-2 border-accent"
               style={activeStyle()}
             />
-            <Show
-              when={
-                !props.readonly &&
-                !props.editing &&
-                !props.formulaEditing &&
-                !!props.listItems?.length &&
-                props.listItems
-              }
-            >
+            <Show when={listButtonShown() && props.listItems}>
               {(items) => {
                 const address = () => cellAddress(props.selection.anchor);
                 const size = () =>

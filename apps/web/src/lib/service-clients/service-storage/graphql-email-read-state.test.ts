@@ -1,7 +1,9 @@
 import { type Client, CombinedError } from '@urql/core';
-import { validate as validateUuid } from 'uuid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MarkEmailThreadSeenDocument } from './graphql/generated/graphql';
+import {
+  MarkEmailThreadSeenDocument,
+  MarkEmailThreadUnreadDocument,
+} from './graphql/generated/graphql';
 import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
@@ -22,30 +24,20 @@ beforeEach(() => {
 });
 
 describe('GraphQL email read-state mutations', () => {
-  it('keeps read and unread as distinct ordered optimistic transactions', async () => {
+  it('uses ordinary mutations; the exchange supplies local semantics', async () => {
     await expect(markGraphqlEmailThreadSeen(client, 'thread')).resolves.toBe(
       'committed'
     );
     await markGraphqlEmailThreadUnread(client, 'thread');
-    expect(mutation.mock.calls[1][1]).toEqual({
-      input: { threadId: 'thread' },
-    });
-    const contexts = mutation.mock.calls.map(
-      (call) => call[2].normalizedCacheOptimistic
-    );
-    const uuids = contexts.map((context) => context.uuid);
-    expect(uuids.every(validateUuid)).toBe(true);
-    expect(new Set(uuids).size).toBe(2);
-    expect(contexts[0].optimisticResponse.markEmailThreadSeen).toEqual({
-      __typename: 'GraphqlSoupEmailThread',
-      id: 'thread',
-      isRead: true,
-    });
-    expect(contexts[1].optimisticResponse.markEmailThreadUnread).toEqual({
-      __typename: 'GraphqlSoupEmailThread',
-      id: 'thread',
-      isRead: false,
-    });
+    expect(mutation.mock.calls.map((call) => [call[0], call[1]])).toEqual([
+      [MarkEmailThreadSeenDocument, { input: { threadId: 'thread' } }],
+      [MarkEmailThreadUnreadDocument, { input: { threadId: 'thread' } }],
+    ]);
+    expect(
+      mutation.mock.calls.every(
+        (call) => call[2].optimisticMutation.revalidations.length === 0
+      )
+    ).toBe(true);
   });
 
   it.each(['seen', 'unread'] as const)(

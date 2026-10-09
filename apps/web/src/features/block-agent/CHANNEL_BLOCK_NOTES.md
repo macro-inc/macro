@@ -22,7 +22,7 @@ features/block-channel/definition.ts          defineBlock({ name:'channel', comp
 
 ### definition.ts (`features/block-channel/definition.ts`)
 Trivial: `load` accepts a `dss` source and returns `ok({ id })`. `liveTrackingEnabled: true`.
-The agent block's `definition.ts` is already the same shape (with `lazy()` component — keep that).
+The agent block's `definition.ts` is already the same shape.
 
 ### The adapter layer (`NewChannelBlockAdapter.tsx`)
 Everything "block-shaped" lives here, NOT in Channel.tsx:

@@ -162,7 +162,8 @@ export function createRecordActions(options: {
     controller.dismissFailure();
   }
   function focusBlankRow() {
-    const field = options.visibleColumns().find(canEditCell);
+    const editable = options.visibleColumns().filter(canEditCell);
+    const field = editable.find((column) => column.primary) ?? editable[0];
     if (!options.canEdit() || !field) return false;
     options.editCell(draftRows.blankId(), field.id);
     return true;

@@ -55,6 +55,7 @@ import {
   addSpreadsheetSheet,
   deleteSpreadsheetSheet,
   duplicateSpreadsheetSheet,
+  moveSpreadsheetSheet,
   prepareSpreadsheetImport,
   readSpreadsheetImages,
   readSpreadsheetWorkbook,
@@ -175,6 +176,29 @@ function sheetLayout(
     columnCount: Math.min(columnCount, SPREADSHEET_MAX_COLUMNS),
     columnWidths,
   };
+}
+
+/**
+ * Whether a sheet's layout or metadata changed since `expected` was read, or
+ * the sheet was removed. `revision` counts only cell changes, so a structural
+ * edit checks these too before writing its shifted copies over them.
+ */
+function sheetLayoutChanged(
+  live: SpreadsheetWorkbookSheet[],
+  expected: SpreadsheetWorkbookSheet[]
+) {
+  const sheets = new Map(live.map((sheet) => [sheet.id, sheet]));
+  return expected.some((sheet) => {
+    const current = sheets.get(sheet.id);
+    return (
+      !current ||
+      current.layout.rowCount !== sheet.layout.rowCount ||
+      current.layout.columnCount !== sheet.layout.columnCount ||
+      JSON.stringify(current.layout.columnWidths) !==
+        JSON.stringify(sheet.layout.columnWidths) ||
+      JSON.stringify(current.metadata) !== JSON.stringify(sheet.metadata)
+    );
+  });
 }
 
 export function createSpreadsheetStore(options: {
@@ -560,6 +584,12 @@ export function createSpreadsheetStore(options: {
       renameSpreadsheetSheet(doc, id, name);
       refresh();
     },
+    moveSheet(id: string, index: number) {
+      const doc = options.source.doc();
+      if (!doc || !editable()) return;
+      moveSpreadsheetSheet(doc, id, index);
+      refresh();
+    },
     duplicateSheet(id: string) {
       const doc = options.source.doc();
       if (!doc || !editable()) return;
@@ -647,7 +677,10 @@ export function createSpreadsheetStore(options: {
         throw new Error('This spreadsheet is view only.');
       if (!canShiftCoordinates())
         throw new Error('Reconnect to insert or delete rows or columns.');
-      if (revision() !== expectedRevision)
+      if (
+        revision() !== expectedRevision ||
+        sheetLayoutChanged(workbook(), expected)
+      )
         throw new Error(
           'The workbook changed while moving cells. No changes were applied; try again.'
         );

@@ -28,6 +28,7 @@ import {
   type PromptSubmitSurface,
   PromptTrace,
 } from '@core/agent-session/prompt-telemetry';
+import { markSessionCreated } from '@core/agent-session/recently-created';
 import {
   replenishWarmAgentSession,
   takeWarmAgentSession,
@@ -89,6 +90,8 @@ export type StartPendingSessionOptions = {
   submitSurface?: PromptSubmitSurface;
   /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
+  /** The composer's model catalog was still loading, so the persona default runs. */
+  modelFallback?: boolean;
   /**
    * Context the surface opening the session gives the agent: its runtime reads it as
    * instructions, so neither the composer nor the sent prompt shows it.
@@ -96,6 +99,12 @@ export type StartPendingSessionOptions = {
   instructions?: string;
   /** Opaque harness setting confirmed before the first prompt. */
   effortOverride?: { configId: string; value: string };
+  /** Inference speed confirmed before the first prompt. */
+  speedOverride?: { configId: string; value: string };
+  /** Release the submitting composer's attachments after the first prompt is accepted. */
+  onDelivered?: () => void;
+  /** Restore the submitting draft when creation, configuration, or first delivery fails. */
+  onFailure?: () => void;
   /**
    * Explicit GitHub repository for the managed Cursor session.
    */
@@ -114,7 +123,7 @@ export type StartPendingSessionOptions = {
 export function startPendingSession(
   options: StartPendingSessionOptions = {}
 ): string {
-  const warmId = takeWarmAgentSession(options);
+  const { id: warmId, claim: warmClaim } = takeWarmAgentSession(options);
   const id = warmId ?? uuidv7();
   const prompt = options.prompt?.trim() ?? '';
   // Started before the create so the whole wait up to the first output,
@@ -124,6 +133,12 @@ export function startPendingSession(
       ? new PromptTrace(id, {
           newSession: true,
           submitSurface: options.submitSurface,
+          create: {
+            warmClaim,
+            modelOverride: options.modelOverride !== undefined,
+            modelFallback: options.modelFallback ?? false,
+            effort: options.effortOverride?.value,
+          },
         })
       : undefined;
   const [sessionId, setSessionId] = createSignal<string>();
@@ -138,6 +153,7 @@ export function startPendingSession(
     trace?.end('failed', cause ?? new Error(message));
     releaseNavigation();
     setError(message);
+    options.onFailure?.();
   };
   const expiry = setTimeout(
     () => forgetPendingSession(id),
@@ -190,6 +206,11 @@ export function startPendingSession(
         trace?.stage('created');
         // Normally the id this tab minted; an older service may mint its own.
         const created = result.value.session.id;
+        // Before anything acquires it: `AgentSession`'s constructor reads the
+        // session row at once, and that read can arrive before the create's
+        // writes are readable. Marked first, a refusal to that read is waited
+        // out rather than reported as a session that is not ours.
+        markSessionCreated(created);
         // A warm claim releases its server reservation before creation answers.
         replenishWarmAgentSession(result.value.session.ownerId);
         void refetchSoupEntity(created, 'agentSession', { created: true });
@@ -197,10 +218,15 @@ export function startPendingSession(
         // an effort holds the block in preflight. Then adopt the session before
         // issuing the first prompt so that prompt is folded speculatively while
         // its POST is in flight.
-        if (options.effortOverride || prompt || options.attachments?.length) {
+        if (
+          options.effortOverride ||
+          options.speedOverride ||
+          prompt ||
+          options.attachments?.length
+        ) {
           const session = AgentSession.acquire(created);
           try {
-            if (options.effortOverride) {
+            if (options.effortOverride || options.speedOverride) {
               await session.load();
               trace?.stage('loaded');
               await sessionConfigReported(session);
@@ -209,6 +235,13 @@ export function startPendingSession(
                 options.modelOverride,
                 options.effortOverride
               );
+              if (options.speedOverride) {
+                await configureSessionModel(
+                  session,
+                  options.modelOverride,
+                  options.speedOverride
+                );
+              }
               trace?.stage('configured');
             }
             // The prompt's reference ends when its POST answers. Navigation
@@ -232,11 +265,12 @@ export function startPendingSession(
                 }
               );
               if (delivered.isErr()) {
-                releaseNavigation();
-                setError(
+                fail(
                   delivered.error.map((error) => error.message).join(' ') ||
                     'The first message could not be sent.'
                 );
+              } else {
+                options.onDelivered?.();
               }
             }
           } catch (error) {

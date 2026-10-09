@@ -9,8 +9,8 @@ use crate::domain::{
         EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
     },
     ports::{
-        AccessRepository, AccessibleDatabases, AccessibleForms, EntityAccessService,
-        ScheduledActionGrants,
+        AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
+        EntityAccessService, ScheduledActionGrants,
     },
 };
 use futures::{StreamExt, stream};
@@ -74,6 +74,7 @@ where
                 Ok(direct.max(parent_access.map(session_permission_from_parent)))
             }
             EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
+            EntityType::CrmPipeline => self.repo.get_pipeline_access(entity_id, user_id).await,
             EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
             EntityType::DatabaseRow => self.repo.get_database_row_access(entity_id, user_id).await,
             EntityType::Form => self.repo.get_form_access(entity_id, user_id).await,
@@ -218,6 +219,7 @@ where
             | EntityType::EmailThread
             | EntityType::Call
             | EntityType::Initiative
+            | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
             | EntityType::Form => {
@@ -557,6 +559,7 @@ where
             | EntityType::CalendarEvent
             | EntityType::AgentSession
             | EntityType::Initiative
+            | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
             | EntityType::Form
@@ -633,14 +636,42 @@ where
                 let user_id = user_id.ok_or(AccessError::Unauthorized)?;
                 self.get_team_permission(user_id, entity_id).await
             }
+            // Sessions answer a refusal more precisely than the rest, and say
+            // so in the log. A session is read the moment its id exists on a
+            // client - which is before its create has landed - so "no grant"
+            // here is as often a race as a refusal, and the two have to be
+            // told apart by whoever is looking: the caller, from the status,
+            // and us, from this event. Existence is only asked on the way to
+            // refusing, so the extra round trip never touches a granted read.
+            EntityType::AgentSession => {
+                let access = self
+                    .get_optimized_access(entity_id, user_id, entity_type)
+                    .await?;
+                let Some(access_level) = access else {
+                    let exists = self.repo.agent_session_exists(entity_id).await?;
+                    tracing::warn!(
+                        entity_id,
+                        entity_type = "agent_session",
+                        viewer = user_id.map_or("anonymous", AsRef::as_ref),
+                        session_exists = exists,
+                        "agent session access denied"
+                    );
+                    return Err(if exists {
+                        AccessError::Unauthorized
+                    } else {
+                        AccessError::NotFound("agent session")
+                    });
+                };
+                Ok(EntityPermission::AccessLevel { access_level })
+            }
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
             | EntityType::CalendarEvent
-            | EntityType::AgentSession
             | EntityType::Initiative
+            | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
             | EntityType::Form
@@ -750,7 +781,8 @@ where
             // A database's audience is exactly its `entity_access` rows, so it
             // resolves the same way a document's does. So is a form's: a public
             // audience is anyone with the link, which no list can name.
-            EntityType::Document
+            EntityType::ForeignEntity
+            | EntityType::Document
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
@@ -758,6 +790,7 @@ where
             | EntityType::Initiative
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::Form => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
@@ -858,5 +891,14 @@ fn session_permission_from_parent(level: AccessLevel) -> AccessLevel {
         AccessLevel::Edit
     } else {
         AccessLevel::View
+    }
+}
+
+impl<R: AccessRepository> AccessiblePipelines for EntityAccessServiceImpl<R> {
+    async fn accessible_pipelines(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        self.repo.list_pipeline_access(user_id).await
     }
 }

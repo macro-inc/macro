@@ -67,6 +67,23 @@ function controllerFor(
   });
 }
 
+it('never uses an imported point baseline to create a new zero-duration event', () => {
+  const controller = controllerFor({
+    title: 'New point',
+    allDay: false,
+    start: '2026-10-10T12:00',
+    end: '2026-10-10T12:00',
+    importedPointTime: {
+      kind: 'timed',
+      startsAt: '2026-10-10T12:00:00Z',
+      endsAt: '2026-10-10T12:00:00Z',
+      timeZone: 'UTC',
+    },
+  });
+  expect(controller.canSave()).toBe(false);
+  expect(controller.submitValues()).toBeUndefined();
+});
+
 describe('calendar account selection', () => {
   it('waits for the primary account instead of silently using another inbox', () => {
     const [primary, setPrimary] = createSignal<string>();

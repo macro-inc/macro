@@ -143,6 +143,7 @@ describe('native database mention adapter', () => {
 
   it('restricts People at the native source and excludes groups and unrelated open tabs', () => {
     const { menu, select } = setup({ specificEntityType: 'USER' });
+    expect(menu.animate).toBe(false);
     expect(menu.sources).toEqual(['users']);
     expect(menu.includeGroups).toBe(false);
     expect(menu.showOpenTabs).toBe(false);

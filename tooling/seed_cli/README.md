@@ -11,6 +11,30 @@ be run through the `just seed` base command.
 
 ## Scenarios
 
+### CRM sample data in an existing local team
+
+Enable CRM for your local team in Settings → CRM, then run from the repository root:
+
+```bash
+nix develop --command bun tooling/seed_cli/seed-crm.ts \
+  --origin https://localhost:23209 --email teo@macro.com
+```
+
+Use your instance's HTTPS proxy port and local account email. The seed adds eight
+companies, twelve contacts, and three populated pipelines: team-shared **Demo Sales**
+and **Demo Contacts**, plus private **Demo Design Partners**. Rows include stages,
+assigned and unassigned owners, revenue, and a custom Notes column. Companies also
+get legacy CRM Stage, Owner, and Revenue values for testing the overview and board.
+Existing team stages are reused; the default set spans Lead through Churned.
+
+This uses the running app's APIs and local passwordless authentication. It does
+not reset the database. Reruns reuse companies by domain, contacts by email,
+pipelines by name and record type, and rows by their company/contact reference;
+existing values and sharing choices are preserved. Fixture data is in
+[`seed/crm.json`](seed/crm.json).
+
+### Permission scenarios
+
 A scenario file describes a complete world — users, teams, channels, and
 entities (documents, tasks, projects, chats, calls, emails, messages) with the
 access edges between them — so varied permission patterns are testable

@@ -156,6 +156,7 @@ export { SendButton } from './components/SendButton';
 export { SideNav } from './components/SideNav';
 export { Surface } from './components/Surface';
 export { TabbedControl } from './components/TabbedControl';
+export { TabSelector } from './components/TabSelector';
 export type { TabItem, TabsProps } from './components/Tabs';
 export { Tabs } from './components/Tabs';
 export { TagDot, type TagDotProps, type TagDotSize } from './components/TagDot';

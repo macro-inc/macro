@@ -80,7 +80,7 @@ export class CalendarNamespace {
     const record = unwrap(
       await this.client.calendar.createCalendarEvent({
         body: toCreateBody(options),
-      })
+      }),
     );
     return CalendarEvent.fromRecord(this.client, record);
   }

@@ -7,9 +7,10 @@
 //! ```
 
 use database_sql::catalog::Schema;
+use database_sql::formula::FormulaReading;
 use database_sql::{Bin, Board, Catalog, EngineError, Outcome, Page, Step};
-use models_databases::OpResult;
 use models_databases::views::{CardPosition, DatabaseView};
+use models_databases::{Formula, OpResult};
 use specta::Types;
 use specta::datatype::{DataType, Fields};
 use specta_typescript::Typescript;
@@ -35,7 +36,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<DatabaseView>()
         .register::<CardPosition>()
         .register::<Board>()
-        .register::<EngineError>();
+        .register::<EngineError>()
+        .register::<FormulaReading>()
+        .register::<Formula>();
     // serde-wasm-bindgen hands `NaN` and the infinities across as numbers,
     // so an `f64` is a plain `number` rather than JSON's `number | null`.
     let types = Configuration::empty()

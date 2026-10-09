@@ -154,4 +154,49 @@ impl<B: BotFacts + 'static> crate::domain::pull_request_links::SessionPullReques
         .map_err(anyhow::Error::from)?;
         Ok(ids.into_iter().map(AgentSessionId::new_from_uuid).collect())
     }
+
+    async fn links_for_pull_requests(
+        &self,
+        github_keys: &[String],
+    ) -> Result<Vec<crate::domain::pull_request_links::PullRequestSessionLinkRow>> {
+        use crate::domain::pull_request_links::{PullRequestLinkSource, PullRequestSessionLinkRow};
+
+        if github_keys.is_empty() {
+            return Ok(Vec::new());
+        }
+        let keys: Vec<String> = github_keys.iter().map(|key| key.to_lowercase()).collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                link.github_key,
+                link.agent_session_id,
+                link.source,
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = session.thread_id)
+                    AS "thread_parent?: Json<MessageParent>"
+            FROM agent_session_pull_request AS link
+            JOIN agent_session AS session ON session.id = link.agent_session_id
+            WHERE lower(link.github_key) = ANY($1)
+            ORDER BY link.created_at, link.agent_session_id
+            "#,
+            &keys,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(anyhow::Error::from)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| PullRequestSessionLinkRow {
+                github_key: row.github_key,
+                session: AgentSessionId::new_from_uuid(row.agent_session_id),
+                source: if row.source == "agent" {
+                    PullRequestLinkSource::Agent
+                } else {
+                    PullRequestLinkSource::User
+                },
+                thread_parent: row.thread_parent.map(|parent| parent.0),
+            })
+            .collect())
+    }
 }

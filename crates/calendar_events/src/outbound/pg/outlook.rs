@@ -300,6 +300,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     calendar_id: id,
                     provider_calendar_id: c.provider_calendar_id,
                     is_read_only: !matches!(c.access_role.as_deref(), Some("writer" | "owner")),
+                    observed_access_role: c.access_role,
                     range: OccurrenceRange {
                         starts_at: row.starts_at,
                         ends_at: row.ends_at,
@@ -364,6 +365,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                 lease.binding.link_id,
                 lease.account_id,
                 calendar.calendar,
+                Some(CalendarProvider::Outlook),
             )
             .await?;
             sqlx::query!(

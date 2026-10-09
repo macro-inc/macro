@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { applyDatabaseOps } from '@queries/storage/databases';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { ResultAsync } from 'neverthrow';
+import type { JSX } from 'solid-js';
 import { TableNavigation } from '../../database/components/table-navigation';
 import {
   tableDeleteMessage,
@@ -18,6 +19,7 @@ export function TableTabs(props: {
   tables: TableDetail[];
   activeTableId: string | undefined;
   canEdit: boolean;
+  menuItems?: () => JSX.Element;
   onSelect: (tableId: string) => void;
 }) {
   const formsOver = useFormsOverTables(() => props.databaseId);
@@ -32,6 +34,7 @@ export function TableTabs(props: {
       }))}
       activeTableId={props.activeTableId}
       canCreate={props.canEdit}
+      menuItems={props.menuItems}
       onSelect={props.onSelect}
       onRename={(tableId, name, previousName) =>
         ResultAsync.fromSafePromise(

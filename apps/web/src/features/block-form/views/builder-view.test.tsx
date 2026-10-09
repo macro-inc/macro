@@ -36,6 +36,14 @@ beforeAll(() => {
 });
 let animationStyle: HTMLStyleElement;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   vi.useFakeTimers();
   // jsdom's empty animation name otherwise leaves native menus waiting forever
   // for an animationend event, preventing their close-focus lifecycle.
@@ -158,6 +166,19 @@ function mount(
   return { ...mock, unmount: rendered.unmount };
 }
 
+async function addQuestion(type: string) {
+  const trigger = screen.getByRole('button', {
+    name: 'Add question',
+  });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  await vi.advanceTimersByTimeAsync(0);
+  const item = screen.getByRole('menuitem', { name: type });
+  item.focus();
+  fireEvent.keyDown(item, { key: 'Enter' });
+  await vi.advanceTimersByTimeAsync(100);
+}
+
 describe('BuilderView', () => {
   it('saves a focused title before a background click closes question editing', async () => {
     const { context } = mount();
@@ -183,30 +204,72 @@ describe('BuilderView', () => {
     const outline = screen.getByRole('navigation', { name: 'Form outline' });
     const section = within(outline).getByRole('button', { name: 'About you' });
     fireEvent.click(section);
-    expect(section.getAttribute('aria-current')).toBe('true');
+    expect(section.getAttribute('aria-current')).toBe('location');
     fireEvent.click(screen.getByRole('region', { name: 'Form canvas' }));
-    expect(section.getAttribute('aria-current')).not.toBe('true');
+    expect(section.getAttribute('aria-current')).not.toBe('location');
   });
 
-  it('keeps focus on a new section after the compact add menu closes', async () => {
+  it('adds a section directly and focuses its handle', async () => {
     mount();
     const trigger = screen.getByRole('button', {
-      name: 'Add question',
+      name: 'Add section',
     });
     trigger.focus();
-    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-    await vi.advanceTimersByTimeAsync(0);
-    const section = screen.getByRole('menuitem', {
-      name: 'Section',
-    });
-    section.focus();
-    fireEvent.keyDown(section, { key: 'Enter' });
-    await vi.advanceTimersByTimeAsync(400);
-    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.click(trigger);
+    await vi.advanceTimersByTimeAsync(100);
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: 'Move Section 2' })
     );
   });
+
+  it('inserts a question at its hovered boundary instead of appending it', async () => {
+    const { shared } = mount();
+    const trigger = screen.getByRole('button', {
+      name: 'Insert question before Team',
+    });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    await vi.advanceTimersByTimeAsync(0);
+    const item = screen.getByRole('menuitem', { name: 'Short answer' });
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(100);
+    const questions = shared.theirs().sections[0].questions;
+    expect(questions).toHaveLength(3);
+    expect(questions.map((question) => question.id)).toEqual([
+      'q-name',
+      expect.any(String),
+      'q-team',
+    ]);
+    expect(questions[1].widget).toBe('short');
+  });
+
+  it.each(['Section', 'Gate'])(
+    'inserts a %s between sections without offering a meeting link',
+    async (kind) => {
+      const { shared } = mount();
+      fireEvent.click(screen.getByRole('button', { name: 'Add section' }));
+      await vi.advanceTimersByTimeAsync(100);
+      const lastId = shared.theirs().sections[1].id;
+      const trigger = screen.getByRole('button', {
+        name: 'Insert before Section 2',
+      });
+      trigger.focus();
+      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(
+        screen.getAllByRole('menuitem').map((item) => item.textContent?.trim())
+      ).toEqual(['Section', 'Gate']);
+      const item = screen.getByRole('menuitem', { name: kind });
+      item.focus();
+      fireEvent.keyDown(item, { key: 'Enter' });
+      await vi.advanceTimersByTimeAsync(100);
+      const sections = shared.theirs().sections;
+      expect(sections).toHaveLength(3);
+      expect(sections[1].kind).toBe(kind === 'Gate' ? 'gate' : 'questions');
+      expect(sections[2].id).toBe(lastId);
+    }
+  );
 
   it('keeps keyboard focus in the outline when another editor changes a section', () => {
     const { shared } = mount();
@@ -259,7 +322,7 @@ describe('BuilderView', () => {
       within(outline)
         .getByRole('button', { name: 'Team' })
         .getAttribute('aria-current')
-    ).toBe('true');
+    ).toBe('location');
   });
 
   it('shows required state below a question and edits it from the footer', async () => {
@@ -282,8 +345,8 @@ describe('BuilderView', () => {
     const outline = screen.getByRole('navigation', { name: 'Form outline' });
     const section = within(outline).getByRole('button', { name: 'About you' });
     fireEvent.click(section);
-    expect(section.getAttribute('aria-current')).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: 'Add Paragraph' }));
+    expect(section.getAttribute('aria-current')).toBe('location');
+    await addQuestion('Paragraph');
     await vi.advanceTimersByTimeAsync(0);
     expect(shared.theirs().sections[0].questions.at(-1)?.widget).toBe(
       'paragraph'
@@ -292,10 +355,10 @@ describe('BuilderView', () => {
       within(outline)
         .getByRole('button', { name: 'About you' })
         .getAttribute('aria-current')
-    ).not.toBe('true');
+    ).not.toBe('location');
   });
 
-  it('shows the question palette beside a separate outline and adds the chosen type after the selected question', async () => {
+  it('appends a question to the section even when an earlier question is selected', async () => {
     const { calls, shared } = mount();
     const banner = screen.getByRole('region', { name: 'Form details' });
     expect(within(banner).getByLabelText('Form name')).toBeTruthy();
@@ -306,41 +369,29 @@ describe('BuilderView', () => {
     expect(
       screen.getByRole('navigation', { name: 'Form outline' })
     ).toBeTruthy();
-    const palette = screen.getByRole('complementary', { name: 'Add to form' });
-    for (const name of [
-      'Short answer',
-      'Paragraph',
-      'Multiple choice',
-      'Checkboxes',
-      'Dropdown',
-      'Number',
-      'Date & time',
-      'Person',
-      'Document',
-      'Database row',
-    ]) {
-      expect(
-        within(palette).getByRole('button', { name: `Add ${name}` })
-      ).toBeTruthy();
-    }
+    expect(
+      screen.queryByRole('complementary', { name: 'Add to form' })
+    ).toBeNull();
     fireEvent.click(screen.getByRole('group', { name: 'Question 1: Name' }));
-    fireEvent.click(
-      within(palette).getByRole('button', { name: 'Add Paragraph' })
-    );
+    await addQuestion('Paragraph');
     await vi.advanceTimersByTimeAsync(0);
     const questions = shared.theirs().sections[0].questions;
     expect(questions).toHaveLength(3);
     expect(questions[0].id).toBe('q-name');
-    expect(questions[1].widget).toBe('paragraph');
-    expect(questions[2].id).toBe('q-team');
+    expect(questions[1].id).toBe('q-team');
+    expect(questions[2].widget).toBe('paragraph');
     expect(calls.notices).toEqual([]);
   });
 
-  it('adds the first question to an empty form from the palette', async () => {
+  it('adds the first question to an empty form from the add menu', async () => {
     const detail = rsvp();
     detail.layout = { sections: [] };
     const { shared, calls } = mount({ detail });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Short answer' }));
+    expect(screen.queryByRole('button', { name: 'Add question' })).toBeNull();
+    const trigger = screen.getByRole('button', { name: 'Add section' });
+    fireEvent.click(trigger);
+    await vi.advanceTimersByTimeAsync(100);
+    await addQuestion('Short answer');
     await vi.advanceTimersByTimeAsync(0);
     expect(shared.theirs().sections).toHaveLength(1);
     expect(shared.theirs().sections[0].questions).toHaveLength(1);
@@ -441,21 +492,22 @@ describe('BuilderView', () => {
 
   it('waits for the native table picker before creating a relation question, and cancel creates nothing', async () => {
     const { shared, calls } = mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Add Database row' }));
+    await addQuestion('Database row');
     expect(screen.getByRole('dialog', { name: 'Choose a table' })).toBeTruthy();
     expect(shared.theirs().sections[0].questions).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await vi.advanceTimersByTimeAsync(100);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(calls.layouts).toEqual([]);
     fireEvent.click(screen.getByRole('group', { name: 'Question 1: Name' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add Database row' }));
+    await addQuestion('Database row');
     fireEvent.click(screen.getByRole('button', { name: 'Responses' }));
     await vi.advanceTimersByTimeAsync(0);
     expect(screen.queryByRole('dialog')).toBeNull();
     const questions = shared.theirs().sections[0].questions;
     expect(questions).toHaveLength(3);
     expect(questions[0].id).toBe('q-name');
-    expect(questions[2].id).toBe('q-team');
+    expect(questions[1].id).toBe('q-team');
     expect(calls.notices).toEqual([]);
   });
 
@@ -514,16 +566,6 @@ describe('BuilderView', () => {
 
   it('builds a gate rule in the grid’s filter editor: the new condition stays while it is filled in, and saves once complete', async () => {
     const detail = rsvp();
-    detail.layout.sections.push({
-      id: 'gate',
-      title: 'Eligibility',
-      description: '',
-      kind: 'gate',
-      gateRules: { conjunction: 'and', conditions: [] },
-      gateMessage: 'Not this time.',
-      bookingTarget: null,
-      questions: [],
-    });
     const mock = createMockFormContext({ detail, tableColumns: columns });
     const context = {
       ...mock.context,
@@ -543,11 +585,14 @@ describe('BuilderView', () => {
         />
       </FormProvider>
     ));
-    fireEvent.click(screen.getByRole('button', { name: 'Add rule' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add gate' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(mock.shared.theirs().sections.at(-1)?.kind).toBe('gate');
+    const savedCount = mock.calls.layouts.length;
     fireEvent.click(screen.getByRole('button', { name: /Add condition/ }));
     await vi.advanceTimersByTimeAsync(1000);
     // Incomplete, so nothing is saved, and the row is still there to fill in.
-    expect(mock.calls.layouts).toHaveLength(0);
+    expect(mock.calls.layouts).toHaveLength(savedCount);
     const value = screen.getByRole('textbox', { name: 'Filter value' });
     fireEvent.input(value, { target: { value: 'Ada' } });
     await vi.advanceTimersByTimeAsync(400);
@@ -868,8 +913,10 @@ describe('BuilderView', () => {
 
     it('adds one of the editor’s booking links as the last step and saves it', async () => {
       const { calls } = mountBooking(rsvp());
-      await openMenu('Booking');
-      await choose(/Intro call/);
+      fireEvent.click(screen.getByRole('button', { name: 'Add meeting link' }));
+      await vi.advanceTimersByTimeAsync(100);
+      fireEvent.click(screen.getByRole('button', { name: /Intro call/ }));
+      await vi.advanceTimersByTimeAsync(100);
       expect(calls.layouts.at(-1)?.sections.at(-1)).toEqual({
         id: expect.any(String),
         title: 'Book a time',
@@ -885,13 +932,13 @@ describe('BuilderView', () => {
       expect(within(card).getByText('30 min · Ada Lovelace')).toBeTruthy();
     });
 
-    it('returns focus to the compact add trigger when booking selection is canceled', async () => {
+    it('returns focus to Add meeting link when selection is canceled', async () => {
       mountBooking(rsvp());
       const trigger = screen.getByRole('button', {
-        name: 'Add question',
+        name: 'Add meeting link',
       });
-      await openMenu('Add question');
-      await choose(/^Booking$/);
+      fireEvent.click(screen.getByRole('button', { name: 'Add meeting link' }));
+      await vi.advanceTimersByTimeAsync(100);
       const dialog = screen.getByRole('dialog', {
         name: 'Choose a booking link',
       });
@@ -901,10 +948,10 @@ describe('BuilderView', () => {
       expect(document.activeElement).toBe(trigger);
     });
 
-    it('chooses a booking link in a dialog from the compact menu and focuses its new step', async () => {
+    it('chooses a booking link from the visible action and focuses its new step', async () => {
       const { shared } = mountBooking(rsvp());
-      await openMenu('Add question');
-      await choose(/^Booking$/);
+      fireEvent.click(screen.getByRole('button', { name: 'Add meeting link' }));
+      await vi.advanceTimersByTimeAsync(100);
       const dialog = screen.getByRole('dialog', {
         name: 'Choose a booking link',
       });
@@ -920,6 +967,26 @@ describe('BuilderView', () => {
       expect(document.activeElement).toBe(
         screen.getByRole('region', { name: 'Book a time' })
       );
+    });
+
+    it('keeps the meeting link last when another section is added', async () => {
+      const { shared } = mountBooking(rsvp());
+      fireEvent.click(screen.getByRole('button', { name: 'Add meeting link' }));
+      fireEvent.click(screen.getByRole('button', { name: /Intro call/ }));
+      await vi.advanceTimersByTimeAsync(100);
+      fireEvent.click(screen.getByRole('button', { name: 'Add section' }));
+      await vi.advanceTimersByTimeAsync(100);
+      expect(shared.theirs().sections.map((section) => section.kind)).toEqual([
+        'questions',
+        'questions',
+        'booking',
+      ]);
+      expect(
+        screen.queryByRole('button', { name: 'Add meeting link' })
+      ).toBeNull();
+      expect(
+        screen.getByRole('button', { name: 'View meeting link' })
+      ).toBeTruthy();
     });
 
     it('shows each of two concurrently added booking steps with its own link, for an editor to remove one', async () => {
@@ -979,9 +1046,12 @@ describe('BuilderView', () => {
 
     it('explains how to make a booking link when the editor has none', async () => {
       const { calls } = mountBooking(rsvp(), []);
-      await openMenu('Booking');
+      fireEvent.click(screen.getByRole('button', { name: 'Add meeting link' }));
+      await vi.advanceTimersByTimeAsync(100);
       expect(screen.getByText(/You have no booking links yet/)).toBeTruthy();
-      await choose(/Create a booking link/);
+      fireEvent.click(
+        screen.getByRole('button', { name: /Create a booking link/ })
+      );
       expect(calls.settingsOpened).toBe(1);
       expect(calls.layouts).toHaveLength(0);
     });
@@ -999,7 +1069,10 @@ describe('BuilderView', () => {
         questions: [],
       });
       const { calls } = mountBooking(detail);
-      fireEvent.click(screen.getByRole('button', { name: 'Booking' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'View meeting link' })
+      );
+      await vi.advanceTimersByTimeAsync(100);
       await vi.advanceTimersByTimeAsync(0);
       expect(document.activeElement).toBe(
         screen.getByRole('region', { name: 'Book a call' })

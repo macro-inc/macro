@@ -41,7 +41,7 @@ for (const action of ['attachment completion', 'draft transfer'] as const) {
           ? Response.json(transferred)
           : new Response(null, { status: 204 });
       },
-      { preconnect: globalThis.fetch.preconnect }
+      { preconnect: globalThis.fetch.preconnect },
     );
     spyOn(globalThis, 'fetch').mockImplementation(fetchMock);
     const macro = new Macro({
@@ -58,17 +58,17 @@ for (const action of ['attachment completion', 'draft transfer'] as const) {
       expect(await requests[1].json()).toEqual(request);
     } else {
       await draft.completeDraftAttachment(
-        '0198a4cc-e138-7670-a308-a6b766602707'
+        '0198a4cc-e138-7670-a308-a6b766602707',
       );
       expect(new URL(requests[1].url).pathname).toEndWith(
-        '/attachments/0198a4cc-e138-7670-a308-a6b766602707/complete'
+        '/attachments/0198a4cc-e138-7670-a308-a6b766602707/complete',
       );
     }
     expect(requests).toHaveLength(2);
     expect(requests[1].method).toBe('POST');
     expect(requests[1].headers.get('X-Email-Link-Id')).toBe(message.link_id);
     expect(new URL(requests[1].url).pathname).toStartWith(
-      `/email/drafts/${message.db_id}/`
+      `/email/drafts/${message.db_id}/`,
     );
   });
 }

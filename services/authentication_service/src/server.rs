@@ -108,6 +108,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    let account_link_state_key = config.account_link_state_key()?;
     let signup_policy = Arc::new(
         config
             .signup_policy()
@@ -236,7 +237,10 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::new(
             MicrosoftAuthService::new(
                 PgMicrosoftGrants::new(db.clone()),
-                MicrosoftOAuthProvider::new(Arc::new(auth_client.clone())),
+                MicrosoftOAuthProvider::new(
+                    Arc::new(auth_client.clone()),
+                    account_link_state_key.clone(),
+                ),
                 cipher,
             )
             .with_connections_enabled(config.outlook_connections_enabled),
@@ -474,6 +478,11 @@ pub async fn run() -> anyhow::Result<()> {
         GithubPullRequestServiceImpl::new(
             foreign_entity_service,
             PgGithubPullRequestRepo::new(db.clone()),
+        )
+        .with_event_publisher(
+            github_pull_requests::broker::BrokerGithubPullRequestPublisher(
+                macro_event_broker.clone(),
+            ),
         ),
         GithubLinkConfig {
             client_id: config.github_client_id.to_string(),
@@ -546,6 +555,29 @@ pub async fn run() -> anyhow::Result<()> {
         .with_enforcement(config.enable_ai_usage_enforcement)
         .with_billing(config.enable_ai_usage_billing),
     );
+    // The floor under every settlement request: on a schedule, settle
+    // everyone who recorded counted usage recently, whose period just closed,
+    // or who holds a reload that was never collected. Settlement is
+    // idempotent and serialized per payer in the database, so replicas may
+    // sweep concurrently. Not started while billing is off: every settlement
+    // would return before reading anything.
+    let settlement_sweep = config.enable_ai_usage_billing.is_enabled().then(|| {
+        tokio::spawn(ai_billing::inbound::run_settlement_sweep(
+            ai_billing::domain::SettlementSweep::new(
+                ai_billing_service.clone(),
+                ai_billing::outbound::PgSettlementCandidates::new(db.clone()),
+                ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                    user_roles_and_permissions_service.clone(),
+                    teams_repo_impl.clone(),
+                ),
+            ),
+            ai_billing::inbound::SETTLEMENT_SWEEP_INITIAL_DELAY,
+            ai_billing::inbound::SETTLEMENT_SWEEP_INTERVAL,
+        ))
+    });
+    if settlement_sweep.is_none() {
+        tracing::info!("ai billing settlement sweep not started: ENABLE_AI_USAGE_BILLING is off");
+    }
     let document_storage_service_client = Arc::new(document_storage_service_client);
     // The harness and scheduled-action services validate the fleet-wide
     // internal key, not this service's own inbound key.
@@ -629,6 +661,7 @@ pub async fn run() -> anyhow::Result<()> {
             signup_policy,
             rate_limit_service: rate_limit,
             calendar_scope_enabled: config.calendar_scope_enabled,
+            account_link_state_key,
             jwt_args,
             authorization_state,
             token_context: MacroApiTokenContext {
@@ -677,6 +710,12 @@ pub async fn run() -> anyhow::Result<()> {
 
     grant_cleanup.abort();
     let _ = grant_cleanup.await;
+    // A sweep interrupted here leaves nothing half done: each settlement
+    // step commits on its own and the next sweep, on any replica, resumes.
+    if let Some(sweep) = settlement_sweep {
+        sweep.abort();
+    }
+
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
     match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {

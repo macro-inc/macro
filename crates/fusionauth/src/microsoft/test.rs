@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::{Deserialize, Serialize};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -147,7 +146,7 @@ fn authorize_url_uses_configured_tenant_and_secondary_account_parameters() {
     let url = microsoft_client()
         .construct_microsoft_authorize_url(
             "https://auth.example.com/oauth2/microsoft/callback",
-            &"state",
+            "state",
         )
         .unwrap();
     let url = reqwest::Url::parse(&url).unwrap();
@@ -167,34 +166,23 @@ fn authorize_url_uses_configured_tenant_and_secondary_account_parameters() {
     assert_eq!(query.get("prompt").unwrap(), "select_account");
 }
 
-#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct TestState {
-    identity_provider_id: String,
-    link_id: String,
-}
-
 #[test]
-fn authorize_url_serializes_state_as_json() {
-    let state = TestState {
-        identity_provider_id: "identity-provider-id".into(),
-        link_id: "link-id".into(),
-    };
+fn authorize_url_carries_state_through_unchanged() {
+    // Callers hand over an already-signed token; it must round-trip byte for byte.
+    let state = "eyJwcm92aWRlciI6Im1pY3Jvc29mdCJ9.c2lnbmF0dXJl+/=&?";
     let url = microsoft_client()
         .construct_microsoft_authorize_url(
             "https://auth.example.com/oauth2/microsoft/callback",
-            &state,
+            state,
         )
         .unwrap();
     let url = reqwest::Url::parse(&url).unwrap();
-    let serialized_state = url
+    let returned_state = url
         .query_pairs()
         .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
         .unwrap();
 
-    assert_eq!(
-        serde_json::from_str::<TestState>(&serialized_state).unwrap(),
-        state
-    );
+    assert_eq!(returned_state, state);
 }
 
 #[test]
@@ -202,7 +190,7 @@ fn microsoft_oauth_configuration_is_optional_and_secret_is_redacted() {
     let error = client()
         .construct_microsoft_authorize_url(
             "https://auth.example.com/oauth2/microsoft/callback",
-            &"state",
+            "state",
         )
         .unwrap_err();
     assert!(matches!(
@@ -216,7 +204,7 @@ fn microsoft_oauth_configuration_is_optional_and_secret_is_redacted() {
     cloned_client
         .construct_microsoft_authorize_url(
             "https://auth.example.com/oauth2/microsoft/callback",
-            &"state",
+            "state",
         )
         .unwrap();
 }
@@ -385,21 +373,28 @@ async fn signing_key_fetch_rejects_an_empty_key_set() {
 }
 
 #[test]
-fn bound_authorization_includes_pkce_and_nonce() {
-    let url = microsoft_client()
-        .construct_bound_microsoft_authorize_url(
-            "https://auth.example.com/callback",
-            &"state",
-            "challenge",
-            "nonce",
-            false,
-        )
-        .unwrap();
-    let url = reqwest::Url::parse(&url).unwrap();
-    let values: HashMap<_, _> = url.query_pairs().into_owned().collect();
-    assert_eq!(values["code_challenge_method"], "S256");
-    assert_eq!(values["code_challenge"], "challenge");
-    assert_eq!(values["nonce"], "nonce");
+fn bound_authorization_preserves_opaque_state_pkce_and_nonce() {
+    let state = "eyJwcm92aWRlciI6Im1pY3Jvc29mdCJ9.c2lnbmF0dXJl+/=&?%20";
+    let redirect_uri = "https://auth.example.com/callback";
+    for calendar in [false, true] {
+        let url = microsoft_client()
+            .construct_bound_microsoft_authorize_url(
+                redirect_uri,
+                state,
+                "challenge",
+                "nonce",
+                calendar,
+            )
+            .unwrap();
+        let url = reqwest::Url::parse(&url).unwrap();
+        let values: HashMap<_, _> = url.query_pairs().into_owned().collect();
+        assert_eq!(url.query_pairs().count(), values.len());
+        assert_eq!(values["state"], state);
+        assert_eq!(values["redirect_uri"], redirect_uri);
+        assert_eq!(values["code_challenge_method"], "S256");
+        assert_eq!(values["code_challenge"], "challenge");
+        assert_eq!(values["nonce"], "nonce");
+    }
 }
 
 #[test]
@@ -482,7 +477,7 @@ fn calendar_consent_is_opt_in_and_contacts_are_read_only() {
         let url = microsoft_client()
             .construct_bound_microsoft_authorize_url(
                 "https://auth.example.com/callback",
-                &"state",
+                "state",
                 "challenge",
                 "nonce",
                 calendar,

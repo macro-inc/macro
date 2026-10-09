@@ -13,7 +13,7 @@ fn occurrence_identity_composes_event_id_and_occurrence_key() {
     let listing = timed_listing(7);
     let key = listing.occurrence.occurrence_key.clone();
 
-    let occurrence = GraphqlCalendarOccurrence::from(listing);
+    let occurrence = occurrence_nodes(vec![listing]).remove(0);
 
     assert_eq!(occurrence.id, ID(format!("{EVENT_ID}:{key}")));
     assert_eq!(occurrence.event_id, ID(EVENT_ID.to_string()));
@@ -36,7 +36,7 @@ fn exception_stays_on_the_occurrence_and_the_event_keeps_series_content() {
         )]),
     };
 
-    let occurrence = GraphqlCalendarOccurrence::from(listing);
+    let occurrence = occurrence_nodes(vec![listing]).remove(0);
 
     assert_eq!(occurrence.event.title, "Standup");
     assert_eq!(
@@ -59,7 +59,7 @@ fn exception_stays_on_the_occurrence_and_the_event_keeps_series_content() {
 
 #[test]
 fn occurrence_without_exception_inherits_everything() {
-    let occurrence = GraphqlCalendarOccurrence::from(timed_listing(8));
+    let occurrence = occurrence_nodes(vec![timed_listing(8)]).remove(0);
 
     assert_eq!(occurrence.override_title, None);
     assert_eq!(occurrence.override_status, None);
@@ -114,4 +114,88 @@ fn visible_calendar_maps_its_link() {
     assert_eq!(calendar.id, ID(uuid::Uuid::from_u128(5).to_string()));
     assert_eq!(calendar.link_id, ID(LINK_ID.to_string()));
     assert_eq!(calendar.default_reminders[0].minutes, 10);
+    assert_eq!(calendar.provider, GraphqlCalendarProvider::Google);
+    assert_eq!(calendar.capabilities, CalendarCapabilities::google().into());
+}
+
+#[test]
+fn event_mapping_preserves_teams_and_per_calendar_source_content() {
+    let mut event = crate::test_fixtures::series_event();
+    event.conference_provider = Some(ConferenceProvider::MicrosoftTeams);
+    event.conference_url = Some("https://teams.microsoft.com/meet/example".to_owned());
+    let source = CalendarEventSourceContent {
+        calendar_id: Uuid::from_u128(0x44),
+        title: "Shared calendar title".to_owned(),
+        description: Some("Shared calendar description".to_owned()),
+        location: Some("Room B".to_owned()),
+        event_type: EventType::OutOfOffice,
+        visibility: EventVisibility::Private,
+        transparency: EventTransparency::Transparent,
+        is_read_only: true,
+        reminders: EventReminders {
+            use_default: false,
+            overrides: vec![EventReminderOverride {
+                method: "email".to_owned(),
+                minutes: 20,
+            }],
+        },
+        creator_email: Some("creator@example.com".to_owned()),
+        creator_name: Some("Creator".to_owned()),
+    };
+    event.sources.push(source.clone());
+
+    let mapped = GraphqlCalendarEvent::new(event, LINK_ID);
+
+    assert_eq!(
+        mapped.conference_provider,
+        Some(GraphqlCalendarConferenceProvider::MicrosoftTeams)
+    );
+    assert_eq!(
+        mapped.conference_url.as_deref(),
+        Some("https://teams.microsoft.com/meet/example")
+    );
+    assert_eq!(mapped.title, "Standup");
+    assert!(!mapped.is_read_only);
+    assert_eq!(
+        mapped.sources,
+        vec![GraphqlCalendarEventSource {
+            calendar_id: ID(source.calendar_id.to_string()),
+            title: source.title,
+            description: source.description,
+            location: source.location,
+            event_type: GraphqlCalendarEventType::OutOfOffice,
+            visibility: GraphqlCalendarEventVisibility::Private,
+            transparency: GraphqlCalendarEventTransparency::Transparent,
+            is_read_only: true,
+            reminders: GraphqlCalendarReminders {
+                use_default: false,
+                overrides: vec![GraphqlCalendarReminderOverride {
+                    method: "email".to_owned(),
+                    minutes: 20
+                }],
+            },
+            creator_email: source.creator_email,
+            creator_name: source.creator_name,
+        }]
+    );
+}
+
+#[test]
+fn timed_point_occurrences_keep_equal_start_and_end() {
+    let mut listing = timed_listing(7);
+    let EventTime::Timed {
+        starts_at, ends_at, ..
+    } = &mut listing.occurrence.time
+    else {
+        panic!("expected a timed occurrence");
+    };
+    *ends_at = *starts_at;
+
+    let occurrence = occurrence_nodes(vec![listing]).remove(0);
+
+    let GraphqlEventTime::Timed(time) = occurrence.time else {
+        panic!("expected a timed GraphQL occurrence");
+    };
+    assert_eq!(time.starts_at, "2026-10-07T15:00:00+00:00");
+    assert_eq!(time.ends_at, time.starts_at);
 }

@@ -12,6 +12,9 @@ pub mod notification_notifier;
 /// PostgreSQL calendar repository.
 #[cfg(feature = "postgres")]
 pub mod pg;
+/// PostgreSQL facts for team-calendar sharing.
+#[cfg(feature = "postgres")]
+pub mod pg_team;
 /// SQS calendar reminder dispatch queue.
 #[cfg(feature = "dispatch-sqs")]
 pub mod sqs_dispatch_queue;

@@ -42,7 +42,11 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
-import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
+import {
+  isSameLocalDate,
+  isTimedPointEvent,
+  parseLocalDate,
+} from '../utils/calendar-date';
 import {
   parseMacroAppLink,
   sanitizeCalendarDescription,
@@ -326,6 +330,10 @@ function formatEventSchedule(
     return isSameLocalDate(start, inclusiveEnd)
       ? `${formatDate.format(start)} · All day`
       : `${formatShortDate.format(start)}–${formatShortDate.format(inclusiveEnd)} · All day`;
+  }
+
+  if (isTimedPointEvent(event)) {
+    return `${formatDate.format(start)} · ${formatCalendarTime(start, timeFormat)} · No duration`;
   }
 
   return isSameLocalDate(start, end)

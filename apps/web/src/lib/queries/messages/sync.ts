@@ -4,6 +4,7 @@ import type {
   MessageListItem,
   MessageParent,
   MessageThread,
+  TimelineActivity,
 } from '@service-storage/messages';
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
@@ -23,10 +24,26 @@ import { fetchMessageThread, getThreadRepliesQueryKey } from './thread-replies';
 import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
+  insertActivitiesIntoMessageTimeline,
   type MessageTimelineData,
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
+
+/** Committed timeline activity, delivered whole so loaded history needs no re-read. */
+export function handleTimelineActivity(event: {
+  parent: MessageParent;
+  activities: TimelineActivity[];
+}) {
+  // A fact committed before the bottom page's first fetch resolved may be
+  // missing from a response the server already computed. Loaded windows still
+  // take it below.
+  refetchTimelineAwaitingFirstPage(event.parent);
+  queryClient.setQueriesData<MessageTimelineData>(
+    { queryKey: getMessageTimelineQueryKeyPrefix(event.parent) },
+    (data) => insertActivitiesIntoMessageTimeline(data, event.activities)
+  );
+}
 
 type ThreadStateListener = (
   parent: MessageParent,
@@ -259,14 +276,19 @@ export function applyThreadState(
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items
+          entries: page.entries
             .filter(
               (item) =>
+                item.type !== 'message' ||
                 parent.type === 'document' ||
                 !state.deleted_at ||
-                item.id !== state.root_id
+                item.message.id !== state.root_id
             )
-            .map(update),
+            .map((entry) =>
+              entry.type === 'message'
+                ? { ...entry, message: update(entry.message) }
+                : entry
+            ),
         })),
       }
   );

@@ -56,7 +56,7 @@ export class Link extends MacroEntity<LinkRecord> {
     return unwrap(
       await this.client.email.mailboxSettingsOperations({
         headers: { 'X-Email-Link-Id': this.id },
-      })
+      }),
     );
   }
 }

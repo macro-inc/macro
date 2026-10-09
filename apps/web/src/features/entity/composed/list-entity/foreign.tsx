@@ -18,6 +18,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { GithubPullRequestEntity } from '../../types/entity';
+import { PrAgentSessionsChip } from '../../views/PrAgentSessionsChip';
 
 type PillProps = {
   children: JSX.Element;
@@ -499,6 +500,7 @@ export function GithubPullRequestPills(props: {
         <ChatCircle class="size-3 shrink-0" />
         {numberFormatter.format(props.entity.metadata.comments.length)}
       </Pill>
+      <PrAgentSessionsChip url={props.entity.metadata.url} />
     </>
   );
 }

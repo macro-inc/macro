@@ -2,14 +2,14 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import TableIcon from '@phosphor/table.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { Key } from '@solid-primitives/keyed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
-import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
+import { Dropdown } from '@ui/components/Dropdown';
+import { TabSelector } from '@ui/components/TabSelector';
 import { Tooltip } from '@ui/components/Tooltip';
 import {
   createEffect,
@@ -34,13 +34,15 @@ import {
 } from '../core/column-schema';
 import { isDatabaseNameTaken } from '../core/property-creation';
 import type { CreateTable } from '../core/table-creation';
-import { CreateTableDialog } from './create-table-dialog';
 import { createInlineRename } from './inline-rename';
+import { NewTableTab } from './new-table-tab';
 
 export function TableNavigation(props: {
   tables: { id: string; name: string }[];
   activeTableId: string | undefined;
   canCreate: boolean;
+  /** Additional feature-owned creation/navigation items in the add menu. */
+  menuItems?: () => JSX.Element;
   onSelect: (tableId: string) => void;
   onCreate: CreateTable;
   onRename?: (
@@ -57,6 +59,15 @@ export function TableNavigation(props: {
 }) {
   const [deleting, setDeleting] = createSignal<{ id: string; name: string }>();
   const [open, setOpen] = createSignal(false);
+  const [createError, setCreateError] = createSignal('');
+  const [createdTableId, setCreatedTableId] = createSignal<string>();
+  const createErrorId = createUniqueId();
+  const closeDraft = (restoreFocus: boolean) => {
+    setOpen(false);
+    setCreateError('');
+    setCreatedTableId(undefined);
+    if (restoreFocus) queueMicrotask(() => createButton?.focus());
+  };
   const [tabRail, setTabRail] = createSignal<HTMLDivElement>();
   const renameErrorId = createUniqueId();
   const [menuTarget, setMenuTarget] = createSignal<{
@@ -192,10 +203,10 @@ export function TableNavigation(props: {
         class="hidden"
         aria-hidden="true"
       />
-      <div class="flex min-w-0 items-center gap-1.5">
+      <TabSelector>
         <span class="sr-only">Tables</span>
         <Show
-          when={props.tables.length > 0}
+          when={props.tables.length > 0 || open()}
           fallback={
             <span class="min-w-0 flex-1 text-xs text-ink-placeholder">
               No tables yet
@@ -218,12 +229,13 @@ export function TableNavigation(props: {
               activationMode="manual"
               class="min-w-0"
             >
-              <Tabs.List
-                ref={setTabRail}
-                aria-label="Database tables"
-                class="relative flex min-h-8 items-center gap-0.5 overflow-x-auto"
-              >
-                <Key each={props.tables} by="id">
+              <TabSelector.List ref={setTabRail} aria-label="Database tables">
+                <Key
+                  each={props.tables.filter(
+                    (table) => table.id !== createdTableId()
+                  )}
+                  by="id"
+                >
                   {(table) => (
                     <DraggableTab
                       id={table().id}
@@ -237,7 +249,7 @@ export function TableNavigation(props: {
                       }}
                     >
                       <Tooltip label={table().name}>
-                        <Tabs.Trigger
+                        <TabSelector.Tab
                           value={table().id}
                           aria-haspopup={
                             canRename() || canReorder() ? 'menu' : undefined
@@ -245,13 +257,21 @@ export function TableNavigation(props: {
                           aria-keyshortcuts={
                             canRename() ? 'F2 Shift+F10' : undefined
                           }
-                          onDblClick={(event) => {
+                          onDblClick={(
+                            event: MouseEvent & {
+                              currentTarget: HTMLButtonElement;
+                            }
+                          ) => {
                             if (!canRename()) return;
                             event.preventDefault();
                             event.stopPropagation();
                             rename(table(), event.currentTarget);
                           }}
-                          onContextMenu={(event) => {
+                          onContextMenu={(
+                            event: MouseEvent & {
+                              currentTarget: HTMLButtonElement;
+                            }
+                          ) => {
                             if (!canRename() && !canReorder()) return;
                             event.preventDefault();
                             event.stopPropagation();
@@ -284,12 +304,11 @@ export function TableNavigation(props: {
                               );
                             }
                           }}
-                          class="relative flex h-8 max-w-40 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-ink/50 data-selected:bg-hover data-selected:font-medium data-selected:text-ink"
                           classList={{ hidden: renaming()?.id === table().id }}
                         >
                           <TableIcon class="size-3.5 shrink-0" />
                           <span class="truncate">{table().name}</span>
-                        </Tabs.Trigger>
+                        </TabSelector.Tab>
                       </Tooltip>
                       <Show when={renaming()?.id === table().id}>
                         <input
@@ -330,6 +349,17 @@ export function TableNavigation(props: {
                     </DraggableTab>
                   )}
                 </Key>
+                <Show when={open()}>
+                  <NewTableTab
+                    existingNames={props.tables.map((table) => table.name)}
+                    onCreate={props.onCreate}
+                    onOpenTable={props.onSelect}
+                    onClose={closeDraft}
+                    onError={setCreateError}
+                    onCreated={setCreatedTableId}
+                    errorId={createErrorId}
+                  />
+                </Show>
                 <Show when={tabReorder.drop()}>
                   {(drop) => (
                     <InsertionLine
@@ -339,7 +369,7 @@ export function TableNavigation(props: {
                     />
                   )}
                 </Show>
-              </Tabs.List>
+              </TabSelector.List>
             </Tabs>
             <DragOverlay
               class="pointer-events-none select-none rounded-md bg-panel shadow-md"
@@ -349,20 +379,37 @@ export function TableNavigation(props: {
             </DragOverlay>
           </DragDropProvider>
         </Show>
-        <Show when={props.canCreate}>
-          <Button
-            ref={createButton}
-            type="button"
-            size="sm"
-            variant={props.tables.length ? 'ghost' : 'strong'}
-            class="shrink-0 gap-1.5 text-xs focus-visible:ring-2 focus-visible:ring-ink/50"
-            onClick={() => setOpen(true)}
+        <Show when={props.canCreate || props.menuItems}>
+          <TabSelector.AddMenu
+            label="Add table or form"
+            onCloseAutoFocus={(event) => {
+              if (!open()) return;
+              event.preventDefault();
+              queueMicrotask(() =>
+                tabRail()
+                  ?.querySelector<HTMLInputElement>('form input')
+                  ?.focus()
+              );
+            }}
+            ref={(element) => {
+              createButton = element;
+            }}
           >
-            <PlusIcon class="size-3.5" />
-            New table
-          </Button>
+            <Show when={props.canCreate}>
+              <Dropdown.Item onSelect={() => setOpen(true)}>
+                <TableIcon class="size-4" />
+                New table
+              </Dropdown.Item>
+            </Show>
+            {props.menuItems?.()}
+          </TabSelector.AddMenu>
         </Show>
-      </div>
+      </TabSelector>
+      <Show when={createError()}>
+        <p id={createErrorId} role="alert" class="mt-1 text-xs text-failure">
+          {createError()}
+        </p>
+      </Show>
       <Show when={tableRename.error()}>
         <p id={renameErrorId} role="alert" class="mt-1 text-xs text-failure">
           {tableRename.error()}
@@ -453,15 +500,6 @@ export function TableNavigation(props: {
           </>
         }
       />
-      <Show when={open()}>
-        <CreateTableDialog
-          existingNames={props.tables.map((table) => table.name)}
-          onCreate={props.onCreate}
-          onOpenTable={props.onSelect}
-          onClose={() => setOpen(false)}
-          returnFocus={createButton}
-        />
-      </Show>
     </ContextMenu>
   );
 }

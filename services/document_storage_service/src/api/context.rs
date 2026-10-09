@@ -187,6 +187,20 @@ pub(crate) type DssCrmStageService = crm::domain::stages::CrmStageServiceImpl<
     crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
 >;
 
+pub(crate) type DssPipelineService = crm::domain::pipelines::PipelineServiceImpl<
+    crm::outbound::pipelines::PgPipelineRepo<
+        databases::outbound::pg_cell_store::PgCellStore<PropertiesPgRepo>,
+    >,
+    DatabasesServiceType,
+    EntityAccessService,
+    crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
+>;
+pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
+    DssPipelineService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -816,6 +830,8 @@ pub(crate) struct ApiContext {
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
+    pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
+    pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
     pub databases_state: DssDatabasesState,
@@ -864,6 +880,7 @@ pub(crate) struct ApiContext {
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
     pub owned_purge_state: DssOwnedPurgeState,
+    pub pipeline_state: DssPipelineState,
 }
 
 env_var! {

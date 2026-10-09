@@ -191,6 +191,7 @@ impl IntoResponse for FormsApiError {
             | FormError::Repository(_)
             | FormError::Collaboration(_)
             | FormError::AccessDirectory(_)
+            | FormError::DatabaseRetained { .. }
             | FormError::DatabaseContract(_)) => {
                 tracing::error!(error = ?error, "forms internal server error");
                 (

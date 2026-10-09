@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use calendar_events::domain::{
+    changes::{CalendarChangeQueryService, CalendarChangesPage, CalendarWatermark},
     models::{
         CalendarCapabilities, CalendarEvent, CalendarMentionPreview, CalendarMentionRequestItem,
         CalendarOccurrence, CalendarOccurrenceCursor, CalendarProvider, CalendarSyncStatus,
@@ -130,11 +131,37 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
     }
 }
 
+impl CalendarChangeQueryService for RecordingCalendarReads {
+    async fn current_watermark(&self, requester_id: &str) -> Result<CalendarWatermark, Report> {
+        self.viewers.lock().unwrap().push(requester_id.to_owned());
+        Ok(CalendarWatermark::default())
+    }
+
+    async fn changes_since(
+        &self,
+        requester_id: &str,
+        _since: CalendarWatermark,
+    ) -> Result<CalendarChangesPage, Report> {
+        self.viewers.lock().unwrap().push(requester_id.to_owned());
+        Ok(CalendarChangesPage {
+            reset_required: true,
+            ..CalendarChangesPage::default()
+        })
+    }
+    async fn event_change(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<calendar_events::domain::changes::CalendarEventChange>, Report> {
+        Ok(None)
+    }
+}
+
 #[tokio::test]
 async fn calendar_fields_read_through_request_data_for_the_viewer() {
     let harness = harness();
     let reads = Arc::new(RecordingCalendarReads::default());
-    let context = CalendarGraphqlContext::new(Arc::clone(&reads));
+    let context = CalendarGraphqlContext::new(Arc::clone(&reads), Arc::clone(&reads));
 
     let id_only = harness
         .schema
@@ -159,8 +186,9 @@ async fn calendar_fields_read_through_request_data_for_the_viewer() {
                             start: "2026-10-05T00:00:00Z", end: "2026-10-12T00:00:00Z"
                         }) {
                             nodes { id eventId linkId event { id title } }
-                            hasNextPage syncStatus
+                            hasNextPage syncStatus watermark { linkId seq }
                         }
+                        calendarChanges(input: { since: [] }) { resetRequired }
                     } }"#,
                     authenticated_parts(),
                 )
@@ -176,10 +204,10 @@ async fn calendar_fields_read_through_request_data_for_the_viewer() {
     assert_eq!(node["id"], format!("{EVENT_ID}:2026-10-06T15:00:00+00:00"));
     assert_eq!(node["event"]["title"], "Planning");
     assert_eq!(user["calendarOccurrences"]["syncStatus"], "READY");
-    assert_eq!(
-        *reads.viewers.lock().unwrap(),
-        vec![VALID_USER_ID.to_owned(), VALID_USER_ID.to_owned()]
-    );
+    assert_eq!(user["calendarChanges"]["resetRequired"], true);
+    let viewers = reads.viewers.lock().unwrap();
+    assert_eq!(viewers.len(), 4);
+    assert!(viewers.iter().all(|viewer| viewer == VALID_USER_ID));
 }
 
 #[tokio::test]
@@ -192,4 +220,107 @@ async fn calendar_fields_fail_without_the_calendar_context() {
         .await;
 
     assert_eq!(response.errors.len(), 1);
+}
+
+#[derive(Default)]
+struct RecordingCalendarMutations {
+    deleted: Mutex<Vec<(String, Uuid)>>,
+}
+
+impl calendar_events::domain::ports::CalendarMutationService for RecordingCalendarMutations {
+    async fn create_event(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
+        _draft: calendar_events::domain::models::CalendarEventDraft,
+    ) -> Result<CalendarEvent, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn list_visible_calendars(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<VisibleCalendar>, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn update_event(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _patch: calendar_events::domain::models::CalendarEventPatch,
+        _scope: calendar_events::domain::ports::CalendarUpdateScope,
+    ) -> Result<CalendarEvent, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn delete_event(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _scope: calendar_events::domain::ports::CalendarDeletionScope,
+    ) -> Result<(), calendar_events::domain::ports::CalendarMutationError> {
+        self.deleted
+            .lock()
+            .unwrap()
+            .push((requester_id.to_owned(), event_id));
+        Ok(())
+    }
+
+    async fn respond_to_event(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _response: calendar_events::domain::models::AttendeeResponseStatus,
+        _scope: calendar_events::domain::ports::CalendarRsvpScope,
+        _responding_email: Option<String>,
+    ) -> Result<CalendarEvent, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn disconnect_calendar(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Uuid,
+    ) -> Result<(), calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+}
+
+#[tokio::test]
+async fn calendar_mutations_run_for_the_authenticated_viewer() {
+    let harness = harness();
+    let mutations = Arc::new(RecordingCalendarMutations::default());
+    let reads = Arc::new(RecordingCalendarReads::default());
+    let context =
+        graphql_calendar::CalendarGraphqlMutationContext::new(Arc::clone(&mutations), reads);
+
+    let response = harness
+        .schema
+        .execute(
+            harness
+                .request(
+                    &format!(
+                        r#"mutation {{ deleteCalendarEvent(input: {{ eventId: "{EVENT_ID}" }}) {{ deletedEventId }} }}"#
+                    ),
+                    authenticated_parts(),
+                )
+                .data(MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap())
+                .data(context),
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["deleteCalendarEvent"]["deletedEventId"],
+        EVENT_ID.to_string()
+    );
+    assert_eq!(
+        *mutations.deleted.lock().unwrap(),
+        vec![(VALID_USER_ID.to_owned(), EVENT_ID)]
+    );
 }

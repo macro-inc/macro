@@ -555,3 +555,56 @@ async fn deleting_a_lane_with_card_positions_does_not_claim_complete_restoration
         }
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn undo_restores_required_column_metadata_and_its_cells(pool: PgPool) {
+    let wedding = wedding(&pool).await;
+    change_as(
+        &pool,
+        &wedding,
+        WOLF,
+        vec![DatabaseOp::Rows {
+            table: wedding.table_id,
+            change: RowsChange::Insert {
+                rows: vec![vec![CellWrite {
+                    column: wedding.name,
+                    value: CellValue::Text("Sam".into()),
+                }]],
+            },
+        }],
+    )
+    .await;
+    sqlx::query!(
+        "UPDATE database_columns SET nullable = false WHERE id = $1",
+        wedding.name.into_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let change = change_as(
+        &pool,
+        &wedding,
+        WOLF,
+        vec![DatabaseOp::Column {
+            table: wedding.table_id,
+            column: wedding.name,
+            change: ColumnChange::Delete,
+        }],
+    )
+    .await;
+    assert!(matches!(
+        undo_as(&pool, &wedding, WOLF, change).await,
+        UndoOutcome::Reverted { .. }
+    ));
+    assert!(
+        !sqlx::query_scalar!(
+            "SELECT nullable FROM database_columns WHERE id = $1",
+            wedding.name.into_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    );
+    let cells: i64 = sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM entity_properties p JOIN database_columns c ON c.property_definition_id = p.property_definition_id WHERE c.id = $1 AND p.entity_type = 'DATABASE_ROW'"#, wedding.name.into_uuid()).fetch_one(&pool).await.unwrap();
+    assert_eq!(cells, 1);
+}

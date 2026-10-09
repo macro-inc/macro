@@ -56,12 +56,12 @@ export class EmailNamespace {
   /** Recover a draft move using its original operation UUID; never starts a new move.
    * An empty committed result fences the old move so it cannot commit later. */
   async recoverDraftTransfer(
-    operationId: string
+    operationId: string,
   ): Promise<TransferRecoveryResponse> {
     return unwrap(
       await this.client.email.recoverDraftTransfer({
         path: { id: operationId },
-      })
+      }),
     );
   }
 
@@ -86,7 +86,7 @@ export class EmailNamespace {
             ...(opts?.sort ? { sort_method: opts.sort } : {}),
             ...(cursor ? { cursor } : {}),
           },
-        })
+        }),
       );
       return {
         items: page.items.map((t) => EmailThread.byId(this.client, t.id)),
@@ -118,7 +118,7 @@ export class EmailNamespace {
   /** Block an email sender. */
   async blockSender(email: string): Promise<void> {
     unwrap(
-      await this.client.email.blockSender({ body: { email_address: email } })
+      await this.client.email.blockSender({ body: { email_address: email } }),
     );
   }
 
@@ -127,7 +127,7 @@ export class EmailNamespace {
     unwrap(
       await this.client.email.unblockSender({
         body: { email_address: email },
-      })
+      }),
     );
   }
 

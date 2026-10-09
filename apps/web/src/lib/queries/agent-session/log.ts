@@ -57,12 +57,29 @@ export class AgentSessionLogUnavailable extends Error {
   }
 }
 
+/** Why {@link SessionLogWatch.cached} came back empty. */
+export type CacheMiss =
+  /** No persistent cache in this client, or it was disabled. */
+  | 'no_cache'
+  /** The watch asked for the network only. */
+  | 'network_only'
+  /** The network answered before the cache read hit, or the read missed. */
+  | 'network_first'
+  /** The cache answered without this session's log, or with an error. */
+  | 'empty'
+  /** The cached log could not be read into rows. */
+  | 'unreadable'
+  /** The watch stopped first. */
+  | 'stopped';
+
 export type SessionLogWatch = {
   /**
    * The log as the cache last held it, or nothing when the cache has no
    * copy or the network answered first. Never rejects.
    */
   cached: Promise<SessionLogSnapshot | undefined>;
+  /** Why `cached` resolved to nothing, once it has; for telemetry. */
+  cacheMiss: () => CacheMiss | undefined;
   /** The log as the server holds it now. Rejects with {@link AgentSessionLogUnavailable}. */
   fetched: Promise<SessionLogSnapshot>;
   /**
@@ -149,6 +166,20 @@ export function watchAgentSessionLog(
   follow?: SessionLogFollow
 ): SessionLogWatch {
   let resolveCached!: (snapshot: SessionLogSnapshot | undefined) => void;
+  let cacheSettled = false;
+  let cacheMiss: CacheMiss | undefined;
+  let cacheAnsweredEmpty = false;
+  const hitCache = (snapshot: SessionLogSnapshot) => {
+    if (cacheSettled) return;
+    cacheSettled = true;
+    resolveCached(snapshot);
+  };
+  const missCache = (reason: CacheMiss) => {
+    if (cacheSettled) return;
+    cacheSettled = true;
+    cacheMiss = reason;
+    resolveCached(undefined);
+  };
   let resolveFetched!: (snapshot: SessionLogSnapshot) => void;
   let rejectFetched!: (error: AgentSessionLogUnavailable) => void;
   const cached = new Promise<SessionLogSnapshot | undefined>((resolve) => {
@@ -167,7 +198,15 @@ export function watchAgentSessionLog(
     : () => undefined;
 
   const settleFetched = (result: OperationResult<AgentSessionLogQuery>) => {
-    resolveCached(undefined);
+    missCache(
+      policy === 'network-only'
+        ? 'network_only'
+        : !getGraphqlCacheHost()
+          ? 'no_cache'
+          : cacheAnsweredEmpty
+            ? 'empty'
+            : 'network_first'
+    );
     if (result.error) {
       rejectFetched(
         new AgentSessionLogUnavailable(sessionId, 'failed', {
@@ -213,10 +252,12 @@ export function watchAgentSessionLog(
         // network answer settles both.
         if (log && !result.error) {
           try {
-            resolveCached(toSnapshot(sessionId, log));
+            hitCache(toSnapshot(sessionId, log));
           } catch {
-            resolveCached(undefined);
+            missCache('unreadable');
           }
+        } else {
+          cacheAnsweredEmpty = true;
         }
         return;
       }
@@ -227,12 +268,13 @@ export function watchAgentSessionLog(
 
   return {
     cached,
+    cacheMiss: () => cacheMiss,
     fetched,
     stop: () => {
       unsubscribe();
       unsubscribeFollow();
       appender?.flush();
-      resolveCached(undefined);
+      missCache('stopped');
       rejectFetched(new AgentSessionLogUnavailable(sessionId, 'failed'));
     },
   };

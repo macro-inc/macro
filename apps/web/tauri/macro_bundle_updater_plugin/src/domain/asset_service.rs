@@ -146,6 +146,12 @@ where
                     });
                 }
 
+                // Entrypoints select the active generation. Serving a previous
+                // index would prevent the new document from acknowledging it.
+                if path == &BundleAssetPath::entrypoint() {
+                    return Ok(BundleAssetResolution::NotFound);
+                }
+
                 match &routes.fallback {
                     Some(BundleSource::Ota { root, .. }) => {
                         Ok(match self.assets.read_asset(root, path).await? {

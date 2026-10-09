@@ -5,8 +5,11 @@ use rootcause::Report;
 
 use crate::{
     CalendarGraphqlContext, bad_input,
-    inputs::{CalendarRangeInput, encode_cursor},
-    objects::{GraphqlCalendar, GraphqlCalendarOccurrence, GraphqlCalendarOccurrencePage},
+    inputs::{CalendarChangesInput, CalendarRangeInput, encode_cursor},
+    objects::{
+        GraphqlCalendar, GraphqlCalendarChanges, GraphqlCalendarOccurrencePage, occurrence_nodes,
+        watermark_entries,
+    },
     unavailable,
 };
 
@@ -46,7 +49,8 @@ impl GraphqlCalendarQuery {
     }
 
     /// One page of occurrences overlapping the viewport, across owned and
-    /// delegated inboxes, ordered by start.
+    /// delegated inboxes, ordered by start. `watermark` is read before the
+    /// occurrences, so the page reflects at least every change it covers.
     #[tracing::instrument(skip_all, err(Debug))]
     async fn calendar_occurrences(
         &self,
@@ -56,6 +60,10 @@ impl GraphqlCalendarQuery {
         let reads = &ctx.data::<CalendarGraphqlContext>()?.reads;
         let request = input.into_page_request()?;
         let page_size = usize::from(request.page_size);
+        let watermark = reads
+            .current_watermark(self.viewer())
+            .await
+            .map_err(|error| unavailable(error, "calendar occurrences are unavailable"))?;
         let (mut rows, sync_status) = futures::try_join!(
             reads.list_occurrences(
                 self.viewer(),
@@ -74,15 +82,29 @@ impl GraphqlCalendarQuery {
             ))
         });
         Ok(GraphqlCalendarOccurrencePage {
-            nodes: rows
-                .into_iter()
-                .map(GraphqlCalendarOccurrence::from)
-                .collect(),
+            nodes: occurrence_nodes(rows),
             has_next_page,
             end_cursor,
             sync_status: sync_status.into(),
-            watermark: Vec::new(),
+            watermark: watermark_entries(&watermark),
         })
+    }
+
+    /// Changes to the viewer's calendars after `since`, one bounded page at a
+    /// time. An empty `since` returns only the current watermark.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn calendar_changes(
+        &self,
+        ctx: &Context<'_>,
+        input: CalendarChangesInput,
+    ) -> async_graphql::Result<GraphqlCalendarChanges> {
+        let reads = &ctx.data::<CalendarGraphqlContext>()?.reads;
+        let since = input.into_watermark()?;
+        reads
+            .changes_since(self.viewer(), since)
+            .await
+            .map(Into::into)
+            .map_err(|error| unavailable(error, "calendar changes are unavailable"))
     }
 }
 

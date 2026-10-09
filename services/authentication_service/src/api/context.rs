@@ -57,6 +57,7 @@ use roles_and_permissions::{
 use sqlx::PgPool;
 use tokio_util::task::TaskTracker;
 
+use crate::account_link_state::AccountLinkStateKey;
 use crate::domain::microsoft::MicrosoftAuth;
 use crate::service::signup_policy::SignupPolicy;
 use cursor_api_key::cipher::CursorApiKeyCipher;
@@ -197,6 +198,8 @@ pub(crate) struct ApiContext {
     pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,
     /// Whether Gmail link consent requests the Google Calendar scope.
     pub calendar_scope_enabled: bool,
+    /// Signs and verifies the `state` on account-link OAuth round trips.
+    pub account_link_state_key: AccountLinkStateKey,
 }
 
 env_var! {

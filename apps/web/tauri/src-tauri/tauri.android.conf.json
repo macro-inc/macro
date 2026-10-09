@@ -1,6 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "macro",
+  "identifier": "com.macro.workspace.mobile",
+  "version": "2.5.0",
+  "bundle": {
+    "android": {
+      "versionCode": 1
+    }
+  },
   "plugins": {
     "deep-link": {
       "mobile": [

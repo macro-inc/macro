@@ -10,6 +10,48 @@ export type ClientOptions = {
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
 
 /**
+ * Per-user inclusion of a source calendar in personal availability.
+ */
+export type AvailabilityCalendar = {
+    /**
+     * Visible source calendar.
+     */
+    calendarId: string;
+    /**
+     * Whether its events normally block the user's time.
+     */
+    contributesToAvailability: boolean;
+    /**
+     * Whether this is the connected account's primary calendar.
+     */
+    isPrimary: boolean;
+    /**
+     * Source name.
+     */
+    name: string;
+};
+
+/**
+ * Own-user source inclusion preference.
+ */
+export type AvailabilityCalendarBody = {
+    /**
+     * Whether this calendar contributes to personal availability.
+     */
+    contributesToAvailability: boolean;
+};
+
+/**
+ * Source calendar settings returned to their viewer.
+ */
+export type AvailabilityCalendarsResponse = {
+    /**
+     * Directly visible source calendars.
+     */
+    calendars: Array<AvailabilityCalendar>;
+};
+
+/**
  * An attendee on a calendar event.
  */
 export type CalendarAttendee = {
@@ -482,7 +524,7 @@ export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
  */
 export type EventTime = {
     /**
-     * Exclusive end instant.
+     * Exclusive end instant; equal to the start for an imported point event.
      */
     endsAt: string;
     kind: 'timed';
@@ -574,7 +616,7 @@ export type PrepareCalendarReplacementRequest = {
 };
 
 /**
- * A sync run committed changes for `link_id`; viewers should refetch.
+ * Realtime signal that a connected inbox's calendar projection changed.
  */
 export type RefreshCalendarEvent = {
     event: 'synced';
@@ -582,6 +624,8 @@ export type RefreshCalendarEvent = {
      * Connected inbox whose calendars changed.
      */
     link_id: string;
+} | {
+    event: 'team_sharing_changed';
 };
 
 /**
@@ -611,6 +655,21 @@ export type RsvpCalendarEventRequest = {
      */
     response: AttendeeResponseStatus;
     scope?: null | CalendarRsvpScopeParam;
+};
+
+/**
+ * What a user exposes through their team membership.
+ */
+export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
+
+/**
+ * Own-user sharing preference.
+ */
+export type TeamCalendarSharingBody = {
+    /**
+     * Busy-only is the default, including when no setting has been saved.
+     */
+    sharing: TeamCalendarSharing;
 };
 
 /**
@@ -711,6 +770,34 @@ export type VisibleCalendar = {
      */
     syncError?: string | null;
 };
+
+export type GetAvailabilityCalendarsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/availability-calendars';
+};
+
+export type GetAvailabilityCalendarsResponses = {
+    200: AvailabilityCalendarsResponse;
+};
+
+export type GetAvailabilityCalendarsResponse = GetAvailabilityCalendarsResponses[keyof GetAvailabilityCalendarsResponses];
+
+export type SetAvailabilityCalendarData = {
+    body: AvailabilityCalendarBody;
+    path: {
+        calendar_id: string;
+    };
+    query?: never;
+    url: '/availability-calendars/{calendar_id}';
+};
+
+export type SetAvailabilityCalendarResponses = {
+    204: void;
+};
+
+export type SetAvailabilityCalendarResponse = SetAvailabilityCalendarResponses[keyof SetAvailabilityCalendarResponses];
 
 export type ListCalendarsData = {
     body?: never;
@@ -1067,3 +1154,29 @@ export type ConfirmCalendarReplacementResponses = {
 };
 
 export type ConfirmCalendarReplacementResponse = ConfirmCalendarReplacementResponses[keyof ConfirmCalendarReplacementResponses];
+
+export type GetTeamSharingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team-sharing';
+};
+
+export type GetTeamSharingResponses = {
+    200: TeamCalendarSharingBody;
+};
+
+export type GetTeamSharingResponse = GetTeamSharingResponses[keyof GetTeamSharingResponses];
+
+export type SetTeamSharingData = {
+    body: TeamCalendarSharingBody;
+    path?: never;
+    query?: never;
+    url: '/team-sharing';
+};
+
+export type SetTeamSharingResponses = {
+    200: TeamCalendarSharingBody;
+};
+
+export type SetTeamSharingResponse = SetTeamSharingResponses[keyof SetTeamSharingResponses];

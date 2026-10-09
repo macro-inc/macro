@@ -1,9 +1,18 @@
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+
 use async_graphql::{Enum, ID, SimpleObject, Union};
-use calendar_events::domain::models::{
-    AttendeeResponseStatus, CalendarAttendee, CalendarEvent, CalendarEventSourceContent,
-    CalendarOccurrence, CalendarSyncStatus, ConferenceProvider, EventReminderOverride,
-    EventReminders, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
-    OccurrenceListing, VisibleCalendar,
+use calendar_events::domain::{
+    changes::{CalendarChangesPage, CalendarEventChange, CalendarWatermark, EventOccurrence},
+    models::{
+        AttendeeResponseStatus, CalendarAttendee, CalendarCapabilities, CalendarEvent,
+        CalendarEventSourceContent, CalendarOccurrence, CalendarProvider, CalendarSyncStatus,
+        ConferenceProvider, EventReminderOverride, EventReminders, EventStatus, EventTime,
+        EventTransparency, EventType, EventVisibility, OccurrenceException, OccurrenceListing,
+        VisibleCalendar,
+    },
 };
 use uuid::Uuid;
 
@@ -440,7 +449,7 @@ pub struct GraphqlCalendarOccurrence {
     /// Connected inbox whose grant backs the event.
     link_id: ID,
     /// The series event.
-    event: GraphqlCalendarEvent,
+    event: Arc<GraphqlCalendarEvent>,
     /// Stable key within the event.
     occurrence_key: String,
     /// Provider recurrence identifier, when applicable.
@@ -462,14 +471,13 @@ pub struct GraphqlCalendarOccurrence {
     override_attendees: Option<Vec<GraphqlCalendarAttendee>>,
 }
 
-impl From<OccurrenceListing> for GraphqlCalendarOccurrence {
-    fn from(listing: OccurrenceListing) -> Self {
-        let OccurrenceListing {
-            event,
-            occurrence,
-            link_id,
-            exception,
-        } = listing;
+impl GraphqlCalendarOccurrence {
+    fn new(
+        event: Arc<GraphqlCalendarEvent>,
+        link_id: Uuid,
+        occurrence: CalendarOccurrence,
+        exception: OccurrenceException,
+    ) -> Self {
         let CalendarOccurrence {
             event_id,
             occurrence_key,
@@ -481,7 +489,7 @@ impl From<OccurrenceListing> for GraphqlCalendarOccurrence {
             id: occurrence_id(event_id, &occurrence_key),
             event_id: id(event_id),
             link_id: id(link_id),
-            event: GraphqlCalendarEvent::new(event, link_id),
+            event,
             occurrence_key,
             recurrence_id,
             time: time.into(),
@@ -497,6 +505,76 @@ impl From<OccurrenceListing> for GraphqlCalendarOccurrence {
     }
 }
 
+/// Map viewport listings, sharing one series event per event among its
+/// occurrences.
+pub(crate) fn occurrence_nodes(listings: Vec<OccurrenceListing>) -> Vec<GraphqlCalendarOccurrence> {
+    let mut events: HashMap<Uuid, Arc<GraphqlCalendarEvent>> = HashMap::new();
+    listings
+        .into_iter()
+        .map(|listing| {
+            let OccurrenceListing {
+                event,
+                occurrence,
+                link_id,
+                exception,
+            } = listing;
+            let event = Arc::clone(
+                events
+                    .entry(event.id)
+                    .or_insert_with(|| Arc::new(GraphqlCalendarEvent::new(event, link_id))),
+            );
+            GraphqlCalendarOccurrence::new(event, link_id, occurrence, exception)
+        })
+        .collect()
+}
+
+/// Provider selected from the persisted calendar account and email binding.
+#[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
+pub enum GraphqlCalendarProvider {
+    /// Google Calendar.
+    Google,
+    /// Microsoft Outlook calendar.
+    Outlook,
+}
+
+impl From<CalendarProvider> for GraphqlCalendarProvider {
+    fn from(provider: CalendarProvider) -> Self {
+        match provider {
+            CalendarProvider::Google => Self::Google,
+            CalendarProvider::Outlook => Self::Outlook,
+        }
+    }
+}
+
+/// Actual provider capabilities used by calendar editors.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarCapabilities {
+    /// Whether event-level automatic invitation declines are supported.
+    auto_decline: bool,
+    conference_provider: Option<GraphqlCalendarConferenceProvider>,
+    /// Whether arbitrary RFC 5545 recurrence properties can be written.
+    custom_recurrence: bool,
+    /// Whether email reminders are delivered by the provider or Macro.
+    email_reminders: bool,
+    /// Whether an existing conference can be detached.
+    remove_conference: bool,
+    /// Whether an attendee can reset their RSVP to unanswered.
+    reset_rsvp: bool,
+}
+
+impl From<CalendarCapabilities> for GraphqlCalendarCapabilities {
+    fn from(capabilities: CalendarCapabilities) -> Self {
+        Self {
+            auto_decline: capabilities.auto_decline,
+            conference_provider: capabilities.conference_provider.map(Into::into),
+            custom_recurrence: capabilities.custom_recurrence,
+            email_reminders: capabilities.email_reminders,
+            remove_conference: capabilities.remove_conference,
+            reset_rsvp: capabilities.reset_rsvp,
+        }
+    }
+}
+
 /// A calendar visible to the viewer.
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
 pub struct GraphqlCalendar {
@@ -506,6 +584,10 @@ pub struct GraphqlCalendar {
     link_id: ID,
     /// Connected inbox address.
     email_address: String,
+    /// Calendar provider, for display and reconnect routing.
+    provider: GraphqlCalendarProvider,
+    /// Provider features available on this actual calendar.
+    capabilities: GraphqlCalendarCapabilities,
     /// Provider display name.
     name: String,
     /// Provider color.
@@ -528,6 +610,8 @@ impl From<VisibleCalendar> for GraphqlCalendar {
             id: id(calendar.id),
             link_id: id(calendar.email_link_id),
             email_address: calendar.email_address,
+            provider: calendar.provider.into(),
+            capabilities: calendar.capabilities.into(),
             name: calendar.name,
             color: calendar.color,
             is_primary: calendar.is_primary,
@@ -551,6 +635,154 @@ pub struct GraphqlCalendarLinkWatermark {
     pub(crate) link_id: ID,
     /// Last change-log sequence covered, as a decimal string.
     pub(crate) seq: String,
+}
+
+pub(crate) fn watermark_entries(
+    watermark: &CalendarWatermark,
+) -> Vec<GraphqlCalendarLinkWatermark> {
+    watermark
+        .links()
+        .map(|link| GraphqlCalendarLinkWatermark {
+            link_id: id(link.link_id),
+            seq: link.seq.to_string(),
+        })
+        .collect()
+}
+
+/// A changed event with its complete current set of visible occurrences.
+/// Clients replace everything they hold for the event with it.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarEventChange {
+    /// The series event.
+    event: Arc<GraphqlCalendarEvent>,
+    /// Every non-cancelled materialized occurrence, ordered by start.
+    occurrences: Vec<GraphqlCalendarOccurrence>,
+}
+
+impl From<CalendarEventChange> for GraphqlCalendarEventChange {
+    fn from(change: CalendarEventChange) -> Self {
+        let CalendarEventChange {
+            event,
+            link_id,
+            occurrences,
+        } = change;
+        let event = Arc::new(GraphqlCalendarEvent::new(event, link_id));
+        Self {
+            occurrences: occurrences
+                .into_iter()
+                .map(|instance| {
+                    GraphqlCalendarOccurrence::new(
+                        Arc::clone(&event),
+                        link_id,
+                        instance.occurrence,
+                        instance.exception,
+                    )
+                })
+                .collect(),
+            event,
+        }
+    }
+}
+
+/// An event's committed state after a calendar mutation.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarMutationPayload {
+    /// The series event after the write; null when it no longer exists or
+    /// has no visible occurrence left.
+    event: Option<Arc<GraphqlCalendarEvent>>,
+    /// Every visible occurrence of the event after the write, then each
+    /// occurrence the write removed, returned with `isCancelled: true` so a
+    /// normalized cache hides it as the response lands. Clients replace
+    /// everything they hold for the event with the uncancelled ones.
+    occurrences: Vec<GraphqlCalendarOccurrence>,
+    /// Set to the event's id when the write removed it.
+    deleted_event_id: Option<ID>,
+}
+
+impl GraphqlCalendarMutationPayload {
+    pub(crate) fn new(
+        event_id: Uuid,
+        before: Option<CalendarEventChange>,
+        after: Option<CalendarEventChange>,
+    ) -> Self {
+        let Some(after) = after else {
+            let occurrences = before
+                .map(|before| {
+                    GraphqlCalendarEventChange::from(CalendarEventChange {
+                        occurrences: before.occurrences.into_iter().map(cancelled).collect(),
+                        ..before
+                    })
+                    .occurrences
+                })
+                .unwrap_or_default();
+            return Self {
+                event: None,
+                occurrences,
+                deleted_event_id: Some(id(event_id)),
+            };
+        };
+        let kept: HashSet<String> = after
+            .occurrences
+            .iter()
+            .map(|instance| instance.occurrence.occurrence_key.clone())
+            .collect();
+        let removed = before
+            .into_iter()
+            .flat_map(|before| before.occurrences)
+            .filter(|instance| !kept.contains(&instance.occurrence.occurrence_key))
+            .map(cancelled);
+        let GraphqlCalendarEventChange { event, occurrences } = CalendarEventChange {
+            occurrences: after.occurrences.into_iter().chain(removed).collect(),
+            ..after
+        }
+        .into();
+        Self {
+            event: Some(event),
+            occurrences,
+            deleted_event_id: None,
+        }
+    }
+}
+
+fn cancelled(mut instance: EventOccurrence) -> EventOccurrence {
+    instance.occurrence.is_cancelled = true;
+    instance
+}
+
+/// One bounded page of calendar changes after a watermark.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarChanges {
+    /// Events created or changed, each with its full occurrence set.
+    events: Vec<GraphqlCalendarEventChange>,
+    /// Events that no longer exist or no longer have a visible occurrence.
+    deleted_event_ids: Vec<ID>,
+    /// Calendars created or changed.
+    calendars: Vec<GraphqlCalendar>,
+    /// Calendars that were removed.
+    deleted_calendar_ids: Vec<ID>,
+    /// Position after this page, one entry per currently visible connected
+    /// inbox. An inbox missing here is no longer visible.
+    new_watermark: Vec<GraphqlCalendarLinkWatermark>,
+    /// Whether more changes follow `newWatermark`.
+    has_more: bool,
+    /// Whether the client must drop every calendar record and coverage it
+    /// holds and refetch: its watermark fell behind retention, or an inbox
+    /// became visible that it never tracked.
+    reset_required: bool,
+}
+
+impl From<CalendarChangesPage> for GraphqlCalendarChanges {
+    fn from(page: CalendarChangesPage) -> Self {
+        Self {
+            events: page.events.into_iter().map(Into::into).collect(),
+            deleted_event_ids: page.deleted_event_ids.into_iter().map(id).collect(),
+            calendars: page.calendars.into_iter().map(Into::into).collect(),
+            deleted_calendar_ids: page.deleted_calendar_ids.into_iter().map(id).collect(),
+            new_watermark: watermark_entries(&page.new_watermark),
+            has_more: page.has_more,
+            reset_required: page.reset_required,
+        }
+    }
 }
 
 /// One page of occurrences overlapping a viewport.

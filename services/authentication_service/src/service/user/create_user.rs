@@ -9,7 +9,7 @@ mod test;
 /// The stub `STRIPE_SECRET_KEY` set by `run_local --no-doppler` (see
 /// `tooling/xtask/crates/xtask_local/src/local/local_env.rs`). With this key a
 /// real Stripe call would fail, so local signups skip it and store a
-/// deterministic placeholder id instead.
+/// deterministic placeholder only in the required legacy account field.
 const LOCAL_STRIPE_SECRET_STUB: &str = "local-stripe-secret";
 
 fn is_local_stripe_stub() -> bool {
@@ -42,14 +42,19 @@ pub async fn create_user(
     let stripe_customer_id = if is_local_stripe_stub() {
         // Local mode uses a stub key; don't call Stripe (it would 401 and
         // abort the transactional user.create webhook, blocking all signups).
-        local_stripe_customer_id(email)
+        None
     } else {
         // NOTE: stripe adds in ~400ms of latency to this request. We may want to update our
         // requirement that each customer exists in stripe and create stripe customers as needed.
         let stripe_customer = create_stripe_user(email, stripe_client).await?;
         tracing::trace!(stripe_customer_id=?stripe_customer.id.to_string(), "created stripe customer");
-        stripe_customer.id.to_string()
+        Some(stripe_customer.id.to_string())
     };
+    // The legacy account key is required, but a profile without a real Stripe
+    // customer must leave billing absent so free team creation skips Stripe.
+    let macro_user_customer_id = stripe_customer_id
+        .clone()
+        .unwrap_or_else(|| local_stripe_customer_id(email));
 
     let organization_id = match_user_to_organization(db, email).await?;
     tracing::trace!(organization_id=?organization_id, "matched user to organization");
@@ -70,7 +75,8 @@ pub async fn create_user(
         username,
         email,
         is_verified,
-        &stripe_customer_id,
+        &macro_user_customer_id,
+        stripe_customer_id.as_deref(),
         organization_id,
         roles,
     )

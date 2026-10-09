@@ -26,7 +26,7 @@ describe('cache takeover messages', () => {
       `graphql-cache-takeover:${cacheDatabaseIdentity('scope')}`
     );
     expect(cacheTakeoverChannelName('scope')).toBe(
-      'graphql-cache-takeover:graphql-cache:scope'
+      'graphql-cache-takeover:graphql-cache:scope:s4.v3.t11'
     );
   });
 

@@ -1,6 +1,9 @@
 use super::*;
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 
+#[cfg(test)]
+mod test;
+
 pub(super) fn instant(value: &Value) -> Result<DateTime<Utc>, CalendarProviderError> {
     let text = string(value, "dateTime")?;
     if let Ok(instant) = DateTime::parse_from_rfc3339(text) {
@@ -72,6 +75,22 @@ pub(super) fn response(value: Option<&str>) -> AttendeeResponseStatus {
         Some("tentativelyAccepted") => AttendeeResponseStatus::Tentative,
         Some("declined") => AttendeeResponseStatus::Declined,
         _ => AttendeeResponseStatus::NeedsAction,
+    }
+}
+
+fn visibility(sensitivity: &str) -> EventVisibility {
+    match sensitivity {
+        "private" | "personal" => EventVisibility::Private,
+        "confidential" => EventVisibility::Confidential,
+        _ => EventVisibility::Default,
+    }
+}
+
+fn transparency(show_as: &str) -> EventTransparency {
+    if show_as == "free" {
+        EventTransparency::Transparent
+    } else {
+        EventTransparency::Opaque
     }
 }
 
@@ -181,16 +200,14 @@ pub(super) fn projection(
         } else {
             EventStatus::Confirmed
         },
-        visibility: match master["sensitivity"].as_str() {
-            Some("private" | "personal") => EventVisibility::Private,
-            Some("confidential") => EventVisibility::Confidential,
-            _ => EventVisibility::Default,
-        },
-        transparency: if master["showAs"].as_str() == Some("free") {
-            EventTransparency::Transparent
-        } else {
-            EventTransparency::Opaque
-        },
+        visibility: master["sensitivity"]
+            .as_str()
+            .map(visibility)
+            .unwrap_or_default(),
+        transparency: master["showAs"]
+            .as_str()
+            .map(transparency)
+            .unwrap_or_default(),
         event_type: if master["showAs"].as_str() == Some("oof") {
             EventType::OutOfOffice
         } else {
@@ -263,6 +280,8 @@ pub(super) fn projection(
                     .as_str()
                     .map(str::to_owned),
                 status: Some(EventStatus::Confirmed),
+                visibility: instance["sensitivity"].as_str().map(visibility),
+                transparency: instance["showAs"].as_str().map(transparency),
                 attendees: Some(attendees(&instance)),
             });
         }
@@ -299,6 +318,7 @@ pub(super) fn projection(
             email_link_id: target.email_link_id,
             account_id: target.account_id,
             calendar_id: target.calendar_id,
+            observed_access_role: target.observed_access_role.clone(),
             provider_event_id: string(&master, "id")?.into(),
             provider_recurring_event_id: None,
             provider_etag: master["@odata.etag"].as_str().map(str::to_owned),

@@ -24,7 +24,11 @@ import {
 } from '@core/signal/profilePicture';
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
-import { type BundleUpdateStatus, useTauri } from '@macro/tauri';
+import {
+  type BundleUpdateStatus,
+  nativeUpdateDescription,
+  useTauri,
+} from '@macro/tauri';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -450,6 +454,7 @@ export function Account() {
             />
           </Row>
 
+          <NativeUpdateRow />
           <Show when={autoUpdateUIEnabled()}>
             <BundleVersionRow />
             <BundleUpdateRow />
@@ -867,5 +872,30 @@ function BundleUpdateRow() {
         </Show>
       </div>
     </Row>
+  );
+}
+
+function NativeUpdateRow() {
+  const tauri = useTauri();
+  return (
+    <Show when={tauri && tauri.nativeUpdateStatus().status !== 'Disabled'}>
+      <Row label="Desktop app update">
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-ink-muted">
+            {tauri && nativeUpdateDescription(tauri.nativeUpdateStatus())}
+          </span>
+          <Show when={tauri?.nativeUpdateStatus().status === 'Ready'}>
+            <Button
+              variant="accent"
+              size="sm"
+              depth={3}
+              onClick={() => void tauri?.restartNativeUpdate()}
+            >
+              Restart to update
+            </Button>
+          </Show>
+        </div>
+      </Row>
+    </Show>
   );
 }

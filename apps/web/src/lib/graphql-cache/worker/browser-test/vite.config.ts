@@ -38,6 +38,7 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       input: Object.fromEntries(
         [
+          'calendar-points.html',
           'index.html',
           'host.html',
           'cutover.html',

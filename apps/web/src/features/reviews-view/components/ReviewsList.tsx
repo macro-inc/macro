@@ -7,6 +7,13 @@ import {
 } from '@app/features/next-soup/actions';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import {
+  type OpenPrLink,
+  PrLinkChips,
+  PrLinksPending,
+  PrPriorityBadge,
+} from '@block-pr/component/PrLinks';
+import { type PrLinks, priorityTaskName } from '@block-pr/data/pr-links';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import {
@@ -44,6 +51,13 @@ import {
 } from '../reviews-types';
 import { ReviewsEmptyState } from './ReviewsEmptyState';
 
+/** What each row links to, loaded alongside the list. */
+export type ReviewsListLinks = {
+  linksFor: (review: GithubPullRequestEntity) => PrLinks | undefined;
+  companyName: (id: string) => string | undefined;
+  onOpen: OpenPrLink;
+};
+
 export type ReviewsListProps = {
   list: ReviewsListController;
   source: ReturnType<typeof useReviewsQuery>;
@@ -58,6 +72,7 @@ export type ReviewsListProps = {
   onClearSearch: () => void;
   onClearFilters: () => void;
   onOpen: (foreignEntityId: string, newSplit: boolean) => void;
+  links: ReviewsListLinks;
 };
 
 const copyLink = makeCopyLinkAction();
@@ -73,6 +88,7 @@ function ReviewRow(props: {
   onChecked: (checked: boolean, shiftKey: boolean) => void;
   favoriteAction: ReturnType<typeof makeFavoriteAction>;
   onOpen: ReviewsListProps['onOpen'];
+  links: ReviewsListLinks;
   onActivate: (newSplit: boolean) => void;
   onClick: (event: MouseEvent) => void;
   onFocus: () => void;
@@ -99,6 +115,30 @@ function ReviewRow(props: {
           checked={props.checked}
           onChecked={props.onChecked}
           onClick={props.onClick}
+          titleLeading={
+            <Show when={props.links.linksFor(props.review)}>
+              {(links) => (
+                <PrPriorityBadge
+                  priority={links().priority}
+                  taskName={priorityTaskName(links())}
+                />
+              )}
+            </Show>
+          }
+          meta={
+            <Show
+              when={props.links.linksFor(props.review)}
+              fallback={<PrLinksPending />}
+            >
+              {(links) => (
+                <PrLinkChips
+                  links={links()}
+                  companyName={props.links.companyName}
+                  onOpen={props.links.onOpen}
+                />
+              )}
+            </Show>
+          }
         />
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
@@ -368,6 +408,7 @@ export function ReviewsList(props: ReviewsListProps) {
                         }
                         favoriteAction={favoriteAction}
                         onOpen={props.onOpen}
+                        links={props.links}
                         onChecked={(checked, shiftKey) =>
                           listInteractions.selection.set(review.id, checked, {
                             range: shiftKey,

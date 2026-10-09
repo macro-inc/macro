@@ -104,8 +104,10 @@ capabilities. `DatabaseRecords` wires the standard schema controls once. Read th
 [provider](../../../apps/web/src/features/database/context/database.tsx) when adding
 a host. `DatabaseGrid` composes the Macro app with its SQL cache and inference
 source; ordinary API hosts use the provider's paginated source. Keep host-specific
-optimizations behind the same data-source contract. CRM can adopt this boundary
-without importing the Macro app adapter.
+optimizations behind the same data-source contract. CRM uses `createPipelineApi`
+in `features/crm/queries/pipeline-data.ts` with the same provider and controller.
+Its adapter converts transport values and calls pipeline-authorized endpoints;
+it does not own pagination or mutation planning.
 
 Verify the same editor against a small fake API without app providers, then test
 the Macro and CRM adapters against the same behavioral contract. Cover a failed

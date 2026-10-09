@@ -3,23 +3,38 @@
 #![deny(missing_docs)]
 
 mod inputs;
+mod mutation;
 mod objects;
 mod reads;
 #[cfg(test)]
+mod schema_test;
+#[cfg(test)]
 mod test_fixtures;
 mod user_query;
+mod writes;
 
-pub use inputs::CalendarRangeInput;
+pub use inputs::{CalendarChangesInput, CalendarLinkWatermarkInput, CalendarRangeInput};
+pub use mutation::{
+    AllDayEventTimeInput, CalendarEventTimeInput, CalendarMutationRoot, CalendarOutOfOfficeInput,
+    CalendarReminderOverrideInput, CalendarRemindersInput, CreateCalendarEventInput,
+    DeleteCalendarEventInput, GraphqlCalendarAttendeeInput, GraphqlCalendarConferenceChange,
+    GraphqlCalendarDeletionScope, GraphqlCalendarOutOfOfficeAutoDeclineMode,
+    GraphqlCalendarRsvpScope, GraphqlCalendarUpdateScope, RespondToCalendarEventInput,
+    TimedEventTimeInput, UpdateCalendarEventInput,
+};
 pub use objects::{
     GraphqlAllDayEventTime, GraphqlCalendar, GraphqlCalendarAttendee,
-    GraphqlCalendarAttendeeResponseStatus, GraphqlCalendarConferenceProvider, GraphqlCalendarEvent,
+    GraphqlCalendarAttendeeResponseStatus, GraphqlCalendarCapabilities, GraphqlCalendarChanges,
+    GraphqlCalendarConferenceProvider, GraphqlCalendarEvent, GraphqlCalendarEventChange,
     GraphqlCalendarEventSource, GraphqlCalendarEventStatus, GraphqlCalendarEventTransparency,
     GraphqlCalendarEventType, GraphqlCalendarEventVisibility, GraphqlCalendarLinkWatermark,
-    GraphqlCalendarOccurrence, GraphqlCalendarOccurrencePage, GraphqlCalendarReminderOverride,
-    GraphqlCalendarReminders, GraphqlCalendarSyncStatus, GraphqlEventTime, GraphqlTimedEventTime,
+    GraphqlCalendarMutationPayload, GraphqlCalendarOccurrence, GraphqlCalendarOccurrencePage,
+    GraphqlCalendarProvider, GraphqlCalendarReminderOverride, GraphqlCalendarReminders,
+    GraphqlCalendarSyncStatus, GraphqlEventTime, GraphqlTimedEventTime,
 };
 pub use reads::CalendarGraphqlContext;
 pub use user_query::GraphqlCalendarQuery;
+pub use writes::CalendarGraphqlMutationContext;
 
 use async_graphql::ErrorExtensions;
 use rootcause::Report;

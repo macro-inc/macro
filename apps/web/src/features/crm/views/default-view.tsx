@@ -1,4 +1,3 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { CrmViewConfig } from '../core/saved-view';
 import { createDefaultCrmView } from '../primitives/default-view';
 import { useApplyCrmView } from './apply-view';
@@ -21,7 +20,6 @@ export function CrmDefaultViewLoader() {
     teamLoading: team.isLoading,
     personal: () => personal.defaultView()?.config,
     team: () => team.defaultView()?.config as CrmViewConfig | undefined,
-    mobile: isTouchDevice,
     apply: applyView,
   });
 

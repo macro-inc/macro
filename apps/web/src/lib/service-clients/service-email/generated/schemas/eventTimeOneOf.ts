@@ -11,7 +11,7 @@ import type { EventTimeOneOfTimeZone } from './eventTimeOneOfTimeZone';
  * An event with absolute instants.
  */
 export type EventTimeOneOf = {
-  /** Exclusive end instant. */
+  /** Exclusive end instant; equal to the start for an imported point event. */
   endsAt: string;
   kind: EventTimeOneOfKind;
   /** Inclusive start instant. */

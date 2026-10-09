@@ -93,6 +93,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "outbound",
   "service",
 ] }
+hmac = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }

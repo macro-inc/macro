@@ -154,6 +154,7 @@ async fn main() -> anyhow::Result<()> {
             reauth_notifier.clone(),
             calendar_watch_config(),
             config.calendar_sync_enabled,
+            config.calendar_team_sharing_enabled,
         );
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -178,7 +179,21 @@ async fn main() -> anyhow::Result<()> {
         PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     )));
 
-    let calendar_service = Arc::new(CalendarService::new(PgCalendarRepository::new(db.clone())));
+    let calendar_service = Arc::new(
+        CalendarService::new(PgCalendarRepository::new(db.clone()))
+            .with_team_sharing_enabled(config.calendar_team_sharing_enabled),
+    );
+    let calendar_team_service = Arc::new(
+        calendar_events::domain::team::CalendarTeamServiceImpl::with_notifier(
+            calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(db.clone()),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
+            config.calendar_team_sharing_enabled,
+        ),
+    );
     let outlook_provider = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
         email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(redis_conn.clone()),
     ))?
@@ -194,7 +209,11 @@ async fn main() -> anyhow::Result<()> {
                 redis_conn.clone(),
                 Arc::new(auth_service_client.clone()),
             ),
-            ConnectionGatewayCalendarRefresh::new(connection_gateway_client.clone(), db.clone()),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
         )
         .with_writes_enabled(config.outlook_writes_enabled);
         let cancellation = worker_cancellation_token.clone();
@@ -208,7 +227,11 @@ async fn main() -> anyhow::Result<()> {
         let relay = calendar_events::domain::outlook::CalendarProjectionRelay::new(
             PgCalendarRepository::new(db.clone()),
             macro_event_broker.clone(),
-            ConnectionGatewayCalendarRefresh::new(connection_gateway_client.clone(), db.clone()),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
         );
         let cancellation = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -234,7 +257,11 @@ async fn main() -> anyhow::Result<()> {
             },
             CalendarTokenProviderAdapter::new(redis_conn, Arc::new(auth_service_client)),
             macro_event_broker.clone(),
-            ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client,
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
         )
         .with_outlook_writes_enabled(config.outlook_writes_enabled),
     );
@@ -285,6 +312,7 @@ async fn main() -> anyhow::Result<()> {
         authorization_state,
         calendar_service,
         calendar_mutation_service,
+        calendar_team_service,
         scheduling_service,
     })
     .await;

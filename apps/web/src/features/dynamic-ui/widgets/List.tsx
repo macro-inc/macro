@@ -7,6 +7,7 @@ import {
 import type { FieldFilters } from '@app/features/next-soup/filters/filter-store/types';
 import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filters';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { CollapsibleList } from '@entity/components/CollapsibleList';
@@ -15,6 +16,7 @@ import type { EntityData } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
 import type { GroupByField } from '@queries/soup/grouped/types';
 import {
+  type SoupApiItemFilter,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
@@ -104,6 +106,12 @@ const GROUP_BY_BY_NAME: Record<
   project: { type: 'project' },
 };
 
+// Cached query meta outlives the widget; the gate closes over the plain query
+// snapshot only, never the component scope.
+function queryItemFilter(source: Query): SoupApiItemFilter {
+  return (item) => soupItemMatchesQuery(item, source);
+}
+
 /**
  * One row: a real `ListEntity`, rendered flush the way SoupView / the unified
  * list do. The row's own `Entity.Root` supplies its height, the rounded inset
@@ -118,11 +126,11 @@ const GROUP_BY_BY_NAME: Record<
  * dispatches per `entity.type` and works for every type here already,
  * `email` included.
  */
-function Row(props: { entity: EntityData }) {
+function Row(props: { entity: WithNotification<EntityData> }) {
   const notificationSource = useGlobalNotificationSource();
   return (
     <ListEntity
-      entity={props.entity as WithNotification<EntityData>}
+      entity={props.entity}
       hideCheckbox
       onClick={() =>
         openEntityInSplitFromUnifiedList(props.entity, {
@@ -147,6 +155,7 @@ function Rows(props: {
   // and return nothing — which is the correct "No items." outcome anyway.
   // `groupBy` orders the returned entities by the requested facet (the grouped
   // select flattens groups into `data.entities` in group order).
+  const notificationSource = useGlobalNotificationSource();
   const itemsQuery = useSoupAstItemsQuery(
     () => ({
       params: { limit: 200 },
@@ -158,16 +167,17 @@ function Rows(props: {
       // normalized cache would prepend ANY optimistically/WS-inserted entity
       // into it (a new task landing in an email-scoped list, etc.). Gate inserts
       // on the same `Query` that produced the AST so only matching items appear.
-      const source = query();
-      return {
-        meta: { itemFilter: (item) => soupItemMatchesQuery(item, source) },
-      };
+      return { meta: { itemFilter: queryItemFilter(query()) } };
     }
   );
 
-  const entities = createMemo<EntityData[]>(() => {
+  const entities = createMemo(() => {
     const all = itemsQuery.data?.entities ?? [];
-    return props.limit != null ? all.slice(0, props.limit) : all;
+    const sliced = props.limit != null ? all.slice(0, props.limit) : all;
+    // Soup rows carry raw notification arrays; ListEntity reads an accessor.
+    return sliced.map((entity) =>
+      withEntityNotifications(entity, notificationSource)
+    );
   });
 
   return (

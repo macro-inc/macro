@@ -11,6 +11,7 @@ use crate::layout::BookingTarget;
 use crate::widget::Widget;
 
 /// A form with its layout, as the caller may see it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FormDetail {
@@ -26,6 +27,7 @@ pub struct FormDetail {
 }
 
 /// One section of a form as it reads.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(
     tag = "kind",
@@ -91,6 +93,7 @@ impl FormSectionDetail {
 }
 
 /// A question with its column's facts.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FormQuestionDetail {
@@ -117,6 +120,7 @@ pub struct FormQuestionDetail {
 }
 
 /// One option of a question's column.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionOption {

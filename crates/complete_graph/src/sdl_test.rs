@@ -720,6 +720,16 @@ fn calendar_reads_hang_off_the_authenticated_user() {
         "calendarOccurrences(input: CalendarRangeInput!): GraphqlCalendarOccurrencePage!",
         "union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime",
         "watermark: [GraphqlCalendarLinkWatermark!]!",
+        "calendarChanges(input: CalendarChangesInput!): GraphqlCalendarChanges!",
+        "since: [CalendarLinkWatermarkInput!]!",
+        "newWatermark: [GraphqlCalendarLinkWatermark!]!",
+        "occurrences: [GraphqlCalendarOccurrence!]!",
+        "createCalendarEvent(input: CreateCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "updateCalendarEvent(input: UpdateCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "deleteCalendarEvent(input: DeleteCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "respondToCalendarEvent(input: RespondToCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "input CalendarEventTimeInput @oneOf {",
+        "deletedEventId: ID",
         "needsCalendarPermission: Boolean!",
         "calendarDisabled: Boolean!",
         "hasCalendarData: Boolean!",
@@ -756,6 +766,7 @@ fn calendar_reads_hang_off_the_authenticated_user() {
     };
     assert!(!root.fields.contains_key("calendars"));
     assert!(!root.fields.contains_key("calendarOccurrences"));
+    assert!(!root.fields.contains_key("calendarChanges"));
 }
 
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client

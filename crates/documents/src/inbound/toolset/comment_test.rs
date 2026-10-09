@@ -12,7 +12,7 @@ use messages::domain::{
         Message, MessageAttribution, MessageParent, MessageThread, NewThreadAnchor, PostMessage,
         PostMessageNotificationPolicy, ThreadPatch, ThreadState,
     },
-    ports::{MessageError, MessagePage, MessagePatch, MessageTimelineQuery},
+    ports::{MessageError, MessagePage, MessagePatch, MessageTimelinePage, MessageTimelineQuery},
     service::{MessageView, MessageWrite},
 };
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -75,6 +75,13 @@ impl MessageReader for FakeMessages {
         _access: EntityAccessReceipt<MessageView>,
         _query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
+        panic!("unexpected timeline call")
+    }
+    async fn timeline_entries(
+        &self,
+        _access: EntityAccessReceipt<MessageView>,
+        _query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
         panic!("unexpected timeline call")
     }
     async fn preceding(

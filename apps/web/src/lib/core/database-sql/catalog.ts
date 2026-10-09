@@ -28,6 +28,9 @@ export function databaseSqlSchema(
             value: option.value,
             order: option.display_order,
           })),
+          ...(column.config?.kind === 'derived'
+            ? { formula: column.config.formula }
+            : {}),
         })),
       })),
     })),

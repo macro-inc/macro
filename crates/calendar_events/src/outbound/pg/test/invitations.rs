@@ -115,6 +115,8 @@ async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool:
     upsert.overrides.push(CalendarEventOverride {
         reminders: None,
         automatic_decline: None,
+        visibility: None,
+        transparency: None,
         sequence: Some(8),
         source_updated_at: Some(Utc::now()),
         recurrence_id: original.clone(),
@@ -175,6 +177,8 @@ async fn master_invitation_does_not_compare_revisions_with_first_exception(pool:
     upsert.overrides.push(CalendarEventOverride {
         reminders: None,
         automatic_decline: None,
+        visibility: None,
+        transparency: None,
         sequence: Some(8),
         source_updated_at: Some(Utc::now()),
         recurrence_id: first.occurrence_key.clone(),
