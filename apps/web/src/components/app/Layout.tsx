@@ -13,9 +13,9 @@ import {
 } from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
-  CreateCompanyModal,
-  CreateContactModal,
-} from '@app/features/crm/crm-create';
+  companyCreation,
+  contactCreation,
+} from '@app/features/crm/creation-adapter';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -82,6 +82,16 @@ import { MobileDockRow } from './mobile/MobileDockRow';
 import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
+
+// The CRM dialogs pull in the database table/board UI; load them on first open.
+const CreateCompanyModal = lazyNamed(
+  () => import('@app/features/crm/crm-create'),
+  'CreateCompanyModal'
+);
+const CreateContactModal = lazyNamed(
+  () => import('@app/features/crm/crm-create'),
+  'CreateContactModal'
+);
 
 const StarterDatabase = lazy(async () => {
   const module = await import(
@@ -259,8 +269,12 @@ function LayoutInner(props: RouteSectionProps) {
             <NativeShareSheet />
             <MacroMcpSetupModal />
             <CreateChannelModal />
-            <CreateCompanyModal />
-            <CreateContactModal />
+            <Show when={companyCreation.open()}>
+              <CreateCompanyModal />
+            </Show>
+            <Show when={contactCreation.target()}>
+              <CreateContactModal />
+            </Show>
             <Show when={isAddInboxDialogOpen()}>
               <AddInboxDialog />
             </Show>
