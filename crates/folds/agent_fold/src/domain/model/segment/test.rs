@@ -225,19 +225,6 @@ fn a_pending_request_waits_even_when_its_tool_reports_after_it() {
 }
 
 #[test]
-fn a_command_that_carries_a_credential_shows_only_its_program() {
-    let parts = [run(
-        "a",
-        "curl -H 'Authorization: Bearer abc' https://example.com",
-        ToolStatus::Completed,
-    )];
-    assert_eq!(
-        segments(&parts, true)[0].rows[0].detail.as_deref(),
-        Some("curl")
-    );
-}
-
-#[test]
 fn long_commands_keep_their_first_line_cut_to_length() {
     let long = format!("echo {}\nsecond line", "x".repeat(200));
     let parts = [run("a", &long, ToolStatus::Completed)];

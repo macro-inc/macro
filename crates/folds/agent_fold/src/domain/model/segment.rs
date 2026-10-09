@@ -33,18 +33,6 @@ mod test;
 /// Longest detail a row keeps, in characters.
 const DETAIL_MAX_CHARS: usize = 80;
 
-/// Words that mark a command line as carrying a credential. A row that would
-/// show one shows only the program instead.
-const SECRET_MARKERS: [&str; 7] = [
-    "token",
-    "secret",
-    "password",
-    "passwd",
-    "authorization",
-    "api_key",
-    "apikey",
-];
-
 /// What a segment of a reply is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
@@ -482,19 +470,9 @@ fn truncate(text: &str) -> String {
     format!("{}…", kept.trim_end())
 }
 
-/// A command's first line, or only its program when the line looks like it
-/// carries a credential.
+/// A command's first line, cut to length.
 fn command_detail(command: &str) -> String {
-    let line = command.lines().next().unwrap_or_default();
-    let lower = line.to_lowercase();
-    if SECRET_MARKERS.iter().any(|marker| lower.contains(marker)) {
-        return line
-            .split_whitespace()
-            .next()
-            .unwrap_or_default()
-            .to_owned();
-    }
-    truncate(line)
+    truncate(command.lines().next().unwrap_or_default())
 }
 
 /// A file's name, or how many files.

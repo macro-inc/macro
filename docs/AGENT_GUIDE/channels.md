@@ -35,9 +35,9 @@ The reply is posted as ordinary messages while the turn runs. Each finished
 passage becomes a message. The steps taken between passages show inside the
 message as compact rows: a status icon (spinner, check, cross, or warning for
 interrupted), a label such as `Ran`, `Read`, `Edited`, or `Searching`, and a
-short detail like the program or file name. Commands that look like they carry
-secrets show only the program. A long run shows its latest six steps behind an
-`N earlier steps` control. Rows tick live while the run is open, then freeze
+short detail like the command or file name. A long run shows its latest six
+steps behind an `N earlier steps` control. Rows tick live while the run is
+open, then freeze
 into the snapshot saved in the message. Readers without session access always
 see that snapshot. Only the turn's last message notifies. Previews and search
 quote the passages, not the steps. Typing refreshes every 3 seconds and clears
