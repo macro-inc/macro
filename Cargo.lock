@@ -18111,6 +18111,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-sqs",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]

@@ -9,6 +9,12 @@ include:
   - infra/stacks/fusionauth-instance/docker-compose.yml
 
 x-common-env: &common-env
+  # Bound console logs even when a worker repeatedly fails.
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "3"
   # The xtask orchestrator points this at a per-instance generated env file via
   # MACRO_ENV_FILE (run-local/run-dev). Defaults to .env for any legacy/manual
   # `docker compose` invocation, and is optional so a missing file is not fatal.
