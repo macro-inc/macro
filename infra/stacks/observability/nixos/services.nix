@@ -86,7 +86,7 @@ in
         User = "alloy-ingest";
         Group = "alloy-ingest";
         LoadCredential = [ (credential "otlp_token") ];
-        ExecStart = "${lib.getExe pkgs.grafana-alloy} run ${pkgs.writeText "ingest.alloy" (import ./ingest-alloy.nix)} --storage.path=/srv/observability/alloy-ingest --server.http.listen-addr=127.0.0.1:12345 --disable-reporting";
+        ExecStart = "${lib.getExe pkgs.grafana-alloy} run ${pkgs.writeText "ingest.alloy" (builtins.readFile ./ingest.alloy)} --storage.path=/srv/observability/alloy-ingest --server.http.listen-addr=127.0.0.1:12345 --disable-reporting";
         ReadWritePaths = [ "/srv/observability/alloy-ingest" ];
         MemoryMax = "1536M";
         CapabilityBoundingSet = [ "" ];

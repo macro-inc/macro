@@ -2,7 +2,7 @@
 {
   services.alloy = {
     enable = true;
-    configPath = pkgs.writeText "host.alloy" (import ./host-alloy.nix);
+    configPath = pkgs.writeText "host.alloy" (builtins.readFile ./host.alloy);
     extraFlags = [
       "--server.http.listen-addr=127.0.0.1:12346"
       "--storage.path=/srv/observability/alloy"

@@ -8,14 +8,14 @@ packages, configuration, service users, resource limits and startup dependencies
 - `nixos/services.nix`: native application services and runtime credentials.
 - `nixos/grafana.nix` and `nixos/datasources.nix`: Grafana access policy and datasources.
 - `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings.
-- `nixos/ingest-alloy.nix`: unprivileged OTLP receiver and export pipeline.
-- `nixos/host-telemetry.nix` and `nixos/host-alloy.nix`: host metrics and journal logs.
+- `nixos/ingest.alloy`: unprivileged OTLP receiver and export pipeline.
+- `nixos/host-telemetry.nix` and `nixos/host.alloy`: host metrics and journal logs.
 - `nixos/cloudwatch.nix`: independent disk and memory health metrics.
 - `nixos/proxy.nix`: native nginx virtual hosts and query-only backend gateway.
 - `nixos/host.nix`: boot dependencies, retained storage and stable service identities.
 
 NixOS modules generate application configuration from Nix attributes. Alloy's
-pipeline uses its native syntax inside a Nix multiline string. Pulumi sends only
+pipelines live in native `.alloy` files read by Nix. Pulumi sends only
 validated runtime values such as hostnames, bucket names and approved identities.
 Datadog instrumentation, collection and alerts remain unchanged. Nothing sends
 application telemetry here until a subsequent dual-export change is deployed.
