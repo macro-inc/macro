@@ -79,8 +79,11 @@ default model, or its model arrow to choose a model; **Create agent** opens the
 roster. Agents are clustered into **Built-in**, **Your agents**, and **Needs
 connection**, with runtime/model details below their names. Code opens directly
 on these groups without an empty Models section or an unrelated runtime warning.
-**Create agent** is a compact button with a subtle fill at the bottom right of
-the picker, outside the scrolling list.
+**Create agent** uses the shared rounded pill button with a subtle fill at the
+bottom right of the picker, outside the scrolling list. Model lists start with
+**Frontier models**, then group the remaining choices by provider. Search accepts
+model names, IDs, and providers. When browsing an agent, **Use default** in the
+header selects its configured model.
 
 The mobile Home composer is an opaque, rounded input using the same surface as
 the New button, including its glass treatment in dark mode. Send is a bare up
@@ -286,16 +289,20 @@ the shimmer.
   over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
   Direct model selections show the model icon, with the model name in the title.
-  Saved and coding agents show their identity beside the model icon on desktop;
-  phones use an icon-only picker.
+  Saved and coding agents show their own icon and name on desktop, without a
+  second model icon; phones use an icon-only picker.
 - The agent dropdown includes saved agents of the selected mode regardless of
   runtime, plus Cursor in Code mode.
-  Macro's models use the same searchable catalog as running sessions: a short
-  **Recommended** list and a **More models** submenu grouped by model family,
-  followed by **Built-in**, **Your agents**, and **Needs connection** groups when
+  Macro's models use the same searchable catalog as running sessions:
+  **Frontier models** lists **Opus 5.5**, **Sonnet 5.5**, **GPT-5.6** (Sol in
+  runtime catalogs), and **GPT-6 Astra**, when available, in that order. The
+  remaining models are grouped by provider directly below, including effort
+  and speed variants. Every available model appears once; choosing a model
+  does not reorder the sections. Search matches names, IDs, and provider names.
+  **Built-in**, **Your agents**, and **Needs connection** groups follow when
   they have entries. Each agent row shows its runtime and model, or its setup
-  action/availability reason. **Create agent** sits at the bottom right with a
-  subtle background. Models have readable
+  action/availability reason. **Create agent** uses the shared rounded pill
+  button at the bottom right with a subtle background. Models have readable
   names (for example, **Sonnet 5.5**) and provider or model icons aligned with the
   agent icons. The in-memory catalog offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
@@ -316,7 +323,7 @@ the shimmer.
   The most recently used supported,
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
-  the searchable Settings catalog, provider icons, and scrollable **More models**.
+  the searchable Settings catalog, provider icons, and scrollable provider sections.
   The submenu focuses the `Search models` field so you can type immediately.
   Clicking an agent directly, or pressing Enter/Space on its focused row, uses
   its default and clears any previous model override. Right Arrow still opens
@@ -341,11 +348,12 @@ the shimmer.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
   vertical center. The heading stays anchored while the composer expands downward,
-  with the repository bar above the input. The plus attachment button stays at the far left: before the
+  with the repository bar below the input on desktop and above it on mobile.
+  The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
   on the left and the agent/model and Send on the right. A full-width repository bar
-  slides and fades above the rounded input in 100ms when opening or closing, with rounded top corners
-  and a subtle border along its sides and top, with a darker surface in dark mode.
+  slides and fades in 100ms when opening or closing, with rounded outer corners
+  and a subtle border, with a darker surface in dark mode.
   Selecting Chat retracts the repository bar and keeps the mode switch inside
   the input, without remounting
   the editor or losing the draft. Reduced-motion
@@ -389,12 +397,16 @@ the shimmer.
   update the saved agent; configure persistent defaults in the agent editor.
   Within an existing session, the model picker remains available on the right.
   Its trigger, model options, and session metadata use the same readable model names
-  as the new-conversation picker. The menu includes provider icons, search, a short
-  **Recommended** list, and a scrollable **More models** submenu shared with Settings.
-  At phone width there is no room beside the menu, so **More models** replaces the
-  list in place and a **Recommended** row at the top goes back.
-- Chat agents' empty input cycles tips about connectors, skills, mentions, and
-  agents; coding agents show **Describe what you want to build**. Type `@` for
+  as the new-conversation picker. Large catalogs share the Settings picker:
+  provider icons, search, **Frontier models** first, and the remaining choices
+  grouped by provider in one scrolling list. The same sections are visible on
+  desktop and phone widths without a nested **More models** menu.
+- On desktop, chat agents' empty input types tips about connectors, skills,
+  mentions, and agents one character at a time, pauses to read each hint, then
+  quickly erases it before typing the next. Entering a draft pauses the animation;
+  clearing it resumes. Reduced-motion preferences keep the first hint static.
+  Coding agents show **Describe what you want to build**; phones keep the short
+  **Message Macro AI** placeholder. Type `@` for
   mentions and `/` for skills.
   Check `/` with the Android software keyboard too: the skills menu should open
   and filter while typing, without sending the draft.

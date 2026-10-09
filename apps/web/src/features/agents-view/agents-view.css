@@ -344,7 +344,7 @@
 		position: relative;
 		display: grid;
 		grid-template-rows: 0fr;
-		border-radius: 20px 20px 0 0;
+		border-radius: 0 0 20px 20px;
 		background: color-mix(in oklch, var(--surface-1) 40%, var(--surface-2));
 		opacity: 0;
 		visibility: hidden;
@@ -356,16 +356,16 @@
 		position: absolute;
 		inset: 0;
 		border: 1px solid var(--edge-muted);
-		border-bottom: 0;
+		border-top: 0;
 		border-radius: inherit;
 		pointer-events: none;
 	}
 
-	/* Continue the repository bar behind the input's rounded top corners. */
+	/* Continue the repository bar behind the input's adjacent rounded corners. */
 	:where(.agents-view, .agents-view-portal) .composer-drawer::after {
 		content: '';
 		position: absolute;
-		top: 100%;
+		bottom: 100%;
 		left: 0;
 		right: 0;
 		height: 32px;
@@ -389,8 +389,26 @@
 		display: flex;
 		align-items: center;
 		padding: 2px 10px;
-		transform: translateY(12px);
+		transform: translateY(-12px);
 		transition: transform 100ms cubic-bezier(0.77, 0, 0.175, 1);
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer[data-placement="top"] {
+		border-radius: 20px 20px 0 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer[data-placement="top"]::before {
+		border-top: 1px solid var(--edge-muted);
+		border-bottom: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer[data-placement="top"]::after {
+		top: 100%;
+		bottom: auto;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer[data-placement="top"] .composer-drawer-content {
+		transform: translateY(12px);
 	}
 
 	:where(.agents-view, .agents-view-portal) .composer-drawer[data-open] .composer-drawer-content {

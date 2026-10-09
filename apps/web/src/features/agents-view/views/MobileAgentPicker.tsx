@@ -1,4 +1,8 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import {
+  buildModelCatalog,
+  matchesModelQuery,
+} from '@core/component/AI/component/input/modelCatalog';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import ArrowLeft from '@phosphor/arrow-left.svg';
@@ -6,7 +10,7 @@ import CaretRight from '@phosphor/caret-right.svg';
 import Check from '@phosphor/check.svg';
 import Plus from '@phosphor/plus.svg';
 import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';
 import { AgentPickerIdentity } from '../components/AgentPickerIdentity';
 import { agentPickerGroups } from '../core/agent-picker-groups';
@@ -29,10 +33,23 @@ export function MobileAgentPicker(props: AgentPickerProps) {
       : (props.selected?.name ?? 'Choose agent');
   const matches = (text: string) =>
     text.toLocaleLowerCase().includes(query().trim().toLocaleLowerCase());
-  const models = () =>
-    catalog
-      .models()
-      .filter((option) => matches(modelLabel(option.id, option.name)));
+  const modelSections = createMemo(() => {
+    const options = catalog.models().map((option) => ({
+      id: option.id,
+      label: modelLabel(option.id, option.name),
+      group: option.group ?? undefined,
+    }));
+    const { frontier, providers } = buildModelCatalog(options);
+    const search = query().trim().toLowerCase();
+    return [{ label: 'Frontier models', options: frontier }, ...providers]
+      .map((section) => ({
+        label: section.label,
+        options: section.options.filter((option) =>
+          matchesModelQuery(option, search)
+        ),
+      }))
+      .filter((section) => section.options.length > 0);
+  });
   const groups = () =>
     agentPickerGroups(
       props.agents.filter((agent) =>
@@ -101,6 +118,18 @@ export function MobileAgentPicker(props: AgentPickerProps) {
               {browsing()?.name ??
                 (macro() ? 'Agents and models' : 'Choose an agent')}
             </h2>
+            <Show when={browsing()}>
+              {(agent) => (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Use ${agent().name} default`}
+                  onClick={() => choose(agent())}
+                >
+                  Use default
+                </Button>
+              )}
+            </Show>
           </div>
           <input
             aria-label={searchLabel()}
@@ -110,50 +139,53 @@ export function MobileAgentPicker(props: AgentPickerProps) {
             class="mx-4 mb-3 rounded-xl border border-edge-muted bg-input px-3 py-2 text-base outline-none"
           />
           <MobileDrawer.ScrollBody class="gap-3 rounded-b-none pb-2">
-            <Show when={browsing()}>
-              {(agent) => (
-                <MobileDrawer.Item onClick={() => choose(agent())}>
-                  Use {agent().name} default
-                </MobileDrawer.Item>
-              )}
-            </Show>
             <Show when={browsing() ?? macro()}>
-              <div>
-                <MobileDrawer.Label class="px-4 font-medium text-ink-muted">
-                  Models
-                </MobileDrawer.Label>
-                <MobileDrawer.Section>
-                  <For each={models()}>
-                    {(option) => (
-                      <MobileDrawer.Item
-                        onClick={() => {
-                          const agent = browsing() ?? macro();
-                          if (agent) choose(agent, option.id);
-                        }}
-                      >
-                        <ModelIcon model={option.id} />
-                        <span class="min-w-0 flex-1 truncate">
-                          {modelLabel(option.id, option.name)}
-                        </span>
-                        <Show
-                          when={
-                            props.selected?.id ===
-                              (browsing() ?? macro())?.id &&
-                            model() === option.id
-                          }
-                        >
-                          <Check class="size-4 text-accent" />
-                        </Show>
-                      </MobileDrawer.Item>
-                    )}
-                  </For>
-                  <Show when={models().length === 0}>
-                    <p role="status" class="px-4 py-3 text-sm text-ink-muted">
-                      {query() ? 'No matching models' : catalog.message()}
-                    </p>
-                  </Show>
-                </MobileDrawer.Section>
-              </div>
+              <For each={modelSections()}>
+                {(section) => (
+                  <div>
+                    <MobileDrawer.Label class="px-4 font-medium text-ink-muted">
+                      {section.label}
+                    </MobileDrawer.Label>
+                    <MobileDrawer.Section
+                      role="group"
+                      aria-label={section.label}
+                    >
+                      <For each={section.options}>
+                        {(option) => (
+                          <MobileDrawer.Item
+                            disabled={Boolean(
+                              (browsing() ?? macro())?.unavailableReason
+                            )}
+                            onClick={() => {
+                              const agent = browsing() ?? macro();
+                              if (agent) choose(agent, option.id);
+                            }}
+                          >
+                            <ModelIcon model={option.id} />
+                            <span class="min-w-0 flex-1 truncate">
+                              {option.label}
+                            </span>
+                            <Show
+                              when={
+                                props.selected?.id ===
+                                  (browsing() ?? macro())?.id &&
+                                model() === option.id
+                              }
+                            >
+                              <Check class="size-4 text-accent" />
+                            </Show>
+                          </MobileDrawer.Item>
+                        )}
+                      </For>
+                    </MobileDrawer.Section>
+                  </div>
+                )}
+              </For>
+              <Show when={modelSections().length === 0}>
+                <p role="status" class="px-4 py-3 text-sm text-ink-muted">
+                  {query() ? 'No matching models' : catalog.message()}
+                </p>
+              </Show>
             </Show>
             <Show when={!browsing()}>
               <For each={groups()}>
@@ -219,8 +251,11 @@ export function MobileAgentPicker(props: AgentPickerProps) {
             </Show>
           </MobileDrawer.ScrollBody>
           <div class="flex shrink-0 justify-end border-t border-edge-muted px-4 pt-3 pb-[max(16px,var(--mobile-sheet-safe-padding))]">
-            <MobileDrawer.Item
-              class="w-auto gap-1.5 rounded-xl bg-ink/5 px-3 font-medium"
+            <Button
+              variant="strong"
+              size="sm"
+              glass={false}
+              class="gap-1.5"
               onClick={() => {
                 changeOpen(false);
                 props.onCreate();
@@ -228,7 +263,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
             >
               <Plus class="size-4" />
               Create agent
-            </MobileDrawer.Item>
+            </Button>
           </div>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>

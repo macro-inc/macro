@@ -5,7 +5,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { cn, Dropdown } from '@ui';
+import { buttonClasses, cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentModelMenuItem } from '../../block-agent/component/AgentModelMenuItem';
@@ -116,7 +116,9 @@ function DesktopAgentPicker(props: AgentPickerProps) {
           </Show>
         </Show>
         {/* The model shows as its provider's logo; the title spells it out. */}
-        <ModelIcon model={model()} class="size-[15px] shrink-0" />
+        <Show when={rawModel()}>
+          <ModelIcon model={model()} class="size-[15px] shrink-0" />
+        </Show>
         <CaretDownIcon class="size-[15px] shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content
@@ -132,7 +134,6 @@ function DesktopAgentPicker(props: AgentPickerProps) {
                   value={
                     props.selected?.id === agent().id ? (model() ?? null) : null
                   }
-                  recommendedId={macroCatalog.currentModel()}
                   disabled={Boolean(agent().unavailableReason)}
                   options={macroCatalog.models().map((option) => ({
                     id: option.id,
@@ -218,7 +219,12 @@ function DesktopAgentPicker(props: AgentPickerProps) {
           <Dropdown.Group class="shrink-0 items-end border-t border-edge-muted p-2">
             <Dropdown.Item
               closeOnSelect
-              class="w-auto gap-1.5 bg-ink/5 px-3 py-2 text-xs font-medium data-highlighted:bg-ink/10"
+              class={buttonClasses({
+                variant: 'strong',
+                size: 'sm',
+                glass: false,
+                class: 'w-auto gap-1.5 data-highlighted:overlay-hover',
+              })}
               onSelect={() => {
                 setOpen(false);
                 props.onCreate();

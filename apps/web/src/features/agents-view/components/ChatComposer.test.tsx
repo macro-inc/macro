@@ -20,6 +20,10 @@ vi.mock('@core/agent-fold/client', () => ({
   preloadAgentFold: vi.fn(async () => {}),
 }));
 
+vi.mock('@solid-primitives/media', () => ({
+  createMediaQuery: () => () => false,
+}));
+
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
 }));
@@ -351,7 +355,7 @@ describe('Chat session input', () => {
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
   it.each([false, true])(
-    'expands coding mode with repository settings above the input without remounting the editor (touch: %s)',
+    'places repository settings below desktop and above touch input without remounting the editor (touch: %s)',
     (touch) => {
       vi.mocked(isTouchDevice).mockReturnValue(touch);
       const [mode, setMode] = createSignal('chat');
@@ -371,7 +375,9 @@ describe('Chat session input', () => {
       expect(layout?.getAttribute('data-composer-compact')).toBe('true');
       expect(
         (drawer?.compareDocumentPosition(input) ?? 0) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+          (touch
+            ? Node.DOCUMENT_POSITION_FOLLOWING
+            : Node.DOCUMENT_POSITION_PRECEDING)
       ).toBeTruthy();
       expect((drawer as HTMLElement).inert).toBe(true);
       expect(drawer?.getAttribute('aria-hidden')).toBe('true');

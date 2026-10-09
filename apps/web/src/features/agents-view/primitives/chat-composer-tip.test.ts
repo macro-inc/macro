@@ -1,52 +1,100 @@
 import { cleanup, renderHook } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createChatComposerTip } from './chat-composer-tip';
 
-beforeEach(() => vi.useFakeTimers());
+const motion = vi.hoisted(() => ({ reduced: false }));
+vi.mock('@solid-primitives/media', () => ({
+  createMediaQuery: () => () => motion.reduced,
+}));
+
+beforeEach(() => {
+  motion.reduced = false;
+  vi.useFakeTimers();
+});
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
 
+/** Follow timer-driven text until a complete hint is visible. */
+function readHint(tip: Accessor<string>, expected: string) {
+  for (let step = 0; step < 300 && tip() !== expected; step++)
+    vi.advanceTimersToNextTimer();
+  expect(tip()).toBe(expected);
+}
+
+const CONNECT = 'Connect your apps in Agents → Connections';
+
 describe('Chat composer tips', () => {
-  it('omits the agent-selection tip inside a session', () => {
-    const { result: tip } = renderHook(() =>
-      createChatComposerTip(() => true, false)
-    );
-    const first = tip();
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('skill');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('@');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toBe(first);
+  it('types progressively, pauses, quickly erases and types the next hint', () => {
+    const { result: tip } = renderHook(() => createChatComposerTip(() => true));
+    expect(tip()).toBe('');
+    vi.advanceTimersToNextTimer();
+    expect(tip()).toBe('C');
+    const typedAt = Date.now();
+    vi.advanceTimersToNextTimer();
+    expect(tip()).toBe('Co');
+    const typingTime = Date.now() - typedAt;
+    readHint(tip, CONNECT);
+    vi.advanceTimersByTime(2000);
+    expect(tip()).toBe(CONNECT);
+    vi.advanceTimersToNextTimer();
+    expect(CONNECT.startsWith(tip())).toBe(true);
+    expect(tip().length).toBeLessThan(CONNECT.length);
+    const deletingAt = Date.now();
+    vi.advanceTimersToNextTimer();
+    expect(Date.now() - deletingAt).toBeLessThan(typingTime);
+    readHint(tip, '');
+    vi.advanceTimersToNextTimer();
+    expect(tip()).toBe('T');
+    readHint(tip, 'Type / to add a skill');
   });
 
   it('cycles through connectors, skills, mentions and agents, then repeats', () => {
     const { result: tip } = renderHook(() => createChatComposerTip(() => true));
-    const first = tip();
-    expect(first).toContain('Connections');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('skill');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('@');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('agent');
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toBe(first);
+    for (const hint of [
+      CONNECT,
+      'Type / to add a skill',
+      'Type @ to mention docs, people, or channels',
+      'Choose an agent to change who helps',
+      CONNECT,
+    ])
+      readHint(tip, hint);
   });
 
-  it('pauses while writing and resumes when the draft is cleared', () => {
+  it('omits the agent-selection tip inside a session', () => {
+    const { result: tip } = renderHook(() =>
+      createChatComposerTip(() => true, false)
+    );
+    for (const hint of [
+      CONNECT,
+      'Use @ to reference a skill document',
+      'Type @ to mention docs, people, or channels',
+      CONNECT,
+    ])
+      readHint(tip, hint);
+  });
+
+  it('stops while writing and resumes the same hint when the draft is cleared', () => {
     const [empty, setEmpty] = createSignal(true);
     const { result: tip } = renderHook(() => createChatComposerTip(empty));
-    const first = tip();
+    vi.advanceTimersToNextTimer();
+    expect(tip()).toBe('C');
     setEmpty(false);
+    expect(vi.getTimerCount()).toBe(0);
     vi.advanceTimersByTime(18000);
-    expect(tip()).toBe(first);
+    expect(tip()).toBe('C');
     setEmpty(true);
-    vi.advanceTimersByTime(6000);
-    expect(tip()).toContain('skill');
+    vi.advanceTimersToNextTimer();
+    expect(tip()).toBe('Co');
+  });
+
+  it('shows a complete static hint without timers when reduced motion is enabled', () => {
+    motion.reduced = true;
+    const { result: tip } = renderHook(() => createChatComposerTip(() => true));
+    expect(tip()).toBe(CONNECT);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('stops its timer when the composer is removed', () => {

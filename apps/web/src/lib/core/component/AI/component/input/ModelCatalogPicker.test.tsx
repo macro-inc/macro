@@ -18,18 +18,6 @@ import {
 } from './ModelCatalogPicker';
 import type { CatalogModelOption } from './modelCatalog';
 
-const { isMobileWidth, setMobileWidth } = vi.hoisted(() => {
-  let mobile = false;
-  return {
-    isMobileWidth: () => mobile,
-    setMobileWidth: (value: boolean) => {
-      mobile = value;
-    },
-  };
-});
-
-vi.mock('@core/mobile/mobileWidth', () => ({ isMobileWidth }));
-
 vi.mock('@ui', () => {
   const cn = (...args: unknown[]) =>
     args.flat(Infinity).filter(Boolean).join(' ');
@@ -111,7 +99,6 @@ const OPTIONS: CatalogModelOption[] = [
 
 afterEach(() => {
   cleanup();
-  setMobileWidth(false);
 });
 
 function mountPicker() {
@@ -258,25 +245,22 @@ describe('ModelCatalogMenu search focus', () => {
   });
 });
 
-describe('ModelCatalogPicker more models at phone width', () => {
-  it('replaces the list in place and comes back', () => {
-    setMobileWidth(true);
+describe('ModelCatalogPicker frontier and providers', () => {
+  it('shows frontier models first and all provider groups directly below', () => {
     mountPicker();
-    fireEvent.click(screen.getByRole('button', { name: 'Agent model' }));
-
-    expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
-
-    fireEvent.click(screen.getByText('More models'));
-    expect(screen.getByText('Gemini 3.8 Flash High')).toBeTruthy();
-    expect(screen.queryByText('Opus 5.5 High')).toBeNull();
-
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Recommended' }));
-    expect(screen.getByText('Opus 5.5 High')).toBeTruthy();
-    expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
+    expect(screen.getByText('Frontier models')).toBeTruthy();
+    expect(screen.getByText('Google')).toBeTruthy();
+    const frontier = screen.getByText('Opus 5.5 High');
+    const provider = screen.getByText('Gemini 3.8 Flash High');
+    expect(
+      frontier.compareDocumentPosition(provider) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.queryByText('Recommended')).toBeNull();
+    expect(screen.queryByText('More models')).toBeNull();
   });
 
-  it('uses the supplied model row for models beyond the recommended list', () => {
-    setMobileWidth(true);
+  it('uses the supplied model row for both frontier and provider choices', () => {
     const CustomRow = (props: ModelRowProps) => (
       <button type="button" onClick={props.onSelect}>
         Custom {props.option.label}
@@ -294,13 +278,27 @@ describe('ModelCatalogPicker more models at phone width', () => {
         />
       );
     });
-
-    fireEvent.click(screen.getByText('More models'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Custom Opus 5.5 High' })
+    );
+    expect(
+      screen.getByRole('button', { name: 'Agent model' }).textContent
+    ).toContain('Opus 5.5 High');
     fireEvent.click(
       screen.getByRole('button', { name: 'Custom Gemini 3.8 Flash High' })
     );
     expect(
       screen.getByRole('button', { name: 'Agent model' }).textContent
     ).toContain('Gemini 3.8 Flash High');
+  });
+
+  it('searches the entire catalog by provider name', () => {
+    mountPicker();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
+      target: { value: 'Google' },
+    });
+    expect(screen.getByText('Gemini 3.8 Flash High')).toBeTruthy();
+    expect(screen.queryByText('Opus 5.5 High')).toBeNull();
+    expect(screen.queryByText('Frontier models')).toBeNull();
   });
 });
