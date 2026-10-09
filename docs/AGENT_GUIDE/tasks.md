@@ -169,6 +169,10 @@ are rejected so they cannot clear other assignments. Creation-date grouping
 and ungrouped views do not accept group moves. Permission and destination checks
 run again on release. Escape cancels, failed saves show an error, and neither
 Created at nor Due date changes during a group move. Active filters still apply.
+Project Gantt also shows empty Status/Priority destinations from property options,
+Unassigned when allowed, and assignees already seen in the current collection
+scope. An emptied assignee group remains available for another drop. The ordinary
+project list still shows only its loaded groups.
 
 Drag horizontally across empty calendar space to open the task composer with
 Due date prefilled and visible. Past dates and permission-disabled creation remain

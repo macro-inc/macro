@@ -22,6 +22,7 @@ import type {
   createProjectCollection,
   ProjectListActivation,
   ProjectListEntity,
+  ProjectListItem,
 } from '../primitives/project-collection';
 import { projectTimelineDates } from '../queries/project-timeline';
 
@@ -36,6 +37,7 @@ function AssigneeLabel(props: {
 export function ProjectsGantt(props: {
   createAssigneeName: (id: Accessor<string>) => Accessor<string>;
   collection: ReturnType<typeof createProjectCollection>;
+  items: Accessor<readonly ProjectListItem[]>;
   groupMoves: Omit<ComponentProps<typeof Gantt.GroupDrag>, 'children'>;
   onOpen: (id: string, metadata?: ProjectListActivation) => void;
   onCreate?: (dates: GanttCreation) => void;
@@ -90,7 +92,7 @@ export function ProjectsGantt(props: {
             </Button>
           </div>
         </Match>
-        <Match when={!collection.items().length && !props.onCreate}>
+        <Match when={!props.items().length && !props.onCreate}>
           <div class="grid flex-1 place-items-center text-sm text-ink-muted">
             No matching projects
           </div>
@@ -111,7 +113,7 @@ export function ProjectsGantt(props: {
               <Gantt.Chart>
                 <Gantt.Header />
                 <Gantt.Rows
-                  items={collection.items()}
+                  items={props.items()}
                   getKey={(row) => row.id}
                   getPanelKey={(row) =>
                     row.kind === 'entity' || row.kind === 'load-more'

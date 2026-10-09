@@ -56,6 +56,7 @@ import type {
   ProjectListActivation,
   ProjectListEntity,
 } from '../primitives/project-collection';
+import { createProjectGanttRows } from '../primitives/project-gantt-rows';
 import {
   projectGroupMoveValue,
   projectGroupPropertyId,
@@ -225,6 +226,26 @@ export function ProjectsCollection(props: {
     const id = projectGroupPropertyId(collection.groupBy());
     return id ? definition(id) : undefined;
   };
+  const groupMoveScope = () =>
+    JSON.stringify([
+      props.scopeId,
+      context.userId(),
+      collection.groupBy(),
+      collection.search(),
+      collection.status(),
+      collection.priority(),
+      collection.mine(),
+      collection.dueBefore(),
+      collection.dueAfter(),
+    ]);
+  const ganttRows = createProjectGanttRows({
+    grouping: collection.groupBy,
+    groups: collection.groups,
+    items: collection.items,
+    property: groupProperty,
+    scope: groupMoveScope,
+    isExpanded: collection.disclosure.isExpanded,
+  });
   const canDragProject = (id: string) => {
     const state = collection.state();
     const project =
@@ -250,7 +271,7 @@ export function ProjectsCollection(props: {
         : undefined;
     const property = groupProperty();
     if (!entity || !property || !canDragProject(move.id)) return;
-    if (!collection.groups().some((group) => group.id === move.toGroup)) return;
+    if (!ganttRows.groups().some((group) => group.id === move.toGroup)) return;
     if (
       collection.groupBy() !== 'assignee' &&
       move.toGroup &&
@@ -749,20 +770,14 @@ export function ProjectsCollection(props: {
         >
           <ProjectsGantt
             collection={collection}
+            items={ganttRows.items}
             groupMoves={{
-              scope: JSON.stringify([
-                props.scopeId,
-                collection.groupBy(),
-                collection.search(),
-                collection.status(),
-                collection.priority(),
-                collection.mine(),
-              ]),
+              scope: groupMoveScope(),
               canDrag: canDragProject,
               canDrop: (move) => !!resolveGroupMove(move),
               getPlacement: (move) =>
                 ganttGroupPlacement({
-                  items: collection.items(),
+                  items: ganttRows.items(),
                   move,
                   getEntity: (row) =>
                     row.kind === 'entity' ? row.entity : undefined,
