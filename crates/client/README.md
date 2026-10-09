@@ -201,6 +201,52 @@ bounded retention discard obsolete bindings and responses. See
 for mutation examples and the distinction between reactive cached fields and
 domain-specific collection membership.
 
+## Derived list membership
+
+Every list field is opaque unless `cache-core/src/membership.rs` declares it a
+relation: parent type and field, child entity type, child fields that must
+equal the parent's `id` (none for a root collection), argument filters, and
+ascending order fields. Declarations are validated against the runtime schema;
+an invalid one stays opaque and is reported by `Engine::membership_diagnostics`.
+`GraphqlUser.favorites` is the only relation so far.
+
+Reading a relation returns the server evidence for that exact field and its
+arguments, adjusted by children whose effective state changed after the
+evidence was written:
+
+- a child the evidence already saw, unchanged since, keeps the evidence's
+  decision;
+- a changed child (optimistic layer, committed response, push, another
+  context) is evaluated locally: in means inserted at its ordered position,
+  out or deleted means removed;
+- a child that cannot be evaluated (missing field, undeclared argument) keeps
+  the evidence, and watch updates carry `membershipUnknown`;
+- dropping an optimistic layer changes effective records, so membership
+  follows rollback.
+
+"Changed after" compares durable sequences from one engine clock
+(`__meta:membership-clock`). A base write that changes a child stamps it; a
+base write of an evidence list stamps that list, even when unchanged, in a
+per-owner `__cacheMembershipEvidence:<owner>` record so the owner itself is
+not rewritten. Records in one response share a sequence. Layers are never
+stamped and their children are always evaluated. Stamped children load once
+per engine and child type through `Storage::scan_records_of_type`, then follow
+this engine's writes; invalidations and resets reload them. A read derives
+lists between passes and memoizes them for the current revision. Watches and
+registered operations depend on the child type, so a new member wakes them.
+
+## Keyed list splices
+
+A watched document re-read diffs against the subscriber's previous result.
+Subscribers that set the watch capability `splices` receive keyed list edits
+(`{"path": [...], "splice": [{"remove": i}, {"insert": i, "value": ...},
+{"move": i, "to": j}]}`) for lists of objects with unique `id`/`__typename`.
+Surviving items keep their objects and their changed fields patch at their new
+positions; the operations keep a longest already-ordered run in place. Hosts
+forward the flag (wasm `watchQuery`, worker `watch.splices`, Tauri
+`graphql_cache_watch`); engines and native binaries without it replace the
+list instead.
+
 ## Entity-rooted optimistic relations
 
 Link recipes may use an optional `recordRoot` (`fragmentName`, `entityKey`).

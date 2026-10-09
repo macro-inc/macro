@@ -661,7 +661,8 @@ every schema argument of its field with the schema's type:
 | Strategy | Operations |
 | --- | --- |
 | Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (11) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, MarkWorkFeedItemsDone |
+| Record prediction; lists derive membership (2) | SetFavorite, ReorderFavorites |
+| Existing domain optimistic recipe (9) | SaveEmailDraft, DeleteEmailDraft, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, MarkWorkFeedItemsDone |
 | Authoritative outcome (10) | CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
 | Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
 
@@ -704,8 +705,12 @@ returns response-path patches. Relationships, embedded-object edits, list
 membership and order, tombstones, invalidation and journal gaps re-read the
 query, rebuild its bindings and diff the result against the retained response.
 Diffs only target paths present in the previous response: an object whose key
-set changed (another fragment type) or a list whose length or item identities
-(`id`, `__typename`) changed is replaced at its own path. A new root, or
+set changed (another fragment type) is replaced at its own path. A list whose
+length or item identities (`id`, `__typename`) changed is spliced in place for
+watchers that request `splices` (the document reader does): removals,
+insertions with their values, and moves, after which surviving items patch at
+their new indices. Other watchers, and lists without unique identities, get the
+list replaced at its own path. A new root, or
 replacements larger than half of the response (such as a compacted page),
 return the complete result instead: such a patch would carry nearly as much
 and cost the engine a copy of every replaced value. Eviction and cursor
@@ -720,7 +725,19 @@ query's normal network policy; `cache-only` never starts a network request.
 The generic projection reflects cached GraphQL results. It does not infer server
 resolver logic, authorization, aggregates, full-text ranking, or whether an entity
 belongs in an arbitrary filtered/paginated list. Such changes need a declared
-domain collection policy or server revalidation. A Soup page read as a plain
+domain collection policy or server revalidation.
+
+A declared relation is such a policy: cache-core derives the list from the
+server's evidence for that field and arguments plus the effective state of
+child records that changed after it (see
+[derived list membership](../../../crates/client/README.md#derived-list-membership)).
+`GraphqlUser.favorites` is one: SetFavorite predicts only the favorite record
+(appended sort order, or deletion) and ReorderFavorites only sort orders, and
+every mounted favorites list, pushed favorite and rollback follows without
+link recipes or list revalidations. The
+[list membership inventory](../src/lib/queries/list-membership-inventory.test.ts)
+classifies every list of objects the app selects as relation, predicate or
+opaque, with a reason. A Soup page read as a plain
 document would retain its server-provided membership, which is why Soup lists
 use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
