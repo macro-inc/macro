@@ -11,12 +11,13 @@ import {
 import { directExecutor, type PreparationExecutor } from './executor';
 import { policyTuple, sameSource, sourceBytes } from './keys';
 import { PreparedMemory } from './memory';
-import { cancelled, PreparationScheduler } from './scheduler';
+import { cancelled, isCancelled, PreparationScheduler } from './scheduler';
 import {
   ARTIFACT_SCHEMA_VERSION,
   type Artifact,
   type ArtifactStore,
   artifactBytes,
+  attempt,
   storageDeadline,
   validArtifact,
 } from './store';
@@ -25,11 +26,45 @@ function variantBytes(policy: string): number {
   return policy.length * 2 + 512;
 }
 
+interface Consumer {
+  priority: number;
+}
+
 interface Variant {
   key?: string;
   pending?: Promise<PreparedEmailBody>;
-  consumers: number;
-  priority: number;
+  /** Live leases. The variant runs at its most urgent consumer's priority. */
+  consumers: Set<Consumer>;
+}
+
+/** Infinity without live consumers. */
+function variantPriority(variant: Variant): number {
+  let priority = Infinity;
+  for (const consumer of variant.consumers)
+    priority = Math.min(priority, consumer.priority);
+  return priority;
+}
+
+function hasReader(binding: Binding): boolean {
+  for (const variant of binding.variants.values())
+    for (const consumer of variant.consumers)
+      if (consumer.priority === 0) return true;
+  return false;
+}
+
+/** Handles a promise whose failure belongs to its consumer. */
+async function settle(promise: Promise<unknown>): Promise<void> {
+  try {
+    await promise;
+  } catch {
+    /* The owning consumer handles failures. */
+  }
+}
+
+function cancelledLease(): PreparedEmailLease {
+  const promise = Promise.reject(cancelled());
+  void settle(promise);
+  return { ready: undefined, promise, promote() {}, release() {} };
 }
 
 interface Binding {
@@ -44,6 +79,10 @@ export interface RenderCacheOptions {
   memoryBytes?: number;
   executor?: PreparationExecutor;
   store?: () => Promise<ArtifactStore | undefined>;
+  /** Storage was invalidated by another session without this one hearing it. */
+  onStaleGeneration?: () => void;
+  /** Consulted before every write; false skips persisting the artifact. */
+  mayPersist?: () => boolean;
 }
 
 /** Session-owned, value-selected preparation. No authorization or transport. */
@@ -77,8 +116,13 @@ export class EmailRenderCache implements EmailPreparation {
   acquire(request: EmailPreparationRequest): PreparedEmailLease {
     if (this.disposed) throw cancelled();
     const id = JSON.stringify([request.mailboxId, request.messageId]);
+    const priority = request.priority ?? 0;
     let binding = this.bindings.get(id);
-    if (!binding || !sameSource(binding.input, request.input)) {
+    const changed = !binding || !sameSource(binding.input, request.input);
+    // Speculation never replaces the source of a body someone is reading.
+    if (binding && changed && priority > 0 && hasReader(binding))
+      return cancelledLease();
+    if (!binding || changed) {
       if (binding) {
         binding.current = false;
         this.bindingBytes -= binding.bytes;
@@ -97,7 +141,7 @@ export class EmailRenderCache implements EmailPreparation {
     const policy = policyTuple(request.options);
     let variant = binding.variants.get(policy);
     if (!variant) {
-      variant = { consumers: 0, priority: request.priority ?? 0 };
+      variant = { consumers: new Set() };
       binding.variants.set(policy, variant);
       const bytes = variantBytes(policy);
       binding.bytes += bytes;
@@ -105,54 +149,63 @@ export class EmailRenderCache implements EmailPreparation {
     }
     binding.variants.delete(policy);
     binding.variants.set(policy, variant);
-    variant.priority = Math.min(variant.priority, request.priority ?? 0);
-    variant.consumers++;
+    const consumer: Consumer = { priority };
+    variant.consumers.add(consumer);
     const selected = variant;
     const source = binding;
     const ready = variant.key ? this.memory.get(variant.key) : undefined;
     let releaseMemory = ready ? this.memory.retain(variant.key!) : undefined;
     let released = false;
-    if (!ready && !variant.pending) {
-      variant.pending = this.resolve(request, id, source, selected, policy);
-      void this.finishVariant(source, variant, variant.pending);
-    }
-    const pending = ready ? Promise.resolve(ready) : variant.pending!;
+    const live = () => !released && !this.disposed && source.current;
+    const start = () => {
+      if (!selected.pending) {
+        selected.pending = this.resolve(request, id, source, selected, policy);
+        void this.finishVariant(source, selected, selected.pending);
+      }
+      return selected.pending;
+    };
     const receive = async () => {
-      const body = await pending;
-      if (released || this.disposed || !source.current) throw cancelled();
-      // Another lease can trigger trimming between publication and delivery.
-      // Republish before pinning so every active value stays byte-accounted.
-      const retained = this.memory.publish(selected.key!, body);
-      releaseMemory ??= this.memory.retain(selected.key!);
-      this.trim();
-      return retained;
+      let pending = ready ? Promise.resolve(ready) : start();
+      for (let restarted = false; ; restarted = true) {
+        try {
+          const body = await pending;
+          if (!live()) throw cancelled();
+          // Another lease can trigger trimming between publication and
+          // delivery. Republish before pinning so every active value stays
+          // byte-accounted.
+          const retained = this.memory.publish(selected.key!, body);
+          releaseMemory ??= this.memory.retain(selected.key!);
+          this.trim();
+          return retained;
+        } catch (error) {
+          // A lease that left reports cancellation, not a shared job's error.
+          if (!live()) throw cancelled();
+          // A shared job can be cancelled for consumers that left, or for a
+          // lower priority, just before this one joined. Restart it once.
+          if (restarted || !isCancelled(error)) throw error;
+          if (selected.pending === pending) selected.pending = undefined;
+          pending = start();
+        }
+      }
     };
     const promise = receive();
     // A synchronous hit consumer need not subscribe to the completion promise.
-    void this.ignoreCancellation(promise);
+    void settle(promise);
     this.trim();
     return {
       ready,
       promise,
       promote: () => {
-        selected.priority = 0;
+        if (!released) consumer.priority = 0;
       },
       release: () => {
         if (released) return;
         released = true;
-        selected.consumers--;
+        selected.consumers.delete(consumer);
         releaseMemory?.();
         this.trim();
       },
     };
-  }
-
-  private async ignoreCancellation(promise: Promise<unknown>): Promise<void> {
-    try {
-      await promise;
-    } catch {
-      /* The owning consumer handles failures. */
-    }
   }
 
   private async finishVariant(
@@ -167,22 +220,24 @@ export class EmailRenderCache implements EmailPreparation {
     } finally {
       if (variant.pending === promise) variant.pending = undefined;
       if (!variant.key) binding.sourceHash = undefined;
-      if (!variant.consumers) this.trim();
+      this.trim();
     }
   }
 
   private async getStorage() {
     if (!this.options.store) return;
-    this.storage ??= this.openStorage();
+    // Opening can wait on another tab's clear. Bound it generously, and leave
+    // the 150ms deadline to foreground reads: a slow open must not disable
+    // persistence for the rest of this session.
+    this.storage ??= storageDeadline(this.openStorage(), 10_000);
     return this.storage;
   }
 
   private async openStorage() {
     try {
-      const store = await storageDeadline(this.options.store!());
+      const store = await this.options.store!();
       if (!store) return;
-      const generation = await storageDeadline(store.generation());
-      return generation === undefined ? undefined : { store, generation };
+      return { store, generation: await store.generation() };
     } catch {
       // An injected adapter may throw before returning a promise.
       return undefined;
@@ -197,23 +252,37 @@ export class EmailRenderCache implements EmailPreparation {
     policy: string
   ): Promise<PreparedEmailBody> {
     const valid = () =>
-      !this.disposed && binding.current && variant.consumers > 0;
-    if (variant.priority > 0 && binding.bytes > 256 * 1024) throw cancelled();
+      !this.disposed && binding.current && variant.consumers.size > 0;
+    if (variantPriority(variant) > 0 && binding.bytes > 256 * 1024)
+      throw cancelled();
     // Bound hashing too: a dedicated worker's message queue must not become an
     // unbounded, unprioritized queue ahead of a foreground request.
     const [sourceHash, policyHash, mailboxHash] = await this.scheduler.schedule(
-      () => variant.priority,
+      () => variantPriority(variant),
       valid,
       async () => {
         // Shared by all variants of this message input generation.
-        binding.sourceHash ??= this.executor.hashSource(
-          binding.input,
-          variant.priority
-        );
+        if (!binding.sourceHash) {
+          const hashing = this.executor.hashSource(
+            binding.input,
+            variantPriority(variant)
+          );
+          binding.sourceHash = hashing;
+          void (async () => {
+            try {
+              await hashing;
+            } catch {
+              // A failed hash must not be reused by every later retry.
+              if (binding.sourceHash === hashing)
+                binding.sourceHash = undefined;
+            }
+          })();
+        }
         return await Promise.all([
           binding.sourceHash,
           this.executor.hash(policy),
-          this.executor.hash(request.mailboxId),
+          // Framed like every other hash input, so ids never alias.
+          this.executor.hash(JSON.stringify([request.mailboxId])),
         ]);
       }
     );
@@ -267,8 +336,8 @@ export class EmailRenderCache implements EmailPreparation {
     let priority = Infinity;
     for (const binding of this.bindings.values())
       for (const variant of binding.variants.values()) {
-        if (binding.current && variant.key === key && variant.consumers)
-          priority = Math.min(priority, variant.priority);
+        if (binding.current && variant.key === key)
+          priority = Math.min(priority, variantPriority(variant));
       }
     return priority;
   }
@@ -295,14 +364,18 @@ export class EmailRenderCache implements EmailPreparation {
     priority: () => number,
     valid: () => boolean
   ): Promise<PreparedEmailBody> {
-    const storage = await this.getStorage();
+    const storage = await storageDeadline(this.getStorage());
     if (storage && valid()) {
-      const cached = await storageDeadline(storage.store.read(key));
+      // An adapter that throws synchronously is a cache failure, not a mail one.
+      const cached = await storageDeadline(
+        attempt(() => storage.store.read(key))
+      );
       if (!valid()) throw cancelled();
       if (validArtifact(cached, key, sourceHash, policyHash)) {
         return this.memory.publish(key, cached.body);
       }
-      if (cached !== undefined) void storageDeadline(storage.store.remove(key));
+      if (cached !== undefined)
+        void storageDeadline(attempt(() => storage.store.remove(key)));
     }
     return await this.scheduler.schedule(priority, valid, async () => {
       const body = await this.executor.prepare(
@@ -342,7 +415,7 @@ export class EmailRenderCache implements EmailPreparation {
     };
     const persist = async () => {
       const storage = await this.getStorage();
-      if (!storage || !valid()) return;
+      if (!storage || !valid() || this.options.mayPersist?.() === false) return;
       const association = {
         id,
         threadId: request.threadId,
@@ -350,8 +423,14 @@ export class EmailRenderCache implements EmailPreparation {
         sourceHash,
         keys: [key],
       };
+      const written = (current: boolean) => {
+        if (current === false && !this.disposed)
+          this.options.onStaleGeneration?.();
+      };
       try {
-        await storage.store.write(storage.generation, artifact, association);
+        written(
+          await storage.store.write(storage.generation, artifact, association)
+        );
       } catch (error) {
         // Quota, denial, and corruption are cache failures, never mail failures.
         if (
@@ -362,10 +441,12 @@ export class EmailRenderCache implements EmailPreparation {
           try {
             await storage.store.evict();
             if (valid())
-              await storage.store.write(
-                storage.generation,
-                artifact,
-                association
+              written(
+                await storage.store.write(
+                  storage.generation,
+                  artifact,
+                  association
+                )
               );
           } catch {
             this.options.store = undefined;
@@ -379,7 +460,7 @@ export class EmailRenderCache implements EmailPreparation {
     for (const [id, binding] of this.bindings) {
       for (const [policy, variant] of binding.variants) {
         if (binding.variants.size <= 8) break;
-        if (variant.consumers || variant.pending) continue;
+        if (variant.consumers.size || variant.pending) continue;
         binding.variants.delete(policy);
         const bytes = variantBytes(policy);
         binding.bytes -= bytes;
@@ -392,7 +473,7 @@ export class EmailRenderCache implements EmailPreparation {
         continue;
       if (
         [...binding.variants.values()].some(
-          (variant) => variant.consumers || variant.pending
+          (variant) => variant.consumers.size || variant.pending
         )
       )
         continue;

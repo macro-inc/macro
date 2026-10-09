@@ -27,11 +27,12 @@ export interface Association {
 export interface ArtifactStore {
   generation(): Promise<number>;
   read(key: string): Promise<unknown>;
+  /** Resolves false only when storage was invalidated after `generation`. */
   write(
     generation: number,
     artifact: Artifact,
     association: Association
-  ): Promise<void>;
+  ): Promise<boolean>;
   remove(key: string): Promise<void>;
   invalidate(): Promise<void>;
   evict?(): Promise<void>;
@@ -65,6 +66,11 @@ export function validArtifact(
 
 export function artifactBytes(body: PreparedEmailBody): number {
   return 2 * body.html.length + 1024;
+}
+
+/** Runs an adapter call so that a synchronous throw becomes a rejection. */
+export async function attempt<T>(work: () => Promise<T>): Promise<T> {
+  return await work();
 }
 
 /** Storage failure/latency must never gate a foreground body indefinitely. */

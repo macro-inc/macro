@@ -405,4 +405,65 @@ describe('stable email host', () => {
       second.dispose();
     }
   });
+  it('settles when the cache goes away while it re-prepares the shown body', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const input = { html: '<p>Shown</p>' };
+    const ready = prepareEmailBody(input);
+    const instant: EmailPreparation = {
+      acquire: () => ({
+        ready,
+        promise: Promise.resolve(ready),
+        promote() {},
+        release() {},
+      }),
+    };
+    const hanging: EmailPreparation = {
+      acquire: () => ({
+        ready: undefined,
+        promise: new Promise<PreparedEmailBody>(() => {}),
+        promote() {},
+        release() {},
+      }),
+    };
+    const app = createRoot((dispose) => {
+      const [preparation, setPreparation] = createSignal<
+        EmailPreparation | undefined
+      >(instant);
+      const body = createStableEmailMessageBody(
+        {
+          message: message('settle', { body_html_sanitized: input.html }),
+          isPersonal: true,
+          isBodyExpanded: () => true,
+          setExpandedMessageBody() {},
+          setFocusedMessageId() {},
+          isFocused: false,
+        },
+        {
+          theme: () => theme,
+          resolveImages: async () => {},
+          get preparation() {
+            return preparation();
+          },
+        }
+      );
+      return { dispose, body, setPreparation };
+    });
+    try {
+      await vi.waitFor(() => expect(app.body.host()).toBeDefined());
+      const host = app.body.host();
+      app.setPreparation(hanging);
+      expect(app.body.isPending()).toBe(true);
+      app.setPreparation(undefined);
+      expect(app.body.isPending()).toBe(false);
+      expect(app.body.host()).toBe(host);
+    } finally {
+      app.dispose();
+    }
+  });
 });

@@ -93,9 +93,13 @@ export function createStableEmailMessageBody(
     { equals: sameRequest }
   );
 
+  // Depend on the decision, not on the auth signals behind it: user info
+  // resolving after mount must not rebuild bodies that stay renderable.
+  const allowed = createMemo(() => context.canRender?.() !== false);
+
   const state = createMemo(() => {
     identity();
-    context.canRender?.();
+    allowed();
     const [body, setBody] = createSignal<PreparedEmailBody>();
     const [host, setHost] = createSignal<HTMLElement>();
     const [pending, setPending] = createSignal(false);
@@ -117,6 +121,8 @@ export function createStableEmailMessageBody(
       rendered: undefined as PreparedEmailBody | undefined,
       presentation: '',
       disposed: false,
+      accepted: undefined as EmailPreparationRequest | undefined,
+      aborts: 0,
     };
     onCleanup(() => {
       current.disposed = true;
@@ -136,7 +142,13 @@ export function createStableEmailMessageBody(
   const showFullHTML = () => state().fullHTML();
   const setShowFullHTML = (value: boolean) =>
     batch(() => {
-      if (wantsFullHTML() === value && state().error())
+      const current = state();
+      // Ask again when the requested variant failed or never arrived.
+      if (
+        wantsFullHTML() === value &&
+        (current.error() ||
+          (!current.pending() && current.fullHTML() !== value))
+      )
         setAttempt((attempt) => attempt + 1);
       setQuoted({ identity: identity(), value });
     });
@@ -146,11 +158,23 @@ export function createStableEmailMessageBody(
   createEffect(() => {
     attempt();
     const current = state();
-    if (context.canRender?.() === false) return;
+    if (!allowed()) return;
     const selected = request();
     // A new session cache (invalidation or flag change) re-acquires like any
     // other request change: the displayed body stays until its replacement.
     const preparation = context.preparation;
+    // Without a cache (sign-out in progress, flag off), a displayed body that
+    // was prepared for this exact request is kept instead of re-parsed.
+    if (
+      !preparation &&
+      current.accepted &&
+      !current.error() &&
+      sameRequest(current.accepted, selected)
+    ) {
+      // A re-acquisition the cache was running for it is moot now.
+      current.setPending(false);
+      return;
+    }
     let active = true;
     let lease: PreparedEmailLease | undefined;
     current.setError(false);
@@ -161,6 +185,8 @@ export function createStableEmailMessageBody(
       }
       if (current.lease !== lease) current.lease?.release();
       current.lease = lease;
+      current.accepted = selected;
+      current.aborts = 0;
       batch(() => {
         current.setBody(body);
         current.setFullHTML(selected.options.showQuotedContent ?? false);
@@ -172,9 +198,30 @@ export function createStableEmailMessageBody(
         accept(await lease!.promise);
       } catch (error) {
         if (!active || current.disposed) return;
-        current.setPending(false);
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          current.setError(true);
+        // Cancelled while this body still wants it (another consumer replaced
+        // the source, say): acquire again a few times.
+        if (
+          error instanceof DOMException &&
+          error.name === 'AbortError' &&
+          current.aborts++ < 3
+        ) {
+          batch(() => {
+            current.setPending(false);
+            setAttempt((value) => value + 1);
+          });
+          return;
+        }
+        // The cache could not serve this body. Prepare it directly, as without
+        // the cache, and only offer a retry when that fails too.
+        lease?.release();
+        lease = undefined;
+        try {
+          accept(prepareEmailBody(selected.input, selected.options));
+        } catch {
+          batch(() => {
+            current.setPending(false);
+            current.setError(true);
+          });
         }
       }
     }
@@ -216,7 +263,7 @@ export function createStableEmailMessageBody(
     const current = state();
     const body = current.body();
     const htmlEnabled =
-      context.canRender?.() !== false &&
+      allowed() &&
       !(!showFullHTML() && props.message.body_macro) &&
       !!props.message.body_html_sanitized;
     if (!htmlEnabled) {

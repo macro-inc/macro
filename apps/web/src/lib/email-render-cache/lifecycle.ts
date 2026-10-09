@@ -1,4 +1,11 @@
-export type RenderInvalidation = 'reset' | 'session-ended';
+/**
+ * - `reset`: this tab learned something other tabs may not have; clear storage
+ *   and tell them.
+ * - `local`: every tab observes the event itself (sync events, cache resets);
+ *   clear storage without rebroadcasting, which would multiply the churn.
+ * - `session-ended`: an explicit sign-out; other tabs stop caching for it.
+ */
+export type RenderInvalidation = 'reset' | 'local' | 'session-ended';
 type InvalidationListener = (reason: RenderInvalidation) => Promise<void>;
 const listeners = new Set<InvalidationListener>();
 

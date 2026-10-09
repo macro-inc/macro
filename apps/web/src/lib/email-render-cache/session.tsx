@@ -1,10 +1,10 @@
 import { prepareEmailThreads } from '@app/features/email-thread/preparation-adapter';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { clearLocalAuthSession } from '@core/auth/logout';
 import { enableEmailRenderCache } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import { isMobile } from '@core/mobile/isMobile';
+import { hasLoginCookie, onLoginStorageChange } from '@core/util/cookies';
 import { isTauri } from '@core/util/platform';
 import { registerCacheResetListener } from '@graphql-cache/lifecycle';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
@@ -40,24 +40,73 @@ export function EmailRenderCacheProvider(props: ParentProps) {
   createEffect(() => {
     if (user.isAuthenticated() === false) setEndedViewer(undefined);
   });
+  /** Resumes an ended viewer only when the server confirms that identity. */
+  async function confirmSignedBackIn(ended: string) {
+    try {
+      // Loaded on demand: this rare path is the provider's only use of it.
+      const { fetchUserInfo } = await import('@queries/auth/user-info');
+      const info = await fetchUserInfo();
+      if (
+        info.authenticated &&
+        info.id === ended &&
+        untrack(endedViewer) === ended
+      )
+        setEndedViewer(undefined);
+    } catch {
+      // Unconfirmed: stay ended. A later sign-in or reload resumes caching.
+    }
+  }
   const viewer = createMemo(() =>
     user.isAuthenticated() === true && user.userId() !== endedViewer()
       ? user.userId()
       : undefined
   );
+  // Another tab signing out removes the durable marker: end this viewer here
+  // too, even if its broadcast never arrives. Signing in carries no identity,
+  // so the ended one resumes only once the server confirms it signed back in.
+  onCleanup(
+    onLoginStorageChange((signedIn) => {
+      const identity = untrack(viewer);
+      const ended = untrack(endedViewer);
+      if (!signedIn) {
+        if (identity) setEndedViewer(identity);
+      } else if (ended) void confirmSignedBackIn(ended);
+    })
+  );
   const [epoch, setEpoch] = createSignal(0);
-  let barrier: Promise<unknown> = Promise.resolve();
-  let resetCurrent: ((sessionEnded: boolean) => Promise<void>) | undefined;
+  // Storage waits for every clear this tab started; results are dropped so
+  // the chain does not retain them for the tab's lifetime.
+  let barrier: Promise<void> = Promise.resolve();
+  const join = (work: Promise<unknown>) => {
+    const previous = barrier;
+    barrier = (async () => {
+      await Promise.allSettled([previous, work]);
+    })();
+  };
+  let resetCurrent:
+    | ((sessionEnded: boolean, broadcast: boolean) => Promise<void>)
+    | undefined;
+  // Kept after disposal: a sign-out confirmed after a 401 already ended the
+  // session must still be announced to other tabs.
+  let latest: ReturnType<typeof createEmailRenderSession> | undefined;
   const unregister = registerEmailRenderInvalidation(async (reason) => {
     const sessionEnded = reason === 'session-ended';
-    const clearing = resetCurrent?.(sessionEnded);
-    if (clearing) barrier = Promise.allSettled([barrier, clearing]);
-    if (sessionEnded) setEndedViewer(user.userId());
-    else setEpoch((value) => value + 1);
+    const clearing = resetCurrent
+      ? resetCurrent(sessionEnded, reason !== 'local')
+      : sessionEnded
+        ? latest?.invalidate(true)
+        : undefined;
+    if (clearing) join(clearing);
+    // A sign-out pins the ended identity until auth reports signed out. When
+    // it already does, there is no session to end and nothing to pin.
+    if (sessionEnded) {
+      if (user.isAuthenticated() === true) setEndedViewer(user.userId());
+    } else setEpoch((value) => value + 1);
     await barrier;
   });
   onCleanup(unregister);
-  onCleanup(registerCacheResetListener(() => invalidateEmailRenders()));
+  // Every tab observes a normalized-cache identity reset itself.
+  onCleanup(registerCacheResetListener(() => invalidateEmailRenders('local')));
 
   const enabled = createMemo(() => flag().enabled);
   const native = isTauri();
@@ -87,8 +136,6 @@ export function EmailRenderCacheProvider(props: ParentProps) {
     }
     // Keep namespace/logout ownership even when the feature is disabled: cold
     // artifacts and another tab's enabled cache still belong to this viewer.
-    const sessionEnded = () =>
-      user.isAuthenticated() !== true || user.userId() !== identity;
     const session = createEmailRenderSession({
       origin: location.origin,
       environment: import.meta.env.MODE,
@@ -98,14 +145,13 @@ export function EmailRenderCacheProvider(props: ParentProps) {
       native,
       mobile: untrack(isMobile),
       waitForInvalidation: () => barrier,
+      isSignedIn: hasLoginCookie,
       onRemoteInvalidation(ended, clearing) {
-        barrier = Promise.allSettled([barrier, clearing]);
-        // End auth before cached source can be reused under a cleared
-        // generation. A disabled tab holds no prepared bodies to protect.
-        if (ended && enabled()) {
-          setEndedViewer(identity);
-          void clearLocalAuthSession();
-        } else setEpoch((value) => value + 1);
+        join(clearing);
+        // Another tab signed out: stop caching for this identity, whatever the
+        // flag says now. Auth itself follows the app's own 401 handling.
+        if (ended) setEndedViewer(identity);
+        else setEpoch((value) => value + 1);
       },
     });
     onCleanup(
@@ -116,12 +162,15 @@ export function EmailRenderCacheProvider(props: ParentProps) {
       })
     );
 
-    resetCurrent = (ended) => session.invalidate(ended || sessionEnded());
+    // Only an explicit sign-out reports a session end; an account switch or
+    // an unconfirmed 401 must never sign other tabs out.
+    resetCurrent = (ended, broadcast) => session.invalidate(ended, broadcast);
+    latest = session;
     onCleanup(() => {
       stopHydration();
       // Account switches and owner disposal clear cold artifacts too. Browser
       // reloads do not run Solid cleanup and therefore retain persistence.
-      barrier = Promise.allSettled([barrier, session.dispose(sessionEnded())]);
+      join(session.dispose());
     });
     return session;
   });

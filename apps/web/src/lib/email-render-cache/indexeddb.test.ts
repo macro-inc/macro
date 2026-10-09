@@ -102,7 +102,7 @@ describe('IndexedDB artifact store', () => {
     const store = open();
     expect(await store.generation()).toBe(0);
     const value = artifact('a', 1);
-    await store.write(0, value, association('message', 'a'));
+    expect(await store.write(0, value, association('message', 'a'))).toBe(true);
     expect(await store.read('a')).toEqual(value);
     const contents = await dump();
     expect(contents.state.bytes).toBe(accountedBytes(contents));
@@ -111,8 +111,17 @@ describe('IndexedDB artifact store', () => {
   it('rejects a write from an older generation and one larger than the budget', async () => {
     const store = open(4096);
     await store.invalidate();
-    await store.write(0, artifact('stale', 1), association('message', 'stale'));
-    await store.write(1, artifact('huge', 1, 4096), association('m', 'huge'));
+    expect(
+      await store.write(
+        0,
+        artifact('stale', 1),
+        association('message', 'stale')
+      )
+    ).toBe(false);
+    // Too large to keep, but not stale: the caller must not treat it as such.
+    expect(
+      await store.write(1, artifact('huge', 1, 4096), association('m', 'huge'))
+    ).toBe(true);
     const contents = await dump();
     expect(contents.artifacts).toEqual([]);
     expect(contents.associations).toEqual([]);

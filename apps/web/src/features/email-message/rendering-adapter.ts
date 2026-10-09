@@ -18,12 +18,13 @@ export function createEmailRenderingContext(): EmailRenderingContextValue {
   const theme = createEmailTheme();
   return {
     theme,
-    // Revoke only on definitive sign-out or an account switch. An unknown auth
-    // state, such as an offline cold start, keeps rendering cached mail.
+    // Revoke only once the identity is cleared (a confirmed sign-out stores
+    // an empty one) or replaced by another account. A raw 401 keeps the
+    // retained identity, and an unknown one (cold start) keeps rendering.
     canRender: () => {
-      if (user.isAuthenticated() === false) return false;
       const id = user.userId();
-      return !id || id === owner();
+      if (id === undefined) return true;
+      return id !== '' && id === (owner() ?? id);
     },
     get preparation() {
       return cache();

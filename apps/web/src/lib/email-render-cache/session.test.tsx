@@ -93,6 +93,9 @@ describe('session ownership', () => {
     Channel.instances = [];
     vi.stubGlobal('crypto', webcrypto);
     vi.stubGlobal('BroadcastChannel', Channel);
+    // jsdom has no IndexedDB; clears only need it to exist (the store is mocked).
+    vi.stubGlobal('indexedDB', {});
+    localStorage.setItem('macro:login', 'true');
   });
   afterEach(async () => {
     await invalidateEmailRenders('session-ended');
@@ -149,7 +152,7 @@ describe('session ownership', () => {
     }
   });
 
-  it('runs local auth cleanup on another tab ending the viewer session', async () => {
+  it('stops caching for an identity another tab signed out, without signing this tab out', async () => {
     const app = mount(true);
     roots.push(app.dispose);
     await vi.waitFor(() =>
@@ -159,8 +162,62 @@ describe('session ownership', () => {
       data: { kind: 'invalidate', sessionEnded: true },
     } as MessageEvent);
     expect(app.read()).toBeUndefined();
-    expect(mocks.logout).toHaveBeenCalledOnce();
     expect(mocks.dispose).toHaveBeenCalled();
+    // Auth follows the app's own 401 handling, never this broadcast.
+    expect(mocks.logout).not.toHaveBeenCalled();
+    // A sign-in elsewhere carries no identity, so it never re-enables caching
+    // for the identity that ended.
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'macro:login', newValue: 'true' })
+    );
+    expect(app.read()).toBeUndefined();
+  });
+
+  it('ends this viewer when another tab removes the sign-in marker', async () => {
+    const app = mount(true);
+    roots.push(app.dispose);
+    await vi.waitFor(() => expect(app.read()).toBeDefined());
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'macro:login', newValue: null })
+    );
+    expect(app.read()).toBeUndefined();
+    expect(mocks.logout).not.toHaveBeenCalled();
+  });
+
+  it('announces a sign-out confirmed after a 401 already ended the session', async () => {
+    const app = mount(true);
+    roots.push(app.dispose);
+    await vi.waitFor(() =>
+      expect(Channel.instances[0]?.onmessage).toBeDefined()
+    );
+    app.setAuthenticated(false);
+    await invalidateEmailRenders('session-ended');
+    expect(mocks.broadcast).toHaveBeenCalledWith({
+      kind: 'invalidate',
+      sessionEnded: true,
+    });
+  });
+
+  it('treats a sign-out it missed as ended when its channel connects', async () => {
+    localStorage.removeItem('macro:login');
+    const app = mount(true);
+    roots.push(app.dispose);
+    await vi.waitFor(() => expect(app.read()).toBeUndefined());
+    expect(mocks.logout).not.toHaveBeenCalled();
+  });
+
+  it('never reports an account switch or unconfirmed 401 as a sign-out', async () => {
+    const app = mount(true);
+    roots.push(app.dispose);
+    await vi.waitFor(() =>
+      expect(Channel.instances[0]?.onmessage).toBeDefined()
+    );
+    app.setAuthenticated(false);
+    await vi.waitFor(() => expect(mocks.broadcast).toHaveBeenCalled());
+    expect(mocks.broadcast).not.toHaveBeenCalledWith({
+      kind: 'invalidate',
+      sessionEnded: true,
+    });
   });
   it('keeps the session and its storage when the flag resolves after mount', async () => {
     const app = mount(false, true);

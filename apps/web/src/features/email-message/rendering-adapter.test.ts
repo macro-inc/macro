@@ -41,6 +41,16 @@ describe('email rendering ownership', () => {
     }
   });
 
+  it('keeps rendering through an unconfirmed 401 that retains the identity', () => {
+    const app = mount({ authenticated: true, id: 'viewer' });
+    try {
+      app.setAuthenticated(false);
+      expect(app.canRender()).toBe(true);
+    } finally {
+      app.dispose();
+    }
+  });
+
   it('revokes on sign-out but keeps rendering through an unknown auth state', () => {
     const app = mount({ authenticated: true, id: 'viewer' });
     try {

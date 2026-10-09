@@ -137,6 +137,30 @@ describe('prepared email cache', () => {
     next.release();
     cache.dispose();
   });
+  it('reports a write rejected for a newer generation, but not after disposal', async () => {
+    const onStaleGeneration = vi.fn();
+    const write = vi.fn(async () => false);
+    const store: ArtifactStore = {
+      generation: async () => 0,
+      read: async () => undefined,
+      write,
+      remove: vi.fn(),
+      invalidate: vi.fn(),
+      close: vi.fn(),
+    };
+    const { cache } = setup({ store: async () => store, onStaleGeneration });
+    const lease = cache.acquire(request);
+    await lease.promise;
+    await vi.waitFor(() => expect(onStaleGeneration).toHaveBeenCalledOnce());
+    const late = cache.acquire({ ...request, messageId: 'late' });
+    await late.promise;
+    cache.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(onStaleGeneration).toHaveBeenCalledOnce();
+    lease.release();
+    late.release();
+  });
+
   it('frames source and policy inputs without merging absent, empty, or distinct flags', () => {
     expect(sourceTuple({})).not.toBe(sourceTuple({ html: '' }));
     expect(sourceTuple({ html: 'a', text: 'b' })).not.toBe(
@@ -253,7 +277,9 @@ describe('prepared email cache', () => {
       generation: async () => 4,
       read: async (key) => records.get(key),
       write: async (generation, artifact) => {
-        if (generation === 4) records.set(artifact.key, artifact);
+        if (generation !== 4) return false;
+        records.set(artifact.key, artifact);
+        return true;
       },
       remove: async (key) => {
         records.delete(key);

@@ -2,6 +2,10 @@ export function cancelled(): DOMException {
   return new DOMException('Email preparation cancelled', 'AbortError');
 }
 
+export function isCancelled(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 interface Job {
   priority: () => number;
   valid: () => boolean;
@@ -22,9 +26,11 @@ export class PreparationScheduler {
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       if (this.disposed || !valid()) return reject(cancelled());
+      // Abandoned jobs wait to be dequeued; they must not hold the cap.
       if (
         priority() > 0 &&
-        this.queue.filter((job) => job.priority() > 0).length >= 32
+        this.queue.filter((job) => job.priority() > 0 && job.valid()).length >=
+          32
       )
         return reject(cancelled());
       this.queue.push({

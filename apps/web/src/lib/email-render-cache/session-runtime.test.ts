@@ -133,7 +133,9 @@ it('disposes immediately and joins a pending reset when logout overtakes it', as
   await Promise.all([reset, ended]);
   expect(settled).toBe(true);
   expect(values.size).toBe(0);
-  expect(invalidate).toHaveBeenCalledOnce();
+  // The sign-out clears again once the reset's clear settles: other tabs may
+  // have written in between, and they leave storage to the signing-out tab.
+  expect(invalidate).toHaveBeenCalledTimes(2);
 });
 
 it('does not open storage after disposal while waiting for a previous invalidation', async () => {
@@ -203,4 +205,43 @@ it('creates no storage when a disabled session clears a namespace that never had
       )
     )
   ).toBe(true);
+});
+
+it('heals a missed invalidation when a write meets a newer generation', async () => {
+  const name = `macro-email-renders-${await namespace()}`;
+  const count = async () => {
+    const db = await new Promise<IDBDatabase>((resolve) => {
+      const opening = indexedDB.open(name, 1);
+      opening.onsuccess = () => resolve(opening.result);
+    });
+    const total = await new Promise<number>((resolve) => {
+      const query = db
+        .transaction('artifacts')
+        .objectStore('artifacts')
+        .count();
+      query.onsuccess = () => resolve(query.result);
+    });
+    db.close();
+    return total;
+  };
+  const notify = vi.fn<EmailRenderSessionOptions['onRemoteInvalidation']>();
+  const stale = start({ onRemoteInvalidation: notify });
+  const opened = stale.cache.acquire(request);
+  await opened.promise;
+  opened.release();
+  await vi.waitFor(async () => expect(await count()).toBe(1));
+  // Another tab invalidates; this fake channel never delivers its broadcast.
+  await start().invalidate();
+  const next = stale.cache.acquire({
+    ...request,
+    messageId: 'next',
+    input: { html: '<p>Next</p>' },
+  });
+  await next.promise;
+  next.release();
+  await vi.waitFor(() =>
+    expect(notify).toHaveBeenCalledWith(false, expect.any(Promise))
+  );
+  expect(() => stale.cache.acquire(request)).toThrow('cancelled');
+  expect(await count()).toBe(0);
 });
