@@ -115,7 +115,7 @@ test('a returning visitor on sign-up can switch to sign in', async ({
   ).toBeVisible();
   await page.getByRole('button', { name: 'Sign in instead' }).click();
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Welcome to Macro' })
+    page.getByRole('heading', { level: 1, name: 'Welcome to Macaro' })
   ).toBeVisible();
   await page.getByRole('button', { name: 'Continue with email' }).click();
   await signInWithCode(page, 'returning@acme.com', '424242');

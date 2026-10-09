@@ -18,7 +18,7 @@ export function OnboardingCreateAccount() {
     <div class="flex flex-col gap-6">
       <div class="flex flex-col gap-4">
         <h1 class="text-2xl font-semibold tracking-tight text-ink">
-          Welcome to Macro
+          Welcome to Macaro
         </h1>
         <p class="text-sm/relaxed text-ink-muted">
           Connect a Gmail account to start syncing your emails, contacts, and
@@ -26,7 +26,7 @@ export function OnboardingCreateAccount() {
         </p>
         <p class="text-sm/relaxed text-ink-muted">
           This will be your primary email account that you will use to sign in
-          to Macro.
+          to Macaro.
         </p>
       </div>
 

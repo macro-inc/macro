@@ -23,7 +23,7 @@ export function MobileAuthWelcome() {
         <Surface depth={1}>
           <div class="flex flex-col items-center gap-2 py-10">
             <LogoIcon class="size-20 text-ink" />
-            <div class="text-lg font-medium">Welcome to Macro</div>
+            <div class="text-lg font-medium">Welcome to Macaro</div>
           </div>
           <div class="flex flex-col gap-3 px-8 pb-8">
             <Button

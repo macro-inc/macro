@@ -95,9 +95,9 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
           }
         >
           <div class="flex flex-col gap-2">
-            <h3 class="text-3xl font-semibold text-ink">Welcome to Macro</h3>
+            <h3 class="text-3xl font-semibold text-ink">Welcome to Macaro</h3>
             <p class="text-base text-ink/60 text-balance">
-              Take a quick tour of Macro’s core features.
+              Take a quick tour of Macaro’s core features.
             </p>
           </div>
           <div class="w-full max-w-xs flex flex-col gap-2 pt-2">

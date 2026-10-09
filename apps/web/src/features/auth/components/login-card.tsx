@@ -40,7 +40,7 @@ export function LoginCard(props: {
               <div class="flex flex-col gap-1.5">
                 <LogoIcon class="mb-2 size-9 text-accent" />
                 <h1 class="font-semibold tracking-tight text-ink text-2xl">
-                  Welcome to Macro
+                  Welcome to Macaro
                 </h1>
                 <p class="text-sm text-ink-muted">The open source workspace</p>
               </div>
