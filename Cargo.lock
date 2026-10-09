@@ -469,6 +469,7 @@ dependencies = [
  "model_owner",
  "notification",
  "pipedream_mcp",
+ "prompt",
  "properties",
  "rdkafka",
  "redis",

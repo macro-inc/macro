@@ -1665,13 +1665,15 @@ scope; desktop's default scope remains **Involves me**.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. An open PR also shows a **Merge** button in the
-top bar beside **Changes**. It opens a confirmation with the repository, PR number,
+side panel below the top bar. An open PR that is not a draft, and whose checks
+have all finished with a success, skipped, or neutral conclusion, also shows a
+**Merge** button in the top bar beside **Changes**. It opens a confirmation with the repository, PR number,
 and title, then merges on GitHub as the signed-in user through their linked account.
 GitHub's permissions and branch protections decide; a refusal appears as a toast
 with GitHub's reason, and a merge refreshes the PR status in place. Without a linked
-GitHub account the toast points to Settings. Merged and closed PRs have no Merge
-button. PRs are not tasks and do not appear in the Tasks list.
+GitHub account the toast points to Settings. Draft PRs, PRs with no checks, and PRs
+whose checks are still running or failing have no Merge button. Merged and closed
+PRs have no Merge button. PRs are not tasks and do not appear in the Tasks list.
 The metadata pills beneath the PR title include linked agent sessions, using the
 agent sparkle icon. A single session shows its name; several sessions show a
 count chip opening a session list. Selecting a session opens it, with Shift-click

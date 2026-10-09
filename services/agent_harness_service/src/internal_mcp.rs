@@ -87,10 +87,7 @@ impl ServerHandler for InternalTools {
             env!("CARGO_PKG_VERSION"),
         )
         .with_title("Macro Internal MCP");
-        info.instructions = Some(
-            "When you create or start working on a pull request, register its URL with Macro using macro_internal.set_pull_request. \
-             Save any screenshot or screen recording meant for the user into your artifacts directory and refer to it in prose by file name only, never by a sandbox path: Macro re-hosts uploaded artifacts and cannot reach files anywhere else.".into(),
-        );
+        info.instructions = Some(prompt::pull_requests::internal_mcp_instructions());
         info
     }
 
