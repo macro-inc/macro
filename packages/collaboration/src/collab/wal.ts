@@ -85,16 +85,20 @@ export class BrowserWALStore<T> implements WALStore<T> {
     const db = await idbOpen<WALSchema<unknown>>(dbName, DB_VERSION, {
       upgrade: upgradeWAL,
     });
-    const scopeIds: string[] = [];
-    let cursor = await db
-      .transaction('updates')
-      .store.index('scopeId')
-      .openKeyCursor(null, 'nextunique');
-    while (cursor) {
-      scopeIds.push(cursor.key);
-      cursor = await cursor.continue();
+    try {
+      const scopeIds: string[] = [];
+      let cursor = await db
+        .transaction('updates')
+        .store.index('scopeId')
+        .openKeyCursor(null, 'nextunique');
+      while (cursor) {
+        scopeIds.push(cursor.key);
+        cursor = await cursor.continue();
+      }
+      return scopeIds;
+    } finally {
+      db.close();
     }
-    return scopeIds;
   }
 
   public async append(update: T): Promise<void> {

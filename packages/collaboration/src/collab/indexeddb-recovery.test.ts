@@ -25,6 +25,36 @@ afterEach(() => {
 });
 
 describe('collaboration IndexedDB recovery', () => {
+  it.each(['success', 'cursor failure'])(
+    'closes the scope-listing connection after %s',
+    async (outcome) => {
+      const first = new BrowserWALStore<number>('wal', 'first');
+      const second = new BrowserWALStore<number>('wal', 'second');
+      await first.append(1);
+      await first.append(2);
+      await second.append(3);
+
+      if (outcome === 'cursor failure') {
+        const error = new Error('Cursor iteration failed');
+        vi.spyOn(IDBCursor.prototype, 'continue').mockImplementationOnce(() => {
+          throw error;
+        });
+        await expect(BrowserWALStore.listScopeIds('wal')).rejects.toBe(error);
+      } else {
+        await expect(BrowserWALStore.listScopeIds('wal')).resolves.toEqual([
+          'first',
+          'second',
+        ]);
+      }
+
+      expect(() => connections.at(-1)!.transaction('updates')).toThrow(
+        expect.objectContaining({ name: 'InvalidStateError' })
+      );
+      expect(await first.count()).toBe(2);
+      expect(await second.count()).toBe(1);
+    }
+  );
+
   it('flushes persisted edits after the WAL connection closes', async () => {
     const store = new BrowserWALStore<Uint8Array>('wal', 'doc');
     const push = vi.fn(async (_updates: Uint8Array[]) => true);
