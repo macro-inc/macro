@@ -4,7 +4,7 @@ import {
   setCreateMenuOpen,
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
-import { openCreateCompanyModal } from '@app/features/crm/crm-create';
+import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
 import { hapticImpact } from '@core/mobile/haptics';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CalendarIcon from '@phosphor/calendar-blank.svg';

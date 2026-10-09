@@ -13,9 +13,9 @@ import {
 } from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
-  CreateCompanyModal,
-  CreateContactModal,
-} from '@app/features/crm/crm-create';
+  companyCreation,
+  contactCreation,
+} from '@app/features/crm/creation-adapter';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
@@ -57,6 +57,7 @@ import { type as osType } from '@tauri-apps/plugin-os';
 import { cn, ImperativeDialogHost } from '@ui';
 import {
   createEffect,
+  createMemo,
   createSignal,
   lazy,
   onCleanup,
@@ -103,6 +104,20 @@ const MobileSettings = lazyNamed(
   () => import('@app/features/settings/MobileSettings'),
   'MobileSettings'
 );
+// The CRM create dialogs pull in the database views and table model.
+const CreateCompanyModal = lazyNamed(
+  () => import('@app/features/crm/crm-create'),
+  'CreateCompanyModal'
+);
+const CreateContactModal = lazyNamed(
+  () => import('@app/features/crm/crm-create'),
+  'CreateContactModal'
+);
+
+/** True from the first time `opened` is, so a dialog loads on first open and can animate closed. */
+function hasOpened(opened: () => boolean) {
+  return createMemo((seen: boolean) => seen || opened(), false);
+}
 
 /**
  * The frame every page renders in: the macOS title bar, dialogs that can open
@@ -241,6 +256,11 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
 
+  const companyDialogUsed = hasOpened(companyCreation.open);
+  const contactDialogUsed = hasOpened(
+    () => contactCreation.target() !== undefined
+  );
+
   return (
     <AppProviders>
       <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -272,8 +292,16 @@ export function AppChrome(props: ParentProps) {
             <NativeShareSheet />
             <MacroMcpSetupModal />
             <CreateChannelModal />
-            <CreateCompanyModal />
-            <CreateContactModal />
+            <Show when={companyDialogUsed()}>
+              <Suspense>
+                <CreateCompanyModal />
+              </Suspense>
+            </Show>
+            <Show when={contactDialogUsed()}>
+              <Suspense>
+                <CreateContactModal />
+              </Suspense>
+            </Show>
             <Show when={isAddInboxDialogOpen()}>
               <AddInboxDialog />
             </Show>

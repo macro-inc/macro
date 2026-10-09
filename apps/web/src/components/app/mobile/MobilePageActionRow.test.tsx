@@ -49,7 +49,7 @@ vi.mock(
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarUiFlag: () => () => true,
 }));
-vi.mock('@app/features/crm/crm-create', () => ({
+vi.mock('@app/features/crm/creation-adapter', () => ({
   openCreateCompanyModal: mocks.openCompany,
 }));
 vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
