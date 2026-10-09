@@ -101,3 +101,30 @@ describe('markdown media loading', () => {
     expect(card.parentElement?.style.maxHeight).toBe('');
   });
 });
+
+describe('markdown image viewer', () => {
+  // The viewer's own content comes from the mocked Lightbox, so the open state
+  // is observed through the dialog overlay.
+  const viewerOpen = () => !!document.querySelector('.scrim-glass');
+
+  it('opens the viewer on a single click when there is no editable editor', () => {
+    render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="image"
+        url="https://files.macro.com/walkthrough.png"
+        alt="walkthrough.png"
+      />
+    ));
+
+    const image = document.querySelector('img');
+    if (!image) throw new Error('image not rendered');
+    // jsdom never loads the file; the decorator keys "ok" off this event.
+    image.dispatchEvent(new Event('load'));
+    expect(viewerOpen()).toBe(false);
+
+    image.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(viewerOpen()).toBe(true);
+  });
+});

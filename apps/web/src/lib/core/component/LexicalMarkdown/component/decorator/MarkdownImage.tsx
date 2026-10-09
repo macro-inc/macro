@@ -173,6 +173,13 @@ export function MarkdownImage(props: ImageDecoratorProps) {
     }
   };
 
+  const handleClick = () => {
+    // Outside an editable editor (channel messages, read-only documents) there
+    // is no node to select, so a click goes straight to the viewer.
+    if (editor()?.isEditable()) clickImageHandler();
+    else viewFull();
+  };
+
   const loadImage = () => {
     setState('ok');
     setImageDims([imageRef.naturalWidth, imageRef.naturalHeight]);
@@ -284,7 +291,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         }}
         onClick={(e: MouseEvent) => {
           e.preventDefault();
-          clickImageHandler();
+          handleClick();
         }}
         onDblClick={(e: MouseEvent) => {
           e.preventDefault();
