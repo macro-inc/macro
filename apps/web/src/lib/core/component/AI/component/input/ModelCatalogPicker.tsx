@@ -3,6 +3,7 @@ import CaretDown from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import SquaresFour from '@phosphor/squares-four.svg';
 import { cn, Dropdown } from '@ui';
 import {
   type Component,
@@ -349,52 +350,57 @@ export function ModelCatalogMenu(
                 catalog().frontier.length === 0
               }
               fallback={
-                <Show
-                  when={isMobileWidth()}
-                  fallback={
-                    <Dropdown.Sub>
-                      <Dropdown.SubTrigger class="h-8 gap-2">
-                        <span class="flex-1">More models</span>
-                        <CaretRight class="size-3.5" />
-                      </Dropdown.SubTrigger>
-                      <Dropdown.SubContent
-                        aria-label="All models"
-                        class="w-72 max-w-[calc(100vw-1rem)] max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto overscroll-contain"
-                        onOpenAutoFocus={(event: Event) =>
-                          event.preventDefault()
-                        }
-                        onPointerDown={(event: PointerEvent) =>
-                          event.stopPropagation()
-                        }
-                        onMouseDown={(event: MouseEvent) =>
-                          event.stopPropagation()
-                        }
-                      >
-                        <ModelCatalogMenu
-                          fullCatalog
-                          autoFocusSearch
-                          value={props.value}
-                          options={props.options}
-                          disabled={props.disabled}
-                          onSelect={props.onSelect}
-                          modelRow={Row}
-                          onClose={props.onClose}
-                        />
-                      </Dropdown.SubContent>
-                    </Dropdown.Sub>
-                  }
-                >
-                  <Dropdown.Item
-                    closeOnSelect={false}
-                    onSelect={() => {
-                      setShowAll(true);
-                      searchEl?.focus();
-                    }}
+                <div class="px-1.5 pb-1">
+                  <Show
+                    when={isMobileWidth()}
+                    fallback={
+                      <Dropdown.Sub>
+                        <Dropdown.SubTrigger class="h-8 gap-2">
+                          <SquaresFour class="size-4 shrink-0 text-ink-muted" />
+                          <span class="flex-1">More models</span>
+                          <CaretRight class="size-3.5" />
+                        </Dropdown.SubTrigger>
+                        <Dropdown.SubContent
+                          aria-label="All models"
+                          class="w-72 max-w-[calc(100vw-1rem)] max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto overscroll-contain"
+                          onOpenAutoFocus={(event: Event) =>
+                            event.preventDefault()
+                          }
+                          onPointerDown={(event: PointerEvent) =>
+                            event.stopPropagation()
+                          }
+                          onMouseDown={(event: MouseEvent) =>
+                            event.stopPropagation()
+                          }
+                        >
+                          <ModelCatalogMenu
+                            fullCatalog
+                            autoFocusSearch
+                            value={props.value}
+                            options={props.options}
+                            disabled={props.disabled}
+                            onSelect={props.onSelect}
+                            modelRow={Row}
+                            onClose={props.onClose}
+                          />
+                        </Dropdown.SubContent>
+                      </Dropdown.Sub>
+                    }
                   >
-                    <span class="flex-1">More models</span>
-                    <CaretRight class="size-3.5" />
-                  </Dropdown.Item>
-                </Show>
+                    <Dropdown.Item
+                      class="h-8 gap-2"
+                      closeOnSelect={false}
+                      onSelect={() => {
+                        setShowAll(true);
+                        searchEl?.focus();
+                      }}
+                    >
+                      <SquaresFour class="size-4 shrink-0 text-ink-muted" />
+                      <span class="flex-1">More models</span>
+                      <CaretRight class="size-3.5" />
+                    </Dropdown.Item>
+                  </Show>
+                </div>
               }
             >
               <Show when={showAll()}>

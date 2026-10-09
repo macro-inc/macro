@@ -170,8 +170,8 @@ function DesktopAgentPicker(props: AgentPickerProps) {
             </Show>
             <For each={groups()}>
               {(group) => (
-                <Dropdown.Group class="bg-transparent">
-                  <Dropdown.GroupLabel class="font-medium text-ink-muted">
+                <Dropdown.Group class="bg-transparent py-0">
+                  <Dropdown.GroupLabel class="h-6 font-medium text-ink-muted">
                     {group.label}
                   </Dropdown.GroupLabel>
                   <For each={group.agents}>

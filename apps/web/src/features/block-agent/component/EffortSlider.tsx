@@ -25,7 +25,7 @@ export function EffortSlider(props: {
   return (
     <Show when={choices().length > 1}>
       <div
-        class="flex items-center gap-3 px-3 py-1"
+        class="px-3 py-0.5"
         classList={{ 'opacity-50': props.disabled }}
         onKeyDown={(event) => {
           if (event.key !== 'Escape') event.stopPropagation();
@@ -34,20 +34,20 @@ export function EffortSlider(props: {
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
-        <span class="shrink-0 text-xs text-ink-muted">Effort</span>
-        <div class="relative min-w-0 flex-1 rounded-md focus-within:ring-1 focus-within:ring-edge-focus">
-          <div class="flex gap-0.5" aria-hidden="true">
+        <div
+          class="relative rounded-sm has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-edge-focus"
+          title={`Effort: ${label()}`}
+        >
+          <div class="flex h-6 items-center gap-1" aria-hidden="true">
             <For each={choices()}>
-              {(choice, position) => (
+              {(_, position) => (
                 <span
-                  class="flex h-7 min-w-0 flex-1 items-center justify-center rounded-md px-1 text-xs transition-colors"
+                  class="h-1.5 min-w-0 flex-1 rounded-sm transition-colors"
                   classList={{
-                    'bg-ink/10 text-ink font-medium': position() === index(),
-                    'text-ink-muted': position() !== index(),
+                    'bg-ink/60': position() <= index(),
+                    'bg-ink/10': position() > index(),
                   }}
-                >
-                  {choice.name}
-                </span>
+                />
               )}
             </For>
           </div>

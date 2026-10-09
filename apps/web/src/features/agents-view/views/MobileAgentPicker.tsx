@@ -10,6 +10,7 @@ import CaretRight from '@phosphor/caret-right.svg';
 import Check from '@phosphor/check.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import Plus from '@phosphor/plus.svg';
+import SquaresFour from '@phosphor/squares-four.svg';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';
@@ -217,15 +218,18 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                   )
                 }
               >
-                <MobileDrawer.Item
-                  onClick={() => {
-                    setShowAll(true);
-                    searchInput?.focus();
-                  }}
-                >
-                  <span class="flex-1">More models</span>
-                  <CaretRight class="size-4" />
-                </MobileDrawer.Item>
+                <MobileDrawer.Section class="rounded-none bg-transparent p-0">
+                  <MobileDrawer.Item
+                    onClick={() => {
+                      setShowAll(true);
+                      searchInput?.focus();
+                    }}
+                  >
+                    <SquaresFour class="size-4 shrink-0 text-ink-muted" />
+                    <span class="flex-1">More models</span>
+                    <CaretRight class="size-4" />
+                  </MobileDrawer.Item>
+                </MobileDrawer.Section>
               </Show>
               <Show when={modelSections().length === 0}>
                 <p role="status" class="px-4 py-3 text-sm text-ink-muted">
