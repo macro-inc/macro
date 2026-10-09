@@ -24,6 +24,22 @@ const snapshot: AiUsageSnapshot = {
 };
 
 describe('usage billing access', () => {
+  it('uses authoritative credit scope for a single-seat team and preserves the older-backend fallback', () => {
+    expect(
+      toUsageSummary({
+        ...snapshot,
+        tier: 'max',
+        credits_shared_with_team: true,
+      })
+    ).toMatchObject({ billingAccess: 'payer', creditScope: 'team' });
+    expect(
+      toUsageSummary({ ...snapshot, seats: 4, credits_shared_with_team: false })
+        .creditScope
+    ).toBe('personal');
+    expect(toUsageSummary({ ...snapshot, seats: 4 }).creditScope).toBe('team');
+    expect(toUsageSummary(snapshot).creditScope).toBe('personal');
+  });
+
   it('marks a Free payer as ineligible for credit purchases', () => {
     expect(toUsageSummary(snapshot)).toMatchObject({
       billingAccess: 'free',
@@ -77,6 +93,39 @@ describe('usage billing access', () => {
 });
 
 describe('automatic reload', () => {
+  it('decodes authoritative calendar-month budget facts and keeps legacy responses unknown', () => {
+    const auto_reload = {
+      minimum_balance_cents: 1_000,
+      target_balance_cents: 10_000,
+      monthly_spend_limit_cents: 5_000,
+      suspended: false,
+      active: true,
+    };
+    expect(
+      toUsageSummary({ ...snapshot, tier: 'max', auto_reload }).autoReload
+        .budget
+    ).toBeUndefined();
+    expect(
+      toUsageSummary({
+        ...snapshot,
+        tier: 'max',
+        auto_reload: {
+          ...auto_reload,
+          monthly_budget: {
+            committed_cents: 4_951,
+            resets_at: '2026-11-01T00:00:00Z',
+            limit_reached: true,
+          },
+        },
+      }).autoReload.budget
+    ).toEqual({
+      spentCents: 4_951,
+      limitCents: 5_000,
+      resetsAt: '2026-11-01T00:00:00Z',
+      limitReached: true,
+    });
+  });
+
   it('treats usage billing as the opt-in and reads thresholds from the backend', () => {
     expect(
       toUsageSummary({

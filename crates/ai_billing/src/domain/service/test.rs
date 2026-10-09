@@ -176,6 +176,7 @@ struct RepoState {
     charges: Vec<FakeCharge>,
     suspended: bool,
     reloads: Vec<FakeReload>,
+    reload_budget_payers: Vec<String>,
     auto_reload_suspended: bool,
     allowances: HashMap<DateTime<Utc>, PeriodAllowance>,
     usage_resets: Vec<(String, DateTime<Utc>, DateTime<Utc>)>,
@@ -185,6 +186,18 @@ struct RepoState {
 }
 
 impl RepoState {
+    fn reload_committed_cents(&self, month: BillingPeriod) -> i64 {
+        self.reloads
+            .iter()
+            .filter(|reload| {
+                (reload.status != CreditReloadStatus::Failed || reload.invoice.is_some())
+                    && month.start <= reload.created_at
+                    && reload.created_at < month.end
+            })
+            .map(|reload| reload.amount_cents)
+            .sum()
+    }
+
     fn ledger(&self, period_start: DateTime<Utc>) -> PeriodLedger {
         PeriodLedger {
             credits_consumed_cents: self.consumed.get(&period_start).copied().unwrap_or(0),
@@ -247,6 +260,16 @@ impl FakeRepo {
 }
 
 impl BillingRepo for FakeRepo {
+    async fn credit_reload_committed_cents(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        month: BillingPeriod,
+    ) -> Result<i64> {
+        let mut state = self.state.lock().unwrap();
+        state.reload_budget_payers.push(payer.as_ref().to_string());
+        Ok(state.reload_committed_cents(month))
+    }
+
     async fn legacy_seats(
         &self,
         _payer: &MacroUserIdStr<'_>,
@@ -584,16 +607,7 @@ impl BillingRepo for FakeRepo {
         let ledger = s.ledger(period_start);
         let covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
         let month = BillingPeriod::calendar_month(now);
-        let spent_this_month_cents = s
-            .reloads
-            .iter()
-            .filter(|r| {
-                r.status != CreditReloadStatus::Failed
-                    && month.start <= r.created_at
-                    && r.created_at < month.end
-            })
-            .map(|r| r.amount_cents)
-            .sum();
+        let spent_this_month_cents = s.reload_committed_cents(month);
         let amount_cents = plan_reload(
             ReloadState {
                 credit_balance_cents: s.balance,
@@ -1379,6 +1393,83 @@ async fn only_the_payer_manages_billing_and_needs_a_paid_plan() {
 }
 
 #[tokio::test]
+async fn summary_reports_calendar_month_commitments_and_minimum_reload_cap_status() {
+    let (service, repo, _, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    let now = Utc::now();
+    let month = BillingPeriod::calendar_month(now);
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.settings.auto_reload.monthly_limit_cents = Some(5_000);
+        for (amount_cents, status, invoice, created_at) in [
+            (2_500, CreditReloadStatus::Paid, Some("in_paid"), now),
+            (2_000, CreditReloadStatus::Pending, None, now),
+            (450, CreditReloadStatus::Failed, Some("in_retry"), now),
+            (10_000, CreditReloadStatus::Failed, None, now),
+            (
+                10_000,
+                CreditReloadStatus::Paid,
+                Some("in_old"),
+                month.start - chrono::Duration::seconds(1),
+            ),
+            (10_000, CreditReloadStatus::Paid, Some("in_next"), month.end),
+        ] {
+            state.reloads.push(FakeReload {
+                id: macro_uuid::generate_uuid_v7(),
+                amount_cents,
+                status,
+                invoice: invoice.map(str::to_string),
+                created_at,
+            });
+        }
+    }
+    // Manual credit balance does not consume the reload cap.
+    repo.set_balance(50_000);
+    let snapshot = service.snapshot(&payer).await.unwrap();
+    let budget = snapshot.auto_reload.monthly_budget.unwrap();
+    assert_eq!(budget.committed_cents, 4_950);
+    assert_eq!(budget.resets_at, month.end);
+    assert!(
+        !budget.limit_reached,
+        "exactly the minimum reload still fits"
+    );
+    repo.state.lock().unwrap().reloads.push(FakeReload {
+        id: macro_uuid::generate_uuid_v7(),
+        amount_cents: 1,
+        status: CreditReloadStatus::Paid,
+        invoice: Some("in_last_cent".to_string()),
+        created_at: now,
+    });
+    let budget = service
+        .snapshot(&payer)
+        .await
+        .unwrap()
+        .auto_reload
+        .monthly_budget
+        .unwrap();
+    assert_eq!(budget.committed_cents, 4_951);
+    assert!(budget.limit_reached);
+    let reads = repo.state.lock().unwrap().reload_budget_payers.len();
+    service.check_allowance(&payer).await.unwrap();
+    assert_eq!(repo.state.lock().unwrap().reload_budget_payers.len(), reads);
+    repo.state
+        .lock()
+        .unwrap()
+        .settings
+        .auto_reload
+        .monthly_limit_cents = None;
+    assert!(
+        service
+            .snapshot(&payer)
+            .await
+            .unwrap()
+            .auto_reload
+            .monthly_budget
+            .is_none()
+    );
+}
+
+#[tokio::test]
 async fn team_seats_keep_allowances_separate_and_share_credits() {
     let owner = user("owner@x.com");
     let member = user("member@x.com");
@@ -1398,6 +1489,12 @@ async fn team_seats_keep_allowances_separate_and_share_credits() {
     let usage = FakeUsage::default();
     usage.add(&member, Utc::now(), 3_000);
     let repo = FakeRepo::default();
+    repo.state
+        .lock()
+        .unwrap()
+        .settings
+        .auto_reload
+        .monthly_limit_cents = Some(5_000);
     let service = BillingServiceImpl::new(
         entitlements,
         usage,
@@ -1414,6 +1511,26 @@ async fn team_seats_keep_allowances_separate_and_share_credits() {
     let member_snapshot = service.snapshot(&member).await.unwrap();
     assert_eq!(member_snapshot.used_cents, 3_000);
     assert_eq!(member_snapshot.included_cents, 2_000);
+    assert_eq!(
+        owner_snapshot
+            .auto_reload
+            .monthly_budget
+            .unwrap()
+            .committed_cents,
+        0
+    );
+    assert_eq!(
+        member_snapshot
+            .auto_reload
+            .monthly_budget
+            .unwrap()
+            .committed_cents,
+        0
+    );
+    assert_eq!(
+        repo.state.lock().unwrap().reload_budget_payers,
+        vec![owner.as_ref().to_string(); 2]
+    );
     assert_eq!(
         member_snapshot.blocked_reason,
         Some(DenyReason::AllowanceExhausted)
@@ -3341,8 +3458,8 @@ async fn assert_upgrade_resets_snapshot_and_gate(pool: sqlx::PgPool, from: PlanT
     };
     usage_repo.insert_usage(&usage, true).await.unwrap();
     // Usage writes use the database clock, so place this fixture explicitly.
-    sqlx::query("UPDATE ai_usage SET created_at = $2 WHERE id = (SELECT id FROM ai_usage WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)")
-        .bind(payer.as_ref()).bind(usage.cost.created_at).execute(&pool).await.unwrap();
+    sqlx::query!("UPDATE ai_usage SET created_at = $2 WHERE id = (SELECT id FROM ai_usage WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)", payer.as_ref(), usage.cost.created_at)
+        .execute(&pool).await.unwrap();
     assert_eq!(svc.snapshot(&payer).await.unwrap().used_cents, 2_000);
     assert!(matches!(
         svc.check_allowance(&payer).await.unwrap(),
@@ -3376,8 +3493,8 @@ async fn assert_upgrade_resets_snapshot_and_gate(pool: sqlx::PgPool, from: PlanT
     usage.cost.price.as_mut().unwrap().total = 2.0;
     usage_repo.insert_usage(&usage, true).await.unwrap();
     // Usage writes use the database clock, so place this fixture explicitly.
-    sqlx::query("UPDATE ai_usage SET created_at = $2 WHERE id = (SELECT id FROM ai_usage WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)")
-        .bind(payer.as_ref()).bind(usage.cost.created_at).execute(&pool).await.unwrap();
+    sqlx::query!("UPDATE ai_usage SET created_at = $2 WHERE id = (SELECT id FROM ai_usage WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)", payer.as_ref(), usage.cost.created_at)
+        .execute(&pool).await.unwrap();
     BillingService::change_plan(&svc, &payer, change)
         .await
         .unwrap();

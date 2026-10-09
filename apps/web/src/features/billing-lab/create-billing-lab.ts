@@ -167,18 +167,7 @@ export function createBillingLab(initial: ScenarioId) {
     },
     autoReload: {
       settings: () => state().autoReload,
-      budget: () => {
-        const limitCents = state().autoReload.monthlySpendLimitCents;
-        if (limitCents === null) return;
-        const now = new Date(state().now);
-        return {
-          spentCents: state().reloadSpentCents,
-          limitCents,
-          resetsAt: new Date(
-            Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
-          ).toISOString(),
-        };
-      },
+      budget: () => usage.summary()?.autoReload.budget,
       available: manageable,
       pending,
       suspended: () => state().reloadSuspended,

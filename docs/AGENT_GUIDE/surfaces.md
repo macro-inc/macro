@@ -2412,12 +2412,12 @@ Their credit balance and automatic reload row are hidden, with no
 credit-purchase action.
 Team owners who pay for their team's seats manage the shared credit balance and
 automatic reload here in Usage, including purchases, balance thresholds, the
-monthly reload cap, and payment methods. Multi-seat payers see **Team Usage
+monthly reload cap, and payment methods. Team payers see **Team Usage
 Credits**, “Credits are shared by your entire team.” and **Shared team balance**.
 The purchase and auto-reload dialogs also identify the team-wide credit balance.
 Team settings manages seats. Included
 usage remains per seat: the owner's Monthly limit meter describes their own
-usage, not the sum of the team's allowances. Multi-seat payers with a finite
+usage, not the sum of the team's allowances. Team payers with a finite
 allowance see “This is your personal monthly usage limit.” beneath the meter.
 Unlimited enterprise plans show `Unlimited` and do not offer credit purchases
 or automatic reload. The development paid-plan preview can still display
@@ -2468,8 +2468,10 @@ restore the preset, not edits. **Monthly reload limit reached** opens Usage with
 a notice banner: **Monthly auto-reload $50 limit reached**, with **resets Nov 1**
 on the right. **Adjust limit** opens Auto-Reload; **Add credits** opens credit purchase.
 Manual credits do not count toward the monthly reload cap, which resets at the
-UTC month boundary. Monthly budget facts are fixture-only until the API exposes
-them; these design notices are not shown for real accounts yet.
+UTC month boundary. Live Usage shows this same banner from the API's monthly
+reload commitments and reset date, including when remaining cap room is below
+the minimum reload charge. Paid/pending reloads and failed invoices that can
+still collect count toward the cap. Older backends without these facts show no notice.
 The **Teams** scenario group opens Usage directly. **Mixed-plan team owner**
 previews shared credits and enabled reload for one Max and three Pro seats;
 **Team credits exhausted**, **Team reload paused**, and **Team monthly reload

@@ -94,6 +94,7 @@ export function Usage() {
       },
     },
     autoReload: {
+      budget: () => usageSummary()?.autoReload.budget,
       settings: () => {
         if (autoReloadPreview()) return previewSettings();
         return usageSummary()?.autoReload.settings ?? DEFAULT_AUTO_RELOAD;

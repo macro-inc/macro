@@ -157,6 +157,14 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<BillingSettings>> + Send;
 
+    /// Reload commitments charged against a UTC calendar-month cap. Includes
+    /// pending reloads and failed invoices that may still collect; excludes manual purchases.
+    fn credit_reload_committed_cents(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        month: BillingPeriod,
+    ) -> impl Future<Output = Result<i64>> + Send;
+
     /// Set overage on/off and the cap. Clears any suspension.
     fn update_overage(
         &self,

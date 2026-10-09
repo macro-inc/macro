@@ -20,7 +20,7 @@ export type UsageContext = {
   };
   autoReload: {
     settings: Accessor<AutoReloadSettings>;
-    /** Monthly spend facts; currently supplied only by the Billing Lab fixture. */
+    /** Authoritative calendar-month cap commitments, or explicit lab fixtures. */
     budget?: Accessor<AutoReloadBudget | undefined>;
     available: Accessor<boolean>;
     pending: Accessor<boolean>;

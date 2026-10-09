@@ -36,6 +36,25 @@ export type AutoReloadDefaults = {
 };
 
 /**
+ * Calendar-month commitments that consume the payer's automatic reload cap.
+ */
+export type AutoReloadMonthlyBudget = {
+    /**
+     * Reloads paid, pending, or failed with an invoice that can still collect.
+     * Customer cents; manual credit purchases do not count.
+     */
+    committed_cents: number;
+    /**
+     * Remaining cap cannot fund the minimum automatic reload charge.
+     */
+    limit_reached: boolean;
+    /**
+     * Start of the next UTC calendar month, independently of subscription renewal.
+     */
+    resets_at: string;
+};
+
+/**
  * The payer's automatic reload settings, as shown in Billing settings.
  */
 export type AutoReloadSnapshot = {
@@ -47,6 +66,7 @@ export type AutoReloadSnapshot = {
      * Reload once the effective balance drops below this, in customer cents.
      */
     minimum_balance_cents: number;
+    monthly_budget?: null | AutoReloadMonthlyBudget;
     /**
      * Most reloaded per UTC calendar month, in customer cents. `null` when
      * there is no limit.
@@ -1628,6 +1648,10 @@ export type UsageSnapshot = {
      * Shared payer credits already applied to this period, in customer cents.
      */
     credits_consumed_cents: number;
+    /**
+     * Whether prepaid credits belong to the team, including a team with one seat.
+     */
+    credits_shared_with_team: boolean;
     /**
      * Included AI for this user's seat this period, in cents at provider cost.
      */

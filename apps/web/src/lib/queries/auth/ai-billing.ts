@@ -78,21 +78,28 @@ export function invalidateAiBillingSummary() {
 }
 
 /** Renewal and scheduled downgrade, read only while Billing settings needs it. */
-export function useSubscriptionStatusQuery(
-  options?: UseAiBillingSummaryQueryOptions
-) {
-  return useQuery(() => ({
+function subscriptionStatusQueryOptions(enabled: boolean) {
+  return {
     queryKey: authKeys.subscriptionStatus.queryKey,
     queryFn: async () =>
       await throwOnErr(() => authServiceClient.getSubscriptionStatus()),
-    enabled:
-      typeof options?.enabled === 'function'
-        ? options.enabled()
-        : (options?.enabled ?? true),
+    enabled,
     staleTime: AI_BILLING_SUMMARY_STALE_TIME,
     throwOnError: false,
     retry: 1,
-  }));
+  };
+}
+
+export function useSubscriptionStatusQuery(
+  options?: UseAiBillingSummaryQueryOptions
+) {
+  return useQuery(() =>
+    subscriptionStatusQueryOptions(
+      typeof options?.enabled === 'function'
+        ? options.enabled()
+        : (options?.enabled ?? true)
+    )
+  );
 }
 
 export function invalidateSubscriptionStatus() {

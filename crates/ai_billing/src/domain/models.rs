@@ -621,6 +621,18 @@ pub enum AllowanceDecision {
     Deny(DenyReason),
 }
 
+/// Calendar-month commitments that consume the payer's automatic reload cap.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct AutoReloadMonthlyBudget {
+    /// Reloads paid, pending, or failed with an invoice that can still collect.
+    /// Customer cents; manual credit purchases do not count.
+    pub committed_cents: i64,
+    /// Start of the next UTC calendar month, independently of subscription renewal.
+    pub resets_at: DateTime<Utc>,
+    /// Remaining cap cannot fund the minimum automatic reload charge.
+    pub limit_reached: bool,
+}
+
 /// The payer's automatic reload settings, as shown in Billing settings.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct AutoReloadSnapshot {
@@ -631,6 +643,8 @@ pub struct AutoReloadSnapshot {
     /// Most reloaded per UTC calendar month, in customer cents. `null` when
     /// there is no limit.
     pub monthly_spend_limit_cents: Option<i64>,
+    /// Present for paid finite accounts with a configured monthly cap.
+    pub monthly_budget: Option<AutoReloadMonthlyBudget>,
     /// Whether reloads are paused after a failed reload charge.
     pub suspended: bool,
     /// Whether reloads will fire: the payer opted in and reloads are not suspended.
@@ -664,6 +678,8 @@ pub struct UsageSnapshot {
     pub credits_consumed_cents: i64,
     /// Shared prepaid credit balance, in customer cents.
     pub credit_balance_cents: i64,
+    /// Whether prepaid credits belong to the team, including a team with one seat.
+    pub credits_shared_with_team: bool,
     /// Legacy API name for the automatic reload opt-in. Never authorizes direct charges.
     pub overage_enabled: bool,
     /// Per-period overage cap, in customer cents.

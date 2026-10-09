@@ -531,6 +531,37 @@ fn unlimited_is_never_blocked() {
 }
 
 #[test]
+fn credit_scope_follows_team_ownership_even_with_only_one_seat() {
+    let owner = user("owner@x.com");
+    let mut entitlement = Entitlement::personal(owner.clone(), PlanTier::Max);
+    for (scope, shared) in [
+        (PayerScope::Personal, false),
+        (
+            PayerScope::TeamOwner {
+                team_id: macro_uuid::generate_uuid_v7(),
+            },
+            true,
+        ),
+    ] {
+        entitlement.scope = scope;
+        let snapshot = build_snapshot(
+            &owner,
+            &entitlement,
+            &BillingSettings::default(),
+            BillingPeriod::calendar_month(Utc::now()),
+            0,
+            0,
+            PeriodLedger::default(),
+            2_500,
+            AiPricing::testing(),
+        );
+        assert_eq!(snapshot.seats, 1);
+        assert!(snapshot.can_manage_billing);
+        assert_eq!(snapshot.credits_shared_with_team, shared);
+    }
+}
+
+#[test]
 fn team_member_is_not_the_payer() {
     let owner = user("owner@x.com");
     let member = user("member@x.com");
@@ -556,6 +587,7 @@ fn team_member_is_not_the_payer() {
         AiPricing::testing(),
     );
     assert!(!s.can_manage_billing);
+    assert!(s.credits_shared_with_team);
     assert_eq!(s.seats, 2);
     assert_eq!(s.included_cents, 10_000);
 }

@@ -43,6 +43,7 @@ describe('billing lab actions', () => {
       limitCents: 5_000,
       spentCents: 5_000,
       resetsAt: '2026-11-01T00:00:00.000Z',
+      limitReached: true,
     });
     const checkout = lab.usage.checkout.start(2_500);
     await vi.runAllTimersAsync();

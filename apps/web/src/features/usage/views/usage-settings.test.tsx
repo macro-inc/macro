@@ -7,6 +7,8 @@ import {
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createBillingLab } from '../../billing-lab/create-billing-lab';
+import { fixtureSnapshot } from '../../billing-lab/queries/fixture-snapshot';
+import { toUsageSummary } from '../queries/usage-summary';
 import { UsageSettingsView } from './usage-settings';
 
 beforeEach(() => vi.spyOn(window, 'scrollTo').mockImplementation(() => {}));
@@ -69,6 +71,45 @@ it('does not infer a monthly cap-reached status without spend facts', () => {
     screen.queryByText('Monthly auto-reload $50 limit reached')
   ).toBeNull();
   expect(screen.queryByRole('button', { name: 'Adjust limit' })).toBeNull();
+});
+
+it('shows a live decoded cap notice when the remaining budget cannot fund a minimum reload', () => {
+  const lab = createBillingLab('pro');
+  const snapshot = {
+    ...fixtureSnapshot(lab.state()),
+    overage_enabled: true,
+    auto_reload: {
+      minimum_balance_cents: 1_000,
+      target_balance_cents: 10_000,
+      monthly_spend_limit_cents: 5_000,
+      suspended: false,
+      active: true,
+      monthly_budget: {
+        committed_cents: 4_951,
+        resets_at: '2026-11-01T00:00:00Z',
+        limit_reached: true,
+      },
+    },
+  };
+  const summary = () => toUsageSummary(snapshot);
+  render(() => (
+    <UsageSettingsView
+      context={{
+        ...lab.usage,
+        summary,
+        autoReload: {
+          ...lab.usage.autoReload,
+          settings: () => summary().autoReload.settings,
+          budget: () => summary().autoReload.budget,
+        },
+      }}
+    />
+  ));
+  expect(
+    screen.getByText('Monthly auto-reload $50 limit reached')
+  ).toBeTruthy();
+  expect(screen.getByText('resets Nov 1')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Adjust limit' })).toBeTruthy();
 });
 
 it('removes the cap notice when the simulated calendar month resets', () => {
@@ -146,3 +187,24 @@ it.each(['pro', 'team-owner'] as const)(
     }
   }
 );
+
+it('keeps team credit labels and the personal allowance explanation for an owner with one seat', () => {
+  const lab = createBillingLab('team-owner');
+  const snapshot = { ...fixtureSnapshot(lab.state()), seats: 1 };
+  render(() => (
+    <UsageSettingsView
+      context={{ ...lab.usage, summary: () => toUsageSummary(snapshot) }}
+    />
+  ));
+  expect(
+    screen.getByText('This is your personal monthly usage limit.')
+  ).toBeTruthy();
+  expect(screen.getByText('Team Usage Credits')).toBeTruthy();
+  expect(
+    screen.getByText('Credits are shared by your entire team.')
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Add more' }));
+  expect(
+    screen.getByText('These credits are shared by your entire team.')
+  ).toBeTruthy();
+});

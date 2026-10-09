@@ -54,6 +54,29 @@ fn invalid_payer(e: impl std::fmt::Display) -> BillingError {
     BillingError::Storage(anyhow::anyhow!("invalid payer id: {e}"))
 }
 
+async fn reload_committed_cents(
+    conn: &mut sqlx::PgConnection,
+    payer: &str,
+    month: BillingPeriod,
+) -> Result<i64> {
+    sqlx::query_scalar!(
+        r#"
+            SELECT COALESCE(SUM(amount_cents), 0)::bigint AS "spent!"
+            FROM ai_credit_reload
+            WHERE user_id = $1
+              AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
+              AND created_at >= $2
+              AND created_at < $3
+            "#,
+        payer,
+        month.start,
+        month.end,
+    )
+    .fetch_one(conn)
+    .await
+    .map_err(storage)
+}
+
 async fn book_credit_reload(
     conn: &mut sqlx::PgConnection,
     payer: &MacroUserIdStr<'_>,
@@ -172,6 +195,15 @@ impl BillingRepo for PgBillingRepo {
                 seat_generation: SeatGeneration::from_raw(r.seat_generation),
             })
             .unwrap_or_default())
+    }
+
+    async fn credit_reload_committed_cents(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        month: BillingPeriod,
+    ) -> Result<i64> {
+        let mut conn = self.pool.acquire().await.map_err(storage)?;
+        reload_committed_cents(&mut conn, payer.as_ref(), month).await
     }
 
     async fn update_overage(
@@ -964,22 +996,7 @@ impl BillingRepo for PgBillingRepo {
         // A failed reload that reached Stripe may still be collected by its
         // retries, so it counts against the limit like a pending one.
         let month = BillingPeriod::calendar_month(now);
-        let spent_this_month_cents = sqlx::query_scalar!(
-            r#"
-            SELECT COALESCE(SUM(amount_cents), 0)::bigint AS "spent!"
-            FROM ai_credit_reload
-            WHERE user_id = $1
-              AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
-              AND created_at >= $2
-              AND created_at < $3
-            "#,
-            payer,
-            month.start,
-            month.end,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(storage)?;
+        let spent_this_month_cents = reload_committed_cents(&mut tx, payer, month).await?;
 
         let amount_cents = plan_reload(
             ReloadState {

@@ -27,7 +27,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
     return props.context.autoReload.settings().enabled &&
       !props.context.autoReload.suspended() &&
       budget &&
-      budget.spentCents >= budget.limitCents
+      (budget.limitReached ?? budget.spentCents >= budget.limitCents)
       ? budget
       : undefined;
   };

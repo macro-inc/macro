@@ -6,7 +6,11 @@ export type UsageSummary = {
   creditScope: 'personal' | 'team';
   billingAccess: 'free' | 'payer' | 'team-member';
   existingUsageBilling?: { limitCents: number; suspended: boolean };
-  autoReload: { settings: AutoReloadSettings; suspended: boolean };
+  autoReload: {
+    settings: AutoReloadSettings;
+    suspended: boolean;
+    budget?: AutoReloadBudget;
+  };
 };
 
 export type UsagePreviewPlan = 'free' | 'paid';
@@ -91,6 +95,8 @@ export function validateAutoReload(
 
 /** Reload purchases use UTC calendar months, independently of subscription renewal. */
 export type AutoReloadBudget = {
+  /** Authoritative cap status, including insufficient room for the minimum charge. */
+  limitReached?: boolean;
   spentCents: number;
   limitCents: number;
   resetsAt: string;

@@ -835,6 +835,13 @@ async fn reserve_credit_reload_honors_the_monthly_limit_including_pending_rows(p
         .unwrap()
         .expect("reload reserved");
     assert_eq!(first.amount_cents, 10_000);
+    let month = BillingPeriod::calendar_month(now);
+    assert_eq!(
+        repo.credit_reload_committed_cents(&payer(), month)
+            .await
+            .unwrap(),
+        10_000
+    );
     // Pending rows count against the limit, so once Stripe resolves this one
     // only 2_000 of room is left.
     repo.finish_credit_reload(first.id, Some("in_1"), CreditReloadStatus::Paid)
@@ -857,6 +864,18 @@ async fn reserve_credit_reload_honors_the_monthly_limit_including_pending_rows(p
             .is_none()
     );
     assert_eq!(reload_rows(&pool).await, 2);
+    assert_eq!(
+        repo.credit_reload_committed_cents(&payer(), month)
+            .await
+            .unwrap(),
+        12_000
+    );
+    assert_eq!(
+        repo.credit_reload_committed_cents(&payer(), BillingPeriod::calendar_month(month.end))
+            .await
+            .unwrap(),
+        0
+    );
 
     // A failed reload does not count; a reload from last month does not either.
     sqlx::query!(
@@ -876,6 +895,12 @@ async fn reserve_credit_reload_honors_the_monthly_limit_including_pending_rows(p
     repo.finish_credit_reload(third.id, None, CreditReloadStatus::Failed)
         .await
         .unwrap();
+    assert_eq!(
+        repo.credit_reload_committed_cents(&payer(), month)
+            .await
+            .unwrap(),
+        10_000
+    );
     // Suspension is what stops reloads after a failure, not the ledger.
     enable_auto_reload(&repo, &thresholds(Some(12_000))).await;
     let fourth = repo
@@ -960,6 +985,12 @@ async fn reserve_credit_reload_retries_a_failed_reload_on_its_open_invoice(pool:
         .await
         .unwrap();
     repo.suspend_auto_reload(&payer()).await.unwrap();
+    assert_eq!(
+        repo.credit_reload_committed_cents(&payer(), BillingPeriod::calendar_month(now))
+            .await
+            .unwrap(),
+        10_000
+    );
     assert!(
         repo.reserve_credit_reload(&payer(), period_start, 0, now)
             .await

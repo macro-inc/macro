@@ -56,11 +56,12 @@ dialog; manually purchased credits do not change auto-reload spend. Advancing
 into November resets reload spend. Reload budgets use UTC calendar months,
 independently of subscription renewal.
 
-These are design previews. Monthly spend and reset facts come from the lab;
-the live API currently provides only the configured cap, not monthly reload
-spend or a cap-reached status. Live settings therefore show no monthly cap-reached
-notice until authoritative budget facts are added. A limit-reached state does
-not imply existing credits or the included allowance are exhausted.
+Live settings use the same banner with authoritative monthly reload commitments
+and reset facts from the API. Paid and pending reloads, plus failed invoices that
+can still collect, consume the cap; manual credit purchases do not. The notice
+also appears when the remaining cap cannot fund the $0.50 minimum reload.
+A limit-reached state does not imply existing credits or the included allowance
+are exhausted. Older backends without budget facts show no cap notice.
 
 ## Team credit controls
 
@@ -83,8 +84,8 @@ Team settings manages seats. The included-usage meter is always the viewer's
 own seat allowance, not a pooled team allowance. **Team-paid Max member** shows
 the team-managed notice without the balance, purchase, or reload controls.
 The lab simulates one viewer at a time; it does not meter other members' AI
-activity or run automatic charges. Monthly cap-reached facts remain fixture-only
-as described above.
+activity or run automatic charges. Its fixture budget follows the same decoder
+and cap status used by live Usage settings.
 
 ## Boundaries
 
