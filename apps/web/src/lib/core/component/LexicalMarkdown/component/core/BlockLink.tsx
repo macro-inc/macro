@@ -14,6 +14,7 @@ const blockNamesWithLocations = [
   'task',
   'email',
   'chat',
+  'database',
   'task',
 ] as const;
 type BlockNameWithLocations = (typeof blockNamesWithLocations)[number];

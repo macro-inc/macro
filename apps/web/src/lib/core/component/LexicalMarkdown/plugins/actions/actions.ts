@@ -12,6 +12,7 @@ import {
   AwaitNode,
   CustomCodeNode,
   DatabaseQueryNode,
+  DocumentCardNode,
   DocumentMentionNode,
   EquationNode,
   HorizontalRuleNode,
@@ -341,16 +342,8 @@ export const ACTIONS: Action[] = [
   },
   {
     id: 'database-query',
-    name: 'Database',
-    keywords: [
-      'query',
-      'query-database',
-      'ask',
-      'database',
-      'live',
-      'answer',
-      'sql',
-    ],
+    name: 'Query',
+    keywords: ['query', 'query-database', 'ask', 'live', 'answer', 'sql'],
     category: ActionCategory.MEDIA,
     icon: LightningIcon,
     dependencies: [DatabaseQueryNode],
@@ -367,6 +360,21 @@ export const ACTIONS: Action[] = [
           ]);
         })
       );
+    },
+  },
+  {
+    id: 'database',
+    name: 'Database',
+    keywords: ['database', 'new database', 'editable', 'records'],
+    category: ActionCategory.MEDIA,
+    icon: TableIcon,
+    dependencies: [AwaitNode, DocumentMentionNode, DocumentCardNode],
+    action: (editor, context) => {
+      if (!isFeatureEnabled(enableDatabases)) return;
+      queueMicrotask(async () => {
+        const { insertNewDatabase } = await import('./insert-database');
+        await insertNewDatabase(editor, context);
+      });
     },
   },
 ];

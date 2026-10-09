@@ -4,6 +4,7 @@ import { $wrapNodeInElement, mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@macro-inc/lexical-core';
 import {
   $collapseInlineSearch,
+  $convertMentionToCard,
   $createAgentSessionMentionNode,
   $createContactMentionNode,
   $createDateMentionNode,
@@ -357,6 +358,8 @@ type MentionsPluginProps = {
   peerIdValidator?: PeerIdValidator;
   sourceDocumentId?: string;
   disableMentionTracking?: boolean;
+  /** Document bodies show newly inserted databases as editors. Composers keep mentions. */
+  expandDatabaseMentions?: boolean;
 };
 
 /**
@@ -400,14 +403,38 @@ function registerMentionsPlugin(
       $traverseNodes($getRoot(), (node) => {
         if ($isMentionNode(node)) {
           mentions.push($mentionItemFromNode(node));
+        } else if (
+          node instanceof DocumentCardNode &&
+          node.getBlockName() === 'database'
+        ) {
+          mentions.push({
+            itemType: 'database',
+            itemId: node.getDocumentId(),
+            documentName: node.getDocumentName(),
+          });
         }
       });
     });
     props.setMentions(mentions);
   }
 
+  function databaseReferenceRemains(mentionUuid: string) {
+    return editor.read(() => {
+      let remains = false;
+      $traverseNodes($getRoot(), (node) => {
+        if (
+          (node instanceof DocumentCardNode || $isDocumentMentionNode(node)) &&
+          node.getBlockName() === 'database' &&
+          node.getMentionUuid() === mentionUuid
+        )
+          remains = true;
+      });
+      return remains;
+    });
+  }
+
   return mergeRegister(
-    // A form's card references the form exactly as its mention did;
+    // A form or database card references its entity exactly as its mention did;
     // converting one to the other removes one reference and creates the other.
     editor.registerMutationListener(
       DocumentCardNode,
@@ -420,19 +447,33 @@ function registerMentionsPlugin(
               : editor.getEditorState(),
             nodeKey
           );
-          // Only a form's card is a reference here (RFC 03); other cards'
+          // Form and database cards are references; other cards'
           // sharing stays as it was.
           if (!(node instanceof DocumentCardNode)) continue;
-          if (node.getBlockName() !== 'form') continue;
+          if (
+            node.getBlockName() !== 'form' &&
+            node.getBlockName() !== 'database'
+          )
+            continue;
           const card = {
             itemType: blockItemType(node.getBlockName()),
             itemId: node.getDocumentId(),
             documentName: node.getDocumentName(),
           };
           if (mutation === 'created') onCreateMention?.(card);
-          else
+          else {
+            const uuid = node.getMentionUuid();
+            if (
+              node.getBlockName() === 'database' &&
+              uuid &&
+              sourceDocumentId &&
+              !databaseReferenceRemains(uuid)
+            )
+              void untrackMention(sourceDocumentId, uuid);
             onRemoveMention?.({ itemType: card.itemType, itemId: card.itemId });
+          }
         }
+        updateMentionsSignal();
       }
     ),
     editor.registerCommand(
@@ -459,10 +500,21 @@ function registerMentionsPlugin(
           if ($isRangeSelection(selection) && !selection.isCollapsed()) {
             $collapseSelection(selection);
             $insertNodes([$createTextNode(' '), mentionNode]);
-            mentionNode.selectEnd();
-            return true;
+          } else {
+            $insertNodes([mentionNode]);
           }
-          $insertNodes([mentionNode]);
+          if (
+            props.expandDatabaseMentions &&
+            payload.blockName === 'database' &&
+            $isDocumentMentionNode(mentionNode) &&
+            editor.hasNodes([DocumentCardNode])
+          ) {
+            const card = $convertMentionToCard(mentionNode);
+            if (!card.getNextSibling())
+              card.insertAfter($createParagraphNode()).selectStart();
+            else card.selectNext();
+            return;
+          }
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
             $wrapNodeInElement(mentionNode, $createParagraphNode);
           }
@@ -862,7 +914,12 @@ function registerMentionsPlugin(
               // unsetDocumenentionPreviewCache(nodeId);
             }
             const mentionUuid = node.getMentionUuid();
-            if (mentionUuid && sourceDocumentId) {
+            if (
+              mentionUuid &&
+              sourceDocumentId &&
+              (node.getBlockName() !== 'database' ||
+                !databaseReferenceRemains(mentionUuid))
+            ) {
               untrackMention(sourceDocumentId, mentionUuid);
             }
             if (onRemoveMention) {

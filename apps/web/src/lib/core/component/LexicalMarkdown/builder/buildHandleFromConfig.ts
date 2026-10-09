@@ -196,6 +196,8 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
           onCreateMention: config.mentions.onCreate,
           onRemoveMention: config.mentions.onRemove,
           sourceDocumentId: config.mentions.sourceDocumentId,
+          expandDatabaseMentions:
+            config.type === 'markdown' || config.type === 'markdown-sync',
         })
       );
     }

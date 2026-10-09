@@ -74,6 +74,7 @@ import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink, openDocument } from '../core/BlockLink';
+import { DatabaseCard } from './DatabaseCard';
 
 false && floatWithElement;
 
@@ -89,6 +90,7 @@ const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
 };
 
 export function DocumentCard(props: DocumentCardDecoratorProps) {
+  if (props.blockName === 'database') return <DatabaseCard {...props} />;
   return (
     <Suspense
       fallback={

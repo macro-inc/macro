@@ -44,7 +44,7 @@ PostHog unless the variable was set when it was built. With the flag off:
 - `/app/database/<uuid>` and a `~/database/<uuid>` split show the 404 view. The
   database block's code is never fetched and no database request is made.
 - **Create → Database**, its **C → L** shortcut, the command palette entry and
-  the slash menu's **Database** action are absent, and no starter database is
+  the slash menu's **Database** and **Query** actions are absent, and no starter database is
   created.
 - The sidebar, mentions, search and Quick Access list no databases; Activity
   and the ReadActivity tool leave out database rows.
@@ -458,7 +458,7 @@ offers **Open view**, which opens that database/table and selects the created vi
 The same tools are exposed to agent sessions through the Macro MCP server.
 
 In a document, channel composer, or the task/document creation composer,
-`/database` → **Database** opens the question box with the AI prompt focused
+`/query` → **Query** opens the question box with the AI prompt focused
 immediately. The empty input rotates through example questions; a selected database
 uses its actual table and column names. Typing hides these hints, and reduced-motion
 preferences keep them static. Use the searchable source picker below the question to
@@ -562,6 +562,13 @@ its optimistic state when no newer cache update has replaced it, then refreshes.
 A slow or failed refresh is not a reason to resend a successful mutation.
 
 ### Embedded database editors
+
+In a document, `/database` creates a database and inserts its expanded editor.
+Selecting an existing database from `@` expands it by default too. **Collapse**
+returns it to a small mention; **Expand** restores the editor. Cell and schema
+edits use the same database grid and authorization as the standalone app. The
+document stores only the database reference and selected table/view, never a
+copy of its rows. See [Databases in documents](documents.md#databases-in-documents).
 
 The shared editor also runs under a host's `DatabaseProvider`, using schema reads,
 row queries and operation batches from that host's API. Verify cell edits and

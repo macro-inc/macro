@@ -148,6 +148,7 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
         peerIdValidator,
         sourceDocumentId: source.id,
         disableMentionTracking: !source.trackMentions,
+        expandDatabaseMentions: true,
       })
     );
   useAll(slots?.afterMentions);
