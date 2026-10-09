@@ -128,11 +128,12 @@ function DesktopAgentPicker(props: AgentPickerProps) {
         onMouseDown={(event: MouseEvent) => event.stopPropagation()}
       >
         <div class="flex min-h-0 max-h-[min(28rem,var(--kb-popper-content-available-height))] flex-col">
-          {props.menuHeader}
+          <Show when={!macro()}>{props.menuHeader}</Show>
           <div class="min-h-0 space-y-1 overflow-y-auto overscroll-contain px-2 pb-2">
             <Show when={macro()}>
               {(agent) => (
                 <ModelCatalogMenu
+                  menuHeader={props.menuHeader}
                   autoFocusSearch
                   value={
                     props.selected?.id === agent().id ? (model() ?? null) : null

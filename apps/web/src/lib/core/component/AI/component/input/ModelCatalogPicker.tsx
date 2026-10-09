@@ -287,7 +287,6 @@ export function ModelCatalogMenu(
   return (
     <>
       <div class="sticky top-0 z-10 bg-menu py-1">
-        {props.menuHeader}
         <div class="flex h-8 items-center gap-2 px-3">
           <MagnifyingGlassIcon
             aria-hidden="true"
@@ -313,6 +312,7 @@ export function ModelCatalogMenu(
             class="min-w-0 h-full w-full border-0 bg-transparent p-0 text-sm text-ink outline-none placeholder:text-ink-extra-muted"
           />
         </div>
+        {props.menuHeader}
       </div>
 
       {props.children}

@@ -409,8 +409,8 @@ the shimmer.
   provider icons, search, **Suggested** first, and **More models** for the
   complete provider catalog. Desktop opens a submenu; phone widths show
   the catalog in place with a Back action. Search includes every model.
-- When the selected model advertises effort choices, a compact **Effort** slider
-  appears at the top of the model selector. Drag to preview a level and release
+- When the selected model advertises effort choices, a compact row of labeled **Effort** steps
+  appears below search in the model selector. Drag to preview a level and release
   to apply it; arrow keys also adjust it. Unsupported models have no effort bar.
   Free and Pro users start new conversations at the lowest advertised level,
   unless they explicitly choose another. Existing sessions keep their current

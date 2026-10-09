@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import type {
   EffortChoice,
   SelectSessionConfigOption,
@@ -25,7 +25,8 @@ export function EffortSlider(props: {
   return (
     <Show when={choices().length > 1}>
       <div
-        class="px-3 pt-2 pb-1"
+        class="flex items-center gap-3 px-3 py-1"
+        classList={{ 'opacity-50': props.disabled }}
         onKeyDown={(event) => {
           if (event.key !== 'Escape') event.stopPropagation();
         }}
@@ -33,32 +34,46 @@ export function EffortSlider(props: {
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
-        <div class="flex items-center justify-between text-xs text-ink-muted">
-          <span>Effort</span>
-          <span class="font-medium text-ink">{label()}</span>
+        <span class="shrink-0 text-xs text-ink-muted">Effort</span>
+        <div class="relative min-w-0 flex-1 rounded-md focus-within:ring-1 focus-within:ring-edge-focus">
+          <div class="flex gap-0.5" aria-hidden="true">
+            <For each={choices()}>
+              {(choice, position) => (
+                <span
+                  class="flex h-7 min-w-0 flex-1 items-center justify-center rounded-md px-1 text-xs transition-colors"
+                  classList={{
+                    'bg-ink/10 text-ink font-medium': position() === index(),
+                    'text-ink-muted': position() !== index(),
+                  }}
+                >
+                  {choice.name}
+                </span>
+              )}
+            </For>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max={choices().length - 1}
+            step="1"
+            value={index()}
+            aria-label="Reasoning effort"
+            aria-valuetext={label()}
+            disabled={props.disabled}
+            class="absolute inset-0 m-0 h-full w-full opacity-0"
+            onInput={(event) => setDragging(Number(event.currentTarget.value))}
+            onChange={(event) => {
+              const choice = choices()[Number(event.currentTarget.value)];
+              if (!props.disabled && props.config && choice)
+                props.onChange({
+                  configId: props.config.id,
+                  value: choice.value,
+                  name: choice.name,
+                });
+              setDragging(undefined);
+            }}
+          />
         </div>
-        <input
-          type="range"
-          min="0"
-          max={choices().length - 1}
-          step="1"
-          value={index()}
-          aria-label="Reasoning effort"
-          aria-valuetext={label()}
-          disabled={props.disabled}
-          class="h-7 w-full accent-ink disabled:opacity-50"
-          onInput={(event) => setDragging(Number(event.currentTarget.value))}
-          onChange={(event) => {
-            const choice = choices()[Number(event.currentTarget.value)];
-            if (!props.disabled && props.config && choice)
-              props.onChange({
-                configId: props.config.id,
-                value: choice.value,
-                name: choice.name,
-              });
-            setDragging(undefined);
-          }}
-        />
       </div>
     </Show>
   );

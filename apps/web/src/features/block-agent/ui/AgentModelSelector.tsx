@@ -157,7 +157,6 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label="Choose a model">
           <MobileDrawer.Handle />
-          {props.menuHeader}
           <Show when={searchable()}>
             <div class="mx-4 mb-3 flex shrink-0 items-center gap-2 rounded-lg border border-edge-muted bg-surface px-3 py-2">
               <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
@@ -171,6 +170,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
               />
             </div>
           </Show>
+          {props.menuHeader}
           <MobileDrawer.ScrollBody>
             <Show when={groups().length === 0}>
               <div class="px-4 py-6 text-center text-sm text-ink-muted">
