@@ -450,6 +450,19 @@ fn harness_with_policies_and_mentions(
         permission_policies,
         HarnessDefaultCodingAgents,
         mentions,
+        EgressProvisionerMock::new(),
+    )
+}
+
+/// A harness whose egress advertises whatever the test connects on `egress`.
+fn harness_with_egress(egress: EgressProvisionerMock) -> (TestBench, TurnSignals) {
+    harness_with_ports(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
+        PromptMentionsMock::new(),
+        egress,
     )
 }
 
@@ -460,6 +473,7 @@ fn harness_with_coding_choice(chosen: bool) -> (TestBench, TurnSignals) {
         KindDefaultPolicies,
         ChosenCodingAgents(chosen),
         PromptMentionsMock::new(),
+        EgressProvisionerMock::new(),
     )
 }
 
@@ -469,6 +483,7 @@ fn harness_with_ports(
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     coding_agents: impl crate::domain::ports::CodingAgentSource,
     mentions: PromptMentionsMock,
+    egress: EgressProvisionerMock,
 ) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
@@ -496,7 +511,7 @@ fn harness_with_ports(
         TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
-        EgressProvisionerMock::new(),
+        egress,
         NoPeers,
         permission_policies,
         coding_agents,
@@ -1695,6 +1710,101 @@ async fn live_sandboxed_coder_session(
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("sandboxed coder session should open");
     container
+}
+
+/// An app the owner connects while a session is live reaches its agent before
+/// the next prompt does: the live ACP session is resumed with the new list.
+#[tokio::test]
+async fn an_app_connected_mid_session_reaches_the_agent_before_the_next_prompt() {
+    let egress = EgressProvisionerMock::new();
+    let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_egress(egress.clone());
+    let id = AgentSessionId::new();
+    let mut command = open_command();
+    command.bot_id = bot_id::MACRO_CODER_BOT_ID;
+    mention_origin_mut(&mut command).sender = staff_sender();
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        let container = containers
+            .container(containers.first_spawned().await)
+            .expect("the spawned container is findable");
+        let agent = container.agent();
+        container.sends_ready();
+        agent.wait_for_requests(1).await;
+        agent.completes_initialize(
+            InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+                AgentCapabilities::new().session_capabilities(
+                    SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                ),
+            ),
+        );
+        agent.wait_for_requests(2).await;
+        agent.opens_session(NewSessionResponse::new("acp-test"));
+        agent.completes_prompt().await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("sandboxed coder session should open");
+    turns.settled(id).await;
+    let agent = container.agent();
+    let ClientRequest::NewSessionRequest(opened) = &agent.received_requests()[1] else {
+        panic!("expected session/new");
+    };
+    let names = |servers: &[agent_client_protocol::schema::v1::McpServer]| -> Vec<String> {
+        servers
+            .iter()
+            .map(|server| match server {
+                agent_client_protocol::schema::v1::McpServer::Http(http) => http.name.clone(),
+                other => panic!("expected HTTP MCP, got {other:?}"),
+            })
+            .collect()
+    };
+    assert_eq!(
+        names(&opened.mcp_servers),
+        ["macro", "macro_internal", "macro-preview"]
+    );
+
+    egress.connect("linear");
+    let prompted = service.execute(
+        id,
+        HarnessCommand::Deliver(forward_message("file it in linear")),
+    );
+    let resume = async {
+        agent.wait_for_requests(4).await;
+        let ClientRequest::ResumeSessionRequest(resumed) = &agent.received_requests()[3] else {
+            panic!("expected session/resume before the prompt");
+        };
+        assert_eq!(resumed.session_id.to_string(), "acp-test");
+        assert_eq!(
+            names(&resumed.mcp_servers),
+            ["macro", "macro_internal", "macro-preview", "linear"]
+        );
+        agent.resumes_session(ResumeSessionResponse::new());
+        agent.completes_prompt().await;
+    };
+    let (prompted, ()) = tokio::join!(prompted, resume);
+    prompted.expect("the prompt reaches the resumed session");
+    turns.settled(id).await;
+    assert_eq!(
+        prompts(&agent)[1],
+        vec![ContentBlock::from(context_prompt("file it in linear"))]
+    );
+
+    // Nothing changed since: the next prompt goes straight out.
+    let prompted = service.execute(
+        id,
+        HarnessCommand::Deliver(forward_message("and assign it to me")),
+    );
+    let answered = async {
+        agent.wait_for_requests(6).await;
+        agent.completes_prompt().await;
+    };
+    let (prompted, ()) = tokio::join!(prompted, answered);
+    prompted.expect("the prompt reaches the session");
+    assert!(matches!(
+        &agent.received_requests()[5],
+        ClientRequest::PromptRequest(_)
+    ));
 }
 
 #[tokio::test]

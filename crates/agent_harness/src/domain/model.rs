@@ -218,6 +218,16 @@ impl AgentKind {
         !matches!(self, Self::External)
     }
 
+    /// Whether this kind's agent is handed the session's whole egress server
+    /// list ([`SandboxEgress::acp_servers`]) when it attaches - the list a
+    /// live session is refreshed to when the owner's connections change.
+    /// Codex is handed none, and an external runtime only the internal and
+    /// preview servers.
+    #[must_use]
+    pub fn takes_egress_mcp_servers(self) -> bool {
+        !matches!(self, Self::CodexCloud | Self::External)
+    }
+
     /// Whether this kind's sessions work in a repository.
     ///
     /// The runtime's nature, and what a persona is taken to be for until it
@@ -800,6 +810,20 @@ impl SandboxEgress {
     /// The `Authorization` value presented on every proxied call.
     pub fn authorization_header(&self) -> String {
         format!("Bearer {}", self.session_token)
+    }
+
+    /// The session token [`Self::acp_servers`] stamped on `servers`, read
+    /// back off the internal server every rendering of the list carries.
+    pub fn session_token_in(servers: &[AcpMcpServer]) -> Option<String> {
+        servers.iter().find_map(|server| match server {
+            AcpMcpServer::Http(server) if server.name == INTERNAL_MCP_NAME => server
+                .headers
+                .iter()
+                .find(|header| header.name.eq_ignore_ascii_case("authorization"))
+                .and_then(|header| header.value.strip_prefix("Bearer "))
+                .map(str::to_owned),
+            _ => None,
+        })
     }
 
     /// The sandbox environment this becomes.

@@ -1,128 +1,94 @@
-//! Resolve current connections without changing a session's selected-app policy.
-use crate::domain::{model::SandboxEgress, ports::SandboxEgressProvisioner};
-use agent_egress::domain::model::SessionToken;
-use agent_session::domain::{model::AgentSessionId, ports::AgentSessionRepo};
+//! Keeping a live session's MCP servers in step with what its owner has
+//! connected: an app connected in settings mid-session reaches the agent on
+//! its next prompt, without a new session.
 
-/// Authenticate the existing session credential and rebuild its permitted list.
-#[tracing::instrument(skip_all, fields(session_id = %id), err)]
-pub async fn refresh<R: AgentSessionRepo, P: SandboxEgressProvisioner>(
-    sessions: &R,
-    provisioner: &P,
-    id: AgentSessionId,
-    token: SessionToken,
-) -> anyhow::Result<SandboxEgress> {
-    let session = sessions
-        .find_by_egress_token_hash(&token.hash())
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Unknown session credential"))?;
-    anyhow::ensure!(
-        session.id == id && !session.is_archived,
-        "Session is not available for connector refresh"
-    );
-    Ok(provisioner
-        .restore(
-            session.owner_user()?,
-            token.as_str().to_owned(),
-            &session.mcp_servers,
-        )
-        .await?)
-}
+use super::*;
+use crate::domain::model::SandboxEgress;
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::domain::{error::Result, model::ProvisionedEgress};
-    use agent_session::{
-        domain::model::AgentMcpServers,
-        testing::{InMemoryAgentSessionRepo, test_agent_session},
-    };
-    use macro_user_id::user_id::MacroUserIdStr;
-    use std::sync::Mutex;
-
-    #[derive(Default)]
-    struct RecordingProvisioner(Mutex<Vec<(String, AgentMcpServers)>>);
-    impl SandboxEgressProvisioner for RecordingProvisioner {
-        async fn provision(
-            &self,
-            _: AgentSessionId,
-            _: &MacroUserIdStr<'static>,
-            _: &AgentMcpServers,
-        ) -> Result<ProvisionedEgress> {
-            panic!("refresh must not mint credentials")
-        }
-        async fn restore(
-            &self,
-            owner: &MacroUserIdStr<'static>,
-            token: String,
-            selection: &AgentMcpServers,
-        ) -> Result<SandboxEgress> {
-            self.0
-                .lock()
-                .unwrap()
-                .push((owner.to_string(), selection.clone()));
-            Ok(SandboxEgress {
-                session_token: token,
-                ..crate::testing::helpers::egress::test_egress()
-            })
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
+    AgentHarnessInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    /// Hand the session's live agent its server list as it stands now, if
+    /// that differs from what it was handed.
+    ///
+    /// Called before a prompt is delivered, so the prompt runs with whatever
+    /// the owner connected since the session attached. The list is rebuilt
+    /// around the session's existing token, under the session's own app
+    /// selection - the same listing a reattach does. A session not attached
+    /// here needs nothing: delivery attaches it with a fresh list.
+    ///
+    /// A failure leaves the agent on the servers it has and the prompt goes
+    /// out regardless; the next prompt tries again.
+    pub(super) async fn refresh_mcp_servers(&self, session_id: AgentSessionId) {
+        if let Err(error) = self.try_refresh_mcp_servers(session_id).await {
+            tracing::warn!(
+                error = ?error,
+                %session_id,
+                "could not refresh a session's MCP servers; the prompt runs with the ones it has"
+            );
         }
     }
 
-    #[tokio::test]
-    async fn refresh_preserves_owner_selection_and_credential() {
-        for selection in [
-            AgentMcpServers::OwnerConnections,
-            AgentMcpServers::Selected { servers: vec![] },
-        ] {
-            let repo = InMemoryAgentSessionRepo::new();
-            let mut session = test_agent_session(AgentSessionId::new());
-            session.mcp_servers = selection.clone();
-            let id = session.id;
-            let owner = session.owner_user().unwrap().to_string();
-            repo.insert_session(session);
-            repo.set_egress_token_hash(id, &SessionToken::new("credential").hash())
-                .await
-                .unwrap();
-            let provisioner = RecordingProvisioner::default();
-            let result = refresh(&repo, &provisioner, id, SessionToken::new("credential"))
-                .await
-                .unwrap();
-            assert_eq!(result.session_token, "credential");
-            assert_eq!(*provisioner.0.lock().unwrap(), vec![(owner, selection)]);
+    async fn try_refresh_mcp_servers(&self, session_id: AgentSessionId) -> Result<()> {
+        let Some(attached) = self.sessions.attached_mcp_servers(session_id) else {
+            return Ok(());
+        };
+        let session = self.sessions.get_session(session_id).await?;
+        if !AgentKind::for_session(session.bot_id, &session.harness).takes_egress_mcp_servers() {
+            return Ok(());
         }
-    }
-
-    #[tokio::test]
-    async fn unknown_mismatched_and_archived_sessions_cannot_refresh() {
-        let repo = InMemoryAgentSessionRepo::new();
-        let mut session = test_agent_session(AgentSessionId::new());
-        let id = session.id;
-        repo.insert_session(session.clone());
-        repo.set_egress_token_hash(id, &SessionToken::new("credential").hash())
-            .await
-            .unwrap();
-        let provisioner = RecordingProvisioner::default();
-        assert!(
-            refresh(&repo, &provisioner, id, SessionToken::new("unknown"))
-                .await
-                .is_err()
+        let Some(token) = SandboxEgress::session_token_in(&attached) else {
+            return Ok(());
+        };
+        let current = self
+            .egress
+            .restore(session.owner_user()?, token, &session.mcp_servers)
+            .await?
+            .acp_servers();
+        if current == attached {
+            return Ok(());
+        }
+        tracing::info!(
+            %session_id,
+            servers = current.len(),
+            "handing a live session its owner's current MCP servers"
         );
-        assert!(
-            refresh(
-                &repo,
-                &provisioner,
-                AgentSessionId::new(),
-                SessionToken::new("credential")
-            )
-            .await
-            .is_err()
-        );
-        session.is_archived = true;
-        repo.insert_session(session);
-        assert!(
-            refresh(&repo, &provisioner, id, SessionToken::new("credential"))
-                .await
-                .is_err()
-        );
-        assert!(provisioner.0.lock().unwrap().is_empty());
+        self.sessions
+            .replace_mcp_servers(session_id, current)
+            .await?;
+        Ok(())
     }
 }

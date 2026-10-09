@@ -268,10 +268,10 @@ where
                 .await;
         }
 
-        let mcp_servers = if kind == AgentKind::CodexCloud {
-            Vec::new()
-        } else {
+        let mcp_servers = if kind.takes_egress_mcp_servers() {
             egress.sandbox.acp_servers()
+        } else {
+            Vec::new()
         };
         let container = match self
             .inner
