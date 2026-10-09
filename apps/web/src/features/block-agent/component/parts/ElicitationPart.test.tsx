@@ -425,6 +425,21 @@ describe('ElicitationPart', () => {
       schema: emptySchema,
     });
 
+    it.each(['CreateBookingLink', 'EditBookingLink'])(
+      'dismisses legacy %s requests without exposing IDs or a form',
+      (tool) => {
+        const request = review(tool, { teamId: 'internal-team-id', draft: {} });
+        pending = { ...live(), request };
+        const view = render(() => (
+          <ElicitationPart turn={0} part={part({ request })} />
+        ));
+        expect(view.queryByTestId('form')).toBeNull();
+        expect(view.queryByText('internal-team-id')).toBeNull();
+        fireEvent.click(view.getByRole('button', { name: 'Dismiss request' }));
+        expect(respond).toHaveBeenCalledWith({ action: 'decline' });
+      }
+    );
+
     it("opens the tool's own composer, and Create answers with the whole draft", () => {
       const request = review('CreateCalendarEvent', eventDraft);
       pending = { ...live(), request };

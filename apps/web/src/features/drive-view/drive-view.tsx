@@ -13,7 +13,7 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { enableDatabases } from '@core/constant/featureFlags';
+import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
@@ -58,12 +58,17 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const navigation = useDriveDetailNavigation();
   const userId = useUserId();
   const databasesFlag = useFeatureFlag(enableDatabases);
+  const formsFlag = useFeatureFlag(enableForms);
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const view = createDriveViewState(props.route, () => list.reset());
   const viewState = createMemo(() =>
-    availableDriveState(view.value(), databasesFlag().enabled)
+    availableDriveState(
+      view.value(),
+      databasesFlag().enabled,
+      formsFlag().enabled
+    )
   );
   const searchText = useMobileSearchText(
     () => view.value().search,
@@ -75,6 +80,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
     createDriveDataSource({
       selection,
       databasesEnabled: () => databasesFlag().enabled,
+      formsEnabled: () => formsFlag().enabled,
       userId,
       tagSets,
       tagSetsReady,

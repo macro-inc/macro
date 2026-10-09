@@ -61,8 +61,13 @@ export function openPipedreamConnectUI(options: {
   };
 
   const onMessage = (event: MessageEvent) => {
-    // The hosted page posts from pipedream.com; ignore everything else.
-    if (!String(event.origin).endsWith('pipedream.com')) return;
+    // Only this hosted iframe can complete the flow. A lookalike origin or
+    // another Connect window must not resume the chat waiting on this one.
+    if (
+      event.origin !== new URL(CONNECT_UI_URL).origin ||
+      event.source !== iframe.contentWindow
+    )
+      return;
     const data = event.data as
       | { type?: string; authProvisionId?: string; error?: string }
       | undefined;

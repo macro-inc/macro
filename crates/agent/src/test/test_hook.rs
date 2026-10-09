@@ -43,6 +43,7 @@ fn inputs(
         routing: Arc::new(|_| None),
         loaded_buffer,
         register_loaded: register,
+        tool_loads: ToolLoads::default(),
         user_tool_finisher,
     }
 }
@@ -195,18 +196,25 @@ async fn on_tool_call_coerces_non_object_args_to_empty_object() {
 async fn invalid_call_to_searchable_tool_loads_it_and_retries() {
     let (register, registered) = recording_register();
     let catalog = Arc::new(vec![searchable("mcp__linear__create_issue")]);
-    let (bridge, _rx) = StreamBridge::channel(
-        inputs(Arc::new(Mutex::new(Vec::new())), register, None),
-        catalog,
-        CancellationToken::new(),
-    );
+    let bridge_inputs = inputs(Arc::new(Mutex::new(Vec::new())), register, None);
+    let tool_loads = bridge_inputs.tool_loads.clone();
+    let (bridge, _rx) = StreamBridge::channel(bridge_inputs, catalog, CancellationToken::new());
 
     let action = bridge
-        .handle_invalid_tool_call("mcp__linear__create_issue")
+        .handle_invalid_tool_call("mcp__linear__create_issue", Some("toolu_1"))
         .await;
 
-    // The unloaded-but-searchable tool was registered and the turn retries.
+    // The unloaded-but-searchable tool was registered and the turn retries,
+    // the retry's result being the one that loaded it.
     assert_eq!(&*registered.lock().unwrap(), &["mcp__linear__create_issue"]);
+    let call = rig_core::message::ToolCall::new(
+        "toolu_1".to_owned(),
+        rig_core::message::ToolFunction::new(
+            "mcp__linear__create_issue".to_owned(),
+            serde_json::json!({}),
+        ),
+    );
+    assert_eq!(tool_loads.loaded_by(&call), ["mcp__linear__create_issue"]);
     let Some(InvalidToolCallAction::Retry { feedback }) = action else {
         panic!("expected retry, got {action:?}");
     };
@@ -224,7 +232,7 @@ async fn invalid_call_to_unknown_tool_retries_with_feedback_without_loading() {
     );
 
     let action = bridge
-        .handle_invalid_tool_call("mcp__nope__hallucinated")
+        .handle_invalid_tool_call("mcp__nope__hallucinated", Some("toolu_1"))
         .await;
 
     // Nothing exists to load; the model gets corrective feedback instead of

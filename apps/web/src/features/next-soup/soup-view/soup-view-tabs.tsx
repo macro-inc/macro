@@ -19,13 +19,11 @@ import {
   type TabbedListView,
   VIEW_TAB_LISTS,
 } from '@app/features/next-soup/soup-view/tab-lists';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
-import { enableReminders } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { batch, createMemo, For, Match, Switch } from 'solid-js';
@@ -48,12 +46,7 @@ const useCurrentListView = () => {
  * pills, and the number/cycle hotkeys — agrees on which tabs exist.
  */
 export const useVisibleViewTabs = () => {
-  const remindersFlag = useFeatureFlag(enableReminders);
-
-  return (view: TabbedListView): TabItem[] =>
-    view === 'home' && !remindersFlag().enabled
-      ? VIEW_TAB_LISTS.home.filter((tab) => tab.value !== 'reminders')
-      : VIEW_TAB_LISTS[view];
+  return (view: TabbedListView): TabItem[] => VIEW_TAB_LISTS[view];
 };
 
 const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = ['documents', 'tasks'];
@@ -276,9 +269,6 @@ export const MobileSoupViewTabs = () => {
 
   return (
     <Switch>
-      <Match when={listView() === 'reminders'}>
-        <MobileFilterDrawer />
-      </Match>
       <Match when={listView() === 'search'}>
         {/* The search view has no tab pills — its header hosts only the
             facet-filter drawer button (the desktop SearchFiltersRow's

@@ -29,6 +29,21 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({
 }));
 
 describe('TextPart', () => {
+  it('hands mounted markdown DOM to its observer and cleans up when unmounted', () => {
+    const stop = vi.fn();
+    const observe = vi.fn((element: HTMLElement) => {
+      expect(element.isConnected).toBe(true);
+      expect(element.classList.contains('chat-markdown-container')).toBe(true);
+      return stop;
+    });
+    const view = render(() => (
+      <TextPart text="Hello" observeRender={observe} />
+    ));
+    expect(observe).toHaveBeenCalledOnce();
+    view.unmount();
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
   it('does not re-render unchanged markdown when inFlight flips', () => {
     parses.length = 0;
     const [inFlight, setInFlight] = createSignal(false);

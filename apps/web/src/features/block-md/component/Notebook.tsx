@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -7,7 +6,6 @@ import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
-  enableInlineAiEditing,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -34,7 +32,6 @@ import {
   untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { DocumentAiEditBar } from './DocumentAiEditBar';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -42,8 +39,10 @@ import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { useMarkdownName } from './MarkdownNameProvider';
 import {
+  MARKDOWN_OUTLINE_INSET,
   MARKDOWN_OUTLINE_WIDTH,
   MarkdownOutline,
+  outlineFitsGutter,
   useMarkdownOutline,
 } from './MarkdownOutline';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
@@ -67,9 +66,6 @@ const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
 const GapTargetWidth = 24;
 const MinimizedCommentTargetWidth = 48;
-const OutlineEdgeInset = 16;
-const OutlineMinWidth =
-  NoteTargetWidth + 2 * (MARKDOWN_OUTLINE_WIDTH + OutlineEdgeInset);
 
 enum CommentLayoutMode {
   lg = 'lg',
@@ -101,13 +97,11 @@ export function Notebook(props: {
   hotkeyScope: string | undefined;
   autoFocus: boolean;
 }) {
-  const { element: blockElement, permissions, state } = useMarkdownDocument();
-  const canEdit = permissions.canEdit;
+  const { element: blockElement, state } = useMarkdownDocument();
   const { comments: commentState, params } = state;
   const { md, setMd } = state.editor;
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
-  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
@@ -120,11 +114,12 @@ export function Notebook(props: {
 
   const [width, setWidth] = createSignal<number>();
   const [leftFloatX, setLeftFloatX] = createSignal(0);
+  const [contentInset, setContentInset] = createSignal(0);
   const commentBreakpoints = createSizeBreakpoints(width, CommentBreakpoints);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
   const outline = useMarkdownOutline({
     editor: () => md.editor,
-    enabled: () => (width() ?? 0) >= OutlineMinWidth && !isMobile(),
+    enabled: () => outlineFitsGutter(contentInset()) && !isMobile(),
   });
 
   const hasComment = createMemo(() => {
@@ -192,13 +187,17 @@ export function Notebook(props: {
     const observeCallback = () => {
       const { width, left } = notebookRef.getBoundingClientRect();
       setWidth(width);
-      const leftFloat =
-        contentRef.getBoundingClientRect().right - left + GapTargetWidth;
-      setLeftFloatX(leftFloat);
+      const content = contentRef.getBoundingClientRect();
+      setContentInset(content.left - left);
+      setLeftFloatX(content.right - left + GapTargetWidth);
     };
     const { observe } = makeResizeObserver(observeCallback);
     observeCallback();
     observe(notebookRef);
+    // A comment layout change resizes the text column without resizing the
+    // notebook, and it is the column's own geometry the outline is placed
+    // against.
+    observe(contentRef);
   });
 
   createEffect(() => {
@@ -336,7 +335,7 @@ export function Notebook(props: {
         <div
           class="pointer-events-none absolute inset-y-0 z-1"
           style={{
-            left: `${OutlineEdgeInset}px`,
+            left: `${MARKDOWN_OUTLINE_INSET}px`,
             width: `${MARKDOWN_OUTLINE_WIDTH}px`,
           }}
         >
@@ -371,11 +370,6 @@ export function Notebook(props: {
               setShowLexicalStateDebugger(false)
             }
           />
-          <Show when={inlineAiEditing().enabled && canEdit() && !isMobile()}>
-            <div class="mb-2">
-              <DocumentAiEditBar documentId={props.documentId} />
-            </div>
-          </Show>
           <DocumentDiscussion editorHasFocus={editorHasFocus()} />
         </ParamsProvider>
       </div>

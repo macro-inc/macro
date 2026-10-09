@@ -567,3 +567,27 @@ fn github_mentions_does_not_capture_trailing_hyphen() {
     let mentions = extract_github_mentions("ping @user- and @-nobody");
     assert_eq!(mentions, vec!["user"]);
 }
+
+// ---------------------------------------------------------------------------
+// pull_request_task_reference
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pull_request_task_reference_prefers_the_team_reference() {
+    let task = MacroTaskId::from_short_uuid("2BuyvtY3ae").unwrap();
+    let team = TeamTaskReference::new("ENG_CORE", 42).unwrap();
+    let reference = pull_request_task_reference(&task, Some(&team));
+    assert_eq!(reference, "ENG_CORE-42");
+    assert_eq!(TeamTaskReference::extract_from_text(&reference), [team]);
+}
+
+#[test]
+fn pull_request_task_reference_falls_back_to_the_macro_id() {
+    let task = MacroTaskId::from_short_uuid("2BuyvtY3ae").unwrap();
+    assert_eq!(pull_request_task_reference(&task, None), "MACRO-2BuyvtY3ae");
+    // A slug the webhook's parser would not read back cannot be the reference.
+    let unreadable = TeamTaskReference::new("A_VERY_LONG_TEAM_SLUG_NAME", 7).unwrap();
+    let reference = pull_request_task_reference(&task, Some(&unreadable));
+    assert_eq!(reference, "MACRO-2BuyvtY3ae");
+    assert_eq!(MacroTaskId::extract_from_text(&reference), [task]);
+}

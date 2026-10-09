@@ -1,3 +1,4 @@
+use crate::model::anthropic_prompt_layout::AnthropicPromptLayout;
 use crate::model::router::*;
 use crate::model::types::Model;
 use crate::model::{PredefinedModel, ReasoningEffort};
@@ -6,6 +7,7 @@ use rig_core::providers::{anthropic, gemini, openai};
 fn test_router() -> ModelRouter {
     let anthropic = anthropic::Client::builder()
         .api_key("test-anthropic-key")
+        .http_client(AnthropicPromptLayout::default())
         .build()
         .unwrap();
     let openai = openai::Client::builder()

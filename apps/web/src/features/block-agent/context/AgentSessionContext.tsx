@@ -41,6 +41,12 @@ export type AgentSessionState = {
   metadata: Accessor<SessionMetadata | undefined>;
   /** The folded transcript, ordered by turn, live-following the session. */
   messages: Accessor<FoldedMessage[]>;
+  /** Optional in galleries/replays; production reports actual answer rendering. */
+  observeRenderedText?: (
+    sessionId: string,
+    turn: number,
+    element: HTMLElement
+  ) => (() => void) | undefined;
   loadFailed: Accessor<boolean>;
   /** The load failed because the viewer is not a participant (401/403). */
   accessDenied: Accessor<boolean>;

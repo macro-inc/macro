@@ -20,6 +20,7 @@ import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { preloadAgentFold } from '@core/agent-fold/client';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
@@ -324,6 +325,7 @@ export function AgentInput(props: AgentInputProps) {
       <div
         ref={containerRef}
         data-keep-keyboard
+        onFocusIn={() => void preloadAgentFold()}
         class="flex flex-col gap-1.5"
         classList={{ 'opacity-50': props.readOnly }}
       >

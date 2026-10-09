@@ -26,6 +26,7 @@
 //! of the nodes it restores.
 
 pub mod codec;
+pub mod position;
 
 use crate::document::{Document, Node, NodeIdx};
 use crate::edit::flags;

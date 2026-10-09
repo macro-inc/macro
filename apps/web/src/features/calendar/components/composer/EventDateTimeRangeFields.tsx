@@ -8,6 +8,7 @@ import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { cn } from '@ui/utils/classname';
 import { createSignal, createUniqueId } from 'solid-js';
 import { formatLocalDate, parseLocalDate } from '../../utils/calendar-date';
+import { EventComposerPopoverPortal } from './EventComposerPopoverPortal';
 import { dateLabelFormatter, EventTimeInput } from './EventDateTimeInputs';
 import {
   DAY_TIME_OPTIONS,
@@ -121,10 +122,10 @@ function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
         />
       </Popover.Trigger>
 
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-edge bg-menu-glass glass menu-open-animation"
+            class="portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass glass menu-open-animation"
             on:keydown={(event: KeyboardEvent) => {
               if (event.key !== 'Escape') return;
               event.preventDefault();
@@ -164,7 +165,7 @@ function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
             </div>
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }

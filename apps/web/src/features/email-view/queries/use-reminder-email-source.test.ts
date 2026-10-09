@@ -131,24 +131,18 @@ function email(id: string): EmailEntity {
 
 function item(
   threadId: string,
-  count = 1,
   reminderId = `${threadId}-reminder`
 ): EmailReminderSummary {
   return {
     threadId,
-    count,
-    nearest: {
-      reminder: {
-        id: reminderId,
-        entityId: threadId,
-        entityType: 'email_thread',
-        description: 'Follow up',
-        enabled: true,
-        nextRunAt: '2026-10-05T12:00:00Z',
-        createdAt: '2026-10-01T12:00:00Z',
-        updatedAt: '2026-10-01T12:00:00Z',
-        schedule: { type: 'once', remindAt: '2026-10-05T12:00:00Z' },
-      },
+    followup: {
+      reminderId,
+      threadId,
+      linkId: 'selected-inbox',
+      revision: 'revision',
+      condition: 'if_no_reply',
+      state: 'pending',
+      remindAt: '2026-10-05T12:00:00Z',
     },
   };
 }
@@ -156,20 +150,20 @@ function item(
 it('uses collection clock metadata only for hydrated rows and clears it outside the tab', () => {
   const { source, setCollection, setHydration, setState } = mount();
   setCollection('data', 'pages', [
-    { items: [item('first', 2), item('revoked')], nextCursor: '' },
+    { items: [item('first'), item('revoked')], nextCursor: '' },
   ]);
   setHydration('data', 'entities', [email('first')]);
   expect(source.reminderForThread?.('first')).toMatchObject({
-    count: 2,
-    nearest: { id: 'first-reminder' },
+    reminderId: 'first-reminder',
+    name: 'first',
   });
   expect(source.reminderForThread?.('revoked')).toBeUndefined();
   setCollection('data', 'pages', [
-    { items: [item('first', 1, 'replacement')], nextCursor: '' },
+    { items: [item('first', 'replacement')], nextCursor: '' },
   ]);
   expect(source.reminderForThread?.('first')).toMatchObject({
-    count: 1,
-    nearest: { id: 'replacement' },
+    reminderId: 'replacement',
+    name: 'first',
   });
   setState('tab', 'all');
   expect(source.reminderForThread?.('first')).toBeUndefined();

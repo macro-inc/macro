@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sync_token, synced_at FROM calendars WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "synced_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "47c1191b50d81a7933e3b9680808ab9ed74dd974cdbdad74b3e2b9e1bc9b5778"
+}

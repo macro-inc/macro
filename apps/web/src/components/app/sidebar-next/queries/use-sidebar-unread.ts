@@ -15,8 +15,15 @@ import { notificationStateFromGraphql } from '@notifications/notification-state'
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { createMemo } from 'solid-js';
+
+// Module scope: cached query meta outlives the hook that registered it.
+const signalInsertFilter: SoupApiItemFilter = (item) =>
+  soupItemMatchesHomeTab(item, 'signal');
 
 /** Presence in the loaded unread page, never a total or a pagination loop. */
 export function useSidebarUnread() {
@@ -50,7 +57,7 @@ export function useSidebarUnread() {
         facetContext: EMPTY_TAG_FACET_CONTEXT,
       }),
     () => ({
-      meta: { insertFilter: (item) => soupItemMatchesHomeTab(item, 'signal') },
+      meta: { insertFilter: signalInsertFilter },
     })
   );
 

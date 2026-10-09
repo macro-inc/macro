@@ -1,5 +1,6 @@
 import { createSessionComposerDraft } from '@app/features/block-agent/primitives/session-composer-draft';
 import type { InputAttachmentData } from '@channel/Input/types';
+import { preloadAgentFold } from '@core/agent-fold/client';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
@@ -14,6 +15,10 @@ import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
+
+vi.mock('@core/agent-fold/client', () => ({
+  preloadAgentFold: vi.fn(async () => {}),
+}));
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -140,6 +145,25 @@ function type(text: string) {
 }
 
 describe('Chat session input', () => {
+  it('preloads the fold only when focused without sending or changing the draft', () => {
+    const send = vi.fn();
+    const change = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft="Keep this draft"
+        onDraftChange={change}
+        onSend={send}
+        selector={null}
+      />
+    ));
+    expect(preloadAgentFold).not.toHaveBeenCalled();
+    fireEvent.focusIn(screen.getByTestId('editor'));
+    expect(preloadAgentFold).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalled();
+    expect(change).not.toHaveBeenCalled();
+    expect(editor.clear).not.toHaveBeenCalled();
+  });
+
   it('seeds the supplied context without sending it', () => {
     const send = vi.fn();
     render(() => (

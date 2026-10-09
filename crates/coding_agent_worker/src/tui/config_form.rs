@@ -66,6 +66,14 @@ impl Setting {
             Self::HerdrFocus => "Open sessions",
         }
     }
+
+    /// Whether the setting only applies to an agent running in herdr.
+    pub fn is_herdr(self) -> bool {
+        matches!(
+            self,
+            Self::HerdrModel | Self::HerdrArguments | Self::HerdrStorage | Self::HerdrFocus
+        )
+    }
 }
 
 /// Settings in keyboard navigation order.
@@ -88,13 +96,13 @@ pub fn settings(config: &Config) -> &'static [Setting] {
         &[
             Setting::Agent,
             Setting::Workspace,
+            Setting::Name,
+            Setting::Scope,
+            Setting::PermissionBypass,
             Setting::HerdrModel,
             Setting::HerdrArguments,
             Setting::HerdrStorage,
             Setting::HerdrFocus,
-            Setting::Name,
-            Setting::Scope,
-            Setting::PermissionBypass,
         ]
     } else {
         SETTINGS

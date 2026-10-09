@@ -1,4 +1,8 @@
 import type { CompletionContext } from '@ironcalc/wasm';
+import type {
+  GoalSeekRequest,
+  GoalSeekResult,
+} from '@macro-inc/spreadsheet/goal-seek';
 import type { SheetPivotLayout } from '@macro-inc/spreadsheet/pivot-layout';
 import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import type { AxisChange } from '@macro-inc/spreadsheet/workbook-structure';
@@ -57,6 +61,13 @@ export type CalculationRequest =
       text: string;
       cursor: number;
       context?: CalculationContext;
+    }
+  | {
+      id: number;
+      type: 'goal-seek';
+      request: GoalSeekRequest;
+      /** Present when the worker has no loaded workbook to copy. */
+      sheets?: CalculationSheet[];
     };
 
 export type CalculationResponse =
@@ -74,6 +85,7 @@ export type CalculationResponse =
     }
   | { id: number; type: 'copy'; edits: SpreadsheetCellEdits }
   | { id: number; type: 'complete'; context: CompletionContext }
+  | { id: number; type: 'goal-seek'; result: GoalSeekResult }
   | { id: number; type: 'error'; message: string };
 
 export type CalculationOperation =
@@ -82,4 +94,5 @@ export type CalculationOperation =
   | Omit<Extract<CalculationRequest, { type: 'calculate-workbook' }>, 'id'>
   | Omit<Extract<CalculationRequest, { type: 'update-workbook' }>, 'id'>
   | Omit<Extract<CalculationRequest, { type: 'copy' }>, 'id'>
-  | Omit<Extract<CalculationRequest, { type: 'complete' }>, 'id'>;
+  | Omit<Extract<CalculationRequest, { type: 'complete' }>, 'id'>
+  | Omit<Extract<CalculationRequest, { type: 'goal-seek' }>, 'id'>;

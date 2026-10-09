@@ -14,7 +14,26 @@ use macro_env_var::{env_vars, maybe_env_vars};
 maybe_env_vars! {
     /// Browser-reachable FusionAuth origin used for OAuth authorization redirects.
     pub struct FusionauthPublicUrl;
+    /// The authentication service's own internal key, which settlement
+    /// requests for counted usage present. Required while
+    /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
+    pub struct AuthenticationServiceSecretKey;
+    /// Comma-separated hosts allowed as `https` OAuth redirect URI destinations
+    /// for MCP clients. Falls back to [`DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS`]
+    /// when unset. Loopback `http` redirect URIs are always allowed and do not
+    /// need to be listed.
+    pub struct McpAllowedRedirectHosts;
 }
+
+/// Hosts trusted to receive an MCP authorization code when
+/// `MCP_ALLOWED_REDIRECT_HOSTS` is unset.
+///
+/// These are the browser-based MCP clients Macro supports, and match the
+/// origins the FusionAuth application already allows. A host absent from this
+/// list cannot be used as a redirect destination, which is what stops an
+/// attacker from registering a client pointing at a callback they control.
+pub const DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS: [&str; 4] =
+    ["claude.ai", "chatgpt.com", "chat.openai.com", "cursor.com"];
 
 env_vars! {
     /// Auth key used by the document storage / search / lexical clients.
@@ -65,6 +84,13 @@ pub struct Config {
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
+    /// Default-off settlement of usage past allowances. When enabled, counted
+    /// usage recorded here asks the authentication service to settle; that
+    /// service's own policy decides whether it does.
+    #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
+    pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
+    /// Key settlement requests present to the authentication service.
+    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -96,6 +122,9 @@ pub struct Config {
     pub document_storage_service_cloudfront_signer_private_key_secret_name:
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
     pub mcp_public_url: McpPublicUrl,
+    /// Hosts allowed as `https` MCP OAuth redirect destinations. Falls back to
+    /// [`DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS`] when unset.
+    pub mcp_allowed_redirect_hosts: McpAllowedRedirectHosts,
     pub fusionauth_base_url: FusionauthBaseUrl,
     /// Browser-reachable FusionAuth URL. Falls back to the API base URL when unset.
     pub fusionauth_public_url: FusionauthPublicUrl,
@@ -126,12 +155,38 @@ impl Config {
         )
     }
 
+    /// Where this host's settlement requests go: the authentication service
+    /// while `ENABLE_AI_USAGE_BILLING` is true, which then requires
+    /// `AUTHENTICATION_SERVICE_SECRET_KEY`; nowhere otherwise.
+    pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
+        let client = self
+            .authentication_service_secret_key
+            .value()
+            .filter(|key| !key.trim().is_empty())
+            .map(|key| {
+                anyhow::Ok(std::sync::Arc::new(
+                    authentication_service_client::AuthServiceClient::new(
+                        key.to_owned(),
+                        macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                    ),
+                ))
+            })
+            .transpose()?;
+        Ok(ai_billing::composition::SettlementRoute::from_policy(
+            self.enable_ai_usage_billing,
+            client,
+        )?)
+    }
+
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let billing = ai_billing::config::load_ai_usage_billing()
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         let mut config = macro_config::ConfigLoader::load::<Config>()
             .context("failed to load mcp server config")?;
         config.enable_ai_usage_enforcement = enforcement;
+        config.enable_ai_usage_billing = billing;
         Ok(config)
     }
 }

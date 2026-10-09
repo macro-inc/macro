@@ -38,14 +38,16 @@ import { URL_PARAMS } from '../constants';
 import { useCanvasDocument } from '../context/canvas-document-context';
 import { useToolManager } from '../signal/toolManager';
 import { useRenderState } from '../store/RenderState';
+import type { CanvasDocumentChrome } from './CanvasDocument';
 
-export function TopBar() {
+export function TopBar(props: { next?: CanvasDocumentChrome } = {}) {
   const analytics = useAnalytics();
 
-  const toolManager = useToolManager();
-  const { getLocation } = useRenderState();
-  const [getCurrentSavedFile] =
-    useCanvasDocument().state.signals.currentSavedFile;
+  const toolManager = props.next ? undefined : useToolManager();
+  const getLocation = props.next?.location ?? useRenderState().getLocation;
+  const getCurrentSavedFile =
+    props.next?.savedFile ??
+    useCanvasDocument().state.signals.currentSavedFile[0];
   const documentId = useBlockId();
   const fileName = useBlockDocumentName('Unknown Filename');
   const downloadName = useBlockDocumentDownloadName('Unknown Filename');
@@ -64,7 +66,7 @@ export function TopBar() {
 
   let ref!: HTMLDivElement;
   onMount(() => {
-    toolManager.ignoreMouseEvents(ref);
+    toolManager?.ignoreMouseEvents(ref);
   });
 
   const downloadDocument = createCallback(async () => {

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+no_update=false
+for arg in "$@"; do
+  case "$arg" in
+    --no-update) no_update=true ;;
+    -h|--help) echo "Usage: just ios-build [--no-update]"; exit 0 ;;
+    *) echo "Unknown option: $arg. Usage: just ios-build [--no-update]" >&2; exit 2 ;;
+  esac
+done
+set --
+if [[ "$no_update" == true ]]; then
+  set -- -- --no-default-features
+fi
+
+script_dir="$(\cd "$(dirname "$0")" && pwd)"
+\cd "$script_dir/.."
+
+source "$script_dir/ios-native-env.sh"
+ios_resolve_toolchain aarch64-apple-ios
+
+# Production analytics must be configured before Vite embeds the key.
+if [[ -z "${VITE_POSTHOG_API_KEY:-}" ]]; then
+  if ! VITE_POSTHOG_API_KEY="$(doppler secrets get VITE_POSTHOG_API_KEY \
+    --project web-release --config prd --plain --raw --no-check-version 2>/dev/null)" \
+    || [[ -z "$VITE_POSTHOG_API_KEY" ]]; then
+    echo "Unable to fetch VITE_POSTHOG_API_KEY. Install the Doppler CLI and authenticate with read access to web-release/prd, or supply VITE_POSTHOG_API_KEY in the environment." >&2
+    exit 1
+  fi
+fi
+export VITE_POSTHOG_API_KEY
+
+# The web/WASM build keeps its original toolchain. Switch to Apple tools only
+# for the native build, and skip Tauri's hook because it has already run here.
+just build-tauri
+
+ios_activate_toolchain
+
+\cd tauri/src-tauri
+exec "$ios_cargo" tauri ios build --open \
+  --config '{"build":{"beforeBuildCommand":"","frontendDist":"../../dist"}}' "$@"

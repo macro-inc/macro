@@ -34,7 +34,6 @@ const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],
-  reminders: ['reminder'],
 };
 
 type CreateOption = {
@@ -73,7 +72,6 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   documents: 'New',
   folders: 'Folder',
   mail: 'Email',
-  reminders: 'Reminder',
   tasks: 'Task',
 };
 
@@ -132,7 +130,7 @@ export const SoupViewCreateButton = () => {
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
   const isCreatableEnabled = useCreatableEnabled();
-  const soupView = useMaybeSoupView();
+  const _soupView = useMaybeSoupView();
 
   const currentView = createMemo(() => {
     const content = panel.handle.content();
@@ -145,9 +143,6 @@ export const SoupViewCreateButton = () => {
   // one thing you make from that list rather than triage into it.
   const createView = createMemo(() => {
     const view = currentView();
-    if (view === 'home' && soupView?.activeTab() === 'reminders') {
-      return 'reminders';
-    }
     return view;
   });
 

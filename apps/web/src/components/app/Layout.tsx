@@ -25,11 +25,7 @@ import {
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
-import { Paywall } from '@app/features/paywall/Paywall';
-import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
-import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
-import { MobileSettings } from '@app/features/settings/MobileSettings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
@@ -44,7 +40,7 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableDatabases, enableReminders } from '@core/constant/featureFlags';
+import { enableDatabases } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -52,6 +48,8 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { isPlatform } from '@core/util/platform';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import {
@@ -59,18 +57,22 @@ import {
   useLocation,
   useNavigate,
 } from '@solidjs/router';
+import { type as osType } from '@tauri-apps/plugin-os';
 import { cn, ImperativeDialogHost } from '@ui';
 import {
   createEffect,
   createMemo,
+  createSignal,
   lazy,
   onCleanup,
   onMount,
   Show,
   Suspense,
 } from 'solid-js';
+import { ViewNavigationSlotContext } from '../view-shell/navigation-slot';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { ContentLoading } from './ContentLoading';
+import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
@@ -83,10 +85,25 @@ import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const StarterDatabase = lazy(async () => {
   const module = await import(
-    '@app/features/block-database/views/starter-database'
+    '../../features/block-database/views/starter-database'
   );
   return { default: module.StarterDatabase };
 });
+
+// Modals and mobile-only surfaces stay out of the entry chunk; each one
+// renders inside a Suspense boundary and loads when it first mounts.
+const Paywall = lazyNamed(
+  () => import('@app/features/paywall/Paywall'),
+  'Paywall'
+);
+const PropertyEditorModal = lazyNamed(
+  () => import('@app/features/property/editor/PropertyEditorModal'),
+  'PropertyEditorModal'
+);
+const MobileSettings = lazyNamed(
+  () => import('@app/features/settings/MobileSettings'),
+  'MobileSettings'
+);
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -164,6 +181,8 @@ function NewOnboardingRedirect() {
 }
 
 function LayoutInner(props: RouteSectionProps) {
+  const hasOverlayTitleBar = isPlatform('desktop') && osType() === 'macos';
+  const [navigationSlot, setNavigationSlot] = createSignal<HTMLElement>();
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const { usageLimitOpen } = useAiUsageLimitState();
@@ -205,112 +224,119 @@ function LayoutInner(props: RouteSectionProps) {
   attachGlobalDOMScope(document.body);
 
   return (
-    <div
-      class={cn(
-        'relative flex flex-col justify-between not-touch:bg-panel w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
-      )}
-    >
-      <ImperativeDialogHost />
-      <BundleUpdateProgressBar />
-      <Suspense>
-        <Show when={isAuthenticated()}>
-          <NewOnboardingRedirect />
-          <Show when={!AUTH_URLS.includes(location.pathname)}>
-            <GithubReauthenticationPrompt />
-            <GmailReauthenticationPrompt />
-            <CalendarPermissionPrompt />
-          </Show>
-          <GlobalShortcuts />
-          <Show when={!isTouchDevice()}>
-            <GoToHotkeys />
+    <ViewNavigationSlotContext.Provider value={navigationSlot}>
+      <div
+        class={cn(
+          'relative flex flex-col justify-between not-touch:bg-panel w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
+          hasOverlayTitleBar && 'pt-[40px]'
+        )}
+      >
+        <Show when={hasOverlayTitleBar}>
+          <DesktopTitleBar navigationRef={setNavigationSlot} />
+        </Show>
+        <ImperativeDialogHost />
+        <BundleUpdateProgressBar />
+        <Suspense>
+          <Show when={isAuthenticated()}>
+            <NewOnboardingRedirect />
+            <Show when={!AUTH_URLS.includes(location.pathname)}>
+              <GithubReauthenticationPrompt />
+              <GmailReauthenticationPrompt />
+              <CalendarPermissionPrompt />
+            </Show>
+            <GlobalShortcuts />
+            <Show when={!isTouchDevice()}>
+              <GoToHotkeys />
+              <Suspense>
+                <FavoritesCommands />
+                <CommandMenu />
+              </Suspense>
+            </Show>
             <Suspense>
-              <FavoritesCommands />
-              <CommandMenu />
+              <PropertyEditorModal />
             </Suspense>
+            <GlobalBulkEditEntityModal />
+            <NativeShareSheet />
+            <MacroMcpSetupModal />
+            <CreateChannelModal />
+            <CreateCompanyModal />
+            <CreateContactModal />
+            <Show when={isAddInboxDialogOpen()}>
+              <AddInboxDialog />
+            </Show>
           </Show>
-          <Suspense>
-            <PropertyEditorModal />
-          </Suspense>
-          <GlobalBulkEditEntityModal />
-          <NativeShareSheet />
-          <MacroMcpSetupModal />
-          <CreateChannelModal />
-          <CreateCompanyModal />
-          <CreateContactModal />
-          {/* Reactive, unlike the imperative isFeatureEnabled(enableReminders) gate on the
-              action: this decides whether the composer is mounted at all, so it
-              has to pick up a late PostHog answer. */}
-          <ShowFeatureFlag flag={enableReminders}>
-            <ReminderComposerModal />
-          </ShowFeatureFlag>
-          <Show when={isAddInboxDialogOpen()}>
-            <AddInboxDialog />
+          <Show
+            when={
+              isAuthenticated() === false &&
+              !AUTH_URLS.includes(location.pathname)
+            }
+          >
+            <Banner />
           </Show>
-        </Show>
-        <Show
-          when={
-            isAuthenticated() === false &&
-            !AUTH_URLS.includes(location.pathname)
-          }
-        >
-          <Banner />
-        </Show>
-      </Suspense>
-      {/* <Show when={isAuthenticated() && isTutorialCompleted() === false}>
+        </Suspense>
+        {/* <Show when={isAuthenticated() && isTutorialCompleted() === false}>
         <Onboarding />
       </Show> */}
 
-      <Show when={paywallOpen()}>
-        <Suspense>
-          <Paywall />
-        </Suspense>
-      </Show>
-      <Show when={usageLimitOpen()}>
-        <AiUsageLimitDialog />
-      </Show>
-      <div class="max-h-full grow flex">
-        <ItemDndProvider>
-          <Show when={isSidebarVisible()}>
-            <SidebarRail />
-          </Show>
+        <Show when={paywallOpen()}>
+          <Suspense>
+            <Paywall />
+          </Suspense>
+        </Show>
+        <Show when={usageLimitOpen()}>
+          <AiUsageLimitDialog />
+        </Show>
+        <div class="min-h-0 flex-1 flex">
+          <ItemDndProvider>
+            <Show when={isSidebarVisible()}>
+              <SidebarRail />
+            </Show>
 
-          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-current">
-            {/* Route loading must not detach the shell or mobile navigation. */}
-            <Suspense fallback={<ContentLoading />}>{props.children}</Suspense>
-          </div>
-        </ItemDndProvider>
-      </div>
-      <Show
-        when={
-          isTouchDevice() &&
-          isAuthenticated() &&
-          !AUTH_URLS.includes(location.pathname)
-        }
-      >
-        <FloatRegionHost />
-        <Suspense>
-          <UserCardDrawer />
-        </Suspense>
-        <Show when={isMobile()}>
-          <MobileSettings />
-        </Show>
-        <MobileViewsRow />
-        <FloatRegion
-          region="dock"
-          active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
-        >
-          <MobileDockRow />
-        </FloatRegion>
-      </Show>
-      <SwipeDownDismissKeyboard />
-      <Suspense>
+            <div class="flex-1 w-full min-h-0 font-sans text-ink caret-current">
+              {/* Route loading must not detach the shell or mobile navigation. */}
+              <Suspense fallback={<ContentLoading />}>
+                {props.children}
+              </Suspense>
+            </div>
+          </ItemDndProvider>
+        </div>
         <Show
-          when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+          when={
+            isTouchDevice() &&
+            isAuthenticated() &&
+            !AUTH_URLS.includes(location.pathname)
+          }
         >
-          <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
+          <FloatRegionHost />
+          <Suspense>
+            <UserCardDrawer />
+          </Suspense>
+          <Show when={isMobile()}>
+            <Suspense>
+              <MobileSettings />
+            </Suspense>
+          </Show>
+          <MobileViewsRow />
+          <FloatRegion
+            region="dock"
+            active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
+          >
+            <MobileDockRow />
+          </FloatRegion>
         </Show>
-      </Suspense>
-      <DevStatusBar />
-    </div>
+        <SwipeDownDismissKeyboard />
+        <Suspense>
+          <Show
+            when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+          >
+            <Launcher
+              open={createMenuOpen()}
+              onOpenChange={setCreateMenuOpen}
+            />
+          </Show>
+        </Suspense>
+        <DevStatusBar />
+      </div>
+    </ViewNavigationSlotContext.Provider>
   );
 }

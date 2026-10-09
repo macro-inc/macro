@@ -1,6 +1,7 @@
 import type { DataValidation } from '@macro-inc/spreadsheet/sheet-rules';
 import { describe, expect, it } from 'vitest';
 import {
+  dropdownOptions,
   listItems,
   type RangeValues,
   validateInput,
@@ -37,6 +38,21 @@ describe('data validation', () => {
     expect(validationAt(rules, 'D5')).toBe(rules[0]);
     expect(validationAt(rules, 'A1')).toBe(rules[1]);
     expect(validationAt(rules, 'C3')).toBeUndefined();
+  });
+
+  it('describes a list rule for the dropdown dialog', () => {
+    expect(dropdownOptions(rule({ formulas: ['"Open,Done"'] }))).toEqual({
+      items: ['Open', 'Done'],
+      rejectInvalid: true,
+    });
+    expect(
+      dropdownOptions(
+        rule({ formulas: ["'Lists'!$A$1:$A$2"], errorStyle: 'warning' })
+      )
+    ).toEqual({ range: "'Lists'!A1:A2", rejectInvalid: false });
+    expect(
+      dropdownOptions(rule({ type: 'whole', formulas: ['1'] }))
+    ).toBeUndefined();
   });
 
   it('lists quoted items, ranges, other sheets and names', () => {

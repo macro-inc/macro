@@ -1,0 +1,36 @@
+/* The shared editor and static renderer use identical canvas typography. */
+.canvas-lexical-text, .canvas-lexical-text .md, .canvas-lexical-text [data-markdown-editable] {
+  font-size: inherit; font-family: inherit; line-height: 1.35; color: inherit;
+  outline: none; min-height: 1.35em;
+}
+.canvas-lexical-text p, .canvas-lexical-text blockquote,
+.canvas-lexical-text h1, .canvas-lexical-text h2, .canvas-lexical-text h3,
+.canvas-lexical-text ul, .canvas-lexical-text ol { margin-block: 0; }
+.canvas-lexical-text [data-markdown-editable] { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Pending mention searches are measured as plain text. Keep their highlight
+   from adding width and wrapping an otherwise single-line canvas label. */
+.canvas-lexical-text .md-inline-search { padding: 0; }
+
+.canvas-lexical-text[data-canvas-text-editor] { min-width: 8px !important; }
+.canvas-lexical-text > .canvas-text-shell { font-size: inherit; height: auto; min-height: 0; overflow: visible; }
+
+/* Canvas-owned markup styles for the shared rich-text renderer. */
+.graphics-rich-text p, .graphics-rich-text blockquote, .graphics-rich-text h1, .graphics-rich-text h2, .graphics-rich-text h3, .graphics-rich-text ul, .graphics-rich-text ol { margin: 0; }
+.graphics-rich-text p { min-height: 1.35em; }
+.graphics-rich-text h1 { font-size: 1.7em; font-weight: 700; line-height: 1.35; }
+.graphics-rich-text h2 { font-size: 1.4em; font-weight: 700; line-height: 1.35; }
+.graphics-rich-text h3 { font-size: 1.15em; font-weight: 700; line-height: 1.35; }
+.graphics-rich-text ul, .graphics-rich-text ol { padding-inline-start: 1.5em; }
+.graphics-rich-text ul { list-style: disc outside; }
+.graphics-rich-text ol { list-style: decimal outside; }
+.graphics-rich-text li { margin: 0; padding: 0; }
+.graphics-rich-text blockquote { border-inline-start: .12em solid currentColor; padding-inline-start: .6em; }
+.graphics-rich-text strong, .graphics-rich-text .graphics-text-bold { font-weight: 700; }
+.graphics-rich-text em, .graphics-rich-text .graphics-text-italic { font-style: italic; }
+.graphics-rich-text u, .graphics-rich-text .graphics-text-underline { text-decoration: underline; }
+.graphics-rich-text s, .graphics-rich-text .graphics-text-strike { text-decoration: line-through; }
+.graphics-rich-text .graphics-text-underline-strike { text-decoration: underline line-through; }
+.graphics-rich-text code, .graphics-rich-text .graphics-text-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: color-mix(in srgb, currentColor 10%, transparent); border-radius: .12em; }
+.graphics-rich-text mark, .graphics-rich-text .graphics-text-highlight { color: inherit; background: #ffe06680; }
+.graphics-rich-text a { color: inherit; text-decoration: underline; }
+.graphics-rich-text [data-lexical-list-type] { list-style: inherit; }

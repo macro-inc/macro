@@ -35,6 +35,20 @@ On **Cursor Cloud**, installation already prepares the database and test envs.
 Start the infrastructure with `bash .cursor/infra.sh`; see [Cursor Cloud](CURSOR_CLOUD.md).
 Apply any new migrations before testing.
 
+### Pre-migrated test template
+
+CI runs `just setup_test_template` after `initialize_dbs`. It migrates `template1`,
+which Postgres clones for every new database, so each `#[sqlx::test]` database
+starts with the MacroDB schema instead of replaying every migration. That
+replay used to be nearly all of the Rust test suite's runtime. Run the recipe
+locally only against a Postgres dedicated to one checkout; every database created
+on that server afterwards gets the schema too.
+
+Tests that build their own schema (`#[sqlx::test(migrations = false)]`, or a
+crate's test-only schema fixture) must first run
+`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`, since their database may
+arrive pre-migrated.
+
 ## Safe database schema changes
 
 ### Entity tables and reusable storage

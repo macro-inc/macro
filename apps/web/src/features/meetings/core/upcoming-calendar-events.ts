@@ -35,7 +35,12 @@ export function selectUpcomingCalendarEvents(
   for (const event of events) {
     const start = timestamp(event.start, event.allDay);
     const end = timestamp(event.end, event.allDay);
-    if (!Number.isFinite(start) || end <= start || !(end > now.getTime())) {
+    if (
+      !Number.isFinite(start) ||
+      end < start ||
+      (event.allDay && end === start) ||
+      !(end > now.getTime())
+    ) {
       continue;
     }
     occurrences.set(

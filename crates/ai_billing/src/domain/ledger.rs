@@ -3,24 +3,33 @@
 //!
 //! For a payer and period, each seat first consumes only its own included
 //! allowance, both measured in cost cents. The remaining usage is chargeable to
-//! the payer's shared credits and overage at the markup, in customer cents:
+//! the payer's shared prepaid credits at the markup, in customer cents:
 //!
 //! ```text
 //! chargeable_cost = sum(max(0, seat_used_cost - seat_included_cost))
 //! chargeable      = extra_customer_cents(chargeable_cost)
 //! covered         = credits_consumed + overage_charged
 //! uncovered       = max(0, chargeable - covered)
-//! headroom        = (covered - chargeable) + credit_balance + overage_room
+//! headroom        = (covered - chargeable) + credit_balance
 //! remaining       = seat_remaining_cost + cost_cents_covered_by(headroom)
+//! effective       = credit_balance - uncovered
+//! reload          = min(target - effective, monthly_limit - reloaded_this_month)
+//!                   when effective < minimum
 //! ```
 //!
 //! The markup is applied to the period's cumulative chargeable cost, never to
 //! an increment, so settling in several chunks books exactly the same money as
-//! settling once. Settlement moves `uncovered` into `credits_consumed` (from
-//! the balance) and then into `overage_charged` (when overage is on, within the
-//! cap, and the chunk is worth charging). Between settlements `uncovered` is
-//! simply usage that has not been booked yet; the gate accounts for it through
-//! `headroom`.
+//! settling once. Settlement moves `uncovered` into `credits_consumed` from
+//! the balance. Historical charges retain their recorded coverage. The legacy
+//! planner can describe direct-charge arithmetic, but the service always
+//! disables that policy and the gateway rejects direct usage invoices. Between
+//! settlements the gate accounts for unbooked usage through `headroom`.
+//!
+//! When automatic reloads are on, the current period is checked before
+//! settlement: `effective` is what the balance will be once this settlement
+//! consumes credits, and a reload tops it back up to `target` (within the
+//! calendar-month limit). Unfunded usage remains uncovered; it cannot trigger
+//! a direct charge.
 //!
 //! Free users have no credits or overage: their `remaining` is only the
 //! unused part of the free allowance, and nothing is ever settled for them.
@@ -29,8 +38,8 @@
 mod test;
 
 use super::models::{
-    AllowanceDecision, BillingPeriod, BillingSettings, DenyReason, Entitlement,
-    MIN_STRIPE_CHARGE_CENTS, PeriodLedger, PlanTier, UsageSnapshot,
+    AllowanceDecision, AutoReloadSnapshot, AutoReloadThresholds, BillingPeriod, BillingSettings,
+    DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS, PeriodLedger, PlanTier, UsageSnapshot,
 };
 use super::pricing::AiPricing;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -107,6 +116,39 @@ pub fn plan_settlement(state: SettlementState, policy: SettlementPolicy) -> Sett
     }
 }
 
+/// The balance position an automatic reload plans against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReloadState {
+    /// Current credit balance, customer cents.
+    pub credit_balance_cents: i64,
+    /// Current-period chargeable money not yet covered by credits or charges,
+    /// customer cents. The settlement that follows will consume it from the
+    /// balance.
+    pub uncovered_cents: i64,
+    /// Reloads already reserved or paid this UTC calendar month, customer cents.
+    pub spent_this_month_cents: i64,
+}
+
+/// Decide whether to reload credits now and by how much.
+///
+/// Reloads when the balance left after settling the uncovered usage drops
+/// below the minimum, topping it back up to the target. The monthly limit caps
+/// the amount; a remainder Stripe would reject is skipped rather than charged.
+pub fn plan_reload(state: ReloadState, thresholds: &AutoReloadThresholds) -> Option<i64> {
+    let effective = state.credit_balance_cents - state.uncovered_cents;
+    if effective >= thresholds.minimum_cents {
+        return None;
+    }
+
+    let mut amount = thresholds.target_cents - effective;
+    if let Some(limit) = thresholds.monthly_limit_cents {
+        let room = (limit - state.spent_this_month_cents).max(0);
+        amount = amount.min(room);
+    }
+
+    (amount >= MIN_STRIPE_CHARGE_CENTS).then_some(amount)
+}
+
 /// Assemble the API-facing snapshot from the resolved inputs. `used_cost_cents`
 /// is this seat's usage at cost; `shared_chargeable_customer_cents` is the
 /// payer's cumulative usage beyond all seat allowances, already marked up at
@@ -129,11 +171,6 @@ pub fn build_snapshot(
     let included_cents = entitlement.included_ai_cents(pricing);
     let shared_covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
     let uncovered_cents = (shared_chargeable_customer_cents - shared_covered).max(0);
-    let overage_room = if settings.overage_active() {
-        (settings.overage_limit_cents - ledger.overage_charged_cents).max(0)
-    } else {
-        0
-    };
     let seat_remaining = (included_cents - used_cost_cents).max(0);
     let remaining_cents = if entitlement.unlimited {
         i64::MAX
@@ -142,9 +179,8 @@ pub fn build_snapshot(
         seat_remaining
     } else {
         let shared_headroom = ((shared_covered - shared_chargeable_customer_cents)
-            + credit_balance_cents.max(0)
-            + overage_room)
-            .max(0);
+            + credit_balance_cents.max(0))
+        .max(0);
         seat_remaining.saturating_add(pricing.cost_cents_covered_by(shared_headroom))
     };
 
@@ -164,6 +200,13 @@ pub fn build_snapshot(
         overage_limit_cents: settings.overage_limit_cents,
         overage_charged_cents: ledger.overage_charged_cents,
         overage_suspended: settings.overage_suspended_at.is_some(),
+        auto_reload: AutoReloadSnapshot {
+            minimum_balance_cents: settings.auto_reload.minimum_cents,
+            target_balance_cents: settings.auto_reload.target_cents,
+            monthly_spend_limit_cents: settings.auto_reload.monthly_limit_cents,
+            suspended: settings.auto_reload_suspended_at.is_some(),
+            active: settings.auto_reload_active(),
+        },
         uncovered_cents,
         remaining_cents,
         blocked_reason: None,
@@ -179,17 +222,15 @@ pub fn build_snapshot(
 ///
 /// Enterprise users are never metered. Free users are allowed until their
 /// monthly cap is used up, after which only an upgrade helps. Everyone else
-/// needs headroom from their allowance, credits, or overage.
+/// needs headroom from their allowance or prepaid credits.
 pub fn decide(snapshot: &UsageSnapshot) -> AllowanceDecision {
     if snapshot.unlimited || snapshot.remaining_cents > 0 {
         return AllowanceDecision::Allow;
     }
     let reason = if snapshot.tier == PlanTier::Free {
         DenyReason::FreeAllowanceExhausted
-    } else if snapshot.overage_suspended {
+    } else if snapshot.auto_reload.suspended {
         DenyReason::OveragePaymentFailed
-    } else if snapshot.overage_enabled && snapshot.overage_limit_cents > 0 {
-        DenyReason::OverageLimitReached
     } else {
         DenyReason::AllowanceExhausted
     };

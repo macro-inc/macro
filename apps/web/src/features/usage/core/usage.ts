@@ -5,6 +5,7 @@ export type UsageSummary = {
   creditBalanceCents: number;
   billingAccess: 'free' | 'payer' | 'team-member';
   existingUsageBilling?: { limitCents: number; suspended: boolean };
+  autoReload: { settings: AutoReloadSettings; suspended: boolean };
 };
 
 export type UsagePreviewPlan = 'free' | 'paid';
@@ -22,6 +23,18 @@ export const DEFAULT_AUTO_RELOAD: AutoReloadSettings = {
   targetBalanceCents: 10_000,
   monthlySpendLimitCents: null,
 };
+
+/** The smallest reload the backend will charge, so target must exceed minimum by this much. */
+export const MIN_RELOAD_CENTS = 50;
+
+export const MAX_TARGET_BALANCE_CENTS = 500_000;
+
+/**
+ * The monthly spend limit also caps usage billing, which the backend clamps to
+ * at least this much (`OVERAGE_LIMIT_MIN_CENTS`), so a smaller limit would be
+ * silently raised.
+ */
+export const MIN_MONTHLY_SPEND_LIMIT_CENTS = 500;
 
 /** Development remains interactive; production follows the UI rollout flag. */
 export function isUsageAvailable(
@@ -58,13 +71,19 @@ export function validateAutoReload(
 ): string | undefined {
   if (settings.minimumBalanceCents <= 0)
     return 'Enter a minimum balance greater than $0.';
-  if (settings.targetBalanceCents <= settings.minimumBalanceCents) {
-    return 'Target balance must be greater than minimum balance.';
+  if (
+    settings.targetBalanceCents <
+    settings.minimumBalanceCents + MIN_RELOAD_CENTS
+  ) {
+    return `Target balance must be greater than minimum balance by at least ${formatCreditBalance(MIN_RELOAD_CENTS)}.`;
+  }
+  if (settings.targetBalanceCents > MAX_TARGET_BALANCE_CENTS) {
+    return `Target balance can be at most ${formatCreditBalance(MAX_TARGET_BALANCE_CENTS)}.`;
   }
   if (
     settings.monthlySpendLimitCents !== null &&
-    settings.monthlySpendLimitCents <= 0
+    settings.monthlySpendLimitCents < MIN_MONTHLY_SPEND_LIMIT_CENTS
   ) {
-    return 'Enter a monthly spend limit greater than $0, or leave it blank.';
+    return `Monthly spend limit must be at least ${formatCreditBalance(MIN_MONTHLY_SPEND_LIMIT_CENTS)}, or leave it blank.`;
   }
 }

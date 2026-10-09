@@ -54,6 +54,7 @@ describe('project creation', () => {
       const service = commands();
       const composer = createProjectComposer(service);
       composer.setName('  Release  ');
+      composer.setDescription('Goals');
       composer.saveDraft(dueDate, dueValue);
       const submission = composer.submit();
       expect(composer.pending()).toBe(true);
@@ -61,6 +62,7 @@ describe('project creation', () => {
       expect(service.create).toHaveBeenCalledOnce();
       expect(service.create).toHaveBeenCalledWith({
         name: 'Release',
+        description: 'Goals',
         shareWithTeam: true,
         properties: [{ property: dueDate, value: dueValue }],
       });
@@ -83,6 +85,7 @@ describe('project creation', () => {
   it("reopens a failure with its draft and the server's reason", () => {
     const draft = {
       name: 'Release',
+      description: '',
       shareWithTeam: true,
       properties: [{ property: dueDate, value: dueValue }],
     };

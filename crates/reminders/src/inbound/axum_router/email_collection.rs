@@ -1,7 +1,9 @@
 //! Authenticated read adapters for original-email reminder surfaces.
 use super::*;
 use crate::domain::email_collection::{EmailReminderPage, EmailReminderQuery, EmailReminderViewer};
+use axum_extra::extract::Query;
 use email::domain::followup::ReminderThreadFilter;
+use serde::Deserialize;
 
 /// Email facets and cursor. Repeated inbox IDs select those inboxes only.
 #[derive(Debug, Default, Deserialize, utoipa::IntoParams)]

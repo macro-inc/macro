@@ -7,14 +7,11 @@ import {
   agentSessionFileOperations,
   agentSessionTitle,
 } from '@app/features/block-agent/component/AgentSplitHeader';
+import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
 import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
-import {
-  forgetPendingSession,
-  pendingSession,
-} from '@app/features/block-agent/context/pending-session';
 import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
 import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
 import {
@@ -47,7 +44,7 @@ import ShareIcon from '@icon/share.svg';
 import type { NotificationSource } from '@notifications/notification-source';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import { EmptyStatePanel } from '@ui';
-import { onCleanup, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { changeSessionArchiveState } from '../../block-agent/queries/change-session-archive-state';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
@@ -212,6 +209,9 @@ function SessionContent(props: {
             </>
           }
         >
+          <Show when={session()?.taskId}>
+            {(taskId) => <AgentTaskChip taskId={taskId()} />}
+          </Show>
           <Show when={session()?.pullRequestUrl}>
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>
@@ -309,13 +309,6 @@ export function AgentSessionPane(props: {
   onSessionId: (sessionId: string) => void;
   onDeleted: () => void;
 }) {
-  const pending = pendingSession(props.id);
-  onCleanup(() => {
-    if (pending?.sessionId() || pending?.failed()) {
-      forgetPendingSession(props.id);
-    }
-  });
-
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
       <AgentChangesProvider>

@@ -1,7 +1,6 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HomePreferencesProvider } from '../home-prefs';
 import { HomeChatStart } from './HomeChatStart';
 
 type ChildrenProps = { children?: JSX.Element };
@@ -45,9 +44,6 @@ vi.mock('@core/component/AI/context', () => ({
 vi.mock('../home-chat-input', () => ({
   HomeChatInput: () => <div data-testid="home-chat-input" />,
 }));
-vi.mock('../home-getting-started-link', () => ({
-  HomeGettingStartedLink: () => <div data-testid="getting-started-link" />,
-}));
 vi.mock('./home-recommended-actions', () => ({
   HomeRecommendedActions: () => <div data-testid="home-suggestions" />,
 }));
@@ -60,11 +56,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function renderHome() {
-  return render(() => (
-    <HomePreferencesProvider userId={() => 'user-1'}>
-      <HomeChatStart />
-    </HomePreferencesProvider>
-  ));
+  return render(() => <HomeChatStart />);
 }
 
 describe('Home agent composer alignment', () => {

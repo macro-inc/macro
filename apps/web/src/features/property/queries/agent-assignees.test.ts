@@ -134,9 +134,9 @@ describe('task agent assignees', () => {
         CLAUDE_BOT_PRINCIPAL_ID,
         CODEX_BOT_PRINCIPAL_ID,
         CURSOR_BOT_PRINCIPAL_ID,
-        MACRO_CODER_PRINCIPAL_ID,
       ]);
       expect(ids).not.toContain(MACRO_AGENT_PRINCIPAL_ID);
+      expect(ids).not.toContain(MACRO_CODER_PRINCIPAL_ID);
       dispose();
     });
   });

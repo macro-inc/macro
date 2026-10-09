@@ -18,7 +18,7 @@ vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   markChannelNotificationsSeenOnOpen: vi.fn(),
-  markReminderSeenOnOpen: vi.fn(),
+  markCalendarNotificationSeenOnOpen: vi.fn(),
   openEntityInSplitFromUnifiedList: mocks.open,
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
@@ -74,11 +74,11 @@ function mountHotkeys() {
             getIsGrouped: () => false,
             getIsLoadMore: () => false,
           }),
-          item: () => ({ type: 'reminder', id: 'reminder' }),
+          item: () => ({ type: 'email', id: 'thread' }),
         },
       },
       splitHandle: {},
-      currentView: () => 'reminders',
+      currentView: () => 'mail',
     } as unknown as Parameters<typeof useSoupViewHotkeys>[0]);
   });
 }

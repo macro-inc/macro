@@ -78,6 +78,7 @@ describe('Slack import staging protections', () => {
     ]);
     expect(rule.allowedOrigins).toContain('https://macro.com');
     expect(rule.allowedOrigins).toContain('http://localhost:3000');
+    expect(rule.allowedOrigins).toContain('https://localhost:3000');
     expect(rule.allowedOrigins).not.toContain('*');
     expect(rule.exposeHeaders).toContain('ETag');
   });

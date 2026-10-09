@@ -36,7 +36,8 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
   },
   [PaywallKey.CHAT_LIMIT]: {
     title: 'Chat limit reached',
-    description: 'Upgrade to keep creating agent chats with premium AI access.',
+    description:
+      'Upgrade to keep creating agent chats with access to every AI model.',
     learnMoreUrl: 'https://docs.macro.com/product/agents',
     learnMoreSubject: 'agents',
   },
@@ -47,20 +48,20 @@ export const PaywallMessages: Record<PaywallKey, PaywallMessageMetadata> = {
     learnMoreSubject: 'agents',
   },
   [PaywallKey.O1_LIMIT]: {
-    title: 'Smart models are premium',
+    title: 'Smart models require Pro or Max',
     description: 'Upgrade to use Macro’s most capable AI models.',
     learnMoreUrl: 'https://docs.macro.com/product/agents',
     learnMoreSubject: 'agents',
   },
   [PaywallKey.CANVAS_CLIKED]: {
-    title: 'AI canvases are premium',
+    title: 'AI canvases require Pro or Max',
     description:
       'Upgrade to generate diagrams, whiteboards, and visual drafts with AI.',
     learnMoreUrl: 'https://docs.macro.com/product/canvas',
     learnMoreSubject: 'canvases',
   },
   [PaywallKey.SAVED_PROMPT]: {
-    title: 'Saved prompts are premium',
+    title: 'Saved prompts require Pro or Max',
     description: 'Upgrade to save reusable prompts for faster workflows.',
     learnMoreUrl: 'https://docs.macro.com/product/snippets',
     learnMoreSubject: 'saved prompts',

@@ -8,7 +8,7 @@ import {
   Show,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DatabaseMentionPickerProps } from './component/GridCell';
+import type { DatabaseMentionPickerProps } from '../database/components/grid-cell';
 import {
   databaseMentionFromItem,
   databaseMentionScope,
@@ -143,6 +143,7 @@ describe('native database mention adapter', () => {
 
   it('restricts People at the native source and excludes groups and unrelated open tabs', () => {
     const { menu, select } = setup({ specificEntityType: 'USER' });
+    expect(menu.animate).toBe(false);
     expect(menu.sources).toEqual(['users']);
     expect(menu.includeGroups).toBe(false);
     expect(menu.showOpenTabs).toBe(false);

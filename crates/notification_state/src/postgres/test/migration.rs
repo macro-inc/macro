@@ -1,6 +1,11 @@
 use crate::NotificationState;
 use sqlx::{Connection, PgPool};
 
+/// CI clones every test database from a `template1` that already holds the macrodb
+/// schema (`just setup_test_template`). These tests build their own schema, so they
+/// start from an empty `public` schema.
+const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
+
 const LEGACY_SCHEMA: &str = include_str!(
     "../../../../macro_db_client/migrations/20260126170641_create_notification_tables.sql"
 );
@@ -20,6 +25,7 @@ async fn migration_normalizes_legacy_states_without_changing_timestamps(
 ) -> Result<(), sqlx::Error> {
     // DDL and the pre-cutover fixture cannot be checked against the current
     // development schema. Execute the real migration scripts in an isolated DB.
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA).execute(&pool).await?;
     sqlx::raw_sql(LEGACY_SCHEMA).execute(&pool).await?;
     sqlx::raw_sql(LEGACY_INDEXES).execute(&pool).await?;
     sqlx::raw_sql(
@@ -77,6 +83,7 @@ async fn migration_normalizes_legacy_states_without_changing_timestamps(
 
 #[sqlx::test(migrations = false)]
 async fn state_defaults_and_constraints_are_enforced(pool: PgPool) -> Result<(), sqlx::Error> {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA).execute(&pool).await?;
     sqlx::raw_sql(LEGACY_SCHEMA).execute(&pool).await?;
     sqlx::raw_sql(LEGACY_INDEXES).execute(&pool).await?;
     sqlx::raw_sql(UP).execute(&pool).await?;

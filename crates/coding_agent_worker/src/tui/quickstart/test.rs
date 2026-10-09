@@ -224,3 +224,63 @@ fn quickstart_renders_permission_consent_and_warning() {
         assert_eq!(workspace.find("/existing/workspace"), full_access.find('['));
     }
 }
+
+#[test]
+fn quickstart_groups_herdr_agents_apart_from_headless_ones() {
+    use crate::tui::agent_catalog::LaunchSpec;
+    use ratatui::{Terminal, backend::TestBackend};
+    let agent = |kind, name| DetectedAgent {
+        kind,
+        name,
+        launch: LaunchSpec {
+            command: "agent".to_owned(),
+            args: Vec::new(),
+            env: Default::default(),
+        },
+        note: None,
+        install: None,
+    };
+    let setup = Quickstart {
+        agents: vec![
+            agent(AgentKind::HerdrClaude, "Claude Code in herdr"),
+            agent(AgentKind::HerdrCodex, "Codex in herdr"),
+            agent(AgentKind::ClaudeCode, "Claude Code"),
+        ],
+        selected_agent: None,
+        focus: QuickstartFocus::Agent(1),
+        workspace: "/tmp".to_owned(),
+        scope: IdentityScope::Private,
+        allow_permission_bypass: false,
+        mode: QuickstartMode::Normal,
+        status: None,
+    };
+    let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+    terminal
+        .draw(|frame| {
+            crate::tui::ui::render_quickstart(frame, &setup, std::path::Path::new("macrod.toml"))
+        })
+        .unwrap();
+    let rows = terminal
+        .backend()
+        .buffer()
+        .content()
+        .chunks(100)
+        .map(|row| {
+            row.iter()
+                .map(|cell| cell.symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+    let position = |text: &str| rows.iter().position(|row| row.contains(text)).unwrap();
+    assert!(position("Herdr") < position("▸ ○ Codex"));
+    assert!(position("▸ ○ Codex") < position("ACP"));
+    let headless = rows
+        .iter()
+        .rposition(|row| row.contains("○ Claude Code"))
+        .unwrap();
+    assert!(position("○ Claude Code") < position("ACP"));
+    assert!(position("ACP") < headless);
+    assert!(!rows.iter().any(|row| row.contains("in herdr")));
+}

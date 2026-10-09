@@ -1,7 +1,4 @@
-import {
-  executeOptimisticMutation,
-  optimisticMutationDispositionOf,
-} from '@graphql-cache/exchange/optimistic';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
 import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
 import {
@@ -49,41 +46,6 @@ function deduplicateEntities(
   return [...unique.values()];
 }
 
-type OptimisticNotificationPatch = Pick<
-  GraphqlUpdateNotificationsResult[number],
-  '__typename' | 'id'
-> &
-  Partial<GraphqlUpdateNotificationsResult[number]>;
-
-/**
- * Builds a deliberately partial mutation response. The normalized cache merges
- * only fields present in an optimistic payload, so unrelated notification data
- * remains intact until the authoritative response commits the transaction.
- */
-function createOptimisticUpdateNotificationsData({
-  notificationIds,
-  operation,
-}: GraphqlUpdateNotificationsArgs): UpdateNotificationsMutation {
-  const updateNotifications: OptimisticNotificationPatch[] =
-    notificationIds.map((id) => {
-      const identity = {
-        __typename: 'GraphqlNotification' as const,
-        id,
-      };
-      // The generic scalar cache cannot apply conditional transitions. A
-      // guessed Seen patch would reopen Done, and a guessed viewedAt would
-      // overwrite history. Let authoritative replies settle seen/reopen;
-      // view-local overlays provide safe optimistic feedback in the meantime.
-      return operation === 'MARK_DONE'
-        ? { ...identity, state: 'DONE' as const }
-        : identity;
-    });
-
-  // GraphQL result types model complete server data, while the cache
-  // normalizer intentionally accepts and merges partial optimistic entities.
-  return { updateNotifications } as UpdateNotificationsMutation;
-}
-
 /** Execute a status write with a durable normalized-cache optimistic layer. */
 export async function executeGraphqlUpdateNotifications(
   client: Client,
@@ -100,28 +62,13 @@ export async function executeGraphqlUpdateNotifications(
       operation: args.operation,
     },
   };
-  const optimisticData = createOptimisticUpdateNotificationsData(args);
-  const result = await executeOptimisticMutation(
-    client,
-    UpdateNotificationsDocument,
-    variables,
-    optimisticData,
-    {
-      uuid: crypto.randomUUID(),
-      revalidations: getChannelListRevalidations(client),
-    }
-  ).toPromise();
-
-  // A retryable transport failure keeps the normalized optimistic layer in
-  // the durable queue. Treat that disposition as accepted so consumers do not
-  // roll back their TanStack/view state while the GraphQL cache stays patched.
-  if (optimisticMutationDispositionOf(result)?.kind === 'queued') {
-    return {
-      ...result,
-      data: result.data ?? optimisticData,
-      error: undefined,
-    };
-  }
+  const result = await client
+    .mutation(UpdateNotificationsDocument, variables, {
+      optimisticMutation: {
+        revalidations: getChannelListRevalidations(client),
+      },
+    })
+    .toPromise();
 
   // Without the normalized exchange there is no durable revalidation runner.
   if (!result.error && optimisticMutationDispositionOf(result) === undefined) {

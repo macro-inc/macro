@@ -121,7 +121,6 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest.workspace = true
-reminders = { path = "../../crates/reminders", default-features = false, features = ["ports"] }
 teams = { path = "../../crates/teams", default-features = false, features = [
   "outbound",
   "ports",

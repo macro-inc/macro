@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET sync_token = 'old-token', synced_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "62904494eba0dd7207fa568280deae7eb1212e330a30ea701967fb90e4bf7c36"
+}

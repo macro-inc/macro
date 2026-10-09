@@ -5,20 +5,31 @@
 //! deliberate difference: initialization here is awaited by the caller (with
 //! the same bounded retry) instead of being spawned fire-and-forget, so
 //! surface creation can report `ready` truthfully.
+//!
+//! Reads and writes of a ready surface's Loro state go through sync-service's
+//! signed `/document/{id}/state` and `/document/{id}/update` routes with a
+//! grant the domain minted, never the internal key.
 
 use std::time::Duration;
 
 use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
 use sync_service_client::SyncServiceClient;
+use sync_service_client::document_state::{DocumentStateError, DocumentUpdate};
+use sync_service_client::initialize::SnapshotAlreadyExists;
 use tokio_retry::{Retry, strategy::FixedInterval};
 
-use crate::domain::models::CollabSurfaceError;
+use macro_sync_service_jwt::DocumentPermissionToken;
+
+use crate::domain::models::{CollabSurfaceError, SurfaceSnapshot, SurfaceUpdate};
 use crate::domain::ports::SurfaceInitializer;
 
 /// Canonical blank-markdown Loro "golden" snapshot — the same bytes the
 /// documents crate seeds empty markdown documents with.
 const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
     include_bytes!("../../../../static_assets/markdown-golden.1.bin");
+
+#[cfg(test)]
+mod test;
 
 const MAX_ATTEMPTS: usize = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -57,29 +68,34 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
                 })?
         };
 
+        self.initialize_from_snapshot(surface_id, &snapshot).await
+    }
+
+    #[tracing::instrument(err, skip(self, snapshot), fields(snapshot_len = snapshot.len()))]
+    async fn initialize_from_snapshot(
+        &self,
+        surface_id: &str,
+        snapshot: &[u8],
+    ) -> Result<(), CollabSurfaceError> {
         let result = Retry::start(
             FixedInterval::new(RETRY_DELAY).take(MAX_ATTEMPTS - 1),
-            || {
-                self.sync_service_client
-                    .initialize_from_snapshot(surface_id, &snapshot)
+            || async {
+                match self
+                    .sync_service_client
+                    .initialize_from_snapshot(surface_id, snapshot)
+                    .await
+                {
+                    // A bound pending surface may have completed initialization
+                    // before the original reply or mark-ready write was lost.
+                    Err(error) if error.is::<SnapshotAlreadyExists>() => Ok(()),
+                    result => result,
+                }
             },
         )
         .await;
 
         match result {
             Ok(()) => Ok(()),
-            // Initialization is one-shot on the sync-service side, so "snapshot
-            // already exists" means an earlier or concurrent ensure won the
-            // init — success for our purposes (a new id was checked to have no
-            // session before its row was written). This is what makes `ensure`
-            // idempotent across retries and races.
-            Err(e) if e.to_string().contains("snapshot already exists") => {
-                tracing::debug!(
-                    surface_id = surface_id,
-                    "sync-service session already initialized; treating as success"
-                );
-                Ok(())
-            }
             Err(e) => Err(CollabSurfaceError::Internal(
                 rootcause::report!("failed to initialize sync-service session: {e:?}")
                     .into_dynamic(),
@@ -102,6 +118,42 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
             })
     }
 
+    #[tracing::instrument(err, skip(self, token))]
+    async fn snapshot(
+        &self,
+        surface_id: &str,
+        token: &DocumentPermissionToken,
+    ) -> Result<SurfaceSnapshot, CollabSurfaceError> {
+        let state = self
+            .sync_service_client
+            .document_state(surface_id, token)
+            .await
+            .map_err(surface_state_error)?;
+        Ok(SurfaceSnapshot {
+            snapshot: state.snapshot,
+            revision: state.revision,
+        })
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, token, expected_revision, update),
+        fields(update_len = update.len())
+    )]
+    async fn update(
+        &self,
+        surface_id: &str,
+        token: &DocumentPermissionToken,
+        expected_revision: &[u8],
+        update: &[u8],
+    ) -> Result<SurfaceUpdate, CollabSurfaceError> {
+        self.sync_service_client
+            .update_document(surface_id, token, expected_revision, update)
+            .await
+            .map(surface_update)
+            .map_err(surface_state_error)
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn markdown(&self, surface_id: &str) -> Result<String, CollabSurfaceError> {
         self.lexical_client
@@ -112,5 +164,33 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
                     rootcause::report!("failed to render surface markdown: {e:?}").into_dynamic(),
                 )
             })
+    }
+}
+
+/// A sync-service refusal of a state read or update, as the domain sees it.
+/// A refused grant (`401`) is ours, so it is internal, not the caller's fault.
+fn surface_state_error(error: DocumentStateError) -> CollabSurfaceError {
+    match error {
+        DocumentStateError::NotFound => CollabSurfaceError::NotFound,
+        DocumentStateError::Forbidden => CollabSurfaceError::AccessDenied,
+        DocumentStateError::TooLarge => {
+            CollabSurfaceError::BadRequest("surface state exceeds the size limit".to_string())
+        }
+        DocumentStateError::Invalid => {
+            CollabSurfaceError::BadRequest("invalid surface update or revision".to_string())
+        }
+        error @ (DocumentStateError::Transport(_)
+        | DocumentStateError::Unauthorized
+        | DocumentStateError::Rejected(_)
+        | DocumentStateError::InvalidResponse(_)) => {
+            CollabSurfaceError::Internal(rootcause::Report::new(error).into_dynamic())
+        }
+    }
+}
+
+fn surface_update(outcome: DocumentUpdate) -> SurfaceUpdate {
+    match outcome {
+        DocumentUpdate::Applied { revision } => SurfaceUpdate::Applied { revision },
+        DocumentUpdate::Conflict => SurfaceUpdate::Conflict,
     }
 }

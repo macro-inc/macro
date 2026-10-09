@@ -11,7 +11,9 @@ export const convertEmailRecipientToContactInfo = (
     case 'user':
       return { email: item.data.email, name: item.data.name };
     case 'contact':
-      return item.data;
+      // Form contacts can be Solid store proxies. Persistence needs an owned,
+      // cloneable snapshot rather than a live reference into the form.
+      return { ...item.data };
     case 'custom':
       return { email: item.data.email };
   }

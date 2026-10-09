@@ -38,7 +38,7 @@ vi.mock('@ui', () => ({
     <button {...props} />
   ),
 }));
-vi.mock('../primitives', () => ({
+vi.mock('../../primitives', () => ({
   SettingsSection: (props: { title: string; children: JSX.Element }) => (
     <section aria-label={props.title}>{props.children}</section>
   ),

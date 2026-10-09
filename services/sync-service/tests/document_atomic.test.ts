@@ -96,6 +96,27 @@ async function post(
 }
 
 describe("atomic document API", () => {
+	it("returns compact state at the same revision and accepts edits from it", async () => {
+		const id = await seed();
+		const initial = await snapshot(id);
+		expect((await post(id, edit(initial, "A1", "Current"))).status).toBe(200);
+		const full = await snapshot(id);
+		const response = await mf.dispatchFetch(`${url(id, "snapshot")}?shallow=true`, {
+			headers: auth(id, "view"),
+		});
+		expect(response.status).toBe(200);
+		const body = (await response.json()) as { snapshot: string; revision: string };
+		const compact = new LoroDoc();
+		compact.import(Buffer.from(body.snapshot, "base64"));
+		expect(compact.isShallow()).toBe(true);
+		expect(compact.toJSON()).toEqual(full.doc.toJSON());
+		expect(body.revision).toBe(full.revision);
+		const change = edit({ ...body, doc: compact }, "B1", "Edited from compact state");
+		expect((await post(id, change)).status).toBe(200);
+		const saved = await snapshot(id);
+		expect(saved.doc.getMap("properties").get("B1")).toBe("Edited from compact state");
+		for (const document of [initial.doc, full.doc, compact, saved.doc]) document.free();
+	});
 	it("returns a coherent authorized snapshot and rejects viewers, wrong-document grants, missing and invalid tokens", async () => {
 		const id = await seed();
 		const source = await snapshot(id);

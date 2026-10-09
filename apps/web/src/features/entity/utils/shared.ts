@@ -9,6 +9,7 @@ const OWNER_PRINCIPAL_ROW = [
   'chat',
   'database',
   'document',
+  'form',
   'email',
   'initiative',
   'project',
@@ -21,7 +22,6 @@ const UNSHARED_ROW = [
   'channel_thread',
   'crm_company',
   'crm_contact',
-  'reminder',
 ] as const;
 
 export function isSharedWithViewer(

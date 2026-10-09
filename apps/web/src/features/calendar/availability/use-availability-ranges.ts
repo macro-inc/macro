@@ -41,8 +41,7 @@ export function useAvailabilityRanges(settings: () => AvailabilitySettings) {
   });
 
   const days = createMemo(() => {
-    const data =
-      query.isSuccess && !query.isPlaceholderData ? query.data : undefined;
+    const data = query.isSuccess ? query.data : undefined;
     if (!data || data.syncStatus === CalendarSyncStatus.syncing) return;
 
     const busyIntervals = busyIntervalsFromOccurrences(data.items);

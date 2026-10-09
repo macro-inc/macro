@@ -178,15 +178,17 @@ pub enum SessionStatus {
 }
 
 /// Which Pipedream MCP servers a session is handed: the agent's own choice,
-/// snapshotted onto the session at creation like `instructions`. The ACP
-/// agent is given its server list once per attach and cannot refresh it, so
-/// the snapshot is what every later attach re-advertises; editing the agent
+/// snapshotted onto the session at creation like `instructions`. The native
+/// runtime refreshes connections within this policy before each turn. Other
+/// ACP runtimes receive the list on attach; editing the agent's selection
 /// applies to its next session.
 pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
 pub struct CreateAgentSessionParams {
+    /// An unclaimed warm session, hidden from lists and history.
+    pub warm: bool,
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
     /// Who created and owns the session.
@@ -258,6 +260,8 @@ pub struct AgentSession {
     pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// The pull request associated with this session, independent of conversation history.
     pub pull_request_url: Option<String>,
+    /// The Macro task the session was explicitly linked to.
+    pub task_id: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,

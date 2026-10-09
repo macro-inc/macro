@@ -125,7 +125,7 @@ interface ToastOptions {
   hideOnMobile?: boolean;
 }
 
-interface ToastSuccessOptions extends ToastOptions {
+interface ToastActionOptions extends ToastOptions {
   actions?: ToastAction[];
   /** When true, bypasses the 3s duplicate-message throttle. */
   stack?: boolean;
@@ -242,7 +242,7 @@ function dismissIfRecent(message: string, type: ToastType): void {
 // Tell users that an action has successfully completed
 function success(
   message: string,
-  options?: ToastSuccessOptions
+  options?: ToastActionOptions
 ): number | undefined {
   if (!options?.stack) dismissIfRecent(message, ToastType.SUCCESS);
   return createToast(message, ToastType.SUCCESS, options);
@@ -262,9 +262,12 @@ function failure(
 }
 
 // Tell users that an action has failed, because of them
-function alert(message: string, options?: ToastOptions) {
-  dismissIfRecent(message, ToastType.ALERT);
-  createToast(message, ToastType.ALERT, options);
+function alert(
+  message: string,
+  options?: ToastActionOptions
+): number | undefined {
+  if (!options?.stack) dismissIfRecent(message, ToastType.ALERT);
+  return createToast(message, ToastType.ALERT, options);
 }
 
 function ActionButtons(props: { actions: ToastAction[]; mobile?: boolean }) {
@@ -663,7 +666,7 @@ async function promise<T>(
 function createToast(
   message: string,
   toastType: ToastType,
-  options?: ToastSuccessOptions
+  options?: ToastActionOptions
 ) {
   const { subtext, actions, duration, stack, hideOnMobile } = options ?? {};
 
@@ -796,22 +799,6 @@ function custom(
   );
   trackActiveToast(region, toastId, options?.persistent);
   return toastId;
-}
-
-// ─── upload helper (kept for backwards compat) ───────────────────────────────
-
-export function createUploadToast(message: string) {
-  return toaster.show(
-    (props) => (
-      <ToastContent
-        toastId={props.toastId}
-        toastType={ToastType.LOADING}
-        message={message}
-        persistent={true}
-      />
-    ),
-    { region: 'stable-toast' }
-  );
 }
 
 // ─── public API ──────────────────────────────────────────────────────────────

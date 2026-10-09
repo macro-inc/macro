@@ -14,7 +14,6 @@ import { enableReminders } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type EmailEntity, isEmailEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
-import { collectionReminderEntity } from '@queries/reminders/collection';
 import { useEmailReminderCollection } from '@queries/reminders/email-collection';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { ListEmailRemindersParams } from '@service-storage/generated/schemas/listEmailRemindersParams';
@@ -144,18 +143,18 @@ export function useReminderEmailSource(
   });
   const reminders = createMemo<Map<string, EmailRowReminder>>(() => {
     if (!active()) return new Map();
-    const visibleIds = new Set(entities().map((email) => email.id));
+    const visibleEmails = new Map(entities().map((email) => [email.id, email]));
     return new Map(
       pages().flatMap((page) =>
         page.items
-          .filter((item) => visibleIds.has(item.threadId))
+          .filter((item) => visibleEmails.has(item.threadId))
           .map(
             (item) =>
               [
                 item.threadId,
                 {
-                  nearest: collectionReminderEntity(item.nearest),
-                  count: item.count,
+                  ...item.followup,
+                  name: visibleEmails.get(item.threadId)!.name,
                 },
               ] as const
           )

@@ -17,7 +17,10 @@ import X from '@phosphor/x.svg';
 import { Button, type ButtonProps } from '@ui/components/Button';
 import { Show } from 'solid-js';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
-import type { FormulaTextSelection } from '../core/formula-reference';
+import type {
+  FormulaReferenceSpan,
+  FormulaTextSelection,
+} from '../core/formula-reference';
 import type { SpreadsheetToolbarProps } from '../core/toolbar-types';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
 import { createTouchPress } from '../primitives/create-touch-press';
@@ -301,6 +304,7 @@ export function FormulaBar(props: {
   editing?: boolean;
   complete: CompleteFormula;
   selectionRequest?: FormulaTextSelection;
+  references?: FormulaReferenceSpan[];
   pickingReference?: boolean;
   onSelectionChange?: (start: number, end: number) => void;
   onNavigate: (address: string) => void;
@@ -357,6 +361,7 @@ export function FormulaBar(props: {
         label="Formula bar"
         complete={props.complete}
         selectionRequest={props.selectionRequest}
+        references={props.references}
         pickingReference={props.pickingReference}
         onSelectionChange={props.onSelectionChange}
         placeholder={

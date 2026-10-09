@@ -382,11 +382,11 @@ fn rows_filter(
         )))),
         call_filter: Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil())))),
         crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+        crm_contact_filter: None,
         foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil())))),
         github_pull_request_filter: None,
         // Reminders, agent sessions and initiatives are opt-in: left empty,
         // they are excluded.
-        reminder_filter: None,
         agent_session_filter: None,
         initiative_filter: None,
         database_row_filter: Some(Arc::new(rows)),

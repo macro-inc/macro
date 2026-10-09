@@ -5,9 +5,11 @@
 mod document_key;
 pub use document_key::{
     CONVERTED_DOCUMENT_FILE_NAME, DOCX_EXTENSION, DocumentKey, PDF_EXTENSION,
-    SYNC_SERVICE_SNAPSHOT_PREFIX, TEMP_FILE_PREFIX, build_cloud_storage_bucket_document_key,
+    SYNC_SERVICE_SNAPSHOT_PREFIX, TEMP_FILE_PREFIX, UPGRADED_DOCUMENT_FILE_NAME,
+    UpgradedOfficeFormat, build_cloud_storage_bucket_document_key,
     build_cloud_storage_bucket_document_prefix, build_docx_staging_bucket_document_key,
-    build_docx_to_pdf_converted_document_key, build_temp_docx_key, document_key_url_path,
+    build_docx_to_pdf_converted_document_key, build_temp_docx_key,
+    build_upgraded_office_document_key, document_key_url_path,
 };
 mod bulk_upload_key;
 pub use bulk_upload_key::BulkUploadStagingKey;

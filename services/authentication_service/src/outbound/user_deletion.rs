@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Duration};
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_authorization::INTERNAL_API_KEY_HEADER;
 use macro_user_id::user_id::MacroUserIdStr;
+use onboarding::domain::ports::OnboardingRepo;
 use rootcause::{
     Report,
     prelude::{IntoRootcause, ResultExt},
@@ -15,12 +16,13 @@ use uuid::Uuid;
 
 use crate::service::user::delete_user::UserDeletionGateway;
 
-/// HTTP, in-process team service, Stripe, and database adapter composed at
-/// authentication-service startup.
-pub struct UserDeletionAdapter<T: TeamService> {
+/// HTTP, in-process team service, onboarding repository, Stripe, and database
+/// adapter composed at authentication-service startup.
+pub struct UserDeletionAdapter<T: TeamService, O: OnboardingRepo> {
     db: PgPool,
     documents: Arc<DocumentStorageServiceClient>,
     teams: Arc<T>,
+    onboarding: O,
     stripe: Arc<stripe::Client>,
     client: reqwest::Client,
     internal_key: String,
@@ -28,17 +30,22 @@ pub struct UserDeletionAdapter<T: TeamService> {
     scheduled_action_url: String,
 }
 
-impl<T: TeamService> UserDeletionAdapter<T> {
+impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
     /// Construct a bounded HTTP client. Redirects must not turn a failed
     /// internal DELETE into an unrelated successful response.
     ///
     /// `internal_key` is the fleet-wide internal service key that the agent
     /// harness and scheduled-action services validate. This service's own
     /// inbound key is a different secret and is rejected by them.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one argument per owning service; the composition root wires them once"
+    )]
     pub fn new(
         db: PgPool,
         documents: Arc<DocumentStorageServiceClient>,
         teams: Arc<T>,
+        onboarding: O,
         stripe: Arc<stripe::Client>,
         internal_key: String,
         harness_url: String,
@@ -48,6 +55,7 @@ impl<T: TeamService> UserDeletionAdapter<T> {
             db,
             documents,
             teams,
+            onboarding,
             stripe,
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(300))
@@ -85,7 +93,7 @@ impl<T: TeamService> UserDeletionAdapter<T> {
     }
 }
 
-impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
+impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdapter<T, O> {
     async fn delete_scheduled_actions(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.delete_owned(&self.scheduled_action_url, "scheduled-actions", user)
             .await
@@ -111,6 +119,15 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
             .await
             .into_rootcause()
             .context("failed to delete user items")?;
+        Ok(())
+    }
+
+    async fn delete_onboarding(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
+        self.onboarding
+            .delete_row(user)
+            .await
+            .map_err(|error| Report::new(error).into_dynamic())
+            .context("failed to delete user onboarding")?;
         Ok(())
     }
 

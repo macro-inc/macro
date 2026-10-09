@@ -155,15 +155,3 @@ export type ExportDefinitionsSource = {
   readonly isError: boolean;
   readonly data: ExportDefinition[];
 };
-
-export type PeopleSource = {
-  people: Accessor<import('../core/people').CrmPerson[]>;
-  query: {
-    readonly isError: boolean;
-    readonly isFetching: boolean;
-    readonly hasNextPage: boolean;
-    readonly isFetchNextPageError: boolean;
-    fetchNextPage(): Promise<unknown>;
-    refetch(): Promise<unknown>;
-  };
-};

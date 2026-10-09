@@ -9,8 +9,8 @@
  * Cursor for a chronological parent timeline.
  */
 export interface MessageCursor {
-  /** Last root creation time. */
+  /** Last message creation time or activity occurrence time. */
   created_at: string;
-  /** Last root UUID, used to break timestamp ties. */
+  /** Last entry UUID, used to break timestamp ties across both sources. */
   id: string;
 }

@@ -1,4 +1,4 @@
-use authentication_service::{
+use crate::{
     outbound::subscription_checkout::StripeCheckoutError,
     service::subscription_checkout::CheckoutError,
 };

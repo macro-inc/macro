@@ -101,7 +101,11 @@ describe('email thread query ownership', () => {
       />
     ));
     expect(screen.getByTestId('body').textContent).toBe('Cached body');
-    expect(mocks.source).toHaveBeenCalledWith(source);
+    expect(mocks.source.mock.calls[0][0]).toMatchObject({
+      id: source.id,
+      fetchOlder,
+      refresh,
+    });
     expect(mocks.query).not.toHaveBeenCalled();
     const options = mocks.composeOptions.mock.calls[0][0];
     expect(options.threadTransport?.()).toBe('graphql');

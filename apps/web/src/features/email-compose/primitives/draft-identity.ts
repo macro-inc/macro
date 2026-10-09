@@ -24,7 +24,8 @@ export function observeDraftIdentity(
             session,
             notices,
             recover,
-            onAlreadySent
+            onAlreadySent,
+            !!storage.retryDraft
           );
       }
     )
@@ -37,7 +38,8 @@ function observeAvailableDraftIdentity(
   session: DraftSession,
   notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
   recover: () => void,
-  onAlreadySent: () => void
+  onAlreadySent: () => void,
+  durableRecovery: boolean
 ) {
   let generation = 0;
   let mutationUuid: string | undefined;
@@ -56,7 +58,7 @@ function observeAvailableDraftIdentity(
     const epoch = session.epoch();
     const request = ++generation;
     try {
-      const result = await read(draftId);
+      const result = await read(draftId, { attachments: false });
       if (
         !result ||
         disposed ||
@@ -66,6 +68,12 @@ function observeAvailableDraftIdentity(
       )
         return;
       mutationUuid = result.mutationUuid ?? mutationUuid;
+      if (
+        result.local &&
+        ['failed', 'unconfirmed', 'delete-failed'].includes(result.local.status)
+      ) {
+        session.dispatch({ type: 'rejected', epoch, code: 'INTERNAL' });
+      }
       if (!result.draft) return;
       const current = session.identity();
       if (
@@ -126,6 +134,8 @@ function observeAvailableDraftIdentity(
         notices.reportError(
           new Error('The server rejected the queued draft save')
         );
+        // Durable drafts expose recovery beside the composer actions.
+        if (durableRecovery) return;
         rejectionNotice = notices.feedback.failure('Draft could not be saved', {
           subtext:
             'Your edits are still in this editor. Save them as a new draft before closing.',

@@ -3,7 +3,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_CALLS,
   enableCrm,
-  enableReminders,
   enableTasksReviews,
 } from '@core/constant/featureFlags';
 import { type Accessor, createMemo } from 'solid-js';
@@ -19,14 +18,12 @@ import { useSidebarPrefs } from './use-sidebar-prefs';
 export function useNavItemGates(): Accessor<NavItemGates> {
   const calendar = useCalendarUiFlag();
   const crm = useFeatureFlag(enableCrm);
-  const reminders = useFeatureFlag(enableReminders);
   const reviews = useFeatureFlag(enableTasksReviews);
   const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
     showCalendar: calendar(),
     showCustomers: crm().enabled,
-    showReminders: reminders().enabled,
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     prefs: prefs(),

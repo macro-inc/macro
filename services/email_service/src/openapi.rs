@@ -1,20 +1,6 @@
-#![allow(unused)]
-
-mod api;
-mod backfill_completion_service;
-mod backfill_init_service;
-mod backfill_outbox;
-mod config;
-mod outbound;
-mod pubsub;
-mod util;
-mod utils;
-
+use email_service::ApiDoc;
 use utoipa::OpenApi;
 
 fn main() {
-    println!(
-        "{}",
-        api::swagger::ApiDoc::openapi().to_pretty_json().unwrap()
-    );
+    println!("{}", ApiDoc::openapi().to_pretty_json().unwrap());
 }

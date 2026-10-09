@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_event_overrides SET starts_at=$2,ends_at=$3,start_date=$4,end_date=$4 WHERE event_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c101454ec5644bd0e219cc112b975205f73c5e2853ee4ad5e213249fb5c2aee5"
+}

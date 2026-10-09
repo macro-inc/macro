@@ -96,6 +96,7 @@ fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMe
         engine,
         Arc::new(LogFrameSource::new(repo.clone())),
         Arc::new(crate::domain::mcp::NoMcpServers),
+        Arc::new(crate::testing::TestModelAccess::paid()),
     )
 }
 
@@ -169,6 +170,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
@@ -308,6 +310,7 @@ async fn manager_admission_rejects_turns_without_wedging_the_session() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
@@ -400,6 +403,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
@@ -547,6 +551,7 @@ async fn instructions_reach_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
@@ -622,6 +627,7 @@ async fn a_session_without_instructions_hands_the_engine_none() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
@@ -682,6 +688,7 @@ async fn identity_reaches_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: Owner::User(owner()),
@@ -763,4 +770,49 @@ async fn the_manager_remembers_the_egress_token_from_spawn_until_teardown() {
 
     manager.teardown(id);
     assert_eq!(manager.session_token(id), None);
+}
+
+/// Teardown is what ends the session, so it also drops the MCP sessions the
+/// egress token was holding. A connector that pools them learns the token.
+#[tokio::test]
+async fn teardown_releases_pooled_mcp_sessions_for_the_egress_token() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let mcp = Arc::new(RecordingRelease {
+        released: std::sync::Mutex::new(Vec::new()),
+    });
+    let manager = InMemAgentManager::new(
+        Arc::new(ScriptedEngine::new(Vec::new())),
+        Arc::new(LogFrameSource::new(repo.clone())),
+        mcp.clone(),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+    );
+    let id = AgentSessionId::new();
+    let _spawned = manager
+        .attach(facts(id), Some("session-token".to_owned()))
+        .await;
+
+    manager.teardown(id);
+
+    assert_eq!(
+        mcp.released.lock().expect("lock").as_slice(),
+        ["session-token"]
+    );
+}
+
+/// Records [`McpToolConnector::release`] so teardown can be seen doing it.
+struct RecordingRelease {
+    released: std::sync::Mutex<Vec<String>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for RecordingRelease {
+    async fn connect(
+        &self,
+        _servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<mcp_toolset::RemoteMcpToolSet> {
+        None
+    }
+
+    fn release(&self, token: &str) {
+        self.released.lock().expect("lock").push(token.to_owned());
+    }
 }

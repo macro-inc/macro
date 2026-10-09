@@ -1,6 +1,16 @@
 import type { Message, MessageListItem } from '@service-storage/messages';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { figAnchor, figThread } from './fig-comments';
+
+// These mapping tests do not mount the live comment query/mutation hooks.
+vi.mock('@queries/messages/document-messages', () => ({
+  useMessageRootsQuery: vi.fn(),
+}));
+vi.mock('@queries/messages/mutations', () => ({
+  newMessageId: vi.fn(),
+  usePatchThreadMutation: vi.fn(),
+  useSendMessageMutation: vi.fn(),
+}));
 
 const parent = { type: 'document' as const, id: 'design' };
 const anchor = { type: 'fig', pageId: '0:1', nodeId: '1:10', x: 4, y: 8 };

@@ -34,10 +34,16 @@ vi.mock('@queries/channel/join-links', () => ({
 vi.mock('@ui', () => ({
   Button: (props: {
     children: JSX.Element;
+    label?: string;
     disabled?: boolean;
     onClick?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
   }) => (
-    <button type="button" disabled={props.disabled} onClick={props.onClick}>
+    <button
+      type="button"
+      aria-label={props.label}
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
       {props.children}
     </button>
   ),
@@ -55,6 +61,18 @@ beforeEach(() => {
 });
 
 describe('ChannelJoinLinkButton', () => {
+  it('keeps the mobile icon button labeled and copies the invite link', async () => {
+    render(() => <ChannelJoinLinkButton channelId="channel-1" iconOnly />);
+    const button = screen.getByRole('button', { name: 'Copy invite link' });
+    expect(button.textContent).toBe('');
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(mocks.writeText).toHaveBeenCalledWith(
+        'https://app.example.com/app/channel-invite?code=join-code'
+      )
+    );
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy();
+  });
   it('generates the link lazily and copies the invitation URL', async () => {
     render(() => <ChannelJoinLinkButton channelId="channel-1" />);
 

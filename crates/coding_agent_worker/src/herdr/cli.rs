@@ -45,14 +45,21 @@ pub(crate) enum HerdrError {
 impl HerdrError {
     /// Only an explicit missing-agent response permits a native session restart.
     pub(crate) fn missing_agent(&self) -> bool {
+        self.has_code("agent_not_found")
+    }
+
+    /// The pane is not yet at its shell prompt, e.g. while direnv loads.
+    pub(crate) fn pane_busy(&self) -> bool {
+        self.has_code("agent_pane_busy")
+    }
+
+    fn has_code(&self, code: &str) -> bool {
         let Self::Refused { stderr, .. } = self else {
             return false;
         };
         serde_json::from_str::<Value>(stderr)
             .ok()
-            .is_some_and(|value| {
-                value.pointer("/error/code").and_then(Value::as_str) == Some("agent_not_found")
-            })
+            .is_some_and(|value| value.pointer("/error/code").and_then(Value::as_str) == Some(code))
     }
 }
 

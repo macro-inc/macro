@@ -2,6 +2,7 @@
 import '../../styles/site-ui.css';
 import '../../styles/dark-theme.css';
 import '../../styles/fonts.css';
+import './cream-preview.css';
 import { lazy } from 'solid-js';
 import { hydrate, render } from 'solid-js/web';
 import { analytics } from '../../app/utils/utilAnalytic';
@@ -15,7 +16,7 @@ const PublicOnboarding = lazy(async () => {
 });
 
 function Preview() {
-  document.documentElement.dataset.themeLight = 'false';
+  document.documentElement.dataset.themeLight = cream ? 'true' : 'false';
   if (window.location.pathname !== '/') {
     const loginUrl = new URL(
       import.meta.env.DEV
@@ -45,6 +46,14 @@ function Preview() {
 
   return <Homepage />;
 }
+// `?theme=cream` previews the homepage in the cream palette; see cream-preview.css.
+const cream =
+  new URLSearchParams(window.location.search).get('theme') === 'cream';
+if (cream) {
+  document.documentElement.dataset.palette = 'cream';
+  document.documentElement.dataset.themeLight = 'true';
+}
+
 const root = document.getElementById('root');
 if (root) {
   if (root.hasAttribute('data-hydrate-homepage')) {

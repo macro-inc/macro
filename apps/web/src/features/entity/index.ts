@@ -71,6 +71,7 @@ export {
   COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
   getTaskAssigneeIds,
+  getTaskPriorityOptionId,
   getTaskReferencedEntityIds,
   getTaskStatusOptionId,
 } from './utils/task-properties';

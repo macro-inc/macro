@@ -144,80 +144,76 @@ export function TableDesignTab(props: TableTabProps) {
         </RibbonGroup>
       </Show>
       <RibbonGroup label="Cells">
-        <>
-          <RibbonPopover
-            label="Shading"
-            icon={<PaintBucket class="size-3.5" />}
-            disabled={ro()}
-            testId="pptx-cell-shading"
-          >
-            {(close) => (
+        <RibbonPopover
+          label="Shading"
+          icon={<PaintBucket class="size-3.5" />}
+          disabled={ro()}
+          testId="pptx-cell-shading"
+        >
+          {(close) => (
+            <ColorPicker
+              themeGrid={env.themeGrid()}
+              standard={env.standardColors}
+              noneLabel="No fill"
+              onPick={(v) => {
+                close();
+                void c.fillCells(v);
+              }}
+            />
+          )}
+        </RibbonPopover>
+        <RibbonPopover
+          label="Borders"
+          icon={<BorderIcon edges="all" />}
+          disabled={ro()}
+          testId="pptx-cell-borders"
+        >
+          {(close) => (
+            <div class="flex w-56 flex-col">
+              <For each={BORDER_EDGES}>
+                {([edges, label]) => (
+                  <PopoverItem
+                    label={label}
+                    icon={<BorderIcon edges={edges} />}
+                    onClick={() => {
+                      close();
+                      void c.borderCells(edges);
+                    }}
+                  />
+                )}
+              </For>
+              <PopoverItem
+                label="No border"
+                icon={<BorderIcon edges="none" />}
+                onClick={() => {
+                  close();
+                  void c.borderCells('all', true);
+                }}
+              />
+              <PopoverLabel>Pen</PopoverLabel>
               <ColorPicker
                 themeGrid={env.themeGrid()}
                 standard={env.standardColors}
-                noneLabel="No fill"
                 onPick={(v) => {
-                  close();
-                  void c.fillCells(v);
+                  if (v) c.setBorderPen({ color: v });
                 }}
               />
-            )}
-          </RibbonPopover>
-        </>
-        <>
-          <RibbonPopover
-            label="Borders"
-            icon={<BorderIcon edges="all" />}
-            disabled={ro()}
-            testId="pptx-cell-borders"
-          >
-            {(close) => (
-              <div class="flex w-56 flex-col">
-                <For each={BORDER_EDGES}>
-                  {([edges, label]) => (
-                    <PopoverItem
-                      label={label}
-                      icon={<BorderIcon edges={edges} />}
-                      onClick={() => {
-                        close();
-                        void c.borderCells(edges);
-                      }}
-                    />
+              <div class="flex flex-wrap gap-1 px-1 pt-1">
+                <For each={[0.5, 1, 1.5, 2.25, 3, 4.5]}>
+                  {(w) => (
+                    <button
+                      type="button"
+                      class="rounded-md border border-edge-muted px-1.5 py-0.5 text-xs hover:bg-ink/5"
+                      onClick={() => c.setBorderPen({ width: w })}
+                    >
+                      {w} pt
+                    </button>
                   )}
                 </For>
-                <PopoverItem
-                  label="No border"
-                  icon={<BorderIcon edges="none" />}
-                  onClick={() => {
-                    close();
-                    void c.borderCells('all', true);
-                  }}
-                />
-                <PopoverLabel>Pen</PopoverLabel>
-                <ColorPicker
-                  themeGrid={env.themeGrid()}
-                  standard={env.standardColors}
-                  onPick={(v) => {
-                    if (v) c.setBorderPen({ color: v });
-                  }}
-                />
-                <div class="flex flex-wrap gap-1 px-1 pt-1">
-                  <For each={[0.5, 1, 1.5, 2.25, 3, 4.5]}>
-                    {(w) => (
-                      <button
-                        type="button"
-                        class="rounded-md border border-edge-muted px-1.5 py-0.5 text-xs hover:bg-ink/5"
-                        onClick={() => c.setBorderPen({ width: w })}
-                      >
-                        {w} pt
-                      </button>
-                    )}
-                  </For>
-                </div>
               </div>
-            )}
-          </RibbonPopover>
-        </>
+            </div>
+          )}
+        </RibbonPopover>
       </RibbonGroup>
     </>
   );
@@ -374,61 +370,57 @@ export function TableLayoutTab(props: TableTabProps) {
           Insert right
         </RibbonTextButton>
       </RibbonGroup>
-      <>
-        <RibbonGroup label="Merge">
-          <RibbonTextButton
-            label="Merge cells"
-            disabled={ro() || !c.canMerge()}
-            data-testid="pptx-merge-cells"
-            onClick={() => void c.mergeCells()}
-          >
-            Merge cells
-          </RibbonTextButton>
-          <RibbonTextButton
-            label="Split cells"
-            disabled={ro() || !c.canSplit()}
-            onClick={() => void c.splitCells()}
-          >
-            Split cells
-          </RibbonTextButton>
-        </RibbonGroup>
-      </>
-      <>
-        <RibbonGroup label="Cell size">
-          <NumberField
-            label="Row height"
-            unit="pt"
-            value={c.cellSize()?.h}
-            min={4}
-            max={2000}
-            disabled={ro()}
-            onCommit={(h) => void c.setCellSize({ h })}
-          />
-          <NumberField
-            label="Column width"
-            unit="pt"
-            value={c.cellSize()?.w}
-            min={4}
-            max={2000}
-            disabled={ro()}
-            onCommit={(w) => void c.setCellSize({ w })}
-          />
-          <RibbonTextButton
-            label="Distribute rows"
-            disabled={ro()}
-            onClick={() => void c.distributeRows()}
-          >
-            Distribute rows
-          </RibbonTextButton>
-          <RibbonTextButton
-            label="Distribute columns"
-            disabled={ro()}
-            onClick={() => void c.distributeColumns()}
-          >
-            Distribute columns
-          </RibbonTextButton>
-        </RibbonGroup>
-      </>
+      <RibbonGroup label="Merge">
+        <RibbonTextButton
+          label="Merge cells"
+          disabled={ro() || !c.canMerge()}
+          data-testid="pptx-merge-cells"
+          onClick={() => void c.mergeCells()}
+        >
+          Merge cells
+        </RibbonTextButton>
+        <RibbonTextButton
+          label="Split cells"
+          disabled={ro() || !c.canSplit()}
+          onClick={() => void c.splitCells()}
+        >
+          Split cells
+        </RibbonTextButton>
+      </RibbonGroup>
+      <RibbonGroup label="Cell size">
+        <NumberField
+          label="Row height"
+          unit="pt"
+          value={c.cellSize()?.h}
+          min={4}
+          max={2000}
+          disabled={ro()}
+          onCommit={(h) => void c.setCellSize({ h })}
+        />
+        <NumberField
+          label="Column width"
+          unit="pt"
+          value={c.cellSize()?.w}
+          min={4}
+          max={2000}
+          disabled={ro()}
+          onCommit={(w) => void c.setCellSize({ w })}
+        />
+        <RibbonTextButton
+          label="Distribute rows"
+          disabled={ro()}
+          onClick={() => void c.distributeRows()}
+        >
+          Distribute rows
+        </RibbonTextButton>
+        <RibbonTextButton
+          label="Distribute columns"
+          disabled={ro()}
+          onClick={() => void c.distributeColumns()}
+        >
+          Distribute columns
+        </RibbonTextButton>
+      </RibbonGroup>
       <RibbonGroup label="Alignment">
         <RibbonButton
           label="Align left"

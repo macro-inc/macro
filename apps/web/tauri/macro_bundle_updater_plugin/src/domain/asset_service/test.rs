@@ -158,3 +158,47 @@ async fn ota_to_embedded_transition_checks_the_previous_ota_first() {
         }
     );
 }
+
+#[tokio::test]
+async fn rollback_entrypoints_always_use_the_embedded_document() {
+    let routes = BundleRoutes::new(100);
+    routes
+        .restore(BundleSource::ota(101, PathBuf::from("/ota/101")))
+        .await;
+    routes.transition_to(BundleSource::embedded(100)).await;
+    let assets = FakeAssets::default();
+    assets
+        .insert("/ota/101", "index.html", "revoked document")
+        .await;
+    let resolver = BundleAssetResolver::new(routes, assets);
+
+    for request in ["", "index.html", "welcome"] {
+        assert_eq!(
+            resolver.resolve(&path(request)).await.unwrap(),
+            BundleAssetResolution::Embedded
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_missing_ota_entrypoint_never_uses_the_previous_document() {
+    let routes = BundleRoutes::new(100);
+    routes
+        .restore(BundleSource::ota(101, PathBuf::from("/ota/101")))
+        .await;
+    routes
+        .transition_to(BundleSource::ota(102, PathBuf::from("/ota/102")))
+        .await;
+    let assets = FakeAssets::default();
+    assets
+        .insert("/ota/101", "index.html", "stale document")
+        .await;
+    let resolver = BundleAssetResolver::new(routes, assets);
+
+    for request in ["", "index.html", "welcome"] {
+        assert_eq!(
+            resolver.resolve(&path(request)).await.unwrap(),
+            BundleAssetResolution::NotFound
+        );
+    }
+}

@@ -5,6 +5,7 @@ export type ReviewsScope =
   | 'involving'
   | 'review_requests';
 export type ReviewsSortId =
+  | 'priority'
   | 'recently_updated'
   | 'least_recently_updated'
   | 'newest'
@@ -14,21 +15,37 @@ export type ReviewsReviewFilterId =
   | 'reviewed_by_me'
   | 'not_reviewed_by_me'
   | 'awaiting_my_review';
+export type ReviewsStatusFilterId = 'open' | 'closed' | 'merged';
+export type ReviewsStatusTabId = 'open' | 'closed';
 export type ReviewsFilterId =
+  | 'status'
   | 'repository'
   | 'author'
   | 'assignee'
   | 'label'
-  | 'review';
+  | 'review'
+  | 'priority'
+  | 'linked'
+  | 'origin';
 /** Selected option ids per filter group; any option in a group matches. */
 export type ReviewsFilterSelection = Record<ReviewsFilterId, readonly string[]>;
 
 export const EMPTY_REVIEWS_FILTERS: ReviewsFilterSelection = {
+  status: [],
   repository: [],
   author: [],
   assignee: [],
   label: [],
   review: [],
+  priority: [],
+  linked: [],
+  origin: [],
+};
+
+/** Default and reset state for the Reviews list. */
+export const DEFAULT_REVIEWS_FILTERS: ReviewsFilterSelection = {
+  ...EMPTY_REVIEWS_FILTERS,
+  status: ['open'],
 };
 
 /** Sidebar order, which the tab hotkeys follow. */

@@ -69,6 +69,7 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getSoupItems: vi.fn(), getSoupAstItems: fetchSoup },
 }));
 vi.mock('@tanstack/solid-query', () => ({
+  infiniteQueryOptions: vi.fn((options: unknown) => options),
   useInfiniteQuery: vi.fn(() => ({
     data: undefined,
     error: null,

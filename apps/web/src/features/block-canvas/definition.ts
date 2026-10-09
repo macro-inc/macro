@@ -9,13 +9,14 @@ import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { err, ok } from 'neverthrow';
-import CanvasBlock from './component/Block';
+import { lazy } from 'solid-js';
+import type { CanvasFile } from './canvas-next/core/document-format';
 import type { Canvas } from './model/CanvasModel';
 
 export const definition = defineBlock({
   name: 'canvas',
   description: 'edit canvas',
-  component: CanvasBlock,
+  component: lazy(() => import('./component/Block')),
   accepted: {
     canvas: 'application/x-macro-canvas',
   },
@@ -73,5 +74,5 @@ export const definition = defineBlock({
 export type CanvasData = ExtractLoadType<(typeof definition)['load']>;
 
 export type CanvasSpec = {
-  exportCanvas: () => Promise<Canvas>;
+  exportCanvas: () => Promise<Canvas | CanvasFile>;
 };

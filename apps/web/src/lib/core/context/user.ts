@@ -55,7 +55,14 @@ export const [UserContextProvider, useUserContext] =
 
     const isLoading = () => query.isLoading;
 
-    const isAuthenticated = createMemo(() => deriveIsAuthenticated(query));
+    const isAuthenticated = createMemo(() =>
+      deriveIsAuthenticated({
+        isLoading: query.isLoading,
+        isError: query.isError,
+        error: query.error,
+        data: userInfo(),
+      })
+    );
 
     const userId = createMemo(() => userInfo()?.id);
     const email = createMemo(() => userInfo()?.email);

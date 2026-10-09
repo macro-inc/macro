@@ -36,10 +36,10 @@ use crate::domain::{
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
     events::{
-        TeamAutoJoinDomainToggledMetadata, TeamCreatedMetadata, TeamDeletedMetadata,
-        TeamInviteCreatedMetadata, TeamInviteRejectedMetadata, TeamInviteRevokedMetadata,
-        TeamJoinMethod, TeamMacroEvent, TeamMemberJoinedMetadata, TeamMemberRemovedMetadata,
-        TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
+        OwnedEntityMetadata, TeamAutoJoinDomainToggledMetadata, TeamCreatedMetadata,
+        TeamDeletedMetadata, TeamInviteCreatedMetadata, TeamInviteRejectedMetadata,
+        TeamInviteRevokedMetadata, TeamJoinMethod, TeamMacroEvent, TeamMemberJoinedMetadata,
+        TeamMemberRemovedMetadata, TeamMemberRoleChangedMetadata, TeamUpdatedMetadata,
     },
     model::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
@@ -51,6 +51,7 @@ use crate::domain::{
         TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease},
+    owned_entity_cleanup::{OwnedEntityCleanup, UnwiredOwnedEntityCleanup, clear_team},
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
     team_repo::{TeamMembersService, TeamRepository, TeamService},
@@ -107,6 +108,7 @@ pub struct TeamServiceImpl<
     CNE = NoOpContactsEnqueuer,
     EB = NoopMacroEventBroker,
     OSR = NoOpOpenSeatRelease,
+    OEC = UnwiredOwnedEntityCleanup,
 > where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -119,6 +121,7 @@ pub struct TeamServiceImpl<
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker,
     OSR: OpenSeatRelease,
+    OEC: OwnedEntityCleanup,
 {
     /// The underlying team repository
     team_repository: TR,
@@ -145,14 +148,17 @@ pub struct TeamServiceImpl<
     event_broker: EB,
     /// Outbound port that releases a removed member's open seat.
     open_seat_release: OSR,
+    /// Outbound port that purges everything a team owns before the team is
+    /// deleted. The default refuses, so an unwired service cannot delete teams.
+    owned_entity_cleanup: OEC,
 }
 
 fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
     TeamError::StorageLayerError(error.into())
 }
 
-impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR> Clone
-    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> Clone
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -165,6 +171,7 @@ where
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker + Clone,
     OSR: OpenSeatRelease,
+    OEC: OwnedEntityCleanup,
 {
     fn clone(&self) -> Self {
         Self {
@@ -179,6 +186,7 @@ where
             contacts_enqueuer: self.contacts_enqueuer.clone(),
             event_broker: self.event_broker.clone(),
             open_seat_release: self.open_seat_release.clone(),
+            owned_entity_cleanup: self.owned_entity_cleanup.clone(),
         }
     }
 }
@@ -196,6 +204,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS>
         NoOpContactsEnqueuer,
         NoopMacroEventBroker,
         NoOpOpenSeatRelease,
+        UnwiredOwnedEntityCleanup,
     >
 where
     TR: TeamRepository,
@@ -242,6 +251,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA>
         NoOpContactsEnqueuer,
         NoopMacroEventBroker,
         NoOpOpenSeatRelease,
+        UnwiredOwnedEntityCleanup,
     >
 where
     TR: TeamRepository,
@@ -280,12 +290,13 @@ where
             contacts_enqueuer: NoOpContactsEnqueuer,
             event_broker: NoopMacroEventBroker,
             open_seat_release: NoOpOpenSeatRelease,
+            owned_entity_cleanup: UnwiredOwnedEntityCleanup,
         }
     }
 }
 
-impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
-    TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
+    TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -298,12 +309,13 @@ where
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker,
     OSR: OpenSeatRelease,
+    OEC: OwnedEntityCleanup,
 {
     /// Replaces the contacts enqueuer while preserving every other service dependency.
     pub fn with_contacts_enqueuer<CNE2>(
         self,
         contacts_enqueuer: CNE2,
-    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE2, EB, OSR>
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE2, EB, OSR, OEC>
     where
         CNE2: ContactsEnqueuer,
     {
@@ -319,6 +331,7 @@ where
             contacts_enqueuer,
             event_broker: self.event_broker,
             open_seat_release: self.open_seat_release,
+            owned_entity_cleanup: self.owned_entity_cleanup,
         }
     }
 
@@ -326,7 +339,7 @@ where
     pub fn with_event_broker<EB2>(
         self,
         event_broker: EB2,
-    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB2, OSR>
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB2, OSR, OEC>
     where
         EB2: MacroEventBroker,
     {
@@ -342,6 +355,7 @@ where
             contacts_enqueuer: self.contacts_enqueuer,
             event_broker,
             open_seat_release: self.open_seat_release,
+            owned_entity_cleanup: self.owned_entity_cleanup,
         }
     }
 
@@ -349,7 +363,7 @@ where
     pub fn with_open_seat_release<OSR2>(
         self,
         open_seat_release: OSR2,
-    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR2>
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR2, OEC>
     where
         OSR2: OpenSeatRelease,
     {
@@ -365,6 +379,32 @@ where
             contacts_enqueuer: self.contacts_enqueuer,
             event_broker: self.event_broker,
             open_seat_release,
+            owned_entity_cleanup: self.owned_entity_cleanup,
+        }
+    }
+
+    /// Replaces the owned-entity cleanup that team deletion purges through
+    /// while preserving every other service dependency.
+    pub fn with_owned_entity_cleanup<OEC2>(
+        self,
+        owned_entity_cleanup: OEC2,
+    ) -> TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC2>
+    where
+        OEC2: OwnedEntityCleanup,
+    {
+        TeamServiceImpl {
+            team_repository: self.team_repository,
+            customer_repository: self.customer_repository,
+            channel_service: self.channel_service,
+            user_roles_and_permissions_service: self.user_roles_and_permissions_service,
+            notification_ingress: self.notification_ingress,
+            crm_enqueuer: self.crm_enqueuer,
+            team_crm_settings_repository: self.team_crm_settings_repository,
+            team_analytics: self.team_analytics,
+            contacts_enqueuer: self.contacts_enqueuer,
+            event_broker: self.event_broker,
+            open_seat_release: self.open_seat_release,
+            owned_entity_cleanup,
         }
     }
 
@@ -413,10 +453,13 @@ where
             .ok();
     }
 
-    /// Deletes `team_id` on behalf of `actor_user_id`: cancels the team
-    /// subscription, removes the team and its memberships, publishes
-    /// `team.deleted`, and strips the team subscriber role from members who
-    /// are on no other team.
+    /// Deletes `team_id` on behalf of `actor_user_id`. Purges everything the
+    /// team and its bots own, cancels the team subscription, deletes the team
+    /// with its memberships, bots, and grants, publishes `team.deleted`, and
+    /// strips the team subscriber role from members who are on no other team.
+    ///
+    /// A failed purge stops before billing and the team row, so the team stays
+    /// intact and deleting it again resumes where this attempt stopped.
     async fn delete_team_as(
         &self,
         team_id: uuid::Uuid,
@@ -427,6 +470,10 @@ where
             .iter()
             .map(|member| member.user_id.clone().into_owned())
             .collect();
+
+        let cleared = clear_team(&self.owned_entity_cleanup, team_id)
+            .await
+            .map_err(DeleteTeamError::OwnedEntityCleanup)?;
 
         let subscription_id = self
             .team_repository
@@ -441,13 +488,19 @@ where
         }
 
         self.team_repository
-            .delete_team(&team_id)
+            .delete_team(&cleared)
             .await
             .map_err(DeleteTeamError::TeamError)?;
         self.publish_team_event(&TeamMacroEvent::deleted(TeamDeletedMetadata {
             team_id,
             actor_user_id,
             member_user_ids,
+            bot_ids: cleared.bot_ids().to_vec(),
+            owned_entities: cleared
+                .purged()
+                .iter()
+                .map(OwnedEntityMetadata::from)
+                .collect(),
         }));
 
         // Remove roles for team members
@@ -904,8 +957,8 @@ impl GetTeamSubscriptionError {
     }
 }
 
-impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR> TeamMembersService
-    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> TeamMembersService
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -918,6 +971,7 @@ where
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker + Clone,
     OSR: OpenSeatRelease,
+    OEC: OwnedEntityCleanup,
 {
     #[tracing::instrument(skip(self), err)]
     async fn list_team_members(
@@ -934,8 +988,8 @@ where
     }
 }
 
-impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR> TeamService
-    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR>
+impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> TeamService
+    for TeamServiceImpl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
@@ -948,6 +1002,7 @@ where
     CNE: ContactsEnqueuer,
     EB: MacroEventBroker + Clone,
     OSR: OpenSeatRelease,
+    OEC: OwnedEntityCleanup,
 {
     #[tracing::instrument(skip(self), err)]
     async fn create_team(

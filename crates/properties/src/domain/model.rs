@@ -54,7 +54,9 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         AccessEntityType::DatabaseRow => Some(EntityType::DatabaseRow),
         AccessEntityType::User => Some(EntityType::User),
         AccessEntityType::ChannelMessage
+        | AccessEntityType::CrmPipeline
         | AccessEntityType::Database
+        | AccessEntityType::Form
         | AccessEntityType::Team
         | AccessEntityType::ForeignEntity
         | AccessEntityType::StaticFile

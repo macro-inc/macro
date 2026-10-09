@@ -25,6 +25,7 @@ pub(super) struct World {
     pub(super) cells: HashMap<RowId, HashMap<Uuid, PropertyValue>>,
     pub(super) grants: HashMap<String, Vec<(DatabaseId, AccessLevel)>>,
     pub(super) published: Vec<(TableId, TableVersion)>,
+    pub(super) metadata_changes: Vec<DatabaseId>,
     /// Every awareness relay the service asked for.
     pub(super) awareness: Vec<(DatabaseId, String, Awareness)>,
     /// Simulate the gateway refusing an awareness relay.
@@ -115,6 +116,8 @@ impl DatabasesRepo for FakeRepo {
         let mut world = self.0.lock().unwrap();
         world.databases.push(database.clone());
         world.columns.push(Column {
+            protections: vec![],
+            nullable: true,
             id: ColumnId::new(),
             table_id: table.id,
             property_definition_id: title.definition.id,
@@ -641,6 +644,10 @@ impl ColumnDefinitionStore for FakeDefinitions {
 
 impl TableEventPublisher for FakeEvents {
     type Error = FakeError;
+    async fn database_changed(&self, database_id: DatabaseId) -> Result<(), FakeError> {
+        self.0.lock().unwrap().metadata_changes.push(database_id);
+        Ok(())
+    }
     async fn table_changed(
         &self,
         _database_id: DatabaseId,

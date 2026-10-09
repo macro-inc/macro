@@ -59,6 +59,7 @@ function thread(): EmailThreadPageFieldsFragment {
     isRead: true,
     projectId: null,
     latestInboundMessageTs: null,
+    reminderReturnedAt: null,
     createdAt: '2026-09-01',
     updatedAt: '2026-09-01',
     viewerPermission: {

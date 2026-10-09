@@ -77,10 +77,35 @@ pub struct BundleManifest {
     pub bundle_build: u64,
     /// Minimum native app build that can safely run this bundle.
     pub min_native_build: u64,
+    /// Platform-specific native minima. Schema 3 requires both mobile platforms.
+    #[serde(default)]
+    pub min_native_builds: Option<MobileBuildMinima>,
     /// Short git SHA used to build the bundle.
     pub git_sha: Option<String>,
     /// Application package version used for the bundle.
     pub app_version: String,
+}
+
+/// Native build numbers are independent across mobile platforms.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MobileBuildMinima {
+    /// Minimum Android versionCode.
+    pub android: u64,
+    /// Minimum iOS CFBundleVersion.
+    pub ios: u64,
+}
+
+impl BundleManifest {
+    /// Select the minimum for the requesting platform, rejecting unknown schemas.
+    pub fn minimum_for(&self, target: AllTargets) -> Option<u64> {
+        match (self.schema_version, &self.min_native_builds, target) {
+            (2, None, AllTargets::Mobile(MobileTarget::Android)) => None,
+            (2, None, _) => Some(self.min_native_build),
+            (3, Some(builds), AllTargets::Mobile(MobileTarget::Android)) => Some(builds.android),
+            (3, Some(builds), AllTargets::Mobile(MobileTarget::Ios)) => Some(builds.ios),
+            _ => None,
+        }
+    }
 }
 
 /// Action returned by the bundle update endpoint.

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::{
-    AiPricing, AllowanceDecision, BillingPeriod, BillingSettings, Entitlement, PlanTier, Result,
-    UsageSnapshot, ledger::build_snapshot,
+    AiPricing, AllowanceDecision, AutoReloadThresholds, BillingPeriod, BillingSettings,
+    Entitlement, PlanTier, Result, UsageSnapshot, ledger::build_snapshot,
 };
 use ai_usage::domain::{Result as UsageResult, UsageError};
 use ai_usage::{
@@ -75,6 +75,15 @@ impl BillingService for FakeBilling {
         unreachable!()
     }
 
+    async fn update_auto_reload(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _enabled: bool,
+        _thresholds: AutoReloadThresholds,
+    ) -> Result<UsageSnapshot> {
+        unreachable!()
+    }
+
     async fn create_credit_checkout(
         &self,
         _user: &MacroUserIdStr<'_>,
@@ -105,6 +114,14 @@ impl BillingService for FakeBilling {
     }
 
     async fn mark_overage_invoice(&self, _stripe_invoice_id: &str, _paid: bool) -> Result<()> {
+        unreachable!()
+    }
+
+    async fn mark_credit_reload_invoice(
+        &self,
+        _stripe_invoice_id: &str,
+        _paid: bool,
+    ) -> Result<()> {
         unreachable!()
     }
 }

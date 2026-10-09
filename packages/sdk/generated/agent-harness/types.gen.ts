@@ -457,6 +457,10 @@ export type AgentSessionResponse = {
      */
     status: SessionStatusDto;
     /**
+     * The Macro task the session was linked to.
+     */
+    taskId?: string | null;
+    /**
      * The channel `thread_id` lives in, when the session was spawned from a
      * channel thread. Derived from `thread_parent`.
      */
@@ -670,6 +674,20 @@ export type ChannelSharePermission = {
      * The channel id
      */
     channel_id: string;
+};
+
+/**
+ * Request or response body for the caller's coding preferences.
+ */
+export type CodingPreferencesBody = {
+    /**
+     * Whether new coding sessions research prior work and link a Macro task.
+     */
+    createTasks: boolean;
+    /**
+     * Whether new coding sessions deliver their work as a pull request.
+     */
+    openPullRequests: boolean;
 };
 
 /**
@@ -1170,6 +1188,39 @@ export type PromptAttachment = {
 export type PullRequestLinkSource = 'agent' | 'user';
 
 /**
+ * A session linked to a pull request, as a viewer of that session sees it.
+ */
+export type PullRequestLinkedSession = {
+    /**
+     * The session id.
+     */
+    sessionId: string;
+    /**
+     * Who associated the pull request with the session.
+     */
+    source: PullRequestLinkSource;
+    threadParent?: null | MessageParent;
+};
+
+/**
+ * The sessions linked to one pull request that the caller can view.
+ */
+export type PullRequestSessions = {
+    /**
+     * The pull request's `owner/repo/pull/number` key.
+     */
+    githubKey: string;
+    /**
+     * Linked sessions the caller can view, oldest link first.
+     */
+    sessions: Array<PullRequestLinkedSession>;
+    /**
+     * The requested pull request URL, canonicalized.
+     */
+    url: string;
+};
+
+/**
  * The sessions associated with a pull request.
  */
 export type PullRequestSessionsResponse = {
@@ -1187,6 +1238,26 @@ export type PullRequestUrl = {
      * The pull request's GitHub URL, such as `https://github.com/owner/repo/pull/12`.
      */
     url: string;
+};
+
+/**
+ * GitHub pull requests, by URL.
+ */
+export type PullRequestUrls = {
+    /**
+     * Pull request GitHub URLs, at most 100.
+     */
+    urls: Array<string>;
+};
+
+/**
+ * The sessions associated with each requested pull request.
+ */
+export type PullRequestsSessionsResponse = {
+    /**
+     * One entry per requested pull request, in request order.
+     */
+    pullRequests: Array<PullRequestSessions>;
 };
 
 /**
@@ -1426,6 +1497,23 @@ export type UpdateSharePermissionRequestV2 = {
 };
 
 /**
+ * A client-minted id deduplicates warm calls without creating a conversation.
+ */
+export type WarmAgentSessionRequest = {
+    /**
+     * Id reserved by this browser for its next in-memory conversation.
+     */
+    id: string;
+};
+
+/**
+ * A bounded best-effort warm attempt; absence means normal creation should proceed.
+ */
+export type WarmAgentSessionResponse = {
+    session?: null | AgentSessionResponse;
+};
+
+/**
  * Just a session id, for the preview variants that carry nothing else.
  *
  * Clients deserialize this, so both derives are used.
@@ -1479,6 +1567,46 @@ export type DiscoverAgentCapabilitiesHandlerResponses = {
 };
 
 export type DiscoverAgentCapabilitiesHandlerResponse = DiscoverAgentCapabilitiesHandlerResponses[keyof DiscoverAgentCapabilitiesHandlerResponses];
+
+export type GetAgentCodingPreferencesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-coding-preferences';
+};
+
+export type GetAgentCodingPreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type GetAgentCodingPreferencesError = GetAgentCodingPreferencesErrors[keyof GetAgentCodingPreferencesErrors];
+
+export type GetAgentCodingPreferencesResponses = {
+    200: CodingPreferencesBody;
+};
+
+export type GetAgentCodingPreferencesResponse = GetAgentCodingPreferencesResponses[keyof GetAgentCodingPreferencesResponses];
+
+export type PutAgentCodingPreferencesData = {
+    body: CodingPreferencesBody;
+    path?: never;
+    query?: never;
+    url: '/agent-coding-preferences';
+};
+
+export type PutAgentCodingPreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type PutAgentCodingPreferencesError = PutAgentCodingPreferencesErrors[keyof PutAgentCodingPreferencesErrors];
+
+export type PutAgentCodingPreferencesResponses = {
+    200: CodingPreferencesBody;
+};
+
+export type PutAgentCodingPreferencesResponse = PutAgentCodingPreferencesResponses[keyof PutAgentCodingPreferencesResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;
@@ -1682,6 +1810,27 @@ export type AgentSessionsForPullRequestResponses = {
 
 export type AgentSessionsForPullRequestResponse = AgentSessionsForPullRequestResponses[keyof AgentSessionsForPullRequestResponses];
 
+export type AgentSessionsForPullRequestsData = {
+    body: PullRequestUrls;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/by-pull-requests';
+};
+
+export type AgentSessionsForPullRequestsErrors = {
+    400: string;
+    401: string;
+    500: string;
+};
+
+export type AgentSessionsForPullRequestsError = AgentSessionsForPullRequestsErrors[keyof AgentSessionsForPullRequestsErrors];
+
+export type AgentSessionsForPullRequestsResponses = {
+    200: PullRequestsSessionsResponse;
+};
+
+export type AgentSessionsForPullRequestsResponse = AgentSessionsForPullRequestsResponses[keyof AgentSessionsForPullRequestsResponses];
+
 export type PreviewAgentSessionsData = {
     body: PreviewAgentSessionsRequest;
     path?: never;
@@ -1705,6 +1854,19 @@ export type PreviewAgentSessionsResponses = {
 };
 
 export type PreviewAgentSessionsResponse2 = PreviewAgentSessionsResponses[keyof PreviewAgentSessionsResponses];
+
+export type WarmAgentSessionHandlerData = {
+    body: WarmAgentSessionRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/warm';
+};
+
+export type WarmAgentSessionHandlerResponses = {
+    200: WarmAgentSessionResponse;
+};
+
+export type WarmAgentSessionHandlerResponse = WarmAgentSessionHandlerResponses[keyof WarmAgentSessionHandlerResponses];
 
 export type DeleteAgentSessionData = {
     body?: never;
@@ -1743,8 +1905,15 @@ export type GetAgentSessionData = {
 };
 
 export type GetAgentSessionErrors = {
+    /**
+     * the session exists but is not this caller's
+     */
     401: string;
     403: string;
+    /**
+     * no session with this id: not created yet, or deleted since
+     */
+    404: string;
     500: string;
 };
 

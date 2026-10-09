@@ -2,7 +2,10 @@ import type { MentionBucketId } from '@core/component/LexicalMarkdown/component/
 import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import type { EntityBucket } from '@core/context/quickAccess';
 import { match } from 'ts-pattern';
-import type { DatabaseEntityType, DatabaseMention } from './column-inference';
+import type {
+  DatabaseEntityType,
+  DatabaseMention,
+} from '../../database/core/column-inference';
 
 const ENTITY_TYPE_OF_BUCKET: Partial<Record<EntityBucket, DatabaseEntityType>> =
   {

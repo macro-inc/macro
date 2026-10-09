@@ -42,6 +42,26 @@ describe('upcoming calendar calls', () => {
     ).toEqual([]);
   });
 
+  it('keeps a future timed point without treating it as an ongoing meeting', () => {
+    const point = { ...call(13), end: call(13).start };
+    expect(
+      selectUpcomingCalendarEvents([point], new Date('2026-09-23T12:00:00Z'))
+    ).toEqual([point]);
+    expect(
+      selectUpcomingCalendarEvents([point], new Date(point.start))
+    ).toEqual([]);
+    expect(isCalendarEventOngoing(point, new Date(point.start))).toBe(false);
+    const emptyAllDay = {
+      ...point,
+      allDay: true,
+      start: '2026-09-23',
+      end: '2026-09-23',
+    };
+    expect(
+      selectUpcomingCalendarEvents([emptyAllDay], new Date(2026, 8, 22))
+    ).toEqual([]);
+  });
+
   it('deduplicates overlapping windows without merging recurring calls sharing a URL', () => {
     const first = call(13);
     expect(

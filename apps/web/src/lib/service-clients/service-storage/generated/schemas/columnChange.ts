@@ -9,6 +9,7 @@ import type { ColumnChangeOneOfFive } from './columnChangeOneOfFive';
 import type { ColumnChangeOneOfNine } from './columnChangeOneOfNine';
 import type { ColumnChangeOneOfOnefour } from './columnChangeOneOfOnefour';
 import type { ColumnChangeOneOfOneone } from './columnChangeOneOfOneone';
+import type { ColumnChangeOneOfOnesix } from './columnChangeOneOfOnesix';
 import type { ColumnChangeOneOfSeven } from './columnChangeOneOfSeven';
 import type { ColumnChangeOneOfThree } from './columnChangeOneOfThree';
 
@@ -22,4 +23,5 @@ export type ColumnChange =
   | ColumnChangeOneOfSeven
   | ColumnChangeOneOfNine
   | ColumnChangeOneOfOneone
-  | ColumnChangeOneOfOnefour;
+  | ColumnChangeOneOfOnefour
+  | ColumnChangeOneOfOnesix;

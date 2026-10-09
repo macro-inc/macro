@@ -41,6 +41,54 @@ fn repo(pool: &PgPool) -> PgDatabaseStarterRepo<PropertiesPgRepo> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_starter_records_initial_values_in_history(pool: PgPool) {
+    insert_user(&pool).await;
+    let blueprint = StarterBlueprint::default();
+    let created = repo(&pool)
+        .ensure_starter(&viewer(), &blueprint)
+        .await
+        .unwrap();
+    let database = created.database_id.unwrap();
+    let table = created.table_id.unwrap();
+    let data = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    let columns = data.columns_for_tables(&[table]).await.unwrap();
+    let definitions = crate::outbound::pg_definition_store::PgDefinitionStore::new(
+        pool.clone(),
+        PropertiesPgRepo::new(pool.clone()),
+    )
+    .definitions(&[columns[1].property_definition_id])
+    .await
+    .unwrap();
+    let rows = data.row_refs(table).await.unwrap();
+    assert_eq!(rows.len(), blueprint.rows.len());
+    for (row, (name, stage_index)) in rows.iter().zip(blueprint.rows) {
+        let changes = data.row_history(database, table, row.id).await.unwrap();
+        let history = crate::domain::journal::row_history(row.id, changes);
+        assert_eq!(history.len(), 1);
+        assert_eq!(
+            history[0].kind,
+            crate::domain::journal::RowChangeKind::Insert
+        );
+        assert!(history[0].before.is_empty());
+        assert_eq!(
+            history[0].after,
+            std::collections::BTreeMap::from([
+                (
+                    columns[0].id,
+                    models_databases::CellValue::Text(name.into())
+                ),
+                (
+                    columns[1].id,
+                    models_databases::CellValue::Options(vec![models_databases::OptionRef::Id(
+                        OptionId::from_uuid(definitions[0].property_options[stage_index].id),
+                    )]),
+                ),
+            ])
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn concurrent_starter_requests_create_one_complete_editable_example(pool: PgPool) {
     insert_user(&pool).await;
     let repo = repo(&pool);

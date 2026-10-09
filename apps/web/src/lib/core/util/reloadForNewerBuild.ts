@@ -52,6 +52,11 @@ const browserPage: ReloadPage = {
 const holds = new Set<symbol>();
 let scheduled = false;
 
+/** Checks active calls/uploads/imports without executing unload side effects. */
+export function hasAutomaticReloadHolds(): boolean {
+  return holds.size > 0;
+}
+
 /**
  * Keeps this tab from reloading by itself into a newer build while work a
  * reload would cut off is running, such as a call or an upload. Returns the

@@ -1,3 +1,5 @@
+import { onCleanup } from 'solid-js';
+import { isServer } from 'solid-js/web';
 import { handleDemoClick } from '../../../app/utils/utilCta';
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureConstellation } from '../../setup/components/FeatureOverview';
@@ -11,6 +13,7 @@ import { MACRO_SEAT_CENTS } from '../core/savings-calculator';
 import '../components/homepage-scroll-cue.css';
 import '../components/homepage-unification.css';
 import '../components/workspace-story.css';
+import '../../setup/cream-preview.css';
 import './sales-page.css';
 
 /** `OnboardingShell`'s palette, which the homepage hero is drawn in. */
@@ -54,9 +57,25 @@ export function RouteTour() {
     path: '/tour',
     noindex: true,
   });
+  // `?theme=cream` previews the page in the cream palette (cream-preview.css).
+  const cream =
+    !isServer &&
+    new URLSearchParams(window.location.search).get('theme') === 'cream';
+  if (cream) {
+    const root = document.documentElement;
+    const previousLight = root.dataset.themeLight;
+    root.dataset.palette = 'cream';
+    // Light glass (white rims, softer shadows) is keyed off <html>.
+    root.dataset.themeLight = 'true';
+    onCleanup(() => {
+      delete root.dataset.palette;
+      if (previousLight === undefined) delete root.dataset.themeLight;
+      else root.dataset.themeLight = previousLight;
+    });
+  }
 
   return (
-    <FeaturePage>
+    <FeaturePage light={cream}>
       <div class="homepage-sections tour-page">
         <div class="homepage-sections-inner">
           {/* The homepage hero inside `OnboardingShell`'s palette and card. */}
@@ -149,7 +168,7 @@ export function RouteTour() {
               title="See how to grow your business faster."
               description="A 30-minute call with our CEO or a member of our team. Pick a time below."
             />
-            <DemoBookingEmbed id="tour-booking" />
+            <DemoBookingEmbed id="tour-booking" cream={cream} />
           </section>
 
           <footer class="tour-footer">

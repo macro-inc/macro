@@ -8,10 +8,14 @@ import { indexUnreadMessageNotifications } from '@notifications/unread-message-n
 import { createChannelNotificationsQuery } from '@queries/channel/notifications';
 import { queryReadyGate } from '@queries/gate';
 import { useMessageTimelineByIdsQuery } from '@queries/messages/timeline';
-import type { MessageListItem } from '@service-storage/messages';
+import type {
+  MessageListItem,
+  TimelineActivity,
+} from '@service-storage/messages';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import type { ThreadListScrollState } from './ThreadList';
 import {
+  type ThreadPosition,
   type UnreadNotificationChip,
   unreadNotificationChip,
   unreadThreads,
@@ -21,6 +25,8 @@ import {
 export function ChannelUnreadNotifications(props: {
   channelId: string;
   messages: Accessor<MessageListItem[]>;
+  /** Activity rows can be the first visible row, so they need positions too. */
+  activities?: Accessor<ReadonlyMap<string, TimelineActivity>>;
   scrollState: Accessor<ThreadListScrollState | undefined>;
   container: Accessor<HTMLElement | undefined>;
   insets: Accessor<{ start: number; end: number }>;
@@ -68,13 +74,15 @@ export function ChannelUnreadNotifications(props: {
     }
   );
   const unreadChip = createMemo(() => {
-    const positions = new Map(
+    const positions = new Map<string, ThreadPosition>(
       (queryReadyGate(unreadRoots) ? unreadRoots.data : []).map((message) => [
         message.id,
         message,
       ])
     );
     for (const message of props.messages()) positions.set(message.id, message);
+    for (const [key, activity] of props.activities?.() ?? [])
+      positions.set(key, { id: activity.id, created_at: activity.occurred_at });
     const scroll = props.scrollState();
     const target = unread()[0];
     const container = props.container();

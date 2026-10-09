@@ -153,7 +153,7 @@ export function EventTypesPanel(props: {
                         <Dots class="size-5" />
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
-                        <DropdownMenu.Content class="z-action-menu min-w-40 rounded-lg border border-edge-muted bg-menu p-1 text-sm shadow-lg">
+                        <DropdownMenu.Content class="menu-surface z-action-menu min-w-40 p-1 text-sm">
                           <DropdownMenu.Item
                             class="rounded px-3 py-2 outline-none data-highlighted:bg-hover"
                             onSelect={() => props.onEdit(event)}

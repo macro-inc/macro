@@ -59,8 +59,8 @@ import {
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
+  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
-  markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../../next-soup/utils';
 import { useHomeView } from '../home-view-context';
@@ -138,7 +138,9 @@ export function HomeList(props: HomeListProps) {
     });
   });
 
-  const { buildActionGroups } = createSoupEntityActions();
+  const { buildActionGroups } = createSoupEntityActions({
+    markDoneDelegate: source.markDoneDelegate,
+  });
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
       activeListView: panel.handle.content().id,
@@ -174,7 +176,7 @@ export function HomeList(props: HomeListProps) {
   }
 
   function markEntitySeen(entity: WithNotification<EntityData>) {
-    markReminderSeenOnOpen(entity, notificationSource);
+    markCalendarNotificationSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
       markChannelNotificationsSeenOnOpen(entity, notificationSource);
     }
@@ -380,6 +382,7 @@ export function HomeList(props: HomeListProps) {
     splitHandle: panel.handle,
     createActionNavigationHandler,
     condition: panel.isPanelActive,
+    markDoneDelegate: source.markDoneDelegate,
   });
 
   function actionGroupsFor(row: HomeActionRow) {
@@ -627,6 +630,7 @@ export function HomeList(props: HomeListProps) {
                               list={actionState}
                               selectedEntities={selectedEntities}
                               viewContext={entityActionViewContext()}
+                              markDoneDelegate={source.markDoneDelegate}
                               onOpenChange={(open) => {
                                 if (!open) return;
                                 focusActionRow({

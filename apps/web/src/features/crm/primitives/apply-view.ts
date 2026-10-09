@@ -14,6 +14,5 @@ export function createApplyCrmView(commands: CrmViewCommands) {
       commands.setSort(config.sort?.length ? config.sort : ['updated_at']);
       commands.setStageFilter(config.stageFilter ?? []);
       commands.setOwnerFilter(config.ownerFilter ?? []);
-      commands.setViewMode(config.viewMode ?? commands.defaultMode());
     });
 }

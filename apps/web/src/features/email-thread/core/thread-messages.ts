@@ -45,7 +45,13 @@ export function selectThreadMessages(thread: EmailThread) {
 
     if (!replyingToId) continue;
 
-    messageDraftMap[replyingToId] = message;
+    const previous = messageDraftMap[replyingToId];
+    if (
+      !previous ||
+      Date.parse(message.updated_at) > Date.parse(previous.updated_at)
+    ) {
+      messageDraftMap[replyingToId] = message;
+    }
   }
 
   return {

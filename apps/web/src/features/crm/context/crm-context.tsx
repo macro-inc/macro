@@ -29,8 +29,16 @@ import type {
   TeamSource,
   TeamViewsSource,
 } from './crm-sources';
+import type {
+  PipelineEditor,
+  PipelineSharing,
+  PipelinesSource,
+} from './pipelines';
 
 export type CrmContext = {
+  createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
+  PipelineEditor: PipelineEditor;
+  PipelineSharing: PipelineSharing;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   contactInitials(name: string | null | undefined, email: string): string;
   userEmail(id: string): string;
@@ -50,6 +58,7 @@ export type CrmContext = {
     openEntity(entity: import('@entity').EntityData): void;
   };
   listsEnabled(): Accessor<boolean>;
+  pipelinesEnabled(): Accessor<boolean>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(
@@ -82,7 +91,9 @@ export type CrmContext = {
   createResetStages(): CrmMutation<void>;
   createExportDefinitions(enabled: Accessor<boolean>): ExportDefinitionsSource;
   createCompanySuggestions(): {
-    companies: Accessor<{ id: string; name: string }[]>;
+    companies: Accessor<
+      { id: string; name: string; domains: { domain: string }[] }[]
+    >;
     query: { readonly isLoading: boolean };
   };
   exportCompanies(
@@ -95,7 +106,8 @@ export type CrmContext = {
     toggleListColumn(column: CrmListColumnId): void;
   };
   openCreateCompany(): void;
-  openCreateContact(companyId: string, domain: string): void;
+  /** Without a company, the dialog asks which company the contact joins. */
+  openCreateContact(company?: { companyId: string; domain: string }): void;
   userId: Accessor<string | undefined>;
   isTeamAdmin: () => Accessor<boolean>;
   createCompanySource(id: Accessor<string>): CompanySource;
@@ -104,7 +116,6 @@ export type CrmContext = {
   createTeamConfigSource(): TeamConfigSource;
   createCapabilities(): CrmCapabilities;
   createDealStages(): DealStages;
-  createUnavailable(): Accessor<boolean>;
   createClosedStageIds(
     stages: Accessor<{ id: string; label: string }[]>
   ): Accessor<Set<string>>;

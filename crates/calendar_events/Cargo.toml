@@ -35,6 +35,7 @@ async-trait = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 futures = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",

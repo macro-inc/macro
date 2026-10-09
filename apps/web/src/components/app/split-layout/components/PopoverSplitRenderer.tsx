@@ -1,7 +1,7 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
@@ -138,16 +138,6 @@ function PopoverSplitModal(props: {
     headerCollapser: { register: () => () => {} },
     toolbarCollapser: { register: () => () => {} },
   };
-
-  registerHotkey({
-    hotkey: 'escape',
-    scopeId,
-    description: 'Close Popover',
-    keyDownHandler() {
-      props.onClose();
-      return true;
-    },
-  });
 
   const attachPanel = (element: HTMLElement) => {
     setPanelRef(element);

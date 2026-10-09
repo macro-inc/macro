@@ -41,6 +41,7 @@ const MODEL_DESCRIPTION: Record<TModel, string> = {
   [Model.opus55]: 'Complex tasks and deeper analysis',
   [Model.haiku45]: 'Quick answers and lighter tasks',
   [Model.gpt6Astra]: 'Frontier reasoning for the hardest problems',
+  [Model.gpt61Sol]: 'Balanced reasoning, coding, and speed',
   [Model.gpt56]: 'Reasoning, writing, and problem solving',
   [Model.gpt56Mini]: 'Fast help with everyday tasks',
   [Model.gemini38Flash]: 'Fast answers over data and documents',

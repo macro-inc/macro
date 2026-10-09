@@ -30,6 +30,7 @@ fn owner() -> MacroUserIdStr<'static> {
 
 fn params(id: AgentSessionId) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        warm: false,
         repo_branch: None,
         id,
         owner_id: model_owner::Owner::User(owner()),

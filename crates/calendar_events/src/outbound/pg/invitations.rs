@@ -56,6 +56,7 @@ impl CalendarInvitationRepository for PgCalendarRepository {
             OccurrenceJoinRow,
             r#"            SELECT
                 occurrence.event_id,
+                event.source_link_id,
                 occurrence.occurrence_key,
                 occurrence.recurrence_id,
                 occurrence.starts_at AS occurrence_starts_at,

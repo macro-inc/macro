@@ -13,6 +13,7 @@ import {
   guestEmails,
 } from '@app/features/calendar/utils/guest-emails';
 import { handleOpenEventOutsidePress } from '@app/features/calendar/utils/open-event-outside-press';
+import { TeamEventDetails } from '@app/features/calendar-team/components/team-event-details';
 import { EventRsvpSection } from '@app/features/calendar-view/components/EventRsvpSection';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useOpenEventEmail } from '@app/features/calendar-view/components/use-open-event-email';
@@ -21,6 +22,7 @@ import { copyGuestEmails } from '@app/features/calendar-view/copy-guest-emails';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
+import { openExternalUrl } from '@core/util/url';
 import { Popover } from '@kobalte/core/popover';
 import CopyIcon from '@phosphor/copy.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
@@ -44,6 +46,7 @@ import {
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 
 interface SelectedEventDetailsProps {
+  boundary: HTMLElement;
   anchor: Accessor<HTMLElement | undefined>;
   event: Accessor<CalendarEvent | undefined>;
   timeFormat: Accessor<CalendarTimeFormat>;
@@ -94,6 +97,7 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
             <Show when={props.event()}>
               {(currentEvent) => (
                 <EventDetailsPopover
+                  boundary={props.boundary}
                   anchor={selected.anchor}
                   event={currentEvent()}
                   timeFormat={props.timeFormat()}
@@ -140,7 +144,9 @@ function EveryoneElseDeclinedNotice(props: {
   onReschedule: () => void;
 }) {
   return (
-    <Show when={hasEveryoneElseDeclined(props.event)}>
+    <Show
+      when={!props.event.teamProjection && hasEveryoneElseDeclined(props.event)}
+    >
       <div class="border-edge-muted mx-3 mb-3 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 rounded-lg border bg-active p-3 text-sm text-ink-muted sm:mt-2 sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:text-xs">
         <span
           aria-hidden="true"
@@ -181,7 +187,7 @@ function EventGuestActions(props: {
   const openEventEmail = useOpenEventEmail();
 
   return (
-    <>
+    <Show when={!props.event.teamProjection}>
       <Button
         label="Copy guest emails"
         variant="ghost"
@@ -208,7 +214,7 @@ function EventGuestActions(props: {
           <EnvelopeIcon />
         </Button>
       </Show>
-    </>
+    </Show>
   );
 }
 
@@ -218,7 +224,10 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
   });
-  const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
+  const canModify = () =>
+    !props.event.teamProjection &&
+    !props.event.isReadOnly &&
+    !props.event.isCancelled;
   const openEditor = () => {
     openEventComposer({ event: props.event });
     props.onOpenChange(false);
@@ -254,16 +263,18 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               <CloseIcon />
             </MobileDrawer.Close>
             <div class="flex items-center gap-1">
-              <Button
-                aria-label="Copy event"
-                variant="ghost"
-                size="icon-md"
-                depth={3}
-                class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
-                onClick={() => copyCalendarEventMention(props.event)}
-              >
-                <LinkIcon />
-              </Button>
+              <Show when={!props.event.teamProjection}>
+                <Button
+                  aria-label="Copy event"
+                  variant="ghost"
+                  size="icon-md"
+                  depth={3}
+                  class="size-11 bg-ink/6 text-ink-muted [&_svg]:size-5"
+                  onClick={() => copyCalendarEventMention(props.event)}
+                >
+                  <LinkIcon />
+                </Button>
+              </Show>
               <Show when={canModify()}>
                 <Button
                   aria-label="Edit event"
@@ -296,22 +307,37 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               onReschedule={openEditor}
             />
             <div class="px-3">
-              <EventDetails
-                event={props.event}
-                timeFormat={props.timeFormat}
-                defaultReminders={props.defaultReminders}
-              />
-            </div>
-            <EventAttendeesSection
-              attendees={props.event.attendees}
-              actions={
-                <EventGuestActions
+              <Show
+                when={props.event.teamProjection}
+                fallback={
+                  <EventDetails
+                    event={props.event}
+                    timeFormat={props.timeFormat}
+                    defaultReminders={props.defaultReminders}
+                  />
+                }
+              >
+                <TeamEventDetails
                   event={props.event}
-                  closeDetails={() => props.onOpenChange(false)}
+                  timeFormat={props.timeFormat}
+                  onOpenLink={openExternalUrl}
                 />
-              }
-            />
-            <EventRsvpSection event={props.event} buttonSize="md" />
+              </Show>
+            </div>
+            <Show when={!props.event.teamProjection}>
+              <EventAttendeesSection
+                attendees={props.event.attendees}
+                actions={
+                  <EventGuestActions
+                    event={props.event}
+                    closeDetails={() => props.onOpenChange(false)}
+                  />
+                }
+              />
+            </Show>
+            <Show when={!props.event.teamProjection}>
+              <EventRsvpSection event={props.event} buttonSize="md" />
+            </Show>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
@@ -321,6 +347,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
 
 interface EventDetailsPopoverProps extends EventDetailsOverlayProps {
   anchor: HTMLElement;
+  boundary: HTMLElement;
 }
 
 function useDeleteEventDialog(props: {
@@ -425,8 +452,9 @@ function DeleteEventDialog(
 
 /**
  * Anchors event details and actions to a rendered calendar event.
- * The card stops at 32rem, or sooner when the space beside the event is
- * shorter. Details scroll inside that cap; the RSVP row stays pinned.
+ * The calendar viewport contains both the portal and its collision boundary.
+ * Wide events can overlap the card so it stays inside that viewport. Details
+ * scroll within 32rem or the available height; the RSVP row stays pinned.
  */
 function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const openEventComposer = useOpenEventComposer();
@@ -434,7 +462,10 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
     event: () => props.event,
     onDeleted: () => props.onOpenChange(false),
   });
-  const canModify = () => !props.event.isReadOnly && !props.event.isCancelled;
+  const canModify = () =>
+    !props.event.teamProjection &&
+    !props.event.isReadOnly &&
+    !props.event.isCancelled;
   const openEditor = () => {
     openEventComposer({ event: props.event });
     props.onOpenChange(false);
@@ -443,6 +474,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   return (
     <Popover
       anchorRef={() => props.anchor}
+      boundary={() => props.boundary}
       open
       onOpenChange={(open) => {
         // Keep the popover mounted while its delete dialog is open.
@@ -453,12 +485,13 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
       gutter={8}
       flip
       slide
+      overlap
       fitViewport
     >
-      <Popover.Portal>
+      <Popover.Portal mount={props.boundary}>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-modal max-w-[calc(100vw-2rem)] outline-none"
+            class="portal-scope z-modal max-w-[var(--kb-popper-content-available-width)] outline-none"
             onInteractOutside={handleOpenEventOutsidePress}
             onOpenAutoFocus={(event) => {
               // Aims can arrive while the keyboard is elsewhere — arrow-key
@@ -485,19 +518,21 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             }}
           >
             <Popover.Arrow class="fill-surface" />
-            <div class="flex max-h-[min(32rem,var(--kb-popper-content-available-height,32rem))] w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl glass bg-menu-glass text-ink">
+            <div class="flex max-h-[min(32rem,var(--kb-popper-content-available-height,32rem))] w-fit min-w-[min(20rem,var(--kb-popper-content-available-width,20rem))] max-w-[min(24rem,var(--kb-popper-content-available-width,24rem))] flex-col overflow-hidden rounded-xl glass bg-menu-glass text-ink">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
               <div class="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
-                <Button
-                  aria-label="Copy event"
-                  variant="ghost"
-                  size="icon-sm"
-                  depth={3}
-                  class="text-ink-muted [&_svg]:size-4"
-                  onClick={() => copyCalendarEventMention(props.event)}
-                >
-                  <LinkIcon />
-                </Button>
+                <Show when={!props.event.teamProjection}>
+                  <Button
+                    aria-label="Copy event"
+                    variant="ghost"
+                    size="icon-sm"
+                    depth={3}
+                    class="text-ink-muted [&_svg]:size-4"
+                    onClick={() => copyCalendarEventMention(props.event)}
+                  >
+                    <LinkIcon />
+                  </Button>
+                </Show>
                 <Show when={canModify()}>
                   <Button
                     aria-label="Edit event"
@@ -539,24 +574,39 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   onReschedule={openEditor}
                 />
                 <div class="px-3 pb-3">
-                  <EventDetails
-                    event={props.event}
-                    timeFormat={props.timeFormat}
-                    defaultReminders={props.defaultReminders}
-                  />
-                </div>
-                <EventAttendeesSection
-                  attendees={props.event.attendees}
-                  actions={
-                    <EventGuestActions
+                  <Show
+                    when={props.event.teamProjection}
+                    fallback={
+                      <EventDetails
+                        event={props.event}
+                        timeFormat={props.timeFormat}
+                        defaultReminders={props.defaultReminders}
+                      />
+                    }
+                  >
+                    <TeamEventDetails
                       event={props.event}
-                      closeDetails={() => props.onOpenChange(false)}
+                      timeFormat={props.timeFormat}
+                      onOpenLink={openExternalUrl}
                     />
-                  }
-                />
+                  </Show>
+                </div>
+                <Show when={!props.event.teamProjection}>
+                  <EventAttendeesSection
+                    attendees={props.event.attendees}
+                    actions={
+                      <EventGuestActions
+                        event={props.event}
+                        closeDetails={() => props.onOpenChange(false)}
+                      />
+                    }
+                  />
+                </Show>
               </div>
               <div class="shrink-0">
-                <EventRsvpSection event={props.event} />
+                <Show when={!props.event.teamProjection}>
+                  <EventRsvpSection event={props.event} />
+                </Show>
               </div>
             </div>
           </Popover.Content>

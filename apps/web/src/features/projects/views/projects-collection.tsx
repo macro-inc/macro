@@ -19,6 +19,7 @@ import { taskGridColumnCount } from '@app/features/tasks-view/components/task-li
 import { toast } from '@core/component/Toast/Toast';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
 import CalendarIcon from '@phosphor/calendar.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -394,6 +395,14 @@ export function ProjectsCollection(props: {
                   </div>
                 </Dropdown.Content>
               </Dropdown>
+              <Button
+                variant="outline"
+                class="touch:hidden @max-[720px]/view-shell:hidden"
+                onClick={props.onCreate}
+              >
+                <PlusIcon class="size-4" />
+                New project
+              </Button>
             </div>
           </div>
         </div>

@@ -207,6 +207,15 @@ mod tests {
     }
 
     #[test]
+    fn project_uuid_matches_the_partial_gin_predicate() {
+        // project_task_ids and idx_ep_project_value_gin both spell this literal.
+        assert_eq!(
+            SystemPropertyKey::PROJECT_UUID.to_string(),
+            "00000001-0000-0000-0000-000000000014"
+        );
+    }
+
+    #[test]
     fn test_required_property_ids_for_company() {
         let required = SystemPropertyKey::required_property_ids_for_entity(EntityType::Company);
         assert_eq!(required.len(), 3);

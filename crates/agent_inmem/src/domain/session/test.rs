@@ -94,6 +94,28 @@ fn an_image_the_browser_left_untyped_is_still_handed_over_as_an_image() {
 }
 
 #[test]
+fn photoshop_documents_are_named_to_the_model_not_shown_as_images() {
+    // Browsers type `.psd` files as `image/vnd.adobe.photoshop`, but no image
+    // pipeline decodes a layered Photoshop document.
+    let prompt = UserPrompt::from_blocks(&[
+        link(
+            "poster.psd",
+            "https://x/file/1",
+            Some("image/vnd.adobe.photoshop"),
+        ),
+        link("big.psb", "https://x/file/2", None),
+    ]);
+    let attachments = prompt
+        .to_chat_message()
+        .attachments
+        .expect("the files attach");
+    for part in attachments.parts().iter() {
+        let content = part.as_ref().expect("links resolve");
+        assert!(matches!(&content.content[0], AttachmentPart::Content(_)));
+    }
+}
+
+#[test]
 fn a_media_type_naming_another_medium_wins_over_the_name() {
     // The composer classifies by media type first, so a file typed as video
     // is a video however it is named - the model input must agree.

@@ -38,6 +38,7 @@ export const CHANNEL_DOCUMENT_FILE_EXTENSIONS = [
   'rtf',
   'txt',
   'xls',
+  'xlsm',
   'xlsx',
   'xml',
   'yaml',

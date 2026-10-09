@@ -17,6 +17,7 @@ name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+agent-client-protocol.workspace = true
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
@@ -36,6 +37,7 @@ ai_toolset = { path = "../../crates/ai_toolset" }
 rmcp = { workspace = true }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
 aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
@@ -84,6 +86,7 @@ system_properties = { path = "../../crates/system_properties" }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }
+model_owner = { path = "../../crates/model_owner" }
 axum = { workspace = true }
 axum-extra = { workspace = true, features = ["typed-header"] }
 aws-sdk-secretsmanager = { workspace = true }

@@ -1,4 +1,3 @@
-import type { EntityData } from '@entity';
 import type { EmailFollowup } from '@service-storage/generated/schemas/emailFollowup';
 import {
   cleanup,
@@ -31,17 +30,15 @@ vi.mock('@queries/undo', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.success, failure: mocks.failure },
 }));
-vi.mock('../reminder-composer', () => ({
-  closeReminderComposer: mocks.close,
-  takeReminderCreatedHandler: mocks.takeHandler,
-}));
-vi.mock('../components/email-reminder-form', () => ({
-  EmailReminderForm: (props: {
+vi.mock('./email-reminder-menu', () => ({
+  EmailReminderMenu: (props: {
     onSave: (at: Date, condition: 'if_no_reply') => void;
     onRemove?: () => void;
     pending: boolean;
+    error?: string;
   }) => (
     <>
+      <p role="alert">{props.error}</p>
       <button
         disabled={props.pending}
         onClick={() =>
@@ -76,12 +73,13 @@ it('keeps initial navigation and removal undo when a lost response is discovered
       return current();
     },
   });
-  mocks.takeHandler.mockReturnValueOnce(mocks.navigate);
   mocks.execute.mockRejectedValueOnce(new Error('Response lost'));
   render(() => (
     <EmailReminderComposer
-      entity={{ id: 'thread', type: 'email', name: 'Subject' } as EntityData}
-      onPending={() => {}}
+      entity={{ id: 'thread', type: 'email', name: 'Subject' }}
+      open={true}
+      onOpenChange={mocks.close}
+      onCreated={mocks.navigate}
     />
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -139,8 +137,10 @@ it('undoes removal by scheduling the captured time and condition again', async (
   });
   render(() => (
     <EmailReminderComposer
-      entity={{ id: 'thread', type: 'email', name: 'Subject' } as EntityData}
-      onPending={() => {}}
+      entity={{ id: 'thread', type: 'email', name: 'Subject' }}
+      open={true}
+      onOpenChange={mocks.close}
+      onCreated={mocks.navigate}
     />
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
@@ -162,13 +162,15 @@ it('reports rolled-back creation without claiming that a reply arrived', async (
   mocks.execute.mockResolvedValueOnce({ state: 'removed' });
   render(() => (
     <EmailReminderComposer
-      entity={{ id: 'thread', type: 'email', name: 'Subject' } as EntityData}
-      onPending={() => {}}
+      entity={{ id: 'thread', type: 'email', name: 'Subject' }}
+      open={true}
+      onOpenChange={mocks.close}
+      onCreated={mocks.navigate}
     />
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() =>
-    expect(mocks.failure).toHaveBeenCalledWith(
+    expect(screen.getByRole('alert').textContent).toBe(
       'The reminder was not set. The conversation has been restored.'
     )
   );
@@ -198,8 +200,10 @@ it.each(['Save', 'Remove'])(
     mocks.execute.mockRejectedValue(new Error('Conflict'));
     render(() => (
       <EmailReminderComposer
-        entity={{ id: 'thread', type: 'email', name: 'Subject' } as EntityData}
-        onPending={() => {}}
+        entity={{ id: 'thread', type: 'email', name: 'Subject' }}
+        open={true}
+        onOpenChange={mocks.close}
+        onCreated={mocks.navigate}
       />
     ));
     fireEvent.click(screen.getByRole('button', { name: action }));

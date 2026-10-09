@@ -37,14 +37,14 @@ use crate::domain::ports::MockProjectRepo;
 
 /// A project lifecycle event recorded by [`TestEventBroker`].
 #[derive(Clone, Debug)]
-struct PublishedEvent {
+pub(super) struct PublishedEvent {
     topic: &'static str,
     key: String,
-    payload: serde_json::Value,
+    pub(super) payload: serde_json::Value,
 }
 
 #[derive(Clone, Default)]
-struct TestEventBroker {
+pub(super) struct TestEventBroker {
     published: Arc<Mutex<Vec<PublishedEvent>>>,
     fail: bool,
 }
@@ -57,7 +57,7 @@ impl TestEventBroker {
         }
     }
 
-    fn published(&self) -> Arc<Mutex<Vec<PublishedEvent>>> {
+    pub(super) fn published(&self) -> Arc<Mutex<Vec<PublishedEvent>>> {
         Arc::clone(&self.published)
     }
 }
@@ -81,7 +81,7 @@ impl MacroEventBroker for TestEventBroker {
 }
 
 #[derive(Clone, Copy)]
-struct NullPort;
+pub(super) struct NullPort;
 
 impl ProjectUploadUrlPort for NullPort {
     async fn put_upload_zip_staging_presigned_url(
@@ -277,7 +277,7 @@ fn mutation_service_with_event_broker(
 }
 
 #[derive(Clone, Default)]
-struct RecordingBulkUpload {
+pub(super) struct RecordingBulkUpload {
     calls: Arc<Mutex<Vec<String>>>,
 }
 
@@ -322,7 +322,7 @@ fn service<D: BulkUploadRequestPort>(
     service_with_event_broker(repo, bulk_upload_service, TestEventBroker::default())
 }
 
-fn service_with_event_broker<D: BulkUploadRequestPort>(
+pub(super) fn service_with_event_broker<D: BulkUploadRequestPort>(
     repo: MockProjectRepo,
     bulk_upload_service: D,
     event_broker: TestEventBroker,
@@ -442,7 +442,7 @@ fn receipt(
     .unwrap()
 }
 
-fn basic_project(id: Uuid, parent_id: Option<Uuid>, deleted: bool) -> BasicProject {
+pub(super) fn basic_project(id: Uuid, parent_id: Option<Uuid>, deleted: bool) -> BasicProject {
     BasicProject {
         id: id.to_string(),
         user_id: owner("macro|owner@example.com"),
@@ -482,7 +482,7 @@ where
     .unwrap()
 }
 
-fn assert_project_event(event: &PublishedEvent, key: Uuid, event_type: &str) {
+pub(super) fn assert_project_event(event: &PublishedEvent, key: Uuid, event_type: &str) {
     assert_eq!(event.topic, "macro.projects");
     assert_eq!(event.key, key.to_string());
     assert!(Uuid::parse_str(event.payload["event_id"].as_str().unwrap()).is_ok());
@@ -2181,6 +2181,7 @@ async fn upload_folder_publishes_uploaded_event() {
                 root_folder_name: "Uploaded tree".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: Some("parent-project".to_string()),
+                folders: Vec::new(),
             },
         )
         .await
@@ -2235,6 +2236,7 @@ async fn upload_folder_with_no_project_ids_publishes_no_event() {
                 root_folder_name: "Uploaded tree".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: None,
+                folders: Vec::new(),
             },
         )
         .await
@@ -2294,6 +2296,7 @@ async fn upload_folder_compensates_after_destination_failure() {
                 root_folder_name: "Upload".to_string(),
                 upload_request_id: "request".to_string(),
                 parent_id: None,
+                folders: Vec::new(),
             },
         )
         .await;

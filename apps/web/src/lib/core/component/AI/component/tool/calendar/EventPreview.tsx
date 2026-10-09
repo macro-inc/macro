@@ -220,15 +220,14 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
       ? createCalendarOccurrenceQueryRange(window.start, window.end)
       : undefined;
   });
-  const { sourceById } = useCalendarSources();
-  const occurrenceData = useCalendarOccurrenceData({ range, sourceById });
-  const availableExistingEvents = createMemo(() =>
-    occurrenceData.occurrencesQuery.isPlaceholderData
-      ? []
-      : occurrenceData.visibleEvents()
-  );
+  const { sourceById, sourcesReady } = useCalendarSources();
+  const occurrenceData = useCalendarOccurrenceData({
+    range,
+    sourceById,
+    sourcesReady,
+  });
   const existingEvents = createMemo(() =>
-    availableExistingEvents().slice(0, MAX_EXISTING_PREVIEW_EVENTS)
+    occurrenceData.visibleEvents().slice(0, MAX_EXISTING_PREVIEW_EVENTS)
   );
   const previewEvents = createMemo(() => {
     const event = previewEvent();

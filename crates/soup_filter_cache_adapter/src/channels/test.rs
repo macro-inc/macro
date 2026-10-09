@@ -41,7 +41,13 @@ fn filters(channel: Value) -> Value {
     json!({"documentFilter":{"literal":{"id":nil}},"projectFilter":{"literal":{"projectIdSelf":nil}},"chatFilter":{"literal":{"chatId":nil}},"calendarEventFilter":{"literal":{"id":nil}},"emailFilter":{"tree":{"literal":{"threadId":nil}}},"channelThreadFilter":{"literal":{"threadId":nil}},"callFilter":{"literal":{"callId":nil}},"crmCompanyFilter":{"literal":{"id":nil}},"foreignEntityFilter":{"literal":{"id":nil}},"channelFilter":channel})
 }
 async fn write<S: PredicateIndexStorage>(engine: &mut Engine<S>, query: &str, data: &Value) {
-    let projections = authoritative_projection_mutations(query, None, data).unwrap();
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        query,
+        None,
+        data,
+    )
+    .unwrap();
     engine
         .write_query_with_registration_and_projections(
             None,
@@ -74,7 +80,13 @@ async fn keys<S: PredicateIndexStorage>(engine: &mut Engine<S>, filter: Value) -
 
 #[test]
 fn canonical_channel_fields_and_aliased_team_id_form_v4_snapshots() {
-    let projections = authoritative_projection_mutations(QUERY, None, &data(vec![row(1)])).unwrap();
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        QUERY,
+        None,
+        &data(vec![row(1)]),
+    )
+    .unwrap();
     let [ProjectionMutation::Replace(document)] = projections.as_slice() else {
         panic!("complete channel")
     };
@@ -113,7 +125,7 @@ fn channel_aliases_preserve_identity_and_reject_conflicting_nullable_facts() {
     aliased["capsule"] = aliased["cacheProjection"].take();
     aliased.as_object_mut().unwrap().remove("cacheProjection");
     assert!(
-        matches!(authoritative_projection_mutations(&query, None, &data(vec![aliased])).unwrap().as_slice(), [ProjectionMutation::Replace(document)] if document.record_key == key(1))
+        matches!(authoritative_projection_mutations(cache_core::meta::bundled_schema_ref(), &query, None, &data(vec![aliased])).unwrap().as_slice(), [ProjectionMutation::Replace(document)] if document.record_key == key(1))
     );
 
     let duplicate = QUERY.replace(
@@ -123,9 +135,14 @@ fn channel_aliases_preserve_identity_and_reject_conflicting_nullable_facts() {
     let mut conflict = row(1);
     conflict["otherTeam"] = json!(id(11));
     assert!(matches!(
-        authoritative_projection_mutations(&duplicate, None, &data(vec![conflict]))
-            .unwrap()
-            .as_slice(),
+        authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
+            &duplicate,
+            None,
+            &data(vec![conflict])
+        )
+        .unwrap()
+        .as_slice(),
         [ProjectionMutation::MarkIncomplete { .. }]
     ));
 }
@@ -144,8 +161,13 @@ fn organization_ids_preserve_the_signed_64_bit_projection_domain() {
         assert_eq!(organization(&value), Ok(Some(organization_id)));
         let mut channel = row(1);
         channel["organizationId"] = value.clone();
-        let updates =
-            authoritative_projection_mutations(QUERY, None, &data(vec![channel])).unwrap();
+        let updates = authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
+            QUERY,
+            None,
+            &data(vec![channel]),
+        )
+        .unwrap();
         let [ProjectionMutation::Replace(document)] = updates.as_slice() else {
             panic!("complete i64 organization snapshot: {organization_id}")
         };
@@ -206,9 +228,14 @@ fn partial_and_invalid_channel_snapshots_do_not_invent_completeness() {
         incomplete.as_object_mut().unwrap().remove(field);
         assert!(
             matches!(
-                authoritative_projection_mutations(QUERY, None, &data(vec![incomplete]))
-                    .unwrap()
-                    .as_slice(),
+                authoritative_projection_mutations(
+                    cache_core::meta::bundled_schema_ref(),
+                    QUERY,
+                    None,
+                    &data(vec![incomplete])
+                )
+                .unwrap()
+                .as_slice(),
                 [ProjectionMutation::MarkIncomplete { .. }]
             ),
             "{field}"
@@ -223,9 +250,14 @@ fn partial_and_invalid_channel_snapshots_do_not_invent_completeness() {
         let mut malformed = row(1);
         malformed[field] = invalid;
         assert!(matches!(
-            authoritative_projection_mutations(QUERY, None, &data(vec![malformed]))
-                .unwrap()
-                .as_slice(),
+            authoritative_projection_mutations(
+                cache_core::meta::bundled_schema_ref(),
+                QUERY,
+                None,
+                &data(vec![malformed])
+            )
+            .unwrap()
+            .as_slice(),
             [ProjectionMutation::MarkIncomplete { .. }]
         ));
     }
@@ -233,9 +265,14 @@ fn partial_and_invalid_channel_snapshots_do_not_invent_completeness() {
     nullable["channelTeamId"] = Value::Null;
     nullable["organizationId"] = Value::Null;
     assert!(matches!(
-        authoritative_projection_mutations(QUERY, None, &data(vec![nullable]))
-            .unwrap()
-            .as_slice(),
+        authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
+            QUERY,
+            None,
+            &data(vec![nullable])
+        )
+        .unwrap()
+        .as_slice(),
         [ProjectionMutation::Replace(_)]
     ));
 }
@@ -306,6 +343,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: "00000000-0000-0000-0000-000000002000",
                 query: PATCH,
                 operation_name: None,
@@ -346,6 +384,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
     // A child notification update edits only its primary channel's membership.
     let notification = json!({"updateNotifications":[{"id":id(101),"state":"DONE"}]});
     let updates = notification_projection_updates(
+        cache_core::meta::bundled_schema_ref(),
         engine.storage(),
         NOTIFICATION,
         None,

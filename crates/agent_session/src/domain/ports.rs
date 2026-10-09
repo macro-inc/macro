@@ -1,5 +1,6 @@
 use std::pin::Pin;
 
+use super::coding_preferences::CodingPreferences;
 use super::error::{AgentSessionError, Result};
 use super::model::*;
 use super::session::StopReason;
@@ -13,6 +14,7 @@ use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::{Owner, OwnerType};
+use shared_entity_registry::OwnedPurgeOutcome;
 use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
@@ -332,6 +334,13 @@ pub struct OpenManagedSession {
 /// its own schedule, while a managed session's sandbox is provisioned here.
 /// That difference is why only one of them takes a workspace.
 pub trait SessionOpener: Send + Sync + 'static {
+    /// Prepare an unprompted hidden in-memory session for an authenticated user.
+    fn warm_session(
+        &self,
+        owner: Owner,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// Open a session and return the persisted row.
     fn open_external_session(
         &self,
@@ -375,6 +384,10 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// The agent session with this id, or `None` when there is none.
+    fn find(&self, id: AgentSessionId)
+    -> impl Future<Output = Result<Option<AgentSession>>> + Send;
 
     /// The sessions among `ids` that exist, each with what a chip shows and
     /// whether a materialized grant lets `viewer` see it: their own grant,
@@ -527,6 +540,21 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'static>,
         size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The user's coding preferences.
+    ///
+    /// A missing row is every preference off, not an error.
+    fn user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<CodingPreferences>> + Send;
+
+    /// Upsert the user's coding preferences, replacing every field.
+    fn set_user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        preferences: CodingPreferences,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Delete an agent session by id.
@@ -1143,6 +1171,15 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
 
     /// The session is going away: release its live resources and delete it.
     fn session_deleted(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Release and delete one session while `expected_owner` still owns it.
+    /// Internal owner removal only. A missing session is already purged; one
+    /// under another owner is untouched.
+    fn purge_owned_session(
+        &self,
+        id: AgentSessionId,
+        expected_owner: &Owner,
+    ) -> impl Future<Output = Result<OwnedPurgeOutcome>> + Send;
 
     /// A control operation the live connection has to be told about. Returns
     /// the action id the caller correlates against the fold stream, and

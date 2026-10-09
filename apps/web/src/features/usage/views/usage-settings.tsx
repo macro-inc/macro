@@ -191,7 +191,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                 {(billing) => (
                   <SettingsSection
                     title="Existing usage billing"
-                    description="This bills additional usage to your card after it happens. It does not automatically reload credits."
+                    description="Usage past your plan and credits is billed to your card. While it is on, credits reload automatically when your balance drops below your minimum."
                   >
                     <SettingsCard>
                       <SettingsRow

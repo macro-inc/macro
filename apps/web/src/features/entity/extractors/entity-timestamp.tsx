@@ -20,10 +20,7 @@ export function EntityTimestamp(props: {
       ? props.entity.scheduledSendTime
       : undefined;
   return (
-    <Show
-      when={scheduledSendTime()}
-      fallback={<>{formatTimestamp(timestamp())}</>}
-    >
+    <Show when={scheduledSendTime()} fallback={formatTimestamp(timestamp())}>
       {(sendTime) => <ScheduledBadge sendTime={sendTime()} />}
     </Show>
   );

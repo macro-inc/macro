@@ -26,7 +26,7 @@ pub(crate) mod testing;
 pub mod text;
 mod variables;
 pub mod vector;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "bindings"))]
 pub mod wasm;
 mod zip;
 

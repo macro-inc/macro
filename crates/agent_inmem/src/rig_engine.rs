@@ -23,9 +23,9 @@
 
 use std::sync::Arc;
 
-use agent::{AgentError, AgentLoop, StreamPart};
+use agent::{AgentError, AgentLoop, StreamPart, SystemPrompt};
 use ai_tools::user_tool_review::user_tool_finisher;
-use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, ToolSetWithPrompt, tools_for};
+use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::StreamExt as _;
@@ -42,9 +42,15 @@ use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
+#[path = "outbound/rig_engine/opener.rs"]
+mod opener;
 #[cfg(test)]
 #[path = "outbound/rig_engine/test.rs"]
 mod test;
+
+#[cfg(test)]
+#[path = "outbound/rig_engine/measure_prompt_cache.rs"]
+mod measure_prompt_cache;
 
 /// How many stream parts may sit unread before the engine pauses; keeps a
 /// slow consumer from buffering a whole turn.
@@ -53,7 +59,8 @@ const PART_BUFFER: usize = 256;
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
 /// [`ai_tools::tools_for`].
 pub struct RigTurnEngine {
-    db: PgPool,
+    memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
+    native_tools: Arc<NativeTools>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -65,7 +72,12 @@ impl RigTurnEngine {
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
         Self {
-            db,
+            memory: Arc::new(MemoryServiceImpl::new(
+                PgMemoryRepo::new(db),
+                tool_context.clone(),
+                tools_for(AiHost::Chat),
+            )),
+            native_tools: Arc::new(NativeTools::new()),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -171,6 +183,52 @@ fn tools_for_turn(
     }
 }
 
+/// Native definitions contain schemas and deserializers, not a user's context.
+/// Build both client-capability variants once, before the first prompt. Each
+/// turn still supplies its own identity, reviewer, gate, MCP tools and memory.
+struct NativeTools {
+    with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
+    without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
+    prompt: String,
+    deferred: Arc<[ai_toolset::SearchableTool]>,
+    /// Every native tool's name, for the opening line's model to guess the
+    /// direction a reply will take.
+    tool_names: String,
+}
+
+impl NativeTools {
+    fn new() -> Self {
+        let tools = tools_for(AiHost::AgentSession);
+        let base_tools = Arc::into_inner(tools.toolset)
+            .expect("tools_for should return a fresh, uniquely owned collection");
+        let other_tools = Arc::into_inner(tools_for(AiHost::AgentSession).toolset)
+            .expect("tools_for should return a fresh, uniquely owned collection");
+        let with_user_input = tools_for_turn(base_tools, true);
+        let tool_names = with_user_input
+            .tools
+            .keys()
+            .map(String::as_str)
+            .chain(tools.deferred.iter().map(|tool| tool.name.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        Self {
+            with_user_input: Arc::new(with_user_input),
+            without_user_input: Arc::new(tools_for_turn(other_tools, false)),
+            prompt: tools.prompt.to_string(),
+            deferred: tools.deferred,
+            tool_names,
+        }
+    }
+
+    fn for_turn(&self, supports_user_input: bool) -> Arc<AsyncToolCollection<InMemToolContext>> {
+        Arc::clone(if supports_user_input {
+            &self.with_user_input
+        } else {
+            &self.without_user_input
+        })
+    }
+}
+
 impl TurnEngine for RigTurnEngine {
     fn supported_models(&self) -> &[&str] {
         crate::domain::models::advertised_models()
@@ -178,13 +236,16 @@ impl TurnEngine for RigTurnEngine {
 
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
-        let db = self.db.clone();
+        let memory = Arc::clone(&self.memory);
+        let native_tools = Arc::clone(&self.native_tools);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
         tokio::spawn(
             agent::MeteringContext::carry(metering, async move {
-                if let Err(error) = drive_turn(db, tool_context, gate, request, &parts).await {
+                if let Err(error) =
+                    drive_turn(&memory, &native_tools, tool_context, gate, request, &parts).await
+                {
                     let _ = parts.send(Err(error)).await;
                 }
             })
@@ -195,7 +256,8 @@ impl TurnEngine for RigTurnEngine {
 }
 
 async fn drive_turn(
-    db: PgPool,
+    memory: &MemoryServiceImpl<PgMemoryRepo>,
+    native_tools: &NativeTools,
     base_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
@@ -207,6 +269,7 @@ async fn drive_turn(
         owner,
         model,
         reasoning_effort,
+        speed,
         identity,
         instructions,
         messages,
@@ -215,6 +278,7 @@ async fn drive_turn(
         user_input,
         reviewer,
     } = request;
+    let started = tokio::time::Instant::now();
 
     // A turn runs as a person: tools act with the owner's identity, the
     // memory is theirs, and usage is billed to them. A session owned by
@@ -231,25 +295,50 @@ async fn drive_turn(
         }
     };
 
+    // Started before anything else so its line is out before the turn's
+    // model has a first token.
+    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
+    let agent = identity.as_ref().map_or_else(
+        || "Macro".to_owned(),
+        |identity| format!("{} (@{})", identity.name, identity.handle),
+    );
+    // How the race went, on one span per turn. `outcome` is `complete` (the
+    // line was the whole reply), `opening` (the line opened the turn's
+    // reply), `silent` (no line fit this follow-up), `turn_first` (the
+    // turn's model spoke first), `no_verdict` (the
+    // fast model failed or answered without one) or `timeout`.
+    let opener_span = tracing::info_span!(
+        "agent.opener",
+        agent.opener.model = opener::MODEL,
+        agent.opener.outcome = tracing::field::Empty,
+        agent.opener.verdict_ms = tracing::field::Empty,
+        agent.opener.line_chars = tracing::field::Empty,
+        agent.opener.turn_first_part_ms = tracing::field::Empty,
+    );
+    let mut opening_line = opener_span.in_scope(|| {
+        opener::spawn(
+            base_context.recorder.clone(),
+            usage_ctx.clone(),
+            &opener::Speaker {
+                agent: &agent,
+                model: crate::domain::models::display_name(&model),
+            },
+            &native_tools.tool_names,
+            &messages,
+        )
+    });
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
-    let tools = tools_for(AiHost::AgentSession);
-    let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
+    let user_memory = fetch_user_memory(memory, &owner).await;
     let system_prompt = system_prompt(
-        &tools.prompt,
+        &native_tools.prompt,
         identity.as_ref(),
         instructions.as_deref(),
         user_memory.as_deref(),
     );
 
-    // `tools_for` returns a fresh Arc. Take its collection back so the
-    // in-memory runtime can widen it onto the session-specific context and
-    // add the one tool that needs the active ACP connection.
-    let base_tools = Arc::into_inner(tools.toolset)
-        .expect("tools_for should return a fresh, uniquely owned collection");
-    let toolset = Arc::new(tools_for_turn(base_tools, user_input.is_some()));
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
+    let toolset = native_tools.for_turn(user_input.is_some());
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
@@ -274,6 +363,7 @@ async fn drive_turn(
     let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
         .with_model(&model)
         .with_reasoning_effort(reasoning_effort)
+        .with_speed(speed)?
         .with_genai_telemetry(false);
     if let Some(reviewer) = reviewer {
         agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
@@ -295,8 +385,10 @@ async fn drive_turn(
         None => toolset,
     };
     // Most of Macro's tools go out by name only; the model loads the rest.
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> =
-        Arc::new(DeferredToolSet::new(toolset, tools.deferred));
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(DeferredToolSet::new(
+        toolset,
+        Arc::clone(&native_tools.deferred),
+    ));
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(GatedToolSet {
         tools: toolset,
         gate,
@@ -304,7 +396,7 @@ async fn drive_turn(
         awaiting,
     });
     let session = agent_loop
-        .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
+        .session(toolset, Arc::new(tool_context), system_prompt, usage_ctx)
         .await;
     let (mut session, loop_cancel) = session.cancellable();
 
@@ -322,7 +414,110 @@ async fn drive_turn(
     let rig_messages = agent::to_rig_messages(&messages);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
+        let mut turn_spoke = false;
+        // The opening line's model usually has its verdict long before this
+        // one's first prose. Thinking passes through while the race goes on;
+        // should this model write prose or call a tool first, its own opening
+        // stands and the line is dropped.
+        let race = {
+            let verdict =
+                tokio::time::timeout(opener::VERDICT_TIMEOUT, opener::verdict(&mut opening_line));
+            tokio::pin!(verdict);
+            loop {
+                tokio::select! {
+                    biased;
+                    part = stream.next() => {
+                        if !turn_spoke {
+                            turn_spoke = true;
+                            opener_span
+                                .record("agent.opener.turn_first_part_ms", elapsed_ms(started));
+                        }
+                        match part {
+                            Some(Ok(part @ (StreamPart::Thinking(_) | StreamPart::Usage(_)))) => {
+                                if parts.send(Ok(part)).await.is_err() {
+                                    loop_cancel.cancel();
+                                    return Ok(());
+                                }
+                            }
+                            part => break Race::TurnFirst(part),
+                        }
+                    }
+                    opening = &mut verdict => break Race::Opening(opening),
+                }
+            }
+        };
+        let mut separate = false;
+        match race {
+            Race::TurnFirst(None) => {
+                opener_span.record("agent.opener.outcome", "turn_first");
+                return Ok(());
+            }
+            Race::TurnFirst(Some(part)) => {
+                opener_span.record("agent.opener.outcome", "turn_first");
+                if parts.send(part).await.is_err() {
+                    loop_cancel.cancel();
+                    return Ok(());
+                }
+            }
+            Race::Opening(Ok(Some(verdict))) => {
+                opener_span.record("agent.opener.verdict_ms", elapsed_ms(started));
+                let (outcome, line) = match verdict {
+                    opener::Verdict::Complete(head) => ("complete", Some((true, head))),
+                    opener::Verdict::Opening(head) => ("opening", Some((false, head))),
+                    opener::Verdict::Silent => ("silent", None),
+                };
+                opener_span.record("agent.opener.outcome", outcome);
+                if let Some((complete, head)) = line {
+                    let deadline = tokio::time::Instant::now() + opener::LINE_TIMEOUT;
+                    let mut line_chars = 0;
+                    let mut finished = false;
+                    let mut delta = Some(head);
+                    while let Some(text) = delta {
+                        line_chars += text.chars().count();
+                        opener_span.record("agent.opener.line_chars", line_chars);
+                        if !text.is_empty()
+                            && parts.send(Ok(StreamPart::Content(text))).await.is_err()
+                        {
+                            loop_cancel.cancel();
+                            return Ok(());
+                        }
+                        delta = match tokio::time::timeout_at(deadline, opening_line.recv()).await {
+                            Ok(next) => {
+                                finished = next.is_none();
+                                next
+                            }
+                            Err(_) => None,
+                        };
+                    }
+                    // Only a whole line stands alone: one that stalled or
+                    // came out empty leaves the reply to this model.
+                    if complete && finished && line_chars > 0 {
+                        loop_cancel.cancel();
+                        return Ok(());
+                    }
+                    separate = line_chars > 0;
+                }
+            }
+            Race::Opening(Ok(None)) => {
+                opener_span.record("agent.opener.outcome", "no_verdict");
+            }
+            Race::Opening(Err(_)) => {
+                opener_span.record("agent.opener.outcome", "timeout");
+            }
+        }
+        drop(opening_line);
         while let Some(part) = stream.next().await {
+            if !turn_spoke {
+                turn_spoke = true;
+                opener_span.record("agent.opener.turn_first_part_ms", elapsed_ms(started));
+            }
+            let part = match part {
+                Ok(StreamPart::Content(text)) if separate && !text.trim().is_empty() => {
+                    separate = false;
+                    Ok(StreamPart::Content(format!("\n\n{}", text.trim_start())))
+                }
+                other => other,
+            };
             if parts.send(part).await.is_err() {
                 // The consumer is gone; stop the loop rather than keep
                 // spending tokens into the void.
@@ -337,8 +532,20 @@ async fn drive_turn(
     result
 }
 
+/// Which spoke first: the turn's own model, or the opening line's.
+enum Race {
+    TurnFirst(Option<Result<StreamPart, AgentError>>),
+    /// The verdict, `None` without one, or `Err` past the verdict timeout.
+    Opening(Result<Option<opener::Verdict>, tokio::time::error::Elapsed>),
+}
+
+fn elapsed_ms(since: tokio::time::Instant) -> u64 {
+    u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
 /// The turn's system prompt: the agent's identity, the agent-session
-/// preamble, the static Macro prompt (how to use the product: mentions,
+/// preamble, the note that an opening line is already out (see [`opener`]),
+/// the static Macro prompt (how to use the product: mentions,
 /// tools, terminology), then the session's own instructions and the owner's
 /// memory when there are any.
 ///
@@ -348,53 +555,51 @@ async fn drive_turn(
 /// the model reads as it takes in the caller's word — the same reason DCS
 /// puts `additional_instructions` after the standing prompt. Memory stays
 /// last so a remembered fact is never read as an instruction.
+///
+/// The prompt is split after the static Macro prompt: everything before is
+/// the same for every session of the agent and is cached on its own, so a
+/// session whose instructions name its own task still reads it back.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
     user_memory: Option<&str>,
-) -> String {
-    let mut prompt = String::new();
+) -> SystemPrompt {
+    let mut shared = String::new();
     if let Some(identity) = identity {
-        prompt.push_str(&prompt::agent_identity::render(
+        shared.push_str(&prompt::agent_identity::render(
             &identity.name,
             &identity.handle,
         ));
-        prompt.push('\n');
+        shared.push('\n');
     }
-    prompt.push_str(&prompt::agent_session::PROMPT.to_string());
-    prompt.push('\n');
-    prompt.push_str(&tools_prompt.to_string());
+    shared.push_str(&prompt::agent_session::PROMPT.to_string());
+    shared.push('\n');
+    shared.push_str(opener::ALREADY_OPENED);
+    shared.push('\n');
+    shared.push_str(&tools_prompt.to_string());
+    let mut rest = String::new();
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
     if let Some(instructions) = instructions.filter(|text| !text.trim().is_empty()) {
-        prompt.push_str("\n<session_instructions>\n");
-        prompt.push_str(instructions);
-        prompt.push_str("\n</session_instructions>");
+        rest.push_str("\n<session_instructions>\n");
+        rest.push_str(instructions);
+        rest.push_str("\n</session_instructions>");
     }
     if let Some(memory) = user_memory {
-        prompt.push_str("\n<user_memory>\n");
-        prompt.push_str(memory);
-        prompt.push_str("\n</user_memory>");
+        rest.push_str("\n<user_memory>\n");
+        rest.push_str(memory);
+        rest.push_str("\n</user_memory>");
     }
-    prompt
+    SystemPrompt::split(shared, rest)
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.
 async fn fetch_user_memory(
-    db: &PgPool,
-    tool_context: &ToolServiceContext,
+    memory_service: &MemoryServiceImpl<PgMemoryRepo>,
     owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
-    let tools = tools_for(AiHost::Chat);
-    let tools = ToolSetWithPrompt {
-        toolset: tools.toolset,
-        prompt: tools.prompt,
-        deferred: tools.deferred,
-    };
-    let memory_service =
-        MemoryServiceImpl::new(PgMemoryRepo::new(db.clone()), tool_context.clone(), tools);
     match memory_service.get_or_generate_memory(owner.clone()).await {
         Ok(memory) => memory.map(|memory| memory.to_string()),
         Err(error) => {
