@@ -87,6 +87,14 @@ export interface CacheEngine {
     variables: Record<string, unknown> | undefined,
     entityResolvers: readonly EntityResolverWire[] | undefined
   ): Promise<ReadResult>;
+  watchQuery?(
+    opId: string,
+    query: string,
+    operationName: string | undefined,
+    variables: Record<string, unknown> | undefined,
+    entityResolvers: readonly EntityResolverWire[] | undefined,
+    since: string | undefined
+  ): Promise<import('../protocol').QueryUpdate>;
   readRecordsByKeys(
     document: string,
     fragmentName: string,

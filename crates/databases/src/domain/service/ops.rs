@@ -733,6 +733,7 @@ fn op_results(
                         ColumnChange::Create { .. } => ColumnResult::Created,
                         ColumnChange::Rename { .. } => ColumnResult::Renamed,
                         ColumnChange::ChangeType { .. } => ColumnResult::TypeChanged,
+                        ColumnChange::SetFormula { .. } => ColumnResult::FormulaSet,
                         ColumnChange::Delete => ColumnResult::Deleted,
                         ColumnChange::AddOptions { .. } => ColumnResult::OptionsAdded {
                             added: match write {
@@ -1043,6 +1044,9 @@ impl Planner {
             } => self.rename_column(place, entry, target?, name, previous_name.as_deref()),
             ColumnChange::Delete => self.delete_column(place, entry, target?),
             ColumnChange::ChangeType { to } => self.change_type(place, entry, target?, *to),
+            ColumnChange::SetFormula { formula } => {
+                self.set_formula(place, entry, target?, formula)
+            }
             ColumnChange::AddOptions { options } => {
                 self.add_options(place, entry, target?, options)
             }

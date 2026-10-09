@@ -21,6 +21,7 @@ import {
   type OperationResult,
   stringifyDocument,
 } from '@urql/core';
+import { createComputed, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   makeSubject,
@@ -30,8 +31,14 @@ import {
   type Source,
   subscribe,
 } from 'wonka';
+import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
+import { createUrqlQuery } from '../../urql-solid/create-urql-query';
 import { CacheNavigationError } from '../host/navigation-error';
-import type { CacheGenerationChange, CacheHost } from '../host/types';
+import type {
+  AffectedOperationsListener,
+  CacheGenerationChange,
+  CacheHost,
+} from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type ClaimedMutation,
@@ -39,6 +46,7 @@ import {
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
   type MutationClaim,
+  type MutationSettlement,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   type ReadResult,
   type WriteResult,
@@ -55,6 +63,7 @@ import {
   optimisticContextOf,
   optimisticMutationDispositionOf,
 } from './optimistic';
+import { optimisticResolversExchange } from './optimistic-resolvers';
 
 const QUERY = gql`
   query Soup($input: SoupInput!) {
@@ -211,13 +220,15 @@ type FakeHost = CacheHost & {
     args: Parameters<CacheHost['enqueueOptimisticMutation']>[0],
     serverFailureCount?: number
   ) => void;
-  pushAffected: (opKeys: number[]) => void;
+  pushAffected: AffectedOperationsListener;
   pushGeneration: (change: CacheGenerationChange) => void;
+  resetStorage: () => void;
 };
 
 function makeFakeHost(): FakeHost {
+  let nextTransaction = 0;
   let readResult: ReadResult = { kind: 'miss' };
-  const subscribers = new Set<(opKeys: number[]) => void>();
+  const subscribers = new Set<AffectedOperationsListener>();
   const generationSubscribers = new Set<
     (change: CacheGenerationChange) => void
   >();
@@ -227,19 +238,24 @@ function makeFakeHost(): FakeHost {
     attemptCount: number;
     serverFailureCount: number;
     leased: boolean;
+    leaseExpiresAtMs?: number;
     nextAttemptAtMs?: number;
   }> = [];
 
-  function claimQueueHead(nowMs: number): ClaimedMutation | undefined {
+  function claimQueueHead(
+    nowMs: number,
+    leaseExpiresAtMs: number
+  ): ClaimedMutation | undefined {
     const head = queue[0];
     if (
       !head ||
-      head.leased ||
+      (head.leased && (head.leaseExpiresAtMs ?? Infinity) > nowMs) ||
       (head.nextAttemptAtMs !== undefined && head.nextAttemptAtMs > nowMs)
     ) {
       return undefined;
     }
     head.leased = true;
+    head.leaseExpiresAtMs = leaseExpiresAtMs;
     head.nextAttemptAtMs = undefined;
     head.attemptCount += 1;
     host.claims.push(head.transactionId);
@@ -260,6 +276,12 @@ function makeFakeHost(): FakeHost {
 
   const host: FakeHost = {
     clientId: 'test-client',
+    resetStorage() {
+      queue.length = 0;
+      nextTransaction = 0;
+      readResult = { kind: 'miss' };
+      host.pushGeneration({ storage: 'reset' });
+    },
     reads: [],
     writes: [],
     begins: [],
@@ -282,8 +304,8 @@ function makeFakeHost(): FakeHost {
         leased: false,
       });
     },
-    pushAffected: (opKeys) => {
-      for (const cb of subscribers) cb(opKeys);
+    pushAffected: (opKeys, changes) => {
+      for (const cb of subscribers) cb(opKeys, changes);
     },
     pushGeneration: (change) => {
       for (const cb of generationSubscribers) cb(change);
@@ -354,7 +376,7 @@ function makeFakeHost(): FakeHost {
         data: args.data,
         linkPatches: args.linkPatches,
       });
-      const transactionId = `txn-${host.begins.length}`;
+      const transactionId = `txn-${++nextTransaction}`;
       queue.push({
         transactionId,
         args,
@@ -362,7 +384,7 @@ function makeFakeHost(): FakeHost {
         serverFailureCount: 0,
         leased: false,
       });
-      const mutation = claimQueueHead(claim.nowMs);
+      const mutation = claimQueueHead(claim.nowMs, claim.leaseExpiresAtMs);
       return {
         transactionId,
         revision: INITIAL_CACHE_REVISION,
@@ -384,9 +406,10 @@ function makeFakeHost(): FakeHost {
     },
     async claimNextMutation(
       _owner,
-      nowMs
+      nowMs,
+      leaseExpiresAtMs
     ): Promise<ClaimedMutation | undefined> {
-      return claimQueueHead(nowMs);
+      return claimQueueHead(nowMs, leaseExpiresAtMs);
     },
     async deferOptimisticWrite(
       transactionId,
@@ -691,6 +714,154 @@ describe('normalizedCacheExchange', () => {
 
   beforeEach(() => {
     host = makeFakeHost();
+  });
+
+  it.each(['constructor', 'prototype', '__proto__'])(
+    'updates the %s alias through the Solid query adapter without mutating snapshots',
+    async (alias) => {
+      const query = gql(
+        `query Reserved { ${alias}: name nested { ${alias}: name } }`
+      );
+      const original = { [alias]: 'old', nested: { [alias]: 'old' } };
+      host.scriptRead({ kind: 'hit', data: original });
+      const client = createClient({
+        url: '/graphql',
+        exchanges: [normalizedCacheExchange(host)],
+      });
+      const { state, dispose } = createRoot((dispose) => ({
+        state: createUrqlQuery(() => ({
+          client,
+          query,
+          variables: {},
+          requestPolicy: 'cache-only' as const,
+        })),
+        dispose,
+      }));
+      try {
+        await vi.waitFor(() => expect(state.isSuccess).toBe(true));
+        expect(JSON.parse(JSON.stringify(state.data))).toEqual(original);
+        for (const data of [
+          { [alias]: 'new', nested: { [alias]: 'new' } },
+          { name: 'ordinary', nested: { name: 'ordinary' } },
+          { [alias]: 'returned', nested: { [alias]: 'returned' } },
+        ]) {
+          host.scriptRead({ kind: 'hit', data });
+          host.pushAffected([host.reads[0].opKey!]);
+          await vi.waitFor(() =>
+            expect(JSON.parse(JSON.stringify(state.data))).toEqual(data)
+          );
+        }
+        expect(original).toEqual({
+          [alias]: 'old',
+          nested: { [alias]: 'old' },
+        });
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('keeps live objects reactive through full reads on older cache hosts', async () => {
+    type Rows = { rows: { __typename: string; id: string; isRead: boolean }[] };
+    const first = gql<Rows>`query First { rows { __typename id isRead } }`;
+    const second = gql<Rows>`query Second { rows { __typename id isRead } }`;
+    const snapshot = {
+      rows: [{ __typename: 'Thread', id: '17', isRead: false }],
+    };
+    host.scriptRead({ kind: 'hit', data: snapshot });
+    const network = vi.fn();
+    const client = createClient({
+      url: '/graphql',
+      exchanges: [
+        normalizedCacheExchange(host),
+        () => (source) =>
+          pipe(
+            source,
+            map((operation) => {
+              network();
+              return { operation, data: {}, stale: false, hasNext: false };
+            })
+          ),
+      ],
+    });
+    const observed: boolean[] = [];
+    const { a, b, selected, dispose } = createRoot((dispose) => {
+      const a = createUrqlQuery(() => ({
+        client,
+        query: first,
+        variables: {},
+        requestPolicy: 'cache-only' as const,
+      }));
+      const b = createUrqlQuery(() => ({
+        client,
+        query: second,
+        variables: {},
+        requestPolicy: 'cache-only' as const,
+      }));
+      const selected = createUrqlQuery(() => ({
+        client,
+        query: first,
+        variables: {},
+        requestPolicy: 'cache-only' as const,
+        select: (data: Rows) =>
+          data.rows.filter((row) => !row.isRead).map((row) => row.id),
+      }));
+      createComputed(() => {
+        if (a.isSuccess) observed.push(a.data!.rows[0].isRead);
+      });
+      return { a, b, selected, dispose };
+    });
+    try {
+      await vi.waitFor(() =>
+        expect(a.isSuccess && b.isSuccess && selected.isSuccess).toBe(true)
+      );
+      const row = a.data!.rows[0];
+      const reads = host.reads.length;
+      const keys = host.reads.flatMap((read) =>
+        read.opKey === undefined ? [] : [read.opKey]
+      );
+      host.scriptRead({
+        kind: 'hit',
+        data: { rows: [{ __typename: 'Thread', id: '17', isRead: true }] },
+      });
+      host.pushAffected(keys, [
+        { kind: 'fields', key: 'Thread:17', fields: { isRead: true } },
+      ]);
+      await vi.waitFor(() => expect(b.data!.rows[0].isRead).toBe(true));
+      expect(a.data!.rows[0]).toBe(row);
+      expect(b.data!.rows[0].isRead).toBe(true);
+      expect(selected.data).toEqual([]);
+      expect(snapshot.rows[0].isRead).toBe(false);
+      host.scriptRead({ kind: 'hit', data: snapshot });
+      host.pushAffected(keys, [
+        { kind: 'fields', key: 'Thread:17', fields: { isRead: false } },
+      ]);
+      await vi.waitFor(() => expect(selected.data).toEqual(['17']));
+      expect(observed).toEqual([false, true, false]);
+      await tick();
+      expect(host.reads.length).toBeGreaterThan(reads);
+      expect(network).not.toHaveBeenCalled();
+
+      // A scalar push arriving before a structural reread must not cancel it.
+      host.scriptRead({
+        kind: 'hit',
+        data: {
+          rows: [
+            { __typename: 'Thread', id: '17', isRead: true },
+            { __typename: 'Thread', id: '18', isRead: false },
+          ],
+        },
+      });
+      host.pushAffected(keys, [{ kind: 'invalidate', key: 'Thread:17' }]);
+      host.pushAffected(keys, [
+        { kind: 'fields', key: 'Thread:17', fields: { isRead: true } },
+      ]);
+      await vi.waitFor(() => expect(a.data?.rows).toHaveLength(2));
+      expect(selected.data).toEqual(['18']);
+      expect(host.reads.length).toBeGreaterThan(reads);
+    } finally {
+      dispose();
+    }
   });
 
   it('evicts inferred missing records after writing the network response', async () => {
@@ -2512,6 +2683,145 @@ describe('normalizedCacheExchange', () => {
     });
 
     it.each([false, true])(
+      'discards an old query when a different tab commits the mutation (hydration=%s)',
+      async (hydration) => {
+        let settle!: (settlement: MutationSettlement) => void;
+        vi.spyOn(host, 'onMutationSettled').mockImplementation((callback) => {
+          settle = callback;
+          return () => undefined;
+        });
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        settle({ status: 'committed', transactionId: 'other-tab-transaction' });
+        network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+      }
+    );
+
+    it('honors cache-only if a subscriber changes policy before an obsolete response arrives', async () => {
+      const { ops, network, forwarded } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      ops.next(makeMutationOp(2));
+      await tick();
+      network.next(queryResult(forwarded[1], { saved: true }));
+      ops.next(makeOp(1, 'cache-only'));
+      await tick();
+      network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+      await tick();
+      expect(forwarded.filter(({ kind }) => kind === 'query')).toHaveLength(1);
+    });
+
+    it.each([false, true])(
+      'restarts a pre-mutation read without publishing or persisting its stale response (hydration=%s)',
+      async (hydration) => {
+        const hydrate = vi.spyOn(host, 'hydrateQuery');
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        const read = forwarded[0];
+        ops.next(makeMutationOp(2));
+        await tick();
+        network.next(queryResult(forwarded[1], { saved: true }));
+        await tick();
+        network.next({
+          ...queryResult(read, { from: 'obsolete' }),
+          hasNext: true,
+        });
+        await tick();
+        expect(forwarded).toHaveLength(2);
+        network.next(queryResult(read, { from: 'obsolete' }));
+        await tick();
+        expect(forwarded).toHaveLength(3);
+        expect(
+          results.filter(({ operation }) => operation.kind === 'query')
+        ).toEqual([]);
+        expect(host.writes).not.toContainEqual(
+          expect.objectContaining({ data: { from: 'obsolete' } })
+        );
+        network.next(queryResult(forwarded[2], { from: 'fresh' }));
+        await tick();
+        expect(results.at(-1)?.data).toEqual({ from: 'fresh' });
+        if (hydration) {
+          expect(hydrate).toHaveBeenCalledWith(
+            expect.objectContaining({
+              query: expect.stringContaining('@cacheOnly'),
+            })
+          );
+        }
+      }
+    );
+
+    it.each([false, true])(
+      'does not restart an obsolete query after teardown (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded } = controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        ops.next(makeMutationOp(2));
+        await tick();
+        network.next(queryResult(forwarded[1], { saved: true }));
+        ops.next(teardownOf(forwarded[0]));
+        network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+        await tick();
+        expect(forwarded.filter(({ kind }) => kind === 'query')).toHaveLength(
+          1
+        );
+        expect(host.writes).not.toContainEqual(
+          expect.objectContaining({ data: { from: 'obsolete' } })
+        );
+      }
+    );
+
+    it('rechecks a response held behind an earlier persistence turn after mutation settlement', async () => {
+      const pending = deferred<void>();
+      const write = host.writeQuery.bind(host);
+      vi.spyOn(host, 'writeQuery').mockImplementationOnce(async (args) => {
+        const result = await write(args);
+        await pending.promise;
+        return result;
+      });
+      const { ops, network, forwarded } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      await tick();
+      network.next({
+        ...queryResult(forwarded[0], { from: 'first' }),
+        hasNext: true,
+      });
+      await tick();
+      network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+      ops.next(makeMutationOp(2));
+      await tick();
+      network.next(queryResult(forwarded[1], { saved: true }));
+      await tick();
+      pending.resolve();
+      await tick();
+      expect(host.writes).not.toContainEqual(
+        expect.objectContaining({ data: { from: 'obsolete' } })
+      );
+      expect(forwarded.filter(({ kind }) => kind === 'query')).toHaveLength(2);
+    });
+
+    it('does not discard an in-flight query after a rejected mutation', async () => {
+      const { ops, network, forwarded, results } = controlledQueryHarness(host);
+      ops.next(makeOp(1, 'network-only'));
+      ops.next(makeMutationOp(2));
+      await tick();
+      network.next({
+        ...queryResult(forwarded[1], undefined),
+        error: new CombinedError({ graphQLErrors: [new Error('forbidden')] }),
+      });
+      network.next(queryResult(forwarded[0], { from: 'valid' }));
+      await tick();
+      expect(forwarded).toHaveLength(2);
+      expect(results.at(-1)?.data).toEqual({ from: 'valid' });
+    });
+
+    it.each([false, true])(
       'rolls back rejected favorites rather than committing list patches (replay=%s)',
       async (replay) => {
         let submitted: Operation | undefined;
@@ -2582,33 +2892,30 @@ describe('normalizedCacheExchange', () => {
       'revalidates Soup membership after a queued read-state write replays on startup',
       async (markReadState) => {
         let submitted: Operation | undefined;
-        const capturingClient = {
-          mutation: (
-            query: Operation['query'],
-            variables: Operation['variables'],
-            context: Operation['context']
-          ) => {
-            submitted = makeOperation(
-              'mutation',
-              createRequest(query, variables),
-              {
-                ...context,
-                url: 'http://test',
-                requestPolicy: 'network-only',
-              }
-            );
-            return {
-              toPromise: async () => ({
-                extensions: {
-                  normalizedCacheMutationDisposition: {
-                    kind: 'queued',
-                    transactionId: 'tx',
-                  },
-                },
-              }),
-            };
-          },
-        } as unknown as Client;
+        const capturingClient = createClient({
+          url: 'http://test',
+          exchanges: [
+            optimisticResolversExchange(soupOptimisticResolvers),
+            () => (operations) =>
+              pipe(
+                operations,
+                map((operation) => {
+                  submitted = operation;
+                  return {
+                    operation,
+                    stale: false,
+                    hasNext: false,
+                    extensions: {
+                      normalizedCacheMutationDisposition: {
+                        kind: 'queued',
+                        transactionId: 'tx',
+                      },
+                    },
+                  };
+                })
+              ),
+          ],
+        });
         const variables = [
           { input: { initial: { limit: 2 } } },
           { input: { continuation: { cursor: 'next' } } },
@@ -3062,11 +3369,163 @@ describe('normalizedCacheExchange', () => {
     });
 
     describe('mutation drain after cache restoration', () => {
+      it.each(['failed', 'pending', 'late network'] as const)(
+        'does not reuse an old mutation response after storage resets (%s)',
+        async (oldResponse) => {
+          const commit = vi.spyOn(host, 'commitOptimisticWrite');
+          const pending = deferred<CommitOptimisticWriteResult>();
+          if (oldResponse === 'failed')
+            commit.mockRejectedValueOnce(new Error('local disk unavailable'));
+          if (oldResponse === 'pending')
+            commit.mockImplementationOnce(() => pending.promise);
+          const { ops, network, forwarded } = controlledQueryHarness(host);
+          const oldData = { setEntityProperty: { id: 'old-effect' } };
+          const newData = { setEntityProperty: { id: 'new-effect' } };
+          ops.next(makeMutationOp(1, oldData));
+          await vi.advanceTimersByTimeAsync(1);
+          const oldOperation = forwarded[0];
+          if (oldResponse !== 'late network') {
+            network.next(queryResult(oldOperation, oldData));
+            await vi.advanceTimersByTimeAsync(1);
+          }
+          host.resetStorage();
+          ops.next(makeMutationOp(2, newData));
+          await vi.advanceTimersByTimeAsync(1);
+          expect(forwarded).toHaveLength(2);
+          if (oldResponse === 'late network') {
+            network.next(queryResult(oldOperation, oldData));
+          } else if (oldResponse === 'pending') {
+            pending.reject(new CacheNavigationError());
+          }
+          await vi.advanceTimersByTimeAsync(1);
+          network.next(queryResult(forwarded[1], newData));
+          await vi.advanceTimersByTimeAsync(1);
+          expect(host.commits).toEqual([
+            {
+              transactionId: 'txn-1',
+              query: stringifyDocument(MUTATION),
+              data: newData,
+            },
+          ]);
+          await vi.advanceTimersByTimeAsync(300_000);
+          expect(forwarded).toHaveLength(2);
+        }
+      );
       beforeEach(() => vi.useFakeTimers());
       afterEach(() => {
         vi.clearAllTimers();
         vi.useRealTimers();
         vi.restoreAllMocks();
+      });
+
+      it.each(['restore', 'poll', 'online'] as const)(
+        'waits for restore readiness before claiming a mutation after %s',
+        async (wake) => {
+          const events = new EventTarget();
+          vi.spyOn(globalThis, 'addEventListener').mockImplementation(
+            events.addEventListener.bind(events)
+          );
+          const { forwarded } = harness(host);
+          await vi.advanceTimersByTimeAsync(0);
+          host.seedQueued({
+            uuid: crypto.randomUUID(),
+            query: stringifyDocument(MUTATION),
+            data: optimistic,
+          });
+          const ready = deferred<void>();
+          vi.spyOn(host, 'currentRevision').mockImplementationOnce(async () => {
+            await ready.promise;
+            return INITIAL_CACHE_REVISION;
+          });
+          const claimNext = host.claimNextMutation.bind(host);
+          const claim = vi
+            .spyOn(host, 'claimNextMutation')
+            .mockImplementation(async (...args) => {
+              // Like the real host, a claim waits for initialization before
+              // admission. Its caller must not tag it with the earlier epoch.
+              await ready.promise;
+              return await claimNext(...args);
+            });
+          if (wake === 'restore') host.pushGeneration({ storage: 'preserved' });
+          if (wake === 'online') events.dispatchEvent(new Event('online'));
+          await vi.advanceTimersByTimeAsync(wake === 'poll' ? 30_000 : 0);
+          const claimsBeforeReady = claim.mock.calls.length;
+          await vi.advanceTimersByTimeAsync(5_000);
+          // BFCache readiness conservatively invalidates the local epoch even
+          // when the durable database (including this queued head) survived.
+          host.pushGeneration({ storage: 'reset' });
+          const readyAt = Date.now();
+          ready.resolve();
+          await vi.advanceTimersByTimeAsync(1);
+
+          expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+          expect(host.claims).toEqual(['restored-1']);
+          expect(host.commits).toHaveLength(1);
+          expect(host.rollbacks).toEqual([]);
+          expect(claimsBeforeReady).toBe(0);
+          expect(claim.mock.calls[0]).toEqual([
+            'exchange:test-client',
+            readyAt,
+            readyAt + 300_000,
+          ]);
+        }
+      );
+
+      it('retries failed readiness without acquiring a mutation lease', async () => {
+        host.seedQueued({
+          uuid: crypto.randomUUID(),
+          query: stringifyDocument(MUTATION),
+          data: optimistic,
+        });
+        const ready = vi
+          .spyOn(host, 'currentRevision')
+          .mockRejectedValueOnce(new CacheNavigationError());
+        const claim = vi.spyOn(host, 'claimNextMutation');
+        const { forwarded } = harness(host);
+        await vi.advanceTimersByTimeAsync(29_999);
+        expect(ready).toHaveBeenCalledOnce();
+        expect(claim).not.toHaveBeenCalled();
+        expect(forwarded).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(host.claims).toEqual(['restored-1']);
+        expect(host.commits).toHaveLength(1);
+        expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+      });
+
+      it('fences a successful claim if storage resets after admission', async () => {
+        host.seedQueued({
+          uuid: crypto.randomUUID(),
+          query: stringifyDocument(MUTATION),
+          variables: { input: { version: 'old' } },
+          data: optimistic,
+        });
+        const pendingClaim = deferred<void>();
+        const claimNext = host.claimNextMutation.bind(host);
+        vi.spyOn(host, 'claimNextMutation').mockImplementationOnce(
+          async (...args) => {
+            const claimed = await claimNext(...args);
+            await pendingClaim.promise;
+            return claimed;
+          }
+        );
+        const { forwarded } = harness(host);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(host.claims).toEqual(['restored-1']);
+        host.resetStorage();
+        // The replacement database can reuse the old transaction ID.
+        host.seedQueued({
+          uuid: crypto.randomUUID(),
+          query: stringifyDocument(MUTATION),
+          variables: { input: { version: 'new' } },
+          data: optimistic,
+        });
+        pendingClaim.resolve();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(forwarded.map((op) => op.variables?.input.version)).toEqual([
+          'new',
+        ]);
+        expect(host.commits).toHaveLength(1);
+        expect(host.rollbacks).toEqual([]);
       });
 
       it.each([
@@ -3113,7 +3572,7 @@ describe('normalizedCacheExchange', () => {
             const sendsBeforeWake = forwarded.length;
             await vi.advanceTimersByTimeAsync(100);
             if (wake === 'online') events.dispatchEvent(new Event('online'));
-            else host.pushGeneration({ storage: 'reset' });
+            else host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             deferring.resolve();
             await vi.advanceTimersByTimeAsync(1);
@@ -3144,7 +3603,7 @@ describe('normalizedCacheExchange', () => {
           .spyOn(host, 'claimNextMutation')
           .mockResolvedValue(undefined);
         await vi.advanceTimersByTimeAsync(100);
-        host.pushGeneration({ storage: 'reset' });
+        host.pushGeneration({ storage: 'preserved' });
         await vi.advanceTimersByTimeAsync(0);
         expect(claim).toHaveBeenCalledOnce();
         await vi.advanceTimersByTimeAsync(1_000);
@@ -3168,7 +3627,7 @@ describe('normalizedCacheExchange', () => {
           expect(claim).toHaveBeenCalledOnce();
 
           if (restoreWhilePending) {
-            host.pushGeneration({ storage: 'reset' });
+            host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             expect(claim).toHaveBeenCalledOnce();
           }
@@ -3176,7 +3635,7 @@ describe('normalizedCacheExchange', () => {
           await vi.advanceTimersByTimeAsync(1);
           if (!restoreWhilePending) {
             expect(forwarded).toHaveLength(0);
-            host.pushGeneration({ storage: 'reset' });
+            host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
           }
 
@@ -3216,14 +3675,14 @@ describe('normalizedCacheExchange', () => {
           const claimsBeforeRestore = claim.mock.calls.length;
 
           if (restoreWhilePending) {
-            host.pushGeneration({ storage: 'reset' });
+            host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
             expect(claim).toHaveBeenCalledTimes(claimsBeforeRestore);
           }
           pendingCommit.reject(new CacheNavigationError());
           await vi.advanceTimersByTimeAsync(1);
           if (!restoreWhilePending) {
-            host.pushGeneration({ storage: 'reset' });
+            host.pushGeneration({ storage: 'preserved' });
             await vi.advanceTimersByTimeAsync(1);
           }
 
@@ -3243,6 +3702,14 @@ describe('normalizedCacheExchange', () => {
           // be claimed on restore; the durable queue still controls eligibility.
           expect(claim.mock.calls.length).toBeGreaterThan(claimsAfterRestore);
           expect(forwarded).toHaveLength(committed ? 2 : 1);
+          // Once the old lease expires, retry persistence of the known server
+          // response. A local cache failure must not repeat the server effect.
+          await vi.advanceTimersByTimeAsync(300_000);
+          expect(host.commits).toHaveLength(2);
+          expect(forwarded).toHaveLength(2);
+          expect(
+            host.commits.map(({ transactionId }) => transactionId)
+          ).toEqual(['txn-1', committed ? 'restored-1' : 'restored-2']);
         }
       );
     });
@@ -3852,69 +4319,99 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
-    it('replays mixed explicit cache effects in order after an optimistic commit', async () => {
-      const deletion = {
-        __typename: 'GraphqlCacheDeletion',
-        graphqlTypeName: 'GraphqlSoupDocument',
-        entityId: 'document-1',
-      };
-      const update = {
-        __typename: 'SoupUpdated',
-        item: {
-          __typename: 'GraphqlSoupDocument',
-          id: 'document-1',
-          displayName: 'Renamed',
-        },
-      };
-      const data = {
-        renameEntities: {
-          results: [
-            {
-              __typename: 'GraphqlMutationSuccess',
-              effects: [deletion, update],
-            },
-          ],
-        },
-      };
-      const base = makeRenameMutationOp(10);
-      const operation = makeOperation(base.kind, base, {
-        ...base.context,
-        normalizedCacheOptimistic: {
-          uuid: crypto.randomUUID(),
-          optimisticResponse: {
-            renameEntities: { results: [] },
+    it.each(['none', 'reported deletion', 'explicit effect'] as const)(
+      'fences postcommit effects across a reset during %s',
+      async (resetDuring) => {
+        const pending = deferred<void>();
+        if (resetDuring !== 'none') {
+          const remove = host.deleteRecords.bind(host);
+          vi.spyOn(host, 'deleteRecords').mockImplementationOnce(
+            async (...args) => {
+              const result = await remove(...args);
+              await pending.promise;
+              return result;
+            }
+          );
+        }
+        const deletion = {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlSoupDocument',
+          entityId: 'document-1',
+        };
+        const update = {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: 'GraphqlSoupDocument',
+            id: 'document-1',
+            displayName: 'Renamed',
           },
-        },
-      });
-      const { ops, results } = harness(host, (op) =>
-        op.kind === 'mutation' ? { data } : {}
-      );
-
-      ops.next(operation);
-      await tick();
-
-      expect(host.commits).toHaveLength(1);
-      expect(host.cacheActions).toEqual([
-        {
-          kind: 'delete',
-          value: ['GraphqlSoupDocument:document-1'],
-        },
-        {
-          kind: 'write',
-          value: {
-            renameEntities: {
-              results: [
-                {
-                  __typename: 'GraphqlMutationSuccess',
-                  effects: [update],
-                },
-              ],
+        };
+        const data = {
+          renameEntities: {
+            results: [
+              {
+                __typename: 'GraphqlMutationSuccess',
+                effects: [deletion, update],
+              },
+            ],
+          },
+        };
+        const base = makeRenameMutationOp(10);
+        const operation = makeOperation(base.kind, base, {
+          ...base.context,
+          normalizedCacheOptimistic: {
+            uuid: crypto.randomUUID(),
+            optimisticResponse: {
+              renameEntities: { results: [] },
             },
           },
-        },
-      ]);
-      expect(results[0]?.data).toBe(data);
-    });
+        });
+        const { ops, results } = harness(
+          host,
+          (op) => (op.kind === 'mutation' ? { data } : {}),
+          resetDuring === 'reported deletion'
+            ? { deletedRecordKeys: () => ['GraphqlSoupDocument:document-1'] }
+            : {}
+        );
+
+        ops.next(operation);
+        await tick();
+
+        expect(host.commits).toHaveLength(1);
+        if (resetDuring !== 'none') {
+          host.resetStorage();
+          pending.resolve();
+          await tick();
+          expect(host.cacheActions).toEqual([
+            { kind: 'delete', value: ['GraphqlSoupDocument:document-1'] },
+          ]);
+          expect(optimisticMutationDispositionOf(results[0])?.kind).toBe(
+            'committed'
+          );
+          return;
+        }
+        expect(host.cacheActions).toEqual([
+          {
+            kind: 'delete',
+            value: ['GraphqlSoupDocument:document-1'],
+          },
+          {
+            kind: 'write',
+            value: {
+              renameEntities: {
+                results: [
+                  {
+                    __typename: 'GraphqlMutationSuccess',
+                    effects: [update],
+                  },
+                ],
+              },
+            },
+          },
+        ]);
+        expect(results[0]?.data).toBe(data);
+      }
+    );
 
     it('skips stale explicit effects and revalidations for a superseded commit', async () => {
       const deletion = {
@@ -4094,6 +4591,72 @@ describe('normalizedCacheExchange', () => {
         requestPolicy: 'network-only',
       });
     });
+
+    it.each(['query', 'persistence'] as const)(
+      'bounds conditional link recovery while %s is stalled without retrying a committed mutation',
+      async (stage) => {
+        vi.useFakeTimers();
+        const read = deferred<OperationResult>();
+        const persistence = deferred<undefined>();
+        try {
+          const commit = host.commitOptimisticWrite.bind(host);
+          host.commitOptimisticWrite = async (...args) => ({
+            ...(await commit(...args)),
+            revalidations: [
+              {
+                query: stringifyDocument(QUERY),
+                operationName: 'Soup',
+                variablesJson: '{}',
+                onlyOnLinkFailure: true,
+              },
+            ],
+          });
+          const onCacheError = vi.fn();
+          const { ops, client, results, forwarded } = harness(host, undefined, {
+            onCacheError,
+          });
+          vi.mocked(client.query).mockReturnValue({
+            toPromise: () => read.promise,
+          } as never);
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+          expect(host.commits).toHaveLength(1);
+          expect(client.query).toHaveBeenCalledOnce();
+          if (stage === 'persistence') {
+            read.resolve({
+              ...queryResult(makeOp(2, 'network-only')),
+              extensions: {
+                __macroNormalizedCache: {
+                  source: 'live-network',
+                  persistence: persistence.promise,
+                },
+              },
+            });
+          }
+          await vi.advanceTimersByTimeAsync(59_999);
+          expect(results).toHaveLength(0);
+          await vi.advanceTimersByTimeAsync(1);
+          expect(results).toHaveLength(1);
+          expect(optimisticMutationDispositionOf(results[0])).toEqual({
+            kind: 'committed',
+            data: results[0].data,
+          });
+          expect(onCacheError).toHaveBeenCalledWith(
+            expect.objectContaining({
+              message: 'Timed out delivering mutation updates',
+            }),
+            expect.anything()
+          );
+          expect(forwarded).toHaveLength(1);
+          expect(host.rollbacks).toHaveLength(0);
+          expect(host.defers).toHaveLength(0);
+        } finally {
+          read.resolve(queryResult(makeOp(2, 'network-only')));
+          persistence.resolve(undefined);
+          vi.useRealTimers();
+        }
+      }
+    );
 
     it.each([true, false])(
       'delegates persisted commit revalidations only when an owner accepts: %s',

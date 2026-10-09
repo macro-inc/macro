@@ -13,6 +13,7 @@ mod test;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::formula::Formula;
 use crate::ids::{ColumnId, DatabaseId, OptionId, PropertyId, RowId, TableId, TableVersion};
 use crate::views::{
     CardPosition, DatabaseView, LaneKey, NewView, RequestedLayout, ViewId, ViewPosition, ViewQuery,
@@ -195,6 +196,12 @@ pub enum ColumnChange {
         #[specta(type = Option<String>, optional)]
         color: Option<Option<String>>,
     },
+    /// Give a derived column a new formula. Its cells follow at once: it
+    /// stores none.
+    SetFormula {
+        /// The formula, over the table's other columns.
+        formula: Formula,
+    },
     /// Remove one option of a select or tag column, and take it out of every
     /// cell holding it: a single-valued cell is emptied, a multi-valued one
     /// keeps its other options. Like [`ColumnChange::UpdateOption`], an
@@ -326,6 +333,15 @@ pub enum NewColumn {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         #[specta(optional)]
         infer_type: bool,
+    },
+    /// A derived column: its cells are what `formula` computes from the
+    /// row's other cells, and nothing writes them.
+    Derived {
+        /// The column's name, unique within the table ignoring case.
+        name: String,
+        /// How its cells are computed: arithmetic over the table's number,
+        /// date and other derived columns.
+        formula: Formula,
     },
     /// An existing property, a person's, a team's or a system one, bound
     /// into the table under its own name.
@@ -654,6 +670,8 @@ pub enum ColumnResult {
     OptionUpdated,
     /// One of its options was removed.
     OptionDeleted,
+    /// Its formula changed.
+    FormulaSet,
 }
 
 /// What happened to a table's rows.

@@ -1,11 +1,12 @@
 import { throwOnErr } from '@core/util/result';
+import type { CacheHost } from '@graphql-cache/index';
 import { queryClient } from '@queries/client';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import { storageServiceClient } from '@service-storage/client';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { CalendarOccurrenceResponse } from '@service-storage/generated/schemas/calendarOccurrenceResponse';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
   markCalendarCacheUnsupported,
@@ -109,6 +110,81 @@ export async function fetchCalendarOccurrences(
   };
 }
 
+// Cached callbacks close over the resolved host, range and flags only.
+function calendarOccurrencesQueryOptions(
+  host: CacheHost | undefined,
+  userId: string | undefined,
+  range: CalendarOccurrenceQueryRange | undefined,
+  enabled: boolean,
+  pollWhileSyncing: boolean,
+  refetchOnWindowFocus: boolean
+) {
+  const keys = calendarKeys.occurrences(userId ?? '', range);
+  // Even the otherwise infinitely fresh GraphQL query must run once after
+  // being seeded. A successful read restores its normal freshness policy.
+  const staleTime = (query: { state: { dataUpdatedAt: number } }) =>
+    query.state.dataUpdatedAt === 0 ? 0 : host ? Infinity : CALENDAR_STALE_TIME;
+
+  if (host) {
+    return queryOptions<
+      CalendarOccurrencesData,
+      Error,
+      CalendarOccurrencesData,
+      CalendarOccurrencesQueryKey
+    >({
+      queryKey: keys._ctx.graphql.queryKey,
+      queryFn: async ({ signal }: { signal: AbortSignal }) => {
+        if (!range) {
+          throw new Error('Calendar occurrence range is unavailable');
+        }
+        const read = await readCalendarRange(host, range, { signal });
+        if (read.kind === 'range') return read.data;
+        if (read.kind === 'unsupported') markCalendarCacheUnsupported(host);
+        return fetchCalendarOccurrences(range, signal);
+      },
+      enabled,
+      staleTime,
+      // Covered viewports never touch the network, so offline reads run.
+      networkMode: 'offlineFirst' as const,
+      refetchOnWindowFocus: false,
+      // Read from REST while the cache was starting: poll like the REST
+      // path until the provider sync finishes.
+      refetchInterval: (query: {
+        state: { data: CalendarOccurrencesData | undefined };
+      }) =>
+        pollWhileSyncing &&
+        !calendarCacheAnswered(host) &&
+        query.state.data?.syncStatus === CalendarSyncStatus.syncing
+          ? CALENDAR_SYNC_POLL_INTERVAL
+          : false,
+    });
+  }
+
+  return queryOptions<
+    CalendarOccurrencesData,
+    Error,
+    CalendarOccurrencesData,
+    CalendarOccurrencesQueryKey
+  >({
+    queryKey: keys.queryKey,
+    queryFn: ({ signal }) => {
+      if (!range) {
+        throw new Error('Calendar occurrence range is unavailable');
+      }
+
+      return fetchCalendarOccurrences(range, signal);
+    },
+    enabled,
+    staleTime,
+    refetchOnWindowFocus,
+    refetchInterval: (query) =>
+      pollWhileSyncing &&
+      query.state.data?.syncStatus === CalendarSyncStatus.syncing
+        ? CALENDAR_SYNC_POLL_INTERVAL
+        : false,
+  });
+}
+
 /** Reuses only the current user's date range when the transport changes. */
 export function useCalendarOccurrencesQuery(
   input: Accessor<CalendarOccurrencesQueryInput>,
@@ -140,8 +216,7 @@ export function useCalendarOccurrencesQuery(
     CalendarOccurrencesQueryKey
   >(() => {
     const { userId, range } = input();
-    const enabled =
-      Boolean(userId) && range !== undefined && options?.().enabled !== false;
+    const opts = options?.();
     const host = cacheHost();
     const keys = calendarKeys.occurrences(userId ?? '', range);
     // Seed the new transport's cache, rather than an observer-only placeholder,
@@ -155,64 +230,15 @@ export function useCalendarOccurrencesQuery(
         activeQueryClient.setQueryData(queryKey, previous, { updatedAt: 0 });
       }
     }
-    // Even the otherwise infinitely fresh GraphQL query must run once after
-    // being seeded. A successful read restores its normal freshness policy.
-    const staleTime = (query: { state: { dataUpdatedAt: number } }) =>
-      query.state.dataUpdatedAt === 0
-        ? 0
-        : host
-          ? Infinity
-          : CALENDAR_STALE_TIME;
 
-    if (host) {
-      return {
-        queryKey: keys._ctx.graphql.queryKey,
-        queryFn: async ({ signal }: { signal: AbortSignal }) => {
-          if (!range) {
-            throw new Error('Calendar occurrence range is unavailable');
-          }
-          const read = await readCalendarRange(host, range, { signal });
-          if (read.kind === 'range') return read.data;
-          if (read.kind === 'unsupported') markCalendarCacheUnsupported(host);
-          return fetchCalendarOccurrences(range, signal);
-        },
-        enabled,
-        staleTime,
-        // Covered viewports never touch the network, so offline reads run.
-        networkMode: 'offlineFirst' as const,
-        refetchOnWindowFocus: false,
-        // Read from REST while the cache was starting: poll like the REST
-        // path until the provider sync finishes.
-        refetchInterval: (query: {
-          state: { data: CalendarOccurrencesData | undefined };
-        }) =>
-          options?.().pollWhileSyncing !== false &&
-          !calendarCacheAnswered(host) &&
-          query.state.data?.syncStatus === CalendarSyncStatus.syncing
-            ? CALENDAR_SYNC_POLL_INTERVAL
-            : false,
-      };
-    }
-
-    return {
-      queryKey: keys.queryKey,
-      queryFn: ({ signal }) => {
-        if (!range) {
-          throw new Error('Calendar occurrence range is unavailable');
-        }
-
-        return fetchCalendarOccurrences(range, signal);
-      },
-      enabled:
-        Boolean(userId) && range !== undefined && options?.().enabled !== false,
-      staleTime,
-      refetchOnWindowFocus: options?.().refetchOnWindowFocus ?? true,
-      refetchInterval: (query) =>
-        options?.().pollWhileSyncing !== false &&
-        query.state.data?.syncStatus === CalendarSyncStatus.syncing
-          ? CALENDAR_SYNC_POLL_INTERVAL
-          : false,
-    };
+    return calendarOccurrencesQueryOptions(
+      host,
+      userId,
+      range,
+      Boolean(userId) && range !== undefined && opts?.enabled !== false,
+      opts?.pollWhileSyncing !== false,
+      opts?.refetchOnWindowFocus ?? true
+    );
   });
 }
 

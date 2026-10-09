@@ -43,11 +43,12 @@
 //! it.
 
 pub mod ast;
-mod lexer;
+pub(crate) mod lexer;
 mod parser;
 pub mod schema;
 #[cfg(test)]
 mod test;
+pub(crate) mod tokens;
 
 use std::ops::Range;
 
@@ -77,9 +78,9 @@ impl std::error::Error for ParseError {}
 #[derive(specta::Type)]
 #[expect(
     dead_code,
-    reason = "only its shape is exported, for the span of a ParseError"
+    reason = "only its shape is exported, for the spans of a ParseError and a FormulaReading"
 )]
-struct Span {
+pub(crate) struct Span {
     start: u32,
     end: u32,
 }

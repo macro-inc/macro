@@ -538,6 +538,17 @@ Mark Not Done remains available for an archived thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification
 ordering, and existing cache reconciliation.
+For optimistic mutation interface changes, delay the network response and verify
+that only the affected row's read/done indicator changes, with scroll position and
+unrelated rows retained. Quickly reverse the action, then reject the first request:
+the later intent must remain visible. A stale refresh while either write is pending
+must not clear its optimistic state. A retryable failure should remain queued;
+a permanent failure should restore only the failed intent's fields.
+With two views of the same thread mounted, a read/unread or archive scalar
+change should update both existing query stores without a full query reread.
+Observers of unrelated fields should stay idle. Changes to links, record
+identity, or unsupported query projections still take the cache reread path;
+a subsequent scalar update must not cancel that pending structural refresh.
 
 The service retains both replica-backed Soup reads and a primary-backed email
 writer. Email mutations and their uncached reply reloads use the primary; ordinary
@@ -1878,47 +1889,60 @@ joining a standalone call never makes its content available to the wider team.
 ## Customers (CRM) — `/app/component/companies`
 
 On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
-Board and List share a horizontal segmented toggle at the top of the sidebar; the
-main header has no layout toggle. People lists contacts across every CRM-enabled
-team the viewer belongs to. Duplicate full email addresses (case-insensitive)
-collapse to the visible contact with the most recent interaction; ties use the
-contact ID. Each team's record and existing contact links remain separate. Hidden
-contacts and contacts under hidden companies are excluded. The directory supports
-name/email search and sorting, and its navigation remains available on touch devices.
-Company views include All companies, My companies
-(Owner = current user), Needs follow-up (has a stage other than Churned and last
-interaction at least 14 days ago),
-Recently active (team email activity within 7 days), and Unassigned (no Owner). Existing personal/team
-saved views also appear under Views. Stages remain board columns or list properties.
-Board/List switches the representation without changing the selected set.
-Recently active uses the CRM last-interaction timestamp, advanced by sent and received
-email. It does not count company @mentions or chat discussions. Manually created
-companies initialize that timestamp to creation time, so newly added companies may
-also appear before any email; the sidebar hover tooltip discloses this limitation.
-View descriptions appear in sidebar tooltips, not above the main board or list.
-The `Search companies` field uses the shared Email/Tasks search bar. Command-F
-focuses it, `Clear search` resets it, and Escape leaves the field.
+Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
+only when pipelines are enabled; disabled until the team's CRM is enabled). The
+**Records** section lists **Companies** and **People**; Pipelines and Lists follow.
+There are no built-in company views or Board/List layout: Companies and People
+are plain soup lists with the shared pagination. Existing personal/team saved
+views stay in the toolbar's Views menu.
 
-On touch devices, Customers uses the same full-frame list layout as the other
-mobile views: floating CRM-navigation and filter buttons with Board/List pills,
-List as the fresh default, and the global **+ Company** action above the dock.
-The navigation button opens the CRM views and lists; the desktop toolbar and
-embedded detail stack stay out of the mobile flow, so selecting a row navigates
-in place.
+Companies lists every visible company, grouped by Stage by default, with Owner,
+Revenue and Last Interaction columns. Its toolbar holds sort, group, filter,
+display options, saved views, and **New company** at the right end.
 
-On desktop, clicking a company in Board or List (or pressing Enter on a focused list row)
-opens its details inside the CRM workspace, keeping the left navigation visible.
-The top breadcrumb reads `<current view or list> > <company>`; click the first
-segment to return with the same filters, layout, and list scroll position. Selecting
-another sidebar view or switching Board/List closes the company details.
-Shift-click still opens the company in a separate split. Direct company links use
-the standalone company page.
-Clicking a contact in an embedded company's Team tab appends a third
-breadcrumb: `<current view or list> > <company> > <contact>`. The CRM sidebar stays
-visible. Click the company breadcrumb or the contact's Company link to return to
-the company; click the first breadcrumb to return directly to the originating
-view. Shift-click still opens a contact in a separate split. Direct contact links
-use the standalone contact page.
+People lists contacts across every CRM-enabled team the viewer belongs to, from
+the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
+duplicate full email addresses (case-insensitive) to one contact. Hidden contacts
+and contacts under hidden companies are excluded. Columns are Person (name and
+email), Company and Last contacted (sortable). `Search people` matches name or
+email on the server after a short typing pause, so results include contacts not
+yet scrolled into view. **New contact** sits at the right end of the toolbar. Its
+dialog asks for a company through a **Choose a company** pill (searchable by name
+or domain, from the up to 500 most relevant companies with a domain) and fixes
+the email to that company's primary domain; **Add contact** on a company's Team
+tab skips the company pill. The company, contact and pipeline dialogs share the
+task/project composer layout: name on the first row beside **Close**, details
+below, and a **Create …** button that also submits on Command-Enter.
+
+`Search companies` and `Search people` use the shared Email/Tasks search bar.
+Command-F focuses it, `Clear search` resets it, and Escape leaves the field.
+
+On touch devices, CRM uses the same scrollable pill tabs as Tasks in the top
+header: Companies, People, available pipelines, and enabled lists. Swipe the
+strip horizontally to reach every destination; the selected tab stays visible.
+The tabs remain available inside pipelines, with no hamburger button. Company
+filters lead the strip when available. On mobile, pipelines omit their title
+and sharing row and use an edge-to-edge table, below the top safe area and above
+the bottom dock. The compact **Pipeline actions** button in the table toolbar
+opens rename and sharing controls; only owners see **Trash pipeline**, which
+requires confirmation. Sharing opens the existing share dialog. Companies uses
+the full-frame list with the global **+ Company** action above the dock. People keeps its search and **New contact** below the tab
+strip. The embedded detail stack stays out of the mobile flow, so selecting a
+row navigates in place.
+
+On desktop, clicking a company or a person in the list (or pressing Enter on a
+focused row) opens its details inside the CRM workspace, keeping the left
+navigation visible. The top breadcrumb reads `<Companies, People or list> >
+<record>`; click the first segment to return with the same filters and list
+scroll position. Selecting another sidebar entry closes the details. Shift-click
+still opens the record in a separate split. Direct company and contact links use
+the standalone pages.
+Each record opened from the details appends a breadcrumb: a contact from a
+company's Team tab gives `Companies > <company> > <contact>`, and a person's
+Company link gives `People > <contact> > <company>`. Opening a record already in
+the trail (such as the contact's own company from `Companies > <company> >
+<contact>`) returns to it instead of adding a duplicate. The CRM sidebar stays
+visible throughout.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 Their information panel starts closed and opens as a floating bubble at every
 width, without shrinking the record content. Click outside the bubble or use
@@ -1958,7 +1982,7 @@ editors without changing hosted data.
 
 `Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
-The sidebar's Views and Lists sections can also collapse independently.
+The sidebar's Records and Lists sections can also collapse independently.
 
 **Pipelines** in the CRM sidebar hold company or contact entries in the shared
 records editor. They have their own identity, ownership and sharing; their
@@ -1967,8 +1991,10 @@ storage does not appear as a separate database in navigation.
 use **Open CRM settings** in the empty state to enable CRM, then return to
 Customers to create a pipeline. Verify this with a newly created team as well as
 an existing CRM-enabled team.
-Choose **New pipeline**, enter a name, choose **Companies** or **Contacts**, and
-choose **Just me** (the default) or **My team**. Creating opens the pipeline's
+Choose **New pipeline**, enter a name in the dialog's first row, pick
+**Companies** (the default) or **Contacts** from the record-type pill, and tick
+**Share with my team** to share it (unticked keeps it private). **Create
+pipeline** or Command-Enter submits. Creating opens the pipeline's
 editable table. Team members can edit shared pipelines; the creator owns them
 and can change access later through the standard **Share** dialog. Under
 **Team access**, choose **Edit** to share with the team or **None** to make the
@@ -1985,13 +2011,25 @@ company's CRM fields. Use **Add column** or a column header's menu to customize
 columns. Pipeline Stage options initially copy the team's current deal stages. Open
 pipelines refresh other editors' changes periodically; a local edit refreshes
 immediately after saving.
+A pipeline page uses the database page's styling with one table and no table
+tabs. Its header shows the name, edited in place by editors, a **Pipeline
+actions** menu (**Rename**; **Trash pipeline** for the owner) and **Share**. The
+toolbar below has **All records**, the pipeline's stored views and **New view**
+(Table or Board), plus Group by (boards), Filter and Sort, then **Add company**
+or **Add contact** (by the pipeline's record type) for editors, which starts a
+row whose reference cell picks the record.
+Stored views are everyone's and are written through the pipeline, so changing one
+changes it for all viewers; All records is each viewer's own. A board can move a
+card to another group from its card menu or by dragging, which sets the row's
+grouping cell. Card order within a group is not read back after a reload, and
+views cannot be reordered yet. The selected view is remembered per pipeline.
 **Trash pipeline** removes its table from navigation without deleting the linked
-companies or contacts. **Back to companies** returns to the main CRM views.
+companies or contacts, then returns to Companies.
 
 CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
 Lists section, list editor, and company membership controls only mount when enabled.
 Existing list data is preserved; a restored list view returns to All companies while
-disabled. Board/List layout and saved filter views remain available.
+disabled. Saved filter views remain available.
 
 When enabled, lists are personal, team-scoped collections of explicit company IDs, persisted through
 saved-view storage separately from saved filter views. `New list` opens a name and
@@ -2631,8 +2669,8 @@ contracts and test coverage.
 Actions live in the top bar immediately before Share, with consistent compact
 buttons (labels collapse on narrow headers). There are no Actions sections in
 information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
-includes Ask Macro and Create task; PDF and calls include Ask Macro; native
-projects expose Delete project with its existing confirmation dialog.
+includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
+projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata is quiet, non-collapsible text at the bottom of each panel,
 separated by a muted divider. Owner and available timestamps share one format;

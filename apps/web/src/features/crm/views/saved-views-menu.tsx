@@ -117,7 +117,6 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
     stageFilter,
     ownerFilter,
     activeTab,
-    viewMode,
   } = useCrmWorkspace();
   const personal = usePersonalCrmViews();
   const team = useTeamCrmViews();
@@ -142,7 +141,6 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
     searchText: searchText(),
     groupBy: soup.grouping.activeGroupId() ?? null,
     sort: soup.sort.active().map((s) => s.id),
-    viewMode: viewMode(),
     stageFilter: [...stageFilter()],
     ownerFilter: [...ownerFilter()],
     activeTab: activeTab(),
@@ -322,71 +320,56 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
  */
 export function CompanyDisplayMenu() {
   const { options, toggleListColumn } = useCrmDisplayOptions();
-  const { activeTab, viewMode } = useCrmWorkspace();
+  const { activeTab } = useCrmWorkspace();
   const { applyTabPreset } = useApplyPreset();
   const isTeamAdmin = useIsTeamAdmin();
 
   const showingHidden = () => activeTab() === 'hidden';
 
-  // On the board, the menu holds only the admin-gated hidden toggle — hide
-  // the trigger entirely when there'd be nothing to show.
-  const hasContent = () => viewMode() === 'list' || isTeamAdmin();
-
   return (
-    <Show when={hasContent()}>
-      <Dropdown>
-        <Tooltip label="Display options">
-          <Dropdown.Trigger
-            depth={2}
-            class="bg-surface"
-            label="Display options"
-          >
-            <SlidersIcon />
-          </Dropdown.Trigger>
-        </Tooltip>
+    <Dropdown>
+      <Tooltip label="Display options">
+        <Dropdown.Trigger depth={2} class="bg-surface" label="Display options">
+          <SlidersIcon />
+        </Dropdown.Trigger>
+      </Tooltip>
 
-        <Dropdown.Content class="w-56">
-          {/* Column visibility only applies to the list. */}
-          <Show when={viewMode() === 'list'}>
-            <Dropdown.Group>
-              <Dropdown.GroupLabel>List columns</Dropdown.GroupLabel>
-              <For
-                each={Object.keys(CRM_LIST_COLUMN_LABELS) as CrmListColumnId[]}
-              >
-                {(column) => (
-                  <Dropdown.CheckboxItem
-                    checked={options().listColumns[column]}
-                    onChange={() => toggleListColumn(column)}
-                    closeOnSelect={false}
-                  >
-                    <span class="flex-1 truncate">
-                      {CRM_LIST_COLUMN_LABELS[column]}
-                    </span>
-                  </Dropdown.CheckboxItem>
-                )}
-              </For>
-            </Dropdown.Group>
-          </Show>
-          {/* Admin/owner only — the BE rejects hidden-set requests from
-            non-admins, matching the old Hidden tab's gating. */}
-          <Show when={isTeamAdmin()}>
-            <Dropdown.Group>
+      <Dropdown.Content class="w-56">
+        <Dropdown.Group>
+          <Dropdown.GroupLabel>List columns</Dropdown.GroupLabel>
+          <For each={Object.keys(CRM_LIST_COLUMN_LABELS) as CrmListColumnId[]}>
+            {(column) => (
               <Dropdown.CheckboxItem
-                checked={showingHidden()}
-                onChange={() =>
-                  applyTabPreset(
-                    'companies',
-                    showingHidden() ? 'active' : 'hidden'
-                  )
-                }
+                checked={options().listColumns[column]}
+                onChange={() => toggleListColumn(column)}
                 closeOnSelect={false}
               >
-                <span class="flex-1 truncate">Show hidden companies</span>
+                <span class="flex-1 truncate">
+                  {CRM_LIST_COLUMN_LABELS[column]}
+                </span>
               </Dropdown.CheckboxItem>
-            </Dropdown.Group>
-          </Show>
-        </Dropdown.Content>
-      </Dropdown>
-    </Show>
+            )}
+          </For>
+        </Dropdown.Group>
+        {/* Admin/owner only — the BE rejects hidden-set requests from
+            non-admins, matching the old Hidden tab's gating. */}
+        <Show when={isTeamAdmin()}>
+          <Dropdown.Group>
+            <Dropdown.CheckboxItem
+              checked={showingHidden()}
+              onChange={() =>
+                applyTabPreset(
+                  'companies',
+                  showingHidden() ? 'active' : 'hidden'
+                )
+              }
+              closeOnSelect={false}
+            >
+              <span class="flex-1 truncate">Show hidden companies</span>
+            </Dropdown.CheckboxItem>
+          </Dropdown.Group>
+        </Show>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }

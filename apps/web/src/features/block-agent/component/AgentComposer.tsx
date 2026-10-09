@@ -1,3 +1,9 @@
+import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import {
+  acceleratedSpeed,
+  speedForModel,
+} from '@core/component/AI/constant/speed';
+import { fastModeEnabled } from '@core/component/AI/signal/speed';
 import ArrowUp from '@phosphor/arrow-up.svg';
 import { Button } from '@ui';
 /**
@@ -161,8 +167,32 @@ export function AgentComposer(props: {
   // Attachments ride the prompt action itself, so they take the same path as
   // the text: issued once, speculated by the fold, and queued server-side
   // behind a running turn with the files still on them.
-  const send = (markdown: string, attachments: InputAttachmentData[]) => {
-    if (readOnly()) return;
+  const send = async (markdown: string, attachments: InputAttachmentData[]) => {
+    if (readOnly() || configuring()) return;
+    const meta = metadata();
+    if (
+      meta?.model &&
+      acceleratedSpeed(meta.model) &&
+      meta.configOptions.some((option) => option.id === 'speed')
+    ) {
+      setConfiguring(true);
+      try {
+        await selectModel(meta.model, {
+          configId: 'speed',
+          value: speedForModel(meta.model, fastModeEnabled()),
+        });
+      } catch {
+        persistedDraft.setDraft(markdown);
+        toast.failure('The speed setting could not be applied. Please retry.');
+        return;
+      } finally {
+        setConfiguring(false);
+      }
+    }
+    if (readOnly()) {
+      persistedDraft.setDraft(markdown);
+      return;
+    }
     // Queued review notes ride this send: taking them here marks them sent
     // before the prompt is issued, so a second Enter cannot post them again
     // as their own queued prompt (which would then stop-and-flush).
@@ -304,9 +334,9 @@ export function AgentComposer(props: {
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
-        disabled={loadFailed() || pending() || readOnly()}
+        disabled={loadFailed() || pending() || readOnly() || configuring()}
         commands={() => metadata()?.availableCommands ?? []}
-        onSend={send}
+        onSend={(markdown, attachments) => void send(markdown, attachments)}
         onStop={() =>
           void act({ type: 'stop' }, 'The agent could not be stopped')
         }
@@ -330,37 +360,46 @@ export function AgentComposer(props: {
         }}
         registerQuoteInsert={registerQuoteInsert}
         modelControl={
-          <ModelSelector
-            model={metadata()?.model ?? null}
-            changingTo={changingModel(messages(), metadata()?.model ?? null)}
-            options={metadata()?.supportedModels ?? []}
-            effortLabel={effortLabel(effort(), changingEffort())}
-            disabled={
-              loadFailed() ||
-              readOnly() ||
-              pending() ||
-              configuring() ||
-              changingEffort() !== undefined
-            }
-            onSelect={(model) => void chooseModel(model)}
-            modelRow={(row) => (
-              <AgentModelMenuItem
-                {...row}
-                harness={session()?.harness}
-                effort={
-                  row.option.id === metadata()?.model ? effort() : undefined
-                }
-                effortValue={
-                  row.option.id === metadata()?.model
-                    ? changingEffort()
-                    : undefined
-                }
-                onSelectEffort={(selection) =>
-                  void chooseModel(row.option.id, selection)
-                }
-              />
-            )}
-          />
+          <div class="flex min-w-0 items-center gap-1">
+            <ModelSelector
+              model={metadata()?.model ?? null}
+              changingTo={changingModel(messages(), metadata()?.model ?? null)}
+              options={metadata()?.supportedModels ?? []}
+              effortLabel={effortLabel(effort(), changingEffort())}
+              disabled={
+                loadFailed() ||
+                readOnly() ||
+                pending() ||
+                configuring() ||
+                changingEffort() !== undefined
+              }
+              onSelect={(model) => void chooseModel(model)}
+              modelRow={(row) => (
+                <AgentModelMenuItem
+                  {...row}
+                  harness={session()?.harness}
+                  effort={
+                    row.option.id === metadata()?.model ? effort() : undefined
+                  }
+                  effortValue={
+                    row.option.id === metadata()?.model
+                      ? changingEffort()
+                      : undefined
+                  }
+                  onSelectEffort={(selection) =>
+                    void chooseModel(row.option.id, selection)
+                  }
+                />
+              )}
+            />
+            <Show
+              when={metadata()?.configOptions.some(
+                (option) => option.id === 'speed'
+              )}
+            >
+              <SpeedToggle model={metadata()?.model ?? ''} />
+            </Show>
+          </div>
         }
       />
     </>

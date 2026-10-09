@@ -154,6 +154,7 @@ import {
   AgentSessionAccessDenied,
   AgentSessionReleased,
 } from './AgentSession';
+import { forgetSessionCreated, markSessionCreated } from './recently-created';
 import { resetSessionTurns, sessionTurn } from './session-turn';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
@@ -816,6 +817,78 @@ describe('AgentSession', () => {
     );
     await expect(live.load()).rejects.toBeInstanceOf(AgentSessionAccessDenied);
     live.release();
+  });
+
+  describe('a session this tab just created', () => {
+    beforeEach(() => {
+      markSessionCreated(SESSION);
+      onTestFinished(() => forgetSessionCreated(SESSION));
+    });
+
+    it('waits out a refusal and loads once the create is readable', async () => {
+      vi.useFakeTimers();
+      onTestFinished(() => void vi.useRealTimers());
+      // The create has answered, but what it wrote is not readable yet.
+      harness.get
+        .mockResolvedValueOnce(err([{ code: 'UNAUTHORIZED' }]))
+        .mockResolvedValue(ok(session));
+
+      const live = AgentSession.acquire(SESSION);
+      const loaded = live.load();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(await loaded).toEqual({ session, bot });
+      // Nothing was thrown away on the strength of a refusal that was a race.
+      expect(logSource.forget).not.toHaveBeenCalled();
+      live.release();
+    });
+
+    it('waits out a 404 from a create whose row is not visible yet', async () => {
+      vi.useFakeTimers();
+      onTestFinished(() => void vi.useRealTimers());
+      harness.get
+        .mockResolvedValueOnce(err([{ code: 'NOT_FOUND' }]))
+        .mockResolvedValue(ok(session));
+
+      const live = AgentSession.acquire(SESSION);
+      const loaded = live.load();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(await loaded).toEqual({ session, bot });
+      live.release();
+    });
+
+    it('gives up as a retryable failure, not denied access, if it never clears', async () => {
+      vi.useFakeTimers();
+      onTestFinished(() => void vi.useRealTimers());
+      harness.get.mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]));
+
+      const live = AgentSession.acquire(SESSION);
+      const settled = live.load().catch((error: unknown) => error);
+      // Past every retry, but still inside the window in which this tab's
+      // creates are given the benefit of the doubt.
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      const error = await settled;
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(AgentSessionAccessDenied);
+      live.release();
+    });
+
+    it('reports a refusal honestly once a load has proved the grant is there', async () => {
+      const first = AgentSession.acquire(SESSION);
+      expect(await first.load()).toEqual({ session, bot });
+      first.release();
+
+      // Access taken away after a load that worked is a refusal in earnest,
+      // not a create still settling, even inside the grace window.
+      harness.get.mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]));
+      const second = AgentSession.acquire(SESSION);
+      await expect(second.load()).rejects.toBeInstanceOf(
+        AgentSessionAccessDenied
+      );
+      second.release();
+    });
   });
 
   describe('cached log', () => {

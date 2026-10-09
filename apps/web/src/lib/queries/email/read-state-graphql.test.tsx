@@ -62,6 +62,7 @@ import {
   SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { stringifyDocument } from '@urql/core';
+import { soupOptimisticResolvers } from '../optimistic-resolvers';
 import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import { emailKeys } from './keys';
 import {
@@ -145,8 +146,7 @@ describe('email read state with GraphQL Soup', () => {
         await network;
         return ok(undefined);
       });
-      // Inspect the actual optimistic context sent to the normalized exchange,
-      // before allowing the GraphQL network result through. No uncached fallback.
+      // The call supplies variables; the shared registry supplies the optimistic fields.
       mocks.graphqlMutation.mockReturnValue({
         toPromise: async () => {
           await network;
@@ -173,8 +173,7 @@ describe('email read state with GraphQL Soup', () => {
         );
         expect(mutation.isPending).toBe(true);
         if (graphql) {
-          const [document, variables, context] =
-            mocks.graphqlMutation.mock.calls[0];
+          const [document, variables] = mocks.graphqlMutation.mock.calls[0];
           expect(document).toBe(
             read ? MarkEmailThreadSeenDocument : MarkEmailThreadUnreadDocument
           );
@@ -183,7 +182,12 @@ describe('email read state with GraphQL Soup', () => {
           });
           expect(
             hasReadPatch(
-              context.normalizedCacheOptimistic.optimisticResponse,
+              soupOptimisticResolvers
+                .find(
+                  (resolver) =>
+                    resolver.document === stringifyDocument(document)
+                )
+                ?.resolve(variables)?.response,
               read
             ),
             'A legacy Soup patch does not update GraphqlSoupEmailThread.isRead'
@@ -248,13 +252,16 @@ describe('email read state with GraphQL Soup', () => {
         await vi.waitFor(() =>
           expect(mocks.graphqlMutation).toHaveBeenCalledOnce()
         );
-        const [document, variables, context] =
-          mocks.graphqlMutation.mock.calls[0];
+        const [document, variables] = mocks.graphqlMutation.mock.calls[0];
         expect(document).toBe(MarkEmailThreadUnreadDocument);
         expect(variables).toEqual({ input: { threadId: 'thread' } });
         expect(
           hasReadPatch(
-            context.normalizedCacheOptimistic.optimisticResponse,
+            soupOptimisticResolvers
+              .find(
+                (resolver) => resolver.document === stringifyDocument(document)
+              )
+              ?.resolve(variables)?.response,
             false
           )
         ).toBe(true);
@@ -291,13 +298,12 @@ describe('email read state with GraphQL Soup', () => {
         const mutation = mountEmailMutation(useMutation, client);
         await mutation.mutateAsync({ threadId: 'thread' });
         expect(
-          mocks.graphqlMutation.mock.calls[0][2].normalizedCacheOptimistic
+          mocks.graphqlMutation.mock.calls[0][2].optimisticMutation
             .revalidations
         ).toEqual([
           {
-            query: stringifyDocument(SoupDocument),
-            operationName: 'Soup',
-            variablesJson: JSON.stringify(variables),
+            document: SoupDocument,
+            variables,
           },
         ]);
         expect(mocks.refresh).not.toHaveBeenCalled();

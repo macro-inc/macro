@@ -242,6 +242,7 @@ fn only_confirmed_effort_replays_and_removal_resets_it() {
         "anthropic/claude-sonnet-5-5",
         &["anthropic/claude-sonnet-5-5"],
         ReasoningEffort::Low,
+        agent::ModelSpeed::Standard,
     );
     frames.push(config_response(
         serde_json::json!({ "configOptions": options }),
@@ -257,4 +258,24 @@ fn only_confirmed_effort_replays_and_removal_resets_it() {
     frames.push(config_frame("model", "other-model"));
     frames.push(config_response(serde_json::json!({ "configOptions": [] })));
     assert_eq!(replay_reasoning_effort(&frames), ReasoningEffort::Default);
+}
+
+#[test]
+fn speed_replays_only_from_confirmed_configuration() {
+    use agent::ModelSpeed;
+    let mut frames = vec![config_frame("speed", "ultrafast")];
+    assert_eq!(replay_speed(&frames), ModelSpeed::Standard);
+    let options = crate::domain::model_options::session_config_options(
+        "openai/gpt-6-astra",
+        &["openai/gpt-6-astra"],
+        ReasoningEffort::Default,
+        ModelSpeed::Ultrafast,
+    );
+    frames.push(config_response(
+        serde_json::json!({"configOptions":options}),
+    ));
+    assert_eq!(replay_speed(&frames), ModelSpeed::Ultrafast);
+    frames.push(config_frame("model", "other-model"));
+    frames.push(config_response(serde_json::json!({"configOptions":[]})));
+    assert_eq!(replay_speed(&frames), ModelSpeed::Standard);
 }

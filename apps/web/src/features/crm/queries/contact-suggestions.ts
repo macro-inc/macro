@@ -7,7 +7,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { CrmRecordDependencies } from './dependencies';
 import { toCrmContactEntity } from './graphql';
 
-/** Cursor-paged GraphQL source shared by suggestions and the People directory. */
+/** Cursor-paged GraphQL source for contact suggestions. */
 export function useCrmContactsQuery(
   deps: Pick<CrmRecordDependencies, 'client'>,
   enabled: Accessor<boolean>,

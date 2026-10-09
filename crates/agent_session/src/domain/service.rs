@@ -592,6 +592,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             agent.action.name = action.as_ref(),
             agent.command.queue_wait_ms = tracing::field::Empty,
             agent.session.runtime_phase_at_dequeue = tracing::field::Empty,
+            agent.command.handshake_wait_ms = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );

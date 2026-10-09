@@ -127,6 +127,27 @@ describe('validateCacheSearchArgs', () => {
 });
 
 describe('cache worker message validators', () => {
+  it('accepts scalar field patches and rejects shapes that cannot be patched', () => {
+    const push = (fields: unknown) => ({
+      kind: 'ops-affected',
+      opIds: ['client:1'],
+      keys: ['Thread:1'],
+      fieldChanges: [{ kind: 'fields', key: 'Thread:1', fields }],
+    });
+    expect(
+      isCachePush(push({ isRead: true, count: 1, name: 'A', removed: null }))
+    ).toBe(true);
+    expect(isCachePush(push({ nested: { id: '2' } }))).toBe(false);
+    expect(isCachePush(push({ items: [] }))).toBe(false);
+    expect(isCachePush(push({ count: Infinity }))).toBe(false);
+    expect(
+      isCachePush({
+        ...push({}),
+        fieldChanges: [{ kind: 'invalidate', key: 'Thread:1' }],
+      })
+    ).toBe(true);
+  });
+
   it('accepts exact responses and every typed push', () => {
     const values = [
       { id: 1, ok: true, result: { kind: 'miss' } },

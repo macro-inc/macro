@@ -12,9 +12,11 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import { queryClient } from '@queries/client';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import { initiativeClient } from '@service-storage/initiative';
 import { Button } from '@ui';
 import {
@@ -36,7 +38,6 @@ import {
 } from './primitives/project-collection';
 import { createProjectCollectionPersistence } from './project-collection-persistence';
 import { ProjectShareLauncher } from './project-share';
-import { projectKeys } from './queries/keys';
 import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
@@ -53,20 +54,9 @@ function createProjectReadGate() {
 
 function createProjectsContext() {
   const userId = useUserId();
-  onCleanup(
-    registerActivityRevalidator({
-      client: getGraphqlSoupClient,
-      // Multiple mounted surfaces share an in-flight refresh instead of cancelling it.
-      refresh: () =>
-        queryClient.invalidateQueries(
-          { queryKey: projectKeys._def },
-          { cancelRefetch: false }
-        ),
-    })
-  );
   return createProjectSources(
     initiativeClient,
-    { client: getGraphqlSoupClient },
+    { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
     queryClient,
     userId,
     createProjectReadGate

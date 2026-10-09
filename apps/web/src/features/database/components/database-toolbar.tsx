@@ -69,11 +69,13 @@ type DatabaseToolbarProps = {
     view: DatabaseView,
     layout: ShownLayout
   ) => ResultAsync<void, DatabaseOpFailure>;
-  /** Every stored view of the table, in its new order. */
-  onReorderViews: (order: string[]) => void;
+  /** Every stored view of the table, in its new order; omitted when the host cannot store an order. */
+  onReorderViews?: (order: string[]) => void;
   onCreateRecord?: () => void;
   canCreateRecord?: boolean;
   creating?: boolean;
+  /** The host's own actions after the view controls, e.g. a labelled create button. */
+  actions?: JSX.Element;
 };
 
 /** View controls contain no data fetching or mutation implementation. */
@@ -137,7 +139,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
     const order = props.views.map((view) => view.id);
     const moved = movedViewOrder(order, id, targetId);
     if (moved.some((view, index) => view !== order[index]))
-      props.onReorderViews(moved);
+      props.onReorderViews?.(moved);
   }
   return (
     <div
@@ -175,6 +177,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                       view={view()}
                       selected={props.selectedViewId === view().id}
                       canEdit={props.canEdit}
+                      canReorder={props.canEdit && !!props.onReorderViews}
                       renaming={viewRename.target()?.id === view().id}
                       renameDraft={viewRename.draft()}
                       renamePending={viewRename.pending()}
@@ -331,6 +334,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                 </Show>
               </Button>
             </Show>
+            {props.actions}
           </div>
         </div>
       </div>
@@ -375,6 +379,7 @@ function ViewTab(props: {
   view: DatabaseView;
   selected: boolean;
   canEdit: boolean;
+  canReorder: boolean;
   renaming: boolean;
   renameDraft: string;
   renamePending: boolean;
@@ -435,7 +440,7 @@ function ViewTab(props: {
             <ContextMenu.Trigger
               as="button"
               type="button"
-              {...(props.canEdit ? sortable.dragActivators : {})}
+              {...(props.canReorder ? sortable.dragActivators : {})}
               data-view-id={props.view.id}
               aria-pressed={props.selected}
               aria-keyshortcuts={props.canEdit ? 'F2 Shift+F10' : undefined}

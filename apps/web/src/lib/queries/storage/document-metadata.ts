@@ -1,7 +1,7 @@
 import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadata } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
-import { useQueries, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQueries, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { entityKeys } from './keys';
 
@@ -28,14 +28,18 @@ async function fetchDocumentAccessLevel(
   return result.value.userAccessLevel;
 }
 
-export function useDocumentMetadataQuery(documentId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: entityKeys.documentMetadata(documentId()).queryKey,
-    queryFn: () => fetchDocumentMetadata(documentId()),
+function documentMetadataQueryOptions(documentId: string) {
+  return queryOptions({
+    queryKey: entityKeys.documentMetadata(documentId).queryKey,
+    queryFn: () => fetchDocumentMetadata(documentId),
     staleTime: STALE_TIME,
     gcTime: GC_TIME,
-    enabled: !!documentId(),
-  }));
+    enabled: !!documentId,
+  });
+}
+
+export function useDocumentMetadataQuery(documentId: Accessor<string>) {
+  return useQuery(() => documentMetadataQueryOptions(documentId()));
 }
 
 /** Shared options keep single-document and collection access checks on the same cache key. */
@@ -46,6 +50,13 @@ export function documentAccessLevelQueryOptions(documentId: string) {
     staleTime: STALE_TIME,
     gcTime: GC_TIME,
     enabled: !!documentId,
+  };
+}
+
+function documentAccessLevelEntryQueryOptions(documentId: string) {
+  return {
+    ...documentAccessLevelQueryOptions(documentId),
+    select: (accessLevel: AccessLevel) => ({ documentId, accessLevel }),
   };
 }
 
@@ -62,10 +73,9 @@ export function useDocumentAccessLevelsQuery(
     const uniqueDocumentIds = [...new Set(documentIds())];
 
     return {
-      queries: uniqueDocumentIds.map((documentId) => ({
-        ...documentAccessLevelQueryOptions(documentId),
-        select: (accessLevel: AccessLevel) => ({ documentId, accessLevel }),
-      })),
+      queries: uniqueDocumentIds.map((documentId) =>
+        documentAccessLevelEntryQueryOptions(documentId)
+      ),
     };
   });
 }

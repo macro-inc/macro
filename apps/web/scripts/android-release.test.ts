@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   androidPackage,
   androidReleaseMetadata,
+  bumpAndroidVersionCode,
   ensureAndroidSigning,
   parseAndroidSigning,
   propertyValue,
@@ -37,35 +38,91 @@ const signing = {
   store_password: 'test-store-password',
 };
 
+const releaseConfig = {
+  version: '2.5.0',
+  bundle: { android: { versionCode: 7 } },
+};
+
 describe('Android release versions', () => {
-  it('assigns deterministic increasing codes across revisions, days, and years', () => {
-    const tags = [
-      'v2026.9.28.0',
-      'v2026.9.28.99',
-      'v2026.9.29.0',
-      'v2027.1.1.0',
-    ];
-    const codes = tags.map((tag) => androidReleaseMetadata(tag).versionCode);
-    expect(codes).toEqual([2026092800, 2026092899, 2026092900, 2027010100]);
-    expect(androidReleaseMetadata(tags[0])).toEqual({
-      version: '2026.9.28-0',
-      versionCode: 2026092800,
-      filename: 'macro-v2026.9.28.0-android-arm64.apk',
-    });
-    expect(androidReleaseMetadata('v2099.12.31.99').versionCode).toBeLessThan(
-      2100000000
-    );
-  });
+  it.each(['v2026.10.7', 'v2026.10.6.2', 'v2027.1.1.0'])(
+    'uses the native config independently of tag %s',
+    (tag) => {
+      expect(androidReleaseMetadata(tag, releaseConfig)).toEqual({
+        version: '2.5.0',
+        versionCode: 7,
+        filename: `macro-${tag}-android-arm64.apk`,
+      });
+    }
+  );
 
   it.each([
     'main',
     'v2026.2.29.0',
-    'v2026.13.1.0',
+    'v2026.13.1',
     'v2026.9.28.100',
     'v2100.1.1.0',
     'v2026.9.28.0\n',
   ])('rejects invalid tag %j', (tag) => {
-    expect(() => androidReleaseMetadata(tag)).toThrow();
+    expect(() => androidReleaseMetadata(tag, releaseConfig)).toThrow();
+  });
+
+  it.each([undefined, 0, -1, 1.5, '7', 2_100_000_001])(
+    'rejects invalid native build %j',
+    (versionCode) => {
+      expect(() =>
+        androidReleaseMetadata('v2026.10.7', {
+          ...releaseConfig,
+          bundle: { android: { versionCode } },
+        })
+      ).toThrow();
+    }
+  );
+
+  it('increments the native counter without changing the marketing version or platform settings', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-version-test-'));
+    try {
+      const path = join(root, 'tauri.android.conf.json');
+      const config = {
+        ...releaseConfig,
+        bundle: {
+          android: { versionCode: 7, minSdkVersion: 24 },
+          icon: ['icon.png'],
+        },
+        plugins: { 'deep-link': { mobile: [] } },
+      };
+      await writeFile(path, JSON.stringify(config));
+      expect(await bumpAndroidVersionCode(path)).toBe(8);
+      expect(await bumpAndroidVersionCode(path)).toBe(9);
+      const updated = JSON.parse(await readFile(path, 'utf8'));
+      expect(updated).toEqual({
+        ...config,
+        bundle: {
+          ...config.bundle,
+          android: { ...config.bundle.android, versionCode: 9 },
+        },
+      });
+      expect(androidReleaseMetadata('v2026.10.7', updated).versionCode).toBe(9);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not write an exhausted counter', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'android-version-test-'));
+    try {
+      const path = join(root, 'tauri.android.conf.json');
+      const contents = JSON.stringify({
+        ...releaseConfig,
+        bundle: { android: { versionCode: 2_100_000_000 } },
+      });
+      await writeFile(path, contents);
+      await expect(bumpAndroidVersionCode(path)).rejects.toThrow(
+        'Google Play limit'
+      );
+      expect(await readFile(path, 'utf8')).toBe(contents);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -84,7 +141,7 @@ describe('Android signing provisioning', () => {
       expect(execFileSync).toHaveBeenCalledWith(
         'doppler',
         expect.arrayContaining([
-          'ANDROID_UPLOAD_SIGNING_JSON',
+          'ANDROID_UPLOAD_SIGNING_JSON_V2',
           'android-release',
           'prd',
         ]),
@@ -122,9 +179,9 @@ describe('Android signing provisioning', () => {
       const properties = join(root, 'keystore.properties');
       const missing = join(root, 'missing.properties');
       await symlink(missing, properties);
-      await expect(
-        ensureAndroidSigning(directory, properties)
-      ).rejects.toThrow(/broken symlink/);
+      await expect(ensureAndroidSigning(directory, properties)).rejects.toThrow(
+        /broken symlink/
+      );
       expect(await readlink(properties)).toBe(missing);
       await mkdir(directory);
       await expect(
@@ -144,9 +201,7 @@ describe('Android signing provisioning', () => {
       vi.mocked(execFileSync).mockImplementation(() => {
         throw new Error('secret-password');
       });
-      await expect(
-        ensureAndroidSigning(directory, properties)
-      ).rejects.toThrow(
+      await expect(ensureAndroidSigning(directory, properties)).rejects.toThrow(
         'Unable to fetch Android signing credentials. Install the Doppler CLI and authenticate with read access to android-release/prd (CI: DOPPLER_TOKEN). See docs/ANDROID_DEVELOPMENT.md.'
       );
       await expect(stat(directory)).rejects.toMatchObject({ code: 'ENOENT' });
@@ -220,7 +275,7 @@ describe('Android signing provisioning', () => {
 });
 
 describe('APK verification', () => {
-  const metadata = androidReleaseMetadata('v2026.9.28.0');
+  const metadata = androidReleaseMetadata('v2026.9.28.0', releaseConfig);
   const badging = `package: name='${androidPackage}' versionCode='${metadata.versionCode}' versionName='${metadata.version}' platformBuildVersionName='16'\nnative-code: 'arm64-v8a'\n`;
 
   function mockTools(

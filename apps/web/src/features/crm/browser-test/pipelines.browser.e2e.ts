@@ -11,7 +11,9 @@ test('create a private company pipeline and customize a column', async ({
   await page.goto(fixture, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: 'New pipeline', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('radio', { name: 'Just me' })).toBeChecked();
+  await expect(
+    dialog.getByRole('checkbox', { name: 'Share with my team' })
+  ).not.toBeChecked();
   await dialog.getByRole('textbox', { name: 'Pipeline name' }).fill('Renewals');
   await dialog.getByRole('button', { name: 'Create pipeline' }).click();
   await expect(dialog).not.toBeVisible();
@@ -56,16 +58,20 @@ test('contact pipeline preserves choices after a failed create', async ({
   await dialog
     .getByRole('textbox', { name: 'Pipeline name' })
     .fill('Recruiting');
-  await dialog.getByRole('radio', { name: 'Contacts', exact: true }).check();
-  await dialog.getByRole('radio', { name: 'My team' }).check();
+  await dialog.getByRole('button', { name: 'Track Companies' }).click();
+  await page.getByRole('menuitemradio', { name: 'Contacts' }).click();
+  await dialog.getByText('Share with my team').click();
+  await expect(
+    dialog.getByRole('checkbox', { name: 'Share with my team' })
+  ).toBeChecked();
   await dialog.getByRole('button', { name: 'Create pipeline' }).click();
   await expect(dialog.getByRole('alert')).toBeVisible();
   await expect(
     dialog.getByRole('textbox', { name: 'Pipeline name' })
   ).toHaveValue('Recruiting');
   await expect(
-    dialog.getByRole('radio', { name: 'Contacts', exact: true })
-  ).toBeChecked();
+    dialog.getByRole('button', { name: 'Track Contacts' })
+  ).toBeVisible();
   await dialog.getByRole('button', { name: 'Create pipeline' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(

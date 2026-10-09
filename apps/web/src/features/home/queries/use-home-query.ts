@@ -30,7 +30,10 @@ import {
 } from '@entity';
 import { unreadFilterFn } from '@entity/utils/filter';
 import type { UnifiedNotification } from '@notifications/types';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -109,6 +112,12 @@ function matchesTab(
     .exhaustive();
 }
 
+// Cached query meta outlives the view; build the gate at module scope over the
+// plain tab value so it cannot retain this hook's scope.
+function homeTabInsertFilter(tab: HomeTab): SoupApiItemFilter {
+  return (item) => soupItemMatchesHomeTab(item, tab);
+}
+
 /** Shared feed membership for the Home list and its sidebar unread indicator. */
 export function useHomeEntitiesQuery(
   state: Pick<HomeDataSourceInput, 'tab' | 'facets'>
@@ -149,7 +158,7 @@ export function useHomeEntitiesQuery(
       enabled: true,
       showSupportedForeignEntities: foreignEntities().enabled,
       meta: {
-        insertFilter: (item) => soupItemMatchesHomeTab(item, tab),
+        insertFilter: homeTabInsertFilter(tab),
       },
     };
   });

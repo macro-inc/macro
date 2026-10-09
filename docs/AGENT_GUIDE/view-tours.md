@@ -40,7 +40,8 @@ and highlights.
 - **Channels:** channels and DMs, creation, then threads, @mentions, and calls,
   which wait on the channel list until a conversation is open. No Slack action.
 - **Email:** Signal/Noise, tags, then keyboard shortcuts.
-- **Customers:** Board/List, relationship details, then company views.
+- **Customers:** Companies and People records, relationship details, then the
+  **New** menu.
 - **Calendar:** calendar sources and copy availability (beacon on the sidebar
   toggle while the sidebar is collapsed), calendar periods, then event details.
 - **Tasks:** also offers Import from Linear, which opens the CSV importer.

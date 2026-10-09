@@ -18,7 +18,22 @@ maybe_env_vars! {
     /// requests for counted usage present. Required while
     /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
     pub struct AuthenticationServiceSecretKey;
+    /// Comma-separated hosts allowed as `https` OAuth redirect URI destinations
+    /// for MCP clients. Falls back to [`DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS`]
+    /// when unset. Loopback `http` redirect URIs are always allowed and do not
+    /// need to be listed.
+    pub struct McpAllowedRedirectHosts;
 }
+
+/// Hosts trusted to receive an MCP authorization code when
+/// `MCP_ALLOWED_REDIRECT_HOSTS` is unset.
+///
+/// These are the browser-based MCP clients Macro supports, and match the
+/// origins the FusionAuth application already allows. A host absent from this
+/// list cannot be used as a redirect destination, which is what stops an
+/// attacker from registering a client pointing at a callback they control.
+pub const DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS: [&str; 4] =
+    ["claude.ai", "chatgpt.com", "chat.openai.com", "cursor.com"];
 
 env_vars! {
     /// Auth key used by the document storage / search / lexical clients.
@@ -107,6 +122,9 @@ pub struct Config {
     pub document_storage_service_cloudfront_signer_private_key_secret_name:
         DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
     pub mcp_public_url: McpPublicUrl,
+    /// Hosts allowed as `https` MCP OAuth redirect destinations. Falls back to
+    /// [`DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS`] when unset.
+    pub mcp_allowed_redirect_hosts: McpAllowedRedirectHosts,
     pub fusionauth_base_url: FusionauthBaseUrl,
     /// Browser-reachable FusionAuth URL. Falls back to the API base URL when unset.
     pub fusionauth_public_url: FusionauthPublicUrl,

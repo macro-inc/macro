@@ -263,6 +263,36 @@ describe('coordinator runtime protocol', () => {
     expect(valid([{ ...entry, unexpected: true }])).toBe(false);
   });
 
+  it('validates live query cursors and requires a reconciled source', () => {
+    const liveQuery = {
+      id: 'view',
+      document: 'fragment Item on GraphqlSoupDocument { id }',
+      fragmentName: 'Item',
+      since: '1',
+    };
+    const request = {
+      filters: {},
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 20,
+      baseline: [],
+      liveQuery,
+    };
+    const valid = (value: unknown) =>
+      isCacheRequest({ id: 1, kind: 'entity-filter', request: value });
+    expect(valid(request)).toBe(true);
+    expect(
+      valid({ ...request, liveQuery: { ...liveQuery, release: true } })
+    ).toBe(true);
+    expect(valid({ ...request, baseline: undefined })).toBe(false);
+    expect(
+      valid({ ...request, liveQuery: { ...liveQuery, since: '01' } })
+    ).toBe(false);
+    expect(valid({ ...request, liveQuery: { ...liveQuery, id: '' } })).toBe(
+      false
+    );
+  });
+
   it('validates calendar range, commit, and uncertain-event requests', () => {
     const range = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
     const rangeRequest = (request: unknown) =>

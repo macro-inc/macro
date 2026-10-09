@@ -812,6 +812,10 @@ export const warmAgentSessionHandler = async (
 };
 
 /**
+ * A caller holding no grant is answered 401; an id with no session behind it
+at all is answered 404. They used to be the same answer, which left a
+client that read a session before its create had landed unable to tell a
+race it should retry from a refusal it should not.
  * @summary Get an agent session by id.
  */
 export type getAgentSessionResponse200 = {
@@ -829,6 +833,11 @@ export type getAgentSessionResponse403 = {
   status: 403;
 };
 
+export type getAgentSessionResponse404 = {
+  data: string;
+  status: 404;
+};
+
 export type getAgentSessionResponse500 = {
   data: string;
   status: 500;
@@ -840,6 +849,7 @@ export type getAgentSessionResponseSuccess = getAgentSessionResponse200 & {
 export type getAgentSessionResponseError = (
   | getAgentSessionResponse401
   | getAgentSessionResponse403
+  | getAgentSessionResponse404
   | getAgentSessionResponse500
 ) & {
   headers: Headers;

@@ -1,36 +1,7 @@
-export const CRM_VIEWS = [
-  {
-    id: 'people',
-    label: 'People',
-    description: 'Contacts across your teams, combined by email',
-  },
-  {
-    id: 'active',
-    label: 'All companies',
-    description: 'Every visible company in your CRM',
-  },
-  {
-    id: 'my-companies',
-    label: 'My companies',
-    description: 'Companies assigned to you',
-  },
-  {
-    id: 'needs-follow-up',
-    label: 'Needs follow-up',
-    description:
-      'Has a stage other than Churned, with no interaction in the last 14 days',
-  },
-  {
-    id: 'recently-active',
-    label: 'Recently active',
-    description:
-      'Team email activity in the last 7 days. Newly added companies may also appear.',
-  },
-  {
-    id: 'unassigned',
-    label: 'Unassigned',
-    description: 'Companies without an owner',
-  },
+/** The record types the CRM sidebar lists; ids are workspace tabs. */
+export const CRM_RECORDS = [
+  { id: 'active', label: 'Companies' },
+  { id: 'people', label: 'People' },
 ] as const;
 
 export type CrmListConfig = {

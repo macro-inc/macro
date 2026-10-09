@@ -85,6 +85,7 @@ fn typescript() -> Job {
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
         .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
+        .add_step(check_functional_test_types())
         .add_step(check_collaboration_types())
         .add_step(check_lexical_service_types())
         .add_step(test_lexical_service())
@@ -183,10 +184,12 @@ fn build() -> Job {
         .add_step(checkout("Checkout Repo", false))
         .add_step(steps::mount_web_build_check_cache_volume())
         .add_step(steps::setup_nix())
-        .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::setup_reqs_web("Setup", true))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(run_build())
+        // Exercise this revision's cache engine, already compiled by build-dev.
+        .add_step(run_functional_tests())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
@@ -332,6 +335,12 @@ fn check_types() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn check_functional_test_types() -> Step<Run> {
+    Step::new("Check Functional Test Types")
+        .run("bun run --bun --silent tsc --project tests/functional/tsconfig.json")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
 fn check_dynamic_ui_schema() -> Step<Run> {
     Step::new("Check Dynamic UI Schema")
         .run("bun run check-dynamic-ui-schema")
@@ -385,6 +394,12 @@ fn run_tests() -> Step<Run> {
             "VITEST_MODULE_CACHE_DIR",
             vars::VITEST_MODULE_CACHE_VOLUME_DIR,
         ))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+fn run_functional_tests() -> Step<Run> {
+    Step::new("Test Optimistic Mutations in Chromium")
+        .run("bun run test:functional")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

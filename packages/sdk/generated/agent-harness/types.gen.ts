@@ -1847,8 +1847,15 @@ export type GetAgentSessionData = {
 };
 
 export type GetAgentSessionErrors = {
+    /**
+     * the session exists but is not this caller's
+     */
     401: string;
     403: string;
+    /**
+     * no session with this id: not created yet, or deleted since
+     */
+    404: string;
     500: string;
 };
 

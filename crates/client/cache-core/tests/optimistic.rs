@@ -203,6 +203,18 @@ impl Storage for ClaimFailingStorage {
         self.inner.clear().await.unwrap();
         Ok(())
     }
+
+    async fn reset_with_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .reset_with_records(entries, projections)
+            .await
+            .unwrap();
+        Ok(())
+    }
 }
 
 fn query_vars() -> serde_json::Map<String, Json> {
@@ -764,7 +776,7 @@ fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
 }
 
 #[test]
-fn durable_mutations_advance_revision_before_reconciliation() {
+fn reconciliation_failures_do_not_commit_or_publish_partial_state() {
     block_on(async {
         let (mut write_engine, _) = reconciliation_engine().await;
         write_engine.storage().fail_next_queue_load();
@@ -783,7 +795,8 @@ fn durable_mutations_advance_revision_before_reconciliation() {
             Err(EngineError::Storage(ref error))
                 if error.to_string() == "injected reconciliation queue load failure"
         ));
-        assert_eq!(write_engine.current_revision().to_string(), "3");
+        assert_eq!(write_engine.current_revision().to_string(), "2");
+        assert_unsettled(&mut write_engine).await;
 
         let (mut commit_engine, transaction) = reconciliation_engine().await;
         let claim = claim_reconciliation_head(&mut commit_engine).await;
@@ -803,7 +816,8 @@ fn durable_mutations_advance_revision_before_reconciliation() {
             Err(EngineError::Storage(ref error))
                 if error.to_string() == "injected reconciliation queue load failure"
         ));
-        assert_eq!(commit_engine.current_revision().to_string(), "3");
+        assert_eq!(commit_engine.current_revision().to_string(), "2");
+        assert_unsettled(&mut commit_engine).await;
 
         let (mut rollback_engine, transaction) = reconciliation_engine().await;
         let claim = claim_reconciliation_head(&mut rollback_engine).await;
@@ -816,8 +830,33 @@ fn durable_mutations_advance_revision_before_reconciliation() {
             Err(EngineError::Storage(ref error))
                 if error.to_string() == "injected reconciliation queue load failure"
         ));
-        assert_eq!(rollback_engine.current_revision().to_string(), "3");
+        assert_eq!(rollback_engine.current_revision().to_string(), "2");
+        assert_unsettled(&mut rollback_engine).await;
     });
+}
+
+async fn assert_unsettled(engine: &mut Engine<ClaimFailingStorage>) {
+    assert_eq!(
+        engine.storage().load_mutation_queue().await.unwrap().len(),
+        1
+    );
+    let ReadResult::Hit { data } = engine
+        .read_query(None, QUERY, Some("Soup"), &query_vars())
+        .await
+        .unwrap()
+    else {
+        panic!("expected the pending edit to remain visible")
+    };
+    assert_eq!(property_of(&data)["value"]["stringValue"], "doing");
+    let record = engine
+        .storage()
+        .get_batch(&[EntityKey(PROPERTY_KEY.into())])
+        .await
+        .unwrap();
+    let CacheValue::Object(value) = &record[0].as_ref().unwrap().fields["value"] else {
+        panic!("expected the durable base")
+    };
+    assert_eq!(value["value"], CacheValue::String("todo".into()));
 }
 
 #[test]

@@ -70,6 +70,7 @@ fn place_header(name: &str, value: &str) -> Option<HeaderPlacement> {
 pub struct AcpMcpConnector<Client> {
     client: Client,
     pool: Arc<ServerPool>,
+    source: Option<Arc<dyn crate::domain::mcp::SessionMcpSource>>,
 }
 
 impl<Client> AcpMcpConnector<Client>
@@ -92,7 +93,17 @@ where
                 }
             });
         }
-        Self { client, pool }
+        Self {
+            client,
+            pool,
+            source: None,
+        }
+    }
+
+    /// Refresh the session's permitted app list before each native turn.
+    pub fn with_source(mut self, source: Arc<dyn crate::domain::mcp::SessionMcpSource>) -> Self {
+        self.source = Some(source);
+        self
     }
 
     /// The pooled session for `server`, dialing it only when this connector
@@ -177,6 +188,16 @@ impl<Client> McpToolConnector for AcpMcpConnector<Client>
 where
     Client: StreamableHttpClient + Send + Sync,
 {
+    async fn refresh(
+        &self,
+        session: agent_session::domain::model::AgentSessionId,
+        advertised: Vec<agent_client_protocol::schema::v1::McpServer>,
+    ) -> anyhow::Result<Option<Vec<agent_client_protocol::schema::v1::McpServer>>> {
+        match &self.source {
+            Some(source) => source.servers(session, advertised).await.map(Some),
+            None => Ok(None),
+        }
+    }
     #[tracing::instrument(
         skip_all,
         fields(

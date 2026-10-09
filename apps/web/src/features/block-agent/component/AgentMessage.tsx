@@ -247,6 +247,9 @@ function promptAuthorName(
     : idToDisplayName(author.userId);
 }
 
+const AGENT_CONTEXT_OPEN = '<m-agent-context>';
+const PENDING_AGENT_CONTEXT = `${AGENT_CONTEXT_OPEN}{"version":1,"text":""}</m-agent-context>\n\n`;
+
 /**
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
@@ -256,13 +259,28 @@ function promptAuthorName(
 function UserMessage(props: { message: FoldedMessage }) {
   const userId = useUserId();
   const authorName = () => promptAuthorName(props.message.author, userId());
+  // The harness puts context before every prompt it delivers. Until the log
+  // confirms this one, an empty stand-in renders where it will, through the
+  // same markdown, so nothing moves when the real one arrives.
+  const parts = () => {
+    const parts = props.message.parts;
+    if (!props.message.pending) return parts;
+    const first = parts.findIndex((part) => part.kind === 'text');
+    const part = parts[first];
+    if (part?.kind !== 'text' || part.text.startsWith(AGENT_CONTEXT_OPEN))
+      return parts;
+    return parts.map((each, index) =>
+      index === first
+        ? { ...part, text: PENDING_AGENT_CONTEXT + part.text }
+        : each
+    );
+  };
 
   return (
     <div
-      class="flex w-full flex-col items-end gap-0.5 transition-opacity"
+      class="flex w-full flex-col items-end gap-0.5"
       // Still on the wire: the fold shows the prompt before the log confirms
-      // it, and the confirmation clears this in place.
-      classList={{ 'opacity-60': props.message.pending }}
+      // it. It reads as sent at once - dimming it made the wait feel longer.
       aria-busy={props.message.pending || undefined}
       ref={(el) =>
         messageSendMotion(el, () =>
@@ -280,7 +298,7 @@ function UserMessage(props: { message: FoldedMessage }) {
         )}
       </Show>
       <UserMessageBubble>
-        <For each={props.message.parts}>
+        <For each={parts()}>
           {(part, index) => (
             <AgentMessagePart
               part={part}

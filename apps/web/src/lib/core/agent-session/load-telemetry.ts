@@ -38,6 +38,13 @@ export type LoadOutcome =
 export type LoadFailure =
   /** The viewer cannot see the session. */
   | 'access_denied'
+  /**
+   * The session was refused, but this tab had just created it: a create that
+   * had not finished becoming readable, waited out and still refused. Its own
+   * value so a race that outlasts the retries does not land among the real
+   * refusals.
+   */
+  | 'not_ready'
   /** The session row could not be fetched. */
   | 'session_fetch'
   /** The log query failed in transport. */
@@ -216,6 +223,16 @@ export class SessionLoadTrace {
   /** The fetched snapshot is folded and the surface can read the session. */
   folded(foldStartedAt: number): void {
     this.stage('fold', foldStartedAt);
+  }
+
+  /**
+   * The read was refused and tried again, because this tab had created the
+   * session moments earlier and the refusal reads as a create that has not
+   * landed. Recorded so the race stays countable once the retry has stopped
+   * anyone noticing it.
+   */
+  retriedBeforeReady(attempts: number): void {
+    this.#set('agent.session.load.not_ready_retries', attempts);
   }
 
   /**

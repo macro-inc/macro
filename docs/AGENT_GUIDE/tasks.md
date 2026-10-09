@@ -78,6 +78,18 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+Property edits should update the visible task before the save finishes. To verify,
+delay the GraphQL mutation and change Status, an existing Priority, and an unset
+Priority in the list and task detail. In a view grouped by that property, the task
+should move groups and update both counts immediately. Reject a save to check that
+the value, group membership, and counts all roll back without refreshing the page.
+
+For tags, include a task with no prior tag assignment. Delay
+`UpdateEntityPropertyOptions` and the following `EntityProperties` query: the tag
+should appear immediately and stay visible through both responses in the list,
+task header, side panel, and a reopened picker. A rejected save should remove only
+the optimistic tag. Repeat with an existing assignment and with removal.
+
 ## Board layout
 
 Open the icon-only **Task layout** dropdown in the toolbar and choose **Board**
@@ -401,7 +413,9 @@ Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
-and side-panel controls as task detail. Choose Overview or Tasks using the inset
+and side-panel controls as task detail. `Project actions` (the dots button
+after the name) opens the row context menu's entries for this project,
+including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar. In Tasks, an outlined circular search button expands into
 a focused `Search in <project name>` field. Close or Escape clears the query and
 restores focus to the button. The task toolbar stays the same height and scrolls

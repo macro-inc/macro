@@ -165,6 +165,36 @@ pub fn storage_schema_columns(columns: &[ColumnEntry]) -> Vec<SchemaColumn> {
         .collect()
 }
 
+/// The table as the SQL engine's catalog has it, so a view, a fold or a
+/// formula reads its columns as a statement would.
+pub fn engine_table(entry: &StorageTable, database: &str) -> database_sql::catalog::Table {
+    use database_sql::catalog::{Column, ColumnKind as EngineKind, SelectOption, TableSource};
+    database_sql::catalog::Table {
+        id: entry.table.id,
+        database_id: entry.table.database_id,
+        database: database.to_owned(),
+        name: entry.table.name.clone(),
+        source: TableSource::Database,
+        columns: entry
+            .columns
+            .iter()
+            .map(|column| Column {
+                id: column.column.property_definition_id,
+                placement: column.column.id,
+                name: column.name().to_owned(),
+                kind: EngineKind::of(
+                    PropertyType::of(&column.column, &column.definition).cast_kind(),
+                    option_labels(&column.definition)
+                        .into_iter()
+                        .map(|(id, label)| SelectOption { id, label })
+                        .collect(),
+                ),
+                formula: column.column.formula().cloned(),
+            })
+            .collect(),
+    }
+}
+
 /// Assemble the viewer's entries from what the repository returned.
 pub fn build_entries(
     databases: &[Database],
@@ -363,6 +393,7 @@ pub fn storage_schema_image<'a>(
                 definition_name: column.definition.definition.display_name.clone(),
                 definition: column.definition.definition.id,
                 kind: column_kind(&column.column, &column.definition),
+                formula: column.column.formula().cloned(),
                 options: options
                     .into_iter()
                     .map(|option| OptionImage {

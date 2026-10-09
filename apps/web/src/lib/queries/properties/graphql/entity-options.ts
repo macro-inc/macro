@@ -32,6 +32,7 @@ import {
   type EntityPropertyOptionSelection,
   getEntityPropertyOptionDeltas,
 } from '../option-deltas';
+import { buildPropertyAssignmentLinks } from './assignment-links';
 import { toGraphqlPropertyTargetEntityType } from './entity';
 
 export type GraphqlEntityPropertyOptionsInput = {
@@ -55,20 +56,26 @@ function getPropertyDefinitionId(
 }
 
 /**
- * A new assignment must be linked into its entity's properties list. Re-reading
- * that one entity updates the normalized parent for every list/detail consumer.
+ * Recover an absent or incomplete parent when a link recipe cannot apply.
+ * Complete parents are linked atomically from the mutation's response.
  * Never inspect all cached Soup variants here: backfills can exceed the cache's
  * inspection budget, and cache bookkeeping must not prevent the mutation.
  * The descriptor is durable, so an offline commit also reconciles on replay.
  */
-function newPropertyLinkRevalidations(
+function propertyLinkRevalidations(
   entityType: EntityType | PropertyTargetEntityType,
   entityId: string
 ): QueryRevalidation[] {
   if (!getGraphqlCacheHost()) return [];
   const input = buildGraphqlEntitySoupInput(entityType, entityId);
   return input
-    ? [{ document: EntityPropertiesDocument, variables: { input } }]
+    ? [
+        {
+          document: EntityPropertiesDocument,
+          variables: { input },
+          onlyOnLinkFailure: true,
+        },
+      ]
     : [];
 }
 
@@ -80,9 +87,10 @@ function newPropertyLinkRevalidations(
 export async function updateGraphqlEntityPropertyOptions(
   input: GraphqlEntityPropertyOptionsInput
 ): Promise<EntityPropertyOptionSelection[]> {
+  const entityType = toGraphqlPropertyTargetEntityType(input.entityType);
   const variables: UpdateEntityPropertyOptionsMutationVariables = {
     input: {
-      entityType: toGraphqlPropertyTargetEntityType(input.entityType),
+      entityType,
       entityId: input.entityId,
       properties: input.properties.map((update) => {
         const deltas = getEntityPropertyOptionDeltas(
@@ -109,21 +117,32 @@ export async function updateGraphqlEntityPropertyOptions(
     const record = buildOptimisticEntityPropertyOptions(
       update.property,
       update.nextOptionIds,
-      update.assignmentId
+      update.assignmentId,
+      { entityType, entityId: input.entityId }
     );
     return record ? [record] : [];
   });
-  const revalidations =
-    optimisticProperties.length < input.properties.length
-      ? newPropertyLinkRevalidations(input.entityType, input.entityId)
-      : [];
+  // A cached assignment may have been removed/recreated elsewhere. Resolve
+  // every parent link from the committed response, even for an existing ID.
+  const updates = optimisticProperties.flatMap((property) =>
+    buildPropertyAssignmentLinks(
+      entityType,
+      input.entityId,
+      property.id,
+      property.propertyDefinitionId
+    )
+  );
+  const revalidations = propertyLinkRevalidations(
+    input.entityType,
+    input.entityId
+  );
 
   const result = await executeOptimisticMutation(
     getGraphqlSoupClient(),
     UpdateEntityPropertyOptionsDocument,
     variables,
     { updateEntityPropertyOptions: optimisticProperties },
-    { uuid: crypto.randomUUID(), revalidations }
+    { uuid: crypto.randomUUID(), updates, revalidations }
   ).toPromise();
 
   const disposition = optimisticMutationDispositionOf<

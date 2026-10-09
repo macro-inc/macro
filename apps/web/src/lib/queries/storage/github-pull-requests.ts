@@ -10,7 +10,11 @@ import type {
   GithubPullRequest,
   GithubPullRequestsResponse,
 } from '@service-storage/generated/schemas';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import {
+  type QueryFunctionContext,
+  type QueryKey,
+  useQuery,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import {
   documentGithubPullRequestsKeys,
@@ -161,66 +165,83 @@ export async function fetchDocumentGithubPullRequests(
   return mergedResponse;
 }
 
+// Cached callbacks outlive the caller; only the resolved id enters them.
+function documentGithubPullRequestsQueryOptions(
+  documentId: string | null | undefined,
+  enabled: boolean
+) {
+  const queryKey = documentId
+    ? documentGithubPullRequestsKeys.list(documentId).queryKey
+    : documentGithubPullRequestsKeys.list._def;
+
+  return {
+    queryKey,
+    queryFn: ({ client }: QueryFunctionContext) => {
+      if (!documentId) {
+        throw new Error(
+          'Document ID is required to fetch GitHub pull requests'
+        );
+      }
+      return fetchDocumentGithubPullRequests(documentId, {
+        onInitialResponse: (initialResponse) => {
+          client.setQueryData(queryKey, initialResponse);
+        },
+      });
+    },
+    staleTime: DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME,
+    enabled: !!documentId && enabled,
+  };
+}
+
 export function useDocumentGithubPullRequestsQuery(
   documentId: DocumentIdInput,
   enabled?: EnabledInput
 ) {
-  const queryClient = useQueryClient();
+  return useQuery(() =>
+    documentGithubPullRequestsQueryOptions(
+      readDocumentId(documentId),
+      readEnabled(enabled)
+    )
+  );
+}
 
-  return useQuery(() => {
-    const currentDocumentId = readDocumentId(documentId);
-    const currentEnabled = !!currentDocumentId && readEnabled(enabled);
-    const queryKey = currentDocumentId
-      ? documentGithubPullRequestsKeys.list(currentDocumentId).queryKey
-      : documentGithubPullRequestsKeys.list._def;
-
-    return {
-      queryKey,
-      queryFn: () => {
-        if (!currentDocumentId) {
-          throw new Error(
-            'Document ID is required to fetch GitHub pull requests'
-          );
-        }
-        return fetchDocumentGithubPullRequests(currentDocumentId, {
-          onInitialResponse: (initialResponse) => {
-            queryClient.setQueryData(queryKey, initialResponse);
-          },
-        });
-      },
-      staleTime: DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME,
-      enabled: currentEnabled,
-    };
-  });
+// Cached callbacks outlive the caller, so the refresh takes the reference and
+// the keys to invalidate as plain values, never the caller's closures.
+function githubPullRequestRefreshQueryOptions(
+  reference: GithubPullRequestRef | undefined,
+  refreshedKeys: readonly QueryKey[]
+) {
+  return {
+    queryKey: githubPullRequestRefreshKeys.refresh(reference?.githubKey ?? '')
+      .queryKey,
+    enabled: reference !== undefined,
+    queryFn: async ({ client }: QueryFunctionContext) => {
+      const result = await authServiceClient.enrichGithubPullRequests({
+        pullRequests: [reference!],
+      });
+      if (result.isErr()) return false;
+      for (const queryKey of refreshedKeys) {
+        void client.invalidateQueries({ queryKey });
+      }
+      return true;
+    },
+    staleTime: GITHUB_PULL_REQUEST_REFRESH_STALE_TIME,
+    retry: false,
+    refetchOnWindowFocus: false,
+  };
 }
 
 /**
  * Refresh one pull request from GitHub with the viewer's linked account, which
- * rewrites every stored copy, then run `onRefreshed` so readers of the stored
- * copy load it again. Without a linked account, or when GitHub is unavailable,
- * the stored copy stays as it is.
+ * rewrites every stored copy, then invalidate `refreshedKeys` so readers of the
+ * stored copy load it again. Without a linked account, or when GitHub is
+ * unavailable, the stored copy stays as it is.
  */
 export function useRefreshGithubPullRequest(
   pullRequest: Accessor<GithubPullRequestRef | undefined>,
-  onRefreshed: () => void
+  refreshedKeys: Accessor<readonly QueryKey[]>
 ) {
-  return useQuery(() => {
-    const reference = pullRequest();
-    return {
-      queryKey: githubPullRequestRefreshKeys.refresh(reference?.githubKey ?? '')
-        .queryKey,
-      enabled: reference !== undefined,
-      queryFn: async () => {
-        const result = await authServiceClient.enrichGithubPullRequests({
-          pullRequests: [reference!],
-        });
-        if (result.isErr()) return false;
-        onRefreshed();
-        return true;
-      },
-      staleTime: GITHUB_PULL_REQUEST_REFRESH_STALE_TIME,
-      retry: false,
-      refetchOnWindowFocus: false,
-    };
-  });
+  return useQuery(() =>
+    githubPullRequestRefreshQueryOptions(pullRequest(), refreshedKeys())
+  );
 }

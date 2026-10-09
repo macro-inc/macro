@@ -183,7 +183,8 @@ pub fn run() {
         builder = builder
             .plugin(tauri_plugin_android_auth::init())
             .plugin(tauri_plugin_android_mobile::init())
-            .plugin(tauri_plugin_android_push::init());
+            .plugin(tauri_plugin_android_push::init())
+            .plugin(tauri_plugin_network_status::init());
     }
 
     // register the rest of the common plugins
@@ -277,6 +278,7 @@ pub fn run() {
             graphql_cache_plugin::commands::graphql_cache_current_revision,
             graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
             graphql_cache_plugin::commands::graphql_cache_read,
+            graphql_cache_plugin::commands::graphql_cache_watch,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
             graphql_cache_plugin::commands::graphql_cache_entity_filter,

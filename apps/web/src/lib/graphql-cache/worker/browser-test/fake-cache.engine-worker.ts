@@ -17,7 +17,9 @@ import { OWNER_LOCK_RETRY_DELAYS_MS } from '../startup';
 
 declare const self: DedicatedWorkerGlobalScope;
 
-const withVersion = <T extends { coordinatorVersion: 6 }>(
+const withVersion = <
+  T extends { coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION },
+>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({

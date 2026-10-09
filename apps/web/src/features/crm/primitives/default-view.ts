@@ -6,7 +6,6 @@ export function createDefaultCrmView(input: {
   teamLoading: Accessor<boolean>;
   personal: Accessor<CrmViewConfig | undefined>;
   team: Accessor<CrmViewConfig | undefined>;
-  mobile: Accessor<boolean>;
   apply(config: CrmViewConfig): void;
 }) {
   let applied = false;
@@ -15,7 +14,6 @@ export function createDefaultCrmView(input: {
     if (applied || input.personalLoading() || input.teamLoading()) return;
     applied = true;
     const config = input.personal() ?? input.team();
-    if (config)
-      input.apply(input.mobile() ? { ...config, viewMode: 'list' } : config);
+    if (config) input.apply(config);
   });
 }

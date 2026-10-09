@@ -48,6 +48,8 @@ pub struct TurnRequest {
     pub model: String,
     /// Provider-independent effort selected for this session.
     pub reasoning_effort: ReasoningEffort,
+    /// Inference speed applied without changing model or reasoning effort.
+    pub speed: agent::ModelSpeed,
     /// Who this agent is. Folded into every turn's system prompt so the
     /// model can answer "who are you" even when the session has no
     /// instructions. `None` leaves the standing prompt unnamed.

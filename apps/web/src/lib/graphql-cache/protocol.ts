@@ -23,6 +23,14 @@ import type { EntityResolverWire } from './exchange/entity-resolvers';
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+/** Paths come from the schema-aware engine projection, including aliases. */
+export type QueryFieldPatch = { path: (string | number)[]; value: unknown };
+export type QueryUpdate =
+  | { kind: 'hit'; data: unknown; revision: CacheRevision }
+  | { kind: 'patch'; patches: QueryFieldPatch[]; revision: CacheRevision }
+  | { kind: 'miss'; revision: CacheRevision }
+  | { kind: 'unsupported' };
+
 /** Opaque in-memory revision of one live cache engine generation. */
 export type CacheRevision = string & {
   readonly __cacheRevision: unique symbol;
@@ -104,6 +112,14 @@ export const MAX_RECONCILIATION_BASELINE = 5_000;
 
 /** Initial-page candidates, optionally reconciled with same-query server pages. */
 export type EntityFilterCacheArgs = {
+  /** Opt into an engine-maintained fragment view and incremental results. */
+  liveQuery?: {
+    id: string;
+    document: string;
+    fragmentName: string;
+    since?: CacheRevision;
+    release?: boolean;
+  };
   filters: Record<string, unknown>;
   sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';
   sortDirection: 'ASC' | 'DESC';
@@ -115,6 +131,7 @@ export type EntityFilterCacheArgs = {
 };
 
 export type EntityFilterCacheResult =
+  | LiveQueryUpdate
   | {
       kind: 'mail-page';
       revision: CacheRevision;
@@ -141,6 +158,23 @@ export type EntityFilterCacheResult =
     }
   | { kind: 'unsupported' }
   | { kind: 'incomplete'; revision: CacheRevision };
+
+export type LiveQueryUpdate = {
+  kind: 'live-query';
+  revision: CacheRevision;
+  reset: boolean;
+  /** Omitted when the existing order remains valid. */
+  keys?: string[];
+  upserts: SelectedRecordByKeyWire[];
+  patches: Array<{
+    recordKey: string;
+    fields: Array<{ path: Array<string | number>; value: unknown }>;
+    identity: { mutationUuid: string | null; pending: boolean };
+  }>;
+  removed: string[];
+  retainedKeys: string[];
+  optimistic: boolean;
+};
 
 /** Unit of a calendar span: UTC milliseconds, or local days since 1970-01-01. */
 export type CalendarSpanKind = 'timed' | 'allDay';
@@ -486,6 +520,8 @@ export function validateCacheSearchArgs(
 export type QueryRevalidationWire = {
   query: string;
   operationName?: string;
+  /** Run only if the mutation's relation recipes could not all be applied. */
+  onlyOnLinkFailure?: boolean;
   /** Canonical JSON object, kept as text in the durable queue. */
   variablesJson: string;
 };
@@ -562,7 +598,17 @@ export type HydrationResult = HydrationSearchChanges &
     | { kind: 'void'; revision: CacheRevision }
   );
 
+export type RecordFieldChange =
+  | {
+      kind: 'fields';
+      key: string;
+      fields: Record<string, string | number | boolean | null>;
+    }
+  | { kind: 'invalidate'; key: string };
+
 export type WriteResult = HydrationSearchChanges & {
+  /** Effective view changes. Missing metadata requires a conservative reread. */
+  fieldChanges?: RecordFieldChange[];
   /** Bindings omitted while committing an otherwise normalizable response. */
   identityErrors?: string[];
   mutationUuid?: string;
@@ -701,6 +747,8 @@ export type CacheRequest = { id: number } & (
   | { kind: 'inspect-mutations' }
   | {
       kind: 'read';
+      /** Incremental projection; requires a namespaced operation id. */
+      watch?: { since?: CacheRevision };
       opId?: string;
       query: string;
       operationName?: string;
@@ -880,6 +928,7 @@ export type CachePush =
       opIds: string[];
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
+      fieldChanges?: RecordFieldChange[];
     }
   | ({
       kind: 'cache-changed';
@@ -962,15 +1011,43 @@ export function isCacheResponse(value: unknown): value is CacheResponse {
   );
 }
 
+/** Validates patches before they can be applied to live query objects. */
+export function isRecordFieldChanges(
+  value: unknown
+): value is RecordFieldChange[] {
+  return (
+    Array.isArray(value) &&
+    value.every((change) => {
+      if (!isWireRecord(change) || typeof change.key !== 'string') return false;
+      if (change.kind === 'invalidate')
+        return hasOnlyWireKeys(change, ['kind', 'key']);
+      return (
+        change.kind === 'fields' &&
+        hasOnlyWireKeys(change, ['kind', 'key', 'fields']) &&
+        isWireRecord(change.fields) &&
+        Object.values(change.fields).every(
+          (field) =>
+            field === null ||
+            typeof field === 'string' ||
+            typeof field === 'boolean' ||
+            (typeof field === 'number' && Number.isFinite(field))
+        )
+      );
+    })
+  );
+}
+
 /** Strictly validates a pushed cache notification. */
 export function isCachePush(value: unknown): value is CachePush {
   if (!isWireRecord(value)) return false;
   switch (value.kind) {
     case 'ops-affected':
       return (
-        hasOnlyWireKeys(value, ['kind', 'opIds', 'keys']) &&
+        hasOnlyWireKeys(value, ['kind', 'opIds', 'keys', 'fieldChanges']) &&
         isWireStringArray(value.opIds) &&
-        isWireStringArray(value.keys)
+        isWireStringArray(value.keys) &&
+        (value.fieldChanges === undefined ||
+          isRecordFieldChanges(value.fieldChanges))
       );
     case 'cache-changed':
       return (

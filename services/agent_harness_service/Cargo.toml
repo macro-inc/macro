@@ -17,6 +17,7 @@ name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+agent-client-protocol.workspace = true
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }

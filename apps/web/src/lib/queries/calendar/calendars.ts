@@ -5,7 +5,11 @@ import type { VisibleCalendar } from '@service-calendar/generated/schemas/visibl
 import { emailClient } from '@service-email/client';
 import { CalendarsDocument } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import { useGraphqlCalendarHost } from './graphql/flag';
 import { mapVisibleCalendar } from './graphql/map';
@@ -50,24 +54,34 @@ export function useVisibleCalendarsQuery(
     | typeof calendarKeys.visibleCalendars._ctx.graphql.queryKey
   >(() => {
     const host = cacheHost();
-    if (host) {
-      return {
-        queryKey: calendarKeys.visibleCalendars._ctx.graphql.queryKey,
-        queryFn: () => readCalendarList(host),
-        staleTime: Infinity,
-        networkMode: 'offlineFirst' as const,
-        enabled: options?.().enabled !== false,
-        placeholderData: (previous: VisibleCalendar[] | undefined) => previous,
-      };
-    }
-    return {
-      queryKey: calendarKeys.visibleCalendars.queryKey,
-      queryFn: listCalendars,
-      staleTime: CALENDAR_LIST_STALE_TIME,
-      enabled: options?.().enabled !== false,
-      placeholderData: (previous: VisibleCalendar[] | undefined) => previous,
-    };
+    const enabled = options?.().enabled !== false;
+    return host
+      ? cachedVisibleCalendarsQueryOptions(host, enabled)
+      : visibleCalendarsQueryOptions(enabled);
   });
+}
+
+// Cached options outlive the hook. The host is the app-level cache service,
+// not component state, so the factory may close over it.
+function cachedVisibleCalendarsQueryOptions(host: CacheHost, enabled: boolean) {
+  return {
+    queryKey: calendarKeys.visibleCalendars._ctx.graphql.queryKey,
+    queryFn: () => readCalendarList(host),
+    staleTime: Infinity,
+    networkMode: 'offlineFirst' as const,
+    enabled,
+    placeholderData: keepPreviousData,
+  };
+}
+
+function visibleCalendarsQueryOptions(enabled: boolean) {
+  return {
+    queryKey: calendarKeys.visibleCalendars.queryKey,
+    queryFn: listCalendars,
+    staleTime: CALENDAR_LIST_STALE_TIME,
+    enabled,
+    placeholderData: keepPreviousData,
+  };
 }
 
 async function listCalendars() {

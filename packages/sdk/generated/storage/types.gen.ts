@@ -3058,6 +3058,12 @@ export type ColumnChange = {
      */
     option: string;
 } | {
+    /**
+     * The formula, over the table's other columns.
+     */
+    formula: Formula;
+    kind: 'set_formula';
+} | {
     kind: 'delete_option';
     /**
      * The option.
@@ -3068,10 +3074,10 @@ export type ColumnChange = {
 /**
  * How a change touched a column.
  */
-export type ColumnChangeKind = 'create' | 'rename' | 'change_type' | 'delete' | 'add_options' | 'update_option' | 'delete_option' | 'reorder' | 'infer_type' | 'related';
+export type ColumnChangeKind = 'create' | 'rename' | 'change_type' | 'set_formula' | 'delete' | 'add_options' | 'update_option' | 'delete_option' | 'reorder' | 'infer_type' | 'related';
 
 /**
- * A relation column: its cells reference rows of another table.
+ * Column-kind specific configuration stored on the placement.
  */
 export type ColumnConfig = {
     /**
@@ -3083,6 +3089,12 @@ export type ColumnConfig = {
      * Target table.
      */
     table_id: string;
+} | {
+    /**
+     * How its cells are computed.
+     */
+    formula: Formula;
+    kind: 'derived';
 };
 
 /**
@@ -3225,6 +3237,8 @@ export type ColumnResult = {
     kind: 'option_updated';
 } | {
     kind: 'option_deleted';
+} | {
+    kind: 'formula_set';
 };
 
 /**
@@ -6793,6 +6807,43 @@ export type FormTally = {
     questions: Array<QuestionTally>;
 };
 
+/**
+ * An expression over one row's cells.
+ */
+export type Formula = {
+    /**
+     * The column placement.
+     */
+    column: string;
+    kind: 'column';
+} | {
+    kind: 'number';
+    /**
+     * The value; finite.
+     */
+    value: number;
+} | {
+    kind: 'binary';
+    /**
+     * The left operand.
+     */
+    left: Formula;
+    /**
+     * How.
+     */
+    operator: Operator;
+    /**
+     * The right operand.
+     */
+    right: Formula;
+} | {
+    kind: 'negate';
+    /**
+     * The expression negated; a number.
+     */
+    operand: Formula;
+};
+
 export type GenericErrorResponse = {
     /**
      * Indicates if an error occurred
@@ -9251,6 +9302,17 @@ export type NewColumn = {
     type: ColumnKind;
 } | {
     /**
+     * How its cells are computed: arithmetic over the table's number,
+     * date and other derived columns.
+     */
+    formula: Formula;
+    /**
+     * The column's name, unique within the table ignoring case.
+     */
+    name: string;
+    source: 'derived';
+} | {
+    /**
      * The property's definition.
      */
     property: string;
@@ -9513,6 +9575,11 @@ export type OpResult = {
      */
     tables: Array<VersionedTable>;
 };
+
+/**
+ * An arithmetic operator.
+ */
+export type Operator = 'add' | 'subtract' | 'multiply' | 'divide';
 
 /**
  * A select option, by its id or by its label.

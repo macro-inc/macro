@@ -182,6 +182,24 @@ describe('compileToAst', () => {
     });
   });
 
+  it('opts into CRM contacts only through contact filters, excluding every other type', () => {
+    const query = defineQueryFilters(
+      { include: { crmContactHidden: false, crmContactSearch: 'ada' } },
+      { skipTargets: ['crmf'] }
+    );
+    const ast = compileToAst(queryStateFrom(query));
+
+    expect(ast.crmf).toEqual({
+      '&': [{ l: { hidden: false } }, { l: { search: 'ada' } }],
+    });
+    expect(ast.ccf).toEqual({ l: { id: NIL_UUID } });
+    expect(ast.df).toEqual({ l: { id: NIL_UUID } });
+    // Contacts are opt-in, so queries that never mention them carry no crmf.
+    expect(compileToAst(queryStateFrom(defineQueryFilters({}))).crmf).toBe(
+      undefined
+    );
+  });
+
   it('compiles channel message thread ids onto regular channel filters', () => {
     const ast = compileToAst(
       queryStateFrom({
