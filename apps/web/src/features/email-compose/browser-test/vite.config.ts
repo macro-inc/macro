@@ -11,10 +11,28 @@ const workspaceDirectory = fileURLToPath(
   new URL('../../../../../../', import.meta.url)
 );
 
+/**
+ * Back routing needs no panel content, and the real panel mounts most of the
+ * app, so the Android Back fixture gets an empty one.
+ */
+const stubSplitPanel = {
+  name: 'email-compose-fixture-stub-split-panel',
+  enforce: 'pre' as const,
+  resolveId(source: string, importer?: string) {
+    if (
+      source.endsWith('/components/SplitPanel') &&
+      importer?.endsWith('MobileSplitContainer.tsx')
+    ) {
+      return fileURLToPath(new URL('./split-panel-stub.tsx', import.meta.url));
+    }
+  },
+};
+
 export default defineConfig({
   root: directory,
   cacheDir: `${directory}/.vite`,
   plugins: [
+    stubSplitPanel,
     solidPlugin(),
     solidSvg({ defaultAsComponent: true }),
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
@@ -22,10 +40,14 @@ export default defineConfig({
   ],
   resolve: {
     dedupe: ['solid-js'],
-    alias: {
-      '@ui': fileURLToPath(new URL('./ui-shim.ts', import.meta.url)),
-      'loro-crdt': 'loro-crdt/base64',
-    },
+    // Exact matches only: `@ui/…` subpaths resolve to the real components.
+    alias: [
+      {
+        find: /^@ui$/,
+        replacement: fileURLToPath(new URL('./ui-shim.ts', import.meta.url)),
+      },
+      { find: /^loro-crdt$/, replacement: 'loro-crdt/base64' },
+    ],
   },
   server: {
     host: '127.0.0.1',

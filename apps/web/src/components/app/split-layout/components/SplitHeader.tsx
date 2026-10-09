@@ -33,7 +33,7 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
-import { splitBackInterceptor } from '../back-interceptor';
+import { runSplitBack } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
 import {
@@ -132,18 +132,21 @@ function SplitBackButton() {
         !context.handle.canGoBack() &&
         !hasAgentsBackFallback(context.handle.content())
       }
-      onClick={() => {
-        if (splitBackInterceptor()?.()) return;
-        if (
-          !context.handle.canGoBack() &&
-          hasAgentsBackFallback(context.handle.content())
-        ) {
-          context.handle.replace({
-            next: { type: 'component', id: 'agents' },
-            mergeHistory: true,
-          });
-        } else context.handle.goBack();
-      }}
+      onClick={() =>
+        runSplitBack({
+          canGoBack: () =>
+            context.handle.canGoBack() ||
+            hasAgentsBackFallback(context.handle.content()),
+          goBack: () => {
+            if (!context.handle.canGoBack()) {
+              context.handle.replace({
+                next: { type: 'component', id: 'agents' },
+                mergeHistory: true,
+              });
+            } else context.handle.goBack();
+          },
+        })
+      }
     >
       <CaretLeft />
     </Button>
