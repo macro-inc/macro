@@ -7,7 +7,7 @@
 
 use super::*;
 use crate::denormalize::QueryProjection;
-use crate::engine::live_query::LiveFieldPatch;
+use crate::engine::live_query::{LiveFieldPatch, ResponsePathSegment};
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -33,13 +33,92 @@ pub enum QueryUpdate {
         data: Arc<Json>,
         revision: String,
     },
-    /// Selected field replacements, including an empty update for no change.
+    /// Ordered edits, including an empty update for no change.
     Patch {
-        patches: Vec<LiveFieldPatch>,
+        patches: Vec<QueryPatch>,
         revision: String,
     },
     /// Required data is missing; the caller must use its normal network policy.
     Miss { revision: String },
+}
+
+/// One edit of a watched response. Patches apply in order; a path refers to
+/// the response as edited by the preceding patches.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum QueryPatch {
+    /// Replaces the value at an existing path.
+    Set(LiveFieldPatch),
+    /// Edits a keyed list in place. Sent only to subscribers that opted in.
+    Splice(ListSplice),
+}
+
+impl QueryPatch {
+    /// Response path of the replaced value or edited list.
+    pub fn path(&self) -> &[ResponsePathSegment] {
+        match self {
+            Self::Set(patch) => &patch.path,
+            Self::Splice(splice) => &splice.path,
+        }
+    }
+
+    /// JSON values carried to the subscriber, for transport checks.
+    pub fn values(&self) -> impl Iterator<Item = &Json> {
+        let (value, inserted) = match self {
+            Self::Set(patch) => (Some(&patch.value), &[][..]),
+            Self::Splice(splice) => (None, &splice.splice[..]),
+        };
+        value
+            .into_iter()
+            .chain(inserted.iter().filter_map(|op| match op {
+                SpliceOp::Insert { value, .. } => Some(value),
+                _ => None,
+            }))
+    }
+}
+
+/// In-place edits of the list at `path`. Surviving items keep their response
+/// objects, so subscribers retain row state; later patches use new indices.
+#[derive(Debug, Serialize)]
+pub struct ListSplice {
+    /// Path of an existing list.
+    pub path: Vec<ResponsePathSegment>,
+    /// Operations applied in order.
+    pub splice: Vec<SpliceOp>,
+}
+
+/// One keyed list operation. Indices refer to the list as already edited.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum SpliceOp {
+    /// Removes the item at `remove`.
+    Remove {
+        /// Index of the removed item.
+        remove: usize,
+    },
+    /// Inserts `value` at `insert`.
+    Insert {
+        /// Index the new item takes.
+        insert: usize,
+        /// Complete selected value of the new item.
+        value: Json,
+    },
+    /// Removes the item at `move`, then inserts it at `to`.
+    Move {
+        /// Index of the moved item.
+        #[serde(rename = "move")]
+        from: usize,
+        /// Index the item takes after its removal.
+        to: usize,
+    },
+}
+
+/// Capabilities of a watch subscriber.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct WatchOptions {
+    /// The subscriber applies [`QueryPatch::Splice`]. Without it, a keyed list
+    /// whose membership or order changed is replaced at its own path.
+    pub splices: bool,
 }
 
 fn serialize_shared<S: serde::Serializer>(
@@ -55,6 +134,7 @@ struct QuerySpec {
     operation_name: Option<String>,
     variables: serde_json::Map<String, Json>,
     entity_resolvers: Vec<EntityResolver>,
+    options: WatchOptions,
 }
 
 struct QueryWatch {
@@ -152,12 +232,40 @@ impl<S: Storage> Engine<S> {
         entity_resolvers: &[EntityResolver],
         since: Option<CacheRevision>,
     ) -> Result<QueryUpdate, EngineError<S::Error>> {
+        self.watch_query_with_options(
+            op_id,
+            query,
+            operation_name,
+            variables,
+            entity_resolvers,
+            since,
+            WatchOptions::default(),
+        )
+        .await
+    }
+
+    /// [`Self::watch_query`] for a subscriber with the given capabilities.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the ordinary query request plus subscriber capabilities"
+    )]
+    pub async fn watch_query_with_options(
+        &mut self,
+        op_id: OpId,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        entity_resolvers: &[EntityResolver],
+        since: Option<CacheRevision>,
+        options: WatchOptions,
+    ) -> Result<QueryUpdate, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
         let spec = QuerySpec {
             query: query.to_owned(),
             operation_name: operation_name.map(str::to_owned),
             variables: variables.clone(),
             entity_resolvers: entity_resolvers.to_vec(),
+            options,
         };
         let Some(mut view) = self
             .query_watches
@@ -194,7 +302,7 @@ impl<S: Storage> Engine<S> {
         view.bytes = view.bytes.saturating_add_signed(binding_delta + data_delta);
         self.query_watches.put(op_id, view);
         Ok(QueryUpdate::Patch {
-            patches,
+            patches: patches.into_iter().map(QueryPatch::Set).collect(),
             revision: self.revision.to_string(),
         })
     }
@@ -229,7 +337,8 @@ impl<S: Storage> Engine<S> {
         };
         let diff = base.and_then(|base| {
             let budget = (base.bytes / MAX_REPLACED_SHARE).max(MIN_REPLACED_BYTES);
-            diff::diff_response(&base.data, &data, budget).map(|diff| (diff, base.bytes))
+            diff::diff_response(&base.data, &data, budget, spec.options.splices)
+                .map(|diff| (diff, base.bytes))
         });
         let data = Arc::new(data);
         let (update, bytes) = match diff {

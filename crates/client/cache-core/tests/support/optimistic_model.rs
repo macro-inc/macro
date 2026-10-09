@@ -2,8 +2,8 @@
 //! The oracle stores ordinary documents plus ordered pending edits; it does not
 //! normalize records, apply cache recipes, or use cache reads to derive expectations.
 
-use cache_core::engine::live_query::{LiveFieldPatch, ResponsePathSegment};
-use cache_core::engine::watch_query::QueryUpdate;
+use cache_core::engine::live_query::ResponsePathSegment;
+use cache_core::engine::watch_query::{QueryPatch, QueryUpdate, SpliceOp, WatchOptions};
 use cache_core::engine::{BeginOptimisticWrite, Engine, EngineError, ReadResult};
 use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch, RecordRoot};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
@@ -262,33 +262,56 @@ struct Subscriber {
     data: Json,
 }
 
-fn apply_patch(data: &mut Json, patch: LiveFieldPatch) {
+fn apply_patch(data: &mut Json, patch: QueryPatch) {
     let mut target = data;
-    for part in patch.path {
+    for part in patch.path() {
         target = match part {
-            ResponsePathSegment::Field(field) => target.get_mut(&field),
-            ResponsePathSegment::Index(index) => target.get_mut(index),
+            ResponsePathSegment::Field(field) => target.get_mut(field),
+            ResponsePathSegment::Index(index) => target.get_mut(*index),
         }
         .expect("every patch must address an existing subscriber path");
     }
-    assert_ne!(
-        *target, patch.value,
-        "unchanged fields must not be published"
-    );
-    *target = patch.value;
+    match patch {
+        QueryPatch::Set(patch) => {
+            assert_ne!(
+                *target, patch.value,
+                "unchanged fields must not be published"
+            );
+            *target = patch.value;
+        }
+        QueryPatch::Splice(splice) => {
+            let items = target.as_array_mut().expect("splices edit lists");
+            for op in splice.splice {
+                match op {
+                    SpliceOp::Remove { remove } => {
+                        items.remove(remove);
+                    }
+                    SpliceOp::Insert { insert, value } => items.insert(insert, value),
+                    SpliceOp::Move { from, to } => {
+                        let item = items.remove(from);
+                        items.insert(to, item);
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl Subscriber {
     async fn check<S: Storage>(&mut self, engine: &mut Engine<S>, expected: Json) {
         let query = if self.aliased { ALIASED } else { QUERY };
         let update = engine
-            .watch_query(
+            .watch_query_with_options(
                 self.op,
                 query,
                 Some("Page"),
                 &page_variables(self.page, self.show),
                 &[],
                 self.revision,
+                // Alternate subscribers receive splices instead of replacements.
+                WatchOptions {
+                    splices: self.op % 2 == 1,
+                },
             )
             .await
             .unwrap();

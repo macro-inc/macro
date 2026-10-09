@@ -1211,7 +1211,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           variables: args.variables,
           priority: args.priority,
           entityResolvers: args.entityResolvers,
-          watch: { since: args.since },
+          watch: { since: args.since, splices: args.splices },
         },
         args.opKey
       )) as QueryUpdate;

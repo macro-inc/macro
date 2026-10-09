@@ -1105,7 +1105,9 @@ fn query_update_values(
     use cache_core::engine::watch_query::QueryUpdate;
     match update {
         QueryUpdate::Hit { data, .. } => vec![data.as_ref()],
-        QueryUpdate::Patch { patches, .. } => patches.iter().map(|patch| &patch.value).collect(),
+        QueryUpdate::Patch { patches, .. } => {
+            patches.iter().flat_map(|patch| patch.values()).collect()
+        }
         QueryUpdate::Miss { .. } => Vec::new(),
     }
 }
@@ -1359,7 +1361,12 @@ impl CacheEngine {
     }
 
     /// Incrementally projects an ordinary query at one engine revision.
+    /// `splices` declares that the caller applies keyed list splices.
     #[wasm_bindgen(js_name = watchQuery)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "positional wasm-bindgen request fields"
+    )]
     pub fn watch_query(
         &self,
         op_id: String,
@@ -1368,6 +1375,7 @@ impl CacheEngine {
         variables: JsValue,
         entity_resolvers: JsValue,
         since: Option<String>,
+        splices: Option<bool>,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1383,13 +1391,16 @@ impl CacheEngine {
             let op = ops.borrow_mut().intern(&op_id);
             let result = state
                 .engine_mut()?
-                .watch_query(
+                .watch_query_with_options(
                     op,
                     &query,
                     operation_name.as_deref(),
                     &variables,
                     &entity_resolvers,
                     since,
+                    cache_core::engine::watch_query::WatchOptions {
+                        splices: splices.unwrap_or(false),
+                    },
                 )
                 .await;
             let result = state.engine_result(result)?;

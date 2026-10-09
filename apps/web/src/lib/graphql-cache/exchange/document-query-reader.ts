@@ -45,6 +45,7 @@ export function createDocumentQueryReader(
           ...args,
           opKey: key,
           since: base?.revision,
+          splices: true,
         });
         const full = !update || update.kind === 'unsupported';
         const fallback = full ? await host.readQuery(args) : undefined;

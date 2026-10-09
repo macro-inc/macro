@@ -232,12 +232,21 @@ struct Subscriber {
     op: OpId,
     data: Json,
     cursor: Option<CacheRevision>,
+    options: WatchOptions,
 }
 
 impl Subscriber {
     async fn check(&mut self, engine: &mut Engine<InMemoryStorage>) -> Result<(), TestCaseError> {
         let update = engine
-            .watch_query(self.op, QUERY, None, &vars(), &[], self.cursor)
+            .watch_query_with_options(
+                self.op,
+                QUERY,
+                None,
+                &vars(),
+                &[],
+                self.cursor,
+                self.options,
+            )
             .await
             .unwrap();
         let full = engine.read_query(None, QUERY, None, &vars()).await.unwrap();
@@ -269,14 +278,21 @@ proptest! {
                     .collect();
                 run(&mut engine, Edit::Page(initial)).await;
             }
-            // The second subscriber skips reads, so its updates span several revisions.
-            let mut subscribers = [1, 2].map(|op| Subscriber { op, data: Json::Null, cursor: None });
+            // The second subscriber skips reads, so its updates span several
+            // revisions. The third receives list replacements instead of splices.
+            let mut subscribers = [(1, true), (2, true), (3, false)].map(|(op, splices)| Subscriber {
+                op,
+                data: Json::Null,
+                cursor: None,
+                options: WatchOptions { splices },
+            });
             for subscriber in &mut subscribers {
                 subscriber.check(&mut engine).await?;
             }
             for (edit, read_second) in edits {
                 run(&mut engine, edit).await;
                 subscribers[0].check(&mut engine).await?;
+                subscribers[2].check(&mut engine).await?;
                 if read_second {
                     subscribers[1].check(&mut engine).await?;
                 }

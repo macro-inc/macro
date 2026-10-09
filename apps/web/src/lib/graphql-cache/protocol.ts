@@ -25,9 +25,22 @@ export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
 /** Paths come from the schema-aware engine projection, including aliases. */
 export type QueryFieldPatch = { path: (string | number)[]; value: unknown };
+/** One keyed list edit; indices refer to the list as edited by earlier ops. */
+export type QuerySpliceOp =
+  | { remove: number }
+  | { insert: number; value: unknown }
+  | { move: number; to: number };
+/** In-place edit of an existing list. Surviving items keep their objects, and
+ * later patches in the same update use the edited indices. Hosts send these
+ * only to watchers that request `splices`. */
+export type QuerySplicePatch = {
+  path: (string | number)[];
+  splice: QuerySpliceOp[];
+};
+export type QueryPatch = QueryFieldPatch | QuerySplicePatch;
 export type QueryUpdate =
   | { kind: 'hit'; data: unknown; revision: CacheRevision }
-  | { kind: 'patch'; patches: QueryFieldPatch[]; revision: CacheRevision }
+  | { kind: 'patch'; patches: QueryPatch[]; revision: CacheRevision }
   | { kind: 'miss'; revision: CacheRevision }
   | { kind: 'unsupported' };
 
@@ -748,7 +761,8 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'read';
       /** Incremental projection; requires a namespaced operation id. */
-      watch?: { since?: CacheRevision };
+      /** `splices`: the reader applies keyed list splices. */
+      watch?: { since?: CacheRevision; splices?: boolean };
       opId?: string;
       query: string;
       operationName?: string;
