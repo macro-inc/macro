@@ -29,6 +29,7 @@ import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   type Accessor,
@@ -113,6 +114,13 @@ export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
   );
 }
 
+// Every channel host composes the top bar, so the menu's entity-action graph
+// is a chunk of its own rather than weight in each of them.
+const ChannelTitleMenu = lazyNamed(
+  () => import('./ChannelTitleMenu'),
+  'ChannelTitleMenu'
+);
+
 /**
  * The channel's tab strip. Given the top bar's `collapser`, the strip
  * registers as its first item to give up space, dropping text labels for
@@ -189,7 +197,8 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
 /**
  * Channel top bar: leading content and tabs share one priority-collapse row
  * so a narrow pane shrinks the tabs to icons before the title truncates.
- * `leading` replaces the default title (a host's breadcrumbs, say).
+ * `leading` replaces the default title (a host's breadcrumbs, say); the title
+ * menu, tabs, and actions are the bar's own, identical for every host.
  */
 export function ChannelDetailTopBar(
   props: ChannelDetailHeaderProps & { leading?: JSX.Element }
@@ -204,19 +213,24 @@ export function ChannelDetailTopBar(
         class="relative h-full min-w-0 shrink overflow-hidden"
         contentClass="flex h-full items-center gap-3"
       >
-        <DebugSuspense name="ChannelDetail.title">
-          <Show
-            when={props.leading}
-            fallback={
-              <ChannelDetailTitle
-                channelId={props.channelId}
-                fallbackName={props.fallbackName}
-              />
-            }
-          >
-            {props.leading}
-          </Show>
-        </DebugSuspense>
+        <div class="flex min-w-0 shrink items-center gap-1">
+          <DebugSuspense name="ChannelDetail.title">
+            <Show
+              when={props.leading}
+              fallback={
+                <ChannelDetailTitle
+                  channelId={props.channelId}
+                  fallbackName={props.fallbackName}
+                />
+              }
+            >
+              {props.leading}
+            </Show>
+          </DebugSuspense>
+          <DebugSuspense name="ChannelDetail.title-menu">
+            <ChannelTitleMenu channelId={props.channelId} />
+          </DebugSuspense>
+        </div>
         <DebugSuspense name="ChannelDetail.tab-strip">
           <ChannelDetailTabs
             channelId={props.channelId}

@@ -114,23 +114,6 @@ export function filterChannelsForScope(
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
 }
 
-export function channelByIdQueryArgs(channelId: string): SoupAstItemsQueryArgs {
-  return {
-    params: {
-      ...CHANNELS_QUERY_PARAMS,
-      limit: 1,
-      sort_method: 'created_at',
-    },
-    body: compileToAst(
-      queryStateFrom(
-        defineQueryFilters({
-          include: { channelId: [channelId] },
-        })
-      )
-    ),
-  };
-}
-
 /**
  * Fetch specific channels by id, for labelled channels the paginated Channels
  * source has not reached yet. Page through the requested IDs independently
@@ -417,16 +400,4 @@ export function useChannelsSources(
       () => sortBy('threads')
     ),
   };
-}
-
-export function useChannelByIdQuery(
-  channelId: Accessor<string | undefined>,
-  enabled: Accessor<boolean>
-) {
-  return useSoupAstItemsQuery(
-    () => channelByIdQueryArgs(channelId() ?? ''),
-    // Every activation needs a fresh complete edge for thread scoping and marking
-    // read. GraphQL revalidates on activation; keep the REST fallback stale too.
-    () => ({ enabled: enabled(), staleTime: 0 })
-  );
 }

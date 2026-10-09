@@ -6,6 +6,7 @@ import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
+import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -31,7 +32,6 @@ import {
   type ChannelsSources,
   deduplicateChannels,
   resolveSelectedChannel,
-  useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
 import { createChannelDetailSource } from './queries/channel-detail-source';

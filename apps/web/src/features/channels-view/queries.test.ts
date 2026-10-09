@@ -25,11 +25,8 @@ vi.mock('@entity', () => ({
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
-import {
-  resolveReferencedChannels,
-  useChannelByIdQuery,
-  useChannelsSources,
-} from './queries';
+import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
+import { resolveReferencedChannels, useChannelsSources } from './queries';
 
 const channelEntity = (id: string) =>
   ({
