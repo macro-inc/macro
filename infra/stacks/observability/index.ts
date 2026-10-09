@@ -34,6 +34,7 @@ validateSettings({
   grafanaHost,
   otlpHost,
   secretArn,
+  alarmTopicArn,
   volumeId: 'vol-0',
   logsBucket: 'validate-logs',
   tracesBucket: 'validate-traces',
@@ -182,6 +183,23 @@ const policy = new aws.iam.RolePolicy('observability-storage', {
         },
         {
           Effect: 'Allow',
+          Action: [
+            'cloudwatch:ListMetrics',
+            'cloudwatch:GetMetricData',
+            'cloudwatch:GetMetricStatistics',
+          ],
+          Resource: '*',
+          Condition: {
+            StringEquals: { 'aws:RequestedRegion': ['us-east-1', 'us-east-2'] },
+          },
+        },
+        {
+          Effect: 'Allow',
+          Action: ['sns:Publish'],
+          Resource: alarmTopicArn,
+        },
+        {
+          Effect: 'Allow',
           Action: ['cloudwatch:PutMetricData'],
           Resource: '*',
           Condition: {
@@ -256,6 +274,7 @@ const instance = new aws.ec2.Instance(
           grafanaHost,
           otlpHost,
           secretArn,
+          alarmTopicArn,
           volumeId,
           logsBucket,
           tracesBucket,

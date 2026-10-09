@@ -277,7 +277,7 @@ region, hostnames and bucket/volume/secret identifiers.
 It writes a systemd environment file, nginx hostname maps, the secret's identifier
 and the expected volume ID under `/opt/observability`. It does not execute
 user-data or read secret values. The standard NixOS user-data evaluator is disabled.
-Schema version 4 rejects older payloads, unknown settings and caller-supplied files.
+Schema version 5 rejects older payloads, unknown settings and caller-supplied files.
 
 `observability-bootstrap` mounts that exact EBS volume and creates each service's
 data directory using stable, named NixOS users. `prepare-volume.sh` formats only
@@ -323,6 +323,39 @@ guarantee. Producer retries cover rejected requests, not accepted data lost in a
 crash. Metrics remote-write has a local WAL. EBS-backed backend WALs protect data
 already delivered to Loki/Tempo. Establish failure/loss tolerance while Datadog
 still receives the authoritative copy.
+
+## Dashboards and alert migration
+
+Nix provisions the `Macro` dashboard folder, a dev telemetry dashboard, and a
+CloudWatch database/Lambda dashboard. CloudWatch reads native metrics in Virginia;
+these are not a replacement for Datadog database query monitoring, RUM, or anomaly
+models. Grafana uses the EC2 role for regional metric reads and publishing to the
+configured alarm SNS topic. Other unprivileged HTTP/ingest services still cannot
+access instance metadata.
+
+`nixos/alerting.nix` starts with the three dev monitors declared in the monitoring
+stack: DSS errors (1013923), channel-invite spam (4876245), and document text
+extractor failure ratio (1291772). Warning and critical rules are separate and
+mutually exclusive. Their windows and thresholds come from those definitions;
+the Lambda ratio sums four hours ending fifteen minutes ago. No-data is OK for
+these event-count/error-ratio rules, while datasource execution errors remain
+errors. Notification grouping and repeat timing are Grafana settings, not exact
+copies of Datadog notification behavior.
+
+All migrated rules initially remain **paused**. Confirm source coverage and query
+results before enabling each rule. The channel-invite monitor's old `processing
+message` event was not found in current notification source, so it particularly
+needs reconciliation against live logs. Paused rules do not imply healthy coverage.
+Production telemetry monitors remain in Datadog. Complete the live dashboard and
+monitor inventory before claiming parity; repository definitions may have drifted.
+
+The `Macro team email` contact point publishes through SNS using the host role,
+without SMTP credentials. The configured topic already has wolf@macro.com and
+teo@macro.com subscriptions; each recipient must confirm their SNS subscription.
+Test the contact point and verify receipt before relying on notifications.
+
+This release adds `alarmTopicArn` to user-data schema 5. Deploy it together with
+the new reviewed AMI; a schema-4 image cannot boot schema-5 user data.
 
 ## Validation and subsequent passes
 

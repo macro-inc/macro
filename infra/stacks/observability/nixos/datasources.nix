@@ -2,6 +2,17 @@
   apiVersion = 1;
   datasources = [
     {
+      name = "CloudWatch";
+      uid = "cloudwatch";
+      type = "cloudwatch";
+      access = "proxy";
+      editable = false;
+      jsonData = {
+        authType = "default";
+        defaultRegion = "us-east-1";
+      };
+    }
+    {
       name = "Prometheus";
       uid = "prometheus";
       type = "prometheus";

@@ -8,12 +8,12 @@ import urllib.request
 CONFIG_ROOT = Path('/opt/observability')
 SETTING_KEYS = {
     'region', 'grafanaHost', 'otlpHost',
-    'secretArn', 'volumeId', 'logsBucket', 'tracesBucket',
+    'secretArn', 'alarmTopicArn', 'volumeId', 'logsBucket', 'tracesBucket',
 }
 
 
 def validate_payload(payload):
-    if not isinstance(payload, dict) or set(payload) != {'version', 'settings'} or payload['version'] != 4:
+    if not isinstance(payload, dict) or set(payload) != {'version', 'settings'} or payload['version'] != 5:
         raise ValueError('Unsupported observability user-data schema')
     settings = payload['settings']
     if not isinstance(settings, dict) or set(settings) != SETTING_KEYS:
@@ -22,6 +22,7 @@ def validate_payload(payload):
         'region': r'us-east-2',
         'grafanaHost': r'[a-z0-9-]+\.macro-internal\.com',
         'otlpHost': r'[a-z0-9-]+\.macro-internal\.com',
+        'alarmTopicArn': r'arn:aws:sns:us-east-2:\d{12}:[a-zA-Z0-9_-]+',
         'secretArn': r'arn:aws:secretsmanager:us-east-2:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+',
         'volumeId': r'vol-[a-f0-9]+',
         'logsBucket': r'[a-z0-9][a-z0-9-]{1,61}[a-z0-9]',
@@ -39,6 +40,7 @@ def write_runtime(payload, output_root):
     settings = validate_payload(payload)
     environment = {
         'AWS_REGION': settings['region'],
+        'GRAFANA_ALERT_TOPIC_ARN': settings['alarmTopicArn'],
         'GRAFANA_HOST': settings['grafanaHost'],
         'GRAFANA_ROOT_URL': 'https://' + settings['grafanaHost'] + '/',
         'LOGS_BUCKET': settings['logsBucket'],

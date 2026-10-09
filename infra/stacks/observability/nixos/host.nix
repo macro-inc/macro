@@ -80,17 +80,19 @@ in
         PrivateTmp = name != "alloy";
         UMask = lib.mkForce "0077";
         TimeoutStopSec = 90;
-        # Only Loki/Tempo need the EC2 role for S3 access.
+        # Grafana uses the role for CloudWatch reads and SNS notifications.
         IPAddressDeny = lib.optionals (
           !builtins.elem name [
             "loki"
             "tempo"
+            "grafana"
           ]
         ) [ "169.254.169.254/32" ];
       };
     })
     // {
       fetch-ec2-metadata.enable = false;
+      print-host-key.enable = false;
       observability-bootstrap = {
         description = "Validate EC2 settings and mount retained observability storage";
         wantedBy = [ "multi-user.target" ];

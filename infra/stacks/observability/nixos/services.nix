@@ -14,6 +14,10 @@ let
   };
 in
 {
+  imports = [
+    ./dashboards.nix
+    ./alerting.nix
+  ];
   services.grafana = {
     enable = true;
     dataDir = "/srv/observability/grafana";

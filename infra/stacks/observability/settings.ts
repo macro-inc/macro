@@ -3,6 +3,7 @@ export interface Settings {
   grafanaHost: string;
   otlpHost: string;
   secretArn: string;
+  alarmTopicArn: string;
   volumeId: string;
   logsBucket: string;
   tracesBucket: string;
@@ -58,6 +59,7 @@ export function validateSettings(settings: Settings): void {
   }
   validateRegion(settings.region);
   validateRegionalArn(settings.secretArn, 'secretsmanager', settings.region);
+  validateRegionalArn(settings.alarmTopicArn, 'sns', settings.region);
   if (!/^vol-[a-f0-9]+$/.test(settings.volumeId)) {
     throw new Error('Invalid data volume ID');
   }
