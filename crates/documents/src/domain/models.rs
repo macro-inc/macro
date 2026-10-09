@@ -93,6 +93,28 @@ pub struct TeamTaskMetadata {
     pub task_num: i32,
 }
 
+/// A task's number within its team, with the team's slug: `{team_slug}-{task_num}`.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TeamTaskNumber {
+    /// The slug of the team the task is numbered in.
+    pub team_slug: String,
+    /// Monotonic task number within the team.
+    pub task_num: i32,
+}
+
+/// What names a task outside Macro: its title, short id, and team number.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TaskIdentity {
+    /// The task document id.
+    pub document_id: String,
+    /// The task title.
+    pub title: String,
+    /// The short id of the task document.
+    pub short_id: String,
+    /// The task's team number, when it belongs to a team.
+    pub team_task: Option<TeamTaskNumber>,
+}
+
 /// User/team information needed to build a task branch name.
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct BranchNameContext {

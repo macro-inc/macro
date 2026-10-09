@@ -203,7 +203,7 @@ export default function ThemeEdit3() {
             </Select.Trigger>
             <Select.Portal>
               <Layer depth={3}>
-                <Select.Content class="z-action-menu min-w-60 rounded-md border border-edge-muted bg-surface p-1 shadow-lg">
+                <Select.Content class="menu-surface z-action-menu min-w-60 p-1">
                   <Select.Listbox />
                 </Select.Content>
               </Layer>

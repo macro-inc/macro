@@ -260,6 +260,8 @@ pub struct AgentSession {
     pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// The pull request associated with this session, independent of conversation history.
     pub pull_request_url: Option<String>,
+    /// The Macro task the session was explicitly linked to.
+    pub task_id: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,

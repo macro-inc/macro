@@ -310,6 +310,12 @@ in Chromium with mocked session snapshots and realtime invalidation. This UI che
 does not prove live provider discovery; backend tests separately cover delayed
 provider metadata.
 
+When an agent links its session to a task with `macro_internal.link_task`, the
+session header (and the side panel's **Task** row) shows a task chip before the
+PR chip: the task title, or `Task` while loading or without access. Clicking it
+opens the task in a new split (in place on touch devices). Linking a different
+task sends the same session-update notification, so mounted headers refresh.
+
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's
 fields (choice rows with an accent box, an `Other` row when the agent allows a free-text

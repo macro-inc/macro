@@ -86,7 +86,7 @@ export function OptionEditor(props: {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          class="z-action-menu flex w-56 flex-col gap-2.5 rounded-lg border border-edge bg-menu p-2.5 text-xs text-ink shadow-menu outline-none"
+          class="menu-surface z-action-menu flex w-56 flex-col gap-2.5 p-2.5 text-xs outline-none"
           onClick={(event: MouseEvent) => event.stopPropagation()}
           on:keydown={(event) => {
             // Natively, so the popover or menu around it never hears this Escape.
