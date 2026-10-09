@@ -519,6 +519,7 @@ dependencies = [
  "mcp_toolset",
  "memory",
  "model-entity",
+ "model_file_type",
  "model_owner",
  "non_empty",
  "opentelemetry",

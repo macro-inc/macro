@@ -65,7 +65,10 @@ impl AttachmentService for Service {
         self.state.started.notify_one();
         let image = match self.outcome {
             Outcome::Image => ImageData::try_from_bytes(ONE_BY_ONE_PNG.to_vec()).expect("PNG"),
-            Outcome::Url => ImageData::StaticUrl(format!("{BASE}/file/{FILE_ID}")),
+            Outcome::Url => ImageData::StaticUrl {
+                url: format!("{BASE}/file/{FILE_ID}"),
+                mime_type: None,
+            },
             Outcome::Error => {
                 return Attachments::one(Err(ResolutionError::new(
                     EntityType::StaticFile.with_entity_string(entity.entity_id.to_string()),
@@ -129,7 +132,10 @@ fn content(uri: &str) -> AttachmentContent<'static> {
         name: Some("original-name.png".to_owned()),
         content: NonEmpty::new(vec![
             AttachmentPart::Content("caption".to_owned()),
-            AttachmentPart::Image(ImageData::StaticUrl(uri.to_owned())),
+            AttachmentPart::Image(ImageData::StaticUrl {
+                url: uri.to_owned(),
+                mime_type: None,
+            }),
         ])
         .expect("two parts"),
     }
@@ -234,7 +240,7 @@ async fn public_images_are_left_for_the_provider_without_internal_reads() {
         .await
         .expect("resolve");
     assert!(
-        matches!(&attachment(&turn.messages[0]).content[1], AttachmentPart::Image(ImageData::StaticUrl(url)) if url == uri)
+        matches!(&attachment(&turn.messages[0]).content[1], AttachmentPart::Image(ImageData::StaticUrl { url, .. }) if url == uri)
     );
     assert!(state.calls.lock().expect("calls lock").is_empty());
 }

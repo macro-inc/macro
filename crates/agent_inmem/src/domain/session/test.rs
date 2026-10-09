@@ -44,7 +44,8 @@ fn images_become_image_urls_and_other_files_are_named_to_the_model() {
     assert_eq!(contents[0].name.as_deref(), Some("a.png"));
     assert!(matches!(
         &contents[0].content[0],
-        AttachmentPart::Image(ImageData::StaticUrl(url)) if url == "https://x/file/1"
+        AttachmentPart::Image(ImageData::StaticUrl { url, mime_type: Some(mime_type) })
+            if url == "https://x/file/1" && mime_type == "image/png"
     ));
 
     let AttachmentPart::Content(text) = &contents[1].content[0] else {
@@ -77,10 +78,12 @@ fn an_image_the_browser_left_untyped_is_still_handed_over_as_an_image() {
         .map(|resolved| resolved.as_ref().expect("links always resolve"))
         .collect();
 
-    // The name decides, and its case does not matter.
+    // The name decides, and its case does not matter. It also supplies the
+    // media type Gemini requires alongside an image URL.
     assert!(matches!(
         &contents[0].content[0],
-        AttachmentPart::Image(ImageData::StaticUrl(url)) if url == "https://x/file/1"
+        AttachmentPart::Image(ImageData::StaticUrl { url, mime_type: Some(mime_type) })
+            if url == "https://x/file/1" && mime_type == "image/png"
     ));
     // A video and an extensionless file are still named in text.
     assert!(matches!(

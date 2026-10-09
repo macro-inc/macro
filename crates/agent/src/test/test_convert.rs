@@ -505,9 +505,10 @@ fn full_conversation_with_tool_round_trip() {
 fn user_message_with_image_url_attachment_includes_image_content() {
     let msg = user_msg_with_attachment(
         "what is in this image?",
-        vec![AttachmentPart::Image(ImageData::StaticUrl(
-            "https://example.com/cat.png".to_owned(),
-        ))],
+        vec![AttachmentPart::Image(ImageData::StaticUrl {
+            url: "https://example.com/cat.png".to_owned(),
+            mime_type: Some("image/png".to_owned()),
+        })],
     );
     let messages = to_rig_messages(&[msg]);
     assert_eq!(messages.len(), 1);
@@ -531,6 +532,8 @@ fn user_message_with_image_url_attachment_includes_image_content() {
         &image.data,
         DocumentSourceKind::Url(url) if url == "https://example.com/cat.png"
     ));
+    // Gemini refuses an image URL without a media type.
+    assert_eq!(image.media_type, Some(ImageMediaType::PNG));
 }
 
 #[test]
@@ -578,9 +581,10 @@ fn user_message_with_text_attachment_appends_text_block() {
 fn user_message_with_only_attachment_and_empty_text_omits_text_block() {
     let mut msg = user_msg_with_attachment(
         "",
-        vec![AttachmentPart::Image(ImageData::StaticUrl(
-            "https://example.com/x.png".to_owned(),
-        ))],
+        vec![AttachmentPart::Image(ImageData::StaticUrl {
+            url: "https://example.com/x.png".to_owned(),
+            mime_type: None,
+        })],
     );
     msg.content = ChatMessageContent::Text(String::new());
 

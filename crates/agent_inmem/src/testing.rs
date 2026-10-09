@@ -174,7 +174,7 @@ impl TurnEngine for ScriptedEngine {
                     .flat_map(|content| content.content.iter())
                     .filter_map(|part| match part {
                         attachment::AttachmentPart::Image(
-                            attachment::image::ImageData::StaticUrl(url),
+                            attachment::image::ImageData::StaticUrl { url, .. },
                         ) => Some(url.clone()),
                         _ => None,
                     })

@@ -14,6 +14,7 @@ use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentPart, Attachments};
 use dashmap::DashMap;
 use model_entity::EntityType;
+use model_file_type::FileType;
 use non_empty::NonEmpty;
 
 #[cfg(test)]
@@ -141,6 +142,20 @@ fn is_image(attachment: &PromptAttachment) -> bool {
         .is_some_and(|extension| IMAGE_EXTENSIONS.contains(&extension.as_str()))
 }
 
+/// The image's MIME type: the browser's when it named an image type, and
+/// otherwise the one its extension implies.
+fn image_mime_type(attachment: &PromptAttachment) -> Option<String> {
+    attachment
+        .mime_type
+        .clone()
+        .filter(|mime| mime.starts_with("image/"))
+        .or_else(|| {
+            let (_, extension) = attachment.name.rsplit_once('.')?;
+            let file_type = extension.parse::<FileType>().ok()?;
+            Some(file_type.mime_type().to_owned())
+        })
+}
+
 /// One attached file as resolved attachment content.
 ///
 /// Only an HTTPS image is handed over as an image URL: providers refuse plain
@@ -150,7 +165,10 @@ fn attachment_content(attachment: &PromptAttachment) -> AttachmentContent<'stati
     let is_image = is_image(attachment);
     let fetchable = attachment.uri.starts_with("https://");
     let part = if is_image && fetchable {
-        AttachmentPart::Image(ImageData::StaticUrl(attachment.uri.clone()))
+        AttachmentPart::Image(ImageData::StaticUrl {
+            url: attachment.uri.clone(),
+            mime_type: image_mime_type(attachment),
+        })
     } else {
         let kind = attachment.mime_type.as_deref().unwrap_or("unknown type");
         AttachmentPart::Content(format!(

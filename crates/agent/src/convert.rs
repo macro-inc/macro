@@ -4,8 +4,8 @@ use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentPart, Attachments};
 use rig_core::OneOrMany;
 use rig_core::message::{
-    AssistantContent, ImageMediaType, Message, ToolCall, ToolFunction, ToolResultContent,
-    UserContent,
+    AssistantContent, ImageMediaType, Message, MimeType as _, ToolCall, ToolFunction,
+    ToolResultContent, UserContent,
 };
 
 /// Conversion of an attachment value into RIG user-content blocks.
@@ -61,7 +61,13 @@ impl ToUserContent for ImageData {
                 Some(ImageMediaType::WEBP),
                 None,
             ),
-            Self::StaticUrl(url) => UserContent::image_url(url.clone(), None, None),
+            Self::StaticUrl { url, mime_type } => UserContent::image_url(
+                url.clone(),
+                mime_type
+                    .as_deref()
+                    .and_then(ImageMediaType::from_mime_type),
+                None,
+            ),
         };
         vec![content]
     }

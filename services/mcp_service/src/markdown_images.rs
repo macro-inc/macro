@@ -228,7 +228,7 @@ async fn encode_response(url: &str, response: reqwest::Response) -> anyhow::Resu
             data: image.base64_data().to_owned(),
             mime_type: "image/webp".to_owned(),
         }),
-        ImageData::StaticUrl(_) => anyhow::bail!("image encoder returned a url"),
+        ImageData::StaticUrl { .. } => anyhow::bail!("image encoder returned a url"),
     }
 }
 

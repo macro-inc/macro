@@ -70,9 +70,10 @@ impl AttachmentService for Service {
         };
         let parts = match self.outcome {
             Outcome::Text => vec![AttachmentPart::Content("not an image".to_owned())],
-            Outcome::Url => vec![AttachmentPart::Image(ImageData::StaticUrl(
-                "https://unresolved.example/photo.png".to_owned(),
-            ))],
+            Outcome::Url => vec![AttachmentPart::Image(ImageData::StaticUrl {
+                url: "https://unresolved.example/photo.png".to_owned(),
+                mime_type: None,
+            })],
             Outcome::Mixed => vec![
                 image(),
                 AttachmentPart::Content("additional content".to_owned()),

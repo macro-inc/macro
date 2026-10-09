@@ -9,7 +9,13 @@ pub enum ImageData {
     /// A base64-encoded image, potentially re-encoded as WebP.
     Base64(Base64Image),
     /// A publicly accessible URL pointing to the image.
-    StaticUrl(String),
+    StaticUrl {
+        /// Where the image is served.
+        url: String,
+        /// The image's MIME type, when known. Some providers (Gemini) refuse
+        /// an image URL without one.
+        mime_type: Option<String>,
+    },
 }
 
 impl ImageData {
@@ -22,6 +28,11 @@ impl ImageData {
     pub fn try_base64_from_string(s: String) -> Result<Self, anyhow::Error> {
         Base64Image::try_from_string(&s)
             .map(Self::Base64)
-            .or_else(|_| Ok(Self::StaticUrl(s)))
+            .or_else(|_| {
+                Ok(Self::StaticUrl {
+                    url: s,
+                    mime_type: None,
+                })
+            })
     }
 }

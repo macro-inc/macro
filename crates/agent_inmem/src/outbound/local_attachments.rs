@@ -164,7 +164,7 @@ impl<S: AttachmentService> LocalImageResolver<S> {
             for index in 0..content.content.len() {
                 match content.content.get_mut(index).expect("index is in bounds") {
                     AttachmentPart::Image(image) => {
-                        if let ImageData::StaticUrl(uri) = image
+                        if let ImageData::StaticUrl { url: uri, .. } = image
                             && let Some(file_id) = self.file_id(uri)
                         {
                             *image = self.resolve_image(owner, file_id).await?;
