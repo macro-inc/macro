@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, time::Duration};
 
 use axum::http::{
     HeaderName, HeaderValue, Method,
@@ -29,6 +29,10 @@ static EXTRA_HEADERS: [&str; 4] = [
     "tracestate",
     "x-email-link-id",
 ];
+
+/// Chrome caps preflight caching at two hours. Without a max age it caches for
+/// five seconds, so any API call after a short idle pays an extra round trip.
+const PREFLIGHT_MAX_AGE: Duration = Duration::from_secs(2 * 60 * 60);
 
 fn get_allowed_origins() -> Vec<Cow<'static, str>> {
     #[allow(
@@ -86,6 +90,7 @@ pub fn cors_layer_with_headers(additional_headers: Vec<HeaderName>) -> CorsLayer
     );
 
     CorsLayer::new()
+        .max_age(PREFLIGHT_MAX_AGE)
         .allow_credentials(true)
         .allow_headers(headers)
         .allow_methods(vec![

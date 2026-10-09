@@ -40,12 +40,17 @@ impl FormDraftStore for FakeDrafts {
     ) -> Result<(), FormDraftError> {
         let mut world = self.0.lock().unwrap();
         available(&world)?;
+        let remote = world.draft_update_before_next_write.take();
         let snapshot = world
             .drafts
             .get_mut(&id)
             .ok_or_else(|| FormDraftError::Unavailable(rootcause::report!("draft missing")))?;
         let document = LoroDoc::new();
         document.import(snapshot).unwrap();
+        if let Some(remote) = remote {
+            document.import(&remote).unwrap();
+            *snapshot = document.export(ExportMode::Snapshot).unwrap();
+        }
         if document.oplog_vv() != loro::VersionVector::decode(&expected_revision).unwrap() {
             return Err(FormDraftError::Conflict);
         }

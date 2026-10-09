@@ -2,6 +2,7 @@ import {
   type CacheHost,
   type CalendarLinkWatermarkWire,
   type CalendarRangeCacheArgs,
+  type CalendarRangeCacheResult,
   type CalendarSpanWire,
   MAX_RECORD_SELECTION_PAGE_SIZE,
   readRecordsByKeys,
@@ -18,6 +19,12 @@ import type { CalendarOccurrenceQueryRange } from '../keys';
 import type { CalendarOccurrencesData } from '../occurrences';
 import { mapCalendarOccurrence, mapCalendarSyncStatus } from './map';
 import { fetchCached } from './network';
+import {
+  CALENDAR_CACHE_HEAD_START_MS,
+  calendarCacheAnswered,
+  markCalendarCacheAnswered,
+  withinCacheHeadStart,
+} from './readiness';
 
 const MS_PER_DAY = 86_400_000;
 const OCCURRENCE_PAGE_SIZE = 2000;
@@ -265,10 +272,44 @@ async function readOccurrenceItems(
   return items;
 }
 
+// The outstanding first read of each host that has not answered yet.
+const firstReads = new WeakMap<object, Promise<unknown>>();
+
+export type CalendarRangeRead =
+  | { kind: 'range'; data: CalendarOccurrencesData }
+  | { kind: 'unsupported' }
+  | { kind: 'not-ready' };
+
 /**
- * Answers a viewport from the cache, fetching only spans never fetched.
- * Resolves `undefined` when the host cannot serve calendar ranges.
+ * Asks the host for a viewport. A host that has never answered gets a head
+ * start; past it, or while an earlier first read is still outstanding, the
+ * caller reads from REST instead of waiting on cache startup.
  */
+async function askCalendarRange(
+  host: Pick<CacheHost, 'calendarRange'>,
+  args: CalendarRangeCacheArgs,
+  headStartMs: number
+): Promise<CalendarRangeCacheResult | 'not-ready'> {
+  if (calendarCacheAnswered(host)) return host.calendarRange(args);
+  if (firstReads.has(host)) return 'not-ready';
+  const answer = (async (): Promise<CalendarRangeCacheResult | 'not-ready'> => {
+    try {
+      const result = await host.calendarRange(args);
+      if (result.kind === 'range') markCalendarCacheAnswered(host);
+      return result;
+    } catch {
+      // A failed first read leaves the host unanswered: this viewport reads
+      // REST and the next read asks again.
+      return 'not-ready';
+    } finally {
+      firstReads.delete(host);
+    }
+  })();
+  firstReads.set(host, answer);
+  return withinCacheHeadStart(answer, headStartMs);
+}
+
+/** Answers a viewport from the cache, fetching only spans never fetched. */
 export async function readCalendarRange(
   host: Pick<
     CacheHost,
@@ -278,11 +319,18 @@ export async function readCalendarRange(
   options: {
     fetchPage?: FetchCalendarOccurrencePage;
     signal?: AbortSignal;
+    headStartMs?: number;
   } = {}
-): Promise<CalendarOccurrencesData | undefined> {
+): Promise<CalendarRangeRead> {
   const args = toCalendarRangeArgs(range);
-  let result = await host.calendarRange(args);
-  if (result.kind === 'unsupported') return undefined;
+  const first = await askCalendarRange(
+    host,
+    args,
+    options.headStartMs ?? CALENDAR_CACHE_HEAD_START_MS
+  );
+  if (first === 'not-ready') return { kind: 'not-ready' };
+  let result = first;
+  if (result.kind === 'unsupported') return { kind: 'unsupported' };
   if (result.gaps.length > 0) {
     for (const window of calendarGapWindows(result.gaps)) {
       await fetchCalendarWindow(
@@ -293,10 +341,13 @@ export async function readCalendarRange(
       );
     }
     result = await host.calendarRange(args);
-    if (result.kind === 'unsupported') return undefined;
+    if (result.kind === 'unsupported') return { kind: 'unsupported' };
   }
   return {
-    items: await readOccurrenceItems(host, result.occurrenceKeys),
-    syncStatus: latestSyncStatus,
+    kind: 'range',
+    data: {
+      items: await readOccurrenceItems(host, result.occurrenceKeys),
+      syncStatus: latestSyncStatus,
+    },
   };
 }

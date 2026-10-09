@@ -1,13 +1,10 @@
 //! Reuse the database query compiler and fold for host-owned storage reads.
 use crate::domain::{
-    catalog::{PropertyType, StorageTable, option_labels},
+    catalog::{StorageTable, engine_table},
     models::{DatabaseError, RowRef},
     storage::StorageRowsQuery,
 };
-use database_sql::{
-    Catalog, Cell, Row,
-    catalog::{Column, ColumnKind, SelectOption, Table, TableSource},
-};
+use database_sql::{Catalog, Cell, Row};
 use models_databases::{
     OptionId, RowId, ViewId,
     views::{DatabaseView, ViewLayout},
@@ -51,29 +48,7 @@ pub(super) fn rows(
     request: &StorageRowsQuery,
 ) -> Result<Vec<RowId>, DatabaseError> {
     let catalog = Catalog {
-        tables: vec![Table {
-            id: entry.table.id,
-            database_id: entry.table.database_id,
-            database: String::new(),
-            name: entry.table.name.clone(),
-            source: TableSource::Database,
-            columns: entry
-                .columns
-                .iter()
-                .map(|column| Column {
-                    id: column.column.property_definition_id,
-                    placement: column.column.id,
-                    name: column.name().to_owned(),
-                    kind: ColumnKind::of(
-                        PropertyType::of(&column.column, &column.definition).cast_kind(),
-                        option_labels(&column.definition)
-                            .into_iter()
-                            .map(|(id, label)| SelectOption { id, label })
-                            .collect(),
-                    ),
-                })
-                .collect(),
-        }],
+        tables: vec![engine_table(entry, "")],
     };
     let query = if request.row_ids.is_some() {
         Default::default()

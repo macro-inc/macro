@@ -3337,3 +3337,96 @@ async fn user_display_names_join_the_parts_a_user_set() {
         assert_eq!(name.as_deref(), expected);
     }
 }
+
+#[tokio::test]
+async fn github_pull_request_tasks_are_returned_only_for_visible_pull_requests() {
+    let visible_task = "00000000-0000-0000-0000-000000000201";
+    let other_task = "00000000-0000-0000-0000-000000000202";
+    let hidden_task = "00000000-0000-0000-0000-000000000203";
+    let short = |id: &str| short_id_for_entity_id(id).unwrap();
+    let links = vec![
+        ("macro/repo/pull/1".to_string(), short(visible_task)),
+        ("macro/repo/pull/1".to_string(), short(other_task)),
+        ("macro/repo/pull/2".to_string(), short(hidden_task)),
+        (
+            "macro/repo/pull/1".to_string(),
+            "not base58 0OIl".to_string(),
+        ),
+    ];
+    let mut repo = make_mock_repo();
+    repo.expect_get_github_pull_request_task_links()
+        .withf(|keys| {
+            keys == [
+                "macro/repo/pull/1".to_string(),
+                "macro/repo/pull/2".to_string(),
+                "macro/repo/pull/3".to_string(),
+            ]
+        })
+        .return_once(move |_| Box::pin(std::future::ready(Ok(links))));
+    expect_authenticated_team_lookup(&mut repo, Vec::new());
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![
+            make_foreign_entity(
+                uuid::uuid!("00000000-0000-0000-0000-000000000211"),
+                "macro/repo/pull/1",
+                GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+                "macro|user@user.com",
+                "user",
+            ),
+            make_foreign_entity(
+                uuid::uuid!("00000000-0000-0000-0000-000000000212"),
+                "macro/repo/pull/2",
+                GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+                "macro|someone-else@user.com",
+                "user",
+            ),
+        ],
+    );
+
+    let response = service
+        .get_github_pull_request_tasks(
+            "macro|user@user.com",
+            vec![
+                "macro/repo/pull/3".to_string(),
+                "macro/repo/pull/1".to_string(),
+                "macro/repo/pull/2".to_string(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response
+            .pull_requests
+            .iter()
+            .map(|pull_request| (
+                pull_request.github_key.as_str(),
+                pull_request.task_ids.clone()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("macro/repo/pull/3", vec![]),
+            (
+                "macro/repo/pull/1",
+                vec![visible_task.to_string(), other_task.to_string()]
+            ),
+            ("macro/repo/pull/2", vec![]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn github_pull_request_tasks_reject_oversized_lookups() {
+    let service = make_test_service(make_mock_repo());
+    let keys = (1..=101)
+        .map(|number| format!("macro/repo/pull/{number}"))
+        .collect();
+
+    let result = service
+        .get_github_pull_request_tasks("macro|user@user.com", keys)
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
+}

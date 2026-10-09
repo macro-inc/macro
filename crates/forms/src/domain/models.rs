@@ -213,6 +213,16 @@ pub enum FormError {
     /// The durable collaborative draft could not be read or saved.
     #[error("collaboration error: {0}")]
     Collaboration(rootcause::Report),
+    /// AI creation allocated a database but could not finish attaching its form.
+    #[error(
+        "Database {database_id} was retained after incomplete form creation: {source}. Inspect it before creating another form."
+    )]
+    DatabaseRetained {
+        /// Saved identity that must not be duplicated or silently deleted.
+        database_id: DatabaseId,
+        /// The attachment failure, with its original domain meaning.
+        source: Box<FormError>,
+    },
     /// Persistence failure.
     #[error("repository error: {0}")]
     Repository(rootcause::Report),

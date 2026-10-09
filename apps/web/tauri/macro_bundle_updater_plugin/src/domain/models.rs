@@ -111,25 +111,52 @@ pub struct BundleManifest {
     pub bundle_build: u64,
     /// Minimum native app build that can safely run this bundle.
     pub min_native_build: u64,
+    /// Independent mobile build minima for schema 3 bundles.
+    #[serde(default)]
+    pub min_native_builds: Option<MobileBuildMinima>,
     /// Short git SHA used to build the bundle.
     pub git_sha: Option<String>,
     /// Application package version used for the bundle.
     pub app_version: String,
 }
 
+/// Independent native build requirements for a shared bundle.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct MobileBuildMinima {
+    /// Android versionCode.
+    pub android: u64,
+    /// iOS CFBundleVersion.
+    pub ios: u64,
+}
+
 impl BundleManifest {
+    /// Select a native minimum without comparing independent platform numbers.
+    pub fn minimum_for(&self, target: Target) -> Option<u64> {
+        match (self.schema_version, &self.min_native_builds, target) {
+            (2, None, Target::Android) => None,
+            (2, None, _) => Some(self.min_native_build),
+            (3, Some(builds), Target::Android) => Some(builds.android),
+            (3, Some(builds), Target::Ios) => Some(builds.ios),
+            _ => None,
+        }
+    }
+
     /// Read and validate a bundle manifest from disk.
     pub async fn read(path: &Path, fs: &impl FsRepo) -> Option<Self> {
-        let manifest = fs
+        let mut manifest = fs
             .read_to_string(path)
             .await
             .ok()
             .and_then(|s| serde_json::from_str::<Self>(&s).ok())?;
-        if manifest.schema_version == 2 {
-            Some(manifest)
+        let target = if cfg!(target_os = "android") {
+            Target::Android
+        } else if cfg!(target_os = "ios") {
+            Target::Ios
         } else {
-            None
-        }
+            Target::Linux
+        };
+        manifest.min_native_build = manifest.minimum_for(target)?;
+        Some(manifest)
     }
 }
 
@@ -522,3 +549,7 @@ pub enum UpdateStatus {
     /// The update has been applied successfully.
     Completed(CompletedStatus),
 }
+
+#[cfg(test)]
+#[path = "models/test.rs"]
+mod platform_test;

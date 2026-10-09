@@ -287,6 +287,39 @@ impl GithubPullRequestsResponse {
     }
 }
 
+/// The most pull requests one task lookup answers, one Reviews page.
+pub const MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP: usize = 100;
+
+/// Request body for looking up the tasks linked to GitHub pull requests.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasksRequest {
+    /// Pull request `owner/repo/pull/number` keys, at most 100.
+    pub github_keys: Vec<String>,
+}
+
+/// The tasks linked to one GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasks {
+    /// The pull request's `owner/repo/pull/number` key, as requested.
+    pub github_key: String,
+    /// Ids of the task documents the pull request references, oldest link first. Empty when
+    /// the caller cannot see the pull request. The caller may still lack access to a task.
+    pub task_ids: Vec<String>,
+}
+
+/// The tasks linked to each requested GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasksResponse {
+    /// One entry per requested pull request, in request order.
+    pub pull_requests: Vec<GithubPullRequestTasks>,
+}
+
 /// Request body for copying a document.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]

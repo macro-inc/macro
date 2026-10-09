@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
@@ -43,6 +43,10 @@ describe('createTauriCacheHost', () => {
   let eventCallbacks: Map<string, EventCallback>;
   const unlisten = vi.fn();
 
+  afterEach(async () => {
+    await vi.dynamicImportSettled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     eventCallbacks = new Map();
@@ -62,7 +66,7 @@ describe('createTauriCacheHost', () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await expect(host.currentStorageGeneration()).resolves.toBe(generation);
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
-      'graphql_cache_init',
+      'graphql_cache_init_with_schema',
       'graphql_cache_inspect_mutations',
       'graphql_cache_current_storage_generation',
     ]);
@@ -104,9 +108,10 @@ describe('createTauriCacheHost', () => {
     });
     expect(result).toEqual({ kind: 'miss' });
 
-    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init', {
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init_with_schema', {
       scope: 'scope-1',
       hotCapacity: 42,
+      schemaSdl: expect.stringContaining('type GraphqlUser'),
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read', {
       opId: `${host.clientId}:7`,
@@ -120,7 +125,7 @@ describe('createTauriCacheHost', () => {
   it('reports asynchronous native initialization failures', async () => {
     const onInitializationError = vi.fn();
     invokeMock.mockImplementation((command: string) =>
-      command === 'graphql_cache_init'
+      command === 'graphql_cache_init_with_schema'
         ? Promise.reject(new Error('init failed'))
         : Promise.resolve(null)
     );
@@ -169,7 +174,7 @@ describe('createTauriCacheHost', () => {
       })
     );
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
-      'graphql_cache_init',
+      'graphql_cache_init_with_schema',
       'graphql_cache_inspect_mutations',
     ]);
     host.dispose();
@@ -248,7 +253,7 @@ describe('createTauriCacheHost', () => {
       optimistic: false,
     };
     invokeMock.mockImplementation((command: string) =>
-      command === 'graphql_cache_init'
+      command === 'graphql_cache_init_with_schema'
         ? new Promise<void>((resolve) => {
             initialize = resolve;
           })
@@ -263,7 +268,7 @@ describe('createTauriCacheHost', () => {
       mail: { view: 'INBOX', cursor: 'previous-local-cursor' },
     };
     const pending = host.entityFilter(args);
-    await Promise.resolve();
+    await vi.dynamicImportSettled();
     expect(invokeMock).toHaveBeenCalledTimes(1);
     initialize();
     await expect(pending).resolves.toEqual(page);
@@ -311,6 +316,52 @@ describe('createTauriCacheHost', () => {
       }
     }
   );
+
+  it('falls back to full reads when native predates incremental watches', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_watch')
+        throw 'Command graphql_cache_watch not found';
+      if (command === 'graphql_cache_read')
+        return { kind: 'hit', data: { x: 1 } };
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'old-native' });
+    try {
+      const args = { opKey: 1, query: '{ x }' };
+      await expect(host.watchQuery?.(args)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      await expect(host.watchQuery?.(args)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      expect(
+        invokeMock.mock.calls.filter(
+          ([command]) => command === 'graphql_cache_watch'
+        )
+      ).toHaveLength(1);
+      await expect(host.readQuery({ query: '{ x }' })).resolves.toEqual({
+        kind: 'hit',
+        data: { x: 1 },
+      });
+    } finally {
+      host.dispose();
+    }
+  });
+
+  it('surfaces watch failures other than a missing native command', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_watch') throw new Error('storage failed');
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'new-native' });
+    try {
+      await expect(
+        host.watchQuery?.({ opKey: 1, query: '{ x }' })
+      ).rejects.toThrow('storage failed');
+    } finally {
+      host.dispose();
+    }
+  });
 
   it('does not treat an unsupported predicate as a missing native command', async () => {
     const page = emptyMailPage;
@@ -391,6 +442,7 @@ describe('createTauriCacheHost', () => {
       const assertion = expect(host.entityFilter(filterArgs)).rejects.toThrow(
         'graphql cache ipc timeout: graphql_cache_entity_filter'
       );
+      await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
       await assertion;
       invokeMock.mockResolvedValue({ kind: 'unsupported' });
@@ -896,7 +948,7 @@ describe('createTauriCacheHost', () => {
         requestTimeoutMs: 50,
       });
       invokeMock.mockImplementation((command: string) =>
-        command === 'graphql_cache_init' ||
+        command === 'graphql_cache_init_with_schema' ||
         command === 'graphql_cache_inspect_mutations'
           ? Promise.resolve(null)
           : new Promise(() => {})
@@ -906,6 +958,7 @@ describe('createTauriCacheHost', () => {
       const assertion = expect(read).rejects.toThrow(
         'graphql cache ipc timeout: graphql_cache_read'
       );
+      await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
       await assertion;
     } finally {
@@ -917,7 +970,7 @@ describe('createTauriCacheHost', () => {
     vi.useFakeTimers();
     try {
       invokeMock.mockImplementation((command: string) =>
-        command === 'graphql_cache_init' ||
+        command === 'graphql_cache_init_with_schema' ||
         command === 'graphql_cache_inspect_mutations'
           ? Promise.resolve(null)
           : new Promise(() => {})
@@ -945,6 +998,7 @@ describe('createTauriCacheHost', () => {
             settled = true;
           }
         );
+      await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
 
       expect(settled).toBe(false);

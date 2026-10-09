@@ -113,6 +113,8 @@ export type BuildTaskQueryOptions = {
   sort: SortSelection<TaskSortId>[];
   /** Only tasks whose property references this entity. */
   reference?: TaskReferenceScope;
+  /** Board Project columns use the initiative property, not legacy folders. */
+  board?: boolean;
 };
 
 /** Builds the concrete Soup AST used only by the production Tasks view. */
@@ -160,6 +162,12 @@ export function buildTaskQuery(
       sort_direction: sortDirection,
     },
     body,
-    groupBy: taskGroupByField(options.groupBy),
+    groupBy:
+      options.board && options.groupBy === 'project'
+        ? {
+            type: 'property',
+            propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+          }
+        : taskGroupByField(options.groupBy),
   };
 }

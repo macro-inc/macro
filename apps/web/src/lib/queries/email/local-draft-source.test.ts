@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const runtime = vi.hoisted(() => ({
   list: vi.fn<() => Promise<LocalDraft[]>>(),
   listeners: new Set<() => void>(),
+  cacheListeners: new Set<(event: { query: { queryHash: string } }) => void>(),
 }));
 vi.mock('./local-drafts', () => ({
   listLocalDrafts: runtime.list,
@@ -16,9 +17,17 @@ vi.mock('./local-drafts', () => ({
   },
 }));
 vi.mock('../client', () => ({
-  queryClient: { getQueryCache: () => ({ subscribe: () => () => {} }) },
+  queryClient: {
+    getQueryCache: () => ({
+      subscribe(listener: (event: { query: { queryHash: string } }) => void) {
+        runtime.cacheListeners.add(listener);
+        return () => runtime.cacheListeners.delete(listener);
+      },
+    }),
+  },
 }));
 
+import { authKeys } from '../auth/keys';
 import {
   createLocalDraftSource,
   localDraftEntities,
@@ -43,9 +52,32 @@ const draft = (overrides: Partial<LocalDraft> = {}): LocalDraft => ({
 beforeEach(() => {
   runtime.list.mockReset();
   runtime.listeners.clear();
+  runtime.cacheListeners.clear();
 });
 
 describe('local draft discovery', () => {
+  it('never reads view state synchronously from a notification, and skips refreshes once disposed', async () => {
+    runtime.list.mockResolvedValue([]);
+    const enabled = vi.fn(() => true);
+    const dispose = createRoot((dispose) => {
+      createLocalDraftSource(enabled);
+      return dispose;
+    });
+    await Promise.resolve();
+    enabled.mockClear();
+    // Query observers are removed, and notify, while Solid disposes the view.
+    const userInfo = {
+      query: { queryHash: JSON.stringify(authKeys.userInfo.queryKey) },
+    };
+    for (const listener of runtime.cacheListeners) listener(userInfo);
+    for (const listener of runtime.listeners) listener();
+    expect(enabled).not.toHaveBeenCalled();
+    dispose();
+    await Promise.resolve();
+    expect(enabled).not.toHaveBeenCalled();
+    expect(runtime.cacheListeners.size).toBe(0);
+  });
+
   it('does not touch draft storage in REST mode and ignores a late result after disabling', async () => {
     let resolve!: (drafts: LocalDraft[]) => void;
     runtime.list.mockReturnValue(
@@ -83,6 +115,8 @@ describe('local draft discovery', () => {
       expect(state.source.drafts()).toEqual([]);
       runtime.list.mockResolvedValue([draft()]);
       for (const listener of runtime.listeners) listener();
+      // One tick for the deferred refresh, one for the listing it awaits.
+      await Promise.resolve();
       await Promise.resolve();
       expect(state.source.drafts()[0].content.subject).toBe('Recover me');
     } finally {

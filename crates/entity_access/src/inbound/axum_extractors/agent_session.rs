@@ -135,7 +135,17 @@ where
             permission
         };
 
+        // The other refusal: a grant exists but does not reach what this route
+        // asks for. Logged separately from the no-grant case in the service,
+        // because the fix is different - this one is a sharing level, not a
+        // missing or not-yet-committed row.
         if !permission.satisfies::<T>() {
+            tracing::warn!(
+                entity_id = %session_id,
+                entity_type = "agent_session",
+                viewer = macro_user_id.as_deref().map_or("anonymous", AsRef::as_ref),
+                "agent session access denied: grant does not reach the required permission"
+            );
             return Err(ExtractorError::Unauthorized);
         }
 

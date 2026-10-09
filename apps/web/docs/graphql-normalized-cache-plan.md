@@ -2,6 +2,12 @@
 
 Status: **draft / pre-implementation**
 
+Implementation note: document-based live projections are implemented on the
+local-resolvers branch; see [Live query API](#8-live-query-api). Earlier sections
+describe the original cache design.
+See [Testing optimistic live queries](graphql-cache-testing.md) for generated
+state-machine coverage, replay commands, and remaining confidence boundaries.
+
 ## 1. Problem
 
 We are migrating data fetching from REST to GraphQL (urql). We need normalized
@@ -361,6 +367,7 @@ apps/web/tauri/graphql_cache_plugin/ # tauri commands + engine thread wrapping
 apps/web/src/lib/graphql-cache/ # JS glue
   host/                        # CacheHost interface + worker & tauri transports
   exchange/                    # urql normalizedCacheExchange
+  solid/                       # createLiveQuery, the reactive document query
   worker/                      # SharedWorker entry + worker core
 ```
 
@@ -536,3 +543,189 @@ These takeaways originally drove the IDB decision. The current §4.2 topology
 requires SharedWorker for browser caching and deliberately falls back to no
 cache when it is unavailable. Firefox/Safari probe runs and the Tauri IPC
 benchmark were **skipped by decision**.
+
+## 8. Live query API
+
+### Choosing a reactive read
+
+Use one default per data shape:
+
+| Data shape | Default | Notes |
+| --- | --- | --- |
+| GraphQL document | `createLiveQuery` from `@graphql-cache/solid/create-live-query` | Cursor-paginated documents use `createUrqlInfiniteQuery` from `@app/lib/urql-solid`. |
+| Soup list | `createSoupLiveQuery` | Feature code reads it through `useSoupAstItemsQuery`, which adds the GraphQL Soup flag, REST fallback, grouping, and entity mapping. |
+
+`createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
+document and variables are arguments, other options pass through, and the result
+and live projection path are the same. Existing `createUrqlQuery` call sites are
+already live and need no migration; new single-document reads use
+`createLiveQuery`. Soup's maintained-view binding and keyed row projection are
+internal to `src/lib/queries/soup/`, not general query APIs.
+
+### Usage
+
+Use a generated document and reactive variables. The normal urql provider can
+supply the client; pass `client` when using a service-specific client.
+
+```ts
+const accountQuery = createLiveQuery(
+  MailAccountsDocument,
+  () => ({}),
+  () => ({ client: getGraphqlSoupClient(), requestPolicy: 'cache-and-network' })
+);
+
+// Access inside a reactive computation or JSX; don't destructure store fields.
+const accounts = () => accountQuery.data?.user.emailLinks ?? [];
+```
+
+`undefined` variables pause a query. Changing variables creates a separate cache
+identity. `refetch`, request policies, loading/error state and selection functions
+retain the existing urql-solid contract. Existing `createUrqlQuery` and
+`createUrqlInfiniteQuery` consumers use the same live projection path without
+being rewritten; every loaded infinite-query page stays subscribed.
+
+Mutation predictions are keyed by mutation field and registered once per field,
+alongside domain query definitions. A representative generated document names
+the field, types its arguments through the document's variables, and types the
+predicted value through its selection:
+
+```ts
+optimisticResolver(MarkEmailThreadSeenDocument, ({ input }) => ({
+  __typename: 'GraphqlSoupEmailThread',
+  id: input.threadId,
+  isRead: true,
+}));
+
+// Any caller can then execute the ordinary generated mutation, or any other
+// document that selects markEmailThreadSeen.
+await client.mutation(MarkEmailThreadSeenDocument, {
+  input: { threadId },
+}).toPromise();
+```
+
+The representative must pass every field argument as a same-named variable, so
+its variables and the field's arguments coincide. For each mutation without an
+explicit optimistic context, the exchange evaluates every root field's arguments
+against the operation's variables (substituting variables and applying variable
+defaults) and places the resolver's value under that document's response key.
+Predictions are all or nothing: if any root field has no resolver, carries a
+directive such as `@include` or `@skip`, or its resolver returns `undefined`, the
+operation is sent without a prediction. Registering two resolvers for one field
+is an error.
+
+Cache-core normalizes the prediction through the executing document's selection.
+Fields that document does not select are ignored, and selected fields missing
+from the prediction keep their cached values on existing entities. Nested
+response keys come from the representative, so a document that selects a field
+under a different alias does not receive that field's predicted value.
+
+The durable optimistic queue owns ordering, retries, commit and rollback. The
+query author supplies no optimistic callbacks, result traversal or cache writes.
+Both the list and a detail query for that thread observe the same effective
+value. Changes to `isRead` preserve row objects and do not notify subscribers to
+unrelated fields.
+
+### Adoption and mutation coverage
+
+Mounted project details, project identity chips, and agent-session mentions use
+this live path as well. Mention lookups share stable batches: adding another
+visible item does not clear an existing item's data or restart its request.
+Project creation links the complete server-normalized record to its detail query,
+including when the user root is not cached yet. Async creation stops publishing
+after viewer changes, cache replacement, or storage reset.
+Task project assignments use the standard Project entity property and its
+optimistic property mutation; the former task-to-project reference query and
+separate assignment mutations no longer exist. Task creation includes that
+property in its ordinary create request. Project descriptions use the project's
+collaborative surface, provisioned by an authoritative ensure mutation.
+
+Permissions and server-owned membership still revalidate on activity, focus, and
+the existing project polling interval. A denied mounted read stays hidden across
+cache hits until an authorized network response succeeds. Disabled detail reads
+and results for another viewer are not exposed. Mentions also refresh on session
+rename, deletion, metadata updates, and reconnect when the normalized cache is
+unavailable.
+Invalidations arriving during a refresh cause a trailing authorized read instead
+of being discarded; simultaneous refresh requests share one read.
+
+[Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
+35 mutation documents and fails when a document has no declared strategy.
+Because predictions are keyed by mutation field, it also checks that local
+resolver documents select only resolved fields, and that any other document
+reaching a field resolver is a listed exception the resolver declines.
+RenameDatabase and RenameForm call `renameEntities` and so reach its resolver,
+which declines database and form entities; they stay authoritative, and the test
+proves they receive no prediction. Each representative document must declare
+every schema argument of its field with the schema's type:
+
+| Strategy | Operations |
+| --- | --- |
+| Local resolver (7) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, UpdateInitiative, DeleteEntityProperty |
+| Existing domain optimistic recipe (11) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, MarkWorkFeedItemsDone |
+| Authoritative outcome (10) | CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
+| Document only; no production caller (7) | MoveEntities, UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities, SetEntityFavorite |
+
+The project resolver predicts names and members; sharing waits for the server.
+Notification optimism predicts MARK_DONE; conditional seen/reopen transitions
+remain authoritative. Renames patch both displayName and the selected source-name
+alias. Property removal unlinks only the assignment from its parent, retaining a
+rollbackable link until the server confirms deletion.
+
+Server-generated identities, per-task permission outcomes, and exact notification
+IDs used by undo are not fabricated. A queued acknowledgement is not a completed
+server response. GraphQL renames keep optimism in the normalized layer; remaining
+legacy readers revalidate on final settlement instead of retaining independent
+optimistic writes that cannot roll back after an offline queue returns.
+
+```ts
+// Names, members, and property removal require no caller-owned cache writes.
+await client.mutation(UpdateInitiativeDocument, {
+  initiativeId: projectId,
+  input: { name: 'Launch', memberIds: [] },
+}).toPromise();
+
+await client.mutation(DeleteEntityPropertyDocument, {
+  entityType: 'DOCUMENT', entityId: taskId, entityPropertyId: assignmentId,
+}).toPromise();
+```
+
+### Projection contract
+
+Cache-core compiles response paths while reading normalized records. Bindings
+understand response aliases, argument-qualified fields, concrete fragment types,
+variable defaults and `@include`/`@skip`. Identity aliases are supported. A
+subscription retains selected-field bindings rather than another complete
+response. Bindings are bounded by count and estimated retained bytes.
+
+Subsequent reads carry the last accepted engine revision. For scalar, scalar-list
+and opaque-scalar changes, the engine reads only changed dependency records and
+returns response-path patches. The JS adapter preserves immutable urql snapshots
+and applies those paths in one Solid batch. Relationships, embedded-object edits,
+list reordering, invalidation, eviction, cursor mismatch and journal gaps use a
+complete cache read to rebuild bindings. Query teardown and account/engine reset
+discard the corresponding retained state. Unknown directives, schema drift and
+incomplete cached results follow the query's normal network policy; `cache-only`
+never starts a network request.
+
+### Collection semantics and limits
+
+The generic projection reflects cached GraphQL results. It does not infer server
+resolver logic, authorization, aggregates, full-text ranking, or whether an entity
+belongs in an arbitrary filtered/paginated list. Such changes need a declared
+domain collection policy or server revalidation. A Soup page read as a plain
+document would retain its server-provided membership, which is why Soup lists
+use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
+and Mail policy through its predicate adapter. That policy remains outside
+generic cache-core.
+
+Network responses must provide the schema's identity fields (usually `id`, and
+`__typename` for abstract types) for normalization. They are not automatically
+injected. Queries against other schemas, incremental `@defer`/`@stream` delivery
+and arbitrary server-derived mutations are not promises of this API. A mutation
+with no registered prediction still runs normally, and its normalized server
+response updates subscribers. Existing websocket writers provide remote changes;
+this work does not introduce a new server subscription engine.
+
+Background hydration retains its existing opt-in notification contract. Soup's
+local collection source opts in; ordinary foreground queries refresh on their
+normal affected-operation notifications.

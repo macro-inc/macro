@@ -69,7 +69,7 @@ export function SectionCard(props: {
   /** New questions go to this section's end. */
   targeted: boolean;
   onTarget: () => void;
-  /** Adds a question into this section; shown while it is empty. */
+  /** Adds a question into this section; shown after its questions. */
   addQuestion: JSX.Element;
   handle: JSX.Element;
   menu: JSX.Element;
@@ -134,19 +134,12 @@ export function SectionCard(props: {
       </header>
       <div
         data-form-section-list={props.sectionId}
-        class="flex min-h-16 flex-col divide-y divide-edge-divider"
+        class="flex flex-col divide-y divide-edge-divider"
       >
-        <Show
-          when={!props.empty}
-          fallback={
-            <div class="flex min-h-16 flex-col items-center justify-center gap-2 px-4 py-3 text-xs text-ink-muted">
-              <span>No questions yet. Add one, or drag a question here.</span>
-              <div class="w-44">{props.addQuestion}</div>
-            </div>
-          }
-        >
-          {props.children}
-        </Show>
+        <Show when={!props.empty}>{props.children}</Show>
+      </div>
+      <div classList={{ 'border-t border-edge-divider': !props.empty }}>
+        {props.addQuestion}
       </div>
       {props.routing}
     </section>
@@ -183,7 +176,7 @@ export function GateCard(props: {
       data-form-section={props.sectionId}
       data-section-kind="gate"
       class={cn(
-        'overflow-hidden rounded-xl border border-dashed border-edge bg-panel transition-opacity',
+        'overflow-hidden rounded-xl border border-edge bg-surface shadow-xs transition-opacity',
         props.dragging && 'opacity-40'
       )}
     >

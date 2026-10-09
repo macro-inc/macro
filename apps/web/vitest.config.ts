@@ -90,6 +90,17 @@ export default defineConfig({
       '../../packages/collaboration/vitest.transport.config.ts',
       '../../packages/machine/vitest.config.ts',
       {
+        extends: false,
+        test: {
+          name: 'forms-editing-worker',
+          environment: 'node',
+          include: [
+            '../../services/ai-editing-worker/src/forms/**/*.test.ts',
+            '../../services/ai-editing-worker/src/endpoints/forms.test.ts',
+          ],
+        },
+      },
+      {
         // Core package tests
         extends: './src/lib/core/vitest.config.ts',
         test: {

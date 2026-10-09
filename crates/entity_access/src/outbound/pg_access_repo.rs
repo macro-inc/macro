@@ -265,6 +265,18 @@ impl AccessRepository for PgAccessRepository {
         .transpose()
     }
 
+    async fn agent_session_exists(&self, agent_session_id: &str) -> Result<bool, AccessError> {
+        let session = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        Ok(sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM agent_session WHERE id = $1) AS "exists!""#,
+            session,
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
     async fn get_agent_session_access(
         &self,
         agent_session_id: &str,

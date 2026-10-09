@@ -78,6 +78,16 @@ function navigation(onCreate: CreateTable, onSelect = vi.fn()) {
   return onSelect;
 }
 
+async function openNewTable() {
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add table or form' }), {
+    key: 'Enter',
+  });
+  fireEvent.keyDown(
+    await screen.findByRole('menuitem', { name: 'New table' }),
+    { key: 'Enter' }
+  );
+}
+
 describe('table creation and navigation', () => {
   it('renames an inactive tab by double click even when the first click refreshes table objects', async () => {
     const [tables, setTables] = createSignal([
@@ -330,9 +340,13 @@ describe('table creation and navigation', () => {
       entry.targets.has(rail)
     );
     expect(observer).toBeDefined();
-    observer!.resize(rail);
+    for (const entry of ResizeObserverMock.instances) {
+      if (entry.targets.has(rail)) entry.resize(rail);
+    }
     expect(rail.scrollLeft).toBe(230);
-    expect(screen.getByRole('button', { name: 'New table' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Add table or form' })
+    ).toBeTruthy();
   });
 
   it('focuses the name, validates duplicates, creates the named table and opens it', async () => {
@@ -343,7 +357,7 @@ describe('table creation and navigation', () => {
     expect(
       screen.getByRole('tab', { name: 'Tasks' }).getAttribute('aria-selected')
     ).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: 'New table' }));
+    await openNewTable();
     const name = await screen.findByLabelText('Table name');
     await waitFor(() => expect(document.activeElement).toBe(name));
     fireEvent.input(name, { target: { value: ' tasks ' } });
@@ -358,7 +372,26 @@ describe('table creation and navigation', () => {
     fireEvent.submit(name.closest('form')!);
     await waitFor(() => expect(select).toHaveBeenCalledWith('projects'));
     expect(create).toHaveBeenCalledWith('Projects', undefined);
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Table name')).toBeNull()
+    );
+  });
+
+  it('saves an inline table draft on blur and cancels an empty one', async () => {
+    const create = vi.fn<CreateTable>(() =>
+      okAsync({ tableId: 'projects', ready: true })
+    );
+    const select = navigation(create);
+    await openNewTable();
+    fireEvent.blur(await screen.findByLabelText('Table name'));
+    expect(screen.queryByLabelText('Table name')).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+    await openNewTable();
+    const name = await screen.findByLabelText('Table name');
+    fireEvent.input(name, { target: { value: 'Projects' } });
+    fireEvent.blur(name);
+    await waitFor(() => expect(select).toHaveBeenCalledWith('projects'));
+    expect(create).toHaveBeenCalledExactlyOnceWith('Projects', undefined);
   });
 
   it('keeps the draft after a failed create and prevents double submission', async () => {
@@ -374,7 +407,7 @@ describe('table creation and navigation', () => {
         )
     );
     navigation(create);
-    fireEvent.click(screen.getByRole('button', { name: 'New table' }));
+    await openNewTable();
     const name = await screen.findByLabelText('Table name');
     fireEvent.input(name, { target: { value: 'Projects' } });
     fireEvent.submit(name.closest('form')!);
@@ -400,26 +433,28 @@ describe('table creation and navigation', () => {
       )
       .mockReturnValueOnce(okAsync({ tableId: 'projects', ready: true }));
     const select = navigation(create);
-    fireEvent.click(screen.getByRole('button', { name: 'New table' }));
+    await openNewTable();
     const name = await screen.findByLabelText('Table name');
     fireEvent.input(name, { target: { value: 'Projects' } });
     fireEvent.submit(name.closest('form')!);
     await screen.findByRole('alert');
     expect((name as HTMLInputElement).readOnly).toBe(true);
     expect(select).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry setup' }));
+    fireEvent.submit(name.closest('form')!);
     await waitFor(() => expect(select).toHaveBeenCalledWith('projects'));
     expect(create).toHaveBeenLastCalledWith('Projects', 'projects');
   });
 
   it('restores focus on cancel and focuses the name when reopening', async () => {
     navigation(vi.fn<CreateTable>());
-    const trigger = screen.getByRole('button', { name: 'New table' });
-    fireEvent.click(trigger);
-    await screen.findByLabelText('Table name');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const trigger = screen.getByRole('button', { name: 'Add table or form' });
+    await openNewTable();
+    const draft = await screen.findByLabelText('Table name');
+    expect(draft.closest('[role=tablist]')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.keyDown(draft, { key: 'Escape' });
     await waitFor(() => expect(document.activeElement).toBe(trigger));
-    fireEvent.click(trigger);
+    await openNewTable();
     const name = await screen.findByLabelText('Table name');
     await waitFor(() => expect(document.activeElement).toBe(name));
   });

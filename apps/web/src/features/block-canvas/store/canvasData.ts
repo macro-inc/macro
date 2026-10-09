@@ -849,11 +849,13 @@ export const useSaveCanvasDataImmediate = sharedInstance(() => {
     const { file, saved } = await saveCanvasDocument(documentId, canvas);
     if (!saved) {
       console.error('error on canvas save');
+      return false;
     }
 
     setCurrentSavedFile(() => file);
 
     setPendingUpdates(false);
+    return true;
   });
 });
 

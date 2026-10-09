@@ -1,5 +1,6 @@
 import type { DateValue } from '@core/util/date';
 import type { MessageTimelineData } from '@queries/messages/timeline';
+import { timelineMessages } from '@queries/messages/timeline-entries';
 import type { MessageListItem } from '@service-storage/messages';
 
 /** Minimal shape needed by isNewMessage — satisfied by both MessageListItem and EntityMessage. */
@@ -11,7 +12,7 @@ export function flattenMessages(
   if (!data?.pages?.length) return [];
   const all: MessageListItem[] = [];
   for (let i = data.pages.length - 1; i >= 0; i--) {
-    const items = data.pages[i].items;
+    const items = timelineMessages(data.pages[i]);
     for (let j = items.length - 1; j >= 0; j--) {
       all.push(items[j]);
     }

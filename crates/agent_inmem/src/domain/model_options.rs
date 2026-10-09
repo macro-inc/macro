@@ -1,6 +1,6 @@
 //! ACP session configuration advertised by the in-memory agent.
 
-use agent::ReasoningEffort;
+use agent::{ModelSpeed, ReasoningEffort};
 use agent_client_protocol::schema::v1::{
     SessionConfigOption, SessionConfigOptionCategory, SessionConfigSelectOption,
     SessionConfigValueId,
@@ -13,6 +13,7 @@ pub fn session_config_options(
     current_model: &str,
     models: &[&str],
     current_effort: ReasoningEffort,
+    current_speed: ModelSpeed,
 ) -> Vec<SessionConfigOption> {
     let options: Vec<_> = models
         .iter()
@@ -38,7 +39,33 @@ pub fn session_config_options(
             current_effort,
         ));
     }
+    if let Some(speed) = speed_config_option(current_model, current_speed) {
+        config.push(speed);
+    }
     config
+}
+
+/// ACP option for inference speed, available only for supported native models.
+pub fn speed_config_option(model: &str, current: ModelSpeed) -> Option<SessionConfigOption> {
+    let accelerated = [ModelSpeed::Fast, ModelSpeed::Ultrafast]
+        .into_iter()
+        .find(|speed| speed.supported(model))?;
+    Some(SessionConfigOption::select(
+        "speed",
+        "Speed",
+        SessionConfigValueId::new(current.as_str()),
+        vec![
+            SessionConfigSelectOption::new("standard", "Standard"),
+            SessionConfigSelectOption::new(
+                accelerated.as_str(),
+                if accelerated == ModelSpeed::Fast {
+                    "Fast · 2× usage"
+                } else {
+                    "Ultrafast · 6× usage"
+                },
+            ),
+        ],
+    ))
 }
 
 /// ACP id for Macro's portable reasoning-effort selector.
@@ -70,7 +97,12 @@ pub fn reasoning_effort_config_option(
 /// Model discovery uses the same default session configuration as session/new.
 #[must_use]
 pub fn model_config_options(current: &str, models: &[&str]) -> Vec<SessionConfigOption> {
-    session_config_options(current, models, ReasoningEffort::default())
+    session_config_options(
+        current,
+        models,
+        ReasoningEffort::default(),
+        ModelSpeed::Standard,
+    )
 }
 
 #[cfg(test)]

@@ -234,5 +234,7 @@ export function createWorkbookActions(options: {
     addSheet: () => changeSheet(() => options.store.addSheet()),
     duplicateSheet: (id: string) =>
       changeSheet(() => options.store.duplicateSheet(id)),
+    moveSheet: (id: string, index: number) =>
+      changeSheet(() => options.store.moveSheet(id, index)),
   };
 }

@@ -38,10 +38,13 @@ TAURI_CONFIG=$(< "$web/tests/native/tauri.e2e.conf.json")
 export CARGO_TARGET_DIR="$out/cargo"
 \cd "$web/tauri/src-tauri"
 # Dev-protocol binary: Vite serves the real UI. No production bundle or OTA.
-# Keep the dev protocol/UI, but run the database VM with production optimization.
+# Keep the dev protocol/UI, but run the database VM and SQL parser with
+# production optimization. The unoptimized recursive parser has large stack
+# frames that exhaust a Tokio worker stack on valid compound filter queries.
 # Exhaustive matrices execute hundreds of thousands of real indexed queries.
 cargo build --locked -p app --no-default-features \
-  --config 'profile.dev.package.turso_core.opt-level=3'
+  --config 'profile.dev.package.turso_core.opt-level=3' \
+  --config 'profile.dev.package.turso_parser.opt-level=3'
 # Publish atomically so an existing isolated run can finish on its old inode.
 cp "$CARGO_TARGET_DIR/debug/app" "$out/app.next"
 mv "$out/app.next" "$out/app"

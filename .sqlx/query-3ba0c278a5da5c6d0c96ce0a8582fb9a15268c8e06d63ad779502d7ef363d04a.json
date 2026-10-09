@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET sync_token='legacy-after-strict',synced_at=now() WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ba0c278a5da5c6d0c96ce0a8582fb9a15268c8e06d63ad779502d7ef363d04a"
+}

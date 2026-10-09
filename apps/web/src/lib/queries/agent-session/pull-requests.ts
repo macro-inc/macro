@@ -48,6 +48,9 @@ const invalidateLink = ({ sessionId, url }: PullRequestLinkChange) =>
     queryClient.invalidateQueries({
       queryKey: agentSessionPullRequestKeys.forSession(sessionId).queryKey,
     }),
+    queryClient.invalidateQueries({
+      queryKey: agentSessionPullRequestKeys.linksForPullRequests._def,
+    }),
   ]);
 
 /** Link a pull request to a session the caller can edit. */

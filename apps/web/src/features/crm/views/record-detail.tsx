@@ -6,13 +6,13 @@ import { Button, Tooltip } from '@ui';
 import {
   createSignal,
   ErrorBoundary,
+  For,
   type JSX,
   onMount,
   Show,
   Suspense,
 } from 'solid-js';
 import { RecordTabs } from '../components/record-tabs';
-import type { CrmContact as CompanyContact } from '../core/contact';
 import {
   COMPANY_SECTIONS,
   CONTACT_SECTIONS,
@@ -24,47 +24,71 @@ import { Contact } from './contact-detail';
 import { CrmCopyLinkButton } from './copy-link-button';
 import { useCompanyQuery, useContactQuery } from './use-crm';
 
-export function CrmCompanyDetail(props: {
-  company: { id: string; name: string };
+/** A CRM record shown inside the workspace, with its fallback label. */
+export type CrmRecordRef = {
+  type: 'company' | 'contact';
+  id: string;
+  name: string;
+};
+
+const recordKey = (record: CrmRecordRef) => `${record.type}:${record.id}`;
+
+function createRecordName(record: CrmRecordRef): () => string {
+  const fallback =
+    record.name || (record.type === 'company' ? 'Company' : 'Contact');
+  if (record.type === 'company') {
+    const { company } = useCompanyQuery(() => record.id);
+    return () => company()?.name ?? fallback;
+  }
+  const query = useContactQuery(() => record.id);
+  return () => {
+    const contact = query.isSuccess ? query.data : undefined;
+    return contact?.name ?? contact?.email ?? fallback;
+  };
+}
+
+/**
+ * Records opened inside the CRM workspace. Each opened record appends a
+ * breadcrumb after the originating view; reopening one already in the trail
+ * returns to it.
+ */
+export function CrmRecordDetail(props: {
+  record: CrmRecordRef;
   viewName: string;
   onClose: () => void;
   navigation: JSX.Element;
 }) {
-  const { query, company } = useCompanyQuery(() => props.company.id);
-  const companyName = () => company()?.name ?? props.company.name;
-  const [selectedContact, setSelectedContact] = createSignal<CompanyContact>();
+  const [trail, setTrail] = createSignal<CrmRecordRef[]>([props.record]);
+  const current = () => trail()[trail().length - 1];
   const [companySection, setCompanySection] =
     createSignal<CompanySection>('overview');
   const [contactSection, setContactSection] =
     createSignal<ContactSection>('overview');
-  const openContact = (contact: CompanyContact) => {
-    setContactSection('overview');
-    setSelectedContact(contact);
+  const returnTo = (index: number) =>
+    setTrail((records) => records.slice(0, index + 1));
+  const open = (record: CrmRecordRef) => {
+    const index = trail().findIndex(
+      (entry) => recordKey(entry) === recordKey(record)
+    );
+    if (index !== -1) return returnTo(index);
+    if (record.type === 'company') setCompanySection('overview');
+    else setContactSection('overview');
+    setTrail((records) => [...records, record]);
   };
-  const contactQuery = useContactQuery(() => selectedContact()?.id ?? '');
-  const contactName = () => {
-    const contact = contactQuery.isSuccess
-      ? contactQuery.data
-      : selectedContact();
-    return contact?.name ?? contact?.email ?? 'Contact';
-  };
-  const closeContact = () => setSelectedContact(undefined);
-  const activeQuery = () => (selectedContact() ? contactQuery : query);
-  const closeDetail = () =>
-    selectedContact() ? closeContact() : props.onClose();
+  const back = () =>
+    trail().length > 1 ? returnTo(trail().length - 2) : props.onClose();
   let container: HTMLDivElement | undefined;
   onMount(() => container?.focus());
 
   return (
     <ViewBreadcrumbs.Root
-      value={
-        selectedContact()
-          ? `contact:${selectedContact()!.id}`
-          : `company:${props.company.id}`
-      }
+      value={recordKey(current())}
       onChange={(value) => {
-        if (value === 'crm-view') props.onClose();
-        if (value === `company:${props.company.id}`) closeContact();
+        if (value === 'crm-view') return props.onClose();
+        const index = trail().findIndex(
+          (record) => recordKey(record) === value
+        );
+        if (index !== -1) returnTo(index);
       }}
     >
       <ViewBreadcrumbs.Item
@@ -83,46 +107,37 @@ export function CrmCompanyDetail(props: {
           </Tooltip>
         )}
       </ViewBreadcrumbs.Item>
-      <ViewBreadcrumbs.Item
-        value={`company:${props.company.id}`}
-        metadata={{ type: 'company', id: props.company.id }}
-        order={1}
-      >
-        {(item) => (
-          <Tooltip label={companyName()} class="min-w-0">
-            <ViewBreadcrumbs.Button
-              isActive={item.isActive()}
-              onClick={item.onSelect}
-              class="gap-1.5"
+      <For each={trail()}>
+        {(record, index) => {
+          const name = createRecordName(record);
+          return (
+            <ViewBreadcrumbs.Item
+              value={recordKey(record)}
+              metadata={{ type: record.type, id: record.id }}
+              order={index() + 1}
             >
-              <EntityIcon targetType="crm_company" size="xs" class="shrink-0" />
-              <span class="truncate">{companyName()}</span>
-            </ViewBreadcrumbs.Button>
-          </Tooltip>
-        )}
-      </ViewBreadcrumbs.Item>
-      <Show when={selectedContact()} keyed>
-        {(contact) => (
-          <ViewBreadcrumbs.Item
-            value={`contact:${contact.id}`}
-            metadata={{ type: 'contact', id: contact.id }}
-            order={2}
-          >
-            {(item) => (
-              <Tooltip label={contactName()} class="min-w-0">
-                <ViewBreadcrumbs.Button
-                  isActive={item.isActive()}
-                  onClick={item.onSelect}
-                  class="gap-1.5"
-                >
-                  <EntityIcon targetType="contact" size="xs" class="shrink-0" />
-                  <span class="truncate">{contactName()}</span>
-                </ViewBreadcrumbs.Button>
-              </Tooltip>
-            )}
-          </ViewBreadcrumbs.Item>
-        )}
-      </Show>
+              {(item) => (
+                <Tooltip label={name()} class="min-w-0">
+                  <ViewBreadcrumbs.Button
+                    isActive={item.isActive()}
+                    onClick={item.onSelect}
+                    class="gap-1.5"
+                  >
+                    <EntityIcon
+                      targetType={
+                        record.type === 'company' ? 'crm_company' : 'contact'
+                      }
+                      size="xs"
+                      class="shrink-0"
+                    />
+                    <span class="truncate">{name()}</span>
+                  </ViewBreadcrumbs.Button>
+                </Tooltip>
+              )}
+            </ViewBreadcrumbs.Item>
+          );
+        }}
+      </For>
       <SidePanel.Root floating defaultOpen={false}>
         <div
           ref={container}
@@ -137,7 +152,7 @@ export function CrmCompanyDetail(props: {
             />
             <div class="min-w-0 overflow-x-auto">
               <Show
-                when={selectedContact()}
+                when={current().type === 'contact'}
                 fallback={
                   <RecordTabs
                     sections={COMPANY_SECTIONS}
@@ -154,81 +169,47 @@ export function CrmCompanyDetail(props: {
               </Show>
             </div>
             <div class="ml-auto flex shrink-0 items-center gap-1">
-              <CrmCopyLinkButton
-                type={selectedContact() ? 'contact' : 'company'}
-                id={selectedContact()?.id ?? props.company.id}
-              />
+              <CrmCopyLinkButton type={current().type} id={current().id} />
               <SidePanel.Toggle />
             </div>
           </div>
           <div class="relative min-h-0 min-w-0 flex-1">
-            <Show when={selectedContact()?.id ?? props.company.id} keyed>
-              {(_recordId) => (
-                <ErrorBoundary
-                  fallback={(error, reset) => {
-                    console.error('Failed to render CRM record', error);
-                    return (
-                      <DetailError
-                        onRetry={reset}
-                        onClose={closeDetail}
-                        isContact={!!selectedContact()}
-                      />
-                    );
-                  }}
+            <Show when={current()} keyed>
+              {(record) => (
+                <RecordContent
+                  record={record}
+                  nested={trail().length > 1}
+                  onBack={back}
                 >
                   <Show
-                    when={!activeQuery().isError}
+                    when={record.type === 'contact'}
                     fallback={
-                      <DetailError
-                        onRetry={() => void activeQuery().refetch()}
-                        onClose={closeDetail}
-                        isContact={!!selectedContact()}
+                      <Company
+                        companyId={record.id}
+                        section={companySection()}
+                        headerToggle={false}
+                        onHidden={back}
+                        onOpenContact={(contact) =>
+                          open({
+                            type: 'contact',
+                            id: contact.id,
+                            name: contact.name ?? contact.email,
+                          })
+                        }
                       />
                     }
                   >
-                    <Suspense
-                      fallback={
-                        <div class="grid size-full place-items-center text-ink-muted">
-                          <SpinnerIcon
-                            aria-label={
-                              selectedContact()
-                                ? 'Loading contact'
-                                : 'Loading company'
-                            }
-                            class="size-5 animate-spin"
-                          />
-                        </div>
-                      }
-                    >
-                      <Show
-                        when={selectedContact()}
-                        keyed
-                        fallback={
-                          <Company
-                            companyId={props.company.id}
-                            section={companySection()}
-                            headerToggle={false}
-                            onHidden={props.onClose}
-                            onOpenContact={openContact}
-                          />
-                        }
-                      >
-                        {(contact) => (
-                          <Contact
-                            contactId={contact.id}
-                            section={contactSection()}
-                            headerToggle={false}
-                            onOpenCompany={(companyId) => {
-                              if (companyId !== props.company.id) return false;
-                              closeContact();
-                              return true;
-                            }}
-                          />
-                        )}
-                      </Show>
-                    </Suspense>
+                    <Contact
+                      contactId={record.id}
+                      section={contactSection()}
+                      headerToggle={false}
+                      onOpenCompany={(companyId) => {
+                        open({ type: 'company', id: companyId, name: '' });
+                        return true;
+                      }}
+                    />
                   </Show>
-                </ErrorBoundary>
+                </RecordContent>
               )}
             </Show>
           </div>
@@ -238,20 +219,64 @@ export function CrmCompanyDetail(props: {
   );
 }
 
+function RecordContent(props: {
+  record: CrmRecordRef;
+  nested: boolean;
+  onBack: () => void;
+  children: JSX.Element;
+}) {
+  const query =
+    props.record.type === 'company'
+      ? useCompanyQuery(() => props.record.id).query
+      : useContactQuery(() => props.record.id);
+  const error = (onRetry: () => void) => (
+    <DetailError
+      onRetry={onRetry}
+      onBack={props.onBack}
+      record={props.record.type}
+      nested={props.nested}
+    />
+  );
+  return (
+    <ErrorBoundary
+      fallback={(cause, reset) => {
+        console.error('Failed to render CRM record', cause);
+        return error(reset);
+      }}
+    >
+      <Show when={!query.isError} fallback={error(() => void query.refetch())}>
+        <Suspense
+          fallback={
+            <div class="grid size-full place-items-center text-ink-muted">
+              <SpinnerIcon
+                aria-label={`Loading ${props.record.type}`}
+                class="size-5 animate-spin"
+              />
+            </div>
+          }
+        >
+          {props.children}
+        </Suspense>
+      </Show>
+    </ErrorBoundary>
+  );
+}
+
 function DetailError(props: {
   onRetry: () => void;
-  onClose: () => void;
-  isContact: boolean;
+  onBack: () => void;
+  record: CrmRecordRef['type'];
+  nested: boolean;
 }) {
   return (
     <div class="flex size-full flex-col items-center justify-center gap-3 text-sm text-ink-muted">
-      <p>This {props.isContact ? 'contact' : 'company'} couldn’t be loaded.</p>
+      <p>This {props.record} couldn’t be loaded.</p>
       <div class="flex gap-2">
         <Button variant="outline" size="sm" onClick={props.onRetry}>
           Try again
         </Button>
-        <Button variant="ghost" size="sm" onClick={props.onClose}>
-          {props.isContact ? 'Back to company' : 'Back to view'}
+        <Button variant="ghost" size="sm" onClick={props.onBack}>
+          {props.nested ? 'Go back' : 'Back to view'}
         </Button>
       </div>
     </div>

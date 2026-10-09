@@ -41,6 +41,7 @@ struct RecordedRequest {
     limit: u16,
     /// Inbox IDs attached to the request.
     link_ids: Vec<Uuid>,
+    team_id: Option<String>,
 }
 
 /// Soup service that records raw requests and returns configured items by user.
@@ -73,7 +74,6 @@ impl SoupService for RecordingSoupService {
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + serde::Serialize + Send,
     {
-        assert!(team_receipt.is_none());
         let items = self
             .responses
             .lock()
@@ -88,6 +88,7 @@ impl SoupService for RecordingSoupService {
                 user_id: req.user,
                 limit: req.limit,
                 link_ids: req.link_ids,
+                team_id: team_receipt.map(|receipt| receipt.entity().entity_id.to_string()),
             });
         let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
             Paginated::from_parts(items, None);
@@ -561,4 +562,56 @@ fn database_row_hydration_targets_exact_ids_and_rules_rows_out_otherwise() {
         ast.database_row_filter.as_deref(),
         Some(&Expr::val(DatabaseRowLiteral::Id(Uuid::nil())))
     );
+}
+
+struct CurrentTeam(Mutex<Option<EntityAccessReceipt<MemberTeamRole>>>);
+impl SoupTeamReader for CurrentTeam {
+    fn team_receipt(
+        &self,
+        _: MacroUserIdStr<'static>,
+    ) -> BoxFuture<'_, Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupItemLoaderError>>
+    {
+        Box::pin(async { Ok(self.0.lock().unwrap().clone()) })
+    }
+}
+
+#[tokio::test]
+async fn pr_and_session_hydration_recheck_team_on_each_batch() {
+    use entity_access::domain::models::{EntityPermission, TeamRole};
+    let viewer = user("macro|viewer@example.com");
+    let team_id = Uuid::now_v7();
+    let team = Arc::new(CurrentTeam(Mutex::new(Some(
+        EntityAccessReceipt::try_new_authenticated_user(
+            viewer.clone(),
+            entity_access::domain::models::Entity {
+                entity_type: EntityType::Team,
+                entity_id: team_id.to_string(),
+            },
+            EntityPermission::TeamRole {
+                role: TeamRole::Member,
+            },
+        )
+        .unwrap(),
+    ))));
+    let soup = RecordingSoupService::default();
+    let mut loader = SoupItemLoader::new(soup.clone(), RecordingInboxReader::default());
+    loader.team_reader = Some(team.clone());
+    let keys = vec![
+        (
+            viewer.clone(),
+            EntityType::ForeignEntity.with_entity_string(Uuid::now_v7().to_string()),
+        ),
+        (
+            viewer.clone(),
+            EntityType::AgentSession.with_entity_string(Uuid::now_v7().to_string()),
+        ),
+    ];
+    loader.load(&keys).await.unwrap();
+    assert_eq!(
+        soup.calls.lock().unwrap()[0].team_id,
+        Some(team_id.to_string())
+    );
+    *team.0.lock().unwrap() = None;
+    loader.load(&keys).await.unwrap();
+    assert_eq!(soup.calls.lock().unwrap()[1].team_id, None);
 }

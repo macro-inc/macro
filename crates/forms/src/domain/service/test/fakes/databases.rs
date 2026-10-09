@@ -679,6 +679,19 @@ impl DatabasesService for FakeDatabases {
             viewer: viewer.user_id.to_string(),
             ops: batch.ops.clone(),
         });
+        if std::mem::take(&mut world.adopt_new_database_before_next_batch) {
+            let table = &mut world.database_mut(database_id).tables[0];
+            table.rows.push((
+                RowId::new(),
+                [(
+                    table.columns[0].id,
+                    CellValue::Text("Human data before attachment".into()),
+                )]
+                .into(),
+            ));
+            table.version += 1;
+            return Err(DatabaseError::NotFound);
+        }
         if let Some(refused) = world.refuse_next_batch.take() {
             return Err(refused);
         }

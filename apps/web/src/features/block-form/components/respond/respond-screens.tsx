@@ -47,8 +47,14 @@ export function RespondTitleCard(props: {
   compact: boolean;
 }) {
   return (
-    <div class="overflow-hidden rounded-xl border border-edge bg-surface">
-      <div class={cn('flex flex-col gap-1.5', props.compact ? 'p-3' : 'p-5')}>
+    <div
+      class={
+        props.compact
+          ? 'overflow-hidden rounded-xl border border-edge bg-surface'
+          : undefined
+      }
+    >
+      <div class={cn('flex flex-col', props.compact ? 'gap-1.5 p-3' : 'gap-6')}>
         <h1
           class={cn(
             'font-semibold text-ink wrap-anywhere',
@@ -58,7 +64,12 @@ export function RespondTitleCard(props: {
           {props.name}
         </h1>
         <Show when={props.description}>
-          <p class="text-sm whitespace-pre-wrap text-ink-muted wrap-anywhere">
+          <p
+            class={cn(
+              'whitespace-pre-wrap text-ink-muted wrap-anywhere',
+              props.compact ? 'text-sm' : 'text-base leading-relaxed'
+            )}
+          >
             {props.description}
           </p>
         </Show>

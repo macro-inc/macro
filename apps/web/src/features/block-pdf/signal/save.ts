@@ -52,22 +52,18 @@ export function useSaveModificationData() {
       pinnedTerms: [],
     });
 
-    const serverSaves: Promise<any>[] = [];
-
     const sha = await hashModificationData(modificationData);
-    serverSaves.push(
-      storageServiceClient.pdfSave({
-        documentId: pdf.documentId(),
-        modificationData,
-        sha,
-      })
-    );
-    serverSaves.push(refetchHistory());
-
-    await Promise.all(serverSaves);
+    const result = await storageServiceClient.pdfSave({
+      documentId: pdf.documentId(),
+      modificationData,
+      sha,
+    });
+    if (result.isErr()) throw new Error('Could not save PDF changes');
+    await refetchHistory();
   };
 
-  return () => pdf.persistence.runSave(save, shouldSave);
+  return (options?: { throwOnError?: boolean }) =>
+    pdf.persistence.runSave(save, shouldSave, options);
 }
 
 export function usePdfSaveLocation() {
@@ -86,28 +82,33 @@ export function usePdfSaveLocation() {
 
   const save = async () => {
     const location = viewer()?.getLocationHash();
-    pdf.setPersistedViewLocation(location);
     if (location == null) {
-      await storageServiceClient.deleteDocumentViewLocation({
+      const result = await storageServiceClient.deleteDocumentViewLocation({
         documentId: pdf.documentId(),
       });
+      if (result.isErr()) throw new Error('Could not save PDF view location');
     } else {
-      await storageServiceClient.upsertDocumentViewLocation({
+      const result = await storageServiceClient.upsertDocumentViewLocation({
         documentId: pdf.documentId(),
         location,
       });
+      if (result.isErr()) throw new Error('Could not save PDF view location');
     }
+    pdf.setPersistedViewLocation(location);
   };
 
-  return () => pdf.persistence.runSave(save, shouldSave);
+  return (options?: { throwOnError?: boolean }) =>
+    pdf.persistence.runSave(save, shouldSave, options);
 }
 
 export const usePdfSave = () => {
+  const pdf = usePdfDocument();
   const saveLocation = usePdfSaveLocation();
   const saveModificationData = useSaveModificationData();
 
-  const save = async () => {
-    await Promise.all([saveLocation(), saveModificationData()]);
+  const save = async (options?: { throwOnError?: boolean }) => {
+    if (options?.throwOnError) await pdf.persistence.waitForSaves();
+    await Promise.all([saveLocation(options), saveModificationData(options)]);
   };
 
   return save;

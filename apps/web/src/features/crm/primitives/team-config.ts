@@ -52,17 +52,6 @@ export function createCrmPermissions(
 }
 
 /**
- * True once the current-team query resolves to no team (null) or a team
- * with CRM disabled — the companies views swap in an explanatory empty
- * state and keep bottom chrome like the AI bar. Stays false while the
- * query loads so enabled teams don't flash the empty state.
- */
-export function createCrmUnavailable(teamQuery: TeamSource): Accessor<boolean> {
-  return () =>
-    teamQuery.data === null || teamQuery.data?.team.crm_enabled === false;
-}
-
-/**
  * The set of stage option ids considered "closed" — explicit config when
  * present, else a label heuristic over the active stages.
  */

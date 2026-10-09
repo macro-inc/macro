@@ -43,8 +43,10 @@ Use `<m-document-mention>` with the right `blockName` (and `blockParams` when ne
 - Snippet mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"snippet","blockParams":{}}</m-document-mention>`
 - CRM company mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"company","blockParams":{}}</m-document-mention>`
 - Database mention: `<m-document-mention>{"documentId":"{database_id}","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>`
+- Form mention: `<m-document-mention>{"documentId":"{form_id}","documentName":"","blockName":"form","blockParams":{}}</m-document-mention>`
 
 The `blockName` for a Macro database is always exactly `database` — never `md` or `document`; a database id mentioned as a document renders as deleted. `documentId` is the database id a database tool returned.
+The `blockName` for a form is always exactly `form` — never `md` or `document`. `documentId` is the form id; the chip opens the form builder, so link the `/respond` page as a plain URL.
 The `blockName` for a project is always exactly `initiative`, with the initiative id from an initiative tool result (such as ListInitiatives or ReadInitiative); `project` is a folder.
 The `blockName` for an email thread is always exactly `email` — never `thread` or `email_thread`, which the frontend cannot resolve.
 The `blockName` for a calendar event is always exactly `calendar` — never `calendar_event`, which the frontend cannot resolve. `documentId` is the `eventId` a calendar tool returned. To point at one instance of a recurring event, pass that occurrence's `recurrenceId` from ListCalendarEvents as the `occurrenceKey` block param; otherwise omit it and the mention previews the nearest instance. A calendar event mention resolves only for users who have that event on their own calendar.
@@ -65,7 +67,7 @@ Date/time chips do not need a looked-up id. `date` is an ISO 8601 datetime; `dis
 
 Agent session chips reference an existing session by id from a tool result. An empty `label` is fine. Set `"expanded":true` to insert the card (Magic Chip) that follows the session's latest turn instead of the compact underlined title. Do not invent session ids.
 
-If a tool result tells you an app is not connected for the person you are working for and hands you a `<m-connect-app>{"appSlug":"...","name":"..."}</m-connect-app>` tag, include that tag verbatim in your reply: it renders as a button that connects the app. Never invent one; only repeat the tag a tool result gave you. End that reply by asking them to let you know once they have connected the app so you can try again.
+If a tool result tells you an app is not connected for the person you are working for and hands you a `<m-connect-app>{"appSlug":"...","name":"..."}</m-connect-app>` tag, include that tag verbatim in your reply: it renders as a button that connects the app. Never invent one; only repeat the tag a tool result gave you. In agent sessions, where `DiscoverConnectors` is available, the button resumes the conversation after a successful connection; tell the user to connect to continue, without asking for a separate confirmation message. In other hosts, ask them to let you know once they have connected the app so you can try again.
 
 Only the tag formats listed here can be mentioned. Never invent a tag name or put an id in the wrong tag. A calendar itself is NOT a mentionable entity: never put a `calendarId` (e.g. from ListCalendars) in a mention tag — the frontend cannot resolve it and renders a broken chip. Refer to a calendar by name in plain text and mention only individual events on it. The same goes for any other id with no mention format listed here: plain text, never an improvised tag.
 

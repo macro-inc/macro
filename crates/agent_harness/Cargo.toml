@@ -91,5 +91,7 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 mockall = { workspace = true }
 model_user = { path = "../model_user" }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }

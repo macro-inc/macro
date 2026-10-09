@@ -160,6 +160,16 @@ it('reads all pages through pipeline identity and supplies primary references to
   expect(host.data().rows.snapshot()?.rows[1].cells.company).toBe('company2');
 });
 
+it('keeps column identity when a background refresh returns the same schema', async () => {
+  const host = setup();
+  await waitFor(() =>
+    expect(host.data().rows.snapshot()?.rows).toHaveLength(2)
+  );
+  const columns = host.data().rows.columns();
+  expect((await host.data().rows.refresh('refresh')).isOk()).toBe(true);
+  expect(host.data().rows.columns()).toBe(columns);
+});
+
 it('writes references through the pipeline operation endpoint and returns the inserted row identity', async () => {
   const host = setup();
   await waitFor(() => expect(host.data().rows.snapshot()).toBeDefined());

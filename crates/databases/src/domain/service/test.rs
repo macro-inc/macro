@@ -37,6 +37,7 @@ mod column_options;
 mod columns;
 mod databases;
 mod delete_table;
+mod derived_columns;
 mod discovery;
 mod domain_events;
 mod fakes;

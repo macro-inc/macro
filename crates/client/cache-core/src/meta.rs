@@ -1,198 +1,340 @@
-//! Schema metadata: static tables generated at build time from
-//! `static_assets/schema.graphql` (see `build.rs`).
-//!
-//! The cache never parses SDL at runtime — everything type-related is
-//! resolved through these tables.
+//! Immutable runtime schema metadata, supplied by the frontend bundle.
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::sync::{Arc, LazyLock};
 
-/// Kind of a composite (selectable) type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Composite output type classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TypeKind {
+    /// A concrete output object.
     Object,
+    /// A union of concrete output objects.
     Union,
+    /// An interface implemented by concrete objects.
     Interface,
 }
-
-/// What a field's named type resolves to, decided at codegen time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Storage interpretation of a field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FieldKind {
-    /// Object / union / interface — value is a link (ref) or embedded object.
+    /// A selectable object, interface, or union.
     Composite,
-    /// Built-in scalar or enum — stored as a plain leaf value.
+    /// A built-in scalar or enum.
     Leaf,
-    /// Custom scalar (e.g. `JSON`) — stored as an opaque JSON blob.
+    /// A custom scalar stored as opaque JSON.
     OpaqueScalar,
 }
-
-/// Flattened GraphQL wrapping type. Nested lists are rejected at codegen.
+/// Borrowed field shape used by cache walks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FieldType {
-    /// The named (inner) type.
-    pub name: &'static str,
+pub struct FieldType<'a> {
+    /// GraphQL name.
+    pub name: &'a str,
+    /// Output or storage classification.
     pub kind: FieldKind,
-    /// Nullability of the outermost wrapper.
+    /// Whether the outer value may be null.
     pub nullable: bool,
+    /// Whether the field contains a list.
     pub list: bool,
-    /// Only meaningful when `list` is true.
+    /// Whether list elements may be null.
     pub item_nullable: bool,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FieldMeta {
-    pub name: &'static str,
-    pub ty: FieldType,
+/// Owned field shape in the metadata artifact.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnedFieldType {
+    /// GraphQL name.
+    pub name: String,
+    /// Output or storage classification.
+    pub kind: FieldKind,
+    /// Whether the outer value may be null.
+    pub nullable: bool,
+    /// Whether the field contains a list.
+    pub list: bool,
+    /// Whether list elements may be null.
+    pub item_nullable: bool,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Owned field definition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnedFieldMeta {
+    /// GraphQL name.
+    pub name: String,
+    /// Declared return shape.
+    pub ty: OwnedFieldType,
+}
+/// Borrowed field definition.
+#[derive(Debug, Clone, Copy)]
+pub struct FieldMeta<'a> {
+    /// GraphQL name.
+    pub name: &'a str,
+    /// Declared return shape.
+    pub ty: FieldType<'a>,
+}
+/// Output type and its normalization policy.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TypeMeta {
-    pub name: &'static str,
+    /// GraphQL name.
+    pub name: String,
+    /// Output or storage classification.
     pub kind: TypeKind,
-    /// `Some(fields)` when the type is a normalized entity; `None` when it is
-    /// embedded inline in its parent record. Derived from the schema's
-    /// `id: ID!` convention.
-    pub key_fields: Option<&'static [&'static str]>,
-    /// Field definitions (objects/interfaces only; empty for unions).
-    pub fields: &'static [FieldMeta],
-    /// Union members / interface implementors (empty for plain objects).
-    pub possible_types: &'static [&'static str],
+    /// Entity identity fields; absent for embedded objects.
+    pub key_fields: Option<Vec<String>>,
+    /// Declared fields on this output type.
+    pub fields: Vec<OwnedFieldMeta>,
+    /// Concrete union members or interface implementors.
+    pub possible_types: Vec<String>,
 }
-
-include!(concat!(env!("OUT_DIR"), "/schema_meta.rs"));
-
-/// Looks up a composite type by name. `TYPES` is sorted by name at codegen.
+/// Versioned internal persistence format for merged schema lookup tables.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SchemaArtifact {
+    /// Persistence format understood by the engine.
+    pub format_version: u32,
+    /// Persisted record semantics required by this schema.
+    pub compatibility_epoch: u32,
+    /// Query operation root.
+    pub query_root: String,
+    /// Optional mutation operation root.
+    pub mutation_root: Option<String>,
+    /// Optional subscription operation root.
+    pub subscription_root: Option<String>,
+    /// Composite output definitions.
+    pub types: Vec<TypeMeta>,
+}
+/// Validated immutable snapshot owned by an engine.
+#[derive(Debug)]
+pub struct Schema {
+    artifact: SchemaArtifact,
+    hash: String,
+}
+/// Invalid or unsupported schema metadata. Loading never modifies storage.
+#[derive(Debug, thiserror::Error)]
+#[error("invalid cache schema: {0}")]
+pub struct SchemaError(String);
+impl Schema {
+    /// Decode persisted metadata before opening its cache.
+    pub fn from_json(json: &str) -> Result<Arc<Self>, SchemaError> {
+        let artifact: SchemaArtifact =
+            serde_json::from_str(json).map_err(|e| SchemaError(e.to_string()))?;
+        Self::from_artifact(artifact)
+    }
+    /// Validate metadata and compute its canonical identity.
+    pub fn from_artifact(mut artifact: SchemaArtifact) -> Result<Arc<Self>, SchemaError> {
+        if artifact.format_version != 1
+            || artifact.compatibility_epoch != crate::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH
+        {
+            return Err(SchemaError(
+                "unsupported format or compatibility epoch; a native update is required".into(),
+            ));
+        }
+        artifact.types.sort_by(|a, b| a.name.cmp(&b.name));
+        for ty in &mut artifact.types {
+            ty.fields.sort_by(|a, b| a.name.cmp(&b.name));
+            ty.possible_types.sort();
+        }
+        let schema = Self {
+            artifact,
+            hash: String::new(),
+        };
+        schema.validate()?;
+        let bytes = serde_json::to_vec(&schema.artifact).map_err(|e| SchemaError(e.to_string()))?;
+        let hash = format!("{:x}", Sha256::digest(bytes));
+        Ok(Arc::new(Self { hash, ..schema }))
+    }
+    /// Combines compatible bundle versions, retaining definitions needed by queued work.
+    /// Shape and identity changes require an explicit engine/storage migration.
+    pub fn merge(&self, incoming: &Schema) -> Result<Arc<Self>, SchemaError> {
+        if self.artifact.query_root != incoming.artifact.query_root
+            || self.artifact.mutation_root != incoming.artifact.mutation_root
+            || self.artifact.subscription_root != incoming.artifact.subscription_root
+        {
+            return Err(SchemaError(
+                "operation roots changed; native migration required".into(),
+            ));
+        }
+        let mut artifact = self.artifact.clone();
+        for ty in &incoming.artifact.types {
+            let Some(existing) = artifact.types.iter_mut().find(|t| t.name == ty.name) else {
+                artifact.types.push(ty.clone());
+                continue;
+            };
+            if existing.kind != ty.kind || existing.key_fields != ty.key_fields {
+                return Err(SchemaError(format!(
+                    "type {} changed identity or kind",
+                    ty.name
+                )));
+            }
+            for field in &ty.fields {
+                if let Some(previous) = existing.fields.iter().find(|f| f.name == field.name) {
+                    if previous != field {
+                        return Err(SchemaError(format!(
+                            "field {}.{} changed shape",
+                            ty.name, field.name
+                        )));
+                    }
+                } else {
+                    existing.fields.push(field.clone());
+                }
+            }
+            for name in &ty.possible_types {
+                if !existing.possible_types.contains(name) {
+                    existing.possible_types.push(name.clone());
+                }
+            }
+        }
+        Self::from_artifact(artifact)
+    }
+    fn validate(&self) -> Result<(), SchemaError> {
+        let fail = |message: &str| Err(SchemaError(message.into()));
+        for pair in self.artifact.types.windows(2) {
+            if pair[0].name == pair[1].name {
+                return fail("duplicate type");
+            }
+        }
+        for root in std::iter::once(self.query_root())
+            .chain(self.mutation_root())
+            .chain(self.subscription_root())
+        {
+            let Some(ty) = self.type_meta(root) else {
+                return fail("missing operation root");
+            };
+            if ty.kind != TypeKind::Object
+                || ty.key_fields.is_some()
+                || ty.fields.iter().any(|f| f.name == "id")
+            {
+                return fail("invalid operation root");
+            }
+        }
+        for ty in &self.artifact.types {
+            if ty.name.is_empty() {
+                return fail("empty type name");
+            }
+            if ty.fields.windows(2).any(|p| p[0].name == p[1].name) {
+                return fail("duplicate field");
+            }
+            if ty.possible_types.windows(2).any(|p| p[0] == p[1]) {
+                return fail("duplicate possible type");
+            }
+            let id = ty.fields.iter().find(|f| f.name == "id");
+            if let Some(id) = id
+                && (id.ty.name != "ID"
+                    || id.ty.nullable
+                    || id.ty.list
+                    || id.ty.kind != FieldKind::Leaf)
+            {
+                return fail("entity id must be ID!");
+            }
+            if ty
+                .key_fields
+                .as_ref()
+                .map(|keys| keys.iter().map(String::as_str).collect::<Vec<_>>())
+                != id.map(|_| vec!["id"])
+            {
+                return fail("invalid entity key policy");
+            }
+            if ty.kind == TypeKind::Union && !ty.fields.is_empty() {
+                return fail("union has fields");
+            }
+            if ty.kind == TypeKind::Object && !ty.possible_types.is_empty() {
+                return fail("object has possible types");
+            }
+            for name in &ty.possible_types {
+                if !self
+                    .type_meta(name)
+                    .is_some_and(|t| t.kind == TypeKind::Object)
+                {
+                    return fail("invalid possible type");
+                }
+            }
+            for field in &ty.fields {
+                if field.name.is_empty() || field.ty.name.is_empty() {
+                    return fail("empty field or return type");
+                }
+                if (field.ty.kind == FieldKind::Composite)
+                    != self.type_meta(&field.ty.name).is_some()
+                {
+                    return fail("invalid composite field reference");
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Identity used to reject mixed bundle schemas in a shared native engine.
+    pub fn hash(&self) -> &str {
+        &self.hash
+    }
+    /// Canonical metadata for persistence and diagnostics.
+    pub fn artifact(&self) -> &SchemaArtifact {
+        &self.artifact
+    }
+    /// Query root name.
+    pub fn query_root(&self) -> &str {
+        &self.artifact.query_root
+    }
+    /// Optional mutation root name.
+    pub fn mutation_root(&self) -> Option<&str> {
+        self.artifact.mutation_root.as_deref()
+    }
+    /// Optional subscription root name.
+    pub fn subscription_root(&self) -> Option<&str> {
+        self.artifact.subscription_root.as_deref()
+    }
+    /// Looks up a composite type.
+    pub fn type_meta(&self, name: &str) -> Option<&TypeMeta> {
+        self.artifact
+            .types
+            .binary_search_by(|t| t.name.as_str().cmp(name))
+            .ok()
+            .map(|i| &self.artifact.types[i])
+    }
+    /// Borrows a field shape without allocating.
+    pub fn field_meta(&self, type_name: &str, field: &str) -> Option<FieldMeta<'_>> {
+        let fields = &self.type_meta(type_name)?.fields;
+        let f = &fields[fields
+            .binary_search_by(|f| f.name.as_str().cmp(field))
+            .ok()?];
+        Some(FieldMeta {
+            name: &f.name,
+            ty: FieldType {
+                name: &f.ty.name,
+                kind: f.ty.kind,
+                nullable: f.ty.nullable,
+                list: f.ty.list,
+                item_nullable: f.ty.item_nullable,
+            },
+        })
+    }
+    /// Tests concrete membership in a fragment condition.
+    pub fn type_matches(&self, concrete: &str, condition: &str) -> bool {
+        concrete == condition
+            || self
+                .type_meta(condition)
+                .is_some_and(|t| t.possible_types.iter().any(|name| name == concrete))
+    }
+}
+/// SDL embedded for legacy callers and tests; production hosts supply bundle SDL.
+pub const BUNDLED_SCHEMA_SDL: &str = include_str!("../../../../static_assets/schema.graphql");
+/// Fingerprint of the SDL embedded in this build, for diagnostics.
+pub const SCHEMA_HASH: &str = env!("CACHE_BUNDLED_SCHEMA_HASH");
+static BUNDLED_SCHEMA: LazyLock<Arc<Schema>> =
+    LazyLock::new(|| Schema::from_sdl(BUNDLED_SCHEMA_SDL).expect("valid bundled schema"));
+mod sdl;
+/// Embedded fixture/default for Rust callers. Production hosts supply bundle SDL.
+pub fn bundled_schema_ref() -> &'static Schema {
+    &BUNDLED_SCHEMA
+}
+/// Embedded schema for legacy Rust callers and tests.
+pub fn bundled_schema() -> Arc<Schema> {
+    Arc::clone(&BUNDLED_SCHEMA)
+}
+/// Legacy lookup against the embedded schema.
 pub fn type_meta(name: &str) -> Option<&'static TypeMeta> {
-    TYPES
-        .binary_search_by(|t| t.name.cmp(name))
-        .ok()
-        .map(|i| &TYPES[i])
+    BUNDLED_SCHEMA.type_meta(name)
 }
-
-/// Looks up a field on a composite type.
-pub fn field_meta(type_name: &str, field: &str) -> Option<&'static FieldMeta> {
-    let t = type_meta(type_name)?;
-    t.fields.iter().find(|f| f.name == field)
+/// Legacy field lookup against the embedded schema.
+pub fn field_meta(type_name: &str, field: &str) -> Option<FieldMeta<'static>> {
+    BUNDLED_SCHEMA.field_meta(type_name, field)
 }
-
-/// True when an object of concrete type `concrete` matches a fragment type
-/// condition `condition` (exact match, union membership, or interface
-/// implementation).
+/// Legacy fragment matching against the embedded schema.
 pub fn type_matches(concrete: &str, condition: &str) -> bool {
-    if concrete == condition {
-        return true;
-    }
-    match type_meta(condition) {
-        Some(meta) => meta.possible_types.contains(&concrete),
-        None => false,
-    }
+    BUNDLED_SCHEMA.type_matches(concrete, condition)
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn query_root_is_present() {
-        let root = type_meta(QUERY_ROOT_TYPE).expect("query root type");
-        assert_eq!(root.kind, TypeKind::Object);
-        assert!(root.key_fields.is_none());
-        assert!(root.fields.iter().any(|f| f.name == "user"));
-
-        // The viewer object is keyed by presence-of-id.
-        let user = type_meta("GraphqlUser").expect("user type");
-        assert_eq!(user.key_fields, Some(&["id"][..]));
-        assert!(user.fields.iter().any(|f| f.name == "soup"));
-    }
-
-    #[test]
-    fn mutation_root_is_present() {
-        let name = MUTATION_ROOT_TYPE.expect("schema has a mutation root");
-        let root = type_meta(name).expect("mutation root type");
-        assert_eq!(root.kind, TypeKind::Object);
-        assert!(root.key_fields.is_none());
-        assert!(root.fields.iter().any(|f| f.name == "setEntityProperty"));
-    }
-
-    #[test]
-    fn subscription_root_is_present() {
-        let name = SUBSCRIPTION_ROOT_TYPE.expect("schema has a subscription root");
-        let root = type_meta(name).expect("subscription root type");
-        assert_eq!(root.kind, TypeKind::Object);
-        assert!(root.key_fields.is_none());
-        assert!(root.fields.iter().any(|field| field.name == "soupUpdates"));
-    }
-
-    #[test]
-    fn interface_possible_types() {
-        let entity = type_meta("GraphqlSoupEntity").expect("entity interface");
-        assert_eq!(entity.kind, TypeKind::Interface);
-        assert!(entity.possible_types.contains(&"GraphqlSoupDocument"));
-        assert!(entity.possible_types.contains(&"GraphqlSoupForeignEntity"));
-        assert!(entity.possible_types.contains(&"GraphqlSoupCalendarEvent"));
-        assert!(entity.possible_types.contains(&"GraphqlSoupAgentSession"));
-        assert!(entity.possible_types.contains(&"GraphqlSoupInitiative"));
-        assert!(entity.possible_types.contains(&"GraphqlSoupDatabaseRow"));
-        assert!(entity.possible_types.contains(&"GraphqlSoupCrmContact"));
-        assert_eq!(entity.possible_types.len(), 14);
-        assert!(type_matches("GraphqlSoupDocument", "GraphqlSoupEntity"));
-        assert!(type_matches("GraphqlSoupInitiative", "GraphqlSoupEntity"));
-        assert!(!type_matches("GraphqlSoupItem", "GraphqlSoupEntity"));
-    }
-
-    #[test]
-    fn presence_of_id_convention_applied() {
-        assert_eq!(
-            type_meta("GraphqlSoupDocument").unwrap().key_fields,
-            Some(&["id"][..])
-        );
-        // Renamed from `messageId` so the convention keys it.
-        assert_eq!(
-            type_meta("GraphqlSoupChannelMessage").unwrap().key_fields,
-            Some(&["id"][..])
-        );
-        // Property assignments have globally unique database ids and are
-        // normalized independently from their shared definitions.
-        assert_eq!(
-            type_meta("GraphqlProperty").unwrap().key_fields,
-            Some(&["id"][..])
-        );
-        assert!(field_meta("GraphqlProperty", "propertyDefinitionId").is_some());
-        // No id field → embedded.
-        assert_eq!(type_meta("SoupPage").unwrap().key_fields, None);
-        assert_eq!(
-            type_meta("GraphqlSoupChannelParticipant")
-                .unwrap()
-                .key_fields,
-            None
-        );
-    }
-
-    #[test]
-    fn field_shapes() {
-        // properties: [GraphqlProperty!]!
-        let f = field_meta("GraphqlSoupDocument", "properties").unwrap();
-        assert_eq!(f.ty.name, "GraphqlProperty");
-        assert_eq!(f.ty.kind, FieldKind::Composite);
-        assert!(!f.ty.nullable && f.ty.list && !f.ty.item_nullable);
-
-        // viewedAt: String (nullable leaf)
-        let f = field_meta("GraphqlSoupDocument", "viewedAt").unwrap();
-        assert_eq!(f.ty.kind, FieldKind::Leaf);
-        assert!(f.ty.nullable && !f.ty.list);
-
-        // sourceMetadata: JSON! (opaque scalar); metadata is now the shared
-        // structured interface field.
-        let f = field_meta("GraphqlSoupForeignEntity", "sourceMetadata").unwrap();
-        assert_eq!(f.ty.kind, FieldKind::OpaqueScalar);
-        assert!(!f.ty.nullable);
-
-        // items: [GraphqlSoupEntity!]! (composite link to the entity interface)
-        let f = field_meta("SoupPage", "items").unwrap();
-        assert_eq!(f.ty.kind, FieldKind::Composite);
-        assert_eq!(f.ty.name, "GraphqlSoupEntity");
-        assert!(f.ty.list);
-    }
-
-    #[test]
-    fn schema_hash_present() {
-        assert_eq!(SCHEMA_HASH.len(), 64);
-    }
-}
+mod test;

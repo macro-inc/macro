@@ -25,6 +25,7 @@ turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
 [dev-dependencies]
 chrono = { workspace = true }
 pollster = { workspace = true }
+proptest = { workspace = true }
 serde_json = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

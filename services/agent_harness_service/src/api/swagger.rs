@@ -19,9 +19,12 @@ use agent_harness::inbound::tool_approvals::{
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
-use agent_session::domain::pull_request_links::{PullRequestLinkSource, SessionPullRequestLink};
+use agent_session::domain::pull_request_links::{
+    PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
+};
 use agent_session::inbound::axum_router::pull_requests::{
-    PullRequestSessionsResponse, PullRequestUrl, SessionPullRequestsResponse,
+    PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
+    SessionPullRequestsResponse,
 };
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
@@ -72,6 +75,7 @@ impl Modify for SecurityAddon {
         axum_router::pull_requests::link_session_pull_request,
         axum_router::pull_requests::unlink_session_pull_request,
         axum_router::pull_requests::sessions_for_pull_request,
+        axum_router::pull_requests::sessions_for_pull_requests,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::get_agent_session_queue_handler,
@@ -119,6 +123,10 @@ impl Modify for SecurityAddon {
         PullRequestUrl,
         SessionPullRequestsResponse,
         PullRequestSessionsResponse,
+        PullRequestUrls,
+        PullRequestsSessionsResponse,
+        PullRequestSessions,
+        PullRequestLinkedSession,
         SessionPullRequestLink,
         PullRequestLinkSource,
         SessionStatusDto,

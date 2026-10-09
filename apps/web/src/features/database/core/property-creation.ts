@@ -14,3 +14,10 @@ export function defaultDatabaseColumnName(names: readonly string[]): string {
   while (isDatabaseNameTaken(name, names)) name = `Unnamed ${suffix++}`;
   return name;
 }
+
+export function defaultFormulaColumnName(names: readonly string[]): string {
+  let name = 'Formula';
+  let suffix = 2;
+  while (isDatabaseNameTaken(name, names)) name = `Formula ${suffix++}`;
+  return name;
+}

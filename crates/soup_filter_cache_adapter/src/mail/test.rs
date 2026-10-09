@@ -72,9 +72,16 @@ fn seed() -> Value {
 }
 async fn write<S: Storage>(engine: &mut Engine<S>, query: &str, data: &Value) {
     let vars = Map::new();
-    let projections = projection_updates(engine.storage(), query, None, &vars, data)
-        .await
-        .unwrap();
+    let projections = projection_updates(
+        cache_core::meta::bundled_schema_ref(),
+        engine.storage(),
+        query,
+        None,
+        &vars,
+        data,
+    )
+    .await
+    .unwrap();
     engine
         .write_query_with_registration_and_projections(
             None,
@@ -294,9 +301,16 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
     let data = json!({"user":{"id":VIEWER,"soup":{"items":[{"__typename":"GraphqlSoupEmailThread","id":id(1),"isRead":true}]}}});
     let vars = Map::new();
     let mutations = optimistic_updates(
-        projection_updates(engine.storage(), PARTIAL, None, &vars, &data)
-            .await
-            .unwrap(),
+        projection_updates(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            PARTIAL,
+            None,
+            &vars,
+            &data,
+        )
+        .await
+        .unwrap(),
     );
     let [OptimisticProjectionMutation::Patch { exact, .. }] = mutations.as_slice() else {
         panic!()
@@ -388,10 +402,17 @@ fn identity_switch_does_not_read_old_mail_bases_but_keeps_incoming_snapshots() {
         let vars = Map::new();
         let mut partial = json!({"user":{"id":"new-viewer","soup":{"items":[{"__typename":"GraphqlSoupEmailThread","id":id(1),"isRead":true}]}}});
         let reads = engine.storage().record_get_count();
-        let projections =
-            projection_updates_for_write(engine.storage(), PARTIAL, None, &vars, &partial, false)
-                .await
-                .unwrap();
+        let projections = projection_updates_for_write(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            PARTIAL,
+            None,
+            &vars,
+            &partial,
+            false,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             engine.storage().record_get_count(),
             reads,
@@ -407,10 +428,17 @@ fn identity_switch_does_not_read_old_mail_bases_but_keeps_incoming_snapshots() {
 
         // Same-identity incremental writes still resolve against the existing base.
         partial["user"]["id"] = json!(VIEWER);
-        let projections =
-            projection_updates_for_write(engine.storage(), PARTIAL, None, &vars, &partial, true)
-                .await
-                .unwrap();
+        let projections = projection_updates_for_write(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            PARTIAL,
+            None,
+            &vars,
+            &partial,
+            true,
+        )
+        .await
+        .unwrap();
         assert!(matches!(
             projections.as_slice(),
             [ProjectionMutation::Patch { .. }]
@@ -424,10 +452,17 @@ fn identity_switch_does_not_read_old_mail_bases_but_keeps_incoming_snapshots() {
             .truncate(1);
         incoming["user"]["soup"]["items"][0]["isRead"] = json!(true);
         let reads = engine.storage().record_get_count();
-        let projections =
-            projection_updates_for_write(engine.storage(), QUERY, None, &vars, &incoming, false)
-                .await
-                .unwrap();
+        let projections = projection_updates_for_write(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            QUERY,
+            None,
+            &vars,
+            &incoming,
+            false,
+        )
+        .await
+        .unwrap();
         assert_eq!(engine.storage().record_get_count(), reads);
         assert!(
             matches!(projections.as_slice(), [ProjectionMutation::Replace(_)]),
@@ -463,9 +498,16 @@ fn oversized_normalized_keys_are_skipped_without_losing_valid_rows() {
         let mut invalid = row(1);
         invalid["id"] = json!("x".repeat(predicate_index::MAX_EXACT_VALUE_BYTES + 1));
         let data = json!({"user":{"id":VIEWER,"soup":{"items":[invalid, row(4)]}}});
-        let updates = projection_updates(&InMemoryStorage::new(), QUERY, None, &Map::new(), &data)
-            .await
-            .unwrap();
+        let updates = projection_updates(
+            cache_core::meta::bundled_schema_ref(),
+            &InMemoryStorage::new(),
+            QUERY,
+            None,
+            &Map::new(),
+            &data,
+        )
+        .await
+        .unwrap();
         let [ProjectionMutation::Replace(document)] = updates.as_slice() else {
             panic!("only the valid row should be projected")
         };
@@ -531,9 +573,16 @@ async fn cleared_inbox_timestamp<S: PredicateIndexStorage>(storage: S) {
         "__typename":TYPE,"id":id(4),"cacheProjection":capsule(4, false),
         "reminderReturnedAt":null,"latestInboundMessageTs":null
     }]}}});
-    let updates = projection_updates(engine.storage(), QUERY, None, &Map::new(), &partial)
-        .await
-        .unwrap();
+    let updates = projection_updates(
+        cache_core::meta::bundled_schema_ref(),
+        engine.storage(),
+        QUERY,
+        None,
+        &Map::new(),
+        &partial,
+    )
+    .await
+    .unwrap();
     assert!(matches!(
         updates.as_slice(),
         [ProjectionMutation::MarkIncomplete { .. }]

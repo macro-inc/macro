@@ -63,8 +63,9 @@ use super::events::{
 use super::models::{
     CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
     DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument, TaskBranchName,
+    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestTasks,
+    GithubPullRequestTasksResponse, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP, NewDocument, TaskBranchName,
     TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
@@ -1307,6 +1308,98 @@ impl<
             }
         }
 
+        Ok(response)
+    }
+
+    #[tracing::instrument(err, skip(self, github_keys), fields(github_keys = github_keys.len()))]
+    async fn get_github_pull_request_tasks(
+        &self,
+        user_id: &str,
+        github_keys: Vec<String>,
+    ) -> Result<GithubPullRequestTasksResponse, DocumentError> {
+        if github_keys.len() > MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP {
+            return Err(DocumentError::BadRequest(format!(
+                "at most {MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP} pull requests per lookup"
+            )));
+        }
+        let mut response = GithubPullRequestTasksResponse {
+            pull_requests: github_keys
+                .into_iter()
+                .map(|github_key| GithubPullRequestTasks {
+                    github_key,
+                    task_ids: Vec::new(),
+                })
+                .collect(),
+        };
+        let mut keys: Vec<String> = response
+            .pull_requests
+            .iter()
+            .map(|pull_request| pull_request.github_key.clone())
+            .collect();
+        keys.sort();
+        keys.dedup();
+        if keys.is_empty() {
+            return Ok(response);
+        }
+
+        let links = self
+            .repo
+            .get_github_pull_request_task_links(&keys)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if links.is_empty() {
+            return Ok(response);
+        }
+
+        let converter = macro_uuid::ShortUuidConverter::default();
+        let mut task_ids_by_key = std::collections::HashMap::<String, Vec<String>>::new();
+        for (github_key, task_short_id) in links {
+            match converter.to_uuid(&task_short_id) {
+                Ok(task_id) => task_ids_by_key
+                    .entry(github_key)
+                    .or_default()
+                    .push(task_id.to_string()),
+                Err(error) => tracing::warn!(
+                    error = ?error,
+                    github_key = %github_key,
+                    "skipping malformed task id linked to a GitHub pull request"
+                ),
+            }
+        }
+
+        // Task ids come from the pull request's own text, so they are visible to whoever can
+        // see the pull request; Soup still checks access to each task.
+        let team_ids = self
+            .repo
+            .get_team_ids_for_user(user_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let mut source_ids = Vec::with_capacity(team_ids.len() + 1);
+        source_ids.push(SourceId::user(user_id.to_string()));
+        source_ids.extend(team_ids.into_iter().map(SourceId::team));
+
+        let mut visible_keys = std::collections::HashSet::new();
+        for github_key in task_ids_by_key.keys() {
+            let foreign_entities = self
+                .foreign_entity_service
+                .get_foreign_entities_by_foreign_entity_id(
+                    github_key,
+                    Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
+                )
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))?;
+            if first_visible_foreign_entity(&foreign_entities, Some(&source_ids)).is_some() {
+                visible_keys.insert(github_key.clone());
+            }
+        }
+
+        for pull_request in &mut response.pull_requests {
+            if visible_keys.contains(&pull_request.github_key)
+                && let Some(task_ids) = task_ids_by_key.get(&pull_request.github_key)
+            {
+                pull_request.task_ids = task_ids.clone();
+            }
+        }
         Ok(response)
     }
 

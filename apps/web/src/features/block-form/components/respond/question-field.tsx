@@ -286,9 +286,13 @@ export function QuestionField(props: {
   return (
     <div
       class={cn(
-        'flex flex-col gap-2 rounded-xl border bg-surface',
-        props.compact ? 'px-3 py-3' : 'px-4 py-4 sm:px-5',
-        invalid() ? 'border-failure' : 'border-edge'
+        'flex flex-col gap-2',
+        props.compact
+          ? 'rounded-xl border bg-surface px-3 py-3'
+          : 'py-3 pr-2 pl-4',
+        invalid()
+          ? 'border-failure ring-1 ring-inset ring-failure'
+          : 'border-edge'
       )}
       data-question-field={props.question.id}
     >
@@ -296,7 +300,10 @@ export function QuestionField(props: {
         <label
           id={`${id()}-label`}
           for={kind().type === 'boolean' ? `${id()}-input` : id()}
-          class="text-sm font-medium text-ink wrap-anywhere"
+          class={cn(
+            'text-sm font-medium text-ink wrap-anywhere',
+            !props.compact && 'pt-1'
+          )}
         >
           {props.column.name}
           <Show when={props.question.required}>

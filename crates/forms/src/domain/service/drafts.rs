@@ -60,7 +60,7 @@ where
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
 {
-    async fn ensure_draft(&self, form: &Form) -> Result<(), FormError> {
+    pub(super) async fn ensure_draft(&self, form: &Form) -> Result<(), FormError> {
         let state = self
             .repository
             .draft_state(form.id)

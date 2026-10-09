@@ -62,6 +62,8 @@ pub(crate) struct SessionCommand {
 pub(crate) struct SessionCompletion {
     completed: oneshot::Sender<Result<()>>,
     span: tracing::Span,
+    /// When the command was dequeued, if the runtime was not live yet.
+    dequeued_before_live: Option<Instant>,
 }
 
 /// Whether a [`SessionActor`] has more steps to take.
@@ -238,17 +240,17 @@ where
                 Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
                     span.record(
                         "agent.command.queue_wait_ms",
-                        enqueued_at.elapsed().as_millis() as u64,
+                        elapsed_ms(enqueued_at),
                     );
-                    span.record(
-                        "agent.session.runtime_phase_at_dequeue",
-                        self.machine.status().as_ref(),
-                    );
+                    let status = self.machine.status();
+                    span.record("agent.session.runtime_phase_at_dequeue", status.as_ref());
+                    let dequeued_before_live = (!matches!(status, RuntimeStatus::Live { .. }))
+                        .then(Instant::now);
                     Input::Command {
                         from: user_id,
                         action,
                         action_id,
-                        token: SessionCompletion { completed, span },
+                        token: SessionCompletion { completed, span, dequeued_before_live },
                     }
                 },
                 // The service dropped every handle; nobody can reach us.
@@ -301,7 +303,13 @@ where
             match effect {
                 Effect::Send { from, mut message } => {
                     let command_span = effects.front().and_then(|effect| match effect {
-                        Effect::Complete { token, .. } => Some(token.span.clone()),
+                        Effect::Complete { token, .. } => {
+                            token.span.record(
+                                "agent.command.handshake_wait_ms",
+                                token.dequeued_before_live.map_or(0, elapsed_ms),
+                            );
+                            Some(token.span.clone())
+                        }
                         _ => None,
                     });
                     // Before delivery, so the turn's span starts when the
@@ -730,6 +738,11 @@ where
             effects.push_back(stop);
         }
     }
+}
+
+/// Milliseconds as i64: a u64 reaches OTel as a string.
+fn elapsed_ms(since: Instant) -> i64 {
+    i64::try_from(since.elapsed().as_millis()).unwrap_or(i64::MAX)
 }
 
 fn acp_method(message: &ToRuntimeMessage) -> Option<&str> {

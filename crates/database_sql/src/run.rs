@@ -311,6 +311,9 @@ pub enum OpResultKind {
     /// [`OpResult::ReorderTables`].
     #[strum(serialize = "tables reordered")]
     TablesReordered,
+    /// [`ColumnResult::FormulaSet`] of an [`OpResult::Column`].
+    #[strum(serialize = "a formula set")]
+    FormulaSet,
 }
 
 impl From<&OpResult> for OpResultKind {
@@ -352,6 +355,10 @@ impl From<&OpResult> for OpResultKind {
                 change: ColumnResult::Deleted,
                 ..
             } => OpResultKind::ColumnDeleted,
+            OpResult::Column {
+                change: ColumnResult::FormulaSet,
+                ..
+            } => OpResultKind::FormulaSet,
             OpResult::Column {
                 change: ColumnResult::OptionsAdded { .. },
                 ..
@@ -418,6 +425,8 @@ pub enum Input {
     Outcome,
     /// The stored positions of a board's cards.
     Positions,
+    /// A derived column's formula, or the table or column it is for.
+    Formula,
 }
 
 impl From<CompileError> for RunError {

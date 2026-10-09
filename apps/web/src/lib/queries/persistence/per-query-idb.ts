@@ -13,7 +13,7 @@ export type PerQueryPersistence = {
   get: (queryHash: string) => Promise<PersistedQueryEntry | undefined>;
   set: (entry: PersistedQueryEntry) => void;
   remove: (queryHash: string) => void;
-  flush: () => Promise<void>;
+  flush: (options?: { throwOnError?: boolean }) => Promise<void>;
 };
 
 export type ClearablePerQueryPersistence = PerQueryPersistence & {
@@ -98,7 +98,7 @@ export function createPerQueryIDBStore(
     return next;
   }
 
-  const flush = async () => {
+  const flush = async (throwOnError = false) => {
     const currentGeneration = generation;
     const puts = new Map(pendingPuts);
     const deletes = new Set(pendingDeletes);
@@ -136,6 +136,7 @@ export function createPerQueryIDBStore(
         if (!pendingPuts.has(hash)) pendingDeletes.add(hash);
       }
       console.error('[query] IDB persistence flush failed', err);
+      if (throwOnError) throw err;
     }
   };
 
@@ -169,12 +170,14 @@ export function createPerQueryIDBStore(
       scheduleFlush();
     },
 
-    flush: async () => {
+    flush: async (options) => {
       if (timer) {
         clearTimeout(timer);
         timer = null;
       }
-      await flush();
+      // Background failures requeue their writes before this barrier retries them.
+      if (options?.throwOnError) await writes;
+      await flush(options?.throwOnError);
       await writes;
     },
 

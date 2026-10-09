@@ -469,6 +469,72 @@ async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn frozen_period_starts_lists_the_payers_periods_in_the_window(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let payer = payer();
+    let other = MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap();
+    let now = Utc::now()
+        .duration_trunc(chrono::Duration::microseconds(1))
+        .unwrap();
+    let month = chrono::Duration::days(30);
+    let seats = |user: &MacroUserIdStr<'static>| {
+        vec![SeatAllowance {
+            user: user.clone(),
+            included_cents: 2_000,
+        }]
+    };
+    // Four consecutive periods frozen for the payer, out of order, and one
+    // for someone else in the middle of them.
+    let starts = [now - month * 3, now - month, now - month * 2, now];
+    for start in starts {
+        let period = BillingPeriod {
+            start,
+            end: start + month,
+        };
+        repo.store_open_allowance(
+            &payer,
+            period.open_start(start).unwrap(),
+            &seats(&payer),
+            SeatGeneration::from_raw(0),
+        )
+        .await
+        .unwrap();
+    }
+    let other_period = BillingPeriod {
+        start: now - month * 2,
+        end: now - month,
+    };
+    repo.store_open_allowance(
+        &other,
+        other_period.open_start(other_period.start).unwrap(),
+        &seats(&other),
+        SeatGeneration::from_raw(0),
+    )
+    .await
+    .unwrap();
+
+    // Inclusive of `since`, exclusive of `before`, oldest first.
+    assert_eq!(
+        repo.frozen_period_starts(&payer, now - month * 2, now)
+            .await
+            .unwrap(),
+        vec![now - month * 2, now - month]
+    );
+    assert_eq!(
+        repo.frozen_period_starts(&payer, now - month * 3, now + month)
+            .await
+            .unwrap(),
+        vec![now - month * 3, now - month * 2, now - month, now]
+    );
+    assert!(
+        repo.frozen_period_starts(&payer, now + chrono::Duration::days(1), now + month)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
     let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let payer = payer();
@@ -1011,6 +1077,7 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
         .expect("status changed");
     assert_eq!(paid.payer.as_ref(), payer().as_ref());
     assert_eq!(paid.amount_cents, 10_000);
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
     assert!(
         repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Paid)
             .await
@@ -1023,6 +1090,98 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
             .await
             .unwrap()
             .is_none()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let reserved = repo
+        .reserve_credit_reload(&payer(), now, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(reserved.id, Some("in_retry"), CreditReloadStatus::Pending)
+        .await
+        .unwrap();
+
+    // Force the ledger INSERT to fail after the paid-status UPDATE executes.
+    sqlx::query!(
+        "ALTER TABLE ai_credit_ledger ADD CONSTRAINT reject_test_reload
+         CHECK (stripe_reference <> 'in_retry')"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 0);
+    let status = sqlx::query_scalar!(
+        r#"SELECT status::text AS "status!" FROM ai_credit_reload WHERE stripe_invoice_id = $1"#,
+        "in_retry",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(status, "pending");
+
+    sqlx::query!("ALTER TABLE ai_credit_ledger DROP CONSTRAINT reject_test_reload")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+    // Re-delivery cannot issue the purchased credits twice.
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reload_invoice_webhook_deduplicates_credits_booked_by_collector(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
+    let now = Utc::now();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let reserved = repo
+        .reserve_credit_reload(&payer(), now, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(
+        reserved.id,
+        Some("in_collector"),
+        CreditReloadStatus::Pending,
+    )
+    .await
+    .unwrap();
+    repo.record_credit_reload(&payer(), reserved.amount_cents, "in_collector")
+        .await
+        .unwrap();
+
+    assert!(
+        repo.resolve_credit_reload_invoice("in_collector", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        repo.credit_balance_cents(&payer()).await.unwrap(),
+        reserved.amount_cents
     );
 }
 

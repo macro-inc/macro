@@ -27,6 +27,8 @@ export interface CalendarOccurrenceData {
 export interface CalendarOccurrenceDataOptions {
   range: Accessor<CalendarOccurrenceQueryRange | undefined>;
   sourceById?: Accessor<ReadonlyMap<string, CalendarSource>>;
+  /** Wait for calendar metadata before painting source colors. */
+  sourcesReady?: Accessor<boolean>;
   isSourceVisible?: (sourceId: string) => boolean;
   queryOptions?: Accessor<CalendarOccurrencesQueryOptions>;
 }
@@ -54,7 +56,7 @@ export function useCalendarOccurrenceData(
     if (
       !isRangeSupported() ||
       !occurrencesQuery.isSuccess ||
-      occurrencesQuery.isPlaceholderData
+      options.sourcesReady?.() === false
     )
       return [];
     const sourceById = options.sourceById?.();
@@ -76,10 +78,9 @@ export function useCalendarOccurrenceData(
   const isLoading = () =>
     options.range() === undefined ||
     (isRangeSupported() &&
-      (occurrencesQuery.isPending || occurrencesQuery.isPlaceholderData));
+      (occurrencesQuery.isPending || options.sourcesReady?.() === false));
   const isSyncing = () =>
     occurrencesQuery.isSuccess &&
-    !occurrencesQuery.isPlaceholderData &&
     occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
 
   return {

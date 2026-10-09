@@ -56,6 +56,7 @@ export function NarrowLayout(props: LayoutProps) {
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
+        {props.titleLeading}
         <Show
           when={isChannelMessageEntity(props.entity) && props.entity}
           fallback={<Entity.Title entity={props.entity} />}

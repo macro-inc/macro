@@ -621,6 +621,7 @@ export const prDetailRoute = defineRoute({
 const debugComponentIds = [
   'ui',
   'icon-gallery',
+  'create-menu-demo',
   ...(LOCAL_ONLY
     ? [
         'theme-edit-3',

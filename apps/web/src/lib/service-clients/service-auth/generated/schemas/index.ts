@@ -40,7 +40,6 @@ export * from './createGtmInviteLinkRequestRecipientEmail';
 export * from './createInProgressLinkResponse';
 export * from './createPortalSessionRequest';
 export * from './createTeamRequest';
-export * from './createUserRequest';
 export * from './creditCheckoutRequestBody';
 export * from './creditCheckoutResponse';
 export * from './cursorApiKeyStatus';

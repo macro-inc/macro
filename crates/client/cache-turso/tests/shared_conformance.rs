@@ -1,5 +1,8 @@
 #![cfg(not(target_arch = "wasm32"))]
 
+#[path = "shared_conformance/calendar_points.rs"]
+mod calendar_points;
+
 use cache_core::calendar::{
     CalendarCommit, CalendarFreshness, CalendarLinkWatermark, CalendarRangeRequest,
     CalendarRangeStorage, CalendarReplacedEvent, CalendarSpan, CalendarSpanKind, CalendarSyncState,
@@ -48,7 +51,10 @@ impl BackendFactory for TursoFactory {
     type Backend = TursoStorage;
 
     fn create() -> (Self, Self::Backend) {
-        let database = TursoMemoryDatabase::new("shared-conformance.db");
+        // Turso tracks open databases by path, even with separate MemoryIO
+        // instances. Concurrent contracts must own distinct physical names.
+        let database =
+            TursoMemoryDatabase::new(format!("shared-conformance-{}.db", uuid::Uuid::now_v7()));
         let storage = database.open("shared-conformance").unwrap();
         (Self { database }, storage)
     }

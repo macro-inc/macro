@@ -41,11 +41,24 @@ fn variables() -> serde_json::Map<String, Value> {
 }
 async fn write<S: Storage>(engine: &mut Engine<S>, query: &str, data: &Value) {
     let vars = variables();
-    let mut projections = authoritative_projection_mutations(query, None, data).unwrap();
+    let mut projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        query,
+        None,
+        data,
+    )
+    .unwrap();
     projections.extend(
-        notification_projection_updates(engine.storage(), query, None, &vars, data)
-            .await
-            .unwrap(),
+        notification_projection_updates(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            query,
+            None,
+            &vars,
+            data,
+        )
+        .await
+        .unwrap(),
     );
     engine
         .write_query_with_registration_and_projections(
@@ -107,9 +120,16 @@ async fn mark_done<S: Storage>(engine: &mut Engine<S>, id: &str, uuid: &str) -> 
     let data = json!({"updateNotifications":[{"__typename":"GraphqlNotification", "id":id, "state":"DONE"}]});
     let vars = variables();
     let updates = optimistic_notification_updates(
-        notification_projection_updates(engine.storage(), UPDATE, None, &vars, &data)
-            .await
-            .unwrap(),
+        notification_projection_updates(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            UPDATE,
+            None,
+            &vars,
+            &data,
+        )
+        .await
+        .unwrap(),
     )
     .unwrap();
     assert_eq!(updates.len(), 1);
@@ -213,10 +233,16 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
     .await;
     let token = claim(&mut engine, second).await;
     let data = json!({"updateNotifications":[notification(B,"DONE")]});
-    let projections =
-        notification_projection_updates(engine.storage(), UPDATE, None, &variables(), &data)
-            .await
-            .unwrap();
+    let projections = notification_projection_updates(
+        cache_core::meta::bundled_schema_ref(),
+        engine.storage(),
+        UPDATE,
+        None,
+        &variables(),
+        &data,
+    )
+    .await
+    .unwrap();
     engine
         .commit_optimistic_write_with_projections(
             second,
@@ -343,6 +369,7 @@ async fn unhydrated_parents<S: PredicateIndexStorage>(storage: S) {
         for state in ["DONE", "UNSEEN", "INVALID"] {
             let data = json!({"updateNotifications":[{"__typename":"GraphqlNotification", "id":A, "state":state}]});
             let updates = notification_projection_updates(
+                cache_core::meta::bundled_schema_ref(),
                 engine.storage(),
                 UPDATE,
                 None,
@@ -419,7 +446,13 @@ fn unhydrated_notification_parents_real_turso() {
 }
 
 async fn nonmatching_parent_projections<S: Storage>(mut storage: S) {
-    let mutations = authoritative_projection_mutations(SNAPSHOT, None, &snapshot(vec![])).unwrap();
+    let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        SNAPSHOT,
+        None,
+        &snapshot(vec![]),
+    )
+    .unwrap();
     let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
         panic!("complete base")
     };
@@ -536,7 +569,13 @@ fn optimistic_notification_conversion_preserves_member_edits_and_invalidation() 
 
 #[test]
 fn optimistic_notification_conversion_rejects_unsupported_mutations() {
-    let mutations = authoritative_projection_mutations(SNAPSHOT, None, &snapshot(vec![])).unwrap();
+    let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        SNAPSHOT,
+        None,
+        &snapshot(vec![]),
+    )
+    .unwrap();
     let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
         panic!("complete snapshot")
     };
@@ -570,7 +609,13 @@ fn optimistic_notification_conversion_rejects_unsupported_mutations() {
 #[test]
 fn snapshot_completeness_aliases_and_primary_scope() {
     let data = snapshot(vec![notification(A, "UNSEEN"), notification(B, "SEEN")]);
-    let mutations = authoritative_projection_mutations(SNAPSHOT, None, &data).unwrap();
+    let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        SNAPSHOT,
+        None,
+        &data,
+    )
+    .unwrap();
     let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
         panic!("complete snapshot")
     };
@@ -582,9 +627,14 @@ fn snapshot_completeness_aliases_and_primary_scope() {
             .unwrap()
             .remove(missing);
         assert!(matches!(
-            authoritative_projection_mutations(SNAPSHOT, None, &data)
-                .unwrap()
-                .as_slice(),
+            authoritative_projection_mutations(
+                cache_core::meta::bundled_schema_ref(),
+                SNAPSHOT,
+                None,
+                &data
+            )
+            .unwrap()
+            .as_slice(),
             [ProjectionMutation::MarkIncomplete { .. }]
         ));
     }
@@ -594,15 +644,25 @@ fn snapshot_completeness_aliases_and_primary_scope() {
         .unwrap()
         .remove("notifications");
     assert!(matches!(
-        authoritative_projection_mutations(SNAPSHOT, None, &omitted)
-            .unwrap()
-            .as_slice(),
+        authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
+            SNAPSHOT,
+            None,
+            &omitted
+        )
+        .unwrap()
+        .as_slice(),
         [ProjectionMutation::MarkIncomplete { .. }]
     ));
     let mut secondary = notification(A, "UNSEEN");
     secondary["entityId"] = json!(B);
-    let mutations =
-        authoritative_projection_mutations(SNAPSHOT, None, &snapshot(vec![secondary])).unwrap();
+    let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        SNAPSHOT,
+        None,
+        &snapshot(vec![secondary]),
+    )
+    .unwrap();
     let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
         panic!("complete secondary edge")
     };
@@ -623,8 +683,20 @@ fn snapshot_completeness_aliases_and_primary_scope() {
     }
     entity.insert("notifs".into(), rows);
     assert_eq!(
-        authoritative_projection_mutations(alias_query.as_str(), None, &alias_data).unwrap(),
-        authoritative_projection_mutations(SNAPSHOT, None, &data).unwrap()
+        authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
+            alias_query.as_str(),
+            None,
+            &alias_data
+        )
+        .unwrap(),
+        authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
+            SNAPSHOT,
+            None,
+            &data
+        )
+        .unwrap()
     );
 }
 
@@ -635,6 +707,7 @@ fn backfill_accepts_large_notification_sets_without_losing_members() {
         .collect();
     let backfill = SNAPSHOT.replace("query Snapshot", "query SoupBackfill");
     let mutations = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
         &backfill,
         Some("SoupBackfill"),
         &snapshot(notifications),
@@ -699,10 +772,17 @@ fn seen_and_reopen_identity_only_optimism_do_not_guess_state() {
         .await;
         let data = json!({"updateNotifications":[{"__typename":"GraphqlNotification","id":A}]});
         assert!(
-            notification_projection_updates(engine.storage(), UPDATE, None, &variables(), &data)
-                .await
-                .unwrap()
-                .is_empty()
+            notification_projection_updates(
+                cache_core::meta::bundled_schema_ref(),
+                engine.storage(),
+                UPDATE,
+                None,
+                &variables(),
+                &data
+            )
+            .await
+            .unwrap()
+            .is_empty()
         );
         let keys = vec![format!("GraphqlNotification:{A}")];
         let updates = notification_deletion_updates(engine.storage(), &keys, true)

@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
+mod timeline;
 
 /// Minimum view permission for any supported message parent.
 #[derive(Debug, Clone, Copy)]
@@ -34,6 +35,7 @@ impl RequiredPermission for MessageWrite {
 /// Shared message use cases. Parent management and delivery are separate capabilities.
 #[derive(Clone)]
 pub struct MessageService<R, E> {
+    activity: Option<std::sync::Arc<dyn activity::domain::timeline::ActivityTimeline>>,
     repo: R,
     events: E,
     references: std::sync::Arc<dyn MessageReferenceAccess>,
@@ -45,12 +47,22 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// Compose a service from persistence and delivery ports.
     pub fn new(repo: R, events: E) -> Self {
         Self {
+            activity: None,
             repo,
             events,
             references: std::sync::Arc::new(DenyMessageReferences),
             mentions: std::sync::Arc::new(NoMessageMentionExtractor),
             groups: std::sync::Arc::new(NoMessageGroups),
         }
+    }
+
+    /// Supply the activity owner's read boundary for mixed parent timelines.
+    pub fn with_activity(
+        mut self,
+        activity: impl activity::domain::timeline::ActivityTimeline,
+    ) -> Self {
+        self.activity = Some(std::sync::Arc::new(activity));
+        self
     }
 
     /// Supply current channel membership for authored group mentions.
@@ -76,8 +88,45 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
-        mut query: MessageTimelineQuery,
+        query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
+        let (parent, query) = self.timeline_selection(&access, query).await?;
+        self.repo.timeline(&parent, query).await
+    }
+
+    /// Read a parent's messages and its timeline activity as one ordered page.
+    /// Parents without a timeline activity source return their messages only.
+    #[tracing::instrument(err, skip(self, access))]
+    pub async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        let (parent, query) = self.timeline_selection(&access, query).await?;
+        let Some(source) = timeline_activity(&parent) else {
+            return self.repo.timeline(&parent, query).await.map(Into::into);
+        };
+        // These filters select a subset of roots, and activity has no matching
+        // filter, so the merged window would be wrong. Including deleted threads
+        // only adds tombstones on the same keyset, so it combines with activity.
+        if !query.ids.is_empty()
+            || query.anchored.is_some()
+            || query.activity_after.is_some()
+            || query.activity_before.is_some()
+        {
+            return Err(MessageError::Invalid(
+                "activity timelines cannot be combined with message filters",
+            ));
+        }
+        self.activity_timeline(&parent, source, query).await
+    }
+
+    /// Validate a selection and resolve the parent it reads.
+    async fn timeline_selection(
+        &self,
+        access: &EntityAccessReceipt<MessageView>,
+        mut query: MessageTimelineQuery,
+    ) -> Result<(MessageParent, MessageTimelineQuery), MessageError> {
         if query
             .activity_after
             .zip(query.activity_before)
@@ -95,13 +144,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 "centered windows cannot have filters",
             ));
         }
-        let parent = parent_from_receipt(&access)?;
+        let parent = parent_from_receipt(access)?;
         self.ensure_parent(&parent).await?;
         query.limit = Some(query.limit.unwrap_or(50).clamp(1, 100));
         if query.ids.len() > 100 || (query.around.is_some() && query.cursor.is_some()) {
             return Err(MessageError::Invalid("invalid timeline selection"));
         }
-        self.repo.timeline(&parent, query).await
+        Ok((parent, query))
     }
 
     /// Read a message and its canonical root for navigation.

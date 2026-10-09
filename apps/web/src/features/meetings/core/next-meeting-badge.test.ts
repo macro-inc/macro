@@ -58,6 +58,16 @@ describe('nextMeetingBadge', () => {
     ).toEqual({ kind: 'soon', label: '12m', minutes: 12 });
   });
 
+  it('counts down to a point without showing it as ongoing', () => {
+    const point = event('2026-10-07T15:12:00Z', '2026-10-07T15:12:00Z');
+    expect(nextMeetingBadge([point], NOW)).toEqual({
+      kind: 'soon',
+      label: '12m',
+      minutes: 12,
+    });
+    expect(nextMeetingBadge([point], new Date(point.start))).toBeUndefined();
+  });
+
   it('rounds a partial minute up so the badge never reads 0m', () => {
     expect(
       nextMeetingBadge(

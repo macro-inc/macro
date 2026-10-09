@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import { AddColumnButton } from '../components/add-column-button';
 import { useDatabase } from '../context/database';
+import { FormulaEditingContext } from '../context/formula-editing';
 import {
   OptionEditingContext,
   useOptionEditing,
@@ -31,32 +32,34 @@ export function DatabaseRecords(props: HostProps) {
     <OptionEditingContext.Provider
       value={hostOptions ?? database.optionEditing()}
     >
-      <DatabaseRecordsView
-        {...props}
-        name={database.data.table()?.name ?? ''}
-        source={database.data.rows}
-        canEdit={database.capabilities().editRows}
-        onChangeColumnType={database.schemaEditing()?.changeType}
-        onDeleteColumn={database.schemaEditing()?.remove}
-        onReorderColumns={database.schemaEditing()?.reorder}
-        onRenameColumn={database.schemaEditing()?.rename}
-        createColumn={database.schemaEditing()?.createDefaultColumn}
-        addColumn={
-          database.schemaEditing()
-            ? (label, onCreated) => (
-                <Show when={database.schemaEditing()}>
-                  {(schema) => (
-                    <AddColumnButton
-                      create={schema().createDefaultColumn}
-                      label={label}
-                      onCreated={onCreated}
-                    />
-                  )}
-                </Show>
-              )
-            : undefined
-        }
-      />
+      <FormulaEditingContext.Provider value={database.formulaEditing()}>
+        <DatabaseRecordsView
+          {...props}
+          name={database.data.table()?.name ?? ''}
+          source={database.data.rows}
+          canEdit={database.capabilities().editRows}
+          onChangeColumnType={database.schemaEditing()?.changeType}
+          onDeleteColumn={database.schemaEditing()?.remove}
+          onReorderColumns={database.schemaEditing()?.reorder}
+          onRenameColumn={database.schemaEditing()?.rename}
+          createColumn={database.schemaEditing()?.createDefaultColumn}
+          addColumn={
+            database.schemaEditing()
+              ? (label, onCreated) => (
+                  <Show when={database.schemaEditing()}>
+                    {(schema) => (
+                      <AddColumnButton
+                        create={schema().createDefaultColumn}
+                        label={label}
+                        onCreated={onCreated}
+                      />
+                    )}
+                  </Show>
+                )
+              : undefined
+          }
+        />
+      </FormulaEditingContext.Provider>
     </OptionEditingContext.Provider>
   );
 }

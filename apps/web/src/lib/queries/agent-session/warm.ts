@@ -47,6 +47,18 @@ export function useWarmAgentSessionQuery(userId: Accessor<string | undefined>) {
   });
 }
 
+/** Why a new session did or did not start on a warm reservation. */
+export type WarmClaim =
+  | 'hit'
+  /** A reservation was ready on another model. */
+  | 'miss_model'
+  /** No reservation, or only an expired one. */
+  | 'miss_none_ready'
+  /** A reservation was ready with other instructions. */
+  | 'miss_other'
+  /** The session is not the owner's default agent, so none could match. */
+  | 'not_attempted';
+
 /**
  * Consume once, only for the owner and exact default-agent configuration.
  * Keep the empty cache fresh until creation finishes and releases server capacity.
@@ -60,27 +72,28 @@ export function takeWarmAgentSession(
     repoUrl?: string;
   },
   client: QueryClient = queryClient
-): string | undefined {
+): { id?: string; claim: WarmClaim } {
   if (
     !options.userId ||
     (options.botId && options.botId !== MACRO_NEW_BOT_ID) ||
     options.repoUrl
   )
-    return;
+    return { claim: 'not_attempted' };
   const key = agentSessionWarmKeys.owner(options.userId).queryKey;
   const entry = client.getQueryData<WarmSession | null>(key);
-  if (!entry) return;
+  if (!entry) return { claim: 'miss_none_ready' };
   if (entry.expires <= Date.now()) {
     client.setQueryData(key, null);
-    return;
+    return { claim: 'miss_none_ready' };
   }
-  if (options.modelOverride && options.modelOverride !== entry.model) return;
+  if (options.modelOverride && options.modelOverride !== entry.model)
+    return { claim: 'miss_model' };
   if (
     (options.instructions?.trim() || '') !== (entry.instructions?.trim() || '')
   )
-    return;
+    return { claim: 'miss_other' };
   client.setQueryData(key, null);
-  return entry.id;
+  return { id: entry.id, claim: 'hit' };
 }
 
 /** Prepare one replacement after creation succeeds, joining any existing request. */

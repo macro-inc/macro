@@ -6,10 +6,18 @@ import {
   MobileFilterDrawer,
   useViewControlHotkeys,
 } from '@app/components/view-shell';
+import { PrOriginIcon, PrPriorityIcon } from '@block-pr/component/PrLinks';
+import {
+  PR_PRIORITY_IDS,
+  PR_PRIORITY_LABELS,
+  type PrLinkKind,
+} from '@block-pr/data/pr-links';
+import { PR_ORIGIN_LABELS, PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { Accordion } from '@kobalte/core/accordion';
 import { createSignal, For, Show } from 'solid-js';
+import { UNKNOWN_ORIGIN } from '../reviews-filter';
 import type {
   ReviewsFilterId,
   ReviewsFilterSelection,
@@ -37,6 +45,7 @@ export type ReviewsControlProps = {
 };
 
 const SORT_OPTIONS: ListControlOption<ReviewsSortId>[] = [
+  { id: 'priority', label: 'Priority' },
   { id: 'recently_updated', label: 'Recently updated' },
   { id: 'least_recently_updated', label: 'Least recently updated' },
   { id: 'newest', label: 'Newest' },
@@ -55,11 +64,38 @@ const REVIEW_OPTIONS: ListControlOption<ReviewsReviewFilterId>[] = [
   { id: 'awaiting_my_review', label: 'Awaiting review from you' },
 ];
 
+const PRIORITY_OPTIONS: ListControlOption<string>[] = PR_PRIORITY_IDS.map(
+  (id) => ({
+    id,
+    label: PR_PRIORITY_LABELS[id],
+    icon: () => <PrPriorityIcon priority={id} />,
+  })
+);
+
+const ORIGIN_OPTIONS: ListControlOption<string>[] = [
+  ...PR_ORIGIN_TOOLS.map((tool) => ({
+    id: tool,
+    label: PR_ORIGIN_LABELS[tool],
+    icon: () => <PrOriginIcon tool={tool} class="size-4" />,
+  })),
+  { id: UNKNOWN_ORIGIN, label: 'Unknown' },
+];
+
+const LINKED_OPTIONS: ListControlOption<string>[] = [
+  { id: 'agent', label: 'An agent session' },
+  { id: 'ticket', label: 'A ticket' },
+  { id: 'customer', label: 'A customer' },
+  { id: 'channel', label: 'A channel' },
+] satisfies ListControlOption<PrLinkKind>[];
+
 function filterGroups(
   props: ReviewsControlProps
 ): ListFilterGroup<ReviewsFilterId, string>[] {
   return [
     { id: 'status', label: 'Status', options: STATUS_OPTIONS },
+    { id: 'priority', label: 'Priority', options: PRIORITY_OPTIONS },
+    { id: 'linked', label: 'Linked to', options: LINKED_OPTIONS },
+    { id: 'origin', label: 'Started from', options: ORIGIN_OPTIONS },
     {
       id: 'repository',
       label: 'Repository',
@@ -200,7 +236,7 @@ export function ReviewsFilterDrawer(props: ReviewsControlProps) {
         </For>
       </MobileDrawer.Section>
       <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
-      <Accordion multiple collapsible defaultValue={['repository']}>
+      <Accordion multiple collapsible defaultValue={['priority']}>
         <div class="flex flex-col gap-3">
           <For each={groups()}>
             {(group) => (
