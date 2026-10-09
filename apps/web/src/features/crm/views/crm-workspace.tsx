@@ -517,7 +517,8 @@ export function CrmWorkspaceView(props: {
               </Suspense>
             </Show>
           </Show>
-          <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* The header above already clears the status bar on touch. */}
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col [--mobile-content-inset-top:0px]">
             {props.children({
               onOpenEntity: isTouchDevice() ? undefined : openRecord,
             })}

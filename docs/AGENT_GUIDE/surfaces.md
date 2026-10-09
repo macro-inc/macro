@@ -1910,8 +1910,10 @@ are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
 
 Companies lists every visible company, grouped by Stage by default, with Owner,
-Revenue and Last Interaction columns. Its toolbar holds sort, group, filter,
-display options, saved views, and **New company** at the right end.
+Revenue and Last Interaction columns. A Stage column is off by default; turn it
+on, or hide Owner or Revenue, under **Display options**. Its toolbar holds
+sort, group, filter, display options, saved views, and **New company** at the
+right end.
 
 People lists contacts across every CRM-enabled team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses

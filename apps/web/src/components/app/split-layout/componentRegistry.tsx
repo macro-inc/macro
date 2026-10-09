@@ -353,14 +353,10 @@ registerComponent(
   () => composableLayout()
 );
 registerComponent('calls', () => <CallsRouteView />);
-registerComponent(
-  'companies',
-  () => <CompaniesRouteView />,
-  () => ({
-    ownsCollectionState: true,
-    ...(isTouchDevice() ? {} : { splitPanelLayout: 'composable' as const }),
-  })
-);
+registerComponent('companies', () => <CompaniesRouteView />, {
+  ownsCollectionState: true,
+  splitPanelLayout: 'composable',
+});
 registerComponent('folders', () => <FoldersRouteView />);
 registerComponent('search', () => <SearchRouteView />);
 registerComponent('firehose', () => (
