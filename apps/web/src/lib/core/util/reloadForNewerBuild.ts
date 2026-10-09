@@ -1,4 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createSignal } from 'solid-js';
 import { deviceLooksOffline } from './connectivity';
 import { isEditableInput } from './isEditableInput';
 
@@ -11,9 +13,18 @@ export interface ReloadPage {
   reload(): void;
   /** Runs `callback` each time the page is hidden or comes back online. */
   onHiddenOrOnline(callback: () => void): void;
-  /** Offers the user a reload now. */
-  promptReload(reload: () => void): void;
+  /** Offers the user a reload now; `build` is the newer build, when known. */
+  promptReload(reload: () => void, build?: string): void;
 }
+
+/** A newer web build this tab can reload into. */
+export type PendingWebUpdate = { build?: string; reload: () => void };
+
+const [pendingWebUpdate, setPendingWebUpdate] =
+  createSignal<PendingWebUpdate>();
+
+/** The newer web build waiting for a reload, which the rail's update button offers. */
+export { pendingWebUpdate };
 
 const browserPage: ReloadPage = {
   isHidden: () => document.visibilityState === 'hidden',
@@ -38,7 +49,10 @@ const browserPage: ReloadPage = {
     });
     window.addEventListener('online', later);
   },
-  promptReload(reload) {
+  promptReload(reload, build) {
+    setPendingWebUpdate({ build, reload });
+    // Touch layouts have no rail to show the update button in.
+    if (!isTouchDevice()) return;
     toast.custom(
       {
         title: 'A new version of Macro is ready',
@@ -78,7 +92,10 @@ export function holdAutomaticReload(): () => void {
  * written. Otherwise it tries again the next time it is hidden or comes back
  * online.
  */
-export function reloadForNewerBuild(page: ReloadPage = browserPage): void {
+export function reloadForNewerBuild(
+  page: ReloadPage = browserPage,
+  build?: string
+): void {
   if (scheduled) return;
   scheduled = true;
   const reloadIfIdle = () => {
@@ -92,7 +109,7 @@ export function reloadForNewerBuild(page: ReloadPage = browserPage): void {
     }
   };
   page.onHiddenOrOnline(reloadIfIdle);
-  page.promptReload(() => page.reload());
+  page.promptReload(() => page.reload(), build);
   reloadIfIdle();
 }
 

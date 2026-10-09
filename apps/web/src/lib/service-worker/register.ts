@@ -57,7 +57,7 @@ function onWorkerMessage(event: MessageEvent<unknown>): void {
     window.location.reload();
     return;
   }
-  reloadForNewerBuild();
+  reloadForNewerBuild(undefined, String(data.build));
 }
 
 /**
