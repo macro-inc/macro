@@ -9062,6 +9062,19 @@ export const ensureStarterHandlerResponse = zod
   );
 
 /**
+ * @summary Insert rows through a webhook. The body is a JSON object, one row, or
+an array of up to 100 objects, one row each. Keys name columns by name
+(ignoring case) or id; `null` leaves a cell empty. Values may be loose:
+`"45"` for a number, `"true"` for a checkbox, a label or labels for a
+select, `2026-10-09` for a date. Nothing is written unless every row fits.
+ */
+export const deliverDatabaseWebhookParams = zod.object({
+  token: zod.string().describe("The webhook's secret token"),
+});
+
+export const deliverDatabaseWebhookBody = zod.unknown();
+
+/**
  * @summary Schema detail of one database.
  */
 export const getDatabaseParams = zod.object({
@@ -14127,6 +14140,64 @@ export const getDatabaseViewPositionsResponse = zod
       ),
   })
   .describe("Where a board's cards sit.");
+
+/**
+ * @summary The database's webhooks.
+ */
+export const listDatabaseWebhooksParams = zod.object({
+  id: zod.uuid().describe('Database id'),
+});
+
+export const listDatabaseWebhooksResponse = zod
+  .object({
+    webhooks: zod
+      .array(
+        zod
+          .object({
+            createdAt: zod.iso.datetime({}).describe('Creation time.'),
+            createdBy: zod
+              .string()
+              .describe('Who created it; its calls write with their access.'),
+            databaseId: zod.uuid().describe('The database.'),
+            id: zod.uuid().describe('Identifier.'),
+            tableId: zod
+              .uuid()
+              .describe('The table its calls insert rows into.'),
+            tokenPrefix: zod
+              .string()
+              .describe(
+                "The token's first characters, to tell webhooks apart."
+              ),
+          })
+          .describe(
+            'A webhook of a database. Its token is never shown again after creation.'
+          )
+      )
+      .describe('Oldest first.'),
+  })
+  .describe("A database's webhooks.");
+
+/**
+ * @summary Create a webhook: a secret URL whose calls insert rows into one of the
+database's tables, writing with the creator's access.
+ */
+export const createDatabaseWebhookParams = zod.object({
+  id: zod.uuid().describe('Database id'),
+});
+
+export const createDatabaseWebhookBody = zod
+  .object({
+    tableId: zod.uuid().describe('A table of the database.'),
+  })
+  .describe('Which table a new webhook inserts rows into.');
+
+/**
+ * @summary Delete a webhook; its URL stops working.
+ */
+export const deleteDatabaseWebhookParams = zod.object({
+  id: zod.uuid().describe('Database id'),
+  webhook_id: zod.uuid().describe('Webhook id'),
+});
 
 /**
  * Available to every signed-in user on every plan; does not consume chat

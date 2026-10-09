@@ -994,6 +994,7 @@ struct FormsApiAddon;
 impl utoipa::Modify for FormsApiAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         openapi.merge(forms::inbound::axum_router::FormsApi::openapi());
+        openapi.merge(database_webhooks::inbound::axum_router::DatabaseWebhooksApi::openapi());
     }
 }
 

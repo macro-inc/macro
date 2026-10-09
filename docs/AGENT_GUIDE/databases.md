@@ -485,7 +485,7 @@ link. **Share** and viewer avatars (other people currently looking at the
 database) sit at the right of the split header, like other entities.
 
 The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
-**Import CSV**, **Download**, and owner-only **Delete**. Rename focuses the inline
+**Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline
 title in the split header; Delete opens the standard confirmation dialog.
 **Download** offers **Current table as CSV**.
 Exports contain all records, regardless of the current filters. CSV uses column
@@ -499,6 +499,15 @@ values remain Text, preserving leading zeros and large identifiers; use a column
 type menu afterward to convert it. The limit is 8 MB, 100 columns, and 10,000 rows.
 A failed response offers **Retry import** with the same request, so retrying a
 completed import does not create a second table.
+
+**Webhooks** (editors only) opens a dialog for the current table. **Create
+webhook** shows its URL once, with a copy button and a `curl` example built from
+the table's columns; the list below shows each webhook's token prefix and a
+delete button. POSTing a JSON object to the URL inserts one row (an array inserts
+one per object, up to 100). Keys name columns, ignoring case; `null` leaves a
+cell empty; unknown keys or values that do not fit refuse the whole call with a
+400 listing every problem. The row is written as the webhook's creator, and the
+webhook stops working if they lose edit access.
 
 ## Side panel and activity
 

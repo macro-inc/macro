@@ -1461,6 +1461,12 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     ));
 
+    let database_webhooks_service = Arc::new(database_webhooks::wiring::build_service(
+        db.clone(),
+        databases_service.clone(),
+        entity_access_service.clone(),
+    ));
+
     let forms_service = Arc::new(forms::wiring::build_service(
         db.clone(),
         databases_service.clone(),
@@ -1963,6 +1969,12 @@ pub async fn run() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        database_webhooks_state:
+            database_webhooks::inbound::axum_router::DatabaseWebhooksRouterState::new(
+                database_webhooks_service,
+                entity_access_service.clone(),
+                authorization_state.clone(),
+            ),
         forms_state: forms::inbound::axum_router::FormsRouterState::new(
             forms_service,
             entity_access_service.clone(),

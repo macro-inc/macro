@@ -5,6 +5,7 @@ import DownloadIcon from '@phosphor/download-simple.svg';
 import PencilIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
+import WebhookIcon from '@phosphor/webhooks-logo.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { ImportTable } from '@service-storage/generated/schemas/importTable';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
@@ -26,6 +27,7 @@ import {
   type DatabaseEntityFailure,
   databaseEntityMessage,
 } from '../../database/core/write-failure';
+import { WebhooksDialog } from '../component/WebhooksDialog';
 import {
   exportDatabaseTableCsv,
   importDatabaseTable,
@@ -47,6 +49,7 @@ export function DatabasePageActions(props: {
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal('');
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
+  const [webhooksOpen, setWebhooksOpen] = createSignal(false);
   let fileInput: HTMLInputElement | undefined;
   let menuButton: HTMLButtonElement | undefined;
   let focusTitleAfterClose = false;
@@ -170,6 +173,13 @@ export function DatabasePageActions(props: {
                 <UploadIcon class="size-4 shrink-0" />
                 Import CSV
               </Dropdown.Item>
+              <Dropdown.Item
+                disabled={!props.table}
+                onSelect={() => setWebhooksOpen(true)}
+              >
+                <WebhookIcon class="size-4 shrink-0" />
+                Webhooks
+              </Dropdown.Item>
             </Show>
             <Dropdown.Sub>
               <Dropdown.SubTrigger disabled={exporting()}>
@@ -210,6 +220,16 @@ export function DatabasePageActions(props: {
             initialName={value().name}
             onImport={importFile}
             onClose={() => setDraft(undefined)}
+            returnFocus={menuButton}
+          />
+        )}
+      </Show>
+      <Show when={webhooksOpen() && props.table}>
+        {(table) => (
+          <WebhooksDialog
+            databaseId={props.detail.database.id}
+            table={table()}
+            onClose={() => setWebhooksOpen(false)}
             returnFocus={menuButton}
           />
         )}

@@ -5562,6 +5562,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "database_webhooks"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "databases",
+ "entity_access",
+ "hex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "models_databases",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "databases"
 version = "0.1.0"
 dependencies = [
@@ -6233,6 +6263,7 @@ dependencies = [
  "cool_asserts",
  "cowlike",
  "crm",
+ "database_webhooks",
  "databases",
  "dictation",
  "document_sub_type",

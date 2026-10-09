@@ -573,6 +573,18 @@ pub(crate) type DatabasesServiceType =
 pub(crate) type DssDatabasesState =
     DatabasesRouterState<DatabasesServiceType, EntityAccessService, AuthorizationService>;
 
+/// Webhooks insert rows through the databases domain service, so they keep its validation and events.
+pub(crate) type DatabaseWebhooksServiceType =
+    database_webhooks::wiring::PgDatabaseWebhooksService<DatabasesServiceType, EntityAccessService>;
+
+/// Webhooks use the same authentication and entity-access services as databases.
+pub(crate) type DssDatabaseWebhooksState =
+    database_webhooks::inbound::axum_router::DatabaseWebhooksRouterState<
+        DatabaseWebhooksServiceType,
+        EntityAccessService,
+        AuthorizationService,
+    >;
+
 /// Forms compose the databases domain service, so row writes retain its validation and events.
 pub(crate) type FormsServiceType = forms::wiring::PgFormsService<
     DatabasesServiceType,
@@ -834,6 +846,7 @@ pub(crate) struct ApiContext {
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
     pub databases_state: DssDatabasesState,
+    pub database_webhooks_state: DssDatabaseWebhooksState,
     pub forms_state: DssFormsState,
     pub database_starter_state: DssDatabaseStarterState,
     pub collab_surface_state: DssCollabSurfaceState,

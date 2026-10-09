@@ -1,0 +1,49 @@
+[package]
+edition = "2024"
+name = "database_webhooks"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# Axum HTTP router: managing a database's webhooks, and receiving one.
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "databases/inbound",
+  "entity_access/inbound",
+]
+# Postgres persistence, and receipts minted through entity access.
+postgres = ["dep:sqlx"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+databases = { path = "../databases", features = ["ports"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+hex = { workspace = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+model-error-response = { path = "../model-error-response", optional = true }
+models_databases = { path = "../models_databases" }
+rand = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+# The real databases service and entity access, for the end-to-end test.
+databases = { path = "../databases", features = ["postgres"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

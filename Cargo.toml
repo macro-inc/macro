@@ -37,6 +37,7 @@ members = [
   "crates/jev",
   "crates/claude_cloud_agents",
   "crates/database_sql",
+  "crates/database_webhooks",
   "crates/databases",
   "crates/databases_sql",
   "crates/models_databases",

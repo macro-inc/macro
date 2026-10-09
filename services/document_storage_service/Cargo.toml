@@ -102,6 +102,10 @@ databases = { path = "../../crates/databases", features = [
   "inbound",
   "postgres",
 ] }
+database_webhooks = { path = "../../crates/database_webhooks", features = [
+  "inbound",
+  "postgres",
+] }
 forms = { path = "../../crates/forms", features = [
   "entity_mutation",
   "gateway",

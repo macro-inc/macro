@@ -265,11 +265,15 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/databases",
-            databases::inbound::axum_router::databases_router(state.databases_state.clone()).merge(
-                databases::inbound::starter_router::starter_router(
+            databases::inbound::axum_router::databases_router(state.databases_state.clone())
+                .merge(databases::inbound::starter_router::starter_router(
                     state.database_starter_state.clone(),
+                ))
+                .merge(
+                    database_webhooks::inbound::axum_router::database_webhooks_router(
+                        state.database_webhooks_state.clone(),
+                    ),
                 ),
-            ),
         )
         .nest(
             "/forms",
