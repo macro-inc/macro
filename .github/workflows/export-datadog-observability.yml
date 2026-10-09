@@ -1,15 +1,10 @@
 name: Export Datadog observability definitions
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - infra/stacks/observability/migration/export-datadog.ts
-      - .github/workflows/export-datadog-observability.yml
 permissions:
   contents: read
 jobs:
   export:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: namespace-profile-linux-small
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10

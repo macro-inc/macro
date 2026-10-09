@@ -351,8 +351,10 @@ send once. Payloads above 8 MiB skip only the mirror. Datadog's response remains
 the client response. `deploy-analytics-proxy-dev.yml` installs the token from
 Secrets Manager and deploys only the dev Worker.
 
-`export-datadog-observability.yml` reads live dashboard/monitor definitions into a
-seven-day GitHub artifact for the migration inventory. It never modifies Datadog.
+The manually dispatched `export-datadog-observability.yml` reads live dashboard/monitor definitions into a
+seven-day GitHub artifact for the migration inventory. It never modifies Datadog. The current repository credentials return HTTP 403
+for both reads; `monitors_read` and `dashboards_read` access must be restored
+before claiming live inventory parity. Partial exports retain an explicit status file.
 Lambda CloudWatch logs, RUM/session replay, synthetics and database query monitoring
 are separate sources; ECS/edge OTLP duplication alone does not provide parity.
 
