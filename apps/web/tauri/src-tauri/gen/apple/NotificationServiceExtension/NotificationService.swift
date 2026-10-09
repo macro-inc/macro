@@ -18,7 +18,13 @@ final class NotificationService: UNNotificationServiceExtension {
         }
 
         let userInfo = request.content.userInfo
-        let senderName = content.title
+        let notificationType = userInfo["notificationType"] as? String
+        // Channel-less sender line for the communication layout; the alert
+        // title (which may carry a channel suffix) is the fallback.
+        let senderName = (userInfo["communicationTitle"] as? String) ?? content.title
+        // `#channel` second line for non-DM channel notifications.
+        let groupName = userInfo["groupName"] as? String
+        let conversationIdentifier = (userInfo["conversationId"] as? String) ?? senderName
 
         // Track pending downloads
         let group = DispatchGroup()
@@ -71,39 +77,65 @@ final class NotificationService: UNNotificationServiceExtension {
                 content.attachments = [attachment]
             }
 
-            // Add profile picture on left side via communication notification (iOS 15+)
-            if let profileURL = profileImageURL {
-                if #available(iOS 15.0, *) {
-                    self.configureCommunicationNotification(
-                        content: content,
-                        senderName: senderName,
-                        avatarURL: profileURL,
-                        contentHandler: contentHandler
-                    )
-                } else {
-                    contentHandler(content)
+            // Add profile picture on left side via communication notification (iOS 15+).
+            // Without a sender photo, emails fall back to the bundled generic
+            // email icon and channel conversations to the generic channel icon.
+            var avatarImageData = profileImageURL.flatMap { try? Data(contentsOf: $0) }
+            if avatarImageData == nil {
+                if notificationType == "new_email" {
+                    avatarImageData = NotificationService.genericEmailAvatarData
+                } else if groupName != nil {
+                    avatarImageData = NotificationService.genericChannelAvatarData
                 }
+            }
+
+            if #available(iOS 15.0, *), let avatarImageData = avatarImageData {
+                self.configureCommunicationNotification(
+                    content: content,
+                    senderName: senderName,
+                    groupName: groupName,
+                    conversationIdentifier: conversationIdentifier,
+                    avatarImageData: avatarImageData,
+                    contentHandler: contentHandler
+                )
             } else {
                 contentHandler(content)
             }
         }
     }
 
+    /// The bundled fallback avatar shown for email notifications whose sender
+    /// has no known profile photo.
+    private static let genericEmailAvatarData: Data? = {
+        bundledAvatarData(named: "email-generic-avatar")
+    }()
+
+    /// The bundled fallback avatar shown for channel notifications whose
+    /// sender has no known profile photo.
+    private static let genericChannelAvatarData: Data? = {
+        bundledAvatarData(named: "channel-generic-avatar")
+    }()
+
+    private static func bundledAvatarData(named name: String) -> Data? {
+        guard let url = Bundle(for: NotificationService.self)
+            .url(forResource: name, withExtension: "png")
+        else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
     @available(iOS 15.0, *)
     private func configureCommunicationNotification(
         content: UNMutableNotificationContent,
         senderName: String,
-        avatarURL: URL,
+        groupName: String?,
+        conversationIdentifier: String,
+        avatarImageData: Data,
         contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
         // Create a unique identifier for the sender
         let handle = INPersonHandle(value: senderName, type: .unknown)
 
-        // Load the avatar image
-        var personImage: INImage? = nil
-        if let imageData = try? Data(contentsOf: avatarURL) {
-            personImage = INImage(imageData: imageData)
-        }
+        let personImage = INImage(imageData: avatarImageData)
 
         // Create the sender person
         let sender = INPerson(
@@ -115,13 +147,32 @@ final class NotificationService: UNNotificationServiceExtension {
             customIdentifier: senderName
         )
 
+        // iOS renders the group line (speakableGroupName) only when the
+        // intent has at least one recipient besides the sender, so a group
+        // conversation carries one placeholder recipient.
+        var recipients: [INPerson]? = nil
+        var speakableGroupName: INSpeakableString? = nil
+        if let groupName = groupName {
+            speakableGroupName = INSpeakableString(spokenPhrase: groupName)
+            recipients = [
+                INPerson(
+                    personHandle: INPersonHandle(value: "", type: .unknown),
+                    nameComponents: nil,
+                    displayName: nil,
+                    image: nil,
+                    contactIdentifier: nil,
+                    customIdentifier: nil
+                )
+            ]
+        }
+
         // Create a send message intent
         let intent = INSendMessageIntent(
-            recipients: nil,
+            recipients: recipients,
             outgoingMessageType: .outgoingMessageText,
             content: content.body,
-            speakableGroupName: nil,
-            conversationIdentifier: senderName,
+            speakableGroupName: speakableGroupName,
+            conversationIdentifier: conversationIdentifier,
             serviceName: nil,
             sender: sender,
             attachments: nil
@@ -129,6 +180,11 @@ final class NotificationService: UNNotificationServiceExtension {
 
         // Set the sender's image for the intent
         intent.setImage(personImage, forParameterNamed: \.sender)
+        if speakableGroupName != nil {
+            // Group notifications take their large avatar from the group
+            // parameter; reuse the sender's photo since channels have none.
+            intent.setImage(personImage, forParameterNamed: \.speakableGroupName)
+        }
 
         // Create an interaction and donate it
         let interaction = INInteraction(intent: intent, response: nil)

@@ -4951,6 +4951,10 @@ type GraphqlNewEmailMetadata {
 	Email snippet.
 	"""
 	snippet: String!
+	"""
+	Profile photo of the sender, when known.
+	"""
+	senderPhotoUrl: String
 }
 
 """

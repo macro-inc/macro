@@ -226,6 +226,7 @@ fn email_notification_builder(
         secondary_notification_entity: None,
         notification: NewEmailMetadata {
             sender: Some("Sender".to_string()),
+            sender_photo_url: None,
             to_email: "staff@macro.com".to_string(),
             thread_id: Uuid::nil().to_string(),
             subject: "Subject".to_string(),

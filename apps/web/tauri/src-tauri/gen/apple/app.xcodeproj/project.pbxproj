@@ -19,6 +19,8 @@
 		618672DC8A5E0605441C9935 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E2B15F176E4B041AE33EEEA /* UIKit.framework */; };
 		836D84C5F07860664DAF79C8 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D8F57162F5CC7AEDD55F173D /* WebKit.framework */; };
 		84C06806528EC8D5602FB113 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EAE3E64C98FE3472A9133C6 /* NotificationService.swift */; };
+		B70668DF9A047276835496CA /* email-generic-avatar.png in Resources */ = {isa = PBXBuildFile; fileRef = 40E7E64E4284E68C42482504 /* email-generic-avatar.png */; };
+		24ECE75F2C6DD5CD821FC8C0 /* channel-generic-avatar.png in Resources */ = {isa = PBXBuildFile; fileRef = 96E67A7F4D4EC3F203D853CE /* channel-generic-avatar.png */; };
 		9AEF994676AC5641057C794B /* NotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FA2CD6184313364E14B6F84E /* NotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9D59FB167BB4E699DA17D1E9 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 04B56F58E2E44DDE1D67E7B7 /* MetalKit.framework */; };
 		C6BD59C055C986EA4A77FDA2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */; };
@@ -75,6 +77,8 @@
 		39EEC6A55698228E08917A52 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		4E0D7F48FDCCC9975129FB20 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
 		5116F21CDEA54A9508733EFB /* NotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationServiceExtension.entitlements; sourceTree = "<group>"; };
+		40E7E64E4284E68C42482504 /* email-generic-avatar.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "email-generic-avatar.png"; sourceTree = "<group>"; };
+		96E67A7F4D4EC3F203D853CE /* channel-generic-avatar.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "channel-generic-avatar.png"; sourceTree = "<group>"; };
 		682535EEFE1DA20BE07B123C /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		81E326B61ED92E1D1EECF952 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		857275BDA611F410D652DC52 /* noop.rs */ = {isa = PBXFileReference; path = noop.rs; sourceTree = "<group>"; };
@@ -190,6 +194,8 @@
 				9D39399531526740F7E44FFB /* Info.plist */,
 				0EAE3E64C98FE3472A9133C6 /* NotificationService.swift */,
 				5116F21CDEA54A9508733EFB /* NotificationServiceExtension.entitlements */,
+				40E7E64E4284E68C42482504 /* email-generic-avatar.png */,
+				96E67A7F4D4EC3F203D853CE /* channel-generic-avatar.png */,
 			);
 			path = NotificationServiceExtension;
 			sourceTree = "<group>";
@@ -298,6 +304,7 @@
 			buildConfigurationList = AF4E0B9FC00510C98D436C9E /* Build configuration list for PBXNativeTarget "NotificationServiceExtension" */;
 			buildPhases = (
 				0EB31E4617FF6899A92515ED /* Sources */,
+				59A51A447B007ECD40563988 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -392,6 +399,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		59A51A447B007ECD40563988 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B70668DF9A047276835496CA /* email-generic-avatar.png in Resources */,
+				24ECE75F2C6DD5CD821FC8C0 /* channel-generic-avatar.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -466,6 +482,7 @@
 					arm64,
 				);
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
+				CODE_SIGN_ENTITLEMENTS = NotificationServiceExtension/NotificationServiceExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = TY74Q77JBD;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
@@ -667,6 +684,7 @@
 					arm64,
 				);
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
+				CODE_SIGN_ENTITLEMENTS = NotificationServiceExtension/NotificationServiceExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = TY74Q77JBD;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;

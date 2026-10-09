@@ -4,11 +4,30 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PushNotificationDataCommunicationTitle } from './pushNotificationDataCommunicationTitle';
+import type { PushNotificationDataConversationId } from './pushNotificationDataConversationId';
+import type { PushNotificationDataGroupName } from './pushNotificationDataGroupName';
+import type { PushNotificationDataNotificationType } from './pushNotificationDataNotificationType';
 import type { PushNotificationDataSenderProfilePictureUrl } from './pushNotificationDataSenderProfilePictureUrl';
 
 export interface PushNotificationData {
+  /** Sender line for the communication-notification layout, without any
+channel suffix (e.g. `hutch mentioned you`). The Notification Service
+Extension falls back to the alert title when absent. */
+  communicationTitle?: PushNotificationDataCommunicationTitle;
+  /** Stable conversation identifier (channel or email-thread id) for
+`INSendMessageIntent.conversationIdentifier`. */
+  conversationId?: PushNotificationDataConversationId;
+  /** Conversation group name (e.g. `#bug-reports`) rendered as the second
+line of a group communication notification. Only set for non-DM
+channel notifications. */
+  groupName?: PushNotificationDataGroupName;
   /** The id of the notification record (UserNotification.id) */
   notificationId: string;
+  /** The notification type name (e.g. `new_email`), used by the Notification
+Service Extension to pick per-type rendering such as the generic email
+avatar fallback. */
+  notificationType?: PushNotificationDataNotificationType;
   /** The sender's profile picture URL, used by the Notification Service Extension
 to download and attach as a rich notification image. */
   senderProfilePictureUrl?: PushNotificationDataSenderProfilePictureUrl;

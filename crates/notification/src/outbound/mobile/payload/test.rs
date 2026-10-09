@@ -13,6 +13,10 @@ fn android_alert_uses_sns_fcm_v1_with_string_data() {
         PushNotificationData {
             notification_id: id,
             sender_profile_picture_url: Some("https://example.com/avatar.png".into()),
+            notification_type: None,
+            communication_title: None,
+            group_name: None,
+            conversation_id: None,
         },
         macro_user_id::user_id::MacroUserIdStr::try_from_email("alice@example.com").unwrap(),
     );

@@ -5,9 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NewEmailMetadataSender } from './newEmailMetadataSender';
+import type { NewEmailMetadataSenderPhotoUrl } from './newEmailMetadataSenderPhotoUrl';
 
 export interface NewEmailMetadata {
   sender?: NewEmailMetadataSender;
+  /** Profile photo of the sender (Macro profile picture or the recipient's
+synced contact photo), when known. */
+  senderPhotoUrl?: NewEmailMetadataSenderPhotoUrl;
   snippet: string;
   subject: string;
   threadId: string;
