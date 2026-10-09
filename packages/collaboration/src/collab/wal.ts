@@ -98,16 +98,38 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   public async append(update: T): Promise<void> {
-    const tx = await this.database.transaction('updates', 'readwrite');
-    await Promise.all([
-      tx.store.add({
-        scopeId: this.scopeId,
-        update,
-        delivered: false,
-        createdAt: Date.now(),
-      }),
-      tx.done,
-    ]);
+    const entry = {
+      scopeId: this.scopeId,
+      update,
+      delivered: false,
+      createdAt: Date.now(),
+    };
+    for (let attempt = 0; ; attempt++) {
+      const tx = await this.database.transaction('updates', 'readwrite');
+      // A rejected request alone does not prove rollback. Wait for the native
+      // transaction outcome before deciding whether replay is safe.
+      const aborted = new Promise<boolean>((resolve) => {
+        tx.addEventListener('abort', () => resolve(true), { once: true });
+        tx.addEventListener('complete', () => resolve(false), { once: true });
+      });
+      try {
+        // Wrap synchronous request errors too, so tx.done is always observed.
+        const write = async () => tx.store.add(entry);
+        await Promise.all([write(), tx.done]);
+        return;
+      } catch (error) {
+        const rolledBack = await aborted;
+        if (
+          attempt === 1 ||
+          !rolledBack ||
+          (tx.error !== null && tx.error.name !== 'AbortError') ||
+          !(error instanceof DOMException) ||
+          error.name !== 'AbortError'
+        ) {
+          throw tx.error ?? error;
+        }
+      }
+    }
   }
 
   public async getAll(): Promise<WALEntry<T>[]> {
@@ -211,7 +233,7 @@ export class WALSyncer<T> {
   /** True if append was called while a flush was in progress. Causes flush
    *  to re-run after completing so those entries aren't stranded. */
   private hasNewPending = false;
-  private flushFailureReported = false;
+  private reportedFailures = new Map<'initialization' | 'flush', string>();
   public pendingFlush: Promise<void> = Promise.resolve();
   private cleanupFns: Array<() => void> = [];
   private deliveryOutage:
@@ -228,14 +250,14 @@ export class WALSyncer<T> {
    * Exists so that we can not "do stuff" until we have pruned expired entries
    * (like when snapshot loading occurs right after construction for example).
    */
-  private readonly readyPromise: Promise<void>;
+  private readyPromise?: Promise<void>;
 
   constructor(
     private readonly store: WALStore<T>,
     private readonly push: (items: T[]) => Promise<boolean>,
     private readonly label?: string
   ) {
-    this.readyPromise = this.setup();
+    void this.ready();
   }
 
   /* Right now just drops expired entries. */
@@ -252,7 +274,22 @@ export class WALSyncer<T> {
   }
 
   public ready(): Promise<void> {
+    if (!this.readyPromise) {
+      this.readyPromise = this.setup();
+      void this.observeSetup(this.readyPromise);
+    }
     return this.readyPromise;
+  }
+
+  private async observeSetup(setup: Promise<void>): Promise<void> {
+    try {
+      await setup;
+      this.reportedFailures.delete('initialization');
+    } catch (error) {
+      // Retry only on the next caller's request, sharing any in-flight setup.
+      if (this.readyPromise === setup) this.readyPromise = undefined;
+      this.reportFailure('initialization', error);
+    }
   }
 
   public async append(item: T): Promise<void> {
@@ -289,26 +326,30 @@ export class WALSyncer<T> {
   private async observeFlush(flush: Promise<void>): Promise<void> {
     try {
       await flush;
-      this.flushFailureReported = false;
+      this.reportedFailures.delete('flush');
     } catch (error) {
-      if (this.flushFailureReported) return;
-      this.flushFailureReported = true;
-      if (this.label) {
-        logSyncService({
-          documentId: this.label,
-          level: 'error',
-          context: {
-            misc: {
-              errName: error instanceof Error ? error.name : undefined,
-              errMessage:
-                error instanceof Error ? error.message : String(error),
-            },
-          },
-          message:
-            'WAL flush failed; queued updates retained for the next attempt',
-        });
-      }
+      this.reportFailure('flush', error);
     }
+  }
+
+  private reportFailure(
+    stage: 'initialization' | 'flush',
+    error: unknown
+  ): void {
+    const details = {
+      errName: error instanceof Error ? error.name : undefined,
+      errMessage: error instanceof Error ? error.message : String(error),
+      errStack: error instanceof Error ? error.stack : undefined,
+    };
+    const fingerprint = JSON.stringify(details);
+    if (this.reportedFailures.get(stage) === fingerprint) return;
+    this.reportedFailures.set(stage, fingerprint);
+    logSyncService({
+      documentId: this.label ?? 'unknown',
+      level: 'error',
+      context: { misc: { ...details, 'wal.stage': stage } },
+      message: `WAL ${stage} failed; retrying on the next trigger`,
+    });
   }
 
   public pruneDelivered(): Promise<void> {

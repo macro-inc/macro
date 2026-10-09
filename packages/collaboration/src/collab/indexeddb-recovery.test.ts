@@ -126,7 +126,7 @@ describe('collaboration IndexedDB recovery', () => {
     expect(await store.count()).toBe(1);
   });
 
-  it('does not replay a write if the connection terminates after the transaction starts', async () => {
+  it('retries once after an interrupted append has rolled back', async () => {
     const store = new BrowserWALStore<number>('wal', 'doc');
     await store.append(1);
     const db = connections[0]!;
@@ -136,7 +136,7 @@ describe('collaboration IndexedDB recovery', () => {
     const add = IDBObjectStore.prototype.add;
     const write = vi
       .spyOn(IDBObjectStore.prototype, 'add')
-      .mockImplementation(function (value, key) {
+      .mockImplementationOnce(function (value, key) {
         const request = add.call(this, value, key);
         // Simulate an interrupted write as well as the connection close event.
         this.transaction.abort();
@@ -146,11 +146,81 @@ describe('collaboration IndexedDB recovery', () => {
         return request;
       });
 
-    await expect(store.append(2)).rejects.toMatchObject({ name: 'AbortError' });
+    await store.append(2);
     await closed;
-    expect(write).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenCalledTimes(2);
     write.mockRestore();
 
+    expect((await store.getAll()).map((entry) => entry.update)).toEqual([1, 2]);
+  });
+
+  it('retries an abort after request success without duplicating the entry', async () => {
+    const store = new BrowserWALStore<number>('wal', 'doc');
+    await store.append(1);
+    const add = IDBObjectStore.prototype.add;
+    const write = vi
+      .spyOn(IDBObjectStore.prototype, 'add')
+      .mockImplementationOnce(function (value, key) {
+        const request = add.call(this, value, key);
+        request.addEventListener('success', () => this.transaction.abort());
+        return request;
+      });
+
+    await store.append(2);
+
+    expect(write).toHaveBeenCalledTimes(2);
+    expect((await store.getAll()).map((entry) => entry.update)).toEqual([1, 2]);
+  });
+
+  it('does not retry an error when the transaction actually commits', async () => {
+    const store = new BrowserWALStore<number>('wal', 'doc');
+    await store.append(1);
+    const add = IDBObjectStore.prototype.add;
+    const error = new DOMException('Ambiguous request failure', 'AbortError');
+    const write = vi
+      .spyOn(IDBObjectStore.prototype, 'add')
+      .mockImplementationOnce(function (value, key) {
+        add.call(this, value, key);
+        throw error;
+      });
+
+    await expect(store.append(2)).rejects.toBe(error);
+
+    expect(write).toHaveBeenCalledOnce();
+    expect((await store.getAll()).map((entry) => entry.update)).toEqual([1, 2]);
+  });
+
+  it('bounds aborted append retries and leaves existing entries intact', async () => {
+    const store = new BrowserWALStore<number>('wal', 'doc');
+    await store.append(1);
+    const add = IDBObjectStore.prototype.add;
+    const write = vi
+      .spyOn(IDBObjectStore.prototype, 'add')
+      .mockImplementation(function (value, key) {
+        const request = add.call(this, value, key);
+        this.transaction.abort();
+        return request;
+      });
+
+    await expect(store.append(2)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(write).toHaveBeenCalledTimes(2);
+    expect((await store.getAll()).map((entry) => entry.update)).toEqual([1]);
+  });
+
+  it('does not retry a transaction aborted by a constraint failure', async () => {
+    const store = new BrowserWALStore<number>('wal', 'doc');
+    await store.append(1);
+    const add = IDBObjectStore.prototype.add;
+    const write = vi
+      .spyOn(IDBObjectStore.prototype, 'add')
+      .mockImplementationOnce(function (value) {
+        return add.call(this, { ...value, id: 1 });
+      });
+
+    await expect(store.append(2)).rejects.toMatchObject({
+      name: 'ConstraintError',
+    });
+    expect(write).toHaveBeenCalledOnce();
     expect((await store.getAll()).map((entry) => entry.update)).toEqual([1]);
   });
 

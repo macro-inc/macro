@@ -36,6 +36,81 @@ async function undeliveredCount(
 // pruneDelivered() is called by the snapshot tick after a durable snapshot save.
 
 describe('WALSyncer', () => {
+  it('retries failed initialization on demand and shares the retry across callers', async () => {
+    vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
+    const store = new MockWALStore<RawUpdate>();
+    const error = new DOMException('Temporarily unavailable', 'UnknownError');
+    const retry = Promise.withResolvers<number>();
+    const prune = vi
+      .spyOn(store, 'pruneExpired')
+      .mockRejectedValueOnce(error)
+      .mockReturnValueOnce(retry.promise);
+    const push = vi.fn(async () => true);
+    const wal = new WALSyncer(store, push);
+
+    await expect(wal.ready()).rejects.toBe(error);
+    expect(prune).toHaveBeenCalledOnce();
+    const ready = wal.ready();
+    expect(wal.ready()).toBe(ready);
+    const append = wal.append(new Uint8Array([1]));
+    expect(prune).toHaveBeenCalledTimes(2);
+    expect(await store.count()).toBe(0);
+
+    retry.resolve(0);
+    await append;
+    await wal.pendingFlush;
+    await wal.ready();
+    expect(prune).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenCalledExactlyOnceWith([new Uint8Array([1])]);
+  });
+
+  it('handles constructor setup failure even when no caller immediately awaits ready', async () => {
+    const log = vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
+    const store = new MockWALStore<RawUpdate>();
+    const error = new Error('Initial prune failed');
+    const prune = vi.spyOn(store, 'pruneExpired').mockRejectedValueOnce(error);
+    const wal = new WALSyncer(store, async () => true);
+
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            misc: expect.objectContaining({
+              errStack: error.stack,
+              'wal.stage': 'initialization',
+            }),
+          },
+        })
+      )
+    );
+    expect(prune).toHaveBeenCalledOnce();
+    await wal.ready();
+    expect(prune).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports distinct flush failures with their stacks during the same outage', async () => {
+    const log = vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
+    const store = new MockWALStore<RawUpdate>();
+    const wal = new WALSyncer(store, async () => true, 'wal-telemetry-test');
+    await wal.ready();
+    const first = new Error('Storage failed');
+    const second = new Error('Storage failed');
+    first.stack = 'Error: Storage failed\n at firstOperation';
+    second.stack = 'Error: Storage failed\n at secondOperation';
+    const getAll = vi.spyOn(store, 'getAll').mockRejectedValue(first);
+    await expect(wal.flush()).rejects.toBe(first);
+    await expect(wal.flush()).rejects.toBe(first);
+    getAll.mockRejectedValue(second);
+    await expect(wal.flush()).rejects.toBe(second);
+    await expect(wal.flush()).rejects.toBe(second);
+
+    const errors = log.mock.calls.filter(([entry]) => entry.level === 'error');
+    expect(errors.map(([entry]) => entry.context.misc?.errStack)).toEqual([
+      first.stack,
+      second.stack,
+    ]);
+  });
+
   it('handles background storage failures once per outage and retries on the next trigger', async () => {
     const log = vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
     const store = new MockWALStore<RawUpdate>();
