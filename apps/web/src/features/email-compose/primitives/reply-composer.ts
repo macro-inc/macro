@@ -71,6 +71,7 @@ import {
 import { createReplyComposerFocus } from './reply-composer-focus';
 import { createReplyRecipientFields } from './reply-recipient-fields';
 import {
+  pendingInlineMedia,
   refuseSend,
   sendRefusalAfterSave,
   sendRefusalBeforeSave,
@@ -300,7 +301,19 @@ export function createReplyComposer(
         void retryDraft().catch(props.notices.reportError);
       } else detachFromObsoleteDraft('Saving your edits as a new draft.');
     },
-    handleAlreadySent
+    handleAlreadySent,
+    async () => {
+      if (
+        sendLocked() ||
+        schedule.state().type === 'scheduled' ||
+        !session.autosaveAllowed() ||
+        props.connectivity.looksOffline()
+      )
+        return false;
+      const draftId = session.draftId();
+      if (draftId && session.serverConfirmed())
+        await attachmentPersistence.upload(draftId);
+    }
   );
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
@@ -434,6 +447,10 @@ export function createReplyComposer(
 
   const attachmentPersistence = createAttachmentPersistence({
     confirmRemoval: !!props.drafts.saveLocalDraft,
+    allowed: () =>
+      !sendLocked() &&
+      schedule.state().type !== 'scheduled' &&
+      !props.connectivity.looksOffline(),
     services: props.attachmentStorage,
     attachments: form.attachments,
     draftId: () =>
@@ -924,9 +941,12 @@ export function createReplyComposer(
 
     const offline = sendRefusalBeforeSave(
       props.connectivity,
-      props.delivery.queueActive?.() && schedule.action() === 'send'
+      props.delivery.queueActive?.() && schedule.action() === 'send',
+      form.attachments.list().length > 0
     );
     if (offline) return refuseSend(props.notices, offline);
+    if (pendingInlineMedia(editor()))
+      return refuseSend(props.notices, 'media-not-uploaded');
     const currentEditor = editor();
     const rememberCurrentReply = () => {
       if (!currentEditor) return;
@@ -994,7 +1014,11 @@ export function createReplyComposer(
       // Ensure draft is saved before sending so undo-send always has a draft to restore
       const epochBeforeSave = session.epoch();
       try {
-        if (props.delivery.queueActive?.() && props.drafts.saveLocalDraft)
+        if (
+          props.delivery.queueActive?.() &&
+          props.drafts.saveLocalDraft &&
+          !form.attachments.list().length
+        )
           await autosave.saveLocal(captureSave(willMarkDone));
         else
           await autosave.save(captureSave(willMarkDone), {
@@ -1023,6 +1047,9 @@ export function createReplyComposer(
         queueActive: props.delivery.queueActive?.(),
       });
       if (refusal) return refuseSend(props.notices, refusal);
+
+      if (pendingInlineMedia(editor()))
+        return refuseSend(props.notices, 'media-not-uploaded');
 
       // Snapshot editor state before watermark so undo-send can restore it.
       // Remember by draft so sends in separate composers cannot replace each other.
@@ -1104,6 +1131,11 @@ export function createReplyComposer(
       try {
         result = await pendingSend;
       } catch (error) {
+        if (
+          sendGeneration !== identityVersion ||
+          session.isStale(epochBeforeSave)
+        )
+          return;
         cleanupWatermark();
         autosave.cancel();
         if (mounted && currentDraftId) {
@@ -1114,6 +1146,11 @@ export function createReplyComposer(
         props.notices.feedback.failure('Failed to send email');
         return;
       }
+      if (
+        sendGeneration !== identityVersion ||
+        session.isStale(epochBeforeSave)
+      )
+        return;
       // Clear only after the send is durably accepted, including after unmount.
       try {
         resetState();
@@ -1306,10 +1343,7 @@ export function createReplyComposer(
       sendLocked()
     )
       return;
-    if (
-      !props.drafts.saveLocalDraft &&
-      (await refuseAttachmentsOffline(props.connectivity, props.notices))
-    )
+    if (await refuseAttachmentsOffline(props.connectivity, props.notices))
       return;
     const currentAttachments = form.attachments.list();
 

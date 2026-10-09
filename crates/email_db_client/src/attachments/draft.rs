@@ -1,20 +1,28 @@
 use models_email::{db, service};
+use sqlx::PgPool;
 use sqlx::types::Uuid;
-use sqlx::{Executor, PgPool, Postgres};
 
 #[cfg(test)]
 mod test;
 
 /// Inserts a new draft attachment metadata record.
-#[tracing::instrument(skip(executor, attachment), err)]
-pub async fn insert_draft_attachment<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool, attachment), err)]
+pub async fn insert_draft_attachment(
+    pool: &PgPool,
     link_id: Uuid,
     attachment: service::attachment::AttachmentDraft,
-) -> anyhow::Result<()>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<()> {
+    let mut tx = pool.begin().await?;
+    anyhow::ensure!(
+        super::mutation::lock_editable_attachment_message(
+            &mut tx,
+            link_id,
+            attachment.draft_id,
+            false
+        )
+        .await?,
+        "draft is no longer editable"
+    );
     let db_att: db::attachment::AttachmentDraft = attachment.into();
 
     let inserted = sqlx::query!(
@@ -41,10 +49,11 @@ where
         db_att.s3_key,
         link_id
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
     anyhow::ensure!(inserted.rows_affected() == 1, "draft is no longer editable");
 
+    tx.commit().await?;
     Ok(())
 }
 
@@ -72,16 +81,17 @@ pub async fn get_total_attachments_size_by_draft_id(
 }
 
 /// Deletes a draft attachment record given the draft_id and attachment_id.
-#[tracing::instrument(skip(executor), err)]
-pub async fn delete_draft_attachment<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool), err)]
+pub async fn delete_draft_attachment(
+    pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
     attachment_id: Uuid,
-) -> anyhow::Result<u64>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<u64> {
+    let mut tx = pool.begin().await?;
+    if !super::mutation::lock_editable_attachment_message(&mut tx, link_id, draft_id, true).await? {
+        return Ok(0);
+    }
     let result = sqlx::query!(
         r#"
                 WITH editable AS (
@@ -98,9 +108,10 @@ where
         draft_id,
         link_id
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     Ok(result.rows_affected())
 }
 

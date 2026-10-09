@@ -1,5 +1,4 @@
 import { toast } from '@core/component/Toast/Toast';
-import { debouncedDependent } from '@core/util/debounce';
 
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
@@ -232,17 +231,26 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
     cleanupListners();
   });
 
-  const debouncedScale = debouncedDependent(scale, 60);
-  createEffect(
-    on(debouncedScale, (value) => {
-      editor()?.update(() => {
+  const persistScale = debounce((value: number) => {
+    const currentEditor = editor();
+    if (!interactable() || !currentEditor?.isEditable()) return;
+    currentEditor.update(() => {
+      if (!currentEditor.isEditable()) return;
+      const node = $getNodeByKey(props.key);
+      if (node && $isVideoNode(node)) node.setScale(value, false);
+    });
+  }, 60);
+  createEffect(on(scale, persistScale));
+  createEffect(() => {
+    if (!interactable()) {
+      persistScale.clear();
+      const committedScale = editor()?.read(() => {
         const node = $getNodeByKey(props.key);
-        if (node && $isVideoNode(node)) {
-          node.setScale(value, false);
-        }
+        return node && $isVideoNode(node) ? node.getScale() : props.scale;
       });
-    })
-  );
+      setScale(committedScale ?? props.scale);
+    }
+  });
 
   const debouncedSetHover = debounce((state: boolean) => {
     setVideoHover(state);
@@ -283,17 +291,21 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
           setVideoHover(false);
         }}
       >
-        <Show when={state() === 'ok' && editor()?.isEditable()}>
+        <Show when={state() === 'ok' && interactable()}>
           <ResizeHandle
             scale={scale}
-            setScale={setScale}
+            setScale={(value) => {
+              if (interactable() && editor()?.isEditable()) setScale(value);
+            }}
             side="left"
             imageDims={videoDims}
             containerRef={containerRef}
           />
           <ResizeHandle
             scale={scale}
-            setScale={setScale}
+            setScale={(value) => {
+              if (interactable() && editor()?.isEditable()) setScale(value);
+            }}
             side="right"
             imageDims={videoDims}
             containerRef={containerRef}

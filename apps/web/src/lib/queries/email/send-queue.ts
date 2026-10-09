@@ -35,6 +35,12 @@ import {
   updateDraftThread,
 } from './graphql/optimistic-thread';
 import {
+  persistLocalEmailSend,
+  readLocalEmailSends,
+  removeLocalEmailSend,
+  watchLocalEmailSends,
+} from './local-drafts';
+import {
   captureSendWorkingCopy,
   restoreSendWorkingCopy,
   retireSendWorkingCopy,
@@ -57,6 +63,9 @@ export function emailSendQueueSelected(
 /** Persisted independently of the optimistic layer, including after rejection. */
 export type EmailSendIntent = {
   uuid: string;
+  cancellationRequested?: boolean;
+  /** The disposable cache lost this record; reconcile before replaying it. */
+  cacheMissing?: boolean;
   /** Resolved through cache aliases on each durable journal read. */
   resolvedDraftId?: string;
   resolvedThreadId?: string;
@@ -143,26 +152,53 @@ export async function readEmailSendIntents(): Promise<EmailSendIntent[]> {
   const host = getGraphqlCacheHost();
   if (!host || host.disabled)
     throw new Error('Durable email storage is unavailable');
-  const intents = await host.durableMutationIntents();
-  return await Promise.all(
-    intents.filter(isEmailSendIntent).map(async (intent) => {
-      const cached = await readCachedDraftAndThread(
-        String(intent.metadata.payload.input.message.draftId),
-        intent.metadata.payload.draft.threadDbId,
-        intents
-      );
-      return {
-        ...intent,
-        resolvedDraftId: String(cached.draftId),
-        resolvedThreadId: cached.threadDbId,
-      };
-    })
-  );
+  const backups = await readLocalEmailSends();
+  const entries = await host.durableMutationIntents();
+  const cached = entries.filter(isEmailSendIntent);
+  const rows: EmailSendIntent[] = [];
+  for (const intent of cached) {
+    const identities = await readCachedDraftAndThread(
+      String(intent.metadata.payload.input.message.draftId),
+      intent.metadata.payload.draft.threadDbId,
+      entries
+    );
+    const backup = backups.find((row) => row.uuid === intent.uuid);
+    let next: EmailSendIntent = {
+      ...intent,
+      resolvedDraftId: String(identities.draftId),
+      resolvedThreadId: identities.threadDbId,
+      cancellationRequested: backup?.cancellationRequested,
+    };
+    // Only persist real changes: writing on every observation would notify forever.
+    if (
+      !(
+        backup?.metadata.payload.restoring && !next.metadata.payload.restoring
+      ) &&
+      (!backup ||
+        JSON.stringify({ ...backup, cacheMissing: undefined }) !==
+          JSON.stringify(next))
+    )
+      next = await persistLocalEmailSend(next);
+    rows.push(
+      backup?.metadata.payload.restoring && !next.metadata.payload.restoring
+        ? backup
+        : next
+    );
+  }
+  for (const backup of backups)
+    if (!cached.some((row) => row.uuid === backup.uuid))
+      rows.push({ ...backup, cacheMissing: true });
+  return rows;
 }
 
 export function watchEmailSends(changed: () => void): () => void {
   getGraphqlSoupClient();
-  return getGraphqlCacheHost()?.onCacheChanged(changed) ?? (() => {});
+  const cache = getGraphqlCacheHost()?.onCacheChanged(changed);
+  const local = watchLocalEmailSends(changed);
+  return () => {
+    cache?.();
+    local();
+  };
 }
 
 export async function sendEmailQueued(args: {
@@ -220,6 +256,29 @@ export async function sendEmailQueued(args: {
     restoreBodyText: args.restoreBodyText ?? draft.bodyText,
     restoreBodyMacro: args.restoreBodyMacro ?? draft.bodyMacro,
   };
+  const intent: EmailSendIntent = {
+    uuid: attemptId,
+    phase: 'pending',
+    locallyCancelled: false,
+    metadata: {
+      kind: 'email-send-v1',
+      payload: { input, draft, workingCopy },
+      exclusive: {
+        entityKey: `GraphqlSoupEmailMessage:${draft.draftId}`,
+        releaseOn: {
+          responsePath: ['cancelEmailSend', 'attempt', 'status'],
+          value: 'CANCELLED',
+        },
+      },
+    },
+  };
+  await persistLocalEmailSend(intent, true);
+  return await enqueueEmailSendIntent(intent);
+}
+
+async function enqueueEmailSendIntent(intent: EmailSendIntent) {
+  const { input, draft } = intent.metadata.payload;
+  const attemptId = intent.uuid;
   const message = optimisticDraftEntity(draft);
   const thread = draft.existingThread
     ? updateDraftThread(
@@ -253,15 +312,7 @@ export async function sendEmailQueued(args: {
     {
       uuid: attemptId,
       durableIntent: {
-        kind: 'email-send-v1',
-        payload: { input, draft, workingCopy },
-        exclusive: {
-          entityKey: `GraphqlSoupEmailMessage:${draft.draftId}`,
-          releaseOn: {
-            responsePath: ['cancelEmailSend', 'attempt', 'status'],
-            value: 'CANCELLED',
-          },
-        },
+        ...intent.metadata,
       },
       identityBindings: [
         {
@@ -288,7 +339,7 @@ export async function sendEmailQueued(args: {
   ).toPromise();
   const queued = optimisticMutationDispositionOf(result)?.kind === 'queued';
   if (result.error && !queued) throw result.error;
-  await retireSendWorkingCopy(workingCopy);
+
   const attempt = result.data?.sendEmailMessage.attempt;
   return {
     draftId: attempt?.message?.id ?? String(draft.draftId),
@@ -332,6 +383,8 @@ export async function cancelEmailSendQueued(
 ): Promise<EmailSendIntent> {
   if (settledSendAttempt(intent)?.status === 'DELIVERY_UNCONFIRMED')
     throw new EmailSendDeliveryUnconfirmed();
+  intent = { ...intent, cancellationRequested: true };
+  await persistLocalEmailSend(intent);
   const { input, draft } = intent.metadata.payload;
   const result = await executeOptimisticMutation(
     getGraphqlSoupClient(),
@@ -400,6 +453,26 @@ export async function restoreCancelledEmailSend(
   if (emailSendLocked(intent))
     throw new Error('Confirm cancellation before restoring the draft');
   const { draft, input } = intent.metadata.payload;
+  // Persist restoration authority before saving a replacement working copy.
+  await persistLocalEmailSend({
+    ...intent,
+    phase: 'pending',
+    response: undefined,
+    metadata: {
+      ...intent.metadata,
+      exclusive: undefined,
+      payload: {
+        ...intent.metadata.payload,
+        restoring: true,
+        draft: {
+          ...draft,
+          bodyHtml: input.restoreBodyHtml,
+          bodyText: input.restoreBodyText,
+          bodyMacro: input.restoreBodyMacro,
+        },
+      },
+    },
+  });
   const { restorationVersion, ...restored } = await restoreSendWorkingCopy(
     {
       ...draft,
@@ -409,6 +482,23 @@ export async function restoreCancelledEmailSend(
     },
     intent.metadata.payload.workingCopy
   );
+  const restoredIntent: EmailSendIntent = {
+    ...intent,
+    phase: 'pending',
+    response: undefined,
+    metadata: {
+      ...intent.metadata,
+      exclusive: undefined,
+      replace: true,
+      payload: {
+        ...intent.metadata.payload,
+        draft: restored,
+        restoring: true,
+        restorationVersion,
+      },
+    },
+  };
+  await persistLocalEmailSend(restoredIntent);
   const outcome = await saveEmailDraftQueued({
     args: {
       ...restored,
@@ -419,6 +509,7 @@ export async function restoreCancelledEmailSend(
         replace: true,
         payload: {
           ...intent.metadata.payload,
+          draft: restored,
           restoring: true,
           restorationVersion,
         },
@@ -454,8 +545,55 @@ export async function restoreCancelledEmailSend(
 export async function retireEmailSendIntent(
   intent: EmailSendIntent
 ): Promise<boolean> {
-  return (
-    (await getGraphqlCacheHost()?.retireDurableMutationIntent(intent.uuid)) ??
-    false
+  const retired = await getGraphqlCacheHost()?.retireDurableMutationIntent(
+    intent.uuid
   );
+  if (!retired && !intent.cacheMissing) return false;
+  if (!intent.metadata.payload.restoring)
+    await retireSendWorkingCopy(intent.metadata.payload.workingCopy);
+  await removeLocalEmailSend(intent.uuid);
+  return true;
+}
+
+/** A cache rebuild reuses the original idempotency key and honors durable cancellation. */
+export async function recoverEmailSendIntent(
+  intent: EmailSendIntent
+): Promise<void> {
+  if (!intent.cacheMissing) return;
+  if (intent.metadata.payload.restoring) {
+    if (!intent.metadata.payload.restorationVersion) {
+      await restoreCancelledEmailSend(intent);
+      return;
+    }
+    const outcome = await saveEmailDraftQueued({
+      args: {
+        ...intent.metadata.payload.draft,
+        mutationUuid: intent.uuid,
+        durableIntent: { ...intent.metadata, replace: true },
+      },
+    });
+    if (outcome.kind === 'rejected')
+      throw new Error('Unable to recover the restored draft');
+    return;
+  }
+  const attempt = await fetchEmailSendStatus(intent);
+  if (attempt) {
+    const reconciled = {
+      ...intent,
+      response: { sendEmailMessage: { attempt } },
+    };
+    await persistLocalEmailSend(reconciled);
+    if (attempt.status === 'SENT') {
+      await retireEmailSendIntent(reconciled);
+      return;
+    }
+    if (
+      attempt.status === 'CANCELLED' ||
+      attempt.status === 'DELIVERY_UNCONFIRMED'
+    )
+      return;
+  }
+  if (intent.phase === 'failed' && !intent.cancellationRequested) return;
+  if (intent.cancellationRequested) await cancelEmailSendQueued(intent);
+  else await enqueueEmailSendIntent(intent);
 }

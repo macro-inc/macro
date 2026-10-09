@@ -1,13 +1,11 @@
 import type { EmailSendAttemptFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { createSignal, onCleanup, onMount } from 'solid-js';
-import {
-  retireSendWorkingCopy,
-  supersededSendRestoration,
-} from './send-draft-lifecycle';
+import { supersededSendRestoration } from './send-draft-lifecycle';
 import {
   type EmailSendIntent,
   fetchEmailSendStatus,
   readEmailSendIntents,
+  recoverEmailSendIntent,
   retireEmailSendIntent,
   settledSendAttempt,
   watchEmailSends,
@@ -38,8 +36,6 @@ export function useQueuedEmailSends(enabled: () => boolean = () => true) {
       if (disposed || current !== generation) return;
       const active: EmailSendIntent[] = [];
       for (const row of rows) {
-        if (!row.metadata.payload.restoring)
-          await retireSendWorkingCopy(row.metadata.payload.workingCopy);
         const resolved = applyStatus(row);
         if (
           (settledSendAttempt(resolved)?.status === 'SENT' ||
@@ -56,6 +52,14 @@ export function useQueuedEmailSends(enabled: () => boolean = () => true) {
       if (reconcile && navigator.onLine) {
         await Promise.all(
           active.map(async (row) => {
+            if (row.cacheMissing) {
+              try {
+                await recoverEmailSendIntent(row);
+              } catch {
+                /* Preserve the independent backup on uncertainty. */
+              }
+              return;
+            }
             const known = statuses.get(row.uuid) ?? settledSendAttempt(row);
             if (
               row.metadata.payload.restoring ||

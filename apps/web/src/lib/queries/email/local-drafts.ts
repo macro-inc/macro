@@ -7,6 +7,7 @@ import type {
 import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { getNativeStagedUpload } from '@core/mobile/nativeStagedUpload';
+import { isTauri } from '@core/util/platform';
 import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
@@ -19,9 +20,12 @@ import type { UserInfoData } from '../auth/user-info';
 import { queryClient } from '../client';
 import { createLocalDraftStore } from './local-draft-store';
 
+import type { EmailSendIntent } from './send-queue';
+
 export const localDraftStore = createLocalDraftStore();
 const fileIds = new WeakMap<File, string>();
 const fileCopies = new WeakMap<File, Promise<Blob>>();
+const nativeUploadLocks = new Map<string, Promise<void>>();
 const pendingWrites = new Set<Promise<LocalDraft>>();
 const EPOCH_KEY = 'email-working-copies:epoch';
 let documentSession: { accountId: string; epoch: string } | undefined;
@@ -402,12 +406,18 @@ export async function recordLocalAttachment(
   draftId: string,
   file: File,
   attachmentId: string | undefined,
-  uploaded: boolean
+  uploaded: boolean,
+  expectedGeneration?: string
 ): Promise<void> {
   const owner = await session();
   const draft = await localDraftStore.read(owner, draftId);
   const id = fileIds.get(file);
-  if (!draft || !id) return;
+  if (
+    !draft ||
+    !id ||
+    (expectedGeneration && draft.generation !== expectedGeneration)
+  )
+    return;
   await localDraftStore.update(owner, draft.key, (current) => {
     if (current.generation !== draft.generation) return current;
     const attachments = current.attachments.map((attachment) =>
@@ -537,7 +547,11 @@ export function localDraftQueueLifecycle(
       return false;
     const id = text(object(mutation.variables.input).draftId);
     if (!id) return false;
-    return (await host.durableMutationIntents()).some((value) => {
+    const intents = [
+      ...(await host.durableMutationIntents()),
+      ...(await readLocalEmailSends()),
+    ];
+    return intents.some((value) => {
       const intent = object(value);
       if (intent.uuid === mutation.uuid) return false; // Explicit restore replaces its send.
       const metadata = object(intent.metadata);
@@ -766,6 +780,13 @@ export function localDraftQueueLifecycle(
       }
     },
     async beforeMutationAttempt(mutation) {
+      if (mutation.operationName === 'SendEmailMessage') {
+        const send = (await readLocalEmailSends()).find(
+          (row) => row.uuid === mutation.uuid
+        );
+        if (send?.cancellationRequested || send?.metadata.payload.restoring)
+          return false;
+      }
       if (await ownedBySend(mutation)) return false;
       const attempt = await resolveAttempt(mutation);
       if (!attempt) return true;
@@ -847,4 +868,62 @@ async function settleDraftAttempt(
           : draft.status,
     };
   });
+}
+
+export async function readLocalEmailSends(): Promise<EmailSendIntent[]> {
+  return await localDraftStore.sends(await session());
+}
+export async function persistLocalEmailSend(
+  intent: EmailSendIntent,
+  reserve = false
+): Promise<EmailSendIntent> {
+  return await localDraftStore.putSend(await session(), intent, reserve);
+}
+export async function removeLocalEmailSend(uuid: string): Promise<void> {
+  await localDraftStore.removeSend(await session(), uuid);
+}
+export function watchLocalEmailSends(changed: () => void): () => void {
+  return localDraftStore.subscribe(changed);
+}
+
+/** Web Locks serialize one durable file's upload across composers and tabs. */
+export async function withLocalAttachmentUpload(
+  draftId: string,
+  file: File,
+  upload: (
+    receipt: Extract<LocalDraftAttachment, { type: 'local' }>,
+    generation: string
+  ) => Promise<void>
+): Promise<void> {
+  const owner = await session();
+  const draft = await localDraftStore.read(owner, draftId);
+  const id = fileIds.get(file);
+  if (!draft || !id)
+    throw new Error('Save the attachment on this device before uploading');
+  const name = `macro-email-upload:${owner.accountId}:${draft.key}:${draft.generation}:${id}`;
+  const run = async () => {
+    await session();
+    const current = await localDraftStore.read(owner, draft.key);
+    const receipt = current?.attachments.find(
+      (attachment) => attachment.type === 'local' && attachment.id === id
+    );
+    if (current?.generation !== draft.generation || receipt?.type !== 'local')
+      throw new Error('This attachment belongs to an obsolete draft');
+    await upload(receipt, current.generation);
+  };
+  if (navigator.locks) {
+    await navigator.locks.request(name, run);
+    return;
+  }
+  if (!isTauri())
+    throw new Error('This browser cannot safely upload queued attachments');
+  // The native app has one main webview; serialize its composers even on older WebKit.
+  const previous = nativeUploadLocks.get(name) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(run);
+  nativeUploadLocks.set(name, next);
+  try {
+    await next;
+  } finally {
+    if (nativeUploadLocks.get(name) === next) nativeUploadLocks.delete(name);
+  }
 }

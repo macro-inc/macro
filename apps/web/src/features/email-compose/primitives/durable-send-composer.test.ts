@@ -376,17 +376,17 @@ it('blocks queued standalone envelope, attachment, signature, schedule, delete, 
     expect(await composer.schedule.onCancel()).toBe(false);
     composer.setSubject('Changed');
     composer.setRecipients('to', []);
-    composer.onSelectInbox('other');
+    composer.onSelectInbox?.('other');
     composer.onAddAttachments([
       { type: 'local', file: new File(['audit'], 'audit.txt') },
     ]);
     root.state.setIncludeSignature(false);
-    composer.onDelete();
+    composer.onDelete?.();
     composer.onSend();
     await vi.advanceTimersByTimeAsync(600);
     expect(composer.subject()).toBe('Original');
     expect(composer.recipients()).toEqual(recipients);
-    expect(composer.selectedInboxId()).toBe('inbox');
+    expect(composer.selectedInboxId?.()).toBe('inbox');
     expect(composer.attachments()).toEqual([]);
     expect(root.state.includeSignature()).toBe(true);
     expect(context.drafts.saveDraft).not.toHaveBeenCalled();

@@ -4,11 +4,13 @@ import { CombinedError, createClient, type Operation } from '@urql/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { map, pipe } from 'wonka';
 import type { GraphqlSaveEmailDraftArgs } from './graphql/draft';
+import { persistLocalEmailSend } from './local-drafts';
 import {
   cancelEmailSendQueued,
   type EmailSendIntent,
   emailSendLocked,
   emailSendQueueSelected,
+  recoverEmailSendIntent,
   restoreCancelledEmailSend,
   sendEmailQueued,
 } from './send-queue';
@@ -28,6 +30,12 @@ const mocks = vi.hoisted(() => ({
   cacheEnabled: vi.fn(),
   rolloutEnabled: vi.fn(),
   restored: vi.fn(),
+}));
+vi.mock('./local-drafts', () => ({
+  readLocalEmailSends: vi.fn(async () => []),
+  persistLocalEmailSend: vi.fn(async (intent) => intent),
+  removeLocalEmailSend: vi.fn(async () => {}),
+  watchLocalEmailSends: vi.fn(() => () => {}),
 }));
 vi.mock('./draft-lifecycle-events', () => ({
   publishDraftRestoration: mocks.restored,
@@ -298,7 +306,22 @@ describe('durable email send intent', () => {
     await expect(restoreCancelledEmailSend(intent)).rejects.toThrow(
       'Confirm cancellation'
     );
-    await restoreCancelledEmailSend({ ...intent, locallyCancelled: true });
+    await restoreCancelledEmailSend({
+      ...intent,
+      phase: 'committed',
+      locallyCancelled: true,
+    });
+    const backups = vi
+      .mocked(persistLocalEmailSend)
+      .mock.calls.slice(-2)
+      .map(([row]) => row);
+    expect(backups).toHaveLength(2);
+    for (const backup of backups) {
+      expect(backup.phase).toBe('pending');
+      expect(backup.response).toBeUndefined();
+      expect(backup.metadata.exclusive).toBeUndefined();
+      expect(backup.metadata.payload.draft.bodyText).toBe('Editable body');
+    }
     expect(mocks.save).toHaveBeenCalledWith({
       args: expect.objectContaining({
         draftId: draft.draftId,
@@ -309,6 +332,7 @@ describe('durable email send intent', () => {
           exclusive: undefined,
           replace: true,
           payload: expect.objectContaining({
+            draft: expect.objectContaining({ bodyText: 'Editable body' }),
             restoring: true,
             restorationVersion: {
               key: draft.draftId,
@@ -346,4 +370,72 @@ describe('durable email send intent', () => {
       })
     );
   });
+});
+
+it('cache recovery replays the frozen send with the original attempt ID', async () => {
+  const intent = await send();
+  operations = [];
+  await recoverEmailSendIntent({ ...intent, cacheMissing: true });
+  const replay = operations.find((operation) => operation.kind === 'mutation')!;
+  expect(replay.variables!.input).toEqual(intent.metadata.payload.input);
+  expect(optimisticContextOf(replay)?.uuid).toBe(intent.uuid);
+});
+it('cache recovery honors cancellation instead of recreating a send', async () => {
+  const intent = await send();
+  mocks.intents.mockResolvedValue([intent]);
+  operations = [];
+  await recoverEmailSendIntent({
+    ...intent,
+    cacheMissing: true,
+    cancellationRequested: true,
+  });
+  const replay = operations.find((operation) => operation.kind === 'mutation')!;
+  expect(replay.variables!.input).toEqual(
+    intent.metadata.payload.input.attempt
+  );
+  expect(optimisticContextOf(replay)?.uuid).toBe(intent.uuid);
+});
+it('cache recovery preserves restored content and its acknowledged revision', async () => {
+  const intent = await send();
+  const restored = {
+    ...intent,
+    cacheMissing: true,
+    metadata: {
+      ...intent.metadata,
+      payload: {
+        ...intent.metadata.payload,
+        restoring: true,
+        draft: { ...draft, bodyText: 'Restored and edited body' },
+        restorationVersion: {
+          key: String(draft.draftId),
+          generation: 'newer',
+          revision: 3,
+        },
+      },
+    },
+  };
+  await recoverEmailSendIntent(restored);
+  expect(mocks.save).toHaveBeenCalledWith({
+    args: expect.objectContaining({
+      bodyText: 'Restored and edited body',
+      mutationUuid: intent.uuid,
+      durableIntent: expect.objectContaining({
+        payload: expect.objectContaining({
+          restorationVersion: restored.metadata.payload.restorationVersion,
+        }),
+      }),
+    }),
+  });
+});
+it('cache recovery never automatically retries a permanently failed send', async () => {
+  const intent = await send();
+  operations = [];
+  await recoverEmailSendIntent({
+    ...intent,
+    cacheMissing: true,
+    phase: 'failed',
+  });
+  expect(
+    operations.filter((operation) => operation.kind === 'mutation')
+  ).toEqual([]);
 });

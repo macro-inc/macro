@@ -951,6 +951,20 @@ and reconnect. Opening through an older local thread link must reach the same
 server thread after synchronization. Repeat with an existing reply and confirm
 that other messages, attachments, and the Sent preview remain intact.
 
+Attachments require connectivity: adding files offline is refused in both composers.
+Existing attachments stay visible and preserved while offline, but Send and Schedule
+send require reconnection for any draft with attachments. Online, clicking Send before
+a save debounce finishes must start or continue uploads; a queued save's confirmation
+must also resume pending uploads after reload. Pending or failed inline image/video
+uploads block Send and Schedule send until they have durable URLs or are removed.
+
+Queued sends survive query-cache recovery in independent account-scoped storage,
+retaining their original attempt IDs, frozen bodies, attachments and cancellation
+requests. After cache loss, status reconciliation must reuse that attempt identity;
+it must not create a second delivery. Cancel and Restore must win over a delayed Send
+completion in both composers. Resizing media must stop immediately when an editor
+locks, including an active drag and a pending debounced resize.
+
 With GraphQL Mail enabled, discarding the last draft in a thread must remove the
 thread from every local Mail view, including after queued replay. Discarding a
 standalone draft from its composer returns to the previous list after deletion

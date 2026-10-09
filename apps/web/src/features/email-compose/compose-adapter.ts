@@ -63,6 +63,7 @@ import {
   resumeLocalDraft,
   reviveLocalDraft,
   saveLocalDraft,
+  withLocalAttachmentUpload,
 } from '@queries/email/local-drafts';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
 import { useQueuedEmailSends } from '@queries/email/queued-sends';
@@ -605,29 +606,74 @@ export function createEmailComposeContext(
       },
     },
     attachmentStorage: {
-      uploadAttachments: ({ draftId, inboxId, ...input }) =>
-        upload.mutateAsync({
-          ...input,
-          draftID: draftId,
-          linkId: headerId(inboxId),
-          onAttachmentAdded: async (file, id) => {
-            input.onAttachmentAdded?.(file, id);
-            if (queueActive())
-              await recordLocalAttachment(draftId, file, id, false);
-          },
-          onAttachmentUploaded: async (file, id) => {
-            input.onAttachmentUploaded?.(file, id);
-            if (queueActive())
-              await recordLocalAttachment(draftId, file, id, true);
-          },
-          onAttachmentUploadFailed: (file) => {
-            if (queueActive())
-              void recordLocalAttachment(draftId, file, undefined, false).catch(
-                reportError
+      async uploadAttachments({ draftId, inboxId, ...input }) {
+        for (const file of input.attachments) {
+          const run = async (
+            receipt?: { attachmentId?: string; uploaded: boolean },
+            generation?: string
+          ) => {
+            if (receipt?.uploaded && receipt.attachmentId) {
+              input.onAttachmentUploaded?.(file, receipt.attachmentId);
+              return;
+            }
+            if (receipt?.attachmentId) {
+              await removeAttachment.mutateAsync({
+                draftID: draftId,
+                attachmentID: receipt.attachmentId,
+                linkId: headerId(inboxId),
+              });
+              await recordLocalAttachment(
+                draftId,
+                file,
+                undefined,
+                false,
+                generation
               );
-            input.onAttachmentUploadFailed?.(file);
-          },
-        }),
+            }
+            await upload.mutateAsync({
+              draftID: draftId,
+              attachments: [file],
+              linkId: headerId(inboxId),
+              onAttachmentAdded: async (uploadedFile, id) => {
+                input.onAttachmentAdded?.(uploadedFile, id);
+                if (queueActive())
+                  await recordLocalAttachment(
+                    draftId,
+                    uploadedFile,
+                    id,
+                    false,
+                    generation
+                  );
+              },
+              onAttachmentUploaded: async (uploadedFile, id) => {
+                input.onAttachmentUploaded?.(uploadedFile, id);
+                if (queueActive())
+                  await recordLocalAttachment(
+                    draftId,
+                    uploadedFile,
+                    id,
+                    true,
+                    generation
+                  );
+              },
+              onAttachmentUploadFailed: (uploadedFile) => {
+                if (queueActive())
+                  void recordLocalAttachment(
+                    draftId,
+                    uploadedFile,
+                    undefined,
+                    false,
+                    generation
+                  ).catch(reportError);
+                input.onAttachmentUploadFailed?.(uploadedFile);
+              },
+            });
+          };
+          if (queueActive())
+            await withLocalAttachmentUpload(draftId, file, run);
+          else await run();
+        }
+      },
       addForwardedAttachments: ({ draftId, attachments, inboxId }) =>
         forward.mutateAsync({
           draftID: draftId,

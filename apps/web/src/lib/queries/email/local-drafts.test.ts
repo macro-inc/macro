@@ -9,6 +9,8 @@ import type { OperationResult } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ user: { authenticated: true, id: 'owner' } }));
+const native = vi.hoisted(() => ({ active: false }));
+vi.mock('@core/util/platform', () => ({ isTauri: () => native.active }));
 const stagedUpload = vi.hoisted(() =>
   vi.fn<() => { previewSrc: string; size: number } | undefined>()
 );
@@ -62,6 +64,7 @@ beforeEach(async () => {
   sends.length = 0;
   auth.user = { authenticated: true, id: 'owner' };
   stagedUpload.mockReset();
+  native.active = false;
   runtime = await import('./local-drafts');
   await runtime.localDraftStore.clear();
 });
@@ -508,3 +511,68 @@ describe('draft queue recovery', () => {
     });
   });
 });
+
+it.each(['web', 'native'] as const)(
+  'serializes restored copies of one file and adopts an existing upload receipt: %s',
+  async (platform) => {
+    native.active = platform === 'native';
+    const locks = new Map<string, Promise<unknown>>();
+    const original = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: async (name: string, run: () => Promise<void>) => {
+          const previous = locks.get(name) ?? Promise.resolve();
+          const next = previous.then(run);
+          locks.set(
+            name,
+            next.catch(() => {})
+          );
+          return await next;
+        },
+      },
+    });
+    if (native.active) Reflect.deleteProperty(navigator, 'locks');
+    try {
+      const file = new File(['upload'], 'audit.txt');
+      const local = await runtime.saveLocalDraft({
+        ...input(),
+        attachments: [{ type: 'local', file }],
+      });
+      const restored = (await runtime.restoreLocalAttachments(local))[0];
+      if (restored.type !== 'local') throw new Error('Expected local file');
+      const pending = Promise.withResolvers<void>(),
+        started = Promise.withResolvers<void>();
+      const upload = vi.fn(async () => {
+        started.resolve();
+        await pending.promise;
+        await runtime.recordLocalAttachment(
+          'local',
+          file,
+          'uploaded',
+          true,
+          local.generation
+        );
+      });
+      const first = runtime.withLocalAttachmentUpload('local', file, upload);
+      await started.promise;
+      const adopt = vi.fn(async (receipt) => {
+        expect(receipt.uploaded).toBe(true);
+        expect(receipt.attachmentId).toBe('uploaded');
+      });
+      const second = runtime.withLocalAttachmentUpload(
+        'local',
+        restored.file,
+        adopt
+      );
+      expect(adopt).not.toHaveBeenCalled();
+      pending.resolve();
+      await Promise.all([first, second]);
+      expect(upload).toHaveBeenCalledOnce();
+      expect(adopt).toHaveBeenCalledOnce();
+    } finally {
+      if (original) Object.defineProperty(navigator, 'locks', original);
+      else Reflect.deleteProperty(navigator, 'locks');
+    }
+  }
+);

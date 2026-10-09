@@ -64,6 +64,7 @@ import { createDraftSaveNotice } from './draft-save-notice';
 import { createDraftSession } from './draft-session';
 import { createEmailSendSchedule } from './email-send-schedule';
 import {
+  pendingInlineMedia,
   refuseSend,
   sendRefusalAfterSave,
   sendRefusalBeforeSave,
@@ -218,7 +219,19 @@ export function createEmailComposer(props: EmailComposerOptions) {
         void retryDraft().catch(props.notices.reportError);
       } else detachFromObsoleteDraft('Saving your edits as a new draft.');
     },
-    handleAlreadySent
+    handleAlreadySent,
+    async () => {
+      if (
+        sendLocked() ||
+        schedule.state().type === 'scheduled' ||
+        !session.autosaveAllowed() ||
+        props.connectivity.looksOffline()
+      )
+        return false;
+      const draftId = session.draftId();
+      if (draftId && session.serverConfirmed())
+        await attachmentPersistence.upload(draftId);
+    }
   );
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
@@ -233,6 +246,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const attachmentPersistence = createAttachmentPersistence({
     confirmRemoval: !!props.drafts.saveLocalDraft,
+    allowed: () =>
+      !sendLocked() &&
+      schedule.state().type !== 'scheduled' &&
+      !props.connectivity.looksOffline(),
     services: props.attachmentStorage,
     attachments: form.attachments,
     draftId: () =>
@@ -548,10 +565,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const handleAddAttachments = async (attachments: DraftFormAttachment[]) => {
     if (persistencePaused()) return;
-    if (
-      !props.drafts.saveLocalDraft &&
-      (await refuseAttachmentsOffline(props.connectivity, props.notices))
-    )
+    if (await refuseAttachmentsOffline(props.connectivity, props.notices))
       return;
     for (const attachment of attachments) {
       form.attachments.add(attachment);
@@ -752,9 +766,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
     const offline = sendRefusalBeforeSave(
       props.connectivity,
-      props.delivery.queueActive?.() && schedule.action() === 'send'
+      props.delivery.queueActive?.() && schedule.action() === 'send',
+      form.attachments.list().length > 0
     );
     if (offline) return refuseSend(props.notices, offline);
+    if (pendingInlineMedia(editor()))
+      return refuseSend(props.notices, 'media-not-uploaded');
     const scheduleAction = schedule.action();
     if (scheduleAction === 'unavailable') {
       props.notices.feedback.alert(
@@ -783,7 +800,11 @@ export function createEmailComposer(props: EmailComposerOptions) {
     try {
       // Durable sends need the latest local copy, without waiting for a server save.
       const epochBeforeSave = session.epoch();
-      if (props.delivery.queueActive?.() && props.drafts.saveLocalDraft) {
+      if (
+        props.delivery.queueActive?.() &&
+        props.drafts.saveLocalDraft &&
+        !form.attachments.list().length
+      ) {
         await autosave.saveLocal();
       } else {
         try {
@@ -818,6 +839,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
         return;
 
       const draftId = identity.kind === 'server' ? identity.draftId : undefined;
+      if (pendingInlineMedia(editor()))
+        return refuseSend(props.notices, 'media-not-uploaded');
+
       // Snapshot editor state before watermark so undo-send can restore it
       if (draftId) rememberForUndo(draftId, currentLink.id);
 
@@ -879,14 +903,25 @@ export function createEmailComposer(props: EmailComposerOptions) {
           inboxId: activeInboxId(),
         });
 
+        if (
+          sendGeneration !== identityVersion ||
+          session.isStale(epochBeforeSave)
+        )
+          return;
+        cleanupWatermark();
         setSentDraftId(currentDraftId());
         setCompleted(true);
         session.dispatch({ type: 'reset' });
         afterSend(result, currentLink.id);
       } finally {
-        cleanupWatermark();
+        if (
+          sendGeneration === identityVersion &&
+          !session.isStale(epochBeforeSave)
+        )
+          cleanupWatermark();
       }
     } catch (error) {
+      if (sendGeneration !== identityVersion) return;
       props.notices.reportError(error);
       if (!completed()) props.notices.feedback.failure('Failed to send email');
     } finally {

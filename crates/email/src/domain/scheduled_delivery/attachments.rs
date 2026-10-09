@@ -3,7 +3,7 @@
 use uuid::Uuid;
 
 /// Exact attachment sets captured by the send action.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ApprovedAttachments {
     /// Completed upload identities.
     pub uploaded: Vec<Uuid>,

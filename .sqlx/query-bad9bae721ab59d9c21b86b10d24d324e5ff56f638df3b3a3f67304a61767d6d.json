@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT send_time, sent, processing, actor_id, delivery_claim_id,\n                  delivery_started_at, delivery_message_id, delivery_status,\n                  (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'\n                   AND (CASE WHEN processing THEN\n                        COALESCE(delivery_lease_expires_at, updated_at + make_interval(secs => $3)) <= NOW()\n                        ELSE delivery_lease_expires_at IS NULL OR delivery_lease_expires_at <= NOW() END)) AS \"available!\"\n           FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
+  "query": "SELECT send_time, sent, processing, actor_id, delivery_claim_id,\n                  delivery_started_at, delivery_message_id, delivery_status, approved_attachments,\n                  (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'\n                   AND (CASE WHEN processing THEN\n                        COALESCE(delivery_lease_expires_at, updated_at + make_interval(secs => $3)) <= NOW()\n                        ELSE delivery_lease_expires_at IS NULL OR delivery_lease_expires_at <= NOW() END)) AS \"available!\"\n           FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -45,6 +45,11 @@
       },
       {
         "ordinal": 8,
+        "name": "approved_attachments",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 9,
         "name": "available!",
         "type_info": "Bool"
       }
@@ -65,8 +70,9 @@
       true,
       true,
       false,
+      false,
       null
     ]
   },
-  "hash": "62bd6ec0bedd0729f21ed828a34474113230fdf46f81de4452061ad7250fb4cd"
+  "hash": "bad9bae721ab59d9c21b86b10d24d324e5ff56f638df3b3a3f67304a61767d6d"
 }

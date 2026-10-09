@@ -43,6 +43,7 @@ const message: EmailThreadMessageFieldsFragment = {
   isDraft: true,
   hasAttachments: false,
   scheduledSendTime: null,
+  scheduledSendStatus: null,
   bodyText: draft.bodyText,
   bodyHtmlSanitized: null,
   bodyMacro: null,

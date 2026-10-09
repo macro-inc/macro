@@ -286,7 +286,10 @@ impl ScheduledDeliveryAdapter {
             .map(|snapshot| serde_json::from_value::<SendSnapshot>(snapshot.clone()))
             .transpose()?
             .as_ref()
-            .map(ApprovedAttachments::from);
+            .map(ApprovedAttachments::from)
+            .unwrap_or(serde_json::from_value(
+                claim.delivery.approved_attachments.clone(),
+            )?);
         let attachments = prepare_delivery_attachments(
             &self.db,
             &self.s3_client,
@@ -294,7 +297,7 @@ impl ScheduledDeliveryAdapter {
             &self.attachment_bucket,
             &claim.link,
             &mut message,
-            approved.as_ref(),
+            Some(&approved),
         )
         .await?;
         let request = SendRequest {

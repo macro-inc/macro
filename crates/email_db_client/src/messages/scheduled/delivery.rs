@@ -19,6 +19,8 @@ pub struct DeliveryClaim {
     /// Whether a provider submission may already have happened.
     pub requires_reconciliation: bool,
     /// Immutable approved content, when admitted through GraphQL.
+    /// Attachment identities retained for every scheduled send.
+    pub approved_attachments: serde_json::Value,
     pub approved_snapshot: Option<serde_json::Value>,
     /// Prepared envelope/body frozen by GraphQL admission; absent for older writes.
     pub prepared_content: Option<serde_json::Value>,
@@ -45,7 +47,7 @@ pub async fn claim_delivery(
     }
     let schedule = sqlx::query!(
         r#"SELECT send_time, sent, processing, actor_id, delivery_claim_id,
-                  delivery_started_at, delivery_message_id, delivery_status,
+                  delivery_started_at, delivery_message_id, delivery_status, approved_attachments,
                   (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'
                    AND (CASE WHEN processing THEN
                         COALESCE(delivery_lease_expires_at, updated_at + make_interval(secs => $3)) <= NOW()
@@ -96,6 +98,7 @@ pub async fn claim_delivery(
         token,
         message_id_header: header,
         requires_reconciliation: reconcile,
+        approved_attachments: schedule.approved_attachments,
         approved_snapshot: attempt.as_ref().and_then(|attempt| attempt.request.clone()),
         prepared_content: attempt.and_then(|attempt| attempt.prepared_content),
     }))

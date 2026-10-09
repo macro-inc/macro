@@ -1,6 +1,6 @@
 use models_email::{db, service};
+use sqlx::PgPool;
 use sqlx::types::Uuid;
-use sqlx::{Executor, PgPool, Postgres};
 
 #[cfg(test)]
 mod test;
@@ -8,16 +8,18 @@ mod test;
 /// Inserts a forwarded attachment link between a draft and an original message's attachment.
 /// Uses a subquery to verify the draft belongs to the given link_id.
 /// ON CONFLICT DO NOTHING makes this idempotent.
-#[tracing::instrument(skip(executor), err)]
-pub async fn insert_forwarded_attachment<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool), err)]
+pub async fn insert_forwarded_attachment(
+    pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
     attachment_id: Uuid,
-) -> anyhow::Result<()>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<()> {
+    let mut tx = pool.begin().await?;
+    if !super::mutation::lock_editable_attachment_message(&mut tx, link_id, draft_id, false).await?
+    {
+        return Ok(());
+    }
     sqlx::query!(
         r#"
         WITH editable AS (
@@ -34,23 +36,26 @@ where
         attachment_id,
         link_id,
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     Ok(())
 }
 
 /// Deletes a forwarded attachment link. Verifies draft ownership via link_id.
-#[tracing::instrument(skip(executor), err)]
-pub async fn delete_forwarded_attachment<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool), err)]
+pub async fn delete_forwarded_attachment(
+    pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
     attachment_id: Uuid,
-) -> anyhow::Result<u64>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<u64> {
+    let mut tx = pool.begin().await?;
+    if !super::mutation::lock_editable_attachment_message(&mut tx, link_id, draft_id, false).await?
+    {
+        return Ok(0);
+    }
     let result = sqlx::query!(
         r#"
         WITH editable AS (
@@ -66,9 +71,10 @@ where
         attachment_id,
         link_id,
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     Ok(result.rows_affected())
 }
 
