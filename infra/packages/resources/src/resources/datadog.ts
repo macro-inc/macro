@@ -147,7 +147,7 @@ export const datadogAgentContainer = {
     },
     {
       name: 'DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT',
-      value: grafanaTelemetryEnabled ? '127.0.0.1:14317' : '0.0.0.0:4317',
+      value: '0.0.0.0:4317',
     },
     // Sampling configuration to prevent excessive disk writes
     // Sample 10% of traces in prod, 100% in dev for debugging
@@ -168,7 +168,7 @@ export const datadogAgentContainer = {
   ],
   portMappings: [
     {
-      containerPort: grafanaTelemetryEnabled ? 14317 : 4317,
+      containerPort: 4317,
     },
   ],
   memoryReservation: 256,

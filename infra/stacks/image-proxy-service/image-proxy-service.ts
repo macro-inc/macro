@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -205,7 +206,10 @@ export class ImageProxyService extends pulumi.ComponentResource {
               stopTimeout: 10,
               cpu: 512,
               memory: 1024,
-              environment: containerEnvVars,
+              environment: [
+                ...(containerEnvVars ?? []),
+                ...grafanaTelemetryEnvironment,
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',

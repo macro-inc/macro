@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -256,6 +257,7 @@ export class AgentScheduleService extends pulumi.ComponentResource {
               cpu: 256,
               memory: 512,
               environment: [
+                ...grafanaTelemetryEnvironment,
                 ...containerEnvVars,
                 {
                   name: 'BASE_URL',

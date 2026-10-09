@@ -1,23 +1,13 @@
 logging { level = "warn" }
 
 otelcol.receiver.otlp "applications" {
-  grpc { endpoint = "127.0.0.1:4317" }
-  http { endpoint = "127.0.0.1:4318" }
+  grpc { endpoint = "127.0.0.1:14317" }
+  http { endpoint = "127.0.0.1:14318" }
   output {
-    traces = [otelcol.exporter.otlp.datadog.input, otelcol.processor.batch.grafana.input]
-    metrics = [otelcol.exporter.otlp.datadog.input, otelcol.processor.batch.grafana.input]
+    traces = [otelcol.processor.batch.grafana.input]
+    metrics = [otelcol.processor.batch.grafana.input]
     logs = [otelcol.processor.batch.grafana.input]
   }
-}
-
-// Datadog keeps its own queue and existing agent enrichment/sampling.
-otelcol.exporter.otlp "datadog" {
-  client {
-    endpoint = "127.0.0.1:14317"
-    tls { insecure = true }
-  }
-  sending_queue { queue_size = 256 }
-  retry_on_failure { max_elapsed_time = "60s" }
 }
 
 otelcol.receiver.fluentforward "application_logs" {
@@ -86,8 +76,7 @@ otelcol.processor.transform "grafana" {
   }
 }
 
-// Batch acknowledges the optional copy before downstream limiting/exporting.
-// Overload may drop this copy; it must not request retries of accepted Datadog data.
+// Buffer only the independent Grafana copy; Datadog bypasses this collector.
 otelcol.processor.batch "grafana" {
   timeout = "5s"
   send_batch_size = 256

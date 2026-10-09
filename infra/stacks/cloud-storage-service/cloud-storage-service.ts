@@ -9,6 +9,7 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -374,7 +375,10 @@ export class CloudStorageService extends pulumi.ComponentResource {
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 512,
               memory: stack === 'prod' ? 4096 : 2048,
-              environment: containerEnvVars,
+              environment: [
+                ...(containerEnvVars ?? []),
+                ...grafanaTelemetryEnvironment,
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',

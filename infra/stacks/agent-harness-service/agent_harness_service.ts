@@ -8,6 +8,7 @@ import {
   ServiceTargetGroup,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -379,6 +380,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               cpu: 1024,
               memory: 2048,
               environment: [
+                ...grafanaTelemetryEnvironment,
                 ...containerEnvVars,
                 { name: 'CLAUDE_OAUTH_KMS_KEY_ID', value: claudeOauthKey.arn },
                 {

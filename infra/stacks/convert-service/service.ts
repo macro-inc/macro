@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -222,6 +223,7 @@ export class ConvertService extends pulumi.ComponentResource {
               cpu: 4096,
               memory: 8192,
               environment: [
+                ...grafanaTelemetryEnvironment,
                 ...containerEnvVars,
                 {
                   name: 'BASE_URL',

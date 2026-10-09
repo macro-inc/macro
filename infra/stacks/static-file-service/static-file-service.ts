@@ -7,6 +7,7 @@ import {
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   EcsDeploymentFailureAlarm,
   fargateLogRouterSidecarContainer,
   QueueAlarms,
@@ -571,6 +572,7 @@ export class StaticFileService extends pulumi.ComponentResource {
               cpu: 256,
               memory: 512,
               environment: [
+                ...grafanaTelemetryEnvironment,
                 {
                   name: `STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME`,
                   value: args.dynamoDbTableName,

@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -236,6 +237,7 @@ export class SearchProcessingService extends pulumi.ComponentResource {
               cpu: stack === 'prod' ? 2048 : 512,
               memory: stack === 'prod' ? 6000 : 1024,
               environment: [
+                ...grafanaTelemetryEnvironment,
                 { name: 'BASE_URL', value: this.domain },
                 ...(containerEnvVars ?? []),
               ],

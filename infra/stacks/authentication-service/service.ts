@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
   ServiceTargetGroup,
@@ -531,6 +532,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
               cpu: 512,
               memory: 718, //1024 - (256 + 50)
               environment: [
+                ...grafanaTelemetryEnvironment,
                 { name: 'BASE_URL', value: this.domain },
                 // Injected here rather than configured in Doppler: a key id is
                 // not a secret, and deriving it from the resource keeps the two

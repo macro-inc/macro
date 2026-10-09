@@ -6,6 +6,11 @@ import {
   grafanaTelemetryEnabled,
 } from '../../../shared';
 
+// Applied automatically with the dev sidecar; never overrides the primary OTLP endpoint.
+export const grafanaTelemetryEnvironment = grafanaTelemetryEnabled
+  ? [{ name: 'GRAFANA_OTLP_ENDPOINT', value: 'http://127.0.0.1:14317' }]
+  : [];
+
 export function grafanaTelemetryContainers(
   serviceName: string
 ): Record<string, ecs.TaskDefinitionContainerDefinitionArgs> {
@@ -15,7 +20,7 @@ export function grafanaTelemetryContainers(
       name: 'alloy',
       image:
         'grafana/alloy:v1.16.0@sha256:6e00cf7c5a692ff5f24844529416ed017d76fce922f8199004e73d5eca46b6b8',
-      essential: true,
+      essential: false,
       memory: 512,
       memoryReservation: 128,
       stopTimeout: 30,

@@ -36,6 +36,7 @@ maybe_env_vars! {
     pub struct RustLog;
     pub struct OtelExporterOtlpEndpoint;
     pub struct OtelTraceFilter;
+    pub struct GrafanaOtlpEndpoint;
 }
 
 /// Build an [`EnvFilter`] from `RUST_LOG`, honoring values injected via `APP_SECRETS_JSON`.
@@ -167,7 +168,8 @@ impl MacroEntrypoint {
                 // LGTM stack), so local logs are queryable next to the traces
                 // they belong to.
                 let export_otel = OtelExporterOtlpEndpoint::new().is_some();
-                let tracer_provider = export_otel.then(|| init_opentelemetry("local".to_string()));
+                let tracer_provider =
+                    export_otel.then(|| init_opentelemetry("local".to_string(), None));
                 let logger_provider = export_otel.then(|| init_otel_logs("local".to_string()));
 
                 if let Some(provider) = tracer_provider.as_ref() {
@@ -241,7 +243,10 @@ impl MacroEntrypoint {
                 let env = DdEnv::new()
                     .map(|e| e.to_string())
                     .unwrap_or_else(|_| "unknown".to_string());
-                let tracer_provider = init_opentelemetry(env);
+                let grafana_endpoint = matches!(self.env, Environment::Develop)
+                    .then(GrafanaOtlpEndpoint::new)
+                    .flatten();
+                let tracer_provider = init_opentelemetry(env, grafana_endpoint.as_deref());
 
                 let tracer = tracer_provider.tracer(service_name());
                 let rust_log_filter = rust_log_env_filter();
@@ -350,7 +355,10 @@ fn otel_resource(deployment_environment: String) -> opentelemetry_sdk::Resource 
         .build()
 }
 
-fn init_opentelemetry(deployment_environment: String) -> SdkTracerProvider {
+fn init_opentelemetry(
+    deployment_environment: String,
+    grafana_endpoint: Option<&str>,
+) -> SdkTracerProvider {
     // W3C trace-context propagation: lets macro_tower_layers parent request
     // spans under an incoming `traceparent` (e.g. from the web app), and
     // service clients propagate context onward.
@@ -364,10 +372,26 @@ fn init_opentelemetry(deployment_environment: String) -> SdkTracerProvider {
         .build()
         .expect("failed to create OTLP span exporter");
 
-    SdkTracerProvider::builder()
+    let mut provider = SdkTracerProvider::builder()
         .with_batch_exporter(exporter)
-        .with_resource(otel_resource(deployment_environment))
-        .build()
+        .with_resource(otel_resource(deployment_environment));
+
+    // Keep the original exporter and its queue independent. The second batch
+    // processor copies the same finished spans without changing IDs or sampling.
+    if let Some(endpoint) = grafana_endpoint.filter(|endpoint| !endpoint.trim().is_empty()) {
+        match opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(endpoint)
+            .with_timeout(std::time::Duration::from_secs(2))
+            .build()
+        {
+            Ok(exporter) => provider = provider.with_batch_exporter(exporter),
+            // Tracing is not installed yet. Optional export must not prevent startup.
+            Err(error) => eprintln!("Grafana trace exporter unavailable: {error}"),
+        }
+    }
+
+    provider.build()
 }
 
 /// OTLP log export for the [`OpenTelemetryTracingBridge`]: tracing events

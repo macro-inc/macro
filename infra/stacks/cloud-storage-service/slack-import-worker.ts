@@ -1,4 +1,7 @@
-import { grafanaTelemetryContainers } from '../../packages/resources/src/resources/grafana';
+import {
+  grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
+} from '../../packages/resources/src/resources/grafana';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
@@ -143,6 +146,7 @@ export class SlackImportWorker extends pulumi.ComponentResource {
               stopTimeout: 120,
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               environment: [
+                ...grafanaTelemetryEnvironment,
                 { name: 'ENVIRONMENT', value: stack },
                 { name: 'DD_SERVICE', value: SERVICE_NAME },
                 { name: 'DD_ENV', value: stack },

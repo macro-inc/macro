@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -204,7 +205,10 @@ export class LexicalService extends pulumi.ComponentResource {
               // conversions, and Bun runs a task's JS on one thread.
               cpu: 1024,
               memory: 2048,
-              environment: containerEnvVars,
+              environment: [
+                ...(containerEnvVars ?? []),
+                ...grafanaTelemetryEnvironment,
+              ],
               secrets,
               logConfiguration: {
                 logDriver: 'awsfirelens',

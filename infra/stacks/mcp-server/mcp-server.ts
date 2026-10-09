@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
   ServiceTargetGroup,
@@ -296,7 +297,10 @@ export class McpServer extends pulumi.ComponentResource {
               stopTimeout: 10,
               cpu: 1024,
               memory: 2048,
-              environment: containerEnvVars,
+              environment: [
+                ...(containerEnvVars ?? []),
+                ...grafanaTelemetryEnvironment,
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',

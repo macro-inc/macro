@@ -8,6 +8,7 @@ import {
   DatadogServiceEntity,
   datadogAgentContainer,
   grafanaTelemetryContainers,
+  grafanaTelemetryEnvironment,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
   ServiceTargetGroup,
@@ -305,7 +306,10 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: 4096,
               memory: 8192,
-              environment: containerEnvVars,
+              environment: [
+                ...(containerEnvVars ?? []),
+                ...grafanaTelemetryEnvironment,
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
