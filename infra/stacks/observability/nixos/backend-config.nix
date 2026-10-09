@@ -1,18 +1,17 @@
-{ pkgs }:
-let
-  yaml = pkgs.formats.yaml { };
-in
 {
-  loki = yaml.generate "loki.yaml" {
+  loki = {
     auth_enabled = false;
-    server.http_listen_port = 3100;
+    server = {
+      http_listen_address = "127.0.0.1";
+      http_listen_port = 3100;
+      grpc_listen_address = "127.0.0.1";
+      grpc_listen_port = 9095;
+    };
     common = {
-      path_prefix = "/var/lib/loki";
+      instance_addr = "127.0.0.1";
+      path_prefix = "/srv/observability/loki";
       replication_factor = 1;
-      ring = {
-        instance_addr = "127.0.0.1";
-        kvstore.store = "inmemory";
-      };
+      ring.kvstore.store = "inmemory";
     };
     schema_config.configs = [
       {
@@ -28,20 +27,20 @@ in
     ];
     storage_config = {
       aws = {
-        region = "@@REGION@@";
-        bucketnames = "@@LOGS_BUCKET@@";
+        region = "\${AWS_REGION}";
+        bucketnames = "\${LOGS_BUCKET}";
       };
       tsdb_shipper = {
-        active_index_directory = "/var/lib/loki/index";
-        cache_location = "/var/lib/loki/index-cache";
+        active_index_directory = "/srv/observability/loki/index";
+        cache_location = "/srv/observability/loki/index-cache";
       };
     };
     ingester.wal = {
       enabled = true;
-      dir = "/var/lib/loki/wal";
+      dir = "/srv/observability/loki/wal";
     };
     compactor = {
-      working_directory = "/var/lib/loki/compactor";
+      working_directory = "/srv/observability/loki/compactor";
       retention_enabled = true;
       delete_request_store = "s3";
     };
@@ -55,23 +54,32 @@ in
     querier.max_concurrent = 4;
     analytics.reporting_enabled = false;
   };
-  tempo = yaml.generate "tempo.yaml" {
-    server.http_listen_port = 3200;
-    distributor.receivers.otlp.protocols.grpc.endpoint = "0.0.0.0:4317";
-    ingester.max_block_duration = "5m";
+  tempo = {
+    server = {
+      http_listen_address = "127.0.0.1";
+      http_listen_port = 3200;
+      grpc_listen_address = "127.0.0.1";
+      grpc_listen_port = 9096;
+    };
+    memberlist.bind_addr = [ "127.0.0.1" ];
+    distributor.receivers.otlp.protocols.grpc.endpoint = "127.0.0.1:4317";
+    ingester = {
+      max_block_duration = "5m";
+      lifecycler.address = "127.0.0.1";
+    };
     compactor.compaction.block_retention = "168h";
     storage.trace = {
       backend = "s3";
-      wal.path = "/var/lib/tempo/wal";
+      wal.path = "/srv/observability/tempo/wal";
       s3 = {
-        bucket = "@@TRACES_BUCKET@@";
-        region = "@@REGION@@";
-        endpoint = "s3.@@REGION@@.amazonaws.com";
+        bucket = "\${TRACES_BUCKET}";
+        region = "\${AWS_REGION}";
+        endpoint = "s3.\${AWS_REGION}.amazonaws.com";
       };
     };
     usage_report.reporting_enabled = false;
   };
-  prometheus = yaml.generate "prometheus.yaml" {
+  prometheus = {
     global.scrape_interval = "30s";
     scrape_configs = [
       {
@@ -79,10 +87,10 @@ in
         static_configs = [
           {
             targets = [
-              "prometheus:9090"
-              "loki:3100"
-              "tempo:3200"
-              "alloy:12345"
+              "127.0.0.1:9090"
+              "127.0.0.1:3100"
+              "127.0.0.1:3200"
+              "127.0.0.1:12345"
             ];
           }
         ];

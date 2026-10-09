@@ -1,8 +1,13 @@
 ''
   prometheus.exporter.unix "host" {
-    // Read host mounts even when systemd gives the collector a private mount namespace.
-    rootfs_path = "/proc/1/root"
     disable_collectors = ["textfile"]
+    enable_collectors = ["systemd"]
+    systemd {
+      unit_include = "(grafana|loki|tempo|prometheus|nginx|alloy|alloy-ingest|observability-.*|amazon-cloudwatch-agent)\\.service"
+      task_metrics = true
+      enable_restarts = true
+      start_time = true
+    }
   }
 
   prometheus.scrape "host" {
@@ -10,33 +15,6 @@
     job_name = "observability/host"
     scrape_interval = "30s"
     forward_to = [prometheus.remote_write.local.receiver]
-  }
-
-  prometheus.exporter.cadvisor "containers" {
-    docker_only = true
-    // Docker's storage client uses its own namespace. Leave the generic
-    // containerd namespace at its default so it cannot claim Docker containers.
-    containerd_host = "/run/docker/containerd/containerd.sock"
-    containerd_namespace = "k8s.io"
-    store_container_labels = false
-    allowlisted_container_labels = ["com.docker.compose.project", "com.docker.compose.service"]
-    enabled_metrics = ["cpu", "memory", "network", "disk", "diskIO", "oom_event"]
-  }
-
-  prometheus.scrape "containers" {
-    targets = prometheus.exporter.cadvisor.containers.targets
-    job_name = "observability/containers"
-    scrape_interval = "30s"
-    forward_to = [prometheus.relabel.containers.receiver]
-  }
-
-  prometheus.relabel "containers" {
-    forward_to = [prometheus.remote_write.local.receiver]
-    rule {
-      source_labels = ["__name__", "container_label_com_docker_compose_project"]
-      regex = "up;|scrape_.*;|.*;macro-observability"
-      action = "keep"
-    }
   }
 
   prometheus.exporter.self "host_alloy" {}
@@ -55,34 +33,11 @@
     }
   }
 
-  discovery.docker "stack" {
-    host = "unix:///var/run/docker.sock"
-    filter {
-      name = "label"
-      values = ["com.docker.compose.project=macro-observability"]
-    }
-  }
-
-  discovery.relabel "containers" {
-    targets = discovery.docker.stack.targets
-    rule {
-      source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-      target_label = "service_name"
-    }
-  }
-
-  loki.source.docker "stack" {
-    host = "unix:///var/run/docker.sock"
-    targets = discovery.relabel.containers.output
-    labels = {job = "observability/containers", instance = constants.hostname}
-    forward_to = [loki.write.local.receiver]
-  }
-
   loki.relabel "journal" {
     forward_to = []
     rule {
       source_labels = ["__journal__systemd_unit"]
-      regex = "(docker|observability|alloy|amazon-cloudwatch-agent|systemd-.*)\\.service"
+      regex = "(grafana|loki|tempo|prometheus|nginx|alloy|alloy-ingest|observability-.*|amazon-cloudwatch-agent|systemd-.*)\\.service"
       action = "keep"
     }
     rule {

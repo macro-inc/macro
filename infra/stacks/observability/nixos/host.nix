@@ -8,15 +8,34 @@ let
     python3
     util-linux
   ];
-  prepareHost = pkgs.writeShellScript "observability-prepare-host" ''
-    set -euo pipefail
-    ${pkgs.python3}/bin/python3 ${./read-user-data.py}
-    ${pkgs.bash}/bin/bash ${./mount-data.sh}
-  '';
+  services = [
+    "grafana"
+    "loki"
+    "tempo"
+    "prometheus"
+    "alloy"
+    "alloy-ingest"
+    "nginx"
+  ];
+  secretConsumers = [
+    "grafana.service"
+    "alloy-ingest.service"
+  ];
+  dataUsers = {
+    grafana = 20001;
+    loki = 20002;
+    tempo = 20003;
+    prometheus = 20004;
+    alloy = 20005;
+    alloy-ingest = 20006;
+  };
 in
 {
-  imports = [ ./host-telemetry.nix ];
-
+  imports = [
+    ./services.nix
+    ./host-telemetry.nix
+    ./proxy.nix
+  ];
   system.stateVersion = "26.05";
   image.baseName = "macro-observability";
   virtualisation.diskSize = 12 * 1024;
@@ -25,66 +44,101 @@ in
   networking.firewall.allowedTCPPorts = [ 8080 ];
   services.openssh.enable = lib.mkForce false;
   services.amazon-ssm-agent.enable = true;
-  # User data is a versioned JSON document, never an executable Nix expression.
+  # EC2 user data contains validated JSON settings, never executable Nix.
   virtualisation.amazon-init.enable = false;
-  systemd.services.fetch-ec2-metadata.enable = false;
   nix.settings.experimental-features = [
     "nix-command"
     "flakes"
   ];
-  environment.systemPackages = runtimePath ++ [ pkgs.docker-compose ];
+  environment.systemPackages = runtimePath;
 
-  virtualisation.docker.enable = true;
-  virtualisation.docker.daemon.settings = {
-    live-restore = false;
-  };
-  # Docker cannot start until the exact retained data volume is mounted. This
-  # retries metadata/attachment failures without requiring operator intervention.
-  systemd.services.docker = {
-    path = runtimePath;
-    preStart = lib.mkBefore "${prepareHost}";
-    unitConfig.StartLimitIntervalSec = 0;
-    serviceConfig = {
-      TimeoutStartSec = 900;
-      Restart = lib.mkForce "always";
-      RestartSec = 30;
-    };
-  };
-  systemd.services.observability = {
-    description = "Macro observability pilot";
-    wantedBy = [ "multi-user.target" ];
-    requires = [ "docker.service" ];
-    after = [
-      "docker.service"
-      "network-online.target"
-    ];
-    wants = [ "network-online.target" ];
-    partOf = [ "docker.service" ];
-    path = runtimePath;
-    unitConfig.StartLimitIntervalSec = 0;
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      WorkingDirectory = "/opt/observability";
-      ExecStartPre = [
-        "${pkgs.util-linux}/bin/mountpoint -q /srv/observability"
-        "${pkgs.python3}/bin/python3 ${../assets/refresh-secrets.py}"
-      ];
-      ExecStart = "${pkgs.docker-compose}/bin/docker-compose -f compose.json up -d --remove-orphans --force-recreate";
-      ExecStop = "${pkgs.docker-compose}/bin/docker-compose -f compose.json down --timeout 60";
-      TimeoutStartSec = 900;
-      TimeoutStopSec = 120;
-      Restart = "on-failure";
-      RestartSec = 30;
-    };
-  };
-  # A dependency failure does not itself retry the dependent unit. Upholds
-  # starts the stack once Docker eventually recovers from a boot-time failure.
-  systemd.services.docker.unitConfig.Upholds = [
-    "observability.service"
-    "alloy.service"
-  ];
+  # Stable identities preserve ownership when a replacement AMI reuses EBS.
+  users.users = lib.mapAttrs (name: uid: {
+    uid = lib.mkForce uid;
+    isSystemUser = true;
+    group = name;
+    createHome = lib.mkForce false;
+  }) dataUsers;
+  users.groups = lib.mapAttrs (_: gid: { gid = lib.mkForce gid; }) dataUsers;
 
+  systemd.services =
+    lib.genAttrs services (name: {
+      requires = [ "observability-bootstrap.service" ];
+      after = [ "observability-bootstrap.service" ];
+      partOf = [ "observability-bootstrap.service" ];
+      startLimitIntervalSec = lib.mkForce 0;
+      serviceConfig = {
+        ExecStartPre = lib.mkBefore [ "${pkgs.util-linux}/bin/mountpoint -q /srv/observability" ];
+        Restart = lib.mkForce "always";
+        RestartSec = lib.mkForce 30;
+        # Stay activating during automatic restarts so Upholds cannot bypass
+        # the backoff by starting a briefly failed/inactive unit.
+        RestartMode = "direct";
+        NoNewPrivileges = true;
+        ProtectSystem = lib.mkForce (if name == "alloy" then false else "strict");
+        ProtectHome = name != "alloy";
+        PrivateTmp = name != "alloy";
+        UMask = lib.mkForce "0077";
+        TimeoutStopSec = 90;
+        # Only Loki/Tempo need the EC2 role for S3 access.
+        IPAddressDeny = lib.optionals (
+          !builtins.elem name [
+            "loki"
+            "tempo"
+          ]
+        ) [ "169.254.169.254/32" ];
+      };
+    })
+    // {
+      fetch-ec2-metadata.enable = false;
+      observability-bootstrap = {
+        description = "Validate EC2 settings and mount retained observability storage";
+        wantedBy = [ "multi-user.target" ];
+        wants = [ "network-online.target" ];
+        after = [ "network-online.target" ];
+        path = runtimePath;
+        startLimitIntervalSec = 0;
+        # Only the secret service upholds its consumers. Starting them here would
+        # repeatedly pull a failed secret service out of its restart backoff.
+        unitConfig.Upholds = [
+          "observability-secrets.service"
+        ]
+        ++ lib.subtractLists secretConsumers (map (name: "${name}.service") services);
+        script = ''
+          ${pkgs.python3}/bin/python3 ${./read-user-data.py}
+          ${pkgs.bash}/bin/bash ${./mount-data.sh}
+          ${lib.concatMapStringsSep "\n" (
+            name: "install -d -m 0700 -o ${name} -g ${name} /srv/observability/${name}"
+          ) (builtins.attrNames dataUsers)}
+        '';
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          Restart = "on-failure";
+          RestartMode = "direct";
+          RestartSec = 30;
+          TimeoutStartSec = 900;
+        };
+      };
+      observability-secrets = {
+        description = "Fetch runtime credentials for Grafana and OTLP ingress";
+        requires = [ "observability-bootstrap.service" ];
+        after = [ "observability-bootstrap.service" ];
+        partOf = [ "observability-bootstrap.service" ];
+        path = [ pkgs.awscli2 ];
+        startLimitIntervalSec = 0;
+        unitConfig.Upholds = secretConsumers;
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${pkgs.python3}/bin/python3 ${../assets/refresh-secrets.py}";
+          Restart = "on-failure";
+          RestartMode = "direct";
+          RestartSec = 30;
+          TimeoutStartSec = 120;
+          UMask = lib.mkForce "0077";
+        };
+      };
+    };
   environment.etc."observability/prepare-volume.sh".source = ../assets/prepare-volume.sh;
-  environment.etc."observability/config".source = import ./application-config.nix { inherit pkgs; };
 }

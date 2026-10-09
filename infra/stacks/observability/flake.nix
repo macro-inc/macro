@@ -18,9 +18,7 @@
       nixosConfigurations.observability = host;
       packages.${system} = {
         default = host.config.system.build.amazonImage;
-        application-config = import ./nixos/application-config.nix {
-          pkgs = nixpkgs.legacyPackages.${system};
-        };
+
       };
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt;
     };

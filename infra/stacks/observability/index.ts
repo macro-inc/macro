@@ -243,7 +243,7 @@ const instance = new aws.ec2.Instance(
     metadataOptions: {
       httpEndpoint: 'enabled',
       httpTokens: 'required',
-      httpPutResponseHopLimit: 2,
+      httpPutResponseHopLimit: 1,
     },
     rootBlockDevice: {
       volumeType: 'gp3',

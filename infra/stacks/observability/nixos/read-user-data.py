@@ -1,16 +1,11 @@
-"""Read IMDSv2 runtime values and render the service configuration owned by Nix."""
+"""Validate nonsecret EC2 settings for native NixOS services."""
 import gzip
 import json
 from pathlib import Path
 import re
 import urllib.request
 
-TEMPLATE_ROOT = Path('/etc/observability/config')
 CONFIG_ROOT = Path('/opt/observability')
-CONFIG_FILES = {
-    'compose.json', 'grafana.ini', 'datasources.yaml', 'config.alloy',
-    'nginx.conf', 'loki.yaml', 'tempo.yaml', 'prometheus.yaml',
-}
 SETTING_KEYS = {
     'region', 'grafanaHost', 'otlpHost', 'allowedEmails', 'adminEmails',
     'secretArn', 'volumeId', 'logsBucket', 'tracesBucket',
@@ -49,49 +44,31 @@ def validate_payload(payload):
     return settings
 
 
-def render_payload(payload, template_root, output_root):
+def write_runtime(payload, output_root):
     settings = validate_payload(payload)
     admin_list = json.dumps(settings['adminEmails'], separators=(',', ':'))
     allowed_list = json.dumps(settings['allowedEmails'], separators=(',', ':'))
-    values = {
-        'REGION': settings['region'],
+    environment = {
+        'AWS_REGION': settings['region'],
         'GRAFANA_HOST': settings['grafanaHost'],
-        'OTLP_HOST': settings['otlpHost'],
+        'GRAFANA_ROOT_URL': 'https://' + settings['grafanaHost'] + '/',
         'LOGS_BUCKET': settings['logsBucket'],
         'TRACES_BUCKET': settings['tracesBucket'],
-        'ROLE_EXPRESSION': f"contains(`{admin_list}`, email) && 'GrafanaAdmin' || contains(`{allowed_list}`, email) && 'Viewer' || 'Denied'",
+        'GRAFANA_ROLE_EXPRESSION': f"contains(`{admin_list}`, email) && 'GrafanaAdmin' || contains(`{allowed_list}`, email) && 'Viewer' || 'Denied'",
     }
-    if {path.name for path in template_root.iterdir()} != CONFIG_FILES:
-        raise ValueError('Unexpected Nix configuration template set')
-
-    def substitute(text):
-        def replace(match):
-            if match[1] not in values:
-                raise ValueError(f'Unknown Nix runtime parameter: {match[1]}')
-            return values[match[1]]
-        return re.sub(r'@@([A-Z_]+)@@', replace, text)
-
-    def substitute_json(value):
-        if isinstance(value, str):
-            return substitute(value)
-        if isinstance(value, list):
-            return [substitute_json(item) for item in value]
-        if isinstance(value, dict):
-            return {key: substitute_json(item) for key, item in value.items()}
-        return value
-
-    # Substitute JSON values after parsing, so quotes in the role expression
-    # remain a string value and can never change the Compose document structure.
-    files = {}
-    for name in CONFIG_FILES:
-        template = (template_root / name).read_text()
-        files[name] = (json.dumps(substitute_json(json.loads(template)), indent=2)
-                       if name.endswith('.json') else substitute(template))
-    files['bootstrap.json'] = json.dumps({
-        'region': settings['region'], 'secretArn': settings['secretArn'],
-    })
-    files['volume-id'] = settings['volumeId']
-    # Validate and render everything before writing any configuration.
+    # systemd EnvironmentFile accepts double-quoted, escaped values. Inputs are
+    # validated ASCII; no shell ever evaluates these values or the role expression.
+    files = {
+        'runtime.env': ''.join(f'{key}={json.dumps(value)}\n' for key, value in environment.items()),
+        'hosts.conf': (
+            'map $host $observability_host {\n  default denied;\n'
+            f"  {settings['grafanaHost']} grafana;\n  {settings['otlpHost']} otlp;\n"
+            '}\nmap "" $grafana_host {\n'
+            f"  default {settings['grafanaHost']};\n" + '}\n'
+        ),
+        'bootstrap.json': json.dumps({'region': settings['region'], 'secretArn': settings['secretArn']}),
+        'volume-id': settings['volumeId'],
+    }
     output_root.mkdir(mode=0o755, parents=True, exist_ok=True)
     for name, content in files.items():
         (output_root / name).write_text(content)
@@ -115,7 +92,7 @@ def main():
     if len(raw) > 16384:
         raise ValueError('User data exceeds EC2 limit')
     payload = json.loads(gzip.decompress(raw))
-    render_payload(payload, TEMPLATE_ROOT, CONFIG_ROOT)
+    write_runtime(payload, CONFIG_ROOT)
 
 
 if __name__ == '__main__':

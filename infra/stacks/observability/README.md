@@ -1,27 +1,22 @@
 # Observability pilot
 
 This stack starts Grafana alongside Datadog on one private EC2 instance. It
-provisions Grafana, Loki, Tempo, Prometheus and Alloy using Docker Compose on a
-prebuilt NixOS image. Nix declares host packages, Docker, service dependencies,
-host collectors and access policy. All service configuration is authored in Nix:
+runs Grafana, Loki, Tempo, Prometheus, Alloy and nginx as native systemd services
+on a prebuilt NixOS image. There is no Docker or Compose dependency. Nix owns
+packages, configuration, service users, resource limits and startup dependencies:
 
-- `nixos/application-config.nix`: Grafana settings, datasources, Alloy pipeline
-  and the assembled configuration output.
-- `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings as attribute sets.
-- `nixos/containers.nix`: pinned images, resource limits, mounts and service flags,
-  including Prometheus retention.
-- `nixos/host-telemetry.nix`: native Alloy and CloudWatch Agent services.
-- `nixos/host-alloy.nix`: standard host/container metrics and log collection.
+- `nixos/services.nix`: native application services and runtime credentials.
+- `nixos/grafana.nix` and `nixos/datasources.nix`: Grafana access policy and datasources.
+- `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings.
+- `nixos/ingest-alloy.nix`: unprivileged OTLP receiver and export pipeline.
+- `nixos/host-telemetry.nix` and `nixos/host-alloy.nix`: host metrics and journal logs.
 - `nixos/cloudwatch.nix`: independent disk and memory health metrics.
-- `nixos/proxy.nix`: structured nginx virtual hosts and locations for ingestion
-  routing and the query-only backend gateway.
+- `nixos/proxy.nix`: native nginx virtual hosts and query-only backend gateway.
+- `nixos/host.nix`: boot dependencies, retained storage and stable service identities.
 
-Nix generates the required INI/YAML/JSON/Alloy/nginx templates into the image;
-there are no separately maintained copies. Alloy retains its native pipeline
-syntax inside a Nix multiline string; nginx uses attribute sets for virtual hosts
-and locations, with native directives in `extraConfig`. Pulumi owns AWS resources
-and sends only validated runtime values such as hostnames, bucket names and
-approved identities.
+NixOS modules generate application configuration from Nix attributes. Alloy's
+pipeline uses its native syntax inside a Nix multiline string. Pulumi sends only
+validated runtime values such as hostnames, bucket names and approved identities.
 Datadog instrumentation, collection and alerts remain unchanged. Nothing sends
 application telemetry here until a subsequent dual-export change is deployed.
 
@@ -56,11 +51,9 @@ OTEL exporter -- HTTPS + bearer token --> ALB --> nginx --> Alloy
   up to a day of local state. S3 does not protect telemetry still buffered locally.
 - No RDS, shared filesystem, Kafka or cluster. Grafana's SQLite stores users,
   dashboards and settings, not log/trace/metric history.
-- Container releases are pinned by version and image digest in `nixos/containers.nix`.
-  Grafana plugin auto-install/update is disabled; upgrades go through review and
-  the smoke test. Host packages are pinned by this stack's own `flake.lock` on
-  NixOS 26.05; reviewed lock updates and replacement AMIs deliver host patches.
-  There is no package installation, channel update or Nix build during boot.
+- All service and OS versions are pinned by this stack's `flake.lock` on NixOS
+  26.05. Grafana plugin auto-install/update is disabled. Reviewed lock updates
+  and replacement AMIs deliver upgrades; there is no installation or build at boot.
 
 Previously received telemetry remains accessible if the production region fails.
 Data that has not left production can still be lost, and a single Ohio host is
@@ -69,26 +62,27 @@ or buckets. Subsequent dual export must use independent queues and HTTPS across
 regions, and account for inter-region transfer costs and latency. A production
 region outage should not block Grafana login or secret retrieval in Ohio.
 
-## Host and container collection
+## Host and service collection
 
-A native NixOS Alloy service collects CPU, memory, filesystem and network metrics
-using its node exporter, and container CPU/memory/network/disk metrics using
-cAdvisor. It also reads Docker logs for this Compose project, selected systemd
-service logs and kernel logs. Metrics go to Prometheus; logs go to Loki. Other
+A native Alloy service collects CPU, memory, filesystem and network metrics
+using its node exporter, including systemd unit state, tasks, restart counts and
+start times. It reads selected application/systemd service logs and kernel logs
+from the journal. Metrics go to Prometheus; logs go to Loki. Container discovery
+and cAdvisor are unnecessary because the stack runs directly on systemd. Other
 production hosts and application OTEL dual export are subsequent work.
 
-The native collector is separate from the unprivileged OTLP ingestion container.
-cAdvisor and Docker discovery require privileged host access; native Alloy runs
-as root with a loopback-only UI, filesystem hardening and a 1 GiB memory limit.
-Its node exporter reads `/proc/1/root` to measure host filesystems through that
-hardening. Docker metadata labels are limited to Compose project/service;
-container metrics and logs are restricted to this stack. EC2 metadata access is
-blocked for this service. Collector state is retained on EBS under `host-alloy`;
-the metrics WAL retains at most one hour of unsent samples. Log delivery uses
-bounded retries and does not guarantee lossless delivery through a long outage.
+The collector runs as a dedicated unprivileged user with journal access, separate
+from the unprivileged OTLP ingress service. Its UI binds only to loopback, EC2
+metadata access is blocked, and its memory limit is 1 GiB. State is retained on
+EBS under `alloy`; the metrics WAL retains at most one hour of unsent samples.
+Log delivery uses bounded retries and does not guarantee lossless delivery
+through a long outage. Nginx access logs use a restricted format without query
+strings and flow through journald into Loki, as do service errors. Host Alloy
+uses the host mount namespace so filesystem metrics reflect the actual mounts;
+Unix permissions restrict writes to its own retained directory.
 
 CloudWatch Agent runs as a separate unprivileged NixOS service, independent of
-Docker and the data mount. It sends only root/data-disk utilization and memory
+the data mount and the application stack. It sends only root/data-disk utilization and memory
 utilization to the `Macro/Observability` namespace using the instance role.
 Alarms identify the current EC2 instance: either ext4 disk above 80% or memory
 above 90% over two five-minute periods notifies the configured SNS topic.
@@ -125,16 +119,14 @@ isolation. Apply redaction in the producer pipeline before copying sensitive dat
 Only the ALB is internet-facing, on TLS 1.2/1.3 port 443. The host has no public IP,
 SSH key or SSH ingress. Its only ingress is port 8080 from the ALB security group.
 ALB-to-host traffic is HTTP inside the VPC. Administrative access uses AWS SSM and
-the operator's IAM identity. Loki, Tempo, Prometheus and Alloy have no published
-externally reachable host ports; Grafana queries them over the private Docker
-network. Loki and Prometheus also bind to host loopback for native Alloy writes. The default ALB
-action is 404. No HTTP listener is opened.
+the operator's IAM identity. Grafana, Loki, Tempo, Prometheus and both Alloy
+services bind to loopback. The default ALB action is 404. No HTTP listener is opened.
 
 Grafana data sources use a separate internal nginx listener on port 8081 that
 allows only named query endpoints and their required HTTP methods. This matters
 because Viewers can call Grafana's data-source proxy: direct backend URLs would
 also expose maintenance endpoints such as Tempo `/shutdown` and Loki `/flush`
-(including mutating GET requests). Port 8081 is not published on the host, and
+(including mutating GET requests). Port 8081 binds only to loopback, and
 Alloy's ingestion path is separate. New data-source features may require reviewed
 additions to this query allowlist.
 
@@ -148,16 +140,17 @@ beyond trusted internal services.
 
 Secrets Manager holds Google client credentials, the Grafana encryption key and
 the ingestion token. EC2 retrieves them at startup into `/run` with restricted
-file permissions; secret values never enter Pulumi state, user-data, container
-environment variables or configuration committed here. Grafana's nonsecret host
+file permissions. Systemd `LoadCredential` gives Grafana only its three credentials
+and ingress Alloy only the OTLP token. Secret values never enter Pulumi state,
+user-data, environment variables or configuration committed here. Grafana's nonsecret host
 and approved-user role expression are supplied through environment variables;
 the generated INI refers to them through Grafana's environment provider. Secrets
 remain file references in the Nix store, never secret values. The secret must use the
 AWS-managed Secrets Manager encryption key; a customer-managed key needs an
-explicit scoped KMS policy addition. IMDSv2 is required with hop limit 2 so Loki
-and Tempo can use the instance role from containers. The single host is one trust
-boundary: containers share network access and can potentially use that role.
-Split roles/hosts when that boundary is no longer acceptable.
+explicit scoped KMS policy addition. IMDSv2 is required with hop limit 1. Only Loki, Tempo, the bootstrap/secret helper,
+CloudWatch and SSM need the instance role; application units without an AWS
+requirement block metadata access. The host is still one administrative trust
+boundary; split roles/hosts when stronger isolation is required.
 
 ## First deployment
 
@@ -204,7 +197,7 @@ pulumi preview --diff
 ```
 
 Deploy with `pulumi up` after
-reviewing the resource plan. Allow up to 15 minutes for bootstrap/image pulls.
+reviewing the resource plan. Allow up to 15 minutes for bootstrap.
 Pulumi resource creation does not prove bootstrap or OAuth has succeeded.
 Do not change the region of a stack that already owns resources: that requires
 an explicit migration and recovery plan for its protected storage.
@@ -221,7 +214,7 @@ Before enabling application traffic, validate all of these against AWS:
 - Reboot preserves data and starts services; stop/replace the host and verify
   the existing volume is reattached. Restore a snapshot to an isolated host and
   verify SQLite/Prometheus/WAL recovery before relying on the backup.
-- Host/container metrics and Docker/systemd logs appear in Grafana. CloudWatch's
+- Host/systemd metrics and service logs appear in Grafana. CloudWatch's
   instance, target-health, root/data-disk and memory alarms reach the selected
   SNS subscription. Verify disk metrics use `InstanceId`, `path` and `fstype`
   dimensions, memory uses `InstanceId`, and missing data alerts. Confirm a daily snapshot is created. Inspect disk/queue
@@ -260,7 +253,7 @@ Review the AMI and boot it in the pilot's private subnet before enabling ingesti
 Check SSM access, the OS version, exact data volume mount, service health, reboot,
 secret-outage recovery and replacement/reattachment. Pin `amiId` only after review.
 The AWS image import and actual EC2 boot checks require deployment access and are
-not simulated by the local Docker tests.
+separate from local configuration and startup validation.
 
 For host changes or security updates, update `nixos/host.nix` or the pinned input
 with `nix flake update nixpkgs`, build/test/publish a new image, then change `amiId`
@@ -274,44 +267,45 @@ recovery plan when the old application version cannot read current data.
 Use SSM Session Manager with the `instanceId` output. On the host:
 
 ```bash
-sudo systemctl status observability
-sudo journalctl -u observability -u alloy -u amazon-cloudwatch-agent --since '30 minutes ago'
-sudo journalctl -u docker --since boot
-sudo docker compose -f /opt/observability/compose.json ps
-sudo docker compose -f /opt/observability/compose.json logs --tail 100
+sudo systemctl status observability-bootstrap observability-secrets grafana loki tempo prometheus alloy alloy-ingest nginx
+sudo journalctl -u observability-bootstrap -u observability-secrets --since boot
+sudo journalctl -u grafana -u loki -u tempo -u prometheus -u alloy -u alloy-ingest -u nginx --since '30 minutes ago'
 ```
 
-Nonsecret runtime values are delivered as versioned, compressed JSON in EC2
-user-data. NixOS reads them using IMDSv2 and validates the exact schema, region,
-hostnames, bucket/volume/secret identifiers and identity lists before rendering
-anything. The standard NixOS user-data evaluator is disabled. Host services,
-helper scripts and all application templates are baked into the AMI. Schema
-version 3 rejects older payloads, unknown settings and caller-supplied files.
-The renderer parses JSON before substituting values, so the Grafana role
-expression cannot alter the container definition's structure. Rendered files
-are written to `/opt/observability` before Docker starts. Configuration/image
-changes require a new image and reviewed `amiId`; runtime value changes do not
-need an image rebuild. Both kinds of changes (including allowlists or image
-versions) replace the instance and cause downtime. The old
-instance is deleted before replacement, its data volume is cleanly detached,
-then the new host waits for that exact volume. Bootstrap formats only a disk with
-no filesystem/signatures. Both Docker and the stack service refuse to start if
-the data mount is missing, preventing silent writes to the root disk.
+Nonsecret runtime values arrive as versioned, compressed JSON in EC2 user-data.
+`read-user-data.py` retrieves them through IMDSv2 and validates the exact schema,
+region, hostnames, bucket/volume/secret identifiers and approved identity lists.
+It writes a systemd environment file, nginx hostname maps, the secret's identifier
+and the expected volume ID under `/opt/observability`. It does not execute
+user-data or read secret values. The standard NixOS user-data evaluator is disabled.
+Schema version 3 rejects older payloads, unknown settings and caller-supplied files.
 
-Container `on-failure` policies restart crashed processes but leave host/daemon
-startup to systemd. The stack service fetches secrets before creating containers
-and retries every 30 seconds without exhausting a start limit during a secret
-service outage. `PartOf=docker.service` restarts the stack after a Docker service
-restart. Docker itself does not depend on Secrets Manager availability. Its
-pre-start step fetches nonsecret metadata and mounts/verifies the exact EBS disk;
-attachment and metadata failures retry without exhausting Docker's start limit.
-Docker's `Upholds` relationship starts the stack after a delayed Docker recovery.
+`observability-bootstrap` mounts that exact EBS volume and creates each service's
+data directory using stable, named NixOS users. `prepare-volume.sh` formats only
+a disk with no filesystem or signatures; existing ext4 data is preserved.
+Application units verify the mount before every startup, preventing fallback to
+the root disk. Bootstrap retries every 30 seconds after metadata or attachment
+failure, and its systemd `Upholds` relationships start dependents after recovery.
 
-Secrets are fetched on every boot and service restart. To rotate the OAuth secret
-or ingestion token, update the Secrets Manager value, then run `sudo systemctl
-restart observability`. This briefly stops ingestion and Grafana. For token
-rotation coordinate producer configuration and use its retry queue; there is no
-dual-token grace window yet. Do not casually rotate the Grafana encryption key.
+`observability-secrets` fetches the credential bundle into root-only files under
+`/run`. Grafana and ingress Alloy wait for successful retrieval and receive private
+credential copies from systemd. Secret-service outages retry every 30 seconds;
+Loki, Tempo, Prometheus and host collection can run independently of that service.
+Systemd restarts crashed processes individually with memory and filesystem limits.
+
+Configuration/image changes require a new image and reviewed `amiId`; runtime
+value changes do not need an image rebuild. Both kinds of changes replace the
+instance and cause downtime. The old instance is deleted before replacement, its
+volume is detached, then the new host waits for that retained volume. This pilot
+has not been deployed with the earlier container layout; an existing container
+installation would need an explicit ownership/path migration before using this image.
+
+To rotate the OAuth secret or ingestion token, update Secrets Manager, then run
+`sudo systemctl restart observability-secrets`. This stops Grafana and ingress
+Alloy while credentials refresh, then restarts both with new private copies.
+Restarting an individual application uses the last fetched bundle. For token
+rotation coordinate producers and their retry queues; there is no dual-token
+grace window. Do not casually rotate Grafana's encryption key.
 
 For instance failure in the same AZ, replace the instance through Pulumi and
 reuse its retained volume. Do not run two hosts against the same data directory.
@@ -333,48 +327,13 @@ still receives the authoritative copy.
 
 ## Validation and subsequent passes
 
-From `infra/`:
-
-```bash
-bun test stacks/observability/render.test.ts
-OBSERVABILITY_SMOKE=1 bun test stacks/observability/render.test.ts
-# Also run native agents: requires passwordless sudo for the isolated Alloy process.
-OBSERVABILITY_SMOKE=1 OBSERVABILITY_COLLECTORS=1 bun test stacks/observability/render.test.ts
-# Optional: requires Nix and a user systemd manager; never restarts real Docker.
-OBSERVABILITY_SYSTEMD=1 bun test stacks/observability/render.test.ts
-bunx biome check stacks/observability
-bun run check
-```
-
-Build the NixOS image from this stack directory with `nix build . --cores 2`.
-The systemd test evaluates the actual units from the pinned NixOS configuration.
-
-The opt-in test requires Nix and builds the same `application-config` output used
-by the AMI. It creates and removes its own Docker project, temporary directories
-and LocalStack S3. It uses fake credentials and loopback-only ephemeral ports. It
-checks real container startup, Google authorization redirect/PKCE, role mapping,
-unauthenticated access denial, token validation, ingestion-only routing,
-three-signal readback, S3 writes and backend restart recovery. It then enables
-auth.proxy only in the local fixture to exercise an authenticated Viewer: all
-three data-source health checks and queries succeed, while backend maintenance
-and write endpoints are denied. Production auth.proxy is never enabled.
-
-The collectors opt-in builds the exact Nix agent packages/configuration. It runs
-native Alloy against the fixture's containers and a generated journal file,
-checks host and container metrics plus Docker/journal log readback, and runs
-CloudWatch Agent against fake IMDS and a local CloudWatch API receiver. It verifies the emitted alarm
-metric dimensions and that a missing mount never reports fallback root usage.
-Only this fixture's Alloy process runs with sudo; it does not start host services
-or restart Docker. Agent state and test containers are removed afterward.
-
-IMDS tests reject unexpected schema versions, setting keys, caller-supplied files,
-invalid identifiers, identity lists and regions before writing configuration;
-they also verify safe JSON substitution. Disk preparation tests substitute every
-disk utility and confirm that failed inspection cannot trigger formatting. The optional systemd test uses isolated
-transient user units and stand-in processes to test secret-outage recovery and
-daemon restart/crash recovery. It does not restart the machine or real Docker.
-Real Google login, AWS IAM, EC2 block-device attachment and boot, ALB/TLS and
-snapshot restore remain deployment acceptance checks above.
+From `infra/`, run `bunx biome check stacks/observability` and `bun run check`.
+Build the complete NixOS image from this stack directory with `nix build . --cores 2`.
+Before publishing an image, validate native service startup, Google authorization redirects,
+anonymous/token denial, three-signal ingestion/readback, S3 flushing, process
+restart recovery and systemd credential/storage permissions in an isolated local
+fixture. Real Google login, AWS IAM, EC2 attachment/boot, ALB/TLS and snapshot
+restore remain the deployment acceptance checks above.
 
 Follow-up PRs:
 

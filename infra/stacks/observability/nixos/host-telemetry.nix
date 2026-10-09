@@ -5,31 +5,21 @@
     configPath = pkgs.writeText "host.alloy" (import ./host-alloy.nix);
     extraFlags = [
       "--server.http.listen-addr=127.0.0.1:12346"
-      "--storage.path=/srv/observability/host-alloy"
+      "--storage.path=/srv/observability/alloy"
       "--disable-reporting"
     ];
   };
-  # cAdvisor and Docker log discovery need privileged host access. Keep this
-  # collector separate from the unprivileged, externally reachable OTLP receiver.
-  systemd.services.alloy = {
-    requires = [ "docker.service" ];
-    after = [ "docker.service" ];
-    partOf = [ "docker.service" ];
-    unitConfig.StartLimitIntervalSec = 0;
-    serviceConfig = {
-      DynamicUser = lib.mkForce false;
-      User = "root";
-      ExecStartPre = "${pkgs.util-linux}/bin/mountpoint -q /srv/observability";
-      RestartSec = lib.mkForce 30;
-      NoNewPrivileges = true;
-      ProtectSystem = "strict";
-      ProtectHome = true;
-      PrivateTmp = true;
-      ReadWritePaths = [ "/srv/observability/host-alloy" ];
-      MemoryMax = "1G";
-      # Host collection needs no EC2 credentials.
-      IPAddressDeny = [ "169.254.169.254/32" ];
-    };
+  # Journal access is separate from the externally reachable OTLP receiver.
+  users.users.alloy.extraGroups = [ "systemd-journal" ];
+  systemd.services.alloy.serviceConfig = {
+    DynamicUser = lib.mkForce false;
+    User = "alloy";
+    Group = "alloy";
+    # No private mount namespace: filesystem metrics must describe the host,
+    # not sandbox read-only bind mounts. Unix permissions restrict this user.
+    StateDirectory = lib.mkForce "";
+    WorkingDirectory = lib.mkForce "/srv/observability/alloy";
+    MemoryMax = "1G";
   };
 
   users.groups.cloudwatch-agent = { };
@@ -43,7 +33,7 @@
     mode = "ec2";
     configuration = import ./cloudwatch.nix;
   };
-  # Independent of Docker, Alloy, the data mount and the Grafana stack. Missing
+  # Independent of Alloy, the data mount and the Grafana stack. Missing
   # data-disk samples must reach the alarm's missing-data policy, not a fallback.
   systemd.services.amazon-cloudwatch-agent = {
     after = [ "network-online.target" ];

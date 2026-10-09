@@ -24,13 +24,13 @@ for key in ['grafana_secret_key', 'otlp_token']:
     if len(values[key]) < 32:
         raise SystemExit(f'Secret too short: {key}')
 directory = Path('/run/macro-observability')
-directory.mkdir(mode=0o750, exist_ok=True)
-os.chown(directory, 0, 10001)
+directory.mkdir(mode=0o700, exist_ok=True)
+os.chown(directory, 0, 0)
 for key in keys:
     path = directory / key
-    # Services are stopped while refreshing; recreate bind mounts on start.
+    # Dependent services stop during refresh and receive private systemd credentials.
     path.unlink(missing_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o440)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
     with os.fdopen(fd, 'w') as output:
         output.write(values[key])
-        os.fchown(output.fileno(), 0, 10001)
+        os.fchown(output.fileno(), 0, 0)
