@@ -20,8 +20,8 @@ def validate_payload(payload):
         raise ValueError('Invalid observability runtime setting keys')
     patterns = {
         'region': r'us-east-2',
-        'grafanaHost': r'[a-z0-9-]+\.macro\.com',
-        'otlpHost': r'[a-z0-9-]+\.macro\.com',
+        'grafanaHost': r'[a-z0-9-]+\.macro-internal\.com',
+        'otlpHost': r'[a-z0-9-]+\.macro-internal\.com',
         'secretArn': r'arn:aws:secretsmanager:us-east-2:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+',
         'volumeId': r'vol-[a-f0-9]+',
         'logsBucket': r'[a-z0-9][a-z0-9-]{1,61}[a-z0-9]',

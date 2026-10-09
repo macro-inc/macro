@@ -15,7 +15,7 @@ if (!['dev', 'prod'].includes(stack)) {
 }
 const region = aws.config.requireRegion();
 validateRegion(region);
-const baseDomain = 'macro.com';
+const baseDomain = 'macro-internal.com';
 const suffix = stack === 'prod' ? '' : '-dev';
 const grafanaHost = `grafana${suffix}.${baseDomain}`;
 const otlpHost = `otlp${suffix}.${baseDomain}`;

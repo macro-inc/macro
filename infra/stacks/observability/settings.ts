@@ -40,9 +40,9 @@ export function validateRegionalArn(
 // Validate runtime values before they reach the NixOS configuration renderer.
 export function validateSettings(settings: Settings): void {
   for (const host of [settings.grafanaHost, settings.otlpHost]) {
-    if (!/^[a-z0-9-]+\.macro\.com$/.test(host)) {
+    if (!/^[a-z0-9-]+\.macro-internal\.com$/.test(host)) {
       throw new Error(
-        'Observability hostnames must be subdomains of macro.com'
+        'Observability hostnames must be subdomains of macro-internal.com'
       );
     }
   }

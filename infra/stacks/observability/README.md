@@ -95,8 +95,8 @@ before enabling broad production ingestion.
 
 ## Team authentication and security
 
-Production URLs are `https://grafana.macro.com` and `https://otlp.macro.com`;
-dev uses `grafana-dev.macro.com` and `otlp-dev.macro.com`.
+Production URLs are `https://grafana.macro-internal.com` and `https://otlp.macro-internal.com`;
+dev uses `grafana-dev.macro-internal.com` and `otlp-dev.macro-internal.com`.
 
 Grafana uses a dedicated **Google Workspace OAuth client**. Only explicitly
 approved lowercase `@macro.com` emails in `allowedEmails` may sign in; membership
@@ -157,13 +157,13 @@ boundary; split roles/hosts when stronger isolation is required.
 The stack is deliberately absent from `.github/services-config.json`, so this PR
 does not enroll it in automatic deployments. Use the repository's Pulumi backend
 and AWS account `569036502058`, region `us-east-2`. Deployment requires the
-existing public `macro.com` Route53 zone; this stack creates its own VPC/NAT and
+existing public `macro-internal.com` Route53 zone; this stack creates its own VPC/NAT and
 DNS-validated regional ACM certificate. Region validation rejects `us-east-1`.
 
 1. Create a dedicated Google OAuth Web application under the company's Google
    organization with an **Internal** consent audience. Register exactly
-   `https://grafana-dev.macro.com/login/google` for dev or
-   `https://grafana.macro.com/login/google` for prod. Prefer separate clients and
+   `https://grafana-dev.macro-internal.com/login/google` for dev or
+   `https://grafana.macro-internal.com/login/google` for prod. Prefer separate clients and
    secrets per environment. Confirm Workspace MFA enforcement.
 2. Through the approved secret-management process, create a Secrets Manager JSON
    secret in **us-east-2** containing `google_client_id`, `google_client_secret`,
