@@ -205,6 +205,7 @@ pub struct MockContainerManager {
     resumes: Arc<AtomicUsize>,
     teardowns: Arc<AtomicUsize>,
     teardown_error: Arc<AtomicBool>,
+    tokens_lost: Arc<AtomicBool>,
     /// Signalled on every spawn, so a test waits for a sandbox instead of
     /// spinning on [`Self::spawned`].
     spawned_signal: Arc<tokio::sync::Notify>,
@@ -270,6 +271,12 @@ impl MockContainerManager {
     #[must_use]
     pub fn resumed(&self) -> usize {
         self.resumes.load(Ordering::Relaxed)
+    }
+
+    /// Hold no session tokens from now on, like an in-process agent's
+    /// manager after a restart.
+    pub fn lose_tokens(&self) {
+        self.tokens_lost.store(true, Ordering::Relaxed);
     }
 
     /// Fail the next teardown before removing its container.
@@ -398,8 +405,12 @@ impl ContainerManager for MockContainerManager {
     }
 
     /// The fixed token every mock container "holds", for sessions that were
-    /// spawned; `None` otherwise, like a provider that finds no container.
+    /// spawned; `None` otherwise, like a provider that finds no container,
+    /// and after [`Self::lose_tokens`].
     async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>, HarnessError> {
+        if self.tokens_lost.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
         Ok(self
             .lock()
             .contains_key(&session)

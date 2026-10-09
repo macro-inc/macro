@@ -695,10 +695,43 @@ async fn disconnected_session_owned_by(
     containers: &MockContainerManager,
     owner: model_owner::Owner,
 ) -> AgentSessionId {
+    // The coder bot: resume-on-disconnect only exists for managed sessions.
+    disconnected_session_of(
+        repo,
+        containers,
+        owner,
+        bot_id::MACRO_CODER_BOT_ID,
+        AgentKind::SandboxedCoder,
+    )
+    .await
+}
+
+/// [`disconnected_session`] served by Macro's in-process agent.
+async fn disconnected_in_memory_session(
+    repo: &InMemoryAgentSessionRepo,
+    containers: &MockContainerManager,
+) -> AgentSessionId {
     let command = open_command();
     let origin = mention_origin(&command);
-    // The coder bot: resume-on-disconnect only exists for managed sessions.
-    let bot_id = bot_id::MACRO_CODER_BOT_ID;
+    disconnected_session_of(
+        repo,
+        containers,
+        model_owner::Owner::User(origin.sender.clone()),
+        bot_id::MACRO_NEW_BOT_ID,
+        AgentKind::InMemory,
+    )
+    .await
+}
+
+async fn disconnected_session_of(
+    repo: &InMemoryAgentSessionRepo,
+    containers: &MockContainerManager,
+    owner: model_owner::Owner,
+    bot_id: BotId,
+    kind: AgentKind,
+) -> AgentSessionId {
+    let command = open_command();
+    let origin = mention_origin(&command);
     let id = AgentSessionId::new();
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
@@ -711,7 +744,12 @@ async fn disconnected_session_owned_by(
             thread_id: Some(origin.thread_id),
             originating_message_id: Some(origin.message_id),
             model: "claude".to_owned(),
-            harness: "opencode".to_owned(),
+            harness: if kind == AgentKind::InMemory {
+                "in-memory"
+            } else {
+                "opencode"
+            }
+            .to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
@@ -728,7 +766,7 @@ async fn disconnected_session_owned_by(
     containers
         .spawn(SpawnContainer {
             session_id: id,
-            kind: AgentKind::SandboxedCoder,
+            kind,
             size: agent_session::domain::model::SandboxSize::Default,
             egress: test_egress(),
         })
@@ -1613,6 +1651,54 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
         })
         .count();
     assert_eq!(prompt_logs, 1);
+    assert!(
+        service.inner.egress.provisioned().is_empty(),
+        "a sandbox's own token is restored, not replaced"
+    );
+}
+
+/// The in-process agent keeps its egress token only in the process that
+/// spawned it, and every turn refreshes its tools with the advertised
+/// credential. Resumed after a restart, it gets a new token, or it could not
+/// take a turn at all.
+#[tokio::test]
+async fn resuming_an_in_memory_session_after_a_restart_mints_a_new_token() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_in_memory_session(&repo, &containers).await;
+    containers.lose_tokens();
+
+    let forward = service.execute(
+        id,
+        HarnessCommand::Deliver(forward_message("continue after the restart")),
+    );
+    let drive_resume = async {
+        while containers.resumed() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let resumed = containers
+            .container(id)
+            .expect("the resumed container is findable");
+        complete_resume(&resumed).await;
+        resumed
+    };
+    let (forwarded, resumed) = tokio::join!(forward, drive_resume);
+    forwarded.expect("forward should resume and deliver the prompt");
+
+    assert_eq!(service.inner.egress.provisioned().len(), 1);
+    assert_eq!(
+        repo.find_by_egress_token_hash("test-token-hash")
+            .await
+            .unwrap()
+            .expect("the row carries the new token's hash")
+            .id,
+        id
+    );
+    let ClientRequest::ResumeSessionRequest(request) = &resumed.agent().received_requests()[1]
+    else {
+        panic!("the session is resumed over ACP");
+    };
+    assert!(!request.mcp_servers.is_empty());
+    assert_eq!(request.mcp_servers, test_egress().acp_servers());
 }
 
 #[tokio::test]

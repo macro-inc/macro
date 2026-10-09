@@ -89,11 +89,13 @@ where
                 let permission_policy = self
                     .permission_policy_for_session(session_id, session.bot_id)
                     .await?;
-                if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
+                let kind = AgentKind::for_session(session.bot_id, &session.harness);
+                if kind.is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
                         .resumed_mcp_servers(
                             session_id,
+                            kind,
                             session.owner_user()?,
                             &session.mcp_servers,
                         )
