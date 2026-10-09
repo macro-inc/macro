@@ -604,13 +604,19 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
   // The drawer starts below the header; reserve only its toggle in the timeline band.
   const textInset = () =>
     gantt.labelWidth() > 0 ? gantt.labelWidth() + 8 : 64;
+  const monthYear = (tick: GanttTick) => {
+    const date = ganttDateFromDay(tick.start);
+    return date.getMonth() === 0 ? date.getFullYear() : undefined;
+  };
+  const monthLabelWidth = (tick: GanttTick) =>
+    tick.label.length * 7 + (monthYear(tick) === undefined ? 8 : 44);
   const monthLeft = (tick: GanttTick) =>
     Math.min(
       Math.max(
         left(tick.start) + 4,
         left(gantt.visibleRange().start) + textInset() - gantt.labelWidth()
       ),
-      left(tick.end) - (tick.label.length * 7 + 44)
+      left(tick.end) - monthLabelWidth(tick)
     );
   const monthOpacity = (tick: GanttTick) => {
     const pinned =
@@ -653,7 +659,7 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
                       const halfLabel = tick.label.length * 3 + 4;
                       return (
                         distance > -halfLabel &&
-                        distance < month.label.length * 7 + 44 + halfLabel
+                        distance < monthLabelWidth(month) + halfLabel
                       );
                     })
                   }
@@ -663,7 +669,7 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
                     <span
                       aria-hidden="true"
                       data-gantt-date-mark=""
-                      class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-edge-muted"
+                      class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-ink-extra-muted/70"
                     />
                   </span>
                 </Show>
@@ -689,16 +695,18 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
                 }}
               >
                 <span class="font-semibold">{tick().label}</span>
-                <span
-                  data-gantt-year=""
-                  class="font-medium text-ink tabular-nums"
-                >
-                  {ganttDateFromDay(tick().start).getFullYear()}
-                </span>
+                <Show when={monthYear(tick()) !== undefined}>
+                  <span
+                    data-gantt-year=""
+                    class="font-medium text-ink tabular-nums"
+                  >
+                    {monthYear(tick())}
+                  </span>
+                </Show>
                 <span
                   aria-hidden="true"
                   data-gantt-date-mark=""
-                  class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-edge"
+                  class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-ink-extra-muted/70"
                 />
               </span>
             </div>
