@@ -323,6 +323,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
+    // Binning and pagination read these eagerly, outside the menu's Show.
+    // Keep closed composers from gathering and ranking mention candidates.
+    if (!menuOpen()) return [];
+
     if (isMobile()) {
       return [
         {
