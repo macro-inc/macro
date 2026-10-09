@@ -32,5 +32,5 @@ ALTER TYPE ai_credit_reload_status ADD VALUE IF NOT EXISTS 'requires_action';
 ALTER TYPE ai_credit_reload_status ADD VALUE IF NOT EXISTS 'voided';
 ALTER TYPE ai_credit_reload_status ADD VALUE IF NOT EXISTS 'uncollectible';
 
-ALTER TABLE ai_overage_charge ADD COLUMN hosted_invoice_url TEXT;
-ALTER TABLE ai_credit_reload ADD COLUMN hosted_invoice_url TEXT;
+ALTER TABLE ai_overage_charge ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT;
+ALTER TABLE ai_credit_reload ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT;

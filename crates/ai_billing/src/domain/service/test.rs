@@ -1335,6 +1335,51 @@ async fn enabled_settlement_does_not_retry_pending_or_failed_direct_charges() {
 }
 
 #[tokio::test]
+async fn an_older_charge_needing_authentication_is_not_retried_after_a_newer_payment() {
+    let (svc, repo, payments, _) = premium_service(5_500);
+    let payer = user("payer@x.com");
+    repo.historical_charge("in_older", 2_100);
+    repo.historical_charge("in_newer", 1_575);
+    // Keep the legacy opt-in active, but enough prepaid credits on hand that
+    // settlements do not need automatic reloads.
+    repo.update_overage(&payer, true, 10_000).await.unwrap();
+    repo.set_balance(10_000);
+    svc.mark_overage_invoice("in_newer", &InvoiceOutcome::Paid)
+        .await
+        .unwrap();
+    svc.mark_overage_invoice(
+        "in_older",
+        &InvoiceOutcome::ActionRequired {
+            hosted_invoice_url: Some(HOSTED_INVOICE_URL.to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    // The newest paid charge leaves overage unsuspended. Even so, repeated
+    // settlements must never attempt payment on the older direct invoice.
+    assert!(!svc.snapshot(&payer).await.unwrap().overage_suspended);
+    for _ in 0..3 {
+        svc.settle(&payer).await.unwrap();
+    }
+    let charges = repo.charges();
+    assert_eq!(charges.len(), 2);
+    assert_eq!(charges[0].status, OverageChargeStatus::RequiresAction);
+    assert_eq!(charges[1].status, OverageChargeStatus::Paid);
+    assert!(payments.opened().is_empty());
+    assert!(payments.opened_reloads().is_empty());
+    assert!(payments.payments().is_empty());
+    assert_eq!(
+        svc.snapshot(&payer).await.unwrap().payment_action,
+        Some(PaymentAction {
+            kind: PaymentActionKind::OverageCharge,
+            amount_cents: 2_100,
+            hosted_invoice_url: Some(HOSTED_INVOICE_URL.to_string()),
+        })
+    );
+}
+
+#[tokio::test]
 async fn free_users_are_hard_capped_at_the_free_allowance() {
     // `FakeUsage::cents` is attributed to the first requested user, which for
     // a free user is the user themself.
