@@ -69,6 +69,11 @@ const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 const buildOutputPath = './output/app';
 const appArchiveOutputPath = './output/app-archive';
 const cacheWasmRetentionDays = 7;
+// How many builds of content-hashed assets stay published. A tab keeps
+// running the build it loaded until it is reloaded, and the client defers
+// that while someone is using the app, so a deploy must not be able to pull
+// a still-open build's lazily fetched chunks out from under it.
+const assetBuildRetention = 10;
 const shellQuote = (value: string): string =>
   "'" + value.split("'").join("'\\''") + "'";
 execSync('rm -rf ./output', { stdio: 'inherit' });
@@ -115,7 +120,12 @@ const syncAssetsCommand = new command.local.Command(
     // raw bytes in dist/archive for Tauri and local preview, but exclude both
     // raw and sidecar from generic sync. The targeted uploader stores Brotli
     // bytes at the original .wasm key with application/wasm + Content-Encoding br.
-    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/upload-brotli-to-s3.sh ./output/app s3://${webAppAssets.bucket}/app public-read && aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete --exclude "app/app-archive.zip" --exclude "app-archive/*" --exclude "*cache_wasm_bg*.wasm" --exclude "*cache_wasm_bg*.wasm.br"`,
+    // No --delete: it removed the previous build's content-hashed files as
+    // soon as a new build landed, and a tab still running that build fetches
+    // most of itself lazily, so those chunks are asked for long afterwards.
+    // `retain-recent-builds.sh` deletes what the last few builds no longer
+    // refer to instead, once everything below has published.
+    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/upload-brotli-to-s3.sh ./output/app s3://${webAppAssets.bucket}/app public-read && aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --exclude "app/app-archive.zip" --exclude "app-archive/*" --exclude "*cache_wasm_bg*.wasm" --exclude "*cache_wasm_bg*.wasm.br"`,
     triggers: [Date.now()],
   },
   {
@@ -144,7 +154,7 @@ const indexHtmlObjectMetadataCommand = new command.local.Command(
 
 // Prune only after the current WASM, generic assets, index content, and index
 // metadata have all published. Any earlier failure preserves all prior keys.
-new command.local.Command(
+const pruneOldCacheWasmCommand = new command.local.Command(
   'prune-old-cache-wasm-command',
   {
     create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/prune-old-brotli-from-s3.sh ./output/app s3://${webAppAssets.bucket}/app ${cacheWasmRetentionDays}`,
@@ -152,6 +162,21 @@ new command.local.Command(
   },
   {
     dependsOn: [indexHtmlObjectMetadataCommand],
+    replaceOnChanges: ['*'],
+  }
+);
+
+// What the generic sync's --delete used to do, delayed by a few builds. Runs
+// last, and after the cache WASM prune, so a failure anywhere above leaves
+// every prior key in place rather than half-retiring a build.
+new command.local.Command(
+  'retain-recent-builds-command',
+  {
+    create: pulumi.interpolate`bash ../../../apps/web/scripts/retain-recent-builds.sh ./output/app s3://${webAppAssets.bucket}/app ${assetBuildRetention}`,
+    triggers: [Date.now()],
+  },
+  {
+    dependsOn: [pruneOldCacheWasmCommand],
     replaceOnChanges: ['*'],
   }
 );
