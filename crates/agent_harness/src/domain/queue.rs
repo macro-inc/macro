@@ -219,7 +219,7 @@ impl SessionQueues {
         self.insert(session, entry, VecDeque::push_back)
     }
 
-    /// Recover a DM's durable admission order even when broker deliveries arrive out of order.
+    /// Recover a conversation's durable admission order even when broker deliveries arrive out of order.
     pub fn enqueue_chronological(
         &self,
         session: AgentSessionId,

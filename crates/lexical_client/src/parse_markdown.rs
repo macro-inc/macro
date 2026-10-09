@@ -415,9 +415,19 @@ pub struct AgentContext<'a> {
     /// Other channel activity, grouped by discussion, oldest first.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub channel: Vec<AgentContextThread<'a>>,
-    /// The prompt was posted in the person's private DM with the agent.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub direct_message: bool,
+    /// The agent conversation the prompt was posted in, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<AgentContextConversation>,
+}
+
+/// What kind of agent conversation a prompt was posted in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentContextConversation {
+    /// A private channel with the person, who reads the reply live.
+    Direct,
+    /// A shared channel where the agent is a member.
+    Shared,
 }
 
 /// The document location of the comment thread an agent prompt was posted in.

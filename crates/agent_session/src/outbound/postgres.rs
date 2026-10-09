@@ -9,7 +9,7 @@ use sqlx::types::Json;
 #[cfg(test)]
 mod test;
 
-mod agent_dm;
+mod agent_conversation;
 mod pull_request;
 mod queue;
 mod recovery;

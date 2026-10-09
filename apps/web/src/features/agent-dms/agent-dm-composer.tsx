@@ -1,29 +1,41 @@
+import { AgentConversationControls } from '@app/features/agent-conversations/agent-conversation-controls';
+import { useAgentConversations } from '@app/features/agent-conversations/queries/conversations';
 import { type ParentProps, Show } from 'solid-js';
-import { AgentDmControls } from './agent-dm-controls';
 import { ConversationNotice } from './components/conversation-notice';
-import { useAgentDmConversation } from './queries/conversation';
 
-/** App-facing composition; mount only after the channel identifies an agent DM. */
+/**
+ * App-facing composition; `botId` names the persona when the channel is an
+ * agent DM, and the composer is the channel's own otherwise.
+ */
 export function AgentDmComposer(
-  props: ParentProps<{ channelId: string; isAgentDm: boolean }>
+  props: ParentProps<{ channelId: string; botId: string | undefined }>
 ) {
   return (
-    <Show when={props.isAgentDm} fallback={props.children}>
-      <AgentDmComposerContent channelId={props.channelId}>
-        {props.children}
-      </AgentDmComposerContent>
+    <Show when={props.botId} fallback={props.children} keyed>
+      {(botId) => (
+        <AgentDmComposerContent channelId={props.channelId} botId={botId}>
+          {props.children}
+        </AgentDmComposerContent>
+      )}
     </Show>
   );
 }
 
-function AgentDmComposerContent(props: ParentProps<{ channelId: string }>) {
-  const conversation = useAgentDmConversation(() => props.channelId);
-  const available = () =>
-    conversation.isSuccess && conversation.data?.available;
+function AgentDmComposerContent(
+  props: ParentProps<{ channelId: string; botId: string }>
+) {
+  const conversations = useAgentConversations(() => props.channelId);
+  const conversation = () =>
+    conversations.isSuccess
+      ? conversations.data?.find(
+          (conversation) => conversation.botId === props.botId
+        )
+      : undefined;
+  const available = () => conversation()?.available === true;
   const notice = () =>
-    conversation.isError
+    conversations.isError
       ? 'error'
-      : conversation.isSuccess
+      : conversations.isSuccess
         ? 'unavailable'
         : 'loading';
   // Centered in the message column, like the channel input it wraps: the
@@ -31,12 +43,12 @@ function AgentDmComposerContent(props: ParentProps<{ channelId: string }>) {
   // its edges.
   return (
     <div class="flex w-full min-w-0 flex-col items-center">
-      <Show when={conversation.isSuccess && conversation.data}>
+      <Show when={conversation()}>
         {(data) => (
           <div class="macro-message-width">
-            <AgentDmControls
+            <AgentConversationControls
               conversation={data()}
-              onChanged={() => void conversation.refetch()}
+              onChanged={() => void conversations.refetch()}
             />
           </div>
         )}
@@ -47,7 +59,7 @@ function AgentDmComposerContent(props: ParentProps<{ channelId: string }>) {
           <div class="macro-message-width">
             <ConversationNotice
               state={notice()}
-              onRetry={() => void conversation.refetch()}
+              onRetry={() => void conversations.refetch()}
             />
           </div>
         }

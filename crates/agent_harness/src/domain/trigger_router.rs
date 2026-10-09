@@ -57,7 +57,7 @@ pub fn route_agent_trigger(
     links: &StaticFileLinks,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
-        AgentTriggerTopicEvent::New(NewAgentSessionEvent::DirectMessage(event)) => {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::ConversationMessage(event)) => {
             let Some(runtime) = runtime else {
                 return Err(Skipped::ForeignBot);
             };
@@ -69,7 +69,7 @@ pub fn route_agent_trigger(
                 .ok_or(Skipped::NotFromUser)?;
             Ok(RoutedTrigger::Command(
                 event.session_id,
-                HarnessCommand::DirectMessage(OpenSession {
+                HarnessCommand::ConversationMessage(OpenSession {
                     bot_id: event.bot_id,
                     runtime,
                     origin: SessionOrigin::Mention(MentionOrigin {

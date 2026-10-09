@@ -354,16 +354,16 @@ where
             .unwrap_or(PermissionPolicy::Prompt)
     }
 
-    /// DM contexts keep the adopted persona choice across reconnects. Current
+    /// Conversation sessions keep the adopted persona choice across reconnects. Current
     /// harness operator restrictions can always tighten that choice.
     pub(super) async fn permission_policy_for_session(
         &self,
         session: AgentSessionId,
         bot: BotId,
     ) -> agent_session::domain::error::Result<PermissionPolicy> {
-        if let Some(policy) = &self.direct_messages
-            && policy.is_dm_session(session).await?
-            && let Some(store) = &self.dm_turns
+        if let Some(policy) = &self.conversations
+            && policy.is_conversation_session(session).await?
+            && let Some(store) = &self.conversation_turns
         {
             let Some(settings) = store.settings(session).await? else {
                 return Ok(PermissionPolicy::Prompt);

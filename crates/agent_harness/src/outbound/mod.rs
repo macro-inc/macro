@@ -5,10 +5,10 @@ pub mod agent_prompt_composer;
 pub mod channel_announcer;
 pub mod channel_prompt_context;
 pub mod containers;
+/// Durable agent conversation turn journal.
+pub mod conversation_turns;
 pub mod cursor;
 pub mod daytona;
-/// Durable persona-DM execution journal.
-pub mod dm_turns;
 pub mod egress;
 pub mod forward;
 pub mod github_branches;

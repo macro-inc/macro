@@ -89,7 +89,7 @@ const agentContextRequest = z.object({
   promptMessageId: z.string().min(1).optional(),
   thread: contextThread.optional(),
   channel: z.array(contextThread).optional(),
-  directMessage: z.boolean().optional(),
+  conversation: z.enum(['direct', 'shared']).optional(),
 });
 
 const agentContextResponse = z.object({

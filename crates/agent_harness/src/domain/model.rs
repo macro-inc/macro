@@ -349,7 +349,7 @@ pub enum ReplyPlacement {
     /// Answer inside the source discussion, the behavior of existing mentions.
     #[default]
     Thread,
-    /// Answer directly in a private persona DM's main timeline.
+    /// Answer in the channel's main timeline, as an agent conversing there does.
     Timeline,
 }
 
@@ -449,7 +449,7 @@ pub struct AgentTypingUpdate {
 /// Source message and placement of one agent response.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
-    /// Ordinary mentions reply in a thread; persona DMs answer in the timeline.
+    /// Ordinary mentions reply in a thread; agent conversations answer in the timeline.
     #[serde(default, skip_serializing_if = "ReplyPlacement::is_thread")]
     pub reply_placement: ReplyPlacement,
     /// Update the existing agent response instead of posting a reply.
@@ -594,9 +594,19 @@ pub struct ConversationContext {
     /// For a top-level channel prompt this is the primary context and ends
     /// with the prompt.
     pub channel: Vec<ContextThread>,
-    /// The prompt was posted in the person's private DM with the agent,
-    /// which they read live: questions and review cards reach them there.
-    pub direct_message: bool,
+    /// The agent conversation the prompt was posted in, when it was posted
+    /// in one rather than a thread.
+    pub conversation: Option<ConversationKind>,
+}
+
+/// What kind of agent conversation a prompt was posted in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversationKind {
+    /// A private channel with the person, who reads the reply live: questions
+    /// and review cards reach them there.
+    Direct,
+    /// A shared channel where the agent is a member. Nothing routes these yet.
+    Shared,
 }
 
 /// Do something in a session that already exists.
@@ -628,8 +638,8 @@ pub struct DeliverAction {
 /// it.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum HarnessCommand {
-    /// Open or continue a durably reserved private DM session.
-    DirectMessage(OpenSession),
+    /// Open or continue the durably reserved session of an agent's conversation.
+    ConversationMessage(OpenSession),
     /// Open a new session.
     Open(OpenSession),
     /// Act on a session that already exists.
@@ -751,9 +761,9 @@ pub struct AnnouncePrompt {
 /// Facts required to announce one prompt into its originating context.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
-    /// Preallocated reply id for a durably journaled DM turn.
+    /// Preallocated reply id for a durably journaled conversation turn.
     pub reply_message_id: Option<Uuid>,
-    /// Whether the answer is a thread reply or a top-level DM message.
+    /// Whether the answer is a thread reply or a top-level channel message.
     pub reply_placement: ReplyPlacement,
     /// Update the existing agent response instead of posting a reply.
     pub reuse_origin_message: bool,

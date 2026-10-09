@@ -5,6 +5,7 @@ pub mod historical;
 mod tests;
 
 mod agent_dm;
+mod channel_agents;
 
 #[cfg(feature = "attachment")]
 use crate::domain::ports::ChannelAttachmentRepo;

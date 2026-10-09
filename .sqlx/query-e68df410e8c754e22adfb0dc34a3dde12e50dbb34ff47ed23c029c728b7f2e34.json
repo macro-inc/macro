@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_conversation_turns SET state = 'stopped', outcome = $2, updated_at = now() WHERE session_id = $1 AND state = 'queued'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e68df410e8c754e22adfb0dc34a3dde12e50dbb34ff47ed23c029c728b7f2e34"
+}

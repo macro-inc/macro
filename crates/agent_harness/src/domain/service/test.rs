@@ -491,7 +491,7 @@ fn harness_with_ports_and_journal(
     permission_policies: impl crate::domain::ports::PermissionPolicySource,
     coding_agents: impl crate::domain::ports::CodingAgentSource,
     mentions: PromptMentionsMock,
-    journal: Option<Arc<dyn crate::domain::dm_turns::DmTurnStore>>,
+    journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
 ) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
@@ -545,7 +545,7 @@ fn harness_with_ports_and_journal(
         notifier.clone(),
     );
     let service = match journal {
-        Some(journal) => service.with_dm_turns(journal),
+        Some(journal) => service.with_conversation_turns(journal),
         None => service,
     };
     let (ended, ended_rx) = mpsc::unbounded_channel();

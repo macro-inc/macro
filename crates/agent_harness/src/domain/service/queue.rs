@@ -237,7 +237,7 @@ where
             SessionManagement::Unmanaged => {
                 span.record("agent.session.management", "unmanaged");
                 span.record("agent.command.forwarded", false);
-                // A new DM has a reserved id but no session row yet. External
+                // A new conversation has a reserved id but no session row yet. External
                 // personas still route to the replica holding their connection;
                 // an existing session uses its pinned harness configuration.
                 let (bot_id, kind) = match self.sessions.get_session(session_id).await {
@@ -246,7 +246,9 @@ where
                         AgentKind::for_session(session.bot_id, &session.harness),
                     ),
                     Err(AgentSessionError::NotFound(_)) => match &command {
-                        HarnessCommand::DirectMessage(open) => (open.bot_id, open.runtime.kind),
+                        HarnessCommand::ConversationMessage(open) => {
+                            (open.bot_id, open.runtime.kind)
+                        }
                         _ => return Err(AgentSessionError::NotFound(session_id).into()),
                     },
                     Err(error) => return Err(error.into()),
@@ -317,31 +319,32 @@ where
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
-        // A DM reserves its identity before startup. Commands are serialized
+        // A conversation reserves its identity before startup. Commands are serialized
         // under that identity, so only the first opens; every later post is a
         // regular queued turn, including after the runtime has disconnected.
         let mut _delivery_lease = None;
         let command = match command {
-            HarnessCommand::DirectMessage(mut open) => {
+            HarnessCommand::ConversationMessage(mut open) => {
                 let mut origin = open.origin.announcement();
                 if origin.reply_placement != crate::domain::model::ReplyPlacement::Timeline {
                     return Err(AgentSessionError::Forbidden.into());
                 }
                 let mut action_id = AgentActionId::from_uuid(origin.message_id);
-                if let Some(policy) = &self.direct_messages
+                if let Some(policy) = &self.conversations
                     && !policy
                         .authorize_prompt(session_id, open.bot_id, Some(open.origin.actor()))
                         .await?
                 {
                     return Err(AgentSessionError::Forbidden.into());
                 }
-                if let Some(store) = &self.dm_turns {
+                if let Some(store) = &self.conversation_turns {
                     let messages::domain::models::MessageParent::Channel(channel) = origin.parent
                     else {
                         return Err(AgentSessionError::Forbidden.into());
                     };
                     let record = store.admit(session_id, channel, open.clone()).await?;
-                    if record.state != crate::domain::dm_turns::DmTurnState::Queued
+                    if record.state
+                        != crate::domain::conversation_turns::ConversationTurnState::Queued
                         || record.session_id != session_id
                     {
                         return Ok(CommandOutcome::Completed);
@@ -425,7 +428,7 @@ where
                 }
             }
             HarnessCommand::Open(_)
-            | HarnessCommand::DirectMessage(_)
+            | HarnessCommand::ConversationMessage(_)
             | HarnessCommand::Turn(_)
             | HarnessCommand::ToolApproval(_)
             | HarnessCommand::SessionStopped { .. }
@@ -438,8 +441,8 @@ where
         }
 
         match command {
-            HarnessCommand::DirectMessage(_) => {
-                unreachable!("DM commands were normalized before dispatch")
+            HarnessCommand::ConversationMessage(_) => {
+                unreachable!("conversation messages were normalized before dispatch")
             }
             HarnessCommand::Open(command) => {
                 self.open(session_id, command).await?;
@@ -492,7 +495,7 @@ where
                     tracing::warn!(%session_id, %action, "ignoring a stale turn end");
                     return Ok(CommandOutcome::Completed);
                 }
-                if let Some(store) = &self.dm_turns {
+                if let Some(store) = &self.conversation_turns {
                     if ended.is_none()
                         && let Some(action) = fold_action_id
                     {
@@ -504,11 +507,15 @@ where
                     }
                     if let Some(turn) = &ended {
                         let state = match &stop {
-                            StopReason::Cancelled => crate::domain::dm_turns::DmTurnState::Stopped,
-                            StopReason::Failed { .. } => {
-                                crate::domain::dm_turns::DmTurnState::Failed
+                            StopReason::Cancelled => {
+                                crate::domain::conversation_turns::ConversationTurnState::Stopped
                             }
-                            _ => crate::domain::dm_turns::DmTurnState::Succeeded,
+                            StopReason::Failed { .. } => {
+                                crate::domain::conversation_turns::ConversationTurnState::Failed
+                            }
+                            _ => {
+                                crate::domain::conversation_turns::ConversationTurnState::Succeeded
+                            }
                         };
                         store
                             .finish(
@@ -785,7 +792,7 @@ where
         }) && self.busy.turn(session_id).is_some();
         let dm_record = if announce.as_ref().is_some_and(|origin| {
             origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
-        }) && let Some(store) = &self.dm_turns
+        }) && let Some(store) = &self.conversation_turns
         {
             store.by_action(action_id).await?
         } else {
@@ -1193,7 +1200,7 @@ where
                 return Err(error);
             }
 
-            let dm_store = self.dm_turns.as_ref().filter(|_| {
+            let conversation_store = self.conversation_turns.as_ref().filter(|_| {
                 entry.announce.as_ref().is_some_and(|origin| {
                     origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
                 })
@@ -1228,7 +1235,7 @@ where
                 presented: Vec::new(),
                 held_tool_calls: Vec::new(),
             };
-            if let Some(store) = dm_store {
+            if let Some(store) = conversation_store {
                 match store.claim(entry.action_id, &flight).await {
                     Ok(true) => {}
                     Ok(false) => {
@@ -1236,7 +1243,7 @@ where
                             .by_action(entry.action_id)
                             .await?
                             .is_some_and(|record| {
-                                record.state == crate::domain::dm_turns::DmTurnState::Queued
+                                record.state == crate::domain::conversation_turns::ConversationTurnState::Queued
                             })
                         {
                             self.requeue_claimed(session_id, entry).await?;
@@ -1298,11 +1305,11 @@ where
             {
                 // A claimed conversation turn fails as an undelivered one
                 // does, so its journal never shows it running.
-                if let Some(store) = dm_store {
+                if let Some(store) = conversation_store {
                     store
                         .finish(
                             entry.action_id,
-                            crate::domain::dm_turns::DmTurnState::Failed,
+                            crate::domain::conversation_turns::ConversationTurnState::Failed,
                             ReplyOutcome::Failed,
                         )
                         .await?;
@@ -1320,7 +1327,7 @@ where
                 announce: entry.announce.clone(),
             };
             flight.announcement_message_id = entry.announced;
-            if let Some(store) = dm_store {
+            if let Some(store) = conversation_store {
                 store.record_flight(entry.action_id, &flight).await?;
             }
             return match self.deliver(session_id, command).await {
@@ -1352,11 +1359,11 @@ where
                     Ok(Dispatch::Dispatched)
                 }
                 Err(error) => {
-                    if let Some(store) = dm_store {
+                    if let Some(store) = conversation_store {
                         store
                             .finish(
                                 entry.action_id,
-                                crate::domain::dm_turns::DmTurnState::Failed,
+                                crate::domain::conversation_turns::ConversationTurnState::Failed,
                                 ReplyOutcome::Failed,
                             )
                             .await?;
@@ -1446,9 +1453,12 @@ pub(super) async fn run_session_worker<
             span,
             route,
         } = queued;
-        let dm_action = match (&command, &inner.dm_turns) {
-            (HarnessCommand::DirectMessage(open), Some(store)) => {
-                match store.get(open.origin.announcement().message_id).await {
+        let conversation_action = match (&command, &inner.conversation_turns) {
+            (HarnessCommand::ConversationMessage(open), Some(store)) => {
+                match store
+                    .get(open.origin.announcement().message_id, open.bot_id)
+                    .await
+                {
                     Ok(record) => record.map(|record| record.action_id),
                     Err(error) => {
                         let _ = completed.send(Err(error.into()));
@@ -1467,16 +1477,16 @@ pub(super) async fn run_session_worker<
             inner.execute(session_id, command).instrument(span).await
         };
         if result.is_err()
-            && let (Some(action), Some(store)) = (dm_action, &inner.dm_turns)
+            && let (Some(action), Some(store)) = (conversation_action, &inner.conversation_turns)
             && let Err(error) = store
                 .finish(
                     action,
-                    crate::domain::dm_turns::DmTurnState::Failed,
+                    crate::domain::conversation_turns::ConversationTurnState::Failed,
                     ReplyOutcome::Failed,
                 )
                 .await
         {
-            tracing::error!(?error, %session_id, "failed to persist DM command failure");
+            tracing::error!(?error, %session_id, "failed to persist conversation command failure");
         }
         let _ = completed.send(result);
     }

@@ -59,7 +59,7 @@ where
         } = command;
 
         if !matches!(action, AgentAction::Stop)
-            && let Some(policy) = &self.direct_messages
+            && let Some(policy) = &self.conversations
         {
             let session = self.sessions.get_session(session_id).await?;
             policy
@@ -334,24 +334,24 @@ where
         if in_segments && !terminal {
             return;
         }
-        let dm_store = self.dm_turns.as_ref().filter(|_| {
+        let conversation_store = self.conversation_turns.as_ref().filter(|_| {
             turn.announce.as_ref().is_some_and(|origin| {
                 origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
             })
         });
-        let _reply_lease = if terminal && let Some(store) = dm_store {
+        let _reply_lease = if terminal && let Some(store) = conversation_store {
             match store.claim_reply(turn.action_id).await {
                 Ok(Some(lease)) => Some(lease),
                 Ok(None) => return,
                 Err(error) => {
-                    tracing::error!(?error, %session_id, "could not claim DM reply reconciliation");
+                    tracing::error!(?error, %session_id, "could not claim conversation reply reconciliation");
                     return;
                 }
             }
         } else {
             None
         };
-        if terminal && let Some(store) = dm_store {
+        if terminal && let Some(store) = conversation_store {
             match store.by_action(turn.action_id).await {
                 Ok(Some(record)) if record.reply_finalized => return,
                 Ok(Some(record)) => {
@@ -360,7 +360,7 @@ where
                     }
                 }
                 Err(error) => {
-                    tracing::error!(?error, %session_id, "could not read the durable DM reply state");
+                    tracing::error!(?error, %session_id, "could not read the durable conversation reply state");
                     return;
                 }
                 _ => {}
@@ -389,10 +389,10 @@ where
         };
         if resolved
             && terminal
-            && let Some(store) = dm_store
+            && let Some(store) = conversation_store
             && let Err(error) = store.finalize_reply(turn.action_id, &outcome).await
         {
-            tracing::error!(?error, %session_id, "failed to mark the DM reply finalized");
+            tracing::error!(?error, %session_id, "failed to mark the conversation reply finalized");
         }
     }
 

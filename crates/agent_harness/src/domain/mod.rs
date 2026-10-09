@@ -1,8 +1,8 @@
 /// Fresh ACP capability discovery without creating an agent session.
 pub mod capability_discovery;
-/// Owner-only metadata and context boundaries for agent DMs.
-pub mod direct_messages;
-pub mod dm_turns;
+pub mod conversation_turns;
+/// Agent conversations in channels: who may prompt them, and their sessions.
+pub mod conversations;
 pub mod error;
 pub mod model;
 /// Which lifecycle facts become notifications for people, and for whom.

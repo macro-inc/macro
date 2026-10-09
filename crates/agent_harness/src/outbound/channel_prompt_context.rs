@@ -196,7 +196,7 @@ impl<Access: ContextAuthorizer, Lexical: MarkReader + QuoteReader> MessagePrompt
                     .map_err(context_error)?,
             )
         };
-        // DM session history owns continuity. Reading ambient channel history
+        // A conversation's session history owns continuity. Reading ambient channel history
         // would duplicate previous turns and resurrect an explicitly reset
         // segment. An authored quote is still resolved below.
         let recent = if is_channel
@@ -252,8 +252,10 @@ impl<Access: ContextAuthorizer, Lexical: MarkReader + QuoteReader> MessagePrompt
             prompt_message_id: Some(prompt.id),
             thread: discussion.map(|discussion| prompt_thread(discussion, &prompt)),
             channel,
-            direct_message: origin.reply_placement
-                == crate::domain::model::ReplyPlacement::Timeline,
+            // Only direct conversations answer in the timeline today.
+            conversation: (origin.reply_placement
+                == crate::domain::model::ReplyPlacement::Timeline)
+                .then_some(crate::domain::model::ConversationKind::Direct),
         })
     }
 }

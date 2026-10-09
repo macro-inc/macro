@@ -4,7 +4,7 @@
 //! is what the domain asked of it and when.
 
 use super::*;
-mod direct_messages;
+mod conversations;
 use crate::domain::model::{
     HeldToolCall, ReplyOutcome, ResolvedReply, TaskAssignmentOrigin, ToolApprovalChange,
 };

@@ -336,9 +336,10 @@ async fn the_owner_and_sender_reach_the_lexical_service() {
     server.abort();
 }
 
-/// A DM's prompt says so to the lexical service, and nothing else does.
+/// A conversation's prompt names its kind to the lexical service, and a
+/// thread's says nothing.
 #[tokio::test]
-async fn only_a_direct_message_is_marked_for_the_lexical_service() {
+async fn only_a_conversation_prompt_is_marked_for_the_lexical_service() {
     let received: Arc<Mutex<Option<serde_json::Value>>> = Arc::default();
     let seen = received.clone();
     let app = Router::new().route(
@@ -359,7 +360,11 @@ async fn only_a_direct_message_is_marked_for_the_lexical_service() {
         format!("http://{address}"),
     ));
 
-    for (direct_message, expected) in [(true, Some(true)), (false, None)] {
+    for (conversation, expected) in [
+        (Some(ConversationKind::Direct), Some("direct")),
+        (Some(ConversationKind::Shared), Some("shared")),
+        (None, None),
+    ] {
         composer
             .compose(
                 "Raw prompt",
@@ -368,17 +373,14 @@ async fn only_a_direct_message_is_marked_for_the_lexical_service() {
                 None,
                 Some(&ConversationContext {
                     reply_target: Some(ReplyTarget::None),
-                    direct_message,
+                    conversation,
                     ..ConversationContext::default()
                 }),
             )
             .await
             .unwrap();
         let body = received.lock().unwrap().clone().unwrap();
-        assert_eq!(
-            body.get("directMessage").and_then(|v| v.as_bool()),
-            expected
-        );
+        assert_eq!(body.get("conversation").and_then(|v| v.as_str()), expected);
     }
     server.abort();
 }

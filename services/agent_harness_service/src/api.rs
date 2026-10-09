@@ -74,7 +74,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     routine_sessions: Router,
     coding_agents: Router,
     capabilities: Router,
-    direct_messages: Router,
+    conversations: Router,
     pull_requests: Router,
     tool_approvals: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
@@ -105,7 +105,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
             capabilities: Router::new(),
-            direct_messages: Router::new(),
+            conversations: Router::new(),
             pull_requests: Router::new(),
             tool_approvals: Router::new(),
             changes,
@@ -119,8 +119,8 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     }
 
     /// Attach owner-only agent conversation routes.
-    pub fn with_direct_messages(mut self, router: Router) -> Self {
-        self.direct_messages = router;
+    pub fn with_conversations(mut self, router: Router) -> Self {
+        self.conversations = router;
         self
     }
 
@@ -271,7 +271,7 @@ where
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
         .merge(states.capabilities)
-        .merge(states.direct_messages)
+        .merge(states.conversations)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

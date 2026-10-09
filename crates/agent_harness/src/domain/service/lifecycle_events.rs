@@ -65,8 +65,8 @@ where
         let session = self.sessions.get_session(session_id).await?;
         let (identity, persona) =
             tokio::try_join!(self.identity_of(&session), self.reply_persona(&session))?;
-        let is_dm = match &self.direct_messages {
-            Some(policy) => policy.is_dm_session(session_id).await?,
+        let is_dm = match &self.conversations {
+            Some(policy) => policy.is_conversation_session(session_id).await?,
             None => false,
         };
         Ok((identity, !is_dm && persona.is_coding))

@@ -280,7 +280,7 @@ where
         }
         // Downstream events name the reply's latest message.
         flight.announcement_message_id = flight.presented.last().copied();
-        if let Some(store) = &self.dm_turns {
+        if let Some(store) = &self.conversation_turns {
             store.record_flight(flight.action_id, flight).await?;
         }
         self.busy.mark_turn(session_id, flight.clone());

@@ -17,6 +17,7 @@ note: |-
 files:
   - apps/web/src/features/agent-activity/core/**
   - apps/web/src/features/agent-dms/core/**
+  - apps/web/src/features/agent-conversations/core/**
   - apps/web/src/features/agent-interactions/core/**
   - apps/web/src/features/calendar-team/core/**
   - apps/web/src/features/tasks-view/core/task-board*

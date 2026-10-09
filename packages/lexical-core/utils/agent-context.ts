@@ -115,10 +115,10 @@ export type AgentContextPrompt = {
   /** Other channel activity, grouped by discussion, oldest first. */
   channel?: AgentContextThread[];
   /**
-   * The prompt was posted in the person's private DM with the agent, which
-   * they read live.
+   * The agent conversation the prompt was posted in: a private channel with
+   * the person, who reads it live, or a shared channel the agent is part of.
    */
-  directMessage?: boolean;
+  conversation?: 'direct' | 'shared';
 };
 
 const text = (value: string): FxpNode => ({ '#text': value });
@@ -182,10 +182,12 @@ function threadNode(
  */
 function describeOrigin(
   parent: AgentContextParent,
-  directMessage: boolean
+  conversation: 'direct' | 'shared' | undefined
 ): string {
-  if (directMessage)
+  if (conversation === 'direct')
     return 'This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.';
+  if (conversation === 'shared')
+    return 'This prompt was posted in a shared channel you take part in, not the agent session view. Your reply is posted in the channel for everyone in it.';
   const surface = match(parent.type)
     .with('channel', () => 'a channel thread')
     .with('document', () => 'a document comment thread')
@@ -364,11 +366,7 @@ function renderConversation(input: AgentContextPrompt): FxpNode | undefined {
   const channel = input.channel ?? [];
   const children: FxpNode[] = [
     ...(input.parent
-      ? [
-          el('origin', [
-            text(describeOrigin(input.parent, input.directMessage === true)),
-          ]),
-        ]
+      ? [el('origin', [text(describeOrigin(input.parent, input.conversation))])]
       : []),
     ...(input.replyTarget
       ? [replyTargetNode(input.replyTarget, input.promptMessageId)]

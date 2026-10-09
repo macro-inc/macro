@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::channel_agents::{ChannelAgent, ChannelAgentKind, ChannelAgentRepo};
 use crate::domain::ports::ChannelRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -72,7 +73,16 @@ async fn concurrent_opens_create_one_channel_and_two_memberships(pool: PgPool) {
         Some(1),
         "the losing request must not leave an orphan channel"
     );
-    assert_eq!(repo.find(left.dm.channel_id).await.unwrap(), Some(left.dm));
+    assert_eq!(
+        repo.find(left.dm.channel_id, bot_id::MACRO_NEW_BOT_ID)
+            .await
+            .unwrap(),
+        Some(ChannelAgent {
+            channel_id: left.dm.channel_id,
+            bot_id: bot_id::MACRO_NEW_BOT_ID,
+            kind: ChannelAgentKind::Direct { user_id: user() },
+        })
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -130,7 +140,12 @@ async fn reopening_restores_membership_and_deletion_removes_the_pair(pool: PgPoo
     .execute(&pool)
     .await
     .unwrap();
-    assert!(repo.find(first.dm.channel_id).await.unwrap().is_none());
+    assert!(
+        repo.agents_in(first.dm.channel_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let recreated = repo.ensure(user(), bot_id::MACRO_NEW_BOT_ID).await.unwrap();
     assert!(recreated.created);
     assert_ne!(recreated.dm.channel_id, first.dm.channel_id);

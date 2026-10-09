@@ -107,16 +107,16 @@ where
         // Persist first: never report a terminal rejection while the durable
         // queue still says that the command will run after a restart.
         for entry in waiting {
-            let dm_store = self.dm_turns.as_ref().filter(|_| {
+            let conversation_store = self.conversation_turns.as_ref().filter(|_| {
                 entry.announce.as_ref().is_some_and(|origin| {
                     origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
                 })
             });
-            if let Some(store) = dm_store {
+            if let Some(store) = conversation_store {
                 store
                     .finish(
                         entry.action_id,
-                        crate::domain::dm_turns::DmTurnState::Failed,
+                        crate::domain::conversation_turns::ConversationTurnState::Failed,
                         ReplyOutcome::Failed,
                     )
                     .await?;
@@ -134,7 +134,7 @@ where
                     Vec::new(),
                 )
                 .await;
-            if resolved && let Some(store) = dm_store {
+            if resolved && let Some(store) = conversation_store {
                 store
                     .finalize_reply(entry.action_id, &ReplyOutcome::Failed)
                     .await?;
