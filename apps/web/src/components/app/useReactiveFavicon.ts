@@ -1,9 +1,9 @@
 import { updateFavicon } from '@app/util/favicon';
 import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
+import type { NotificationSource } from '@notifications';
 import { committedThemeAccent } from '@theme/signals/themeSignals';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { match, P } from 'ts-pattern';
-import { useGlobalNotificationSource } from './GlobalAppState';
 
 type BadgeMessage = {
   hasBadge: boolean;
@@ -24,11 +24,12 @@ const badgeBus = createCrossTabBus<BadgeMessage>({
       .otherwise(() => null),
 });
 
-export function ReactiveFavicon() {
+/** Badges the favicon when a notification arrives while the app is in the background. */
+export function useReactiveFavicon(
+  globalNotifications: NotificationSource
+): void {
   const [showNotificationBadge, setShowNotificationBadge] = createSignal(false);
   const [isAppFocused, setIsAppFocused] = createSignal(!document.hidden);
-
-  const globalNotifications = useGlobalNotificationSource();
 
   const postBadgeMessage = (hasBadge: boolean) => {
     badgeBus.publish({ hasBadge, sentAt: Date.now() });
@@ -73,6 +74,4 @@ export function ReactiveFavicon() {
       showNotificationBadge()
     );
   });
-
-  return null;
 }

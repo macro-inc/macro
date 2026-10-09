@@ -2343,12 +2343,23 @@ Section headings and controls share a white surface in light mode and the
 composer border in dark mode, with subtle row separators. The compact sidebar
 uses the shared workspace width.
 
+When a newer version is ready, an **Update available** button (a download icon
+in a subtle accent circle that a glowing comet periodically circles) appears in
+the sidebar rail above the mobile-app and settings icons. Its popover (a title,
+a short description, and one action) opens by itself once per update until
+dismissed (click outside or Escape); the button stays until the update is
+applied. Its wording and action depend on the update: **New version available**
+/ **Reload** for a newer web build, **Update ready** / **Update** for a
+downloaded bundle in the desktop app, and **Desktop app update ready** /
+**Restart and update** for a native desktop update. When part of the app fails
+to load because a newer web build replaced it, the same button appears and its
+popover opens again (even if dismissed) with **Reload**; there is no blocking
+alert. Touch layouts have no rail, so a newer web build shows a **Reload** toast
+there instead.
+
 On desktop release builds, **Account → Desktop app update** shows native update
-progress. When a verified update is ready, an **Update available** arrow icon
-appears in the sidebar above the mobile-app and settings icons. Click it to open
-**Update Macro**, then choose **Restart and update** or **Later**. Dismissing the
-modal leaves the sidebar notification available. While preparing to restart,
-the modal disables its actions. Restart waits for pending canvas/PDF saves and
+progress. While preparing to restart, the popover can't be dismissed and its
+action is disabled. Restart waits for pending canvas/PDF saves and
 local persistence; active calls, uploads, and imports must finish first. A ready
 update also installs on normal app quit. Closing a window only triggers
 installation if it exits the app. Browser, mobile, and development builds do not

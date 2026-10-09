@@ -23,7 +23,7 @@ export default function HomepagePullRequest() {
         : (host.querySelector<HTMLElement>('[data-magic-chip]') ?? undefined));
     setView(next);
   };
-  const prLink = () => (
+  const prLink = (detailed = false) => (
     <button
       type="button"
       class="homepage-agent-pr-link"
@@ -35,7 +35,15 @@ export default function HomepagePullRequest() {
         status={merged() ? 'merged' : 'open'}
         class="size-4 shrink-0"
       />
-      <span>PR #482</span>
+      <span class={detailed ? 'demo-cursor-pr-title' : undefined}>
+        {detailed ? '#482 · Fix flaky deploy pipeline' : 'PR #482'}
+      </span>
+      <Show when={detailed}>
+        <span class="demo-cursor-pr-stats">
+          <span>+38</span>
+          <span>−12</span>
+        </span>
+      </Show>
     </button>
   );
   return (
@@ -54,15 +62,16 @@ export default function HomepagePullRequest() {
           },
           {
             person: 'cursor',
-            text: 'On it. I’ll work on your branch, fix the failures, and run the tests.',
+            text: '',
             reply: (
               <>
-                <span class="homepage-agent-reply-label">Reply to Cursor</span>
-                <div class="homepage-agent-chip glass">
+                <div class="homepage-agent-chip">
                   <DemoAgentChip
                     agentSessionId={DEPLOY_SESSION_ID}
+                    requester="Teo"
+                    request="@Cursor, investigate the failures and build the fix on this branch."
                     markdown={DEPLOY_RESULT}
-                    pullRequest={prLink()}
+                    pullRequest={prLink(true)}
                     headerActions={
                       <Button
                         variant="success"

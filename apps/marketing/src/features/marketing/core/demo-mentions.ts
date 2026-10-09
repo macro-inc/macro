@@ -3,7 +3,14 @@ import { homepagePeople } from './homepage-demo-people';
 export type DemoMention = {
   id: string;
   label: string;
-  kind: 'person' | 'document' | 'task' | 'agent' | 'channel' | 'spreadsheet';
+  kind:
+    | 'person'
+    | 'document'
+    | 'task'
+    | 'agent'
+    | 'channel'
+    | 'spreadsheet'
+    | 'email';
   photo?: string;
   shortName?: string;
   detail?: string;
@@ -28,7 +35,7 @@ export const demoMentions: DemoMention[] = [
     kind: 'task',
     status: 'In Review',
   },
-  { id: 'cursor', label: 'Cursor', kind: 'agent' },
+  { id: 'cursor', label: 'Cursor', kind: 'person' },
   { id: 'rollout', label: 'Team rollout plan', kind: 'document' },
   {
     id: 'checklist',

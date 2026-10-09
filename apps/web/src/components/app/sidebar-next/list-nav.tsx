@@ -65,6 +65,7 @@ export const ListNav = (props: ListNavProps) => {
   const location = useLocation();
 
   const content = () => sidebarContent(props.item.id, props.item.params);
+  const preload = () => layout.preloadContent(content());
 
   // Read the manager signal live: it is undefined until the split layout
   // mounts, which happens after the sidebar.
@@ -226,6 +227,8 @@ export const ListNav = (props: ListNavProps) => {
         data-unread={props.unread ? '' : undefined}
         data-active-call={props.activeCall ? '' : undefined}
         data-badge={props.badge}
+        onMouseEnter={preload}
+        onFocus={preload}
         onMouseDown={onMouseDown}
         onClick={onClick}
       >

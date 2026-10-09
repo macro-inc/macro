@@ -1,0 +1,57 @@
+.agent-workflow-frame { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; height:100%; }
+.agent-workflow-back { padding:8px 12px 0; flex:none; }
+.agent-design-attachment { display:block; width:min(100%,380px); margin-top:10px; border-radius:8px; overflow:hidden; }
+.agent-portal-design { display:block; width:100%; height:auto; }
+.agent-workflow-pr { display:inline-flex; gap:4px; align-items:center; padding:2px 6px; }
+.agent-pr-page { padding:32px; }
+
+.agent-workflow-home { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; }
+.agent-workflow-home[hidden] { display:none; }
+
+@media (max-width:699px) {
+  .email-desktop-demo[data-agent-showcase=true] .email-desktop-content { height:760px; }
+}
+
+.agent-folder-mockup { width:600px; height:480px; transform-origin:top left; border:1px solid var(--color-edge-muted); border-radius:12px; background:var(--color-panel); color:var(--color-ink); text-align:left; font:400 14px/1.5 var(--font-sans); }
+.agent-folder-mockup p { margin:0; }
+.agent-folder-mockup p + p { margin-top:4px; }
+.agent-design-attachment { border:1px solid var(--color-edge-muted); padding:12px; background:var(--color-surface-2); }
+@media(max-width:699px) { .agent-design-attachment { padding:6px; } }
+
+.agent-folder-preview { width:100%; max-width:600px; overflow:hidden; border-radius:12px; }
+
+/* Remote-cursor.tsx: thin peer caret with its persistent AI name tag. */
+.agent-writing-caret { position:absolute; width:2px; background:var(--color-pink); pointer-events:none; z-index:8; }
+.agent-writing-caret > span { position:absolute; bottom:calc(100% + 2px); left:0; display:flex; align-items:center; height:20px; padding:0 8px; border-radius:2px; background:var(--color-pink); color:var(--color-surface); font:400 12px/20px var(--font-sans); }
+
+.agent-editing-frame { position:relative; overflow:hidden; }
+
+/* The walkthrough owns scroll positioning while writing. Browser anchoring
+   must not fight it when a new checklist line or reply changes the height. */
+.agent-editing-frame .dummy-scroll, .agent-meeting-frame .agent-transcript { overflow-anchor:none; scroll-behavior:auto; }
+.agent-editing-frame .dummy-scroll > .mx-auto { padding-bottom:calc(3rem + var(--agent-scroll-reserve, 0px)); }
+.agent-meeting-frame .agent-transcript { padding-bottom:calc(16px + var(--agent-scroll-reserve, 0px)); }
+@media(max-width:699px) {
+  /* Match the native channel message size in the document's shared discussion. */
+  .agent-editing-frame [aria-label='Document discussion'] .sample-message-row p { font-size:14px; line-height:1.5; }
+}
+
+.agent-meeting-answer { animation: agent-meeting-answer-in 260ms ease-out both; }
+@keyframes agent-meeting-answer-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .agent-meeting-answer { animation:none; } }
+
+/* The same reply stays mounted while the agent finishes its document edit. */
+.agent-editing-frame [aria-label='Document discussion'] [data-reply=true] { animation:agent-reply-in 220ms ease-out both; }
+.agent-editing-frame [aria-label='Document discussion'] [data-reply=true] p { opacity:1; transition:opacity 220ms ease; }
+.agent-editing-frame[data-response-state=settling] [aria-label='Document discussion'] [data-reply=true] p { opacity:0; }
+@media(prefers-reduced-motion:reduce) {
+  .agent-editing-frame [aria-label='Document discussion'] [data-reply=true] { animation:none; }
+  .agent-editing-frame [aria-label='Document discussion'] [data-reply=true] p { transition:none; }
+}
+
+/* Keep the composer steady as the acknowledgment becomes the finished reply. */
+.agent-editing-frame [aria-label='Document discussion'] [data-reply=true] p { min-block-size:2lh; }
+@keyframes agent-reply-in { from { opacity:0; } to { opacity:1; } }
+@media(max-width:699px) {
+  .agent-editing-frame [aria-label='Document discussion'] [data-reply=true] p { min-block-size:5lh; }
+}

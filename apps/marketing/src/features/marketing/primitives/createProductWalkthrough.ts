@@ -15,6 +15,9 @@ export function createProductWalkthrough(
     },
   });
   return {
+    replayIfUntouched: () => {
+      if (!takenOver) playback.replay();
+    },
     pause: () => {
       takenOver = true;
       playback.pause();
