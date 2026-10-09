@@ -109,8 +109,7 @@ function ReadyCopy(props: {
           when={props.connectGmailOnDesktop}
           fallback={
             <>
-              Finish onboarding on desktop. You’ll connect Gmail on your
-              computer. We emailed{' '}
+              Finish onboarding on desktop. We emailed{' '}
               <span class="text-ink [overflow-wrap:anywhere]">
                 {props.email}
               </span>{' '}

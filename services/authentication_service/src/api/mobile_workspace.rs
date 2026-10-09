@@ -376,11 +376,7 @@ fn desktop_signup_url(base: &url::Url, accent: Option<&str>) -> String {
 }
 
 fn desktop_signup_message(team_name: &str, url: &str, team_created: bool) -> (&'static str, String) {
-    let subject = if team_created {
-        "Your Macro team is ready"
-    } else {
-        "Finish signing up for Macro"
-    };
+    let subject = "Finish onboarding on your computer";
     let safe_name = escape_html(team_name);
     let safe_url = escape_html(url);
     let intro = if team_created {
@@ -414,12 +410,12 @@ fn desktop_signup_message(team_name: &str, url: &str, team_created: bool) -> (&'
                 <a href="https://macro.com" style="text-decoration:none;">
                   <img src="https://macro.com/app/macro-email-logo.png" width="36" height="36" alt="Macro" style="display:block;border:0;background-color:#ffffff;" />
                 </a>
-                <h1 style="margin:36px 0 16px;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.5px;color:#222222;">Sign up on your computer</h1>
+                <h1 style="margin:36px 0 16px;font-size:28px;line-height:36px;font-weight:600;letter-spacing:-0.5px;color:#222222;">Finish onboarding on your computer</h1>
                 <p style="margin:0 0 20px;font-size:16px;line-height:26px;color:#525252;">{intro}</p>
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;">
                   <tr>
                     <td bgcolor="#222222" style="border-radius:6px;text-align:center;">
-                      <a href="{safe_url}" style="display:inline-block;padding:14px 24px;border:1px solid #222222;border-radius:6px;color:#ffffff;background-color:#222222;font-size:15px;line-height:20px;font-weight:600;text-decoration:none;">Sign up on your computer</a>
+                      <a href="{safe_url}" style="display:inline-block;padding:14px 24px;border:1px solid #222222;border-radius:6px;color:#ffffff;background-color:#222222;font-size:15px;line-height:20px;font-weight:600;text-decoration:none;">Finish onboarding on your computer</a>
                     </td>
                   </tr>
                 </table>
@@ -553,14 +549,14 @@ mod tests {
             "https://macro.com/app/signup?accent=%2365d8ac",
             true,
         );
-        assert_eq!(subject, "Your Macro team is ready");
-        assert!(html.contains("Sign up on your computer"));
+        assert_eq!(subject, "Finish onboarding on your computer");
+        assert!(html.contains("Finish onboarding on your computer"));
         assert!(html.contains("Acme &amp; Co is ready."));
         assert!(html.contains("https://macro.com/app/signup?accent=%2365d8ac"));
         assert!(!html.to_lowercase().contains("code"));
         let (subject, html) = desktop_signup_message("Acme", "https://macro.com/app/signup", false);
-        assert_eq!(subject, "Finish signing up for Macro");
-        assert!(html.contains("Sign up on your computer"));
+        assert_eq!(subject, "Finish onboarding on your computer");
+        assert!(html.contains("Finish onboarding on your computer"));
         assert!(!html.contains("Acme is ready"));
     }
 
