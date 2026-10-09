@@ -1,3 +1,4 @@
+import { grafanaTelemetryContainers } from '../../packages/resources/src/resources/grafana';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
@@ -9,7 +10,7 @@ import {
 import { DEFAULT_CONTINUE_BEFORE_STEADY_STATE } from '../../packages/resources/src/resources/ecs_deployment_defaults';
 import { EcsDeploymentFailureAlarm } from '../../packages/resources/src/resources/ecs_deployment_failure_alarm';
 import { EcrImage } from '../../packages/service/src/ecr';
-import { config, stack } from '../../packages/shared';
+import { config, grafanaTelemetryEnabled, stack } from '../../packages/shared';
 import { DopplerEcsEnvironment } from '../../packages/shared/src/doppler_environment';
 
 interface SlackImportWorkerArgs {
@@ -118,7 +119,7 @@ export class SlackImportWorker extends pulumi.ComponentResource {
         },
         taskDefinitionArgs: {
           cpu: '1024',
-          memory: '2048',
+          memory: grafanaTelemetryEnabled ? '3072' : '2048',
           taskRole: { roleArn: this.role.arn },
           executionRole: { roleArn: dopplerEcsEnvironment.executionRole.arn },
           runtimePlatform: {
@@ -127,6 +128,7 @@ export class SlackImportWorker extends pulumi.ComponentResource {
           },
           containers: {
             // Hard limits leave 1536 MiB for import work and 512 MiB for telemetry.
+            ...grafanaTelemetryContainers(SERVICE_NAME),
             log_router: { ...fargateLogRouterSidecarContainer, memory: 128 },
             datadog_agent: {
               ...datadogAgentContainer,

@@ -6,6 +6,7 @@ import {
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
+  grafanaTelemetryContainers,
   fargateLogRouterSidecarContainer,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -108,6 +109,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: {
+            ...grafanaTelemetryContainers(BASE_NAME),
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
             service: {

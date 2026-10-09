@@ -6,6 +6,7 @@ import {
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
+  grafanaTelemetryContainers,
   fargateLogRouterSidecarContainer,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -192,6 +193,7 @@ export class LexicalService extends pulumi.ComponentResource {
           },
 
           containers: {
+            ...grafanaTelemetryContainers(BASE_NAME),
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
             service: {

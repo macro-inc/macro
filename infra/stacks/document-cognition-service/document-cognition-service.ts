@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   DatadogServiceEntity,
   datadogAgentContainer,
+  grafanaTelemetryContainers,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
   ServiceTargetGroup,
@@ -295,6 +296,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: {
+            ...grafanaTelemetryContainers(BASE_NAME),
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
             service: {

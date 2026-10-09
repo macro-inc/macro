@@ -5,7 +5,7 @@ import {
   ComponentResource,
   type ComponentResourceOptions,
 } from '@pulumi/pulumi';
-import { stack } from '../../../shared';
+import { grafanaTelemetryEnabled, stack } from '../../../shared';
 
 const DATADOG_API_KEY_SECRET_KEY = 'datadog-api-key';
 
@@ -78,7 +78,9 @@ export const fargateLogRouterSidecarContainer = {
     type: 'fluentbit',
     options: {
       'config-file-type': 'file',
-      'config-file-value': '/fluent-bit/configs/parse-json.conf',
+      'config-file-value': grafanaTelemetryEnabled
+        ? '/tmp/observability-extra.conf'
+        : '/fluent-bit/configs/parse-json.conf',
       'enable-ecs-log-metadata': 'true',
     },
   },
@@ -96,6 +98,24 @@ export const fargateLogRouterSidecarContainer = {
       value: stack,
     },
   ],
+  ...(grafanaTelemetryEnabled
+    ? {
+        entryPoint: ['/bin/sh', '-ec'],
+        command: [
+          `cat /fluent-bit/configs/parse-json.conf > /tmp/observability-extra.conf
+cat >> /tmp/observability-extra.conf <<'CONFIG'
+[OUTPUT]
+    Name forward
+    Match *-firelens-*
+    Host 127.0.0.1
+    Port 24225
+    Retry_Limit 1
+    net.connect_timeout 2
+CONFIG
+exec /entrypoint.sh`,
+        ],
+      }
+    : {}),
   memoryReservation: 50,
 } satisfies ecs.TaskDefinitionContainerDefinitionArgs;
 
@@ -127,7 +147,7 @@ export const datadogAgentContainer = {
     },
     {
       name: 'DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT',
-      value: '0.0.0.0:4317',
+      value: grafanaTelemetryEnabled ? '127.0.0.1:14317' : '0.0.0.0:4317',
     },
     // Sampling configuration to prevent excessive disk writes
     // Sample 10% of traces in prod, 100% in dev for debugging
@@ -148,7 +168,7 @@ export const datadogAgentContainer = {
   ],
   portMappings: [
     {
-      containerPort: 4317,
+      containerPort: grafanaTelemetryEnabled ? 14317 : 4317,
     },
   ],
   memoryReservation: 256,

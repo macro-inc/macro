@@ -324,6 +324,38 @@ crash. Metrics remote-write has a local WAL. EBS-backed backend WALs protect dat
 already delivered to Loki/Tempo. Establish failure/loss tolerance while Datadog
 still receives the authoritative copy.
 
+## Dev dual export
+
+Dev ECS stacks opt in with `<project>:grafanaTelemetryEnabled: true` in
+`Pulumi.dev.yaml`. Production rejects this flag. The initial canary is
+`image-proxy-service`; expand after checking both destinations. The execution
+role can read the ingestion-only `observability/dev-ingest` secret in Virginia.
+The application task role does not receive access to the Grafana OAuth bundle.
+
+Alloy listens on loopback OTLP 4317/4318 and forwards traces/metrics to the existing
+Datadog agent on 14317 and to Ohio. FireLens retains its Datadog output and adds a
+bounded-retry Fluent Forward output to Alloy for logs. ECS metadata supplies task
+and container metrics; identity is promoted into metric labels to keep replicas
+separate. The extra container reserves 128 MiB with a 512 MiB hard limit; review
+Fargate sizing during each stack preview. Alloy is essential, so collector failure
+restarts the task instead of silently losing all application traces indefinitely.
+
+The Grafana branch batches asynchronously before its memory limiter. Overflow,
+export failure, or task replacement can drop the optional copy without making
+applications retry a batch already accepted by Datadog. These queues are not
+durable, and sharing a process still creates a resource-failure dependency.
+
+The dev analytics proxy mirrors existing browser and worker OTLP traces/logs in
+`waitUntil`, using a server-side token and a five-second export timeout. Browsers
+send once. Payloads above 8 MiB skip only the mirror. Datadog's response remains
+the client response. `deploy-analytics-proxy-dev.yml` installs the token from
+Secrets Manager and deploys only the dev Worker.
+
+`export-datadog-observability.yml` reads live dashboard/monitor definitions into a
+seven-day GitHub artifact for the migration inventory. It never modifies Datadog.
+Lambda CloudWatch logs, RUM/session replay, synthetics and database query monitoring
+are separate sources; ECS/edge OTLP duplication alone does not provide parity.
+
 ## Validation and subsequent passes
 
 From `infra/`, run `bunx biome check stacks/observability` and `bun run check`.

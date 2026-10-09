@@ -6,6 +6,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   datadogAgentContainer,
+  grafanaTelemetryContainers,
   EcsDeploymentFailureAlarm,
   fargateLogRouterSidecarContainer,
   QueueAlarms,
@@ -560,6 +561,7 @@ export class StaticFileService extends pulumi.ComponentResource {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: {
+            ...grafanaTelemetryContainers(BASE_NAME),
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
             service: {

@@ -7,6 +7,7 @@ import {
   EcsDeploymentFailureAlarm,
   ServiceTargetGroup,
   datadogAgentContainer,
+  grafanaTelemetryContainers,
   fargateLogRouterSidecarContainer,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -366,6 +367,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: {
+            ...grafanaTelemetryContainers(BASE_NAME),
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
             service: {
