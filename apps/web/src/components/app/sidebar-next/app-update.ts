@@ -8,12 +8,42 @@ import { debugAppUpdate } from './app-update-debug';
 export type AppUpdate = {
   /** Stable per update, so dismissing one doesn't hide the next. */
   id: string;
+  title: string;
   description: string;
   actionLabel: string;
   /** The action is running and the popover must stay open. */
   busy: boolean;
   apply: () => void;
 };
+
+type UpdateCopy = Pick<AppUpdate, 'title' | 'description' | 'actionLabel'>;
+
+/** What the popover says for each kind of update, by client. */
+export const UPDATE_COPY = {
+  web: {
+    title: 'New version available',
+    description: 'A new version of Macro is ready. Reload the page to use it.',
+    actionLabel: 'Reload',
+  },
+  bundle: {
+    title: 'Update ready',
+    description:
+      'A new version of the Macro desktop app has downloaded. Update to start using it.',
+    actionLabel: 'Update',
+  },
+  native: {
+    title: 'Desktop app update ready',
+    description:
+      'Restart Macro to install it, or keep working and it installs when you quit.',
+    actionLabel: 'Restart and update',
+  },
+  nativePreparing: {
+    title: 'Desktop app update ready',
+    description:
+      'Saving your work before Macro restarts to install the update.',
+    actionLabel: 'Preparing to restart…',
+  },
+} satisfies Record<string, UpdateCopy>;
 
 /** The bundle build this page booted, from index.html. */
 function runningBuild(): string {
@@ -41,9 +71,7 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
       const preparing = tauri.nativeUpdatePreparing();
       return {
         id: `native:${native.data.version}`,
-        description:
-          'Restart to install it, or keep working and it will update when you quit.',
-        actionLabel: preparing ? 'Preparing to restart…' : 'Restart and update',
+        ...(preparing ? UPDATE_COPY.nativePreparing : UPDATE_COPY.native),
         busy: preparing,
         apply: () => void tauri.restartNativeUpdate(),
       };
@@ -52,8 +80,7 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
     if (tauri?.bundleUpdateStatus().status === 'Completed') {
       return {
         id: `bundle:${runningBuild()}`,
-        description: 'Update to start using it.',
-        actionLabel: 'Update',
+        ...UPDATE_COPY.bundle,
         busy: false,
         apply: () => void invoke('perform_update'),
       };
@@ -63,8 +90,7 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
     if (web) {
       return {
         id: `web:${web.build ?? runningBuild()}`,
-        description: 'Reload to start using it.',
-        actionLabel: 'Reload',
+        ...UPDATE_COPY.web,
         busy: false,
         apply: web.reload,
       };

@@ -6,7 +6,7 @@
  */
 import { toast } from '@core/component/Toast/Toast';
 import { createSignal, For, Show } from 'solid-js';
-import type { AppUpdate } from './app-update';
+import { type AppUpdate, UPDATE_COPY } from './app-update';
 
 const ENABLED_KEY = 'macro:debug-updates';
 const DISMISSED_KEY = 'macro:app-update-dismissed';
@@ -47,18 +47,11 @@ export function debugAppUpdate(): AppUpdate | undefined {
     case 'none':
       return;
     case 'web':
-      return {
-        id,
-        description: 'Reload to start using it.',
-        actionLabel: 'Reload',
-        busy: false,
-        apply: pretend('reload'),
-      };
+      return { id, ...UPDATE_COPY.web, busy: false, apply: pretend('reload') };
     case 'bundle':
       return {
         id,
-        description: 'Update to start using it.',
-        actionLabel: 'Update',
+        ...UPDATE_COPY.bundle,
         busy: false,
         apply: pretend('apply the bundle update'),
       };
@@ -67,9 +60,7 @@ export function debugAppUpdate(): AppUpdate | undefined {
       const busy = simulated() === 'native-busy';
       return {
         id: `debug:native:${generation()}`,
-        description:
-          'Restart to install it, or keep working and it will update when you quit.',
-        actionLabel: busy ? 'Preparing to restart…' : 'Restart and update',
+        ...(busy ? UPDATE_COPY.nativePreparing : UPDATE_COPY.native),
         busy,
         apply: pretend('restart'),
       };

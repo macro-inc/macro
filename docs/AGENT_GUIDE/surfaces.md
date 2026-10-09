@@ -2281,13 +2281,14 @@ composer border in dark mode, with subtle row separators. The compact sidebar
 uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
-in a circle, with a glow that periodically spins around it) appears in the
-sidebar rail above the mobile-app and settings icons. Its popover (**Update available**, a short
-description, and one action) opens by itself once per update until dismissed
-(click outside or Escape); the button stays until the update is applied. The
-action depends on the update: **Reload** for a newer web build, **Update** for a
-downloaded bundle in the desktop app, and **Restart and update** for a native
-desktop update. Touch layouts have no rail, so a newer web build still shows a
+in a subtle accent circle that a glowing comet periodically circles) appears in
+the sidebar rail above the mobile-app and settings icons. Its popover (a title,
+a short description, and one action) opens by itself once per update until
+dismissed (click outside or Escape); the button stays until the update is
+applied. Its wording and action depend on the update: **New version available**
+/ **Reload** for a newer web build, **Update ready** / **Update** for a
+downloaded bundle in the desktop app, and **Desktop app update ready** /
+**Restart and update** for a native desktop update. Touch layouts have no rail, so a newer web build still shows a
 **Reload** toast there.
 
 On desktop release builds, **Account → Desktop app update** shows native update

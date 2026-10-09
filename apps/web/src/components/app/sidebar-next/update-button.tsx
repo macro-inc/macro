@@ -6,15 +6,16 @@ import type { AppUpdate } from './app-update';
 
 const DISMISSED_KEY = 'macro:app-update-dismissed';
 
-/**
- * Two accent arcs of different lengths and strengths on a thin ring, so the
- * glow swells and thins as it travels around the circle.
- */
-const GLOW_RING = {
+/** A comet on the circle's edge: a bright head trailing a tail that fades out. */
+const COMET = {
   background:
-    'conic-gradient(from 0deg, transparent 0deg, var(--color-accent) 70deg, transparent 120deg, transparent 190deg, color-mix(in oklch, var(--color-accent) 55%, transparent) 225deg, transparent 255deg)',
-  mask: 'radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px))',
+    'conic-gradient(from 0deg, transparent 0deg 140deg, color-mix(in oklch, var(--color-accent) 20%, transparent) 250deg, var(--color-accent) 350deg, transparent 360deg)',
 } as const;
+
+/** Masks a box to a ring `width` px thick along its edge. */
+const ring = (width: number) => ({
+  mask: `radial-gradient(farthest-side, transparent calc(100% - ${width}px), #000 calc(100% - ${width - 0.5}px))`,
+});
 
 function dismissedUpdate(): string | null {
   try {
@@ -33,8 +34,8 @@ function dismissUpdate(id: string): void {
 }
 
 /**
- * The rail's update button: a download glyph in a circle with a glow that
- * spins around it every few seconds. Its popover opens by itself once per update, until it is
+ * The rail's update button: a download glyph in a subtle accent circle that a
+ * glowing comet circles every few seconds. Its popover opens by itself once per update, until it is
  * dismissed; mount one per update id so a new update opens it again.
  */
 export function UpdateButton(props: { update: () => AppUpdate }) {
@@ -62,16 +63,17 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
         draggable={false}
         data-sidebar-next-item="app-update"
       >
-        <span class="pointer-events-none relative flex size-7 items-center justify-center rounded-full bg-accent text-accent-contrast">
+        <span class="pointer-events-none relative flex size-7 items-center justify-center rounded-full bg-accent-bg text-accent">
+          {/* Halo under the comet, then the comet itself, flush with the circle. */}
           <span
             aria-hidden="true"
             class="absolute -inset-1 rounded-full opacity-0 blur-[3px] animate-update-glow motion-reduce:hidden"
-            style={GLOW_RING}
+            style={{ ...COMET, ...ring(5) }}
           />
           <span
             aria-hidden="true"
-            class="absolute -inset-1 rounded-full opacity-0 blur-[0.5px] animate-update-glow motion-reduce:hidden"
-            style={GLOW_RING}
+            class="absolute -inset-0.5 rounded-full opacity-0 animate-update-glow motion-reduce:hidden"
+            style={{ ...COMET, ...ring(2) }}
           />
           <DownloadIcon class="size-4" aria-hidden="true" />
         </span>
@@ -82,14 +84,14 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
           aria-busy={props.update().busy}
         >
           <Popover.Title class="text-sm font-semibold text-ink">
-            Update available
+            {props.update().title}
           </Popover.Title>
           <Popover.Description class="mt-1 text-sm leading-5 text-ink-muted">
-            A new version of Macro is ready. {props.update().description}
+            {props.update().description}
           </Popover.Description>
           <div class="mt-3 flex justify-end">
             <Button
-              variant="accent"
+              variant="cta"
               size="sm"
               disabled={props.update().busy}
               onClick={() => props.update().apply()}

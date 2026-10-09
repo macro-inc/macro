@@ -29,6 +29,7 @@ const DISMISSED_KEY = 'macro:app-update-dismissed';
 function update(overrides: Partial<AppUpdate> = {}): AppUpdate {
   return {
     id: 'web:42',
+    title: 'Update available',
     description: 'Reload to start using it.',
     actionLabel: 'Reload',
     busy: false,
