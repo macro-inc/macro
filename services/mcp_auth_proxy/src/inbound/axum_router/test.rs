@@ -134,7 +134,7 @@ async fn attacker_cannot_have_a_code_delivered_to_their_own_callback() {
 }
 
 #[tokio::test]
-async fn authorize_rejects_an_unregistered_client_id() {
+async fn authorize_explains_how_to_reconnect_an_unregistered_client() {
     let harness = Harness::new();
 
     let response = send(
@@ -148,7 +148,10 @@ async fn authorize_rejects_an_unregistered_client_id() {
     .await;
 
     assert_eq!(response.status, StatusCode::BAD_REQUEST);
-    assert_eq!(response.body, "unknown client_id");
+    assert!(response.body.contains("remove the Macro MCP connection"));
+    assert!(response.body.contains("add it again, and sign in to Macro"));
+    assert_eq!(response.location, None);
+    assert!(!harness.inflight.has_pending());
 }
 
 /// The flow a real MCP client drives, from registration through to a bearer
