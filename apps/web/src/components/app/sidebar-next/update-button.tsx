@@ -6,11 +6,10 @@ import type { AppUpdate } from './app-update';
 
 const DISMISSED_KEY = 'macro:app-update-dismissed';
 
-/** A comet on the circle's edge: a bright head trailing a tail that fades out. */
-const COMET = {
-  background:
-    'conic-gradient(from 0deg, transparent 0deg 140deg, color-mix(in oklch, var(--color-accent) 20%, transparent) 250deg, var(--color-accent) 350deg, transparent 360deg)',
-} as const;
+/** A comet with `strength` (0-100) of the accent: a bright head trailing a tail that fades out. */
+const comet = (strength: number) => ({
+  background: `conic-gradient(from 0deg, transparent 0deg 140deg, color-mix(in oklch, var(--color-accent) ${strength / 5}%, transparent) 250deg, color-mix(in oklch, var(--color-accent) ${strength}%, transparent) 350deg, transparent 360deg)`,
+});
 
 /** Masks a box to a ring `width` px thick along its edge. */
 const ring = (width: number) => ({
@@ -67,13 +66,13 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
           {/* Halo under the comet, then the comet itself, flush with the circle. */}
           <span
             aria-hidden="true"
-            class="absolute -inset-1 rounded-full opacity-0 blur-[3px] animate-update-glow motion-reduce:hidden"
-            style={{ ...COMET, ...ring(5) }}
+            class="absolute -inset-0.5 rounded-full opacity-0 blur-[1.5px] animate-update-glow motion-reduce:hidden"
+            style={{ ...comet(50), ...ring(2.5) }}
           />
           <span
             aria-hidden="true"
-            class="absolute -inset-0.5 rounded-full opacity-0 animate-update-glow motion-reduce:hidden"
-            style={{ ...COMET, ...ring(2) }}
+            class="absolute -inset-px rounded-full opacity-0 animate-update-glow motion-reduce:hidden"
+            style={{ ...comet(100), ...ring(1.5) }}
           />
           <DownloadIcon class="size-4" aria-hidden="true" />
         </span>
