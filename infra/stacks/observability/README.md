@@ -16,7 +16,7 @@ packages, configuration, service users, resource limits and startup dependencies
 
 NixOS modules generate application configuration from Nix attributes. Alloy's
 pipelines live in native `.alloy` files read by Nix. Pulumi sends only
-validated runtime values such as hostnames, bucket names and approved identities.
+validated runtime values such as hostnames and bucket names.
 Datadog instrumentation, collection and alerts remain unchanged. Nothing sends
 application telemetry here until a subsequent dual-export change is deployed.
 
@@ -98,23 +98,23 @@ before enabling broad production ingestion.
 Production URLs are `https://grafana.macro-internal.com` and `https://otlp.macro-internal.com`;
 dev uses `grafana-dev.macro-internal.com` and `otlp-dev.macro-internal.com`.
 
-Grafana uses a dedicated **Google Workspace OAuth client**. Only explicitly
-approved lowercase `@macro.com` emails in `allowedEmails` may sign in; membership
-in the domain alone is insufficient. Named `adminEmails` get Grafana server
-administrator access; other approved users are Viewers. Admins must also appear
-in the allowlist. Unknown identities map to an invalid role and are denied with
-`role_attribute_strict`. Google hosted-domain validation, ID-token signature
-validation, PKCE and refresh-token checking are enabled. Workspace administrators
-must enforce MFA for the approved accounts. No password login, default admin,
-anonymous access or public signup is enabled.
+Grafana uses a **Google Workspace OAuth client**. Every member of the `macro.com`
+Workspace may sign in and receives Grafana server administrator and organization
+administrator access. Google hosted-domain validation and the `macro.com` domain
+restriction reject accounts outside that Workspace, including personal Google
+accounts. ID-token signature validation, PKCE and refresh-token checking are enabled.
+Workspace administrators must enforce MFA. No password login, default admin or
+anonymous access is enabled; account creation happens only after Google login.
+The role policy is declared directly in `nixos/grafana.nix`; there are no per-user
+Pulumi access lists.
 
-Sessions have a one-hour inactivity limit and eight-hour maximum. Removing an
-email from configuration blocks the next login; it does **not** immediately
-invalidate an existing session. For offboarding, first disable the user and
-revoke their sessions in Grafana using another admin, then update the allowlist.
-Keep at least two admins. This uses OSS role mapping, not Enterprise team sync.
-All approved users can query the pilot's telemetry; there is no per-service data
-isolation. Apply redaction in the producer pipeline before copying sensitive data.
+Sessions have a one-hour inactivity limit and eight-hour maximum. Suspending a
+Workspace account does **not** immediately invalidate an existing Grafana session.
+For offboarding, disable the Workspace account and use another Grafana admin to
+disable the Grafana user and revoke their sessions. This uses OSS role mapping,
+not Enterprise team sync. All team members can administer Grafana and query the
+pilot's telemetry; there is no per-service data isolation. Apply redaction in the
+producer pipeline before copying sensitive data.
 
 Only the ALB is internet-facing, on TLS 1.2/1.3 port 443. The host has no public IP,
 SSH key or SSH ingress. Its only ingress is port 8080 from the ALB security group.
@@ -124,7 +124,7 @@ services bind to loopback. The default ALB action is 404. No HTTP listener is op
 
 Grafana data sources use a separate internal nginx listener on port 8081 that
 allows only named query endpoints and their required HTTP methods. This matters
-because Viewers can call Grafana's data-source proxy: direct backend URLs would
+because users can call Grafana's data-source proxy: direct backend URLs would
 also expose maintenance endpoints such as Tempo `/shutdown` and Loki `/flush`
 (including mutating GET requests). Port 8081 binds only to loopback, and
 Alloy's ingestion path is separate. New data-source features may require reviewed
@@ -142,9 +142,9 @@ Secrets Manager holds Google client credentials, the Grafana encryption key and
 the ingestion token. EC2 retrieves them at startup into `/run` with restricted
 file permissions. Systemd `LoadCredential` gives Grafana only its three credentials
 and ingress Alloy only the OTLP token. Secret values never enter Pulumi state,
-user-data, environment variables or configuration committed here. Grafana's nonsecret host
-and approved-user role expression are supplied through environment variables;
-the generated INI refers to them through Grafana's environment provider. Secrets
+user-data, environment variables or configuration committed here. Grafana's nonsecret hostname
+and public URL are supplied through environment variables; the generated INI
+refers to them through Grafana's environment provider. Secrets
 remain file references in the Nix store, never secret values. The secret must use the
 AWS-managed Secrets Manager encryption key; a customer-managed key needs an
 explicit scoped KMS policy addition. IMDSv2 is required with hop limit 1. Only Loki, Tempo, the bootstrap/secret helper,
@@ -171,15 +171,15 @@ DNS-validated regional ACM certificate. Region validation rejects `us-east-1`.
    random values of at least 32 characters for the last two. Preserve
    `grafana_secret_key` through recovery; changing it can make stored credentials
    unreadable. Never paste secret values into shell commands, this file or PRs.
-3. Select approved users and admins. Select an existing **us-east-2** SNS topic
+3. Select an existing **us-east-2** SNS topic
    with a confirmed, monitored subscription for infrastructure alarms. Its
    delivery destination must remain accessible during a production outage.
    Configuration rejects secrets and topics in another region; the host reads
    the local secret directly, without fetching credentials from production.
 4. Build, publish and smoke-boot the NixOS image as described below. Set its
    reviewed Ohio AMI ID; there is deliberately no mutable "latest image" lookup.
-5. Set the nonsecret configuration below, substituting actual identifiers. No
-   example account or placeholder is authorized automatically.
+5. Set the nonsecret configuration below, substituting actual identifiers.
+   Placeholder credentials are not usable for deployment.
 
 ```bash
 \cd infra
@@ -190,9 +190,6 @@ pulumi config set aws:region us-east-2
 pulumi config set amiId '<reviewed NixOS AMI ID in Ohio>'
 pulumi config set secretArn '<existing Secrets Manager ARN>'
 pulumi config set alarmTopicArn '<existing monitored SNS topic ARN>'
-pulumi config set --path 'allowedEmails[0]' '<approved-admin@macro.com>'
-pulumi config set --path 'allowedEmails[1]' '<approved-viewer@macro.com>'
-pulumi config set --path 'adminEmails[0]' '<approved-admin@macro.com>'
 pulumi preview --diff
 ```
 
@@ -204,8 +201,8 @@ an explicit migration and recovery plan for its protected storage.
 
 Before enabling application traffic, validate all of these against AWS:
 
-- Approved Viewer and Admin can log in; an unapproved Workspace account and a
-  personal Google account cannot. Viewer cannot administer Grafana.
+- A `macro.com` Workspace member can log in with server and organization admin
+  access. A different Workspace domain and personal Google accounts cannot log in.
 - All three data sources pass their health checks. A small OTLP fixture appears
   in logs, traces and metrics with the expected `service.name`.
 - Missing/wrong tokens fail; valid token cannot read backend APIs. No backend
@@ -274,11 +271,11 @@ sudo journalctl -u grafana -u loki -u tempo -u prometheus -u alloy -u alloy-inge
 
 Nonsecret runtime values arrive as versioned, compressed JSON in EC2 user-data.
 `read-user-data.py` retrieves them through IMDSv2 and validates the exact schema,
-region, hostnames, bucket/volume/secret identifiers and approved identity lists.
+region, hostnames and bucket/volume/secret identifiers.
 It writes a systemd environment file, nginx hostname maps, the secret's identifier
 and the expected volume ID under `/opt/observability`. It does not execute
 user-data or read secret values. The standard NixOS user-data evaluator is disabled.
-Schema version 3 rejects older payloads, unknown settings and caller-supplied files.
+Schema version 4 rejects older payloads, unknown settings and caller-supplied files.
 
 `observability-bootstrap` mounts that exact EBS volume and creates each service's
 data directory using stable, named NixOS users. `prepare-volume.sh` formats only

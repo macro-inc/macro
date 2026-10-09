@@ -45,7 +45,7 @@
     use_refresh_token = true;
     validate_id_token = true;
     jwk_set_url = "https://www.googleapis.com/oauth2/v3/certs";
-    role_attribute_path = "$__env{GRAFANA_ROLE_EXPRESSION}";
+    role_attribute_path = "\"'GrafanaAdmin'\"";
     role_attribute_strict = true;
     allow_assign_grafana_admin = true;
     skip_org_role_sync = false;

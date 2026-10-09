@@ -2,8 +2,6 @@ export interface Settings {
   region: string;
   grafanaHost: string;
   otlpHost: string;
-  allowedEmails: string[];
-  adminEmails: string[];
   secretArn: string;
   volumeId: string;
   logsBucket: string;
@@ -48,23 +46,6 @@ export function validateSettings(settings: Settings): void {
   }
   if (settings.grafanaHost === settings.otlpHost) {
     throw new Error('UI and ingestion require separate hostnames');
-  }
-  if (!settings.allowedEmails.length || !settings.adminEmails.length) {
-    throw new Error('Configure approved users and at least one admin');
-  }
-  for (const email of [...settings.allowedEmails, ...settings.adminEmails]) {
-    if (!/^[a-z0-9._+-]+@macro\.com$/.test(email)) {
-      throw new Error(
-        'Access lists require lowercase macro.com email addresses'
-      );
-    }
-  }
-  if (
-    settings.adminEmails.some(
-      (email) => !settings.allowedEmails.includes(email)
-    )
-  ) {
-    throw new Error('Every admin must also be in allowedEmails');
   }
   if (
     !/^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+$/.test(

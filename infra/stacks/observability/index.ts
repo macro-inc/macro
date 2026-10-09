@@ -22,8 +22,6 @@ const otlpHost = `otlp${suffix}.${baseDomain}`;
 const tags = { project: 'observability', environment: stack };
 const durable = { protect: true, retainOnDelete: true };
 const secretArn = config.require('secretArn');
-const allowedEmails = config.requireObject<string[]>('allowedEmails');
-const adminEmails = config.requireObject<string[]>('adminEmails');
 const alarmTopicArn = config.require('alarmTopicArn');
 // Built from this stack's pinned NixOS flake and published in Ohio.
 const amiId = config.require('amiId');
@@ -35,8 +33,6 @@ validateSettings({
   region,
   grafanaHost,
   otlpHost,
-  allowedEmails,
-  adminEmails,
   secretArn,
   volumeId: 'vol-0',
   logsBucket: 'validate-logs',
@@ -259,8 +255,6 @@ const instance = new aws.ec2.Instance(
           region,
           grafanaHost,
           otlpHost,
-          allowedEmails,
-          adminEmails,
           secretArn,
           volumeId,
           logsBucket,
