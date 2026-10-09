@@ -155,6 +155,29 @@ pub async fn graphql_cache_read(
         .await
 }
 
+/// Incrementally project an ordinary query through cache-core.
+#[tauri::command]
+pub async fn graphql_cache_watch(
+    state: State<'_, CacheState>,
+    op_id: String,
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<Variables>,
+    entity_resolvers: Option<Vec<EntityResolver>>,
+    since: Option<String>,
+) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
+    engine_handle(&state)?
+        .watch(
+            op_id,
+            query,
+            operation_name,
+            variables.unwrap_or_default(),
+            entity_resolvers.unwrap_or_default(),
+            since,
+        )
+        .await
+}
+
 /// Projects explicit normalized entity keys without scanning storage.
 #[tauri::command]
 pub async fn graphql_cache_read_records_by_keys(
@@ -204,7 +227,12 @@ pub async fn graphql_cache_calendar_commit<R: Runtime>(
     commit: CalendarCommit,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?.calendar_commit(commit).await?;
-    emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_ops_affected(
+        &app,
+        &result.affected_ops,
+        &result.changed,
+        result.field_changes.as_ref(),
+    );
     if result.revision_advanced {
         emit_cache_changed_with_search_changes(
             &app,
@@ -255,7 +283,12 @@ pub async fn graphql_cache_write<R: Runtime>(
             identity,
         })
         .await?;
-    emit_ops_affected(&app, &result.affected_ops, &result.changed);
+    emit_ops_affected(
+        &app,
+        &result.affected_ops,
+        &result.changed,
+        result.field_changes.as_ref(),
+    );
     if result.revision_advanced {
         emit_cache_changed_with_search_changes(
             &app,
@@ -324,6 +357,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             &app,
             &result.write_result.affected_ops,
             &result.write_result.changed,
+            None,
         );
         if result.write_result.revision_advanced {
             emit_cache_changed(
@@ -390,7 +424,12 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
             uncertain_calendar_event_keys.unwrap_or_default(),
         )
         .await?;
-    emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
+    emit_ops_affected(
+        &app,
+        &result.result.affected_ops,
+        &result.result.changed,
+        result.result.field_changes.as_ref(),
+    );
     if result.result.revision_advanced {
         emit_cache_changed(&app, &result.result.revision, result.result.reset);
     }
@@ -495,7 +534,12 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
         result: write_result,
     } = &result
     {
-        emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+        emit_ops_affected(
+            &app,
+            &write_result.affected_ops,
+            &write_result.changed,
+            write_result.field_changes.as_ref(),
+        );
         if write_result.revision_advanced {
             emit_cache_changed(&app, &write_result.revision, write_result.reset);
         }
@@ -553,7 +597,12 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             result,
         } => (result, Some(replacement_transaction_id.clone()), None),
     };
-    emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+    emit_ops_affected(
+        &app,
+        &write_result.affected_ops,
+        &write_result.changed,
+        write_result.field_changes.as_ref(),
+    );
     if write_result.revision_advanced {
         emit_cache_changed(&app, &write_result.revision, write_result.reset);
     }
@@ -594,7 +643,12 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
         RollbackOptimisticWriteResultWire::RolledBack {
             result: write_result,
         } => {
-            emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+            emit_ops_affected(
+                &app,
+                &write_result.affected_ops,
+                &write_result.changed,
+                write_result.field_changes.as_ref(),
+            );
             if write_result.revision_advanced {
                 emit_cache_changed(&app, &write_result.revision, write_result.reset);
             }
@@ -612,7 +666,12 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
             replacement_transaction_id,
             result: write_result,
         } => {
-            emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+            emit_ops_affected(
+                &app,
+                &write_result.affected_ops,
+                &write_result.changed,
+                write_result.field_changes.as_ref(),
+            );
             if write_result.revision_advanced {
                 emit_cache_changed(&app, &write_result.revision, write_result.reset);
             }
@@ -639,7 +698,7 @@ pub async fn graphql_cache_invalidate<R: Runtime>(
     keys: Vec<String>,
 ) -> Result<AffectedOperationsResultWire, String> {
     let affected = engine_handle(&state)?.invalidate(keys.clone()).await?;
-    emit_ops_affected(&app, &affected.affected_ops, &keys);
+    emit_ops_affected(&app, &affected.affected_ops, &keys, None);
     emit_cache_changed(&app, &affected.revision, false);
     Ok(affected)
 }
@@ -653,7 +712,7 @@ pub async fn graphql_cache_delete_records<R: Runtime>(
     keys: Vec<String>,
 ) -> Result<AffectedOperationsResultWire, String> {
     let affected = engine_handle(&state)?.delete_records(keys.clone()).await?;
-    emit_ops_affected(&app, &affected.affected_ops, &keys);
+    emit_ops_affected(&app, &affected.affected_ops, &keys, None);
     emit_cache_changed(&app, &affected.revision, false);
     Ok(affected)
 }

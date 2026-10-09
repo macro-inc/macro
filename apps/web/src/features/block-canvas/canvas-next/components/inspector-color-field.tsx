@@ -66,7 +66,7 @@ export function InspectorColorField(props: {
               <Layer depth={3}>
                 <Popover.Content
                   aria-label={`${props.label} color picker`}
-                  class="z-modal max-h-[min(calc(100vh-2rem),var(--kb-popper-content-available-height))] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-edge bg-panel p-4 shadow-lg"
+                  class="menu-surface z-modal max-h-[min(calc(100vh-2rem),var(--kb-popper-content-available-height))] w-72 max-w-[calc(100vw-2rem)] overflow-y-auto p-4"
                 >
                   <ColorPicker.Root
                     value={picker()}

@@ -93,6 +93,51 @@ describe('agent fold preloading', () => {
     await expect(pushed).resolves.toEqual([]);
   });
 
+  it('reports an unavailable script with its URL without assuming a stale build', async () => {
+    const { AgentFoldWorkerUnavailable, pushSession } = await import(
+      './client'
+    );
+    const pushed = pushSession('session', [{ kind: 'snapshot', rows: [] }]);
+
+    workers[0]!.dispatchEvent(new ErrorEvent('error', { message: '' }));
+
+    const error = await pushed.catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(AgentFoldWorkerUnavailable);
+    expect((error as Error).message).not.toContain('no longer served');
+    expect((error as Error).message).toContain('fold.worker');
+  });
+
+  it('reports a script that loaded and threw as a startup failure', async () => {
+    const { AgentFoldWorkerUnavailable, pushSession } = await import(
+      './client'
+    );
+    const pushed = pushSession('session', [{ kind: 'snapshot', rows: [] }]);
+
+    workers[0]!.dispatchEvent(
+      new ErrorEvent('error', { message: 'Uncaught Error: wasm exploded' })
+    );
+
+    const error = await pushed.catch((reason: unknown) => reason);
+    expect(error).not.toBeInstanceOf(AgentFoldWorkerUnavailable);
+    expect((error as Error).message).toContain('wasm exploded');
+  });
+
+  it('rejects every fold in flight from one worker failure', async () => {
+    const { pushSession } = await import('./client');
+    const first = pushSession('a', [{ kind: 'snapshot', rows: [] }]);
+    const second = pushSession('b', [{ kind: 'snapshot', rows: [] }]);
+
+    workers[0]!.dispatchEvent(new ErrorEvent('error', { message: '' }));
+
+    // One cause, two reports: why a single failure looks like many in Datadog.
+    const [a, b] = await Promise.all([
+      first.catch((reason: unknown) => reason),
+      second.catch((reason: unknown) => reason),
+    ]);
+    expect((a as Error).name).toBe('AgentFoldWorkerUnavailable');
+    expect((b as Error).name).toBe('AgentFoldWorkerUnavailable');
+  });
+
   it('contains constructor failures without preventing a later real load', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.stubGlobal(

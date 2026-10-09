@@ -1305,11 +1305,15 @@ pub async fn run() -> anyhow::Result<()> {
     // Agent sessions belong to a different bot entirely
     // (`bot_id::MACRO_NEW_BOT_ID`, served by the harness), so the two paths
     // can never answer the same mention.
+    // This host holds no authentication-service key, so its counted usage is
+    // settled by that service's reconciliation sweep rather than requested
+    // after each completion.
     let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(
         db.clone(),
         event_broker_tracker.clone(),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
     )
     .await
     .context("failed to build Macro agent tool context")?;
@@ -1947,8 +1951,36 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access_service.clone(),
     ));
 
+    // Home's work feed: Soup candidates over the replica, notification
+    // acknowledgement on the primary, and live updates recomputed from the
+    // viewer's notification, activity and Soup streams. Done publishes a
+    // viewer-addressed Soup patch so the viewer's other sessions recompute
+    // too: GraphQL notification writes publish no realtime update.
+    let graphql_work_feed_context = complete_graph::WorkFeedGraphqlContext::new(
+        work_feed::domain::service::WorkFeedServiceImpl::new(
+            work_feed::outbound::source::SoupWorkFeedSource::new(
+                soup_service.clone(),
+                Arc::new(email_service.clone()),
+            ),
+            work_feed::outbound::notifications::ReaderWorkFeedNotifications::new(
+                graphql_notification_reader.clone(),
+            ),
+            work_feed::outbound::mail::EmailWorkFeedMail::new(Arc::new(email_service.clone())),
+            work_feed::outbound::signals::SoupRealtimeWorkFeedSignals::new(
+                KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
+            ),
+        ),
+        work_feed::outbound::triggers::RealtimeWorkFeedTriggers::new(
+            websocket_notification_consumer_service.clone(),
+            activity_realtime_service.clone(),
+            soup_realtime_service.clone(),
+        ),
+        complete_graph::EntityAccessWorkFeedViewers(entity_access_service.clone()),
+    );
+
     let api_context = ApiContext {
         dictation_state,
+        graphql_work_feed_context,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),

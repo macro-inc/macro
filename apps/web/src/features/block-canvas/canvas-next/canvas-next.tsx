@@ -25,6 +25,7 @@ import { createCanvasTextMeasurer } from './views/text-content';
 export function CanvasNextEditor(props: {
   initial: CanvasFile;
   canEdit: boolean;
+  isEmbedded?: boolean;
   fitOnLoad?: boolean;
   onReady?: (editor: GraphicsEditor, finishText: () => void) => void;
 }) {
@@ -39,7 +40,7 @@ export function CanvasNextEditor(props: {
   return (
     <StaticMarkdownContext>
       <Show
-        when={props.canEdit}
+        when={props.canEdit && !props.isEmbedded}
         fallback={
           <CanvasReadOnlyView editor={editor} fitOnLoad={props.fitOnLoad} />
         }

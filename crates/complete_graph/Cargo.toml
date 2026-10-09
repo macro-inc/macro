@@ -37,6 +37,7 @@ graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
 graphql_scheduled_action = { path = "../graphql_scheduled_action" }
 graphql_soup = { path = "../graphql_soup" }
+graphql_work_feed = { path = "../graphql_work_feed" }
 macro_authorization = { path = "../macro_authorization", features = [
   "axum",
   "outbound",
@@ -57,6 +58,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
+work_feed = { path = "../work_feed" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }
 calendar_events = { path = "../calendar_events" }

@@ -223,6 +223,14 @@ impl Storage for BrowserStorage {
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.inner.clear().await
     }
+
+    async fn reset_with_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.inner.reset_with_records(entries, projections).await
+    }
 }
 
 impl PredicateIndexStorage for BrowserStorage {

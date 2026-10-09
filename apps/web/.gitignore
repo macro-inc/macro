@@ -13,6 +13,7 @@ node_modules/**/*
 .bundle-smoke/
 
 # Environments
+/firebase/**/google-services.json
 .venv
 env/
 venv/

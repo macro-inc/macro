@@ -334,6 +334,24 @@ impl BillingRepo for FakeRepo {
             .get(&period_start)
             .cloned())
     }
+    async fn frozen_period_starts(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+        before: DateTime<Utc>,
+    ) -> Result<Vec<DateTime<Utc>>> {
+        let mut starts: Vec<DateTime<Utc>> = self
+            .state
+            .lock()
+            .unwrap()
+            .allowances
+            .keys()
+            .copied()
+            .filter(|start| since <= *start && *start < before)
+            .collect();
+        starts.sort_unstable();
+        Ok(starts)
+    }
     async fn store_open_allowance(
         &self,
         _payer: &MacroUserIdStr<'_>,
@@ -2088,6 +2106,116 @@ async fn previous_period_usage_never_triggers_a_reload() {
     assert_eq!(reloads.len(), 1);
     assert_eq!(reloads[0].amount_cents, 10_000);
     assert_eq!(repo.state.lock().unwrap().balance, 10_000);
+}
+
+fn one_seat(payer: &MacroUserIdStr<'static>, included_cents: i64) -> PeriodAllowance {
+    PeriodAllowance {
+        seats: vec![SeatAllowance {
+            user: payer.clone(),
+            included_cents,
+        }],
+    }
+}
+
+/// Credits consumed per period start, oldest first.
+fn consumed_by_period(repo: &FakeRepo) -> Vec<(DateTime<Utc>, i64)> {
+    let mut consumed: Vec<(DateTime<Utc>, i64)> = repo
+        .state
+        .lock()
+        .unwrap()
+        .consumed
+        .iter()
+        .filter(|(_, cents)| **cents > 0)
+        .map(|(start, cents)| (*start, *cents))
+        .collect();
+    consumed.sort_unstable();
+    consumed
+}
+
+#[tokio::test]
+async fn older_frozen_periods_are_settled_inside_the_reconciliation_window() {
+    let (svc, repo, payments, usage, _, payer, previous, current) = anchored_premium(0);
+    repo.pause_reloads();
+    repo.set_balance(10_000);
+    svc.sync_period(&payer, current.start, current.end, None)
+        .await
+        .unwrap();
+    // Three closed periods behind the previous one, each observed while open
+    // and each run 1_500 past its frozen allowance; nothing settled them.
+    let two_back = previous.previous();
+    let three_back = two_back.previous();
+    let four_back = three_back.previous();
+    for period in [two_back, three_back, four_back] {
+        repo.freeze(period.start, one_seat(&payer, 1_000));
+        usage.add(&payer, period.start + chrono::Duration::days(2), 2_500);
+    }
+
+    svc.settle(&payer).await.unwrap();
+
+    // The two inside the window are booked from credits against their own
+    // freeze; the one beyond it is left alone rather than settled from a
+    // guessed period.
+    assert_eq!(
+        consumed_by_period(&repo),
+        vec![(three_back.start, 1_575), (two_back.start, 1_575)]
+    );
+    assert_eq!(repo.state.lock().unwrap().balance, 10_000 - 2 * 1_575);
+    assert!(payments.opened().is_empty());
+
+    // Settling again books nothing more.
+    svc.settle(&payer).await.unwrap();
+    assert_eq!(repo.state.lock().unwrap().balance, 10_000 - 2 * 1_575);
+}
+
+#[tokio::test]
+async fn an_older_frozen_period_ends_where_the_unfrozen_previous_one_begins() {
+    let (svc, repo, _, usage, _, payer, previous, current) = anchored_premium(0);
+    repo.pause_reloads();
+    repo.set_balance(10_000);
+    svc.sync_period(&payer, current.start, current.end, None)
+        .await
+        .unwrap();
+    // The period before the previous one was frozen and ran 1_500 over; the
+    // previous one was never observed but still carries 200 of usage over
+    // the live allowance.
+    let two_back = previous.previous();
+    repo.freeze(two_back.start, one_seat(&payer, 1_000));
+    usage.add(&payer, two_back.start + chrono::Duration::days(2), 2_500);
+    usage.add(&payer, previous.start + chrono::Duration::days(2), 2_200);
+
+    svc.settle(&payer).await.unwrap();
+
+    // Each period's usage is booked once, under its own key: the frozen
+    // period stops where the derived previous period starts rather than
+    // swallowing (and double billing) the usage after it.
+    assert_eq!(
+        consumed_by_period(&repo),
+        vec![(two_back.start, 1_575), (previous.start, 210)]
+    );
+}
+
+#[tokio::test]
+async fn a_period_frozen_inside_the_previous_window_replaces_the_derived_one() {
+    let (svc, repo, _, usage, _, payer, previous, current) = anchored_premium(0);
+    repo.pause_reloads();
+    repo.set_balance(10_000);
+    svc.sync_period(&payer, current.start, current.end, None)
+        .await
+        .unwrap();
+    // The subscription was re-anchored mid-cycle: the period that actually
+    // preceded the open one started ten days after the derived previous
+    // period would have, and was frozen under that start.
+    let shifted = previous.start + chrono::Duration::days(10);
+    repo.freeze(shifted, one_seat(&payer, 1_000));
+    usage.add(&payer, shifted + chrono::Duration::days(2), 2_500);
+
+    svc.settle(&payer).await.unwrap();
+
+    // Booked once, under the frozen start and its 1_000 allowance: a second
+    // settlement under the derived start (live 2_000 allowance, 525 owed)
+    // would have consumed credits for the same usage twice.
+    assert_eq!(consumed_by_period(&repo), vec![(shifted, 1_575)]);
+    assert_eq!(repo.state.lock().unwrap().balance, 10_000 - 1_575);
 }
 
 #[tokio::test]

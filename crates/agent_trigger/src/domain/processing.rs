@@ -9,6 +9,7 @@ use messages::domain::events::MessagePostedMetadata;
 use messages::domain::models::MessageParent;
 
 use super::broker_events::{AgentSessionMacroEvent, AgentTriggerEventName};
+use super::context::{DiscussionReader, discussion_trigger};
 use super::service::{
     AgentBotLookup, AgentTriggerService, ChannelParticipationLookup, ExplicitReplyExtractor,
     ImplicitTriggerJudge, TeamMembershipLookup, ThreadHistory,
@@ -72,11 +73,13 @@ pub async fn process_message_event<
     Judge,
     History,
     Kinds,
+    Discussions,
     Broker,
 >(
     trigger: &AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, History>,
     publisher: &Broker,
     kinds: &Kinds,
+    discussions: &Discussions,
     input: &TriggerInput,
 ) -> Result<(), ProcessMessageEventError>
 where
@@ -88,6 +91,7 @@ where
     Judge: ImplicitTriggerJudge,
     History: ThreadHistory,
     Kinds: ChannelTypeLookup,
+    Discussions: DiscussionReader,
     Broker: MacroEventBroker,
 {
     tracing::Span::current().record("macro.event.type", "message.posted");
@@ -134,8 +138,29 @@ where
         ) => None,
     };
 
+    // Read once for every agent the message calls. Trigger events are
+    // admitted at most once, so a failed read publishes the events without
+    // context rather than dropping the prompts.
+    let discussion = match trigger.invocation(posted).await? {
+        Some(invocation) => discussions
+            .discussion(&invocation, posted)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    message_id = %posted.message_id,
+                    "publishing agent triggers without their discussion"
+                );
+            })
+            .ok(),
+        None => None,
+    };
+
     for decision in decisions {
-        let yielded = AgentSessionMacroEvent::from_decision(decision, channel_type)
+        let context = discussion
+            .clone()
+            .map(|discussion| discussion_trigger(&decision, discussion));
+        let yielded = AgentSessionMacroEvent::from_decision(decision, channel_type, context)
             .map_err(|error| AgentSessionError::Unknown(error.into()))?;
         let event_type: &'static str = AgentTriggerEventName::from(&yielded.event().event).into();
         tracing::info!(

@@ -104,7 +104,16 @@ async fn main() -> Result<()> {
         AgentHarnessServiceUrl::new()?.as_ref(),
         &config.internal_api_key,
     )?);
-    let runner = Arc::new(TargetRunner::new(Arc::clone(&sessions)));
+    let event_content = Arc::new(event_content(
+        &db,
+        &registrar,
+        Arc::clone(&access),
+        &config,
+    )?);
+    let runner = Arc::new(TargetRunner::new(
+        Arc::clone(&sessions),
+        Arc::clone(&event_content),
+    ));
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
         runner,
@@ -155,17 +164,17 @@ async fn main() -> Result<()> {
     let conditions_enabled = typesafe.is_some();
     let conditions = match typesafe {
         Some(provider) => Some(ConditionGate::new(
-            Arc::new(event_content(
-                &db,
-                &registrar,
-                Arc::clone(&access),
-                &config,
-            )?),
+            event_content,
+            // Condition evaluation is the only model work this process meters
+            // (agent targets are funded by the harness). Counted usage asks the
+            // authentication service to settle the payer, as every other host does.
             Arc::new(JevClassifier::new(
                 provider,
-                ai_usage::pg_recorder_with_enforcement(
+                ai_billing::composition::pg_settling_recorder(
                     db.clone(),
                     config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
                 ),
             )),
         )),
@@ -256,13 +265,18 @@ async fn main() -> Result<()> {
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for
-/// condition checks. None of these reads notify, publish or enqueue.
+/// condition checks and the agent's account of the event. None of these reads
+/// notify, publish or enqueue.
 fn event_content(
     db: &sqlx::PgPool,
     registrar: &OwnedEntityRegistrar<PgBotsRepo>,
     access: Arc<EntityAccessServiceImpl<PgAccessRepository>>,
     config: &Config,
-) -> Result<impl scheduled_action::domain::event_runs::condition::EventContentReader + use<>> {
+) -> Result<
+    impl scheduled_action::domain::event_runs::condition::EventContentReader
+    + scheduled_action::domain::ports::RoutineEventReader
+    + use<>,
+> {
     Ok(EventContentAdapter::new(
         email::domain::service::EmailServiceImpl::new(
             email::outbound::EmailPgRepo::new(db.clone()),
@@ -296,7 +310,7 @@ fn event_content(
     ))
 }
 
-/// Condition checks only read properties; they never assign tasks.
+/// Event content only reads properties; it never assigns tasks.
 struct NoTaskNotifications;
 
 impl properties::NotificationService for NoTaskNotifications {

@@ -62,6 +62,92 @@
         ]
       }
     },
+    "/agent-coding-preferences": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read what the caller's new coding sessions are told to do beyond their assignment.",
+        "operationId": "get_agent_coding_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingPreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace the caller's coding preferences.",
+        "operationId": "put_agent_coding_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodingPreferencesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingPreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-models/load": {
       "post": {
         "tags": ["agent-models"],
@@ -2417,6 +2503,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "supportsImages": {
+            "type": ["boolean", "null"],
+            "description": "Image input support, absent when the runtime does not advertise it."
           }
         }
       },
@@ -2847,6 +2937,10 @@
             "$ref": "#/components/schemas/SessionStatusDto",
             "description": "The session's status."
           },
+          "taskId": {
+            "type": ["string", "null"],
+            "description": "The Macro task the session was linked to."
+          },
           "threadChannelId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -3121,6 +3215,21 @@
           }
         }
       },
+      "CodingPreferencesBody": {
+        "type": "object",
+        "description": "Request or response body for the caller's coding preferences.",
+        "required": ["createTasks", "openPullRequests"],
+        "properties": {
+          "createTasks": {
+            "type": "boolean",
+            "description": "Whether new coding sessions research prior work and link a Macro task."
+          },
+          "openPullRequests": {
+            "type": "boolean",
+            "description": "Whether new coding sessions deliver their work as a pull request."
+          }
+        }
+      },
       "CompleteRequest": {
         "type": "object",
         "description": "One-time manual code. Deliberately does not implement Debug.",
@@ -3156,6 +3265,10 @@
                     "description": "The id the caller already speculated this action under, when it has\none. Adopted as the accepted id, so a client that renders the action\noptimistically promotes that entry in place instead of retracting it\nand re-speculating under a server id. Re-sending the same id is not a\nsecond action: see [`ControlResponse`].\n\nNamed rather than flattened so it cannot collide with the action's own\nfields, which are tagged under `type`."
                   }
                 ]
+              },
+              "context": {
+                "type": ["object", "null"],
+                "description": "Why the agent is being asked. Only a runtime forwarding a triggered\nprompt may send it; a user's request carrying it is refused."
               }
             }
           }

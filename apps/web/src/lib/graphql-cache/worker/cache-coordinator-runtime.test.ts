@@ -4,7 +4,10 @@ import {
   installCacheCoordinatorWorker,
   installSharedCacheCoordinatorWorker,
 } from './cache-coordinator-runtime';
-import type { CoordinatorToTabEnvelope } from './coordinator-protocol';
+import {
+  CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CoordinatorToTabEnvelope,
+} from './coordinator-protocol';
 import type {
   CoordinatorMessagePort,
   CoordinatorRouter,
@@ -48,7 +51,7 @@ class FakeEndpoint extends EventTarget {
 }
 
 const message = {
-  coordinatorVersion: 6,
+  coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
   kind: 'disconnect-tab',
   tabId: 'tab-a',
   reason: 'test',
@@ -125,7 +128,7 @@ describe('cache coordinator runtime', () => {
 
     expect(() =>
       ports[0]?.postMessage({
-        coordinatorVersion: 6,
+        coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
         kind: 'protocol-error',
         error: 'test',
       } satisfies CoordinatorToTabEnvelope)

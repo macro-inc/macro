@@ -74,6 +74,9 @@ pub struct AgentModelDto {
     pub name: String,
     /// Optional provider description.
     pub description: Option<String>,
+    /// Image input support, absent when the runtime does not advertise it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_images: Option<bool>,
     /// Optional group heading supplied by the provider.
     pub group: Option<String>,
 }
@@ -116,6 +119,7 @@ impl From<AgentModels> for LoadAgentModelsResponse {
                     name: model.name,
                     description: model.description,
                     group: model.group,
+                    supports_images: model.supports_images,
                 })
                 .collect(),
         }

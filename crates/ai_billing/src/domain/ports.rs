@@ -198,6 +198,20 @@ pub trait BillingRepo: Send + Sync + 'static {
         period_start: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<PeriodAllowance>>> + Send;
 
+    /// Starts of the periods frozen for this payer that began at or after
+    /// `since` and before `before`, oldest first.
+    ///
+    /// A frozen period is one that was observed while open, so it is keyed
+    /// exactly as the ledger entries and charges booked against it. These are
+    /// the closed periods settlement can still reconcile without inventing a
+    /// period start.
+    fn frozen_period_starts(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<DateTime<Utc>>>> + Send;
+
     /// Record each seat's allowance for the open period when `observed` is still
     /// the payer's seat generation.
     ///
@@ -470,6 +484,22 @@ pub trait PaymentGateway: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<BillingPeriod>>> + Send;
 }
 
+/// Finds whose settlement may be outstanding, for the periodic sweep in the
+/// service that owns Stripe ([`SettlementSweep`](super::sweep::SettlementSweep)).
+pub trait SettlementCandidates: Send + Sync + 'static {
+    /// Users and payers worth settling: anyone who recorded counted usage at
+    /// or after `since`, payers holding a credit reload that was reserved but
+    /// never collected, and payers whose anchored subscription period began
+    /// or ended at or after `since` (so a period that just closed is booked
+    /// even when nobody uses AI afterwards). Deduplicated; the order is
+    /// unspecified.
+    fn candidates(
+        &self,
+        since: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
+}
+
 /// Asks whoever owns Stripe to settle a payer. Fire-and-forget: services that
 /// only read billing state (the gate in DCS) use this instead of settling.
 pub trait SettlementTrigger: Send + Sync + 'static {
@@ -514,10 +544,13 @@ pub trait BillingService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
 
     /// Book each seat's usage beyond its own allowance for the payer of `user`
-    /// (previous and current period) from shared prepaid credits. Only the
-    /// current period may trigger an automatic credit reload. The previous
-    /// period is settled against the per-seat allowances frozen while it was
-    /// open, not the live plan or seat list.
+    /// from shared prepaid credits. Settles the current period and, before
+    /// it, every closed period still inside the reconciliation window
+    /// ([`RECONCILED_CLOSED_PERIODS`](super::service::RECONCILED_CLOSED_PERIODS)),
+    /// so usage that ran past a period boundary is booked without a customer
+    /// action. Only the current period may trigger an automatic credit
+    /// reload. A closed period is settled against the per-seat allowances
+    /// frozen while it was open, not the live plan or seat list.
     fn settle(&self, user: &MacroUserIdStr<'_>) -> impl Future<Output = Result<()>> + Send;
 
     /// Retired direct usage opt-in. Enabling is rejected; disabling remains

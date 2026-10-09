@@ -3,6 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineRow } from '../core/types';
 import { RoutinesList } from './routines-list';
 
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+
 afterEach(cleanup);
 const rows: RoutineRow[] = [
   {

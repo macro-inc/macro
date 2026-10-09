@@ -60,6 +60,12 @@ pub struct TextResponse {
     text: String,
 }
 
+/// Why the model stopped generating.
+///
+/// Every variant the API documents is named so callers can match on it, and
+/// anything newer lands in [`StopReason::Unknown`]: a stop reason this crate
+/// has not heard of must not make the whole response unparseable, since the
+/// content it carries is still good.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum StopReason {
@@ -67,8 +73,16 @@ pub enum StopReason {
     MaxTokens,
     StopSequence,
     ToolUse,
-    PausTurn,
+    /// A server-tool loop (web search, web fetch, code execution) hit its
+    /// iteration limit. The content so far is complete up to that point;
+    /// sending it back continues the turn.
+    PauseTurn,
     Refusal,
+    /// The response filled the model's context window; treat it as truncated.
+    ModelContextWindowExceeded,
+    /// A stop reason added to the API after this enum.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

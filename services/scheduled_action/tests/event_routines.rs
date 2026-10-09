@@ -50,7 +50,7 @@ use scheduled_action::{
             ExecutionResource, ExecutionResourceType, MAX_ACTION_TIME, ScheduledAction,
             ScheduledActionUpdate,
         },
-        ports::{ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner},
+        ports::{RoutineRun, ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner},
         service::ScheduledActionServiceImpl,
     },
     inbound::{
@@ -176,8 +176,9 @@ impl ScheduledAgentRunner for FakeRunner {
         &self,
         action: &ScheduledAction,
         _: &ExecutionHandle,
-        event: Option<&EventReference>,
+        firing: RoutineRun<'_>,
     ) -> anyhow::Result<()> {
+        let event = firing.event();
         self.calls
             .lock()
             .unwrap()

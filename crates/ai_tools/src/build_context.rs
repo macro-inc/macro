@@ -131,19 +131,26 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 /// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
 ///
 /// `enforcement` is validated by the host at startup and shared with all other
-/// AI entry points. It configures both quota admission and prospective counting.
-/// `pricing` is the host's mandatory AI pricing configuration, shared with every
-/// other billing component it composes.
+/// AI entry points. It configures quota admission here and must be the policy
+/// `recorder` was composed with. `pricing` is the host's mandatory AI pricing
+/// configuration, shared with every other billing component it composes.
+///
+/// `recorder` is the host's configured usage recorder, shared by every tool in
+/// the context that calls a model. The host composes it so that one process
+/// records, counts, and requests settlement for usage one way: through
+/// [`ai_billing::composition::pg_settling_recorder`] where its usage is
+/// chargeable, or [`ai_usage::pg_recorder_with_enforcement`] where it is not.
 ///
 /// `event_task_tracker` tracks event publishes started by the context. Callers
 /// must retain the original tracker, pass a clone here, and close and drain the
 /// original after the host stops broker-backed work.
-#[tracing::instrument(skip(pool, event_task_tracker), err)]
+#[tracing::instrument(skip(pool, event_task_tracker, recorder), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
     event_task_tracker: TaskTracker,
     enforcement: ai_usage::AiUsageEnforcement,
     pricing: ai_billing::AiPricing,
+    recorder: Arc<dyn ai_usage::UsageRecorder>,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -495,8 +502,6 @@ pub async fn build_tool_service_context_from_env(
             editing_worker_url: ai_editing_worker_url,
         },
     );
-
-    let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
 
     Ok(ToolServiceContext {
         connector_tool_context: crate::tool_context::build_connector_tool_context(

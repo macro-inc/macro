@@ -351,6 +351,7 @@ dependencies = [
  "cursor_api_key",
  "cursor_cloud_agents",
  "dashmap",
+ "documents",
  "entity_access",
  "entity_access_db_utils",
  "futures",
@@ -367,12 +368,14 @@ dependencies = [
  "mcp_client",
  "messages",
  "mockall",
+ "model",
  "model-entity",
  "model_notifications",
  "model_owner",
  "model_user",
  "notification",
  "opentelemetry",
+ "opentelemetry_sdk",
  "pipedream_mcp",
  "redis",
  "reqwest 0.13.4",
@@ -389,6 +392,8 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
+ "trigger_context",
  "url",
  "utoipa",
  "uuid",
@@ -414,6 +419,7 @@ dependencies = [
  "ai_toolset",
  "ai_usage",
  "anyhow",
+ "authentication_service_client",
  "aws-sdk-kms",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -421,6 +427,7 @@ dependencies = [
  "axum-extra",
  "bot_id",
  "bots",
+ "call",
  "channels",
  "claude_cloud_agents",
  "codex_cloud_agents",
@@ -464,6 +471,7 @@ dependencies = [
  "model_owner",
  "notification",
  "pipedream_mcp",
+ "prompt",
  "properties",
  "rdkafka",
  "redis",
@@ -661,6 +669,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "trigger_context",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -698,6 +707,7 @@ dependencies = [
  "async-trait",
  "bot_id",
  "bots",
+ "call",
  "channel_sender",
  "channels",
  "chrono",
@@ -706,6 +716,7 @@ dependencies = [
  "entity_access",
  "initiative",
  "lexical_client",
+ "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -727,6 +738,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "trigger_context",
  "workspace-hack",
 ]
 
@@ -740,6 +752,7 @@ dependencies = [
  "ai_usage",
  "anyhow",
  "bots",
+ "call",
  "channels",
  "connection_gateway_client",
  "crm",
@@ -3425,6 +3438,7 @@ dependencies = [
  "pollster",
  "postcard",
  "predicate-index",
+ "proptest",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3441,6 +3455,7 @@ dependencies = [
  "maybe_send",
  "pollster",
  "predicate-index",
+ "proptest",
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
@@ -3452,7 +3467,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.43"
+version = "0.6.47"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4348,6 +4363,7 @@ dependencies = [
  "toml_edit 0.22.27",
  "tracing",
  "tracing-subscriber",
+ "trigger_context",
  "tui-input",
  "uuid",
  "webbrowser",
@@ -4486,6 +4502,7 @@ dependencies = [
  "graphql_properties",
  "graphql_scheduled_action",
  "graphql_soup",
+ "graphql_work_feed",
  "macro_authorization",
  "macro_user_id",
  "model-entity",
@@ -4507,6 +4524,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "work_feed",
  "workspace-hack",
 ]
 
@@ -6353,6 +6371,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "webhook",
+ "work_feed",
  "workspace-hack",
  "zip 2.4.2",
 ]
@@ -8823,6 +8842,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_work_feed"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-stream",
+ "chrono",
+ "entity_access",
+ "futures",
+ "graphql_common",
+ "graphql_notification",
+ "graphql_soup",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "notification",
+ "rootcause",
+ "serde_json",
+ "soup",
+ "tokio",
+ "tracing",
+ "uuid",
+ "work_feed",
+ "workspace-hack",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10835,6 +10880,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "trigger_context",
  "workspace-hack",
 ]
 
@@ -11954,6 +12000,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "attachment",
+ "authentication_service_client",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -12852,13 +12899,16 @@ dependencies = [
  "native_app_service",
  "rootcause",
  "semver",
+ "serde_json",
  "sha2 0.10.9",
+ "tempfile",
  "tokio",
  "tower-http",
  "tracing",
  "tracing-subscriber",
  "url",
  "workspace-hack",
+ "zip 2.4.2",
 ]
 
 [[package]]
@@ -16533,6 +16583,7 @@ dependencies = [
  "ai_billing",
  "ai_usage",
  "anyhow",
+ "authentication_service_client",
  "aws-sdk-secretsmanager",
  "axum",
  "bot_id",
@@ -16598,6 +16649,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "trigger_context",
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
@@ -19784,6 +19836,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "trigger_context"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "triomphe"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21462,6 +21526,37 @@ dependencies = [
  "group 0.14.0",
  "hybrid-array",
  "primefield",
+]
+
+[[package]]
+name = "work_feed"
+version = "0.1.0"
+dependencies = [
+ "activity",
+ "base64 0.22.1",
+ "chrono",
+ "cowlike",
+ "document_sub_type",
+ "email",
+ "entity_access",
+ "filter_ast",
+ "futures",
+ "item_filters",
+ "macro_user_id",
+ "model-entity",
+ "model_notifications",
+ "models_soup",
+ "notification",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "soup",
+ "soup_realtime",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

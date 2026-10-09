@@ -37,7 +37,7 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
     history(timeGap = 400, loroManager?: LoroManager) {
       if (type === 'markdown-sync' && loroManager) {
         cleanupFunctions.push(
-          registerLoroHistory(editor, loroManager.doc, timeGap)
+          registerLoroHistory(editor, loroManager, timeGap)
         );
       } else {
         cleanupFunctions.push(

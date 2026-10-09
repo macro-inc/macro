@@ -15,6 +15,14 @@ const fold = vi.hoisted(() => ({
   pushSession: vi.fn(),
   readSession: vi.fn(),
   closeSession: vi.fn(),
+  // The real class, so `instanceof` classifies a load failure the way the
+  // app does rather than the way a stand-in happens to.
+  AgentFoldWorkerUnavailable: class AgentFoldWorkerUnavailable extends Error {
+    constructor(readonly workerUrl: string) {
+      super(`agent fold worker script could not be loaded (${workerUrl})`);
+      this.name = 'AgentFoldWorkerUnavailable';
+    }
+  },
 }));
 const harness = vi.hoisted(() => ({
   get: vi.fn(),
@@ -1107,6 +1115,14 @@ describe('AgentSession', () => {
       fold.readSession.mockRejectedValueOnce(new Error('worker died'));
       await expect(live.load()).rejects.toThrow('worker died');
 
+      // A worker whose script never loaded is counted apart from a fold that
+      // went wrong: nothing is wrong with the fold, and the fix is a deploy
+      // retention question.
+      fold.readSession.mockRejectedValueOnce(
+        new fold.AgentFoldWorkerUnavailable('/app/fold.worker-abc.js')
+      );
+      await expect(live.load()).rejects.toThrow('could not be loaded');
+
       expect(
         loadSpans().map((span) => [
           span.attributes['agent.session.load.outcome'],
@@ -1117,6 +1133,7 @@ describe('AgentSession', () => {
         ['failed', 'log_fetch'],
         ['failed', 'access_denied'],
         ['failed', 'fold'],
+        ['failed', 'worker_unavailable'],
       ]);
       live.release();
     });

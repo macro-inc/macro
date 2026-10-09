@@ -7,11 +7,13 @@ recurrence editor, or reminder AI tool. Calendar event alarms remain separate.
 ## Snooze or change a conversation
 
 On one selected email or an open conversation, press **H**, choose **Remind me**
-in its menu, or activate its bell. The shared command menu shows the subject
-and time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
+in its menu, or activate its bell. The shared command menu's input placeholder
+reads `Remind me: <subject>`, followed by time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
 **Next week**. Type a future time such as `in 2 hours` or `tomorrow 9am` in
 **Remind me when**. Up/Down changes the selection; Enter or clicking a choice
-saves immediately. **Cancel** or Escape closes without saving. There is no
+saves immediately. **Cancel** (footer, bottom left) or Escape closes without
+saving. The **If no reply** / **Regardless** toggle sits in the footer's bottom
+right. There is no
 separate title, note, or recurrence step.
 
 The time picker opens immediately, including on the first use. You can type or

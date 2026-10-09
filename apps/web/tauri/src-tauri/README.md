@@ -160,9 +160,29 @@ for compatible additions, queued work, and rollback behavior.
 
 GraphQL hydration checkpoints require the native
 `graphql_cache_current_storage_generation` command. When shipping this frontend
-through the bundle updater, set `MIN_NATIVE_BUILD` to the first native build that
-includes that command. Older binaries must receive a native update before this
-bundle; they cannot validate a saved hydration cursor against the cache database.
+through the bundle updater, set `MIN_NATIVE_BUILD_ANDROID` to the first Android
+versionCode that implements the command and `MIN_NATIVE_BUILD_IOS` to the first
+iOS CFBundleVersion that implements it. Set both together: build numbers are
+independent. The schema 3 manifest carries `minNativeBuilds: { android, ios }`;
+the endpoint returns the requesting platform's minimum in its existing response.
+The updater checks that minimum during extraction, restore, and application.
+Old schema 2 updaters reject schema 3 and continue using their existing bundle.
+Android cannot receive legacy schema 2 updates because their shared minimum
+cannot establish Android compatibility. `MIN_NATIVE_BUILD` remains supported
+for iOS/desktop-only schema 2 releases.
+
+Every new native command used by shared JS must raise the corresponding
+platform minimum to a binary that implements it. Optional reachability falls
+back to browser connectivity if an older native binary lacks the command.
+Deploy the updated native_app_service before publishing schema 3 archives;
+an old server returns the legacy minimum and the client rejects the mismatch.
+Never lower a minimum to force an incompatible update to apply.
+
+Extraction writes a sibling `<directory>.complete` record only after checksum,
+extraction, manifest, and entrypoint validation succeed. Directories without a
+matching completion record cannot be reused or restored. Previously cached OTA
+bundles lack this record and fall back to embedded assets on the first native
+upgrade; a compatible update can then be downloaded again.
 
 Durable email-draft recovery additionally requires
 `graphql_cache_inspect_mutations` and queued `client_metadata` support. Set

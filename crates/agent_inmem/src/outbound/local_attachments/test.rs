@@ -105,13 +105,13 @@ impl TurnEngine for Engine {
 fn engine(
     outcome: Outcome,
 ) -> (
-    LocalAttachmentTurnEngine<Service>,
+    StaticFileAttachmentTurnEngine<Service>,
     Arc<Engine>,
     Arc<ServiceState>,
 ) {
     let inner = Arc::new(Engine::default());
     let state = Arc::new(ServiceState::default());
-    let engine = LocalAttachmentTurnEngine::new(
+    let engine = StaticFileAttachmentTurnEngine::new(
         inner.clone(),
         Url::parse(BASE).expect("base URL"),
         Service {
@@ -150,6 +150,7 @@ fn request(messages: Vec<ChatMessage>) -> TurnRequest {
         owner: Owner::from_principal_str("macro|test@macro.com").expect("user"),
         model: "test-model".to_owned(),
         reasoning_effort: agent::ReasoningEffort::default(),
+        speed: agent::ModelSpeed::Standard,
         identity: None,
         instructions: None,
         messages,
@@ -350,7 +351,7 @@ impl TurnEngine for CooperativeEngine {
 #[tokio::test]
 async fn a_running_engine_drains_its_final_tool_response_after_cancellation() {
     let started = Arc::new(Notify::new());
-    let engine = LocalAttachmentTurnEngine::new(
+    let engine = StaticFileAttachmentTurnEngine::new(
         Arc::new(CooperativeEngine {
             started: Arc::clone(&started),
         }),

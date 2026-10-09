@@ -28,7 +28,7 @@ use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, DocumentError,
     DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
-    OwnerTeam, TeamTaskMetadata,
+    OwnerTeam, TeamTaskMetadata, TeamTaskNumber,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -858,6 +858,25 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             team_id: row.team_id,
             task_num: row.task_num,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_task_number(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<TeamTaskNumber>, Self::Err> {
+        sqlx::query_as!(
+            TeamTaskNumber,
+            r#"
+            SELECT t.slug AS "team_slug!", tt.task_num
+            FROM team_task tt
+            JOIN team t ON t.id = tt.team_id
+            WHERE tt.document_id = $1
+            "#,
+            document_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]

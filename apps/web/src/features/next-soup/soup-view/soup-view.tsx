@@ -232,6 +232,11 @@ interface SoupViewProps {
   additionalEntities?: Accessor<EntityData[]>;
   /** The view's tour, e.g. `<ViewTour tour={callsTour} />`. */
   tour?: JSX.Element;
+  /**
+   * Replaces the split-header title, tabs, search, and filter toolbar for
+   * views that compose their own chrome (e.g. a sidebar layout).
+   */
+  header?: JSX.Element;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -377,7 +382,7 @@ export const SoupView = (props: SoupViewProps) => {
       class="size-full flex flex-col @container"
       data-list-view={activeListView()}
     >
-      <Show when={true}>
+      <Show when={props.header === undefined} fallback={props.header}>
         <div class="flex flex-col w-full">
           <SplitHeaderLeft>
             <div

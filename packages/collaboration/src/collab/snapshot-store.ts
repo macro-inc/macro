@@ -1,6 +1,7 @@
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
 import { logSyncService } from './logger';
-import { type LoroManager, LoroManagerError } from './manager';
+import type { LoroManager } from './manager';
+import { LoroManagerError } from './manager-error';
 import type { GenericRootSchema, RawUpdate } from './shared';
 import type { WALStore } from './wal';
 

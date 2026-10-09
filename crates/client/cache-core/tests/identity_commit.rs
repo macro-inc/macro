@@ -190,6 +190,7 @@ async fn enqueue_aliased(engine: &mut Engine<InMemoryStorage>) -> MutationId {
                     query: PROPERTIES.into(),
                     operation_name: None,
                     variables_json: r#"{"id":"local"}"#.into(),
+                    only_on_link_failure: false,
                 }],
                 created_at_ms: 0,
             },
@@ -638,6 +639,7 @@ fn rollback_after_restart_returns_persisted_revalidations_with_resolved_ids() {
                             query: PROPERTIES.into(),
                             operation_name: Some("Properties".into()),
                             variables_json: r#"{"id":"local"}"#.into(),
+                            only_on_link_failure: false,
                         }],
                         identity_bindings: &[IdentityBinding {
                             local_key: EntityKey("GraphqlProperty:local".into()),
@@ -683,6 +685,7 @@ fn rollback_after_restart_returns_persisted_revalidations_with_resolved_ids() {
                 query: PROPERTIES.into(),
                 operation_name: Some("Properties".into()),
                 variables_json: r#"{"id":"server"}"#.into(),
+                only_on_link_failure: false,
             }]
         );
         assert_eq!(result.mutation_uuid.as_deref(), Some(UUID));

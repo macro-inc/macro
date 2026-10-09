@@ -3,6 +3,7 @@ import type { CalendarAttendee } from '@service-storage/generated/schemas/calend
 import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventTransparency } from '@service-storage/generated/schemas/eventTransparency';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
 import {
   isTimedPointEvent,
@@ -97,6 +98,8 @@ export interface CalendarEvent {
   reminderEventType?: EventType;
   /** Provider event type; absent means a regular event. */
   eventType?: EventType;
+  /** `transparent` events show the owner as free; absent means busy. */
+  transparency?: EventTransparency;
   /** Calendar of the copy this chip shows. Mutations address that copy. */
   calendarId?: string;
   /**
@@ -261,6 +264,7 @@ export function mapCalendarOccurrence(
     reminderCalendarId: canonical.calendarId ?? undefined,
     reminderEventType: canonical.eventType ?? undefined,
     eventType: content.eventType ?? undefined,
+    transparency: content.transparency,
     calendarId,
     sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,

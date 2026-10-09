@@ -55,5 +55,32 @@ pub fn advertised_models() -> &'static [&'static str] {
         .as_slice()
 }
 
+/// Image input support for the models in Macro's catalog.
+///
+/// This is model-specific, not provider-specific. Sources (2026-10-08):
+/// https://fireworks.ai/models (Vision versus LLM classification) and
+/// https://huggingface.co/openai/gpt-oss-120b
+/// Verified with image requests as well: Fireworks' list-models metadata
+/// incorrectly marks MiniMax M3 as text-only, but it reads image colors and text.
+/// Unknown models remain unknown rather than being advertised as text-only.
+#[must_use]
+pub fn supports_images(id: &str) -> Option<bool> {
+    if CHAT_MODELS.contains(&id) {
+        return Some(true);
+    }
+    match id {
+        "fireworks/kimi-k3"
+        | "fireworks/muse-glimmer-30b"
+        | "fireworks/glm-5p3-flash"
+        | "fireworks/qwen3p8-max"
+        | "fireworks/minimax-m3" => Some(true),
+        "fireworks/deepseek-v4-pro-0813"
+        | "fireworks/glm-5p3"
+        | "fireworks/nemotron-lightning-3p5-30b-a3b"
+        | "cerebras/gpt-oss-120b" => Some(false),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod test;

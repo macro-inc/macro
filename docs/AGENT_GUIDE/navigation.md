@@ -782,6 +782,9 @@ restart rules still apply.
 Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
+Settings → Agents → Agents ends with **Coding sessions**: per-user **Create
+tasks** and **Open pull requests** switches, both off by default. Each saves on
+toggle and reverts with a toast if the save fails.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
 Settings → Agents → Runtimes, above Cursor, with the
@@ -811,6 +814,13 @@ polled into Macro about every two seconds; disconnected runtimes must resume fir
 Home does not bind Delete or Backspace to deleting list items. These keys remain
 available to the open editor (for example, clearing a selected spreadsheet range).
 Use the item menu to delete an item from Home.
+
+Home and Agents unsent composer storage follows the current account identity.
+Before identity is available, it uses memory only and does not restore legacy
+shared drafts or attachment projections. Logout
+clears composer drafts and attachment projections, including legacy keys. When
+checking Android draft recovery, verify the actual editor text after process
+death; storage unit tests alone do not establish lifecycle recovery.
 
 `C A` (Create → Agent) opens the Agents new-conversation page and focuses its
 message input; `C Shift+A` requests a new split. It does not open a modal or
@@ -884,3 +894,12 @@ retry errors inline. See [Email reminders](reminders.md).
 Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
 The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.
+
+### Native update-required dialog
+
+When newer frontend JS requires a newer native app, the mobile shell offers
+**Update app** and **OK**. Update app uses the native opener; Android targets the
+HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the Store app
+is absent. An opener failure displays an inline error and the dialog stays
+dismissible. A missing listing is handled in the external store/browser: return
+to Macro, dismiss, and retry later. Task 07 verifies the live listing.

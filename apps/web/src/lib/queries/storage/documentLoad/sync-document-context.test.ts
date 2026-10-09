@@ -81,6 +81,7 @@ vi.mock('../../client', async () => {
           set: vi.fn(),
           remove: vi.fn(),
           flush: async () => {},
+          clear: async () => {},
         },
       },
     ],

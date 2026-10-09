@@ -33,6 +33,8 @@ import {
 import {
   activeAgentFilter,
   calendarFilter,
+  callExternalFilter,
+  callInternalFilter,
   callsFilter,
   channelsFilter,
   crmCompanyActiveFilter,
@@ -96,6 +98,8 @@ export const SOUP_FILTERS = [
   activeTaskFilter,
   calendarFilter,
   callsFilter,
+  callExternalFilter,
+  callInternalFilter,
   crmCompanyFilter,
   crmCompanyActiveFilter,
   crmCompanyHiddenFilter,

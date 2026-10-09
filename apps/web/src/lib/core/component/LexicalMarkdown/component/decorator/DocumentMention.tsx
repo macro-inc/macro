@@ -70,6 +70,7 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { useMarkdownHost } from '../../context/MarkdownHostContext';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
@@ -578,7 +579,7 @@ export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
 
 function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const currentBlockId = useMaybeBlockId();
-  const currentBlockName = useMaybeBlockName();
+  const currentBlockName = useMarkdownHost() ?? useMaybeBlockName();
 
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
