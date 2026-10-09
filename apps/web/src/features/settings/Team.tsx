@@ -1494,9 +1494,11 @@ function TeamManagement(props: {
 
           <Show
             when={
+              teamQuery.isSuccess &&
               showSeatPlans() &&
               isAdminOrOwner() &&
               !teamQuery.data?.team.enterprise &&
+              // A successful team response omits this field only on lookup failure.
               teamQuery.data?.scheduled_seat_plans == null
             }
           >

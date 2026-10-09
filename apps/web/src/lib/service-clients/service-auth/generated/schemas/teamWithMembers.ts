@@ -16,7 +16,7 @@ export interface TeamWithMembers {
   /** The members of the team */
   members: TeamMember[];
   /** Provider-confirmed pending seat changes, keyed by member user ID.
-Only available to paid-team admins and owners; empty means no pending changes. */
+Empty when no changes apply to this viewer; absent when the lookup fails. */
   scheduled_seat_plans?: TeamWithMembersScheduledSeatPlans;
   /** The team */
   team: Team;
