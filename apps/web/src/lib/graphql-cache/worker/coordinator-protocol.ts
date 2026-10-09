@@ -23,7 +23,7 @@ import {
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 8 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 9 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -510,9 +510,11 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         (value.watch === undefined ||
           (isRecord(value.watch) &&
             isNonEmptyString(value.opId) &&
-            hasOnlyKeys(value.watch, ['since']) &&
+            hasOnlyKeys(value.watch, ['since', 'splices']) &&
             (value.watch.since === undefined ||
-              isCacheRevision(value.watch.since))))
+              isCacheRevision(value.watch.since)) &&
+            (value.watch.splices === undefined ||
+              typeof value.watch.splices === 'boolean')))
       );
     case 'write':
       return (
