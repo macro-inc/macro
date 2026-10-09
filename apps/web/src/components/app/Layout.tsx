@@ -69,7 +69,6 @@ import {
 import { ViewNavigationSlotContext } from '../view-shell/navigation-slot';
 import { AppProviders } from './AppProviders';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
-import { ContentLoading } from './ContentLoading';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
 import { InitialInteractiveOnboardingModal } from './InitialInteractiveOnboardingModal';
@@ -186,8 +185,9 @@ export function RootFrame(props: ParentProps) {
             <AiUsageLimitDialog />
           </Show>
           <div class="min-h-0 flex-1 flex flex-col">
-            {/* Route loading must not detach the frame. */}
-            <Suspense fallback={<ContentLoading />}>{props.children}</Suspense>
+            {/* Route loading must not detach the frame. Routes draw their own
+                loading state, so the frame adds none. */}
+            <Suspense>{props.children}</Suspense>
           </div>
           <SwipeDownDismissKeyboard />
           <DevStatusBar />
@@ -317,10 +317,9 @@ export function AppChrome(props: ParentProps) {
               <SidebarRail />
             </Show>
             <PageContent>
-              {/* Route loading must not detach the chrome or mobile navigation. */}
-              <Suspense fallback={<ContentLoading />}>
-                {props.children}
-              </Suspense>
+              {/* Route loading must not detach the chrome or mobile navigation;
+                  the route draws its own loading state. */}
+              <Suspense>{props.children}</Suspense>
             </PageContent>
           </ItemDndProvider>
         </div>
