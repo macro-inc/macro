@@ -740,6 +740,72 @@ export type GithubPullRequestLabel = {
 };
 
 /**
+ * Whether GitHub can merge a pull request's head into its base without conflicts.
+ */
+export type GithubPullRequestMergeability = 'mergeable' | 'conflicting' | 'unknown';
+
+/**
+ * One pull request's mergeability.
+ */
+export type GithubPullRequestMergeabilityEntry = {
+    /**
+     * Whether the head merges cleanly into the base.
+     */
+    mergeability: GithubPullRequestMergeability;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Request body for the mergeability of several pull requests.
+ */
+export type GithubPullRequestMergeabilityRequest = {
+    /**
+     * The pull requests to check, at most [`GithubPullRequestMergeabilityRequest::MAX`].
+     */
+    pullRequests: Array<GithubPullRequestNumber>;
+};
+
+/**
+ * Response body for pull request mergeability. Pull requests the user
+ * cannot see are left out.
+ */
+export type GithubPullRequestMergeabilityResponse = {
+    /**
+     * The mergeability of each visible pull request.
+     */
+    pullRequests: Array<GithubPullRequestMergeabilityEntry>;
+};
+
+/**
+ * One pull request, by repository and number.
+ */
+export type GithubPullRequestNumber = {
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
  * A pull request reference that can be enriched with live GitHub data.
  */
 export type GithubPullRequestRef = {
@@ -1378,6 +1444,40 @@ export type SendMobileWelcomeEmailResponse = {
      * Whether the lead was enrolled (false if they were already enrolled previously)
      */
     sent: boolean;
+};
+
+/**
+ * A request to mark one pull request as a draft, or as ready for review, on
+ * the user's behalf.
+ */
+export type SetGithubPullRequestDraftRequest = {
+    /**
+     * `true` converts the pull request to a draft; `false` marks it ready for review.
+     */
+    draft: boolean;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Response body for a pull request whose draft state changed.
+ */
+export type SetGithubPullRequestDraftResponse = {
+    /**
+     * Whether the pull request is now a draft.
+     */
+    draft: boolean;
+    pullRequest?: null | EnrichedGithubPullRequest;
 };
 
 export type SsoRequiredResponse = {
@@ -2186,6 +2286,39 @@ export type VerifyEmailLinkResponses = {
 
 export type VerifyEmailLinkResponse = VerifyEmailLinkResponses[keyof VerifyEmailLinkResponses];
 
+export type SetGithubPullRequestDraftData = {
+    body: SetGithubPullRequestDraftRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/draft';
+};
+
+export type SetGithubPullRequestDraftErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot change the pull request
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * GitHub declined the change
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetGithubPullRequestDraftError = SetGithubPullRequestDraftErrors[keyof SetGithubPullRequestDraftErrors];
+
+export type SetGithubPullRequestDraftResponses = {
+    200: SetGithubPullRequestDraftResponse;
+};
+
+export type SetGithubPullRequestDraftResponse2 = SetGithubPullRequestDraftResponses[keyof SetGithubPullRequestDraftResponses];
+
 export type EnrichGithubPullRequestsData = {
     body: EnrichGithubPullRequestsProxyRequest;
     path?: never;
@@ -2241,6 +2374,35 @@ export type MergeGithubPullRequestResponses = {
 };
 
 export type MergeGithubPullRequestResponse2 = MergeGithubPullRequestResponses[keyof MergeGithubPullRequestResponses];
+
+export type GetGithubPullRequestMergeabilityData = {
+    body: GithubPullRequestMergeabilityRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/mergeability';
+};
+
+export type GetGithubPullRequestMergeabilityErrors = {
+    401: ErrorResponse;
+    /**
+     * No GitHub link
+     */
+    404: ErrorResponse;
+    /**
+     * Too many pull requests requested
+     */
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestMergeabilityError = GetGithubPullRequestMergeabilityErrors[keyof GetGithubPullRequestMergeabilityErrors];
+
+export type GetGithubPullRequestMergeabilityResponses = {
+    200: GithubPullRequestMergeabilityResponse;
+};
+
+export type GetGithubPullRequestMergeabilityResponse = GetGithubPullRequestMergeabilityResponses[keyof GetGithubPullRequestMergeabilityResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;

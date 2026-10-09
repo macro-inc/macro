@@ -3,7 +3,10 @@ import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
 import { useChannelName } from '@core/context/channels';
-import { rowPillClasses } from '@entity/components/row-pill';
+import {
+  rowPillClasses,
+  rowPillTriggerClasses,
+} from '@entity/components/row-pill';
 import MacroIcon from '@icon/macro-logo.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
@@ -16,7 +19,6 @@ import ListChecksIcon from '@phosphor/list-checks.svg';
 import RobotIcon from '@phosphor/robot.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-import { tagPillClasses } from '@property/tags/TagPill';
 import { cn, Surface, Tooltip } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -152,7 +154,7 @@ function LinkPill(props: {
             >
               <button
                 type="button"
-                class={tagPillClasses(cn('max-w-40', props.class))}
+                class={rowPillTriggerClasses(cn('max-w-40', props.class))}
                 aria-label={`Open linked ${props.kind.toLowerCase()}`}
                 {...isolate}
                 onClick={(event) => {
@@ -167,7 +169,7 @@ function LinkPill(props: {
         >
           <Popover placement="bottom-end" gutter={4} flip>
             <Popover.Trigger
-              class={tagPillClasses(cn('max-w-40', props.class))}
+              class={rowPillTriggerClasses(cn('max-w-40', props.class))}
               aria-label={`${props.items.length} linked ${props.kind.toLowerCase()}s`}
               {...isolate}
               onClick={(event: MouseEvent) => event.stopPropagation()}
@@ -231,7 +233,7 @@ function ChannelOriginPill(props: {
   const pill = () => (
     <button
       type="button"
-      class={tagPillClasses('max-w-40')}
+      class={rowPillTriggerClasses('max-w-40')}
       aria-label={`Open the message in #${name()} that started the agent`}
       {...isolate}
       onClick={(event) => {
@@ -438,7 +440,7 @@ export function PrOriginBadge(props: { origin: PrOrigin; onOpen: OpenPrLink }) {
       >
         <button
           type="button"
-          class={tagPillClasses('max-w-32')}
+          class={rowPillTriggerClasses('max-w-32')}
           aria-label={`${prOriginDescription(props.origin)}. Open the session`}
           {...isolate}
           onClick={(event) => {
