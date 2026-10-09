@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import { compareTimelinePositions } from '@core/util/message-timeline';
 import { isTransientRequestError } from '@core/util/request-error';
 import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
 import { compositeEntity } from '@notifications/types';
@@ -15,8 +16,10 @@ import type {
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import type { ThreadListScrollState } from './ThreadList';
 import {
+  type ThreadPlacement,
   type ThreadPosition,
   type UnreadNotificationChip,
+  type UnreadThread,
   unreadNotificationChip,
   unreadThreads,
 } from './unread-thread-navigation';
@@ -27,6 +30,8 @@ export function ChannelUnreadNotifications(props: {
   messages: Accessor<MessageListItem[]>;
   /** Activity rows can be the first visible row, so they need positions too. */
   activities?: Accessor<ReadonlyMap<string, TimelineActivity>>;
+  /** The actual rendered order, including activity rows. */
+  rowKeys?: Accessor<readonly string[]>;
   scrollState: Accessor<ThreadListScrollState | undefined>;
   container: Accessor<HTMLElement | undefined>;
   insets: Accessor<{ start: number; end: number }>;
@@ -74,41 +79,64 @@ export function ChannelUnreadNotifications(props: {
     }
   );
   const unreadChip = createMemo(() => {
-    const positions = new Map<string, ThreadPosition>(
+    const unloaded = new Map<string, ThreadPosition>(
       (queryReadyGate(unreadRoots) ? unreadRoots.data : []).map((message) => [
         message.id,
         message,
       ])
     );
-    for (const message of props.messages()) positions.set(message.id, message);
+
+    const positions = new Map<string, ThreadPosition>(
+      props.messages().map((message) => [message.id, message])
+    );
     for (const [key, activity] of props.activities?.() ?? [])
-      positions.set(key, { id: activity.id, created_at: activity.occurred_at });
+      positions.set(key, { id: key, created_at: activity.occurred_at });
+    const rows = props.rowKeys
+      ? props.rowKeys().flatMap((key) => {
+          const row = positions.get(key);
+          return row ? [row] : [];
+        })
+      : props.activities
+        ? [...positions.values()].sort((left, right) =>
+            compareTimelinePositions(
+              { id: left.id, createdAt: left.created_at },
+              { id: right.id, createdAt: right.created_at }
+            )
+          )
+        : props.messages();
     const scroll = props.scrollState();
-    const target = unread()[0];
     const container = props.container();
     const viewport = container?.querySelector('[data-channel-scroll]');
-    const element =
-      target &&
-      container?.querySelector(
-        `[data-message-id="${CSS.escape(target.messageId)}"]`
-      );
-    let targetPosition: 'above' | 'below' | 'visible' | undefined;
-    if (viewport && element) {
-      const bounds = viewport.getBoundingClientRect();
-      const message = element.getBoundingClientRect();
-      const insets = props.insets();
-      targetPosition =
-        message.bottom <= bounds.top + insets.start
-          ? 'above'
-          : message.top >= bounds.bottom - insets.end
-            ? 'below'
-            : 'visible';
-    }
+    const insets = props.insets();
+    const place = (element: Element): ThreadPlacement => {
+      const bounds = viewport!.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      return rect.bottom <= bounds.top + insets.start
+        ? 'above'
+        : rect.top >= bounds.bottom - insets.end
+          ? 'below'
+          : 'visible';
+    };
+    const measure = (thread: UnreadThread) => {
+      if (!container || !viewport) return;
+      const row = container
+        .querySelector(`[data-message-id="${CSS.escape(thread.threadId)}"]`)
+        ?.closest('[data-index]');
+      // The unread message when it is rendered, otherwise the control that
+      // reveals it while collapsed, otherwise the thread row around both.
+      const element =
+        container.querySelector(
+          `[data-message-id="${CSS.escape(thread.messageId)}"]`
+        ) ??
+        row?.querySelector('[data-thread-collapsed-replies]') ??
+        row;
+      return element ? place(element) : undefined;
+    };
     return unreadNotificationChip(
       unread(),
-      positions,
+      { rows, unloaded },
       scroll?.didInitialScroll ? scroll.visibleRange : undefined,
-      targetPosition
+      measure
     );
   });
 

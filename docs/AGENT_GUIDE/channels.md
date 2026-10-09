@@ -399,15 +399,27 @@ A newer message navigation cancels a pending jump to latest. Scrolling manually
 or choosing another destination also cancels the initial target's delayed fallback.
 A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 
-The **Unread notification** chip points to the most recent unread notification.
-There is only one chip: above the list for a target above the viewport, or below
-for a target below it. The number counts distinct parent-message threads across
-the channel, not individual notifications. Three replies and a mention in the
-same thread count as one; reactions do not count. Clicking jumps to the target
-and expands its thread. A collapsed unread reply in a visible thread is reachable
-with the bottom chip. A visible target has no chip. Notifications are marked seen
-when their message mounts, including virtualized overscan. Collapsed replies that
-are not rendered remain unread.
+The **Unread notification** chip points to the most recent unread notification
+the reader cannot see. There is only one chip: above the list for a target above
+the viewport, or below for a target below it. The number counts distinct
+parent-message threads across the channel, not individual notifications. Three
+replies and a mention in the same thread count as one; reactions do not count.
+Clicking jumps to the target and expands its thread. Notifications are marked
+seen when their message mounts, including virtualized overscan. Collapsed
+replies that are not rendered remain unread.
+The chip only ever points off screen. A thread already on screen gets no chip,
+including when its unread reply is collapsed — the thread's own `N more replies`
+control carries that unread. With several unread threads the chip skips the ones
+on screen and names the newest one off screen, while the count still covers them
+all. Check this from the bottom of a channel whose last thread holds a collapsed
+unread reply: there must be no downward chip pointing past the end of the
+conversation, and adding an unread thread above must raise an upward chip
+counting both.
+An unrendered target is placed by the row order the list actually shows, not by
+message timestamps: concurrent sends reach the client in delivery order, so a row
+can sit below the viewport while carrying an older timestamp than the rows above
+it. Check a burst of simultaneous messages followed by a reply to one of their
+threads; the chip must point at the row's rendered side.
 The count and target update as notifications arrive or become seen. Check an old
 thread receiving a new reply while a newer thread is also unread: the chip must
 point upward to the old thread, still show two stacks, and preserve the scroll

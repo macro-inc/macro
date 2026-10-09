@@ -729,6 +729,7 @@ export function Channel(props: ChannelProps) {
                         channelId={props.channelId}
                         messages={messages}
                         activities={() => messageIndex.activityByKey}
+                        rowKeys={() => messageIndex.entryKeys}
                         scrollState={threadListScrollState}
                         container={threadListContainerEl}
                         insets={threadListScrollInsets}
