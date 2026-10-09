@@ -195,6 +195,8 @@ export * from './teamMember';
 export * from './teamPlan';
 export * from './teamRole';
 export * from './teamWithMembers';
+export * from './teamWithMembersScheduledSeatPlans';
+export * from './teamWithMembersScheduledSeatPlansAnyOf';
 export * from './toggleAutoJoinDomainResponse';
 export * from './toggleAutoJoinDomainResponseAutoJoinDomain';
 export * from './toggleNonAdminInvitesResponse';

@@ -202,11 +202,9 @@ export function BillingSettingsView(props: {
           class="@container/plan-options flex scroll-mt-4 flex-col gap-4 outline-none"
         >
           <h2 class="text-base font-medium text-ink">
-            {props.state.tier === 'max'
-              ? 'Change plan'
-              : props.state.hasPaid && props.state.aiUsageEnabled
-                ? 'Need more AI?'
-                : 'Upgrade'}
+            {props.state.hasPaid && props.state.aiUsageEnabled
+              ? 'Need more AI?'
+              : 'Upgrade'}
           </h2>
           <div
             class="grid grid-cols-1 gap-6"

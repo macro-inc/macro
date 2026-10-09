@@ -57,6 +57,7 @@ it('hides Keep Max when no downgrade is confirmed and disables it during a chang
     />
   ));
   expect(
-    (screen.getByRole('button', { name: 'Keep Max' }) as HTMLButtonElement).disabled
+    (screen.getByRole('button', { name: 'Keep Max' }) as HTMLButtonElement)
+      .disabled
   ).toBe(true);
 });

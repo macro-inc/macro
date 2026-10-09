@@ -176,7 +176,6 @@ function memberPlan(member: TeamMember): PaidPlan {
   return plan === 'max' ? 'max' : 'premium';
 }
 
-
 const emailSchema = z.string().email();
 
 type InviteEntry = { email: string };
@@ -1501,9 +1500,16 @@ function TeamManagement(props: {
               teamQuery.data?.scheduled_seat_plans == null
             }
           >
-            <div class="flex items-center gap-2 text-xs text-ink-muted" role="status">
+            <div
+              class="flex items-center gap-2 text-xs text-ink-muted"
+              role="status"
+            >
               <span>Couldn't load scheduled plan changes.</span>
-              <Button variant="ghost" size="sm" onClick={() => teamQuery.refetch()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => teamQuery.refetch()}
+              >
                 Try again
               </Button>
             </div>

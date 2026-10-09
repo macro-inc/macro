@@ -1560,6 +1560,13 @@ export type TeamWithMembers = {
      */
     members: Array<TeamMember>;
     /**
+     * Provider-confirmed pending seat changes, keyed by member user ID.
+     * Only available to paid-team admins and owners; empty means no pending changes.
+     */
+    scheduled_seat_plans?: {
+        [key: string]: ScheduledSeatPlan;
+    } | null;
+    /**
      * The team
      */
     team: Team;

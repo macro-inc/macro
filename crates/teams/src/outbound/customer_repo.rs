@@ -222,7 +222,8 @@ impl CustomerRepositoryImpl {
         // the team -> subscription lock order from exhausting its own capacity.
         let lock_pool = || {
             sqlx::postgres::PgPoolOptions::new()
-                .max_connections(pool.options().get_max_connections())
+                .max_connections(pool.options().get_max_connections().min(4))
+                .idle_timeout(std::time::Duration::from_secs(60))
                 .connect_lazy_with(
                     pool.connect_options()
                         .as_ref()
