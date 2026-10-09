@@ -416,6 +416,14 @@ parent, and switching channels while notifications are loading. Loading this
 channel's notification edge must not delay its messages or activate the global
 GraphQL notification feed.
 
+On native iOS, tapping a thread reply push in Notification Center or on the lock
+screen should open its channel, expand the parent thread, and reveal the actual
+reply. Verify with the app backgrounded and after terminating it. Use an older
+thread with a reply hidden by the collapsed preview so opening only the channel
+or parent message cannot satisfy the check. See the
+[native notification regression procedure](../../apps/web/tests/native/ios/README.md#thread-reply-push-notifications)
+for simulator setup.
+
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.
 

@@ -168,7 +168,6 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_auth::init())
-            .plugin(tauri_plugin_notifications::init())
             .plugin(tauri_plugin_virtual_keyboard::init())
             .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
@@ -227,6 +226,14 @@ pub fn run() {
             // checks from settings still work.
             .with_auto_update(cfg!(feature = "auto_apply_update") && !recording),
         );
+
+    #[cfg(target_os = "ios")]
+    {
+        // Both notification plugins assign UNUserNotificationCenter.delegate.
+        // Initialize push last: the local-notification delegate ignores remote
+        // pushes, so leaving it installed drops taps before frontend navigation.
+        builder = builder.plugin(tauri_plugin_notifications::init());
+    }
 
     #[cfg(mobile)]
     {

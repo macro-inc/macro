@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PushEvent } from './push-api';
 
 const mock = vi.hoisted(() => ({
+  os: 'android' as 'android' | 'ios',
   loggedIn: true,
   lifecycle: undefined as PushRegistrationLifecycle | undefined,
   watcher: undefined as ((event: PushEvent) => void) | undefined,
@@ -62,7 +63,7 @@ vi.mock('./notification', () => ({
   }),
 }));
 vi.mock('./TauriProvider', () => ({
-  useExpectTauri: () => ({ os: 'android' }),
+  useExpectTauri: () => ({ os: mock.os }),
 }));
 vi.mock('./push-api', () => ({
   createPushApi: () => ({
@@ -83,6 +84,7 @@ import { MaybePushNotificationRegistration } from './PushNotification';
 beforeEach(() => {
   vi.resetAllMocks();
   localStorage.clear();
+  mock.os = 'android';
   mock.loggedIn = true;
   mock.watcher = undefined;
   mock.watch.mockImplementation(
@@ -118,6 +120,43 @@ async function mount() {
   expect(mock.configure).toHaveBeenCalledTimes(1);
   mock.configure.mockClear();
 }
+
+describe('iOS push navigation', () => {
+  it.each(['pending', 'failed'])(
+    'navigates a delivered reply tap while token registration is %s',
+    async (registration) => {
+      mock.os = 'ios';
+      mock.check.mockResolvedValue({ status: 'granted' });
+      if (registration === 'pending') {
+        mock.register.mockImplementation(() => new Promise(() => {}));
+      } else {
+        mock.register.mockResolvedValue({
+          success: false,
+          error: 'Registration timed out',
+        });
+      }
+      render(() => (
+        <MaybePushNotificationRegistration>
+          <div />
+        </MaybePushNotificationRegistration>
+      ));
+      await vi.waitFor(() => expect(mock.watcher).toBeDefined());
+      await vi.waitFor(() => expect(mock.register).toHaveBeenCalledOnce());
+      expect(mock.registerDevice).not.toHaveBeenCalled();
+      mock.watcher?.({
+        type: 'BACKGROUND_DELIVERY',
+        payload: { notificationId: 'reply-notification' },
+      });
+      expect(mock.navigate).not.toHaveBeenCalled();
+      mock.watcher?.({
+        type: 'BACKGROUND_TAP',
+        payload: { notificationId: 'reply-notification' },
+      });
+      expect(mock.navigate).toHaveBeenCalledWith('reply-notification');
+      expect(mock.watch).toHaveBeenCalledOnce();
+    }
+  );
+});
 
 describe('Android push lifecycle', () => {
   it('listens before registration and navigates only on taps', async () => {
