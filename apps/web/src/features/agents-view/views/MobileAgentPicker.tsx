@@ -134,7 +134,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
               )}
             </Show>
           </div>
-          <div class="mx-4 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-full bg-ink/3 px-3">
+          <div class="mx-4 mb-2 flex h-9 shrink-0 items-center gap-2 px-3">
             <MagnifyingGlass
               aria-hidden="true"
               class="size-4 shrink-0 text-ink-extra-muted"
@@ -148,7 +148,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
               class="h-full min-w-0 w-full border-0 bg-transparent p-0 text-base outline-none placeholder:text-ink-extra-muted"
             />
           </div>
-          <MobileDrawer.ScrollBody class="gap-3 rounded-b-none pb-2">
+          <MobileDrawer.ScrollBody class="gap-3">
             <Show when={browsing() ?? macro()}>
               <For each={modelSections()}>
                 {(section) => (
@@ -157,6 +157,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                       {section.label}
                     </MobileDrawer.Label>
                     <MobileDrawer.Section
+                      class="rounded-none bg-transparent p-0"
                       role="group"
                       aria-label={section.label}
                     >
@@ -204,7 +205,11 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                     <MobileDrawer.Label class="px-4 font-medium text-ink-muted">
                       {group.label}
                     </MobileDrawer.Label>
-                    <MobileDrawer.Section role="group" aria-label={group.label}>
+                    <MobileDrawer.Section
+                      class="rounded-none bg-transparent p-0"
+                      role="group"
+                      aria-label={group.label}
+                    >
                       <For each={group.agents}>
                         {(agent) => (
                           <div class="flex items-center">
@@ -259,22 +264,22 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                 </p>
               </Show>
             </Show>
+            <div class="flex justify-end px-4 pt-1">
+              <Button
+                variant="strong"
+                size="sm"
+                glass={false}
+                class="gap-1.5"
+                onClick={() => {
+                  changeOpen(false);
+                  props.onCreate();
+                }}
+              >
+                <Plus class="size-4" />
+                Create agent
+              </Button>
+            </div>
           </MobileDrawer.ScrollBody>
-          <div class="flex shrink-0 justify-end border-t border-edge-muted px-4 pt-3 pb-[max(16px,var(--mobile-sheet-safe-padding))]">
-            <Button
-              variant="strong"
-              size="sm"
-              glass={false}
-              class="gap-1.5"
-              onClick={() => {
-                changeOpen(false);
-                props.onCreate();
-              }}
-            >
-              <Plus class="size-4" />
-              Create agent
-            </Button>
-          </div>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>

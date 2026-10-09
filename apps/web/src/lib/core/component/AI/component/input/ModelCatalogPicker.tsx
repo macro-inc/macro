@@ -81,7 +81,7 @@ function ModelList(props: {
 }) {
   const Row = props.row;
   return (
-    <Dropdown.Group class="rounded-xl bg-ink/3">
+    <Dropdown.Group class="bg-transparent">
       <Dropdown.GroupLabel class="font-medium text-ink-muted">
         {props.label}
       </Dropdown.GroupLabel>
@@ -280,7 +280,7 @@ export function ModelCatalogMenu(
   return (
     <>
       <div class="sticky top-0 z-10 bg-menu py-1">
-        <div class="flex h-8 items-center gap-2 rounded-full bg-ink/3 px-3">
+        <div class="flex h-8 items-center gap-2 px-3">
           <MagnifyingGlassIcon
             aria-hidden="true"
             class="size-4 shrink-0 text-ink-extra-muted"

@@ -80,7 +80,9 @@ roster. Agents are clustered into **Built-in**, **Your agents**, and **Needs
 connection**, with runtime/model details below their names. Code opens directly
 on these groups without an empty Models section or an unrelated runtime warning.
 **Create agent** uses the shared rounded pill button with a subtle fill at the
-bottom right of the picker, outside the scrolling list. Model lists start with
+bottom right at the end of the scrolling list. The picker uses one
+continuous surface, with labels and spacing separating groups instead of nested
+shaded cards. Model lists start with
 **Suggested**, then group the remaining choices by provider. Search accepts
 model names, IDs, and providers. When browsing an agent, **Use default** in the
 header selects its configured model.
@@ -298,7 +300,7 @@ the shimmer.
   runtime catalogs), and **GPT-6 Astra**, when available, in that order. The
   remaining models are grouped by provider directly below, including effort
   and speed variants. Every available model appears once; choosing a model
-  does not reorder the sections. Search matches names, IDs, and provider names. The compact rounded search
+  does not reorder the sections. Search matches names, IDs, and provider names. The compact borderless search
   field receives focus when the selector opens or reopens.
   **Built-in**, **Your agents**, and **Needs connection** groups follow when
   they have entries. Each agent row shows its runtime and model, or its setup
@@ -343,8 +345,8 @@ the shimmer.
   type a prompt on Home, visit an agent session, then return using the Home sidebar
   button or Back. The Home prompt should remain after returning and after a reload.
   Sending or clearing the input removes only that surface's saved text draft.
-  **Create agent** stays pinned at the bottom of the dropdown
-  while the agent and model lists scroll. It opens the roster on the selected kind's
+  **Create agent** follows the agent and model lists as a right-aligned action,
+  sharing their scroll area without a separate footer. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's

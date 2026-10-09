@@ -167,7 +167,7 @@ function DesktopAgentPicker(props: AgentPickerProps) {
             </Show>
             <For each={groups()}>
               {(group) => (
-                <Dropdown.Group class="rounded-xl border border-edge-muted/60 bg-ink/3">
+                <Dropdown.Group class="bg-transparent">
                   <Dropdown.GroupLabel class="font-medium text-ink-muted">
                     {group.label}
                   </Dropdown.GroupLabel>
@@ -216,25 +216,25 @@ function DesktopAgentPicker(props: AgentPickerProps) {
                 Loading agents…
               </div>
             </Show>
+            <Dropdown.Group class="items-end bg-transparent px-1.5 pt-1 pb-0">
+              <Dropdown.Item
+                closeOnSelect
+                class={buttonClasses({
+                  variant: 'strong',
+                  size: 'sm',
+                  glass: false,
+                  class: 'w-auto gap-1.5 data-highlighted:overlay-hover',
+                })}
+                onSelect={() => {
+                  setOpen(false);
+                  props.onCreate();
+                }}
+              >
+                <PlusIcon class="size-4" />
+                Create agent
+              </Dropdown.Item>
+            </Dropdown.Group>
           </div>
-          <Dropdown.Group class="shrink-0 items-end border-t border-edge-muted p-2">
-            <Dropdown.Item
-              closeOnSelect
-              class={buttonClasses({
-                variant: 'strong',
-                size: 'sm',
-                glass: false,
-                class: 'w-auto gap-1.5 data-highlighted:overlay-hover',
-              })}
-              onSelect={() => {
-                setOpen(false);
-                props.onCreate();
-              }}
-            >
-              <PlusIcon class="size-4" />
-              Create agent
-            </Dropdown.Item>
-          </Dropdown.Group>
         </div>
       </Dropdown.Content>
     </Dropdown>
