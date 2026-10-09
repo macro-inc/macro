@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Patch structural document query changes from re-read diffs, not full results.
-version = "0.6.46"
+# Share query results with watches and compile bindings into a shared path tree.
+version = "0.6.47"
 
 [features]
 default = []

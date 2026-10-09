@@ -9,17 +9,16 @@ use super::*;
 use crate::denormalize::QueryProjection;
 use crate::engine::live_query::LiveFieldPatch;
 use serde::Serialize;
+use std::sync::Arc;
 
 mod diff;
 
 const WATCH_CAPACITY: usize = 64;
-// Diff bases add about a fifth to the bindings' estimate. The budget grows to
-// match, so as many large watches stay resident as with bindings alone.
-const WATCH_BYTES: usize = 20 * 1024 * 1024;
-// Subscribers apply a patch that replaces a large subtree (a compacted list)
-// slower than a complete result, so beyond this share of the response a
-// re-read publishes a replacement instead. Small responses always patch.
-const MAX_REPLACED_SHARE: usize = 8;
+const WATCH_BYTES: usize = 16 * 1024 * 1024;
+// A patch replacing most of the response (a compacted page) saves subscribers
+// little, while the engine must copy every replaced value into it. Beyond this
+// share a re-read publishes the shared result instead. Small ones always patch.
+const MAX_REPLACED_SHARE: usize = 2;
 const MIN_REPLACED_BYTES: usize = 16 * 1024;
 
 /// An atomic query read. A patch is applicable only to the exact revision the
@@ -27,8 +26,13 @@ const MIN_REPLACED_BYTES: usize = 16 * 1024;
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum QueryUpdate {
-    /// Complete replacement, also establishing a new patch base.
-    Hit { data: Json, revision: String },
+    /// Complete replacement, also establishing a new patch base. The watch
+    /// shares it as its diff base; serialization is that of the plain JSON.
+    Hit {
+        #[serde(serialize_with = "serialize_shared")]
+        data: Arc<Json>,
+        revision: String,
+    },
     /// Selected field replacements, including an empty update for no change.
     Patch {
         patches: Vec<LiveFieldPatch>,
@@ -36,6 +40,13 @@ pub enum QueryUpdate {
     },
     /// Required data is missing; the caller must use its normal network policy.
     Miss { revision: String },
+}
+
+fn serialize_shared<S: serde::Serializer>(
+    data: &Arc<Json>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    data.as_ref().serialize(serializer)
 }
 
 #[derive(PartialEq, Eq)]
@@ -56,7 +67,8 @@ struct QueryWatch {
 
 /// The subscriber's result at the watch revision: the base for re-read diffs.
 struct Base {
-    data: Json,
+    /// Shared with the last `Hit`; hosts drop theirs once it is encoded.
+    data: Arc<Json>,
     bytes: usize,
 }
 
@@ -164,14 +176,15 @@ impl<S: Storage> Engine<S> {
         let keys = changes
             .records
             .into_iter()
-            .filter(|key| view.projection.records.contains_key(key))
+            .filter(|key| view.projection.binds(key))
             .collect();
         let bases = self.load_bases(&keys).await?;
         let effective = effective_records(&bases, &self.optimistic, &keys);
         let Some((patches, binding_delta)) = view.projection.update(&effective) else {
             return self.read_watched(op_id, spec, Some(view.into_base())).await;
         };
-        let Some(data_delta) = diff::apply_patches(&mut view.base.data, &patches) else {
+        let Some(data_delta) = diff::apply_patches(Arc::make_mut(&mut view.base.data), &patches)
+        else {
             // A binding path missing from the base would desynchronize diffs.
             return self.read_watched(op_id, spec, None).await;
         };
@@ -209,12 +222,16 @@ impl<S: Storage> Engine<S> {
             return Ok(QueryUpdate::Miss { revision });
         };
         let Some(projection) = projection else {
-            return Ok(QueryUpdate::Hit { data, revision });
+            return Ok(QueryUpdate::Hit {
+                data: Arc::new(data),
+                revision,
+            });
         };
         let diff = base.and_then(|base| {
             let budget = (base.bytes / MAX_REPLACED_SHARE).max(MIN_REPLACED_BYTES);
             diff::diff_response(&base.data, &data, budget).map(|diff| (diff, base.bytes))
         });
+        let data = Arc::new(data);
         let (update, bytes) = match diff {
             Some((diff, bytes)) => (
                 QueryUpdate::Patch {
@@ -225,7 +242,7 @@ impl<S: Storage> Engine<S> {
             ),
             None => (
                 QueryUpdate::Hit {
-                    data: data.clone(),
+                    data: Arc::clone(&data),
                     revision,
                 },
                 diff::json_bytes(&data),

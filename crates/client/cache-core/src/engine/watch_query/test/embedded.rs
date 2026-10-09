@@ -61,7 +61,7 @@ fn nested_property_edits_patch_each_subscriber_without_reading_other_rows() {
                 .await
                 .unwrap();
             assert!(
-                matches!(&first, QueryUpdate::Hit { data, .. } if *data == property_page(1000))
+                matches!(&first, QueryUpdate::Hit { data, .. } if **data == property_page(1000))
             );
             cursors.push((op, revision(&first)));
         }

@@ -61,7 +61,7 @@ fn patches(update: QueryUpdate) -> Json {
 fn apply(snapshot: &mut Json, update: QueryUpdate) -> CacheRevision {
     let cursor = revision(&update);
     match update {
-        QueryUpdate::Hit { data, .. } => *snapshot = data,
+        QueryUpdate::Hit { data, .. } => *snapshot = Json::clone(&data),
         QueryUpdate::Patch { mut patches, .. } => {
             let encoded = |patch: &live_query::LiveFieldPatch| serde_json::to_value(patch).unwrap();
             let mut seen = Vec::new();
@@ -115,7 +115,7 @@ fn targets_one_field_in_a_thousand_rows_for_every_subscriber() {
             .watch_query(2, PAGE, None, &vars(), &[], None)
             .await
             .unwrap();
-        assert!(matches!(&first, QueryUpdate::Hit { data: result, .. } if *result == data(1000)));
+        assert!(matches!(&first, QueryUpdate::Hit { data: result, .. } if **result == data(1000)));
         change(&mut engine, "17", "isRead", CacheValue::Bool(true)).await;
         let before = engine.storage().record_get_count();
         for (op, previous) in [(1, first), (2, second)] {
@@ -251,7 +251,7 @@ fn aliases_fragments_defaults_and_synthetic_relations_need_no_selected_identity(
             .await
             .unwrap();
         assert!(
-            matches!(&first, QueryUpdate::Hit { data, .. } if *data == json!({"user":{"alias":{"seen":false}}}))
+            matches!(&first, QueryUpdate::Hit { data, .. } if **data == json!({"user":{"alias":{"seen":false}}}))
         );
         change(&mut engine, "0", "isRead", CacheValue::Bool(true)).await;
         let update = engine
@@ -283,7 +283,7 @@ fn aliases_fragments_defaults_and_synthetic_relations_need_no_selected_identity(
             .await
             .unwrap();
         assert!(
-            matches!(update, QueryUpdate::Hit { data, .. } if data == json!({"user":{"alias":{}}}))
+            matches!(update, QueryUpdate::Hit { data, .. } if *data == json!({"user":{"alias":{}}}))
         );
     });
 }
@@ -490,7 +490,7 @@ fn skipped_fields_do_not_resurface_and_repeated_fragment_selections_merge() {
         let merged =
             "query { user { id } user { soup(input:{initial:{limit:1000}}) { nextCursor } } }";
         assert!(
-            matches!(engine.watch_query(2, merged, None, &serde_json::Map::new(), &[], None).await.unwrap(), QueryUpdate::Hit { data, .. } if data == json!({"user":{"id":"viewer","soup":{"nextCursor":null}}}))
+            matches!(engine.watch_query(2, merged, None, &serde_json::Map::new(), &[], None).await.unwrap(), QueryUpdate::Hit { data, .. } if *data == json!({"user":{"id":"viewer","soup":{"nextCursor":null}}}))
         );
     });
 }
@@ -572,7 +572,7 @@ fn network_identity_aliases_and_default_arguments_round_trip() {
             .watch_query(1, query, None, &variables, &[], None)
             .await
             .unwrap();
-        assert!(matches!(&first, QueryUpdate::Hit { data: actual, .. } if *actual == data));
+        assert!(matches!(&first, QueryUpdate::Hit { data: actual, .. } if **actual == data));
         change(&mut engine, "0", "isRead", CacheValue::Bool(true)).await;
         let next = engine
             .watch_query(1, query, None, &variables, &[], Some(revision(&first)))
@@ -608,6 +608,6 @@ fn account_changes_discard_query_watches_and_old_entities() {
             .watch_query(1, PAGE, None, &vars(), &[], Some(revision(&first)))
             .await
             .unwrap();
-        assert!(matches!(result, QueryUpdate::Hit { data, .. } if data == next));
+        assert!(matches!(result, QueryUpdate::Hit { data, .. } if *data == next));
     });
 }

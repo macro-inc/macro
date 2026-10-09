@@ -706,9 +706,10 @@ query, rebuild its bindings and diff the result against the retained response.
 Diffs only target paths present in the previous response: an object whose key
 set changed (another fragment type) or a list whose length or item identities
 (`id`, `__typename`) changed is replaced at its own path. A new root, or
-replacements larger than an eighth of the response (such as a compacted page),
-return a complete result, which subscribers reconcile faster. Eviction and
-cursor mismatch also return a complete result. The JS adapter preserves
+replacements larger than half of the response (such as a compacted page),
+return the complete result instead: such a patch would carry nearly as much
+and cost the engine a copy of every replaced value. Eviction and cursor
+mismatch also return a complete result. The JS adapter preserves
 immutable urql snapshots and applies those paths in one Solid batch. Query
 teardown and account/engine reset discard the corresponding retained state.
 Unknown directives, schema drift and incomplete cached results follow the
