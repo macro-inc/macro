@@ -52,10 +52,9 @@ channel does not rerun completed messages. A disconnected live display offers
 **Reconnect** without issuing another prompt.
 
 The conversation has no control for resetting the agent's context; it
-continues in one context, and long in-memory conversations summarize old
-context automatically while keeping the complete channel transcript visible.
-A context keeps the persona instructions, model, tools, and permission choice
-it started with, across reconnects; later persona edits do not reach it. A
+continues in one context. A context keeps the persona instructions, model,
+tools, and permission choice it started with, across reconnects; later persona
+edits do not reach it. A
 harness operator can still revoke permission bypass. Contexts started earlier
 through the API stay marked by a divider before their first message.
 
