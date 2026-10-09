@@ -337,7 +337,7 @@ the shimmer.
   with the repository bar above the input. The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
   on the left and the agent/model and Send on the right. A full-width repository bar
-  slides and fades in above the rounded input over 200ms, with rounded top corners
+  slides and fades above the rounded input in 100ms when opening or closing, with rounded top corners
   and a subtle border along its sides and top, with a darker surface in dark mode.
   Selecting Chat retracts the repository bar and keeps the mode switch inside
   the input, without remounting
