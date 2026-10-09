@@ -5,10 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
-  datadogAgentContainer,
-  grafanaTelemetryContainers,
-  grafanaTelemetryEnvironment,
-  fargateLogRouterSidecarContainer,
+  withTelemetry,
   ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -196,20 +193,14 @@ export class ImageProxyService extends pulumi.ComponentResource {
           executionRole: {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
-          containers: {
-            ...grafanaTelemetryContainers(BASE_NAME),
-            log_router: fargateLogRouterSidecarContainer,
-            datadog_agent: datadogAgentContainer,
+          containers: withTelemetry(BASE_NAME, {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10,
               cpu: 512,
               memory: 1024,
-              environment: [
-                ...(containerEnvVars ?? []),
-                ...grafanaTelemetryEnvironment,
-              ],
+              environment: [...(containerEnvVars ?? [])],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
@@ -233,7 +224,7 @@ export class ImageProxyService extends pulumi.ComponentResource {
                 },
               ],
             },
-          },
+          }),
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
             cpuArchitecture: `${

@@ -327,7 +327,10 @@ still receives the authoritative copy.
 ## Dev dual export
 
 Every dev ECS service using the shared Datadog sidecars automatically also runs
-Alloy; there is no per-service opt-in flag. Production keeps its existing Datadog configuration
+Alloy; there is no per-service opt-in flag. Task definitions call the shared
+`withTelemetry(serviceName, containers)` helper, which supplies the Datadog agent,
+FireLens router, dev Alloy sidecar, and dev Grafana environment variable together.
+Production keeps its existing Datadog configuration
 until its rollout. The earlier `image-proxy-service` canary verified Ohio
 ingestion; it used the superseded collector-in-front-of-Datadog design. The
 current design keeps applications exporting directly to the Datadog agent. The execution role can read the ingestion-only

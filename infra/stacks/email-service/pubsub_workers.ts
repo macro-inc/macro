@@ -5,10 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
-  datadogAgentContainer,
-  grafanaTelemetryContainers,
-  grafanaTelemetryEnvironment,
-  fargateLogRouterSidecarContainer,
+  withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
@@ -109,20 +106,14 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
           executionRole: {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
-          containers: {
-            ...grafanaTelemetryContainers(BASE_NAME),
-            log_router: fargateLogRouterSidecarContainer,
-            datadog_agent: datadogAgentContainer,
+          containers: withTelemetry(BASE_NAME, {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 1024,
               memory: stack === 'prod' ? 3742 : 1742, // 2048 minimum - 256 for datadog - 50 for log_router
-              environment: [
-                ...grafanaTelemetryEnvironment,
-                ...containerEnvVars,
-              ],
+              environment: [...containerEnvVars],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
@@ -138,7 +129,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
               },
               // No portMappings - workers don't expose ports
             },
-          },
+          }),
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
             cpuArchitecture: `${

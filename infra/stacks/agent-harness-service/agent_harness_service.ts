@@ -6,10 +6,7 @@ import {
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
   ServiceTargetGroup,
-  datadogAgentContainer,
-  grafanaTelemetryContainers,
-  grafanaTelemetryEnvironment,
-  fargateLogRouterSidecarContainer,
+  withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
@@ -367,10 +364,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
           executionRole: {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
-          containers: {
-            ...grafanaTelemetryContainers(BASE_NAME),
-            log_router: fargateLogRouterSidecarContainer,
-            datadog_agent: datadogAgentContainer,
+          containers: withTelemetry(BASE_NAME, {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
@@ -380,7 +374,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               cpu: 1024,
               memory: 2048,
               environment: [
-                ...grafanaTelemetryEnvironment,
                 ...containerEnvVars,
                 { name: 'CLAUDE_OAUTH_KMS_KEY_ID', value: claudeOauthKey.arn },
                 {
@@ -418,7 +411,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                 },
               ],
             },
-          },
+          }),
           runtimePlatform: {
             operatingSystemFamily: platform.family.toUpperCase(),
             cpuArchitecture:

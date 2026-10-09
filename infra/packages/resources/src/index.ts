@@ -38,7 +38,4 @@ export type { TopicArgs } from './resources/kafka-cluster';
 export { KafkaCluster } from './resources/kafka-cluster';
 export { ServiceTargetGroup } from './resources/service_target_group';
 
-export {
-  grafanaTelemetryContainers,
-  grafanaTelemetryEnvironment,
-} from './resources/grafana';
+export { withTelemetry } from './resources/telemetry';

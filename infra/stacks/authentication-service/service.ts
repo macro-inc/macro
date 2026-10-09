@@ -5,10 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
-  datadogAgentContainer,
-  grafanaTelemetryContainers,
-  grafanaTelemetryEnvironment,
-  fargateLogRouterSidecarContainer,
+  withTelemetry,
   serviceLoadBalancer,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -521,10 +518,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
           executionRole: {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
-          containers: {
-            ...grafanaTelemetryContainers(BASE_NAME),
-            log_router: fargateLogRouterSidecarContainer,
-            datadog_agent: datadogAgentContainer,
+          containers: withTelemetry(BASE_NAME, {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
@@ -532,7 +526,6 @@ export class AuthenticationService extends pulumi.ComponentResource {
               cpu: 512,
               memory: 718, //1024 - (256 + 50)
               environment: [
-                ...grafanaTelemetryEnvironment,
                 { name: 'BASE_URL', value: this.domain },
                 // Injected here rather than configured in Doppler: a key id is
                 // not a secret, and deriving it from the resource keeps the two
@@ -572,7 +565,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
                 },
               ],
             },
-          },
+          }),
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
             cpuArchitecture: `${

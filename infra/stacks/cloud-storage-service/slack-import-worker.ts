@@ -1,17 +1,10 @@
-import {
-  grafanaTelemetryContainers,
-  grafanaTelemetryEnvironment,
-} from '../../packages/resources/src/resources/grafana';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
-import {
-  DATADOG_API_KEY,
-  datadogAgentContainer,
-  fargateLogRouterSidecarContainer,
-} from '../../packages/resources/src/resources/datadog';
+import { DATADOG_API_KEY } from '../../packages/resources/src/resources/datadog';
 import { DEFAULT_CONTINUE_BEFORE_STEADY_STATE } from '../../packages/resources/src/resources/ecs_deployment_defaults';
 import { EcsDeploymentFailureAlarm } from '../../packages/resources/src/resources/ecs_deployment_failure_alarm';
+import { withTelemetry } from '../../packages/resources/src/resources/telemetry';
 import { EcrImage } from '../../packages/service/src/ecr';
 import { config, grafanaTelemetryEnabled, stack } from '../../packages/shared';
 import { DopplerEcsEnvironment } from '../../packages/shared/src/doppler_environment';
@@ -129,42 +122,40 @@ export class SlackImportWorker extends pulumi.ComponentResource {
             operatingSystemFamily: 'LINUX',
             cpuArchitecture: 'X86_64',
           },
-          containers: {
-            // Hard limits leave 1536 MiB for import work and 512 MiB for telemetry.
-            ...grafanaTelemetryContainers(SERVICE_NAME),
-            log_router: { ...fargateLogRouterSidecarContainer, memory: 128 },
-            datadog_agent: {
-              ...datadogAgentContainer,
-              memory: 384,
-              portMappings: [],
-            },
-            worker: {
-              name: SERVICE_NAME,
-              image: image.image.imageUri,
-              essential: true,
-              memory: 1536,
-              stopTimeout: 120,
-              secrets: [...dopplerEcsEnvironment.containerSecrets],
-              environment: [
-                ...grafanaTelemetryEnvironment,
-                { name: 'ENVIRONMENT', value: stack },
-                { name: 'DD_SERVICE', value: SERVICE_NAME },
-                { name: 'DD_ENV', value: stack },
-              ],
-              logConfiguration: {
-                logDriver: 'awsfirelens',
-                options: {
-                  Name: 'datadog',
-                  Host: 'http-intake.logs.us5.datadoghq.com',
-                  apikey: DATADOG_API_KEY,
-                  dd_service: SERVICE_NAME,
-                  dd_source: 'fargate',
-                  dd_tags: `env:${stack}`,
-                  provider: 'ecs',
+          containers: withTelemetry(
+            SERVICE_NAME,
+            {
+              worker: {
+                name: SERVICE_NAME,
+                image: image.image.imageUri,
+                essential: true,
+                memory: 1536,
+                stopTimeout: 120,
+                secrets: [...dopplerEcsEnvironment.containerSecrets],
+                environment: [
+                  { name: 'ENVIRONMENT', value: stack },
+                  { name: 'DD_SERVICE', value: SERVICE_NAME },
+                  { name: 'DD_ENV', value: stack },
+                ],
+                logConfiguration: {
+                  logDriver: 'awsfirelens',
+                  options: {
+                    Name: 'datadog',
+                    Host: 'http-intake.logs.us5.datadoghq.com',
+                    apikey: DATADOG_API_KEY,
+                    dd_service: SERVICE_NAME,
+                    dd_source: 'fargate',
+                    dd_tags: `env:${stack}`,
+                    provider: 'ecs',
+                  },
                 },
               },
             },
-          },
+            {
+              logRouter: { memory: 128 },
+              datadogAgent: { memory: 384, portMappings: [] },
+            }
+          ),
         },
         tags,
       },
