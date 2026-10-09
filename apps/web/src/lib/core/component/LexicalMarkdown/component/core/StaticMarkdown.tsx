@@ -411,11 +411,11 @@ const AgentSessionMention: TypedRenderableEntity<AgentSessionMentionNode> = {
     node.__type === 'agent-session-mention',
   render: (props) => (
     <span class={getTextClassName(props.node, props.theme)}>
-      {AgentSessionMentionDecorator({
-        ...props.node.exportComponentProps(),
-        key: props.node.getKey(),
-        theme: props.theme,
-      })}
+      <AgentSessionMentionDecorator
+        {...props.node.exportComponentProps()}
+        key={props.node.getKey()}
+        theme={props.theme}
+      />
     </span>
   ),
 };

@@ -735,6 +735,11 @@ list errors do not affect an active search.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
+Verify Recent in a visible browser with a latest-message preview containing an
+agent-session mention. Let its title resolve, scroll the preview out of view and
+back, then switch to All. The title should update without repeatedly remounting
+the mention, and scrolling and navigation must remain responsive; a headless
+browser alone can miss this regression.
 Channels and DMs each have a sort action before their create action. They can be
 sorted by last viewed, last updated, or date created, and each choice persists
 independently as a user preference.
