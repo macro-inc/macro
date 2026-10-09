@@ -128,6 +128,10 @@ export type AgentModelDto = {
      * Display name.
      */
     name: string;
+    /**
+     * Image input support, absent when the runtime does not advertise it.
+     */
+    supportsImages?: boolean | null;
 };
 
 /**
