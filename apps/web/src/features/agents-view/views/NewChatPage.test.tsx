@@ -654,6 +654,82 @@ describe('agent-led new conversation', () => {
     expect(row.textContent).toContain('Its runtime is disconnected');
   });
 
+  it.each([false, true])(
+    'clusters coding agents by availability without an empty model catalog (touch: %s)',
+    async (touch) => {
+      mocks.touch = touch;
+      const roster = buildAgentRoster({
+        agents: [
+          {
+            bot: { id: 'reviewer', name: 'Reviewer', handle: 'reviewer' },
+            harness: 'macrod',
+            harness_id: 'laptop',
+            default_model: 'claude-sonnet-5-5',
+          },
+          {
+            bot: { id: 'offline', name: 'Offline agent', handle: 'offline' },
+            harness: 'macrod',
+            harness_id: 'offline',
+            default_model: 'default',
+          },
+        ],
+        runtimes: [{ id: 'laptop', name: 'Laptop', connected: true }],
+        cursorConnected: true,
+        cursorNeedsConnection: false,
+      }).filter((agent) => agent.kind === 'coder');
+      const onCreate = vi.fn();
+      const onSelect = vi.fn();
+      render(() => (
+        <AgentPicker
+          agents={roster}
+          selected={roster[0]}
+          loading={false}
+          onSelect={onSelect}
+          onConnect={vi.fn()}
+          onCreate={onCreate}
+        />
+      ));
+      if (touch) fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+      else openAgents();
+      const picker = await screen.findByRole(touch ? 'dialog' : 'menu');
+      const builtIn = within(picker).getByRole('group', { name: 'Built-in' });
+      const saved = within(picker).getByRole('group', { name: 'Your agents' });
+      const offline = within(picker).getByRole('group', {
+        name: 'Needs connection',
+      });
+      expect(builtIn.textContent).toContain('Cursor');
+      expect(saved.textContent).toContain('Reviewer');
+      expect(saved.textContent).toContain('Laptop · Sonnet 5.5');
+      expect(offline.textContent).toContain('Offline agent');
+      expect(offline.textContent).toContain('Its runtime is disconnected');
+      expect(
+        within(picker).queryByText('Connect the runtime to load models.')
+      ).toBeNull();
+      expect(within(picker).queryByText('Models')).toBeNull();
+      const unavailable = within(offline).getByRole(
+        touch ? 'button' : 'menuitem'
+      );
+      expect(
+        touch
+          ? unavailable.hasAttribute('disabled')
+          : unavailable.getAttribute('aria-disabled') === 'true'
+      ).toBe(true);
+      fireEvent.click(unavailable);
+      expect(onSelect).not.toHaveBeenCalled();
+      const create = within(picker).getByRole(touch ? 'button' : 'menuitem', {
+        name: 'Create agent',
+      });
+      if (touch) fireEvent.click(create);
+      else {
+        create.focus();
+        fireEvent.keyDown(create, { key: 'Enter' });
+      }
+      expect(onCreate).toHaveBeenCalledOnce();
+      await waitFor(() =>
+        expect(screen.queryByRole(touch ? 'dialog' : 'menu')).toBeNull()
+      );
+    }
+  );
   it('focuses model search when hovering an agent submenu', async () => {
     page(true, [], false, [], 'code');
     const submenu = await hoverAgent('Cursor');
@@ -680,7 +756,7 @@ describe('agent-led new conversation', () => {
         .getByRole('menuitem', { name: /Cursor default/ })
         .querySelector('.text-accent')
     ).toBeTruthy();
-    const model = screen.getByRole('menuitem', { name: /GPT-5/ });
+    const model = screen.getByTitle('GPT-5');
     expect(model.querySelector('.text-accent')).toBeNull();
     expect(model.querySelector('[data-ai-provider="openai"] svg')).toBeTruthy();
     fireEvent.keyDown(model, { key: 'Enter' });
@@ -699,9 +775,7 @@ describe('agent-led new conversation', () => {
       ).toHaveLength(1)
     );
     expect(
-      screen
-        .getByRole('menuitem', { name: /GPT-5/ })
-        .querySelector('.text-accent')
+      screen.getByTitle('GPT-5').querySelector('.text-accent')
     ).toBeTruthy();
     expect(
       screen
@@ -749,7 +823,7 @@ describe('agent-led new conversation', () => {
     ]);
     openAgents();
     const modelsGroup = screen.getByRole('group', { name: 'Recommended' });
-    const agentsGroup = screen.getByRole('group', { name: 'Agents' });
+    const agentsGroup = screen.getByRole('group', { name: 'Your agents' });
     expect(
       modelsGroup.compareDocumentPosition(agentsGroup) &
         Node.DOCUMENT_POSITION_FOLLOWING
@@ -762,7 +836,7 @@ describe('agent-led new conversation', () => {
     expect(screen.getByTitle('GLM 5.3 Flash')).toBeTruthy();
     fireEvent.input(search, { target: { value: '' } });
     expect(screen.queryByRole('menuitem', { name: /Cursor/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /^Macro/ })).toBeNull();
     const models = within(screen.getByRole('group', { name: 'Recommended' }));
     expect(
       models.queryByRole('menuitem', { name: /Cursor default|GPT-5/ })

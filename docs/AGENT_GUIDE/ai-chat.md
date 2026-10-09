@@ -76,7 +76,11 @@ draft, attachments, agent, model, repository, and branch. Tap the
 agent/model control once to open a bottom sheet with its search field focused,
 without first focusing or expanding the message input. Tap an agent to use its
 default model, or its model arrow to choose a model; **Create agent** opens the
-roster. Desktop navigation remains unchanged.
+roster. Agents are clustered into **Built-in**, **Your agents**, and **Needs
+connection**, with runtime/model details below their names. Code opens directly
+on these groups without an empty Models section or an unrelated runtime warning.
+**Create agent** is a compact button with a subtle fill at the bottom right of
+the picker, outside the scrolling list.
 
 The mobile Home composer is an opaque, rounded input using the same surface as
 the New button, including its glass treatment in dark mode. Send is a bare up
@@ -288,7 +292,10 @@ the shimmer.
   runtime, plus Cursor in Code mode.
   Macro's models use the same searchable catalog as running sessions: a short
   **Recommended** list and a **More models** submenu grouped by model family,
-  followed by **Agents** and **Coding agents** sections. Models have readable
+  followed by **Built-in**, **Your agents**, and **Needs connection** groups when
+  they have entries. Each agent row shows its runtime and model, or its setup
+  action/availability reason. **Create agent** sits at the bottom right with a
+  subtle background. Models have readable
   names (for example, **Sonnet 5.5**) and provider or model icons aligned with the
   agent icons. The in-memory catalog offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
@@ -306,7 +313,7 @@ the shimmer.
   selected runtime, including Claude Cloud. Every coding agent opens the repository
   drawer; chat agents hide it. Repository/branch overrides are currently applied
   only to Cursor sessions by the create-session API.
-  Coding agents carry a `</>` badge. The most recently used supported,
+  The most recently used supported,
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.

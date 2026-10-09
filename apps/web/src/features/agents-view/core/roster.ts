@@ -94,6 +94,8 @@ export function runtimeLabel(
       return MACRO_HARNESS_NAME;
     case 'cursor':
       return 'Cursor';
+    case 'claude-cloud':
+      return 'Claude Cloud';
     case 'macrod':
       return (
         runtimes.find((runtime) => runtime.id === harnessId)?.name ??
