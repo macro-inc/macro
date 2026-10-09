@@ -14,3 +14,8 @@ const DEFAULT_WORKSPACE_ACCENT: WorkspaceAccent = WORKSPACE_ACCENTS[4];
 export const workspaceAccentNamed = (name: string): WorkspaceAccent =>
   WORKSPACE_ACCENTS.find((accent) => accent.name === name) ??
   DEFAULT_WORKSPACE_ACCENT;
+
+export const isWorkspaceAccentColor = (value: string): boolean =>
+  WORKSPACE_ACCENTS.some(
+    (accent) => accent.color.toLowerCase() === value.toLowerCase()
+  );

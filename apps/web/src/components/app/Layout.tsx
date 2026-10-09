@@ -169,10 +169,18 @@ function NewOnboardingRedirect() {
     const target =
       location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
     const isGenericEntry = target === '/' || target.startsWith(DEFAULT_ROUTE);
+    const accent = new URLSearchParams(location.search).get('accent');
+    const accentQuery =
+      accent && /^#[\da-f]{6}$/i.test(accent)
+        ? `accent=${encodeURIComponent(accent)}`
+        : undefined;
+    const path = isGenericEntry
+      ? '/onboarding'
+      : `/onboarding?next=${encodeURIComponent(target)}`;
     navigate(
-      isGenericEntry
-        ? '/onboarding'
-        : `/onboarding?next=${encodeURIComponent(target)}`,
+      accentQuery
+        ? `${path}${path.includes('?') ? '&' : '?'}${accentQuery}`
+        : path,
       { replace: true }
     );
   });

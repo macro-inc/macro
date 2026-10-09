@@ -15,6 +15,8 @@ export function WorkspaceIntro(props: {
   onSelectAccent: (name: string) => void;
   onContinue: (color: string) => void;
   action?: JSX.Element;
+  /** Replaces the line under the title. Desktop keeps the account wording. */
+  lede?: string;
 }) {
   const accent = () => props.accent;
   const noiseId = createUniqueId();
@@ -52,8 +54,8 @@ export function WorkspaceIntro(props: {
         Create your workspace
       </h1>
       <p class="mt-6 max-w-[460px] font-[Inter_Variable] text-sm leading-6 text-ink-muted sm:text-[15px] [text-wrap:balance]">
-        Choose your workspace color. You’ll connect accounts and invite
-        teammates next.
+        {props.lede ??
+          'Choose your workspace color. You’ll connect accounts and invite teammates next.'}
       </p>
       <div
         class="relative mt-8 flex h-40 w-full max-w-[400px] items-center justify-center sm:h-44"

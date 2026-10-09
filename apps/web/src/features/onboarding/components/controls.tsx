@@ -40,7 +40,7 @@ export function FormInput(props: {
       value={props.value}
       autocomplete={props.id}
       onInput={(e) => props.onInput(e.currentTarget.value)}
-      class="obf-input w-full px-4 py-3 rounded-2xl border border-edge bg-input text-sm text-ink placeholder:text-ink-placeholder focus:border-ink/40 focus:outline-none transition-colors"
+      class="obf-input w-full px-4 py-3 rounded-2xl border border-edge bg-input text-base text-ink placeholder:text-ink-placeholder focus:border-ink/40 focus:outline-none transition-colors sm:text-sm"
     />
   );
 }

@@ -23,6 +23,8 @@ mod link;
 #[allow(unused_imports)]
 mod merge;
 mod mobile_welcome_email;
+mod mobile_workspace;
+mod google_workspace_email;
 
 mod github_pull_requests;
 mod health;
@@ -163,6 +165,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             },
         ))
         .merge(mobile_welcome_email::router(state.clone()))
+        .merge(mobile_workspace::router(state.clone()))
         .nest(
             "/webhooks",
             webhooks::router().layer(axum::middleware::from_fn(

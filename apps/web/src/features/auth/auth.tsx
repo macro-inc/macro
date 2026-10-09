@@ -4,7 +4,9 @@ import {
   OnboardingPending,
   OnboardingSignup,
 } from '@app/features/onboarding/onboarding';
+import { MetaMobileOnboardingView } from '@app/features/onboarding/views/meta-mobile-onboarding-view';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { isMetaMobileSignup } from '@core/mobile/isMetaInAppBrowser';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
@@ -12,7 +14,11 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { onMount, Show } from 'solid-js';
-import { AuthProvider, type AuthUser } from './context/auth-context';
+import {
+  AuthProvider,
+  type AuthUser,
+  useAuthContext,
+} from './context/auth-context';
 import { sessionTokenParam } from './core/email-code';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
@@ -28,33 +34,64 @@ export function Login(props: { signupMode?: boolean }) {
   const email = typeof params.email === 'string' ? params.email : undefined;
   const desktopSignup = () =>
     props.signupMode === true && !isMobile() && !isNativeMobilePlatform();
+  const metaMobileSignup = () =>
+    props.signupMode === true && isMetaMobileSignup();
   return (
     <AuthProvider value={createAppAuthContext()}>
-      <AuthView
-        intent={props.signupMode ? 'signup' : 'login'}
-        showApple={getNativeMobilePlatform() === 'ios'}
-        compact={virtualKeyboardVisible()}
-        initialEmail={email}
-        // Dev persona links (`?email=`) sign straight in against a local backend.
-        autoStart={import.meta.env.DEV && email !== undefined}
-        token={sessionTokenParam(params.token)}
-        onVerified={() => {
-          const referral = new URLSearchParams(window.location.search).get(
-            'referral'
-          );
-          if (referral) window.location.href = `/app?referral=${referral}`;
-        }}
-        signupJourney={
-          desktopSignup()
-            ? (slots) => <OnboardingSignup {...slots} />
-            : undefined
+      <Show
+        when={metaMobileSignup()}
+        fallback={
+          <AuthView
+            intent={props.signupMode ? 'signup' : 'login'}
+            showApple={getNativeMobilePlatform() === 'ios'}
+            compact={virtualKeyboardVisible()}
+            initialEmail={email}
+            // Dev persona links (`?email=`) sign straight in against a local backend.
+            autoStart={import.meta.env.DEV && email !== undefined}
+            token={sessionTokenParam(params.token)}
+            onVerified={() => {
+              const referral = new URLSearchParams(window.location.search).get(
+                'referral'
+              );
+              if (referral) window.location.href = `/app?referral=${referral}`;
+            }}
+            signupJourney={
+              desktopSignup()
+                ? (slots) => <OnboardingSignup {...slots} />
+                : undefined
+            }
+            onSignIn={() => navigate('/login')}
+            // Desktop sign-up resolves into onboarding's frame either way.
+            pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
+            signedIn={(user) => <PostAuthGate user={user()} />}
+          />
         }
-        onSignIn={() => navigate('/login')}
-        // Desktop sign-up resolves into onboarding's frame either way.
-        pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
-        signedIn={(user) => <PostAuthGate user={user()} />}
-      />
+      >
+        <MetaMobileSignup />
+      </Show>
     </AuthProvider>
+  );
+}
+
+function MetaMobileSignup() {
+  const context = useAuthContext();
+  const signedInEmail = () => {
+    const session = context.session();
+    return session.t === 'signed-in' ? session.user.email : undefined;
+  };
+  return (
+    <Show
+      when={context.session().t !== 'loading'}
+      fallback={<OnboardingPending />}
+    >
+      <MetaMobileOnboardingView
+        signedInEmail={signedInEmail()}
+        onIdentify={(address) =>
+          context.identify({ id: address, email: address })
+        }
+        onLead={(address) => context.trackMobileSignupLead(address)}
+      />
+    </Show>
   );
 }
 

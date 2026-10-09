@@ -102,7 +102,21 @@ New desktop users enter the same flow from
 `/app/signup`, `/app/login`, or `/app/onboarding`. Marketing Get Started links
 open `/app/signup`. Existing members and native mobile keep their existing routes.
 
-Signed-out `/app/signup` starts at the workspace color picker, followed by feature
+Meta and Instagram in-app browsers, and phones that arrive with a Meta click id
+(`fbclid`, `igshid`, or a Meta `utm_source`), do not enter that desktop flow.
+A local dev server also shows it at `/app/signup?meta-mobile=1`.
+`/app/signup` instead walks a mobile version of the same screens: workspace
+color, work email, then workspace name and teammates. The email has to be a
+Google Workspace work address. Personal mail and other providers are refused.
+There is no Gmail connect step on the phone. Submitting creates the team and emails
+a link to desktop signup. The phone stays on “Your team has been created. Finish
+onboarding on desktop.” and does not open the app. The email subject and button
+are “Finish onboarding on your computer.” The button opens `/app/signup` with the
+chosen accent, where desktop onboarding asks them to connect Gmail. A
+Google-required domain gets the same email without a team and still signs in with
+Google on the computer.
+
+On a desktop browser, signed-out `/app/signup` starts at the workspace color picker, followed by feature
 interests and security. No account is required for these slides. The signed-out
 page should remain stable after the session check returns
 401; it must not alternate with the loading screen or reset a selected color.

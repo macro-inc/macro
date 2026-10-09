@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { OnboardingProvider } from './context/onboarding-context';
 import { parseCheckoutReturn } from './core/checkout';
+import { isWorkspaceAccentColor } from './core/workspace-accent';
 import { createAppOnboardingContext } from './create-app-onboarding-context';
 import { OnboardingFlowView } from './views/onboarding-flow-view';
 import { SignupJourneyView } from './views/signup-journey-view';
@@ -25,6 +26,12 @@ export function Onboarding() {
     <OnboardingProvider value={context}>
       <OnboardingFlowView
         next={typeof params.next === 'string' ? params.next : undefined}
+        accent={
+          typeof params.accent === 'string' &&
+          isWorkspaceAccentColor(params.accent)
+            ? params.accent
+            : undefined
+        }
         checkoutReturn={parseCheckoutReturn(params)}
         onNavigate={(target) => navigate(target, { replace: true })}
         onRedirect={(url) => {

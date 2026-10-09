@@ -48,6 +48,8 @@ export function createOnboardingFlow(
   context: FlowCapabilities,
   options: {
     checkoutReturn: Accessor<CheckoutReturn | undefined>;
+    /** Color chosen on another device, already validated by the host. */
+    accent?: Accessor<string | undefined>;
     record: Accessor<Loadable<OnboardingRecord>>;
     /** Whether the viewer signed up with Google (has an inbox) or an email code. */
     signupMethod: Accessor<'google' | 'email_code' | undefined>;
@@ -77,7 +79,9 @@ export function createOnboardingFlow(
       options.checkoutReturn() !== undefined
     );
     saveStep(userId, initial);
-    if (draft?.authenticating && draft.accent)
+    const carried = options.accent?.();
+    if (carried) context.applyAccent(carried, userId);
+    else if (draft?.authenticating && draft.accent)
       context.applyAccent(draft.accent, userId);
     clearSignupDraft();
     setStep(initial);

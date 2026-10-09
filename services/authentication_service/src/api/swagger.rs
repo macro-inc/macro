@@ -49,7 +49,7 @@ use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
 use crate::api::user::stripe::{PaidPlan, StripeSessionResponse};
 use crate::api::{
     email, github_pull_requests, health, jwt, link, login, logout, merge, mobile_welcome_email,
-    oauth, oauth2, permissions, session, user,
+    mobile_workspace, oauth, oauth2, permissions, session, user,
 };
 use model::authentication::login::response::SsoRequiredResponse;
 use model::authentication::{
@@ -192,6 +192,9 @@ use model::user::{
                 /// /mobile-welcome-email
                 mobile_welcome_email::handler,
 
+                /// /mobile-workspace
+                mobile_workspace::handler,
+
                 /// /merge
                 merge::create_merge_request::handler,
                 merge::verify_merge_request::handler,
@@ -305,6 +308,8 @@ use model::user::{
                         // Mobile welcome email
                         mobile_welcome_email::SendMobileWelcomeEmailRequest,
                         mobile_welcome_email::SendMobileWelcomeEmailResponse,
+                        mobile_workspace::CreateMobileWorkspaceRequest,
+                        mobile_workspace::CreateMobileWorkspaceResponse,
 
                         // Merge
                         CreateAccountMergeRequest,

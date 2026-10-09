@@ -29,6 +29,8 @@ import { ToolsStep } from './tools-step';
 export function OnboardingFlowView(props: {
   /** A deep link to land on after onboarding. */
   next: string | undefined;
+  /** Workspace color chosen before this browser, carried on the desktop link. */
+  accent?: string;
   checkoutReturn: CheckoutReturn | undefined;
   onNavigate: (target: string) => void;
   /** Leaves the app for hosted checkout. */
@@ -57,6 +59,7 @@ export function OnboardingFlowView(props: {
   });
   const flow = createOnboardingFlow(context, {
     checkoutReturn: () => props.checkoutReturn,
+    accent: () => props.accent,
     record,
     signupMethod: () => {
       const accounts = emailAccounts.accounts();
