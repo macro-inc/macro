@@ -15,7 +15,14 @@ An external email can be selected as a channel participant. For an unregistered 
 Import starts from the **Import from Slack** chip below the Chat sidebar tabs,
 or **Settings → Team → Connections → Import from Slack**. The chip is visible
 to team admins and owners when Slack archive import is enabled, and opens the
-same dialog without leaving Chat. Closing the dialog returns focus to the chip.
+same dialog without leaving Chat. Its **Dismiss Slack import** button hides the
+card and remembers the choice in this browser for that user and Macro team.
+Successful archive imports (including partial imports with a completed channel)
+and server-confirmed channel-only imports also hide it. Failed or cancelled
+imports do not. Dismissing or completing an import keeps the Settings entry
+available; completion does not close an open progress dialog. Check persistence
+after reload and confirm dismissal does not affect another user or team.
+Closing the dialog returns focus to the chip when it is still visible.
 The dialog offers **Import with history** (recommended) and **Import channels
 without history**. The first needs a ZIP export provided by a Slack workspace
 owner or admin; its upload screen links to Slack's export instructions. Files

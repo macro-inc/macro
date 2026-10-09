@@ -23,6 +23,12 @@ const mocks = vi.hoisted(() => ({
 }));
 const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
+vi.mock('@queries/team/teams', () => ({
+  useCurrentTeamQuery: () => ({
+    isSuccess: true,
+    data: { team: { id: 'team' } },
+  }),
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
