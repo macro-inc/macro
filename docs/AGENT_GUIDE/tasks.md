@@ -129,7 +129,8 @@ Controls stay fixed during scrolling and are disabled during date drags.
 **Today** smoothly centers the current day, except when reduced motion is enabled;
 initial centering is immediate. Its line extends into the calendar header, stays
 behind bars, and clips outside the left item panels, including their gaps and
-rounded corners. Only items and bars have hover feedback, not full calendar rows.
+rounded corners, until the drawer finishes sliding closed. Only items and bars
+have hover feedback, not full calendar rows.
 The settings menu
 changes the displayed period (Day, Week, Month), toggles calendar lines, and
 changes their spacing (Daily, Weekly, Monthly) and

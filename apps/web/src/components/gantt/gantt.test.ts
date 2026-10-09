@@ -783,7 +783,7 @@ it('shrinks the default sidebar in narrow panes while retaining the current date
   expect(gantt.visibleRange().start).toBeCloseTo(anchor);
 });
 
-it('clips Today decoration past floating panels without shifting bar coordinates', async () => {
+it('keeps Today clipping through drawer exits and resizing without shifting bar coordinates', async () => {
   const { gantt, viewport, container, today, resize } = chartFixture(
     1000,
     true
@@ -808,8 +808,19 @@ it('clips Today decoration past floating panels without shifting bar coordinates
   expect(body.style.left).toBe(markerLeft);
   gantt.sidebar.setOpen(false);
   expect(clip.style.left).toBe('0px');
-  gantt.sidebar.setOpen(true);
+  expect(
+    clip.classList.contains('animate-[gantt-scene-close_200ms_linear]')
+  ).toBe(true);
+  expect(clip.classList.contains('motion-reduce:animate-none')).toBe(true);
+  expect(clip.style.getPropertyValue('--gantt-closing-inset')).toBe('280px');
+  const closingClasses = clip.className;
   resize(240);
+  expect(clip.style.getPropertyValue('--gantt-closing-inset')).toBe('200px');
+  expect(clip.className).toBe(closingClasses);
+  gantt.sidebar.setOpen(true);
+  expect(
+    clip.classList.contains('animate-[gantt-scene-close_200ms_linear]')
+  ).toBe(false);
   expect(clip.style.left).toBe('200px');
   expect(body.style.left).toBe(markerLeft);
 });

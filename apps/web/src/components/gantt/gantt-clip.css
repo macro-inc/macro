@@ -1,0 +1,7 @@
+/* Match the item panels' 200ms exit; the inset follows responsive width changes. */
+@keyframes gantt-scene-close {
+  from,
+  to {
+    left: var(--gantt-closing-inset);
+  }
+}
