@@ -1,3 +1,4 @@
+import { invalidateEmailRenders } from '@app/lib/email-render-cache/lifecycle';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_INBOX_SYNC_STATUS } from '@core/constant/featureFlags';
 import { queryClient } from '@queries/client';
@@ -53,6 +54,9 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 export function handleRefreshEmail(payload: unknown): void {
   const event = asRefreshEmailEvent(payload);
   if (!event) return;
+  // Every tab receives this socket event, so none rebroadcasts it.
+  if (event.event === 'delete_message' || event.event === 'link_removed')
+    void invalidateEmailRenders('local');
 
   if (
     event.event === 'upsert_message' ||

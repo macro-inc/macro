@@ -3,19 +3,28 @@ import type { EntityLoadError } from '@core/component/EntityLoadGate';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiThread } from '@service-email/generated/schemas';
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { createSignal, onCleanup } from 'solid-js';
+import { batch, createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   EmailThreadLoadGate,
   type EmailThreadLoadGateProps,
 } from './EmailThreadLoadGate';
 
+const markers = vi.hoisted(() => ({
+  mounts: [] as string[],
+  releases: [] as string[],
+}));
 vi.mock('@notifications', () => ({
-  EmailDebouncedReadMarker: (props: { threadId: string; linkId?: string }) => (
-    <span data-testid="read-marker">
-      {props.threadId}:{props.linkId}
-    </span>
-  ),
+  EmailDebouncedReadMarker: (props: { threadId: string; linkId?: string }) => {
+    const id = props.threadId;
+    onMount(() => markers.mounts.push(id));
+    onCleanup(() => markers.releases.push(id));
+    return (
+      <span data-testid="read-marker">
+        {props.threadId}:{props.linkId}
+      </span>
+    );
+  },
 }));
 vi.mock('@core/mobile/native-network-status', () => ({
   nativeNetworkStatus: () => 'online',
@@ -181,4 +190,37 @@ it('retains the mounted composer during identity revalidation but respects serve
   expect(screen.queryByRole('textbox')).toBeNull();
   expect(screen.getByText('Not found')).toBeTruthy();
   expect(unmounted).toHaveBeenCalledOnce();
+});
+
+it('restarts read marking for cached navigation without remounting the body', () => {
+  markers.mounts.length = 0;
+  markers.releases.length = 0;
+  const [id, setId] = createSignal('a');
+  const [data, setData] = createSignal<string | undefined>('cached');
+  const [pending, setPending] = createSignal(false);
+  render(() => (
+    <EmailThreadLoadGate
+      threadId={id()}
+      notificationSource={
+        {} as EmailThreadLoadGateProps<string>['notificationSource']
+      }
+      result={{ data, error: () => undefined, isPending: pending }}
+      onRetry={() => {}}
+    >
+      <div data-testid="body" />
+    </EmailThreadLoadGate>
+  ));
+  const body = screen.getByTestId('body');
+  expect(markers.mounts).toEqual(['a']);
+  setId('b');
+  expect(markers.mounts).toEqual(['a', 'b']);
+  expect(markers.releases).toEqual(['a']);
+  expect(screen.getByTestId('body')).toBe(body);
+  setId('b');
+  expect(markers.mounts).toHaveLength(2);
+  batch(() => {
+    setData(undefined);
+    setPending(true);
+  });
+  expect(markers.releases).toEqual(['a', 'b']);
 });

@@ -10,6 +10,7 @@ import type { MutationInspection } from '../protocol';
 
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { notifyCacheIdentityReset } from '../lifecycle';
 import type {
   AffectedOperationsResult,
   CachedQueryInstanceWire,
@@ -163,6 +164,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         : undefined;
       invoke<T>(command, args).then(
         (value) => {
+          if (
+            value &&
+            typeof value === 'object' &&
+            'reset' in value &&
+            value.reset === true
+          )
+            void notifyCacheIdentityReset();
           if (timer !== undefined) clearTimeout(timer);
           resolve(value);
         },
