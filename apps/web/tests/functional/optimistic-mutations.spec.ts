@@ -80,7 +80,7 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
     if (!request.query.includes('mutation ')) reads.push(request.operationName);
     let outcome: Outcome = 'commit';
     if (
-      ['UpdateEntityPropertyOptions', 'RenameEntities'].includes(
+      ['UpdateEntityPropertyOptions', 'RenameEntities', 'RenameTitle'].includes(
         request.operationName
       )
     ) {
@@ -218,16 +218,20 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
   };
 }
 
-for (const outcome of ['commit', 'reject'] as const) {
-  test(`a local rename resolver changes only the subscribed field and ${outcome}s correctly`, async ({
+for (const [button, outcome] of [
+  ['Rename task', 'commit'],
+  ['Rename task', 'reject'],
+  // The resolver is keyed by mutation field, not by the document's text.
+  ['Rename task by field', 'commit'],
+  ['Rename task by field', 'reject'],
+] as const) {
+  test(`a local rename resolver changes only the subscribed field and ${outcome}s correctly via ${button}`, async ({
     page,
   }) => {
     const server = await mount(page, 'cached', [DOCS_TAG]);
     await expect(page.getByTestId('name')).toHaveText('Task under test');
     const before = await page.evaluate(() => window.optimisticMutations.read());
-    await page
-      .getByRole('button', { name: 'Rename task', exact: true })
-      .click();
+    await page.getByRole('button', { name: button, exact: true }).click();
     await expect(page.getByTestId('name')).toHaveText('Renamed task');
     await expectTags(page, ['docs']);
     await expect.poll(() => server.mutations.length).toBe(1);
