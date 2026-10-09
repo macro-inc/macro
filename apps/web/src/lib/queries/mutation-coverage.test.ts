@@ -18,6 +18,10 @@ const policies = {
   ReorderFavorites: 'custom: ordered favorite links',
   SetEntityProperty: 'custom: assignment identity and parent links',
   UpdateEntityPropertyOptions: 'custom: ordered option deltas',
+  CreateCalendarEvent: 'custom: client event identity and occurrences',
+  UpdateCalendarEvent: 'custom: event and occurrence edits',
+  DeleteCalendarEvent: 'custom: event and occurrence removal',
+  RespondToCalendarEvent: 'custom: attendee response',
   CreateInitiative: 'authoritative: server assigns the project ID',
   DeleteInitiative:
     'authoritative: boolean response; membership refresh after success',
@@ -27,6 +31,9 @@ const policies = {
     'authoritative: database metadata and SQL catalog reload after success',
   TrashDatabase:
     'authoritative: database list membership refreshes after success',
+  RenameForm:
+    'authoritative: form, database, and preview caches refresh after success',
+  TrashForm: 'authoritative: form list membership refreshes after success',
   RecordChannelActivity: 'authoritative: server event identity and timestamps',
   UpdateNotificationsForEntity:
     'authoritative: exact affected notification IDs required for undo',

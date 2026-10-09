@@ -381,28 +381,28 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         for planned_field in fields_plan.iter() {
             let field = planned_field.node;
             self.path.push(ResponsePath::Field(&field.response_key));
-            if normalized && self.retain_output {
-                if let Some(projection) = self.projection.as_mut() {
-                    match &planned_field.source {
-                        FieldSource::Stored { key, ty } => {
-                            let value = fields.get(key.as_ref());
-                            let selection = projection::ValueProjection::compile(
-                                self.schema,
-                                value,
-                                field,
-                                ty,
-                                self.variables,
-                                self.entity_resolvers,
-                                self.plans,
-                            )?;
-                            projection.selected_field(owner, key, value, &self.path, selection);
-                        }
-                        FieldSource::Entity { storage_key, .. }
-                        | FieldSource::Missing(storage_key) => {
-                            projection.guard(owner, storage_key, fields.get(storage_key.as_ref()))
-                        }
-                        _ => {}
+            if normalized
+                && self.retain_output
+                && let Some(projection) = self.projection.as_mut()
+            {
+                match &planned_field.source {
+                    FieldSource::Stored { key, ty } => {
+                        let value = fields.get(key.as_ref());
+                        let selection = projection::ValueProjection::compile(
+                            self.schema,
+                            value,
+                            field,
+                            ty,
+                            self.variables,
+                            self.entity_resolvers,
+                            self.plans,
+                        )?;
+                        projection.selected_field(owner, key, value, &self.path, selection);
                     }
+                    FieldSource::Entity { storage_key, .. } | FieldSource::Missing(storage_key) => {
+                        projection.guard(owner, storage_key, fields.get(storage_key.as_ref()))
+                    }
+                    _ => {}
                 }
             }
             let value = self.read_field(owner, fields, concrete, planned_field)?;

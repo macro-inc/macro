@@ -1506,9 +1506,10 @@ impl CacheEngine {
                         .collect::<Result<Vec<_>, _>>()
                         .map_err(err_js)?;
                     if let Some(live) = request.live_query {
+                        let schema = state.engine_mut()?.schema_snapshot();
                         let selection = state
                             .selections
-                            .get(live.document, live.fragment_name)
+                            .get(&schema, live.document, live.fragment_name)
                             .map_err(err_js)?;
                         let since = live
                             .since
