@@ -404,7 +404,8 @@ the shimmer.
 - On desktop, chat agents' empty input types tips about connectors, skills,
   mentions, and agents one character at a time, pauses to read each hint, then
   quickly erases it before typing the next. Entering a draft pauses the animation;
-  clearing it resumes. Reduced-motion preferences keep the first hint static.
+  clearing it resumes. The text-only typewriter also runs when reduced motion
+  is enabled.
   Coding agents show **Describe what you want to build**; phones keep the short
   **Message Macro AI** placeholder. Type `@` for
   mentions and `/` for skills.

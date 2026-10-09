@@ -3,13 +3,7 @@ import { type Accessor, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createChatComposerTip } from './chat-composer-tip';
 
-const motion = vi.hoisted(() => ({ reduced: false }));
-vi.mock('@solid-primitives/media', () => ({
-  createMediaQuery: () => () => motion.reduced,
-}));
-
 beforeEach(() => {
-  motion.reduced = false;
   vi.useFakeTimers();
 });
 afterEach(() => {
@@ -88,13 +82,6 @@ describe('Chat composer tips', () => {
     setEmpty(true);
     vi.advanceTimersToNextTimer();
     expect(tip()).toBe('Co');
-  });
-
-  it('shows a complete static hint without timers when reduced motion is enabled', () => {
-    motion.reduced = true;
-    const { result: tip } = renderHook(() => createChatComposerTip(() => true));
-    expect(tip()).toBe(CONNECT);
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('stops its timer when the composer is removed', () => {

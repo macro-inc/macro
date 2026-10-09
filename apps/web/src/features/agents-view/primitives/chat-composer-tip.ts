@@ -1,4 +1,3 @@
-import { createMediaQuery } from '@solid-primitives/media';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
 const TIPS = [
@@ -16,7 +15,6 @@ export function createChatComposerTip(
   const tips = canChooseAgent
     ? TIPS
     : [TIPS[0], 'Use @ to reference a skill document', TIPS[2]];
-  const reducedMotion = createMediaQuery('(prefers-reduced-motion: reduce)');
   const [text, setText] = createSignal('');
   let index = 0;
   let length = 0;
@@ -25,7 +23,7 @@ export function createChatComposerTip(
 
   // A timer is external state: start and stop it with the visible empty input.
   createEffect(() => {
-    if (!empty() || reducedMotion()) return;
+    if (!empty()) return;
     let timer: ReturnType<typeof setTimeout>;
     const schedule = (nextDelay: number) => {
       delay = nextDelay;
@@ -53,5 +51,5 @@ export function createChatComposerTip(
     schedule(delay);
     onCleanup(() => clearTimeout(timer));
   });
-  return () => (reducedMotion() ? tips[0] : text());
+  return text;
 }
