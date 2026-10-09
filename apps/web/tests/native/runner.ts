@@ -136,6 +136,8 @@ try {
     ],
     {
       MODE: 'development',
+      // The isolated fixture and Tauri dev URL both use loopback HTTP.
+      MACRO_DEV_HTTPS: 'false',
       PORT: '3009',
       VITE_LOCAL_SERVERS: 'ALL',
       VITE_LOCAL_BACKEND_ORIGIN: fixture.origin,
@@ -170,7 +172,7 @@ try {
     capabilities,
   });
   console.log(`Native session ${browser.sessionId}; opening Email`);
-  const emailNavigation = browser.$('button[aria-label="Go to Email"]');
+  const emailNavigation = browser.$('button[aria-label="Email"]');
   await emailNavigation.waitForDisplayed({ timeout: 120_000 });
   await emailNavigation.click();
   console.log(
@@ -229,18 +231,26 @@ try {
   if (matrixMode) {
     await browser.setTimeout({ script: 120_000 });
     const preview = await browser.executeAsync(
-      (view: string | undefined, done: (value: unknown) => void) => {
+      (
+        view: string | undefined,
+        done: (value: { cases?: unknown; error?: string }) => void
+      ) => {
         void (async () => {
-          const path = '/tests/native/filter-matrix.ts';
-          const matrix = await import(path);
-          done(matrix.describeCases(1, view));
+          try {
+            const path = '/tests/native/filter-matrix.ts';
+            const matrix = await import(path);
+            done({ cases: matrix.describeCases(1, view) });
+          } catch (error) {
+            done({ error: String(error) });
+          }
         })();
       },
       matrixView
     );
+    assert(preview.cases, preview.error ?? 'Matrix returned no initial case');
     await Bun.write(
       resolve(artifacts, 'matrix-first-case.json'),
-      JSON.stringify(preview, null, 2)
+      JSON.stringify(preview.cases, null, 2)
     );
     let progress: {
       done: boolean;

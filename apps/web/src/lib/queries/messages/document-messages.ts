@@ -6,7 +6,7 @@ import {
   type MessageThread,
   type PostMessage,
 } from '@service-storage/messages';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createEffect } from 'solid-js';
 import {
   newMessageId,
@@ -99,19 +99,27 @@ export function useMessageActions(parent: Accessor<MessageParent>) {
   };
 }
 
+// Cached callbacks outlive the hook; only plain request values enter here.
+function messageLinkQueryOptions(
+  parent: MessageParent,
+  target: string | null | undefined
+) {
+  return queryOptions({
+    queryKey: ['historical-comment-link', parent.type, parent.id, target],
+    enabled: !!target,
+    queryFn: () =>
+      /^\d+$/.test(target!)
+        ? entityMessagesClient.legacyLink(parent, target!)
+        : entityMessagesClient.get(parent, target!),
+  });
+}
+
 /** Resolve copied links, falling back to the root when the linked reply was deleted. */
 export function useMessageLink(
   parent: Accessor<MessageParent>,
   target: Accessor<string | null | undefined>
 ) {
-  const legacy = useQuery(() => ({
-    queryKey: ['historical-comment-link', parent().type, parent().id, target()],
-    enabled: !!target(),
-    queryFn: () =>
-      /^\d+$/.test(target()!)
-        ? entityMessagesClient.legacyLink(parent(), target()!)
-        : entityMessagesClient.get(parent(), target()!),
-  }));
+  const legacy = useQuery(() => messageLinkQueryOptions(parent(), target()));
   return {
     error: () => legacy.error,
     refetch: legacy.refetch,

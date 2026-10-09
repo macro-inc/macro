@@ -75,6 +75,38 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - Production web builds register `public/sw.js`: it serves the cached `index.html` and content-hashed assets from Cache Storage and moves tabs to newer builds. Set localStorage `macro:sw` to `off` to bypass it while debugging.
 - The build fails if any emitted file exceeds CloudFront's 10 MB compression limit; split it rather than raising the limit.
 
+### Query callback lifetimes
+
+Query options can remain cached after their UI unmounts, including for disabled
+queries. Callbacks created inside hooks can retain component accessors, Solid
+owners, and detached DOM through shared closure environments—even when a callback
+only references a locally resolved ID. This does not mean every closure captures
+every local variable.
+
+- Create cached callbacks in module-scope query factories accepting resolved IDs,
+  flags, and plain data. Resolve reactive inputs inside the `useQuery` /
+  `useInfiniteQuery` options accessor, e.g. `useQuery(() => itemQueryOptions(id()))`,
+  so inputs still update reactively.
+- Keep pure selectors and polling policies at module scope, or inside those
+  factories. Check **all** retained callbacks: `queryFn`, `select`,
+  `refetchInterval`, pagination, placeholder callbacks, and functions in `meta`.
+- Do not pass component accessors, props getters, or query proxies into the
+  factory. For reactive selection, pass plain snapshots of the needed values
+  (such as channel names or a resolved document ID). Naming a function or copying
+  an ID inside the hook does not isolate its closure from the hook.
+- Use `keepPreviousData` from `@tanstack/solid-query` instead of an inline
+  `placeholderData: (p) => p`.
+- The same rule applies to callers of wrapper hooks such as `useSoupAstItemsQuery`
+  and `createGroupedSoupQueries`: `meta.itemFilter` / `meta.insertFilter` passed
+  from a component or view context are cached too, so build them with a
+  module-scope factory over plain snapshots (see
+  [drive-data-source](src/features/drive-view/queries/drive-data-source.ts)).
+- Query hooks in `src/lib/urql-solid` are exempt: their observers are created per
+  mount and destroyed on cleanup, so nothing outlives the component.
+
+Examples: [session query factory](src/lib/queries/agent-session/session.ts) and
+[search query factories](src/lib/queries/soup/search.ts).
+
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.
 - Prefer wrapping the setter over `createEffect(() => { if (signal()) sideEffect() })`. When setting focus/selection should also clear another stop, blur a control, or scroll, put that work in the setter (or a named helper the setter calls) so the action is explicit at the call site — not a distant effect watching the signal.

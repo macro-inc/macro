@@ -25,28 +25,31 @@ async function fetchAttachmentReferences(
   return response.references;
 }
 
+// Cached callbacks outlive the caller; only plain values enter here.
+function attachmentReferencesQueryOptions(
+  type: ItemType,
+  id: string | null | undefined
+) {
+  return {
+    queryKey: id
+      ? attachmentReferencesKeys.list(type, id).queryKey
+      : attachmentReferencesKeys.list._def,
+    queryFn: () => {
+      if (!id) {
+        throw new Error('Entity ID is required to fetch attachment references');
+      }
+      return fetchAttachmentReferences(type, id);
+    },
+    staleTime: ATTACHMENT_REFERENCES_STALE_TIME,
+    enabled: !!id,
+  };
+}
+
 export function useAttachmentReferencesQuery(
   entityId: Accessor<string | null | undefined>,
   entityType: Accessor<ItemType>
 ) {
-  return useQuery(() => {
-    const id = entityId();
-    const type = entityType();
-
-    return {
-      queryKey: id
-        ? attachmentReferencesKeys.list(type, id).queryKey
-        : attachmentReferencesKeys.list._def,
-      queryFn: () => {
-        if (!id) {
-          throw new Error(
-            'Entity ID is required to fetch attachment references'
-          );
-        }
-        return fetchAttachmentReferences(type, id);
-      },
-      staleTime: ATTACHMENT_REFERENCES_STALE_TIME,
-      enabled: !!id,
-    };
-  });
+  return useQuery(() =>
+    attachmentReferencesQueryOptions(entityType(), entityId())
+  );
 }

@@ -581,10 +581,17 @@ pub async fn run() -> anyhow::Result<()> {
             installation_state_secret: config.github_installation_state_secret.to_string(),
         },
         document_service.clone(),
-        Arc::new(GithubPullRequestServiceImpl::new(
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-            PgGithubPullRequestRepo::new(db.clone()),
-        )),
+        Arc::new(
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+                PgGithubPullRequestRepo::new(db.clone()),
+            )
+            .with_event_publisher(
+                github_pull_requests::broker::BrokerGithubPullRequestPublisher(
+                    macro_event_broker.clone(),
+                ),
+            ),
+        ),
         (*notification_ingress_service).clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
@@ -1298,11 +1305,15 @@ pub async fn run() -> anyhow::Result<()> {
     // Agent sessions belong to a different bot entirely
     // (`bot_id::MACRO_NEW_BOT_ID`, served by the harness), so the two paths
     // can never answer the same mention.
+    // This host holds no authentication-service key, so its counted usage is
+    // settled by that service's reconciliation sweep rather than requested
+    // after each completion.
     let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(
         db.clone(),
         event_broker_tracker.clone(),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
     )
     .await
     .context("failed to build Macro agent tool context")?;
@@ -1699,6 +1710,10 @@ pub async fn run() -> anyhow::Result<()> {
     });
 
     consumer_tracker.spawn({
+        let session_repo = agent_session::outbound::postgres::PgAgentSessionRepo::new(
+            db.clone(),
+            owned_entity_registrar.clone(),
+        );
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
         let macro_event_broker = macro_event_broker.clone();
@@ -1716,7 +1731,13 @@ pub async fn run() -> anyhow::Result<()> {
                 );
                 tracing::info!("starting realtime Soup entity consumer");
                 let result = fanout_service
-                    .run_entity_update_consumer(&brokers, cancellation_token.cancelled())
+                    .run_entity_update_consumer(
+                        &brokers,
+                        &soup_realtime::outbound::agent_sessions::AgentSessionPullRequestLookup(
+                            session_repo.clone(),
+                        ),
+                        cancellation_token.cancelled(),
+                    )
                     .await;
 
                 if cancellation_token.is_cancelled() {

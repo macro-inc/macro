@@ -113,6 +113,93 @@ Missing records, incomplete response registrations, explicit invalidations/delet
 and resets retain conservative behavior. Page-retention eviction wakes readers of
 the removed page. This is in-memory dependency tracking, not a storage migration.
 
+## Maintained query views
+
+`Engine::read_live_query` combines a validated predicate query, same-query server
+membership evidence, and a generated fragment selection. The first read returns
+ordered keys and selected records. Later reads return insertions/removals and
+field-path patches, including nested normalized entities and response aliases.
+One engine lock covers membership and projection, so callers do not coordinate
+filter calls, chunked record reads, and revision retries.
+
+Views track the normalized dependencies of each selected row. Record changes
+reproject only dependent rows; projection changes reevaluate membership through
+the existing predicate index. Ordinary network writes, hydration, optimistic
+writes and settlement share the engine change journal. Resets, external
+invalidations and gaps in that bounded journal conservatively rebuild the view.
+Views are released on unsubscribe and bounded by an LRU; eviction is safe because
+a subscriber with an unavailable cursor receives a full replacement.
+
+For Soup, `createSoupLiveQuery` owns network fetching, server pagination, cache
+baselines, and local fallback selection. Its non-suspending `data()` accessor
+returns reactive GraphQL records; callers do not coordinate cache revisions:
+
+```ts
+const soup = createSoupLiveQuery(() => ({
+  filters: filters(),
+  sortMethod: 'UPDATED_AT',
+  sortDirection: 'DESC',
+  limit: 50,
+}));
+
+// Render soup.data(); live fields update without per-mutation query callbacks.
+await soup.fetchNextPage();
+await soup.refresh();
+```
+
+The source preserves the email view and sort direction on continuation requests.
+It selects maintained views on supporting hosts, uses the shared coherent-page
+reader for Mail and older hosts, and retains network data on local failures.
+Once a maintained view catches up, it owns the displayed rows through field
+updates and rollback. Hydration advances the same authority watermark, and Soup
+selects notification identities so nested state updates can avoid query rereads.
+The legacy REST-shaped Soup facade translates its request and projects these
+records into UI entities through one keyed mapper. Fetched versions remain
+separate from local display versions so pagination coverage cannot drift.
+
+The lower-level Solid `createPredicateQuery` binding owns subscription, coalescing,
+cleanup and engine-generation recovery, preserving keyed row stores and applying
+patches in one batch. Its first source adapter is a reconciled flat Soup filter:
+
+```ts
+const items = createPredicateQuery({
+  host: getGraphqlSoupCacheHost,
+  query: () => ({
+    source: { filters: filters(), sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC', limit: 50, baseline: serverMembership() },
+    select: selectRecords(SoupItemFieldsFragmentDoc),
+  }),
+});
+```
+
+Mutations still use ordinary GraphQL execution and the registered local resolver.
+The view requires no per-mutation update callback. This is an incremental row
+projection layer, not a general local SQL engine: membership changes still run
+the indexed predicate query, and arbitrary joins/aggregates are not compiled.
+Unknown membership retains server baseline evidence. Mail cursor pagination and
+older hosts keep the existing reconciliation path. All views remain limited to
+data known to the cache; remote changes require the existing network feeds.
+
+Ordinary GraphQL queries use `createLiveQuery(document, variables, options)`:
+
+```ts
+const accounts = createLiveQuery(
+  MailAccountsDocument,
+  () => ({}),
+  () => ({ client: getGraphqlSoupClient() })
+);
+```
+
+This uses the existing urql query contract, with cache-core tracking selected
+fields and returning response-path patches. Existing `createUrqlQuery` and
+`createUrqlInfiniteQuery` consumers benefit from the same path automatically.
+Aliases, fragment types, arguments, variable defaults and conditional selections
+are resolved by the core reader. Structural edits rebuild the projection;
+teardown, account resets and bounded retention discard obsolete bindings. See
+[the live query API guide](../../apps/web/docs/graphql-normalized-cache-plan.md#8-live-query-api)
+for mutation examples and the distinction between reactive cached fields and
+domain-specific collection membership.
+
 ## Entity-rooted optimistic relations
 
 Link recipes may use an optional `recordRoot` (`fragmentName`, `entityKey`).

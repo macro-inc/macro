@@ -1,13 +1,73 @@
 import { createLivePreviewBatcher } from '@queries/preview/live-batcher';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { createSignal, For, onCleanup } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { DatabaseViewColumn } from '../core/database-view';
-import { GridCell } from './grid-cell';
+import { type DatabaseMentionPickerProps, GridCell } from './grid-cell';
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+it('keeps the current company preview mounted while searching and cancelling its picker', async () => {
+  let mounts = 0;
+  let disposals = 0;
+  let picker: DatabaseMentionPickerProps | undefined;
+  const write = vi.fn(async () => true);
+  function Preview() {
+    mounts++;
+    onCleanup(() => disposals++);
+    return <span data-testid="company-preview">Northstar</span>;
+  }
+  render(() => (
+    <GridCell
+      column={{
+        id: 'company',
+        name: 'Company',
+        dataType: 'ENTITY',
+        specificEntityType: 'COMPANY',
+        options: [],
+        isMultiSelect: false,
+        writable: true,
+      }}
+      value="company-1"
+      canEdit
+      onWrite={write}
+      onAddOption={write}
+      onMention={write}
+      renderMentionValue={() => <Preview />}
+      renderMentionPicker={(props) => {
+        picker = props;
+        return null;
+      }}
+    />
+  ));
+  const original = screen.getByTestId('company-preview');
+  for (let round = 0; round < 2; round++) {
+    const trigger = screen.getByRole('button', { name: 'Company: Northstar' });
+    fireEvent.click(trigger);
+    const editor = screen.getByRole('textbox', {
+      name: 'Edit Company',
+    }) as HTMLInputElement;
+    expect(screen.getByTestId('company-preview')).toBe(original);
+    expect(disposals).toBe(0);
+    expect(editor.value).toBe('');
+    expect(document.activeElement).toBe(editor);
+    fireEvent.input(editor, { target: { value: 'new company' } });
+    expect(picker?.search).toBe('new company');
+    fireEvent.keyDown(editor, { key: 'Escape' });
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(screen.getByTestId('company-preview')).toBe(original);
+  }
+  expect(mounts).toBe(1);
+  expect(write).not.toHaveBeenCalled();
 });
 
 it('retains a company preview when refreshed row objects still reference the same company', () => {

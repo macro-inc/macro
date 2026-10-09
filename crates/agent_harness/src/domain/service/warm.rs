@@ -4,6 +4,7 @@ use super::*;
 use crate::domain::model::SessionRepository;
 use agent_session::domain::model::session_owner_user;
 use agent_session::domain::ports::{OpenManagedSession, SelectedManagedPersona};
+use agent_session::domain::warm::WarmClaim;
 use model_owner::Owner;
 use std::time::{Duration, Instant};
 
@@ -51,7 +52,7 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
-    #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = false))]
+    #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = false, agent.session.warm_id_sent = tracing::field::Empty, agent.session.warm_miss_reason = tracing::field::Empty, agent.session.model = tracing::field::Empty))]
     pub(super) async fn open_managed_session_inner(
         &self,
         request: agent_session::domain::ports::OpenManagedSession,
@@ -96,6 +97,7 @@ where
         // in is choosing what this session runs on, for its whole life.
         let requested_model = request.model;
         let model = requested_model.clone().unwrap_or(model);
+        tracing::Span::current().record("agent.session.model", &model);
         let kind = AgentKind::for_session(bot_id, &harness);
         let harness = kind.harness_slug().map_or(harness, str::to_owned);
         tracing::Span::current().record("agent.harness", &harness);
@@ -154,22 +156,31 @@ where
             .instrument(tracing::info_span!("agent.init.admission", agent.session.id = %session_id))
             .await
             .map_err(into_session_error)?;
-        if !warm
-            && kind == AgentKind::InMemory
-            && bot_id == bot_id::MACRO_NEW_BOT_ID
-            && matches!(mcp_servers, AgentMcpServers::OwnerConnections)
-            && request.repo_url.is_none()
-            && let Some(lifecycle) = &self.warm_lifecycle
-            && lifecycle
-                .claim(
-                    session_id,
-                    &request.owner,
-                    bot_id,
-                    &model,
-                    instructions.as_deref(),
-                )
-                .await?
-        {
+        let claim = if warm {
+            None
+        } else {
+            let eligible = kind == AgentKind::InMemory
+                && bot_id == bot_id::MACRO_NEW_BOT_ID
+                && matches!(mcp_servers, AgentMcpServers::OwnerConnections)
+                && request.repo_url.is_none();
+            let claim = match &self.warm_lifecycle {
+                Some(lifecycle) if eligible => Some(
+                    lifecycle
+                        .claim(
+                            session_id,
+                            &request.owner,
+                            bot_id,
+                            &model,
+                            instructions.as_deref(),
+                        )
+                        .await?,
+                ),
+                _ => None,
+            };
+            record_warm_claim(request.id.is_some(), eligible, claim);
+            claim
+        };
+        if claim == Some(WarmClaim::Claimed) {
             self.warm_reservations.lock().await.remove(&session_id);
             tracing::Span::current().record("agent.session.warm_hit", true);
             let session = self.inner.sessions.get_session(session_id).await?;
@@ -357,28 +368,40 @@ where
         self
     }
 
+    #[tracing::instrument(name = "agent.session.prepare_warm", skip_all, fields(agent.session.id = %id, agent.warm.outcome = tracing::field::Empty, agent.session.model = tracing::field::Empty))]
     pub(super) async fn prepare_warm(
         &self,
         owner: Owner,
         id: AgentSessionId,
     ) -> agent_session::domain::error::Result<Option<AgentSession>> {
+        let span = tracing::Span::current();
         session_owner_user(&owner)?;
+        span.record(
+            "agent.session.model",
+            &self.inner.defaults.for_bot(bot_id::MACRO_NEW_BOT_ID).model,
+        );
         if self.warm_lifecycle.is_none() {
+            span.record("agent.warm.outcome", "disabled");
             return Ok(None);
         }
         {
             let mut reservations = self.warm_reservations.lock().await;
             reservations.retain(|_, (_, started)| started.elapsed() < WARM_RESERVATION_TTL);
             if reservations.contains_key(&id) {
+                span.record("agent.warm.outcome", "reused");
                 return Ok(None);
             }
-            if reservations.len() >= MAX_WARM_RESERVATIONS
-                || reservations
-                    .values()
-                    .filter(|(user, _)| user == &owner)
-                    .count()
-                    >= MAX_WARM_RESERVATIONS_PER_OWNER
+            if reservations.len() >= MAX_WARM_RESERVATIONS {
+                span.record("agent.warm.outcome", "refused_global_cap");
+                return Ok(None);
+            }
+            if reservations
+                .values()
+                .filter(|(user, _)| user == &owner)
+                .count()
+                >= MAX_WARM_RESERVATIONS_PER_OWNER
             {
+                span.record("agent.warm.outcome", "refused_owner_cap");
                 return Ok(None);
             }
             reservations.insert(id, (owner.clone(), Instant::now()));
@@ -402,12 +425,17 @@ where
         )
         .await
         {
-            Ok(Ok(session)) => Ok(Some(session)),
+            Ok(Ok(session)) => {
+                span.record("agent.warm.outcome", "prepared");
+                Ok(Some(session))
+            }
             Ok(Err(error)) => {
+                span.record("agent.warm.outcome", "failed");
                 tracing::warn!(error = ?error, "warm session preparation failed");
                 Ok(None)
             }
             Err(_) => {
+                span.record("agent.warm.outcome", "timed_out");
                 tracing::warn!("warm session preparation timed out");
                 Ok(None)
             }
@@ -430,5 +458,23 @@ where
             }
             Err(error) => tracing::warn!(error = ?error, "warm session expiry failed"),
         }
+    }
+}
+
+/// Why a non-warming open did or did not claim a warm session, on its span.
+fn record_warm_claim(client_minted_id: bool, eligible: bool, claim: Option<WarmClaim>) {
+    let span = tracing::Span::current();
+    let reason: &'static str = match claim {
+        _ if !client_minted_id => "no_warm_id",
+        Some(WarmClaim::Claimed) => "none",
+        Some(WarmClaim::Missed(reason)) => reason.into(),
+        None if !eligible => "ineligible",
+        None => "disabled",
+    };
+    span.record("agent.session.warm_miss_reason", reason);
+    if !client_minted_id {
+        span.record("agent.session.warm_id_sent", false);
+    } else if let Some(claim) = claim {
+        span.record("agent.session.warm_id_sent", claim.found_warm_session());
     }
 }

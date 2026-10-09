@@ -691,12 +691,22 @@ impl AgentSessionResponse {
     params(("session_id" = Uuid, Path, description = "ID of the agent session")),
     responses(
         (status = 200, body = AgentSessionResponse),
-        (status = 401, body = String),
+        (status = 401, body = String, description = "the session exists but is not this caller's"),
         (status = 403, body = String),
+        (
+            status = 404,
+            body = String,
+            description = "no session with this id: not created yet, or deleted since"
+        ),
         (status = 500, body = String),
     )
 )]
 /// Get an agent session by id.
+///
+/// A caller holding no grant is answered 401; an id with no session behind it
+/// at all is answered 404. They used to be the same answer, which left a
+/// client that read a session before its create had landed unable to tell a
+/// race it should retry from a refusal it should not.
 #[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
 pub async fn get_agent_session_handler<
     T: AgentSessionService,

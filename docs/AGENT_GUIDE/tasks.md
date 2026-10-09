@@ -48,6 +48,12 @@ clears it, and switching tabs clears it like any other filter. On mobile, the ta
 are pills and the leading sliders button opens one drawer containing Sort, Group, and
 Filters (including Tags). The mobile bottom dock has the Ask AI input, a separate **+ Task**
 button, and Search.
+Mobile does not show the separate layout, sort, group, and filter toolbar.
+Use the compact sliders drawer for task-list controls; project task lists use the
+same drawer. Mobile supports List only. Opening a Board link or restoring a Board
+entry automatically selects List and replaces that host's layout URL parameter,
+without adding a history entry or clearing search, sorting, grouping, or filters.
+The desktop Board layout remains available.
 
 **Keyboard:** **H** and **←** collapse the focused item or its parent group.
 On a focused group header, **H** collapses only that group; pressing it again
@@ -71,6 +77,18 @@ layouts. Narrow splits also show a close button when multiple splits are open. C
 the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
+
+Property edits should update the visible task before the save finishes. To verify,
+delay the GraphQL mutation and change Status, an existing Priority, and an unset
+Priority in the list and task detail. In a view grouped by that property, the task
+should move groups and update both counts immediately. Reject a save to check that
+the value, group membership, and counts all roll back without refreshing the page.
+
+For tags, include a task with no prior tag assignment. Delay
+`UpdateEntityPropertyOptions` and the following `EntityProperties` query: the tag
+should appear immediately and stay visible through both responses in the list,
+task header, side panel, and a reopened picker. A rejected save should remove only
+the optimistic tag. Repeat with an existing assignment and with removal.
 
 ## Board layout
 
@@ -175,8 +193,9 @@ those older results must not hide a failure for the new, uncached query.
 
 ## Reviews view
 
-With `enable-tasks-reviews` enabled (on by default in development), a
-`Reviews` shortcut appears above `My Tasks` in the Tasks sidebar and mobile tabs.
+With `enable-tasks-reviews` enabled (on by default in development),
+`Reviews` is available in desktop navigation and the mobile bottom dock's
+`More views` drawer, not the mobile Tasks tabs.
 It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
 `Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
 `Involves me` is selected by default. The selected tab is stored in the URL and
@@ -394,7 +413,9 @@ Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
-and side-panel controls as task detail. Choose Overview or Tasks using the inset
+and side-panel controls as task detail. `Project actions` (the dots button
+after the name) opens the row context menu's entries for this project,
+including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar. In Tasks, an outlined circular search button expands into
 a focused `Search in <project name>` field. Close or Escape clears the query and
 restores focus to the button. The task toolbar stays the same height and scrolls

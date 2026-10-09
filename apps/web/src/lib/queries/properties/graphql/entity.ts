@@ -46,10 +46,7 @@ import {
   groupedPropertyKeys,
   type PrepareGroupedPropertyUpdates,
 } from '../../soup/grouped/graphql-optimistic';
-import {
-  buildOptimisticSetEntityProperty,
-  isTemporaryGraphqlProperty,
-} from '../graphql-optimistic';
+import { buildOptimisticSetEntityProperty } from '../graphql-optimistic';
 import { buildPropertyAssignmentLinks } from './assignment-links';
 import { observePropertyMutationSettlements } from './mutation-settlements';
 
@@ -249,10 +246,7 @@ async function prepareMutationArgs(
   const host = getGraphqlCacheHost();
   if (host) {
     try {
-      if (
-        optimisticProperty &&
-        isTemporaryGraphqlProperty(optimisticProperty.id)
-      ) {
+      if (optimisticProperty) {
         optimisticCache.updates = buildPropertyAssignmentLinks(
           entityType,
           input.entityId,
@@ -269,6 +263,7 @@ async function prepareMutationArgs(
           optimisticCache.revalidations.push({
             document: EntityPropertiesDocument,
             variables: { input: targetInput },
+            onlyOnLinkFailure: true,
           });
         }
       }

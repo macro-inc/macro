@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 pub const MAX_RECONCILIATION_BASELINE: usize = 5_000;
 
 /// Positive server membership evidence, scoped by the caller to this exact query.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PredicateBaselineEntry {
     /// Normalized record key.
     pub record_key: RecordKey,

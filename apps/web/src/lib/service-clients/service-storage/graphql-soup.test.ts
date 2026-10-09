@@ -50,6 +50,7 @@ it('preserves initiative identity, properties, and metadata separately from fold
 it('preserves the scheduled occurrence identity on reminder notifications', async () => {
   const { mapGraphqlNotification } = await import('./graphql-soup');
   const mapped = mapGraphqlNotification({
+    __typename: 'GraphqlNotification',
     id: 'notification-1',
     entityId: 'thread-1',
     entityType: 'EMAIL_THREAD',
@@ -313,6 +314,9 @@ vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({
   createClient: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
 }));
+vi.mock('../../queries/optimistic-resolvers', () => ({
+  soupOptimisticResolvers: [],
+}));
 vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
@@ -397,6 +401,7 @@ describe('legacy channel list notifications', () => {
   const notification = (
     metadata: ChannelListNotificationFieldsFragment['metadata']
   ): ChannelListNotificationFieldsFragment => ({
+    __typename: 'GraphqlNotification',
     id: 'notification',
     eventType: 'channel_message_send',
     entityId: 'channel',
@@ -775,6 +780,60 @@ describe('GraphQL Soup browser cache session gate', () => {
         'cache.phase': 'operation',
         'cache.operation_kind': kind,
       });
+    }
+  );
+
+  it.each([
+    ['navigation', 'admitted-enqueue-uncertain', false],
+    ['transport', 'admitted-enqueue-uncertain', true],
+    ['abrupt', 'admitted-enqueue-uncertain', true],
+    ['message-only', 'admitted-enqueue-uncertain', true],
+    ['missing', 'admitted-enqueue-uncertain', true],
+    ['navigation', undefined, true],
+  ] as const)(
+    'classifies wrapped cache errors by cause %s and code %s (report: %s)',
+    async (causeKind, errorCode, shouldReport) => {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const { CacheNavigationError } = await import(
+        '@graphql-cache/host/navigation-error'
+      );
+      const navigation = new CacheNavigationError();
+      const causes = {
+        navigation,
+        transport: new Error('coordinator MessagePort messageerror'),
+        abrupt: new Error('cache worker host was abruptly disposed'),
+        'message-only': new Error(navigation.message),
+        missing: undefined,
+      };
+      const error = Object.assign(
+        new Error('admitted optimistic enqueue outcome is uncertain', {
+          cause: causes[causeKind],
+        }),
+        { name: 'CacheResponseError', errorCode }
+      );
+      const operation: Operation = {
+        kind: 'mutation',
+        key: 42,
+        query: parse('mutation PrivateMutation { update }'),
+        variables: { privateValue: 'do-not-export' },
+        context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+      };
+      const report =
+        mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
+      expect(report).toBeDefined();
+      report?.(error, operation);
+
+      if (shouldReport) {
+        expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+          'error.source': 'graphql-cache',
+          'cache.backend': 'turso-wasm-opfs',
+          'cache.phase': 'operation',
+          'cache.operation_kind': 'mutation',
+        });
+      } else {
+        expect(mocks.telemetryError).not.toHaveBeenCalled();
+      }
     }
   );
 

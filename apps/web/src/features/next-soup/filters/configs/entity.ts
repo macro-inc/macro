@@ -2,6 +2,7 @@ export {
   crmCompanyActiveFilter,
   crmCompanyFilter,
   crmCompanyHiddenFilter,
+  crmContactActiveFilter,
 } from '../../../crm/collection-filters';
 
 import { getEntityProjectId } from '@entity';

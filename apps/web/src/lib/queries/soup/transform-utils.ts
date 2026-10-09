@@ -325,9 +325,14 @@ const formatDisplayName = (text: string, fileType?: string | null) =>
   formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
 
 export const useSearchResponseItemMapper = () => {
-  const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
+  const { channels } = useChannelsContext();
+  return (result: UnifiedSearchResponseItem, searchQuery: string) =>
+    createSearchResponseItemMapper(channels())(result, searchQuery);
+};
 
+export const createSearchResponseItemMapper = (
+  channels: ReadonlyArray<{ id: string; name?: string | null }>
+) => {
   return (
     result: UnifiedSearchResponseItem,
     searchQuery: string
@@ -500,8 +505,7 @@ export const useSearchResponseItemMapper = () => {
           source: 'service',
         };
         const channelName =
-          channels().find((channel) => channel.id === result.channel_id)
-            ?.name ??
+          channels.find((channel) => channel.id === result.channel_id)?.name ??
           (search.nameHighlight
             ? extractSearchSnippet(search.nameHighlight)
             : blockNameToDefaultFile('channel'));
@@ -522,7 +526,7 @@ export const useSearchResponseItemMapper = () => {
       }
       case 'channelMessage': {
         const channelName =
-          channels().find((c) => c.id === result.channel_id)?.name ??
+          channels.find((c) => c.id === result.channel_id)?.name ??
           blockNameToDefaultFile('channel');
         const search = getSearchData({ type: 'channel', results: [result] });
         const content = search.contentHitData?.[0]?.content ?? '';
@@ -624,7 +628,7 @@ export const useSearchResponseItemMapper = () => {
 
         const channelName: string | undefined =
           result.metadata.channel_name ??
-          channels().find((c) => c.id === result.channel_id)?.name ??
+          channels.find((c) => c.id === result.channel_id)?.name ??
           undefined;
         const status = result.metadata.status;
 
@@ -1051,7 +1055,10 @@ const toCalendarEventTime = (
 
 export const isInstructionsMdDoc = (
   item: SoupApiItem,
-  instructionsIdQuery: UseQueryResult<string | null | undefined, Error>
+  instructionsIdQuery: Pick<
+    UseQueryResult<string | null | undefined, Error>,
+    'data' | 'isSuccess'
+  >
 ) => {
   if (item.tag !== 'document') return false;
 
@@ -1063,7 +1070,10 @@ export const isInstructionsMdDoc = (
 export const mapSoupPageToEntityList: (
   data: SoupPage,
   options: {
-    instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
+    instructionsIdQuery: Pick<
+      UseQueryResult<string | null | undefined, Error>,
+      'data' | 'isSuccess'
+    >;
     showSupportedForeignEntities?: boolean;
   }
 ) => SoupEntity[] = (data, options) => {

@@ -1,8 +1,9 @@
 //! Kafka consumer for entity events that change realtime Soup items.
 //!
 //! Delivery is best effort with bounded retries: offsets are committed after
-//! successful domain processing or a logged terminal failure. Exhausted retries
-//! discard the rest of that event so it cannot wedge a partition. Malformed and
+//! successful domain processing or a logged terminal failure. Exhausted publication
+//! retries discard the rest of that event so it cannot wedge a partition. Failed
+//! linked-session lookups still allow direct PR record updates. Malformed and
 //! recognized-but-irrelevant events are also committed. Cancellation leaves the
 //! in-flight event uncommitted; partial delivery and replay can produce duplicates.
 
@@ -13,7 +14,7 @@ use std::{future::Future, time::Duration};
 
 use crate::domain::{
     models::{Patch, SoupRealtimePatch},
-    ports::SoupRealtimeService,
+    ports::{PullRequestSessions, SoupRealtimeService},
     service::SoupRealtimeServiceImpl,
 };
 use channels::domain::{
@@ -23,6 +24,7 @@ use channels::domain::{
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
+use github_pull_requests::broker::{GithubPullRequestMacroEvent, GithubPullRequestTopicEvent};
 use initiative::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
@@ -58,6 +60,7 @@ type SoupRealtimeKafkaConsumer =
 
 macro_event_broker::declare_topics!(
     DeclaredMacroEvent:
+        GithubPullRequestMacroEvent,
         DocumentMacroEvent,
         ProjectMacroEvent,
         ChatMacroEvent,
@@ -552,6 +555,14 @@ fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePa
 
 fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
     match event {
+        DeclaredMacroEvent::GithubPullRequestMacroEvent(event) => {
+            let GithubPullRequestTopicEvent::Updated(change) = &event.event().event;
+            change
+                .foreign_entity_ids
+                .iter()
+                .map(|id| update(EntityType::ForeignEntity, id))
+                .collect()
+        }
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
             patches_from_document_event(&event.event().event)
         }
@@ -597,13 +608,39 @@ enum EventOutcome {
     Dropped,
 }
 
-#[tracing::instrument(skip(service, event, commit))]
-async fn process_event<S: SoupRealtimeService>(
+#[tracing::instrument(skip(service, sessions, event, commit))]
+async fn process_event<S: SoupRealtimeService, L: PullRequestSessions>(
     service: &S,
+    sessions: &L,
     event: &DeclaredMacroEvent,
     commit: impl FnOnce(),
 ) -> EventOutcome {
-    let patches = patches_from_event(event);
+    let mut patches = patches_from_event(event);
+    if let DeclaredMacroEvent::GithubPullRequestMacroEvent(event) = event {
+        let GithubPullRequestTopicEvent::Updated(update) = &event.event().event;
+        match Retry::start(notify_retry_strategy(), || {
+            crate::domain::service::pull_request_patches(
+                sessions,
+                &update.github_key,
+                update
+                    .foreign_entity_ids
+                    .iter()
+                    .map(|id| entity(EntityType::ForeignEntity, id)),
+            )
+        })
+        .await
+        {
+            Ok(expanded) => patches = expanded,
+            Err(error) => {
+                tracing::error!(
+                    error=?error,
+                    github_key=%update.github_key,
+                    attempts=MAX_NOTIFY_ATTEMPTS,
+                    "skipping linked session updates after lookup retries; publishing PR records"
+                );
+            }
+        }
+    }
     let mut outcome = if patches.is_empty() {
         tracing::trace!("ignoring event without a Soup patch");
         EventOutcome::Ignored
@@ -662,10 +699,11 @@ impl SoupRealtimeServiceImpl {
     /// intentionally preferring consumer progress over delivery during persistent
     /// failures. Shutdown during processing or retry backoff leaves the event
     /// uncommitted for replay.
-    #[tracing::instrument(skip(self, shutdown), fields(brokers), err)]
+    #[tracing::instrument(skip(self, sessions, shutdown), fields(brokers), err)]
     pub async fn run_entity_update_consumer(
         &self,
         brokers: &str,
+        sessions: &impl PullRequestSessions,
         shutdown: impl Future<Output = ()> + Send,
     ) -> Result<(), Report> {
         let consumer = KafkaEventConsumer::<SoupRealtimeConsumerGroup>::from_env(brokers)?;
@@ -712,7 +750,7 @@ impl SoupRealtimeServiceImpl {
                     tokio::select! {
                         biased;
                         _ = &mut shutdown => break,
-                        _ = process_event(self, &event, || {
+                        _ = process_event(self, sessions, &event, || {
                             commit_logged(&consumer, kafka_message);
                         }).instrument(span) => {}
                     }

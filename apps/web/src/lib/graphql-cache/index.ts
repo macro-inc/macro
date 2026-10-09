@@ -97,3 +97,8 @@ export {
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from './protocol';
+
+export {
+  createLiveQuery,
+  type LiveQueryOptions,
+} from './solid/create-live-query';

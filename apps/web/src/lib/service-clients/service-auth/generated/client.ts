@@ -100,7 +100,7 @@ import type {
 } from './schemas';
 
 /**
- * @summary Turn automatic credit reloads (and with them overage) on with the given
+ * @summary Turn automatic credit reloads on with the given
 thresholds, or off. Payer only. Enabling settles right away, so a balance
 already under the minimum reloads immediately.
  */
@@ -258,7 +258,7 @@ export const createAiCreditCheckout = async (
 };
 
 /**
- * @summary Turn overage billing on or off and set the per-period cap. Payer only.
+ * @summary Retired direct-usage opt-in. Enabling is rejected; disabling remains supported.
  */
 export type updateAiBillingOverageResponse200 = {
   data: UsageSnapshot;

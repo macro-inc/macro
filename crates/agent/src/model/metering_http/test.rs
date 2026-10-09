@@ -120,6 +120,7 @@ fn admission(request: BeginInvocation) -> AuthorizedInvocation {
 struct Transport {
     calls: Arc<AtomicUsize>,
     bodies: Arc<Mutex<Vec<Value>>>,
+    headers: Arc<Mutex<Vec<http_client::HeaderMap>>>,
     response: Bytes,
     remaining: Arc<Mutex<std::collections::VecDeque<Bytes>>>,
     fail: bool,
@@ -146,6 +147,7 @@ impl Transport {
 
     fn called<T: Into<Bytes>>(&self, request: Request<T>) {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.headers.lock().unwrap().push(request.headers().clone());
         self.bodies
             .lock()
             .unwrap()
@@ -929,3 +931,5 @@ async fn a_reshaped_anthropic_request_is_metered_with_its_cache_usage() {
         UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(4, 7, 30000, 250, 0))
     );
 }
+
+mod speed;

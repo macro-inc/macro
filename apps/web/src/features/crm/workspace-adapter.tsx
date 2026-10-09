@@ -1,9 +1,8 @@
 import { usePreference } from '@app/preferences/use-preference';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { idToDisplayName } from '@core/user/util';
-import { isCrmCompanyEntity } from '@entity';
+import { type EntityData, isCrmCompanyEntity } from '@entity';
 import { COMPANY_STAGE_OPTIONS } from '@entity/utils/task-properties';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { batch, createEffect, createRenderEffect, on } from 'solid-js';
@@ -18,10 +17,22 @@ import { createSoupViewState } from '../next-soup/soup-view/soup-view-context';
 import { useSoupFilterPersistence } from '../next-soup/use-soup-filter-persistence';
 import { openEntityInSplitFromUnifiedList } from '../next-soup/utils';
 import type { CrmContext } from './context/crm-context';
+import type { DealStages } from './context/crm-sources';
 import type { CrmWorkspace } from './context/workspace-context';
 import type { CrmViewConfig } from './core/saved-view';
 import { createCrmCollectionFilters } from './filter-adapter';
 import { COMPANY_GROUP_OPTIONS } from './group-options';
+
+// The filter context lands in cached soup query meta, so its stage resolvers
+// close over the deal stages only, never this workspace's scope (see "Query
+// callback lifetimes" in apps/web/AGENTS.md).
+function stageFilterResolvers(stages: DealStages) {
+  return {
+    resolveCompanyStage: (entity: EntityData) =>
+      isCrmCompanyEntity(entity) ? stages.resolveStage(entity) : undefined,
+    companyStageLabel: stages.stageLabel,
+  };
+}
 
 export function createCrmWorkspace(
   crm: CrmContext,
@@ -30,8 +41,7 @@ export function createCrmWorkspace(
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const stages = crm.createDealStages();
-  const resolveStage = (entity: import('@entity').EntityData) =>
-    isCrmCompanyEntity(entity) ? stages.resolveStage(entity) : undefined;
+  const stageResolvers = stageFilterResolvers(stages);
   const [persistFilters] = useSoupFilterPersistence();
   const filters = createCrmCollectionFilters(crm, soup, persistFilters, stages);
   const state = createSoupViewState({
@@ -41,7 +51,7 @@ export function createCrmWorkspace(
       propertyGrouping: {
         value: (entity, id) =>
           id === SYSTEM_PROPERTY_IDS.STAGE
-            ? (resolveStage(entity) ?? '')
+            ? (stageResolvers.resolveCompanyStage(entity) ?? '')
             : undefined,
         label: (value, id) =>
           id === SYSTEM_PROPERTY_IDS.STAGE
@@ -55,14 +65,13 @@ export function createCrmWorkspace(
             : COMPANY_STAGE_OPTIONS.map((option) => String(option.value)),
       },
       filterContext: () => ({
-        resolveCompanyStage: resolveStage,
-        companyStageLabel: stages.stageLabel,
+        ...stageResolvers,
         owners: filters.state.ownerFilter(),
         stages: filters.state.stageFilter(),
       }),
       selectFilters: filters.facets,
       groupOptions: {
-        visible: () => filters.state.viewMode() === 'list',
+        visible: () => true,
         options: COMPANY_GROUP_OPTIONS,
       },
     },
@@ -164,9 +173,6 @@ export function createCrmWorkspace(
         if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
           soup.predicates.toggle({ and: ['company-owner'] });
         }
-        soupView.setViewMode(
-          initialCrmView.viewMode ?? (isTouchDevice() ? 'list' : 'board')
-        );
       }
     });
   });

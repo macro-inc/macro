@@ -21,6 +21,7 @@ mod model_providers;
 mod permission_policy;
 mod routine_sessions;
 mod runtime_commands;
+mod session_mcp;
 mod trigger;
 
 #[cfg(test)]
@@ -308,8 +309,18 @@ async fn run() -> anyhow::Result<()> {
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
     );
-    let recorder =
-        ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
+    // One recorder for everything this process meters: in-memory agent
+    // turns, session naming, trigger inference, and repository selection.
+    // Counted usage asks the authentication service (which owns Stripe) to
+    // settle the payer, the same way document cognition does, so credits are
+    // consumed and a reload follows an agent turn rather than the next
+    // Billing page view.
+    let recorder = ai_billing::composition::pg_settling_recorder(
+        pool.clone(),
+        config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
+        config.settlement_route()?,
+    );
     let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
@@ -501,10 +512,17 @@ async fn run() -> anyhow::Result<()> {
     // server's session for the life of the egress token, so a replaced agent
     // task and the catalog's listing reuse the handshake instead of opening
     // a second set of clients and dropping them when the listing ends.
-    let mcp_connector = Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
-        Arc::clone(&egress),
-        &egress_base_url,
-    )));
+    let mcp_connector = Arc::new(
+        AcpMcpConnector::new(EgressMcpClient::new(Arc::clone(&egress), &egress_base_url))
+            .with_source(Arc::new(session_mcp::SessionConnectors {
+                sessions: session_repo.clone(),
+                provisioner: Arc::new(EgressProvisioner::new(
+                    Arc::clone(&mcp_connections),
+                    Arc::clone(&mcp_servers),
+                    &egress_base_url,
+                )),
+            })),
+    );
     let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
         Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
@@ -514,6 +532,7 @@ async fn run() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
+        recorder.clone(),
     )
     .await
     .context("failed to build the in-memory agent tool context")?;

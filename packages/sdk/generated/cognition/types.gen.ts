@@ -676,6 +676,10 @@ export type HttpSendChatMessageRequest = {
      */
     model: string;
     /**
+     * Inference speed, validated against the selected model. Defaults to standard.
+     */
+    speed?: ModelSpeed;
+    /**
      * Which toolset to use. Defaults to `all`
      */
     toolset?: ToolSet;
@@ -876,6 +880,11 @@ export type MessageWithAttachments = {
     content: string;
     date: string;
 };
+
+/**
+ * The requested inference speed. Standard is backward compatible with old clients.
+ */
+export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;

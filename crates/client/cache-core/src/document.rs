@@ -12,6 +12,9 @@ use serde_json::Value as Json;
 use std::collections::HashMap;
 use thiserror::Error;
 
+mod prepare;
+pub(crate) use prepare::prepare_selections;
+
 #[derive(Debug, Error)]
 pub enum DocumentError {
     #[error("GraphQL parse error: {0}")]
@@ -24,13 +27,17 @@ pub enum DocumentError {
     UnsupportedOperationType(String),
     #[error("fragment `{0}` is not defined")]
     UnknownFragment(String),
+    #[error("unsupported directive `@{0}` requires network execution")]
+    UnsupportedDirective(String),
+    #[error("invalid condition for `@{0}`")]
+    InvalidCondition(String),
     #[error("malformed document: {0}")]
     Malformed(&'static str),
 }
 
 /// Argument value: constant JSON or a variable reference resolved at
 /// read/write time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArgValue {
     Const(Json),
     Variable(String),
@@ -38,7 +45,7 @@ pub enum ArgValue {
     Object(Vec<(String, ArgValue)>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldNode {
     /// Response key (alias if present, else name).
     pub response_key: String,
@@ -46,17 +53,20 @@ pub struct FieldNode {
     pub name: String,
     /// The field is persisted but omitted from hydration results.
     pub cache_only: bool,
+    /// Conditional directives evaluated once against operation variables.
+    pub conditions: Vec<(String, ArgValue)>,
     pub arguments: Vec<(String, ArgValue)>,
     pub selection_set: Vec<Selection>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Selection {
     Field(FieldNode),
     /// Inline fragment or named-fragment spread, already flattened to a type
     /// condition (None = no condition) plus selections.
     Fragment {
         type_condition: Option<String>,
+        conditions: Vec<(String, ArgValue)>,
         selection_set: Vec<Selection>,
     },
 }
@@ -73,6 +83,7 @@ pub enum OperationKind {
 pub struct Operation {
     pub name: Option<String>,
     pub kind: OperationKind,
+    pub variable_defaults: serde_json::Map<String, Json>,
     pub selection_set: Vec<Selection>,
 }
 
@@ -150,9 +161,31 @@ impl Document {
                 &fragments,
                 0,
             )?;
+            let mut variable_defaults = serde_json::Map::new();
+            if let Some(definitions) = op.variable_definitions() {
+                for definition in definitions.variable_definitions() {
+                    if let Some(value) = definition
+                        .default_value()
+                        .and_then(|default| default.value())
+                    {
+                        let name = definition
+                            .variable()
+                            .ok_or(DocumentError::Malformed("variable without name"))?
+                            .text()
+                            .to_string();
+                        let value = resolve_arg(&convert_value(value)?, &serde_json::Map::new())
+                            .map_err(|_| {
+                                DocumentError::Malformed("nonconstant variable default")
+                            })?;
+                        variable_defaults.insert(name, value);
+                    }
+                }
+            }
+            prepare::conditions(op.directives())?;
             operations.push(Operation {
                 name: op.name().map(|n| n.text().to_string()),
                 kind,
+                variable_defaults,
                 selection_set,
             });
         }
@@ -274,6 +307,7 @@ fn convert_selection_set(
                     response_key,
                     name,
                     cache_only,
+                    conditions: prepare::conditions(f.directives())?,
                     arguments,
                     selection_set,
                 }));
@@ -293,6 +327,7 @@ fn convert_selection_set(
                 )?;
                 out.push(Selection::Fragment {
                     type_condition,
+                    conditions: prepare::conditions(frag.directives())?,
                     selection_set,
                 });
             }
@@ -317,8 +352,10 @@ fn convert_selection_set(
                     fragments,
                     depth + 1,
                 )?;
+                prepare::conditions(def.directives())?;
                 out.push(Selection::Fragment {
                     type_condition,
+                    conditions: prepare::conditions(spread.directives())?,
                     selection_set,
                 });
             }

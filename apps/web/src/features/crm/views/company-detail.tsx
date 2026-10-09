@@ -82,7 +82,10 @@ export function Company(props: {
                     onClick={() => {
                       const domain = company()?.domains[0]?.domain;
                       if (domain)
-                        openCreateContactModal(props.companyId, domain);
+                        openCreateContactModal({
+                          companyId: props.companyId,
+                          domain,
+                        });
                     }}
                   >
                     <PlusIcon class="size-3.5" />

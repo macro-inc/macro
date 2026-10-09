@@ -73,6 +73,21 @@ fn openapi_documents_session_admission_failures() {
     assert!(schema["components"]["schemas"]["AiAdmissionErrorBody"].is_object());
 }
 
+/// A read answers "not yours" and "not there" differently, and says so in the
+/// contract: a client that cannot tell them apart has no way to know a
+/// refusal of a session it has only just created is worth trying again.
+#[test]
+fn openapi_separates_a_missing_session_from_a_refused_one() {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(paths(get_agent_session_handler))]
+    struct ApiDoc;
+
+    let schema = serde_json::to_value(<ApiDoc as utoipa::OpenApi>::openapi()).unwrap();
+    let responses = &schema["paths"]["/agent-sessions/{session_id}"]["get"]["responses"];
+    assert!(responses["401"].is_object());
+    assert!(responses["404"].is_object());
+}
+
 const BOT_TOKEN: &str = "mbot_self_test";
 const HARNESS_TOKEN: &str = "mhns_self_test";
 const OWNER: &str = "macro|owner@example.com";

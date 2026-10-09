@@ -30,6 +30,7 @@ type QueryTarget =
   | 'callf'
   | 'fef'
   | 'ccf'
+  | 'crmf'
   | 'asf'
   | 'propf';
 
@@ -167,6 +168,8 @@ const FIELD_CONFIG: Record<
   foreignEntityIncludesMe: { target: 'fef', field: 'me', unit: true },
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
+  crmContactHidden: { target: 'crmf', field: 'hidden' },
+  crmContactSearch: { target: 'crmf', field: 'search' },
   agentSessionId: { target: 'asf', field: 'id' },
   agentSessionOwnerId: { target: 'asf', field: 'o' },
   includeAgentSessions: { target: 'asf', field: 'inc', unit: true },
@@ -230,6 +233,7 @@ const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   callf: [],
   fef: [],
   ccf: [],
+  crmf: [],
   asf: [],
   propf: [],
 });

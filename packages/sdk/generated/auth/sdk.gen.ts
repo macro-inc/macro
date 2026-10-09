@@ -58,7 +58,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Turn automatic credit reloads (and with them overage) on with the given
+     * Turn automatic credit reloads on with the given
      * thresholds, or off. Payer only. Enabling settles right away, so a balance
      * already under the minimum reloads immediately.
      */
@@ -88,7 +88,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Turn overage billing on or off and set the per-period cap. Payer only.
+     * Retired direct-usage opt-in. Enabling is rejected; disabling remains supported.
      */
     public updateAiBillingOverage<ThrowOnError extends boolean = false>(options: Options<UpdateAiBillingOverageData, ThrowOnError>): RequestResult<UpdateAiBillingOverageResponses, UpdateAiBillingOverageErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<UpdateAiBillingOverageResponses, UpdateAiBillingOverageErrors, ThrowOnError>({

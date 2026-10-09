@@ -292,6 +292,30 @@ impl BillingRepo for PgBillingRepo {
         .transpose()
     }
 
+    async fn frozen_period_starts(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+        before: DateTime<Utc>,
+    ) -> Result<Vec<DateTime<Utc>>> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT period_start
+            FROM ai_billing_period_allowance
+            WHERE user_id = $1
+              AND period_start >= $2
+              AND period_start < $3
+            ORDER BY period_start
+            "#,
+            payer.as_ref(),
+            since,
+            before,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)
+    }
+
     async fn store_open_allowance(
         &self,
         payer: &MacroUserIdStr<'_>,
@@ -529,7 +553,8 @@ impl BillingRepo for PgBillingRepo {
             .map_err(funding_storage)?;
         let legacy_limit = legacy_cap_remaining(account.overage_limit_cents, committed_postpaid);
         let ledger = read_period_ledger(&mut tx, payer, period_start).await?;
-        let overage_active = account.overage_enabled
+        let overage_active = policy.overage_active
+            && account.overage_enabled
             && account.overage_suspended_at.is_none()
             && account.overage_limit_cents > 0;
 
@@ -598,7 +623,9 @@ impl BillingRepo for PgBillingRepo {
         .fetch_all(&mut *tx)
         .await
         .map_err(storage)?;
-        let orphaned = owed.iter().find(|row| row.status == "pending");
+        let orphaned = owed
+            .iter()
+            .find(|row| policy.overage_active && row.status == "pending");
         let retryable = owed.iter().find(|row| {
             row.status != "pending"
                 && overage_active

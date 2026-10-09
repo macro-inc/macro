@@ -22,6 +22,7 @@ pub(crate) fn selected_field<'a>(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } if type_condition
                 .as_deref()
                 .is_none_or(|condition| schema.type_matches(concrete, condition)) =>
@@ -54,6 +55,7 @@ pub(crate) fn possible_selected_fields<'a>(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } if type_condition
                 .as_deref()
                 .is_none_or(|condition| types_overlap(schema, type_name, condition)) =>

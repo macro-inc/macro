@@ -1,10 +1,8 @@
 import {
-  executeOptimisticMutation,
   optimisticMutationDispositionOf,
   type QueryRevalidation,
 } from '@graphql-cache/exchange/optimistic';
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
-import { v4 as uuidv4 } from 'uuid';
 import {
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
@@ -31,21 +29,13 @@ export async function markGraphqlEmailThreadSeen(
   threadId: string,
   revalidations: readonly QueryRevalidation[] = []
 ): Promise<EmailReadStateDisposition> {
-  const result = await executeOptimisticMutation(
-    client,
-    MarkEmailThreadSeenDocument,
-    { input: { threadId } },
-    {
-      markEmailThreadSeen: {
-        __typename: 'GraphqlSoupEmailThread',
-        id: threadId,
-        isRead: true,
-      },
-    },
-    // Keep distinct read/unread intents ordered; a newer action must not be
-    // rolled back by a previous request's failure.
-    { uuid: uuidv4(), revalidations }
-  ).toPromise();
+  const result = await client
+    .mutation(
+      MarkEmailThreadSeenDocument,
+      { input: { threadId } },
+      { optimisticMutation: { revalidations } }
+    )
+    .toPromise();
   return readStateDisposition(
     result,
     Boolean(result.data?.markEmailThreadSeen)
@@ -58,19 +48,13 @@ export async function markGraphqlEmailThreadUnread(
   threadId: string,
   revalidations: readonly QueryRevalidation[] = []
 ): Promise<EmailReadStateDisposition> {
-  const result = await executeOptimisticMutation(
-    client,
-    MarkEmailThreadUnreadDocument,
-    { input: { threadId } },
-    {
-      markEmailThreadUnread: {
-        __typename: 'GraphqlSoupEmailThread',
-        id: threadId,
-        isRead: false,
-      },
-    },
-    { uuid: uuidv4(), revalidations }
-  ).toPromise();
+  const result = await client
+    .mutation(
+      MarkEmailThreadUnreadDocument,
+      { input: { threadId } },
+      { optimisticMutation: { revalidations } }
+    )
+    .toPromise();
   return readStateDisposition(
     result,
     Boolean(result.data?.markEmailThreadUnread)

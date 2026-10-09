@@ -190,8 +190,11 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     get search() {
       return searchText();
     },
+    get layout() {
+      return isTouchDevice() ? 'list' : persistedState.layout;
+    },
     get groupBy() {
-      if (persistedState.layout !== 'board') {
+      if (state.layout !== 'board') {
         return persistedState.groupBy;
       }
 
@@ -219,6 +222,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       setSearch: setTabSearch,
       tab: routeTab,
       enabled: syncSearch,
+      boardEnabled: () => !isTouchDevice(),
     });
   const currentSearch = () =>
     tasksTabSearchCodec.serialize({

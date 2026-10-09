@@ -2,6 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { enableCanvasNext } from '@core/constant/featureFlags';
+import { useTauri } from '@macro/tauri';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,
@@ -215,6 +216,15 @@ function CanvasDocumentState(props: CanvasDocumentProps) {
   const [animation] = canvas.state.stores.animation;
   const [dataState, setDataState] = createSignal<CanvasDataState>('loading');
   const [visible, setVisible] = createSignal(false);
+  const unregisterUpdatePreparation =
+    useTauri()?.registerNativeUpdatePreparation(async () => {
+      if (pending() && !(await saveCanvasDataImmediate())) {
+        throw new Error(
+          'Could not save your canvas. Please try again before restarting.'
+        );
+      }
+    });
+  onCleanup(() => unregisterUpdatePreparation?.());
   const [pendingLocationParams, setPendingLocationParams] =
     createSignal<Record<string, unknown>>();
 

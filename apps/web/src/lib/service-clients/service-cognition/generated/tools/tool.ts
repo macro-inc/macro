@@ -95,6 +95,10 @@ type ToolParserMap = {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
   };
+  DiscoverConnectors: {
+    call: types.DiscoverConnectors;
+    response: types.DiscoverConnectorsResponse;
+  };
   DispatchCodingAgent: {
     call: types.DispatchCodingAgent;
     response: types.DispatchedCodingAgent;
@@ -452,6 +456,10 @@ const toolParserMap = {
   DescribeDatabase: {
     call: schemas.DescribeDatabase,
     response: schemas.ToolDatabaseSchema,
+  },
+  DiscoverConnectors: {
+    call: schemas.DiscoverConnectors,
+    response: schemas.DiscoverConnectorsResponse,
   },
   DispatchCodingAgent: {
     call: schemas.DispatchCodingAgent,
@@ -854,6 +862,10 @@ type ToolDataMap = {
   DescribeDatabase: {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
+  };
+  DiscoverConnectors: {
+    call: types.DiscoverConnectors;
+    response: types.DiscoverConnectorsResponse;
   };
   DispatchCodingAgent: {
     call: types.DispatchCodingAgent;

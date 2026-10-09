@@ -1,7 +1,6 @@
 import { makeFlaggedPersisted } from '@app/preferences/make-flagged-persisted';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { UserIcon } from '@core/component/UserIcon';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { idToDisplayName } from '@core/user/util';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import { useContacts } from '@queries/contacts/contacts';
@@ -30,10 +29,6 @@ export function createCrmCollectionFilters(
   const [stageFilter, setStageFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.stageFilter', { default: [] }),
     { enabled: persist, name: 'soup-view-stage-filter-v2' }
-  );
-  const [viewMode, setViewMode] = useEntryState<'list' | 'board'>(
-    'soup.viewMode',
-    { default: isTouchDevice() ? 'list' : 'board' }
   );
   const userId = crm.userId;
   const currentUserId = userId;
@@ -232,8 +227,6 @@ export function createCrmCollectionFilters(
       setOwnerFilter,
       stageFilter,
       setStageFilter,
-      viewMode,
-      setViewMode,
     },
   };
 }

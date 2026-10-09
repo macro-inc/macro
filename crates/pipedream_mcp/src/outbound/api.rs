@@ -13,6 +13,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use url::Url;
 
+mod capabilities;
+
 /// Default base URL of the Pipedream REST API.
 pub const DEFAULT_API_URL: &str = "https://api.pipedream.com";
 
