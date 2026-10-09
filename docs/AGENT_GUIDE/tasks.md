@@ -90,36 +90,73 @@ The calendar fills the available pane width and height, including empty space
 below loaded rows. Zooming, resizing, and loading earlier items preserve the
 visible calendar position. On first load, the chart centers on today after its
 viewport is measurable. Refetches and later resizes do not reset the scroll.
-Bars use the task color. Calendar content stays outside the sidebar during fast
-horizontal scrolling. The pointer's date label stays in the sticky calendar header
-during vertical scrolling, and the vertical scrollbar begins below that header.
-Hold **Ctrl** and scroll to zoom between 4 and 80 pixels per day, keeping the date
+Bars use the app's neutral depth-two surface and semantic border, with a small
+status-colored indicator. In light mode, bars have a stronger solid neutral fill
+and outline, and item panels have a subtle neutral fill and clearer border.
+Dark-mode surfaces stay unchanged. Bar text stays inside the visible portion of its bar as
+you scroll, zoom, or open the item drawer, and truncates in narrow segments.
+The full-width date header stays visible during vertical scrolling; the pointer's
+date label stays in that header, and the vertical scrollbar begins below it.
+Timeline-edge fades stay within the date header, beneath its floating buttons.
+Fades start at the calendar edges, span up to 128px, and shrink in narrow calendars.
+The floating item list uses separate rounded, bordered, low-contrast panels for
+consecutive groups. Items clip inside their panels and use the same height and
+padding as bars, with transparent backgrounds and hover-only highlighting.
+Group headers match the normal list's rounded surfaces, status tints, disclosure
+controls, and count pills.
+The list starts expanded in wide panes and collapses automatically below 640px
+until you explicitly choose open or closed. That choice stays in effect across
+pane resizes while the chart is mounted. Use the top-left toggle to change it.
+The drawer slides in and out, respecting reduced motion, and shares vertical
+scrolling with the bars without shifting dates or reserving calendar width.
+Clicking or focusing the calendar keeps the list open.
+Escape or the toggle closes it; focus returns to the toggle when closing a focused
+item. Closed drawer items are not focusable.
+Task and project context menus remain available on drawer items. **Today** and
+timeline settings are separate floating buttons at the top right.
+Hold **Ctrl** or **Cmd** and scroll to zoom between 4 and 80 pixels per day, keeping the date
 under the pointer in place. Ordinary scrolling is unchanged. Period presets in
 the settings menu also set zoom; calendar labels adapt to the zoom level.
+Floating controls at the chart's bottom right zoom out/in around the visible
+calendar's center. The percentage/reset button stays visible; adjacent minus/plus
+buttons sit to its left and appear on hover, keyboard focus, or during Ctrl/Cmd scroll zoom.
+Minus/plus controls have no invisible hit area while auto-hidden; when revealed,
+they remain visible but disabled at zoom limits or during edits.
+The reset/value button matches the zoom buttons' height and has a fixed width
+for the full percentage range. Click it to reset to 100%; the same zoom limits apply.
+Controls stay fixed during scrolling and are disabled during date drags.
 
-**Today** centers the current day; its line extends into the calendar header,
-stays above row hover backgrounds but behind bars, and remains outside sticky labels. The settings menu
+**Today** smoothly centers the current day, except when reduced motion is enabled;
+initial centering is immediate. Its line extends into the calendar header and stays
+behind bars. Only items and bars have hover feedback, not full calendar rows.
+The settings menu
 changes the displayed period (Day, Week, Month), toggles calendar lines, and
 changes their spacing (Daily, Weekly, Monthly) and
-style (Solid, Dashed). Grid settings do not change item dates. Larger bold month
-headings use abbreviated months and an apostrophe before the two-digit year
-(for example, **Oct '26**), anchored to their calendar cells rather than sliding
-across them. Labels remain visible during horizontal scrolling, and the date
-header remains visible during vertical scrolling. The calendar extends as you
-approach either horizontal edge. Click a task label or bar to open the task;
-right-click either for the same actions as its list item.
+style (Solid, Dashed). Grid settings do not change item dates. Compact bold month
+names share the main date band and switch from abbreviated names at Month zoom
+to full names at Week/Day zoom. Undimmed year markers share the same baseline,
+after each month name. Short date marks sit directly beneath their centered labels
+instead of full-height header lines. Month/year labels fade as the next month
+pushes them toward the left edge, before reaching the expand/collapse button.
+Labels remain visible during horizontal scrolling,
+and the date header remains visible during vertical scrolling. The calendar
+extends as you approach either horizontal edge, even during continuous scrolling.
+Left-edge rebasing preserves the current visible date immediately; right-edge
+extension does not write the scroll position. Click a task label or bar to open
+the task; right-click either for the same actions as its list item.
 
 When editing is permitted, drag a bar's right edge to change Due date. The edge
-tracks the pointer smoothly and shows a date tooltip below the edge. There is no
-resize snapping indicator or settling animation. Release saves the calendar date.
+tracks the pointer smoothly and shows a date tooltip below the edge, above group
+headers and clear of the item panels. There is no resize snapping indicator or
+settling animation. Release saves the calendar date.
 Escape cancels the preview; failed saves restore the previous date.
 Arrow keys on the resize handle change one day; Shift changes one week.
-Created at stays fixed: whole-bar dragging and start-date resizing are unavailable.
+Created at stays fixed: whole-bar date dragging and start-date resizing are
+unavailable.
 
-A subtle diagonal-line scrim marks calendar space where creation is unavailable:
-before today, or throughout the calendar when creation is not permitted. It stays
-outside the sidebar and header; available space remains clear. Drag horizontally
-across clear space to open the task composer with Due date prefilled and visible.
+Drag horizontally across empty calendar space to open the task composer with
+Due date prefilled and visible. Past dates and permission-disabled creation remain
+unavailable, without a diagonal-line pattern.
 This works with no loaded rows too. Release opens the composer rather than
 immediately creating a task; Escape cancels the selection.
 In a project's Tasks section, creation preserves that project and its edit gate.
@@ -129,9 +166,16 @@ remains automatic. New selections begin today or later, so creation never produc
 an end before Created at. Existing overdue items remain unchanged.
 
 The timeline reuses the list's filtered, sorted, grouped rows and collapsed
-state. Use **Load more tasks** to continue a group or the task feed; the chart
-contains loaded results, not an implied complete schedule. Selecting Gantt
-persists in `tasks.layout` or `projectTasks.layout`, just like List and Board.
+state. Sidebar items fill the list's inset width and share vertical scrolling with
+bars. Compact group headers show the grouping's icon and span both the list and
+calendar; they remain visible when the list is collapsed.
+Pagination remains available in the item list and as a quiet, labeled action at
+the visible calendar's left edge outside the open list, even after horizontal
+panning. Group pagination stays after its group; the global continuation appears
+once after the loaded rows. Loading shows a spinner and disables both actions;
+pagination and group headers do not start range creation.
+The chart contains loaded results, not an implied complete schedule. Selecting
+Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Board.
 
 ## Board layout
 
@@ -693,15 +737,5 @@ catch up after switching tabs, including when the cache-owning tab is hidden.
 
 ## Messages as tasks
 
-In any channel composer, toggle the `Task` switch before sending to create a task from the
-message.
 
-### Nested sidebar tags
-
-Tag names containing `/` render with one child level (for example, `Work/Urgent`).
-Deeper paths remain in the child label: `Work/Customers/Acme` appears as
-`Customers/Acme` under `Work`, alongside any actual `Customers` tag.
-Use the caret to expand or collapse a branch. A folder-only parent expands without
-filtering; clicking an actual tag selects only that tag, including when it has
-children. Personal and team paths stay separate. Ancestors of restored selected
-tags start expanded. Filter-menu options continue to show full tag names.
+[Showing lines 1-754 of 767 (50.0KB limit). Use offset=755 to continue.]

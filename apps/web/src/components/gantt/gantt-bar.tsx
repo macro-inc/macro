@@ -1,4 +1,4 @@
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -235,86 +235,108 @@ export function GanttBar(
       {(bar) => {
         const description = () =>
           `${local.title ?? 'Timeline item'}: ${formatGanttDay(bar().start)} → ${bar().end === undefined ? 'No end date' : formatGanttDay(bar().end!)}${failed() ? '. Could not save end date' : ''}`;
+        const position = () => ({
+          left: `${gantt.labelWidth() + bar().left}px`,
+          width: `${bar().width}px`,
+        });
+        const drawerInset = () =>
+          gantt.labelWidth() === 0 && gantt.sidebar.open()
+            ? gantt.sidebar.width()
+            : 0;
         const edgeDay = () =>
           gantt.range().start +
           (bar().left + bar().width) / gantt.pixelsPerDay();
         return (
-          <div
-            ref={container}
-            data-gantt-bar=""
-            data-gantt-start={bar().start}
-            data-gantt-end={bar().end}
-            class={cn(
-              'group pointer-events-none absolute top-1/2 z-10 h-7 -translate-y-1/2 text-xs',
-              draft() !== undefined && 'z-50',
-              saving() && 'opacity-60'
-            )}
-            style={{
-              left: `${gantt.labelWidth() + bar().left}px`,
-              width: `${bar().width}px`,
-              color:
-                'oklch(from var(--color-task) clamp(0, calc((0.6 - l) * 1000), 1) 0 0)',
-            }}
-          >
-            <GanttCalendarClip width={bar().width}>
-              <div
-                data-gantt-bar-body=""
-                class={cn(
-                  'pointer-events-auto relative size-full rounded-md border border-task bg-task hover:overlay-hover',
-                  bar().kind === 'open-ended' && 'border-dashed border-current',
-                  failed() && 'ring-1 ring-failure-ink',
-                  local.class
-                )}
-              >
-                <button
-                  {...rest}
-                  type="button"
-                  title={description()}
-                  aria-label={rest['aria-label'] ?? description()}
-                  class={cn(
-                    'h-full w-full overflow-hidden text-left whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current',
-                    bar().width >= 32 ? 'px-2' : 'px-0'
-                  )}
-                >
-                  <Show when={bar().width >= 32}>{local.children}</Show>
-                </button>
-                <Show when={local.onEndChange && !rest.disabled}>
-                  <button
-                    type="button"
-                    aria-label={`Resize end date for ${local.title ?? 'timeline item'}`}
-                    title="Resize end date · Arrow keys change one day, Shift changes one week"
-                    disabled={saving()}
-                    class="absolute inset-y-0 right-0 w-2.5 cursor-ew-resize touch-none border-l border-current opacity-0 outline-none group-hover:opacity-100 focus:opacity-100"
-                    onPointerDown={beginResize}
-                    onKeyDown={resizeByKey}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                  />
-                </Show>
-                <Show when={failed()}>
-                  <span role="alert" class="sr-only">
-                    Could not save end date
-                  </span>
-                </Show>
-              </div>
-            </GanttCalendarClip>
+          <>
+            <div
+              ref={container}
+              data-gantt-bar=""
+              data-gantt-start={bar().start}
+              data-gantt-end={bar().end}
+              class={cn(
+                'group pointer-events-none absolute top-1/2 z-10 h-7 -translate-y-1/2 text-xs',
+                saving() && 'opacity-60'
+              )}
+              style={position()}
+            >
+              <GanttCalendarClip width={bar().width}>
+                <Layer depth={2}>
+                  <div
+                    data-gantt-bar-body=""
+                    class={cn(
+                      'pointer-events-auto relative size-full rounded-md border border-edge bg-surface text-ink hover:overlay-hover shadow-sm light-mode:border-ink/20 light-mode:bg-[color-mix(in_oklch,var(--color-surface)_92%,var(--color-ink))]',
+                      bar().kind === 'open-ended' && 'border-dashed',
+                      failed() && 'ring-1 ring-failure-ink',
+                      local.class
+                    )}
+                  >
+                    <button
+                      {...rest}
+                      type="button"
+                      title={description()}
+                      aria-label={rest['aria-label'] ?? description()}
+                      class="relative size-full text-left whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-current"
+                    >
+                      <span
+                        data-gantt-bar-label=""
+                        class="sticky flex h-full w-max max-w-full items-center overflow-hidden px-2"
+                        style={{
+                          left: `${gantt.labelWidth() + drawerInset()}px`,
+                        }}
+                      >
+                        <span class="flex min-w-0 items-center gap-1.5">
+                          {local.children}
+                        </span>
+                      </span>
+                    </button>
+                    <Show when={local.onEndChange && !rest.disabled}>
+                      <button
+                        type="button"
+                        aria-label={`Resize end date for ${local.title ?? 'timeline item'}`}
+                        title="Resize end date · Arrow keys change one day, Shift changes one week"
+                        disabled={saving()}
+                        class="absolute inset-y-0 right-0 w-2.5 cursor-ew-resize touch-none border-l border-edge opacity-0 outline-none group-hover:opacity-100 focus:opacity-100"
+                        onPointerDown={beginResize}
+                        onKeyDown={resizeByKey}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                      />
+                    </Show>
+                    <Show when={failed()}>
+                      <span role="alert" class="sr-only">
+                        Could not save end date
+                      </span>
+                    </Show>
+                  </div>
+                </Layer>
+              </GanttCalendarClip>
+            </div>
             <Show when={draft()}>
               {(preview) => (
-                <span
-                  role="status"
-                  class="pointer-events-none absolute right-0 top-full mt-1 overflow-hidden rounded border border-edge-muted bg-tooltip px-2 py-1 text-xs font-medium text-ink shadow-sm whitespace-nowrap"
-                  style={{
-                    'max-width': `${Math.max(0, (gantt.visibleRange().end - gantt.visibleRange().start) * gantt.pixelsPerDay() - 16)}px`,
-                    translate: `clamp(calc(${(gantt.visibleRange().start - edgeDay()) * gantt.pixelsPerDay() + 8}px + 100%), 0px, ${(gantt.visibleRange().end - edgeDay()) * gantt.pixelsPerDay() - 8}px) 0`,
-                  }}
+                <div
+                  data-gantt-resize-preview=""
+                  class={cn(
+                    'pointer-events-none absolute top-1/2 z-50 h-7 -translate-y-1/2',
+                    saving() && 'opacity-60'
+                  )}
+                  style={position()}
                 >
-                  {formatGanttDay(preview().end)}
-                </span>
+                  <span
+                    role="status"
+                    class="pointer-events-none absolute right-0 top-full mt-1 overflow-hidden rounded border border-edge-muted bg-tooltip px-2 py-1 text-xs font-medium text-ink shadow-sm whitespace-nowrap"
+                    style={{
+                      'max-width': `${Math.max(0, (gantt.visibleRange().end - gantt.visibleRange().start) * gantt.pixelsPerDay() - drawerInset() - 16)}px`,
+                      translate: `clamp(calc(${(gantt.visibleRange().start - edgeDay()) * gantt.pixelsPerDay() + drawerInset() + 8}px + 100%), 0px, ${(gantt.visibleRange().end - edgeDay()) * gantt.pixelsPerDay() - 8}px) 0`,
+                    }}
+                  >
+                    {formatGanttDay(preview().end)}
+                  </span>
+                </div>
               )}
             </Show>
-          </div>
+          </>
         );
       }}
     </Show>

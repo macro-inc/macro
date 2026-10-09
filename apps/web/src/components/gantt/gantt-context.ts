@@ -2,14 +2,15 @@ import { type Accessor, createContext, useContext } from 'solid-js';
 import type { GanttRange, GanttScale } from './gantt-date';
 import type { GanttGuide } from './gantt-interaction';
 
-export const MONTH_HEADER_HEIGHT = 40;
-export const HEADER_HEIGHT = MONTH_HEADER_HEIGHT + 28;
+export const HEADER_HEIGHT = 48;
 export type GanttContext = {
   range: Accessor<GanttRange>;
   scale: Accessor<GanttScale>;
   setScale: (scale: GanttScale) => void;
   pixelsPerDay: Accessor<number>;
   zoomAt: (clientX: number, wheelDelta: number) => void;
+  scrollZooming: Accessor<boolean>;
+  markScrollZoom: () => void;
   gridVisible: Accessor<boolean>;
   setGridVisible: (visible: boolean) => void;
   gridScale: Accessor<GanttScale>;
@@ -18,12 +19,18 @@ export type GanttContext = {
   setGridStyle: (style: 'solid' | 'dashed') => void;
   labelWidth: Accessor<number>;
   rowHeight: Accessor<number>;
+  sidebar: {
+    open: Accessor<boolean>;
+    width: Accessor<number>;
+    setOpen: (open: boolean) => void;
+    setTrigger: (element: HTMLButtonElement | undefined) => void;
+  };
   width: Accessor<number>;
   visibleRange: Accessor<GanttRange>;
   viewport: Accessor<HTMLDivElement | undefined>;
   setViewport: (element: HTMLDivElement | undefined) => void;
   updateViewport: () => void;
-  scrollToToday: () => void;
+  scrollToToday: (behavior?: ScrollBehavior) => void;
   guide: Accessor<GanttGuide | undefined>;
   setGuide: (guide: GanttGuide | undefined) => void;
   editing: Accessor<boolean>;

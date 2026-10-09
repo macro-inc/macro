@@ -26,7 +26,8 @@ function fixture(
   save: (date: Date) => Promise<void>,
   pointToDay: ReturnType<typeof useGantt>['pointToDay'] = () => ({
     day: toGanttDay('2026-03-13')!,
-  })
+  }),
+  drawer = false
 ) {
   vi.stubGlobal('requestAnimationFrame', () => 1);
   vi.stubGlobal('cancelAnimationFrame', () => {});
@@ -37,6 +38,7 @@ function fixture(
   viewport.getBoundingClientRect = () => new DOMRect(0, 0, 1000, 600);
   render(() =>
     createComponent(Gantt.Root, {
+      labelWidth: drawer ? 0 : undefined,
       range: {
         start: toGanttDay('2026-03-01')!,
         end: toGanttDay('2026-06-01')!,
@@ -157,24 +159,94 @@ it('follows fractional pointer movement and writes the displayed calendar date',
   expect(toGanttDay(save.mock.calls[0][0])).toBe(boundary - 1);
 });
 
-it('clips the dragged bar body behind sticky labels while keeping its value tooltip outside the clip', () => {
-  const bar = fixture(async (_date: Date) => {});
-  bar.scrollTo(170);
-  pointer(bar.handle(), 'pointerdown', 500);
-  pointer(window, 'pointermove', 540);
-  const body = bar
+it.each([false, true])(
+  'keeps the resize tooltip above group headers and outside sidebar clipping (drawer: %s)',
+  (drawer) => {
+    const bar = fixture(async (_date: Date) => {}, undefined, drawer);
+    bar.scrollTo(170);
+    pointer(bar.handle(), 'pointerdown', 500);
+    pointer(window, 'pointermove', 540);
+    const body = bar
+      .element()
+      .querySelector<HTMLElement>('[data-gantt-bar-body]')!;
+    const clip = body.closest<HTMLElement>('[data-gantt-calendar-clip]')!;
+    expect(clip.style.left).toBe(drawer ? '0px' : '260px');
+    expect(clip.classList.contains('sticky')).toBe(true);
+    const boundary = clip.style.clipPath;
+    const tooltip = screen.getByRole('status');
+    const preview = tooltip.closest<HTMLElement>(
+      '[data-gantt-resize-preview]'
+    )!;
+    expect(preview.classList.contains('z-50')).toBe(true);
+    expect(bar.element().contains(preview)).toBe(false);
+    expect(bar.element().classList.contains('z-10')).toBe(true);
+    expect(clip.contains(tooltip)).toBe(false);
+    expect(tooltip.classList.contains('top-full')).toBe(true);
+    expect(tooltip.style.maxWidth).toBe(drawer ? '704px' : '724px');
+    expect(tooltip.style.translate).toContain('clamp(');
+    bar.scrollTo(190);
+    expect(clip.style.clipPath).toBe(boundary);
+    fireEvent.keyDown(window, { key: 'Escape' });
+  }
+);
+
+it('uses native sticky text bounded by the bar through scrolling, zoom, and narrow panes', async () => {
+  const viewport = document.createElement('div');
+  let width = 500;
+  Object.defineProperty(viewport, 'clientWidth', { get: () => width });
+  let gantt!: ReturnType<typeof useGantt>;
+  const view = render(() =>
+    createComponent(Gantt.Root, {
+      range: { start: 0, end: 100 },
+      get children() {
+        return createComponent(() => {
+          gantt = useGantt();
+          gantt.setViewport(viewport);
+          gantt.updateViewport();
+          return createComponent(Gantt.Bar, {
+            start: '1970-01-06',
+            end: '1970-02-10',
+            children: 'A long timeline',
+          });
+        }, {});
+      },
+    })
+  );
+  const bar = view.container.querySelector<HTMLElement>('[data-gantt-bar]')!;
+  const label = bar.querySelector<HTMLElement>('[data-gantt-bar-label]')!;
+  const button = label.closest('button')!;
+  expect(label.classList.contains('sticky')).toBe(true);
+  expect(label.classList.contains('max-w-full')).toBe(true);
+  expect(label.classList.contains('overflow-hidden')).toBe(true);
+  expect(button.classList.contains('overflow-hidden')).toBe(false);
+  expect(label.style.left).toBe('150px');
+  expect(label.style.width).toBe('');
+  expect(bar.style.width).toBe('720px');
+
+  viewport.scrollLeft = 200;
+  gantt.updateViewport();
+  expect(label.style.left).toBe('150px');
+  gantt.setScale('month');
+  await Promise.resolve();
+  expect(bar.style.width).toBe('216px');
+  expect(label.style.left).toBe('150px');
+
+  width = 300;
+  gantt.updateViewport();
+  expect(label.style.left).toBe('128px');
+  viewport.scrollLeft = 41 * gantt.pixelsPerDay();
+  gantt.updateViewport();
+  expect(label.style.left).toBe('128px');
+  expect(label.style.width).toBe('');
+  expect(bar.querySelector('[data-gantt-calendar-clip]')).not.toBeNull();
+});
+
+it('keeps sticky bar text outside the open drawer without scrolling calculations', () => {
+  const bar = fixture(async (_date: Date) => {}, undefined, true);
+  const label = bar
     .element()
-    .querySelector<HTMLElement>('[data-gantt-bar-body]')!;
-  const clip = body.closest<HTMLElement>('[data-gantt-calendar-clip]')!;
-  expect(clip.style.left).toBe('260px');
-  expect(clip.classList.contains('sticky')).toBe(true);
-  const boundary = clip.style.clipPath;
-  const tooltip = screen.getByRole('status');
-  expect(clip.contains(tooltip)).toBe(false);
-  expect(tooltip.classList.contains('top-full')).toBe(true);
-  expect(tooltip.style.maxWidth).toBe('724px');
-  expect(tooltip.style.translate).toContain('clamp(');
+    .querySelector<HTMLElement>('[data-gantt-bar-label]')!;
+  expect(label.style.left).toBe('280px');
   bar.scrollTo(190);
-  expect(clip.style.clipPath).toBe(boundary);
-  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(label.style.left).toBe('280px');
 });

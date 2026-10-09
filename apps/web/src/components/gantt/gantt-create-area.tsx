@@ -1,5 +1,5 @@
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
-import { GanttCalendarClip, GanttCalendarScene } from './gantt-clip';
+import { GanttCalendarClip } from './gantt-clip';
 import { HEADER_HEIGHT, useGantt } from './gantt-context';
 import {
   formatGanttDay,
@@ -11,7 +11,7 @@ import { ganttCreationRange } from './gantt-interaction';
 
 export type GanttCreation = { start: Date; end: Date };
 
-/** Hatch unavailable space; available space opens a host-owned composer without writing an entity. */
+/** Available space opens a host-owned composer without writing an entity. */
 export function GanttCreateArea(props: {
   onCreate?: (dates: GanttCreation) => void;
   minDate?: GanttDate;
@@ -23,13 +23,6 @@ export function GanttCreateArea(props: {
     top: number;
   }>();
   let disposeDrag: (() => void) | undefined;
-  const unavailableEnd = () =>
-    props.onCreate
-      ? Math.min(
-          toGanttDay(props.minDate) ?? gantt.range().start,
-          gantt.range().end
-        )
-      : gantt.range().end;
 
   function begin(event: PointerEvent) {
     const viewport = gantt.viewport();
@@ -39,7 +32,7 @@ export function GanttCreateArea(props: {
     if (
       !(target instanceof Element) ||
       target.closest(
-        'button, a, input, [data-gantt-bar], [data-gantt-label], [data-gantt-header]'
+        'button, a, input, [data-gantt-bar], [data-gantt-label], [data-gantt-header], [data-gantt-group-header], [data-gantt-pagination]'
       )
     )
       return;
@@ -119,52 +112,38 @@ export function GanttCreateArea(props: {
   );
 
   return (
-    <>
-      <Show when={unavailableEnd() > gantt.range().start}>
-        <GanttCalendarScene class="z-0">
+    <Show when={draft()}>
+      {(selection) => {
+        const range = () =>
+          ganttCreationRange(selection().first, selection().last);
+        return (
           <div
-            data-gantt-create-scrim=""
-            class="absolute inset-y-0 pattern-ink-muted pattern-diagonal-12 opacity-20"
+            aria-hidden="true"
+            class="pointer-events-none absolute z-10 h-7"
             style={{
-              left: `${gantt.labelWidth()}px`,
-              width: `${(unavailableEnd() - gantt.range().start) * gantt.pixelsPerDay()}px`,
+              top: `${selection().top}px`,
+              left: `${gantt.labelWidth() + (range().start - gantt.range().start) * gantt.pixelsPerDay()}px`,
+              width: `${(range().end - range().start) * gantt.pixelsPerDay()}px`,
+              transform: 'translateZ(0)',
             }}
-          />
-        </GanttCalendarScene>
-      </Show>
-      <Show when={draft()}>
-        {(selection) => {
-          const range = () =>
-            ganttCreationRange(selection().first, selection().last);
-          return (
-            <div
-              aria-hidden="true"
-              class="pointer-events-none absolute z-10 h-7"
+          >
+            <GanttCalendarClip
+              width={(range().end - range().start) * gantt.pixelsPerDay()}
+            >
+              <div class="size-full rounded-md border border-ink-muted bg-[color-mix(in_oklch,var(--color-ink)_18%,var(--color-panel))]" />
+            </GanttCalendarClip>
+            <span
+              class="absolute right-0 top-full mt-1 overflow-hidden rounded border border-edge-muted bg-tooltip px-2 py-1 text-xs text-ink whitespace-nowrap"
               style={{
-                top: `${selection().top}px`,
-                left: `${gantt.labelWidth() + (range().start - gantt.range().start) * gantt.pixelsPerDay()}px`,
-                width: `${(range().end - range().start) * gantt.pixelsPerDay()}px`,
-                transform: 'translateZ(0)',
+                'max-width': `${Math.max(0, (gantt.visibleRange().end - gantt.visibleRange().start) * gantt.pixelsPerDay() - 16)}px`,
+                translate: `clamp(calc(${(gantt.visibleRange().start - range().end) * gantt.pixelsPerDay() + 8}px + 100%), 0px, ${(gantt.visibleRange().end - range().end) * gantt.pixelsPerDay() - 8}px) 0`,
               }}
             >
-              <GanttCalendarClip
-                width={(range().end - range().start) * gantt.pixelsPerDay()}
-              >
-                <div class="size-full rounded-md border border-task bg-task" />
-              </GanttCalendarClip>
-              <span
-                class="absolute right-0 top-full mt-1 overflow-hidden rounded border border-edge-muted bg-tooltip px-2 py-1 text-xs text-ink whitespace-nowrap"
-                style={{
-                  'max-width': `${Math.max(0, (gantt.visibleRange().end - gantt.visibleRange().start) * gantt.pixelsPerDay() - 16)}px`,
-                  translate: `clamp(calc(${(gantt.visibleRange().start - range().end) * gantt.pixelsPerDay() + 8}px + 100%), 0px, ${(gantt.visibleRange().end - range().end) * gantt.pixelsPerDay() - 8}px) 0`,
-                }}
-              >
-                Due {formatGanttDay(range().end - 1)}
-              </span>
-            </div>
-          );
-        }}
-      </Show>
-    </>
+              Due {formatGanttDay(range().end - 1)}
+            </span>
+          </div>
+        );
+      }}
+    </Show>
   );
 }

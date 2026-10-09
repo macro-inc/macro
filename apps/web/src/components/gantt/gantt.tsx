@@ -27,16 +27,18 @@ import {
   GanttContextProvider as Context,
   type GanttContext,
   HEADER_HEIGHT,
-  MONTH_HEADER_HEIGHT,
   useGantt,
 } from './gantt-context';
 import { GanttCreateArea } from './gantt-create-area';
 import {
   formatGanttDay,
+  formatGanttMonth,
   type GanttDate,
   type GanttRange,
   type GanttScale,
+  type GanttTick,
   ganttBarGeometry,
+  ganttDateFromDay,
   ganttPixelsPerDay,
   ganttTicks,
   normalizeGanttRange,
@@ -49,9 +51,20 @@ import {
   zoomedGanttPixels,
 } from './gantt-interaction';
 import { GanttSettings } from './gantt-settings';
+import {
+  GanttControls,
+  GanttGroupHeader,
+  GanttLabel,
+  GanttPagination,
+  GanttSidebarPanelRow,
+  GanttSidebarToggle,
+} from './gantt-sidebar';
+import { GanttZoomControls } from './gantt-zoom-controls';
 
 export { useGantt } from './gantt-context';
+export { GanttLabel } from './gantt-sidebar';
 
+const SIDEBAR_COLLAPSE_WIDTH = 640;
 export function GanttRoot(
   props: ParentProps<{
     range: GanttRange;
@@ -83,6 +96,11 @@ export function GanttRoot(
   const [extent, setExtent] = createSignal<GanttRange>();
   const [guide, setGuide] = createSignal<GanttGuide>();
   const [editing, setEditing] = createSignal(false);
+  const [sidebarChoice, setSidebarChoice] = createSignal<boolean>();
+  let sidebarTrigger: HTMLButtonElement | undefined;
+  const [scrollZooming, setScrollZooming] = createSignal(false);
+  let scrollZoomTimeout: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(scrollZoomTimeout));
   let extending = false;
   let scrollRevision = 0;
   const [metrics, setMetrics] = createSignal({
@@ -91,10 +109,34 @@ export function GanttRoot(
     start: dataRange().start,
     pixels: ganttPixelsPerDay(props.defaultScale ?? 'week'),
   });
-  const labelWidth = () => props.labelWidth ?? 260;
-  const rowHeight = () => props.rowHeight ?? 44;
+  const rowHeight = () => props.rowHeight ?? 40;
   // Scroll changes do not resize the calendar; zoom, bounds, and viewport changes do.
   const viewportWidth = createMemo(() => metrics().width);
+  const labelWidth = () => {
+    if (props.labelWidth !== undefined) return props.labelWidth;
+    const available = viewportWidth() || 1_000;
+    return Math.min(260, Math.max(128, available * 0.3), available / 2);
+  };
+  const sidebarWidth = () => Math.min(280, Math.max(0, viewportWidth() - 40));
+  const sidebarOpen = () =>
+    labelWidth() === 0 &&
+    (sidebarChoice() ?? (viewportWidth() || 1_000) >= SIDEBAR_COLLAPSE_WIDTH);
+  const restoreSidebarFocus = () => {
+    const focused = document.activeElement;
+    if (
+      viewport()?.contains(focused) &&
+      focused instanceof Element &&
+      focused.closest('[data-gantt-label]')
+    ) {
+      sidebarTrigger?.focus({ preventScroll: true });
+    }
+  };
+  const changeSidebar = (open: boolean) => {
+    if (open && editing()) return;
+    if (!open) restoreSidebarFocus();
+    setGuide(undefined);
+    setSidebarChoice(open);
+  };
   const range = createMemo(() => {
     const data = dataRange();
     const extended = extent();
@@ -118,12 +160,22 @@ export function GanttRoot(
   const updateViewport = () => {
     const element = viewport();
     if (!element) return;
+    const wasOpen = sidebarOpen();
+    if (
+      sidebarChoice() === undefined &&
+      wasOpen &&
+      element.clientWidth > 0 &&
+      element.clientWidth < SIDEBAR_COLLAPSE_WIDTH
+    ) {
+      restoreSidebarFocus();
+    }
     setMetrics({
       left: element.scrollLeft,
       width: element.clientWidth,
       start: range().start,
       pixels: pixelsPerDay(),
     });
+    if (wasOpen !== sidebarOpen()) setGuide(undefined);
     extendViewport();
   };
   const extendViewport = () => {
@@ -142,39 +194,52 @@ export function GanttRoot(
       element.scrollWidth,
       pixelsPerDay()
     );
-    if (!next) return;
-    extending = true;
-    const anchor = metrics().start + metrics().left / metrics().pixels;
-    setExtent(next);
-    queueMicrotask(() => {
-      if (viewport() === element) {
-        element.scrollLeft = Math.max(
-          0,
-          (anchor - range().start) * pixelsPerDay()
-        );
-        updateViewport();
-      }
-      extending = false;
-    });
+    if (next) extendBounds(next);
   };
-  const visibleRange = () => ({
-    start: range().start + metrics().left / pixelsPerDay(),
-    end:
-      range().start +
-      (metrics().left + Math.max(1, metrics().width - labelWidth())) /
-        pixelsPerDay(),
-  });
+  function extendBounds(next: GanttRange) {
+    const element = viewport();
+    const current = range();
+    if (!element || (next.start === current.start && next.end === current.end))
+      return;
+    const left = element.scrollLeft;
+    const pixels = pixelsPerDay();
+    extending = true;
+    ++scrollRevision;
+    try {
+      // Commit the new DOM width before compensating, or the browser clamps the offset.
+      setExtent(next);
+      if (range().start !== current.start) {
+        element.scrollLeft = left + (current.start - range().start) * pixels;
+      }
+      updateViewport();
+    } finally {
+      extending = false;
+    }
+  }
+  const visibleRange = () => {
+    const current = metrics();
+    const start = current.start + current.left / current.pixels;
+    return {
+      start,
+      end: start + Math.max(1, current.width - labelWidth()) / pixelsPerDay(),
+    };
+  };
 
-  function restoreScroll(anchor: number) {
+  function restoreScroll(anchor: number, behavior: ScrollBehavior = 'instant') {
     const element = viewport();
     if (!element) return;
     const revision = ++scrollRevision;
     queueMicrotask(() => {
       if (viewport() !== element || revision !== scrollRevision) return;
-      element.scrollLeft = Math.max(
-        0,
-        (anchor - range().start) * pixelsPerDay()
-      );
+      const left = Math.max(0, (anchor - range().start) * pixelsPerDay());
+      const reducedMotion = window.matchMedia?.(
+        '(prefers-reduced-motion: reduce)'
+      ).matches;
+      if (behavior === 'smooth' && !reducedMotion) {
+        element.scrollTo({ left, behavior });
+      } else {
+        element.scrollLeft = left;
+      }
       updateViewport();
     });
   }
@@ -195,6 +260,13 @@ export function GanttRoot(
     scale,
     setScale: (value) => setPixelsPerDay(ganttPixelsPerDay(value)),
     pixelsPerDay,
+    scrollZooming,
+    markScrollZoom: () => {
+      if (editing()) return;
+      clearTimeout(scrollZoomTimeout);
+      setScrollZooming(true);
+      scrollZoomTimeout = setTimeout(() => setScrollZooming(false), 800);
+    },
     zoomAt: (clientX, delta) => {
       const element = viewport();
       if (!element || extending || editing() || !Number.isFinite(delta)) return;
@@ -237,6 +309,14 @@ export function GanttRoot(
     setGridStyle,
     labelWidth,
     rowHeight,
+    sidebar: {
+      open: sidebarOpen,
+      width: sidebarWidth,
+      setOpen: changeSidebar,
+      setTrigger: (element) => {
+        sidebarTrigger = element;
+      },
+    },
     width,
     visibleRange,
     viewport,
@@ -251,7 +331,7 @@ export function GanttRoot(
       if (!element || extending) return;
       const rect = element.getBoundingClientRect();
       const x = clientX - rect.left;
-      if (x < labelWidth()) return;
+      if (x < labelWidth() || (sidebarOpen() && x < sidebarWidth())) return;
       const day =
         range().start +
         (element.scrollLeft + Math.min(x, rect.width) - labelWidth()) /
@@ -273,21 +353,28 @@ export function GanttRoot(
       });
       return snapGanttGuide(day, pixelsPerDay(), targets);
     },
-    scrollToToday: () => {
+    scrollToToday: (behavior = 'smooth') => {
       const element = viewport();
       const today = toGanttDay(new Date());
       if (!element || today === undefined) return;
-      const half =
-        Math.max(1, element.clientWidth - labelWidth()) / pixelsPerDay() / 2;
-      const center = today + 0.5;
+      const pixels = pixelsPerDay();
+      const days = Math.max(1, element.clientWidth - labelWidth()) / pixels;
+      const anchor = range().start + element.scrollLeft / pixels;
+      const destination = today + 0.5 - days / 2;
+      const padding = Math.max(30, Math.ceil(element.clientWidth / pixels));
       const current = range();
-      if (center - half < current.start || center + half > current.end) {
-        setExtent({
-          start: Math.min(current.start, Math.floor(center - half - 1)),
-          end: Math.max(current.end, Math.ceil(center + half + 1)),
-        });
-      }
-      restoreScroll(center - half);
+      // Reserve the complete animation path so no edge rebase interrupts smooth scrolling.
+      extendBounds({
+        start: Math.min(
+          current.start,
+          Math.floor(Math.min(anchor, destination) - padding)
+        ),
+        end: Math.max(
+          current.end,
+          Math.ceil(Math.max(anchor, destination) + days + padding)
+        ),
+      });
+      restoreScroll(destination, behavior);
     },
   };
 
@@ -295,9 +382,20 @@ export function GanttRoot(
     <Context.Provider value={context}>
       <div
         class={cn(
-          'flex size-full min-h-0 min-w-0 flex-col overflow-hidden',
+          'relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden',
           props.class
         )}
+        onKeyDown={(event) => {
+          if (
+            event.key !== 'Escape' ||
+            event.defaultPrevented ||
+            editing() ||
+            !sidebarOpen()
+          )
+            return;
+          event.preventDefault();
+          changeSidebar(false);
+        }}
       >
         {props.children}
       </div>
@@ -331,7 +429,7 @@ function GanttCursorTooltip() {
       {(guide) => (
         <span
           data-gantt-cursor-label=""
-          class="pointer-events-none absolute bottom-1 z-10 overflow-hidden rounded border border-edge-muted bg-tooltip px-1.5 py-0.5 text-xxs text-ink whitespace-nowrap"
+          class="pointer-events-none absolute bottom-1 z-30 overflow-hidden rounded border border-edge-muted bg-tooltip px-1.5 py-0.5 text-xxs text-ink whitespace-nowrap"
           style={{
             left: `${(guide().day - gantt.range().start) * gantt.pixelsPerDay()}px`,
             'max-width': `${Math.max(0, (gantt.visibleRange().end - gantt.visibleRange().start) * gantt.pixelsPerDay() - 16)}px`,
@@ -350,7 +448,13 @@ function GanttCursorTooltip() {
 export function GanttTodayButton() {
   const gantt = useGantt();
   return (
-    <Button size="sm" variant="ghost" onClick={gantt.scrollToToday}>
+    <Button
+      depth={2}
+      size="md"
+      variant="outline"
+      class="bg-surface shadow-sm"
+      onClick={() => gantt.scrollToToday()}
+    >
       Today
     </Button>
   );
@@ -368,13 +472,24 @@ export function GanttChart(
     if (centered || !element?.clientWidth) return;
     centered = true;
     queueMicrotask(() => {
-      if (gantt.viewport() === element) gantt.scrollToToday();
+      if (gantt.viewport() === element) gantt.scrollToToday('instant');
     });
   };
   const zoom = (event: WheelEvent) => {
-    if (!event.ctrlKey) return;
+    if (!event.ctrlKey && !event.metaKey) {
+      // Wheel events continue at a clamped edge even when no scroll event fires.
+      gantt.updateViewport();
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
+    if (
+      event.target instanceof Element &&
+      event.target.closest('[data-gantt-label]')
+    )
+      return;
+    if (gantt.editing()) return;
+    gantt.markScrollZoom();
     const unit =
       event.deltaMode === 1
         ? 16
@@ -427,11 +542,21 @@ export function GanttChart(
       viewportProps={{
         'aria-label': props.label ?? 'Gantt timeline',
         tabIndex: 0,
+        style: { 'overscroll-behavior': 'none', 'overflow-anchor': 'none' },
         onScroll: () => {
           gantt.updateViewport();
           updateGuide();
         },
         onPointerMove: (event) => {
+          if (
+            event.target.closest(
+              '[data-gantt-label], [data-gantt-group-header]'
+            )
+          ) {
+            pointerX = undefined;
+            gantt.setGuide(undefined);
+            return;
+          }
           pointerX = event.clientX;
           if (gantt.editing()) return;
           gantt.setGuide(gantt.pointToDay(event.clientX));
@@ -461,13 +586,38 @@ export function GanttChart(
 export function GanttHeader(props: ParentProps<{ class?: string }>) {
   const gantt = useGantt();
   const months = createMemo(() =>
-    ganttTicks(gantt.range(), 'month', gantt.visibleRange())
+    ganttTicks(gantt.range(), 'month', gantt.visibleRange()).map((tick) => ({
+      ...tick,
+      label: formatGanttMonth(
+        tick.start,
+        gantt.scale() === 'month' ? 'short' : 'long'
+      ),
+    }))
   );
   const ticks = createMemo(() =>
     ganttTicks(gantt.range(), gantt.scale(), gantt.visibleRange())
   );
   const left = (day: number) =>
     (day - gantt.range().start) * gantt.pixelsPerDay();
+  const calendarWidth = () =>
+    (gantt.visibleRange().end - gantt.visibleRange().start) *
+    gantt.pixelsPerDay();
+  // The drawer starts below the header; reserve only its toggle in the timeline band.
+  const textInset = () =>
+    gantt.labelWidth() > 0 ? gantt.labelWidth() + 8 : 64;
+  const monthLeft = (tick: GanttTick) =>
+    Math.min(
+      Math.max(
+        left(tick.start) + 4,
+        left(gantt.visibleRange().start) + textInset() - gantt.labelWidth()
+      ),
+      left(tick.end) - (tick.label.length * 7 + 44)
+    );
+  const monthOpacity = (tick: GanttTick) => {
+    const pinned =
+      left(gantt.visibleRange().start) + textInset() - gantt.labelWidth();
+    return Math.max(0, 1 - Math.max(0, pinned - monthLeft(tick)) / 32);
+  };
   return (
     <div
       class={cn(
@@ -477,46 +627,107 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
       data-gantt-header=""
       style={{ height: `${HEADER_HEIGHT}px`, width: `${gantt.width()}px` }}
     >
-      <div
-        class="sticky left-0 z-10 flex shrink-0 items-center justify-between gap-2 border-r border-edge-muted bg-inherit px-4 font-medium text-ink"
-        style={{ width: `${gantt.labelWidth()}px` }}
-      >
-        {props.children}
-      </div>
-      <div class="relative isolate flex-1 overflow-hidden">
+      <Show when={gantt.labelWidth() > 0}>
+        <div
+          class="sticky left-0 z-10 flex shrink-0 flex-wrap content-center items-center justify-between gap-x-2 gap-y-1 border-r border-edge-muted bg-inherit px-3 font-medium text-ink"
+          style={{ width: `${gantt.labelWidth()}px` }}
+        >
+          {props.children}
+        </div>
+      </Show>
+      <div class="relative isolate flex-1 overflow-clip">
         <TodayLine header />
-        <For each={months()}>
-          {(tick) => (
-            <div
-              class="absolute top-0 flex items-center overflow-hidden border-l border-edge-muted whitespace-nowrap"
-              style={{
-                height:
-                  gantt.scale() === 'month'
-                    ? `${HEADER_HEIGHT}px`
-                    : `${MONTH_HEADER_HEIGHT}px`,
-                left: `${left(tick.start)}px`,
-                width: `${(tick.end - tick.start) * gantt.pixelsPerDay()}px`,
-              }}
-            >
-              <span class="px-2 text-lg font-bold text-ink">{tick.label}</span>
-            </div>
-          )}
-        </For>
         <Show when={gantt.scale() !== 'month'}>
           <For each={ticks()}>
             {(tick) => (
               <div
-                class="absolute flex h-7 items-center overflow-hidden border-l border-edge-muted px-2 whitespace-nowrap"
+                data-gantt-date-tick=""
+                class="absolute inset-y-0 flex items-center leading-4 whitespace-nowrap"
                 style={{
-                  top: `${MONTH_HEADER_HEIGHT}px`,
                   left: `${left(tick.start)}px`,
-                  width: `${(tick.end - tick.start) * gantt.pixelsPerDay()}px`,
                 }}
               >
-                {tick.label}
+                <Show
+                  when={
+                    !months().some((month) => {
+                      const distance = left(tick.start) - monthLeft(month);
+                      const halfLabel = tick.label.length * 3 + 4;
+                      return (
+                        distance > -halfLabel &&
+                        distance < month.label.length * 7 + 44 + halfLabel
+                      );
+                    })
+                  }
+                >
+                  <span class="relative -translate-x-1/2">
+                    {tick.label}
+                    <span
+                      aria-hidden="true"
+                      data-gantt-date-mark=""
+                      class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-edge-muted"
+                    />
+                  </span>
+                </Show>
               </div>
             )}
           </For>
+        </Show>
+        <Key each={months()} by="start">
+          {(tick) => (
+            <div
+              data-gantt-month=""
+              class="pointer-events-none absolute inset-y-0 flex items-center overflow-clip text-ink whitespace-nowrap"
+              style={{
+                left: `${left(tick().start)}px`,
+                width: `${(tick().end - tick().start) * gantt.pixelsPerDay()}px`,
+              }}
+            >
+              <span
+                class="sticky z-20 ml-1 flex shrink-0 items-baseline gap-2 bg-panel px-1 text-xs leading-4"
+                style={{
+                  left: `${textInset()}px`,
+                  opacity: monthOpacity(tick()),
+                }}
+              >
+                <span class="font-semibold">{tick().label}</span>
+                <span
+                  data-gantt-year=""
+                  class="font-medium text-ink tabular-nums"
+                >
+                  {ganttDateFromDay(tick().start).getFullYear()}
+                </span>
+                <span
+                  aria-hidden="true"
+                  data-gantt-date-mark=""
+                  class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-edge"
+                />
+              </span>
+            </div>
+          )}
+        </Key>
+        <div
+          aria-hidden="true"
+          data-gantt-timeline-fades=""
+          class="pointer-events-none absolute inset-0 z-10"
+        >
+          <div
+            class="sticky h-full"
+            style={{
+              left: `${gantt.labelWidth()}px`,
+              width: `${calendarWidth()}px`,
+            }}
+          >
+            <div class="absolute inset-y-0 left-0 w-[min(128px,33%)] bg-gradient-to-r from-panel to-transparent" />
+            <div class="absolute inset-y-0 right-0 w-[min(128px,33%)] bg-gradient-to-l from-panel to-transparent" />
+          </div>
+        </div>
+        <Show when={gantt.labelWidth() === 0}>
+          <div class="pointer-events-none absolute inset-0 z-30">
+            <div
+              data-gantt-toggle-mask=""
+              class="sticky left-0 h-full w-14 bg-panel"
+            />
+          </div>
         </Show>
         <GanttCursorTooltip />
       </div>
@@ -527,6 +738,8 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
 type RowsProps<T> = {
   items: readonly T[];
   getKey: (item: T) => string | number;
+  /** Consecutive sidebar rows with the same key form one visual panel. */
+  getPanelKey?: (item: T) => string | number | undefined;
   virtualize?: boolean;
   children: (item: T) => JSX.Element;
 };
@@ -617,14 +830,20 @@ function VirtualRows<T>(props: RowsProps<T>) {
             class="absolute left-0"
             style={{ top: `${virtualRow().start - HEADER_HEIGHT}px` }}
           >
-            <For
-              each={props.items.slice(
-                virtualRow().index,
-                virtualRow().index + 1
-              )}
+            <GanttSidebarPanelRow
+              items={props.items}
+              index={virtualRow().index}
+              getPanelKey={props.getPanelKey}
             >
-              {(item) => props.children(item)}
-            </For>
+              <For
+                each={props.items.slice(
+                  virtualRow().index,
+                  virtualRow().index + 1
+                )}
+              >
+                {(item) => props.children(item)}
+              </For>
+            </GanttSidebarPanelRow>
           </div>
         )}
       </Key>
@@ -641,8 +860,16 @@ export function GanttRows<T>(props: RowsProps<T>) {
         <div class="relative">
           {/* Keep occurrence keys, but refresh the renderer when an immutable item is replaced. */}
           <Key each={props.items} by={props.getKey}>
-            {(item) => (
-              <For each={[item()]}>{(current) => props.children(current)}</For>
+            {(item, index) => (
+              <GanttSidebarPanelRow
+                items={props.items}
+                index={index()}
+                getPanelKey={props.getPanelKey}
+              >
+                <For each={[item()]}>
+                  {(current) => props.children(current)}
+                </For>
+              </GanttSidebarPanelRow>
             )}
           </Key>
         </div>
@@ -662,30 +889,10 @@ export function GanttRow(
     <div
       {...rest}
       class={cn(
-        'group/gantt-row relative border-b border-edge-muted/60 text-sm text-ink hover:bg-hover focus-within:bg-hover',
+        'relative border-b border-edge-muted/60 text-sm text-ink',
         local.class
       )}
       style={{ width: `${gantt.width()}px`, height: `${gantt.rowHeight()}px` }}
-    >
-      {local.children}
-    </div>
-  );
-}
-
-export function GanttLabel(
-  props: Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'>
-) {
-  const gantt = useGantt();
-  const [local, rest] = splitProps(props, ['children', 'class']);
-  return (
-    <div
-      {...rest}
-      class={cn(
-        'sticky left-0 z-20 flex h-full items-center border-r border-edge-muted px-4 py-1.5 group-hover/gantt-row:bg-hover group-focus-within/gantt-row:bg-hover',
-        local.class
-      )}
-      data-gantt-label=""
-      style={{ width: `${gantt.labelWidth()}px` }}
     >
       {local.children}
     </div>
@@ -760,10 +967,15 @@ export const Gantt = {
   Root: GanttRoot,
   TodayButton: GanttTodayButton,
   Settings: GanttSettings,
+  SidebarToggle: GanttSidebarToggle,
+  Controls: GanttControls,
+  Pagination: GanttPagination,
+  ZoomControls: GanttZoomControls,
   Chart: GanttChart,
   Header: GanttHeader,
   Rows: GanttRows,
   Row: GanttRow,
+  GroupHeader: GanttGroupHeader,
   Label: GanttLabel,
   DateHint: GanttDateHint,
   CreateArea: GanttCreateArea,

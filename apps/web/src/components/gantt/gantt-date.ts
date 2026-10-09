@@ -59,6 +59,16 @@ export function formatGanttDay(day: number, includeYear = true): string {
   }).format(new Date(day * DAY_MS));
 }
 
+export function formatGanttMonth(
+  day: number,
+  format: 'long' | 'short' = 'long'
+): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: format,
+    timeZone: 'UTC',
+  }).format(new Date(day * DAY_MS));
+}
+
 export function ganttPixelsPerDay(scale: GanttScale): number {
   return match(scale)
     .with('day', () => 40)
@@ -186,16 +196,7 @@ export function ganttTicks(
         : cursor + (scale === 'week' ? 7 : 1);
     const label =
       scale === 'month'
-        ? new Intl.DateTimeFormat('en-US', {
-            month: 'short',
-            year: '2-digit',
-            timeZone: 'UTC',
-          })
-            .formatToParts(new Date(cursor * DAY_MS))
-            .map((part) =>
-              part.type === 'year' ? `'${part.value}` : part.value
-            )
-            .join('')
+        ? formatGanttMonth(cursor)
         : scale === 'day'
           ? String(new Date(cursor * DAY_MS).getUTCDate())
           : formatGanttDay(cursor, false);
@@ -207,4 +208,29 @@ export function ganttTicks(
     cursor = next;
   }
   return ticks;
+}
+
+/** Stable calendar-year bounds keep sticky markers anchored while visible months change. */
+export function ganttYearTicks(
+  range: GanttRange,
+  visible: GanttRange = range
+): GanttTick[] {
+  const first = Math.max(range.start, Math.floor(visible.start));
+  const last = Math.min(range.end, Math.ceil(visible.end));
+  if (last <= first) return [];
+
+  const years: GanttTick[] = [];
+  let year = new Date(first * DAY_MS).getUTCFullYear();
+  let cursor = ordinal(year, 0, 1);
+  while (cursor < last && years.length < 1_000) {
+    const next = ordinal(year + 1, 0, 1);
+    years.push({
+      start: Math.max(cursor, range.start),
+      end: Math.min(next, range.end),
+      label: String(year),
+    });
+    year += 1;
+    cursor = next;
+  }
+  return years;
 }
