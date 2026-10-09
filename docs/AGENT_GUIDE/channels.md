@@ -705,6 +705,9 @@ list errors do not affect an active search.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
+Workspaces with fewer than three channels show a dismissible **Make a home for
+your team** card above the sections, with a **Create a channel** button; the
+dismissal is remembered in the browser.
 Channels and DMs each have a sort action before their create action. They can be
 sorted by last viewed, last updated, or date created, and each choice persists
 independently as a user preference.

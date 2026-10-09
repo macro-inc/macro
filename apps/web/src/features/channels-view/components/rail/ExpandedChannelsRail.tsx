@@ -75,6 +75,7 @@ import {
   RailListLoading,
   RailListLoadingMore,
 } from './ChannelsRailSection';
+import { CreateChannelsChip } from './CreateChannelsChip';
 import {
   useChannelRailItemState,
   useChannelRailScopeState,
@@ -852,6 +853,9 @@ function ExpandedBrowse() {
       </Match>
       <Match when={true}>
         <ViewSidebar.Content class="h-full overflow-hidden">
+          <CreateChannelsChip
+            channelCount={rail.sources.channels.items().length}
+          />
           <ChannelFavoritesSection />
           {/* The groups split the height left after favorites between them.
               Their half-height caps resolve against this column, not the
