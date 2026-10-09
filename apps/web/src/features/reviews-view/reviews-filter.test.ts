@@ -46,6 +46,7 @@ describe('review link filters and priority sort', () => {
     sessions: [],
     tasks: [],
     channelIds: [],
+    channelOrigins: [],
     companyIds: [],
     priority: { id: 'none' },
     ...overrides,

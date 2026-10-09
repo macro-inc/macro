@@ -17,6 +17,7 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { rowPillClasses } from '../../components/row-pill';
 import type { GithubPullRequestEntity } from '../../types/entity';
 import { PrAgentSessionsChip } from '../../views/PrAgentSessionsChip';
 
@@ -28,13 +29,7 @@ type PillProps = {
 
 function Pill(props: PillProps) {
   return (
-    <span
-      title={props.title}
-      class={cn(
-        'min-w-0 rounded-full inline-flex items-center gap-1 px-1.5 py-1 leading-tight text-xs font-medium border border-edge bg-surface/50',
-        props.class
-      )}
-    >
+    <span title={props.title} class={rowPillClasses(props.class)}>
       {props.children}
     </span>
   );
@@ -451,7 +446,9 @@ export function GithubAuthorBadge(props: {
           />
         )}
       </Show>
-      <span class="min-w-0 truncate">{name()}</span>
+      <span data-pill-text class="min-w-0 truncate">
+        {name()}
+      </span>
     </span>
   );
 }

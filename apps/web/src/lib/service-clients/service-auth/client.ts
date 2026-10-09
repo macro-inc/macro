@@ -28,6 +28,8 @@ import type {
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
+  GithubPullRequestMergeabilityRequest,
+  GithubPullRequestMergeabilityResponse,
   GmailLinkStatusResponse,
   InitGithubLinkResponse,
   InitGmailLinkResponse,
@@ -35,6 +37,8 @@ import type {
   MergeGithubPullRequestResponse,
   PatchUserTutorialRequest,
   SendMobileWelcomeEmailResponse,
+  SetGithubPullRequestDraftRequest,
+  SetGithubPullRequestDraftResponse,
   UserQuota,
 } from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
@@ -241,12 +245,15 @@ async function readErrorMessage(
 }
 
 /**
- * Keeps GitHub's own words on a declined merge. GitHub names the failing
- * check, the missing review, or the disallowed method; the status alone
- * ("409") tells the user nothing they can act on.
+ * Keeps GitHub's own words when it declines a change. GitHub names the
+ * failing check, the missing review, or the missing permission; the status
+ * alone ("409") tells the user nothing they can act on.
  */
-const githubMergeErrorResponseHandler: ErrorResponseHandler<GithubMergeErrorCode> =
-  async function handleGithubMergeErrorResponse(response) {
+function githubChangeErrorResponseHandler(copy: {
+  noLink: string;
+  rejected: string;
+}): ErrorResponseHandler<GithubMergeErrorCode> {
+  return async function handleGithubChangeErrorResponse(response) {
     if (response.status === 428) {
       return {
         code: 'REAUTHENTICATION_REQUIRED',
@@ -258,16 +265,21 @@ const githubMergeErrorResponseHandler: ErrorResponseHandler<GithubMergeErrorCode
     }
     const message = await readErrorMessage(response);
     if (response.status === 404 && message === NO_GITHUB_LINK_MESSAGE) {
-      return {
-        code: 'NO_GITHUB_LINK',
-        message: 'Connect GitHub in Settings to merge pull requests',
-      };
+      return { code: 'NO_GITHUB_LINK', message: copy.noLink };
     }
-    return {
-      code: 'MERGE_REJECTED',
-      message: message ?? 'GitHub declined to merge the pull request',
-    };
+    return { code: 'MERGE_REJECTED', message: message ?? copy.rejected };
   };
+}
+
+const githubMergeErrorResponseHandler = githubChangeErrorResponseHandler({
+  noLink: 'Connect GitHub in Settings to merge pull requests',
+  rejected: 'GitHub declined to merge the pull request',
+});
+
+const githubDraftErrorResponseHandler = githubChangeErrorResponseHandler({
+  noLink: 'Connect GitHub in Settings to change pull requests',
+  rejected: 'GitHub declined to change the pull request',
+});
 
 const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
   async function handleGithubErrorResponse(response) {
@@ -514,6 +526,32 @@ export const authServiceClient = {
           errorResponseHandler: githubMergeErrorResponseHandler,
         }
       )
+    ).map((result) => result);
+  },
+  async setGithubPullRequestDraft(args: SetGithubPullRequestDraftRequest) {
+    return (
+      await fetchWithAuth<
+        SetGithubPullRequestDraftResponse,
+        GithubMergeErrorCode
+      >(`${authHost}/github_pull_requests/draft`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubDraftErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+  async getGithubPullRequestMergeability(
+    args: GithubPullRequestMergeabilityRequest
+  ) {
+    return (
+      await fetchWithAuth<
+        GithubPullRequestMergeabilityResponse,
+        GithubReauthenticationErrorCode
+      >(`${authHost}/github_pull_requests/mergeability`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubErrorResponseHandler,
+      })
     ).map((result) => result);
   },
   async patchUserTutorial(args: PatchUserTutorialRequest) {

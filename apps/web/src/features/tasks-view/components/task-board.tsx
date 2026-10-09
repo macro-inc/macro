@@ -241,6 +241,8 @@ function Root(props: {
 function Columns(props: {
   children(column: Accessor<TaskBoardColumn>): JSX.Element;
   endColumn?: () => JSX.Element;
+  /** The board's accessible name; boards of other items name their own. */
+  'aria-label'?: string;
 }) {
   const board = useBoardContext();
   let viewport: HTMLDivElement | undefined;
@@ -318,7 +320,7 @@ function Columns(props: {
       viewportProps={{
         tabindex: -1,
         role: 'region',
-        'aria-label': 'Task board',
+        'aria-label': props['aria-label'] ?? 'Task board',
         class: 'pt-1 pb-4 outline-none',
       }}
       contentProps={{ style: { height: '100%' } }}
@@ -424,6 +426,8 @@ function Cards(props: {
   children(task: Accessor<TaskBoardTask>): JSX.Element;
   empty?: JSX.Element;
   footer?: JSX.Element;
+  /** What the cards are, for each column's accessible name. */
+  itemsLabel?: string;
 }) {
   const board = useBoardContext();
   const lane = useColumnContext();
@@ -490,7 +494,7 @@ function Cards(props: {
       class="min-h-0 flex-auto"
       viewportProps={{
         role: 'region',
-        'aria-label': `${lane.column().label} tasks`,
+        'aria-label': `${lane.column().label} ${props.itemsLabel ?? 'tasks'}`,
         'aria-labelledby': lane.headerId,
         tabindex: 0,
         'data-task-board-scroll': lane.column().id,

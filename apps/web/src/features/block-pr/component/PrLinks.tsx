@@ -1,6 +1,9 @@
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
-import { AgentSessionMentionLabel } from '@core/component/LexicalMarkdown/component/decorator/AgentSessionMentionLabel';
+import { PopupPreview } from '@core/component/DocumentPreview';
+import { HoverCard } from '@core/component/HoverCard';
 import { useChannelName } from '@core/context/channels';
+import { rowPillClasses } from '@entity/components/row-pill';
 import MacroIcon from '@icon/macro-logo.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
@@ -11,16 +14,16 @@ import GithubIcon from '@phosphor/github-logo.svg';
 import HashIcon from '@phosphor/hash.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import RobotIcon from '@phosphor/robot.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-import { useAgentSessionMentionPreview } from '@queries/agent-session/mentions';
+import { tagPillClasses } from '@property/tags/TagPill';
 import { cn, Surface, Tooltip } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import {
   PR_PRIORITY_LABELS,
+  type PrChannelOrigin,
   type PrLinks,
   type PrPriority,
   type PrPriorityId,
@@ -124,9 +127,11 @@ function LinkPill(props: {
   const body = () => (
     <>
       <props.icon class="size-3 shrink-0" />
-      <span class="min-w-0 truncate">{first()?.label()}</span>
+      <span data-pill-text class="min-w-0 truncate">
+        {first()?.label()}
+      </span>
       <Show when={props.items.length > 1}>
-        <span class="shrink-0 tabular-nums text-ink-extra-muted">
+        <span data-pill-text class="shrink-0 tabular-nums text-ink-extra-muted">
           +{props.items.length - 1}
         </span>
       </Show>
@@ -147,10 +152,7 @@ function LinkPill(props: {
             >
               <button
                 type="button"
-                class={cn(
-                  'inline-flex h-6 min-w-0 max-w-40 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  props.class
-                )}
+                class={tagPillClasses(cn('max-w-40', props.class))}
                 aria-label={`Open linked ${props.kind.toLowerCase()}`}
                 {...isolate}
                 onClick={(event) => {
@@ -165,10 +167,7 @@ function LinkPill(props: {
         >
           <Popover placement="bottom-end" gutter={4} flip>
             <Popover.Trigger
-              class={cn(
-                'inline-flex h-6 min-w-0 max-w-40 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                props.class
-              )}
+              class={tagPillClasses(cn('max-w-40', props.class))}
               aria-label={`${props.items.length} linked ${props.kind.toLowerCase()}s`}
               {...isolate}
               onClick={(event: MouseEvent) => event.stopPropagation()}
@@ -213,42 +212,117 @@ function LinkPill(props: {
   );
 }
 
-function SessionName(props: { id: string }) {
-  const preview = useAgentSessionMentionPreview(
-    () => props.id,
-    () => true
-  );
-  const name = () => {
-    const current = preview.isSuccess ? preview.data : undefined;
-    return current?.access === 'access'
-      ? current.data.name || 'Agent session'
-      : 'Agent session';
-  };
-  return <AgentSessionMentionLabel label={name()} />;
-}
+/** The channel message an agent was started from, opened at that message. */
+const channelOriginContent = (origin: PrChannelOrigin): SplitContent => ({
+  type: 'channel',
+  id: origin.channelId,
+  params: origin.messageId
+    ? { [CHANNEL_URL_PARAMS.message]: origin.messageId }
+    : undefined,
+});
 
-function ChannelName(props: { id: string }) {
-  const name = useChannelName(props.id, 'Channel');
-  return <>{name()}</>;
+function ChannelOriginPill(props: {
+  origin: PrChannelOrigin;
+  /** Show only the mark, for the pills stacked behind the first. */
+  stacked: boolean;
+  onOpen: OpenPrLink;
+}) {
+  const name = useChannelName(props.origin.channelId, 'Channel');
+  const pill = () => (
+    <button
+      type="button"
+      class={tagPillClasses('max-w-40')}
+      aria-label={`Open the message in #${name()} that started the agent`}
+      {...isolate}
+      onClick={(event) => {
+        event.stopPropagation();
+        props.onOpen(channelOriginContent(props.origin), event.shiftKey);
+      }}
+    >
+      <HashIcon class="size-3 shrink-0" />
+      <span
+        data-pill-text
+        class={cn(
+          'min-w-0 truncate',
+          props.stacked && 'hidden group-hover/channels:inline'
+        )}
+      >
+        {name()}
+      </span>
+    </button>
+  );
+  return (
+    <Show
+      when={props.origin.messageId}
+      fallback={
+        <Tooltip as="span" label={`Started from #${name()}`}>
+          {pill()}
+        </Tooltip>
+      }
+    >
+      {(messageId) => (
+        <HoverCard
+          triggerClass="min-w-0"
+          trigger={pill()}
+          content={
+            <PopupPreview
+              mouseEnter={() => {}}
+              mouseLeave={() => {}}
+              documentInfo={{
+                id: props.origin.channelId,
+                type: 'channel',
+                params: { [CHANNEL_URL_PARAMS.message]: messageId() },
+                isOpenable: true,
+              }}
+            />
+          }
+        />
+      )}
+    </Show>
+  );
 }
 
 /**
- * Chips for the agents, tickets, customers, and channels a pull request links
- * to. Each opens the linked item in a split.
+ * The channel messages the linked agents were started from, such as an
+ * @mention. Several overlap as a stack that spreads out on hover; each
+ * previews its message on hover and opens the channel at it.
+ */
+function ChannelOriginPills(props: {
+  origins: readonly PrChannelOrigin[];
+  onOpen: OpenPrLink;
+}) {
+  return (
+    <Show when={props.origins.length > 0}>
+      <span
+        class="group/channels flex min-w-0 shrink items-center [&>*+*]:-ml-2 hover:[&>*+*]:ml-0.5 [&>*]:relative [&>*]:transition-[margin] [&>*:hover]:z-10"
+        aria-label={`Started from ${props.origins.length} channel ${
+          props.origins.length === 1 ? 'message' : 'messages'
+        }`}
+      >
+        <For each={props.origins}>
+          {(origin, index) => (
+            <ChannelOriginPill
+              origin={origin}
+              stacked={index() > 0}
+              onOpen={props.onOpen}
+            />
+          )}
+        </For>
+      </span>
+    </Show>
+  );
+}
+
+/**
+ * Chips for where a pull request was started (the tool and the channel
+ * messages its agents came from) and the customers and tickets it links to.
+ * Each opens the linked item in a split. Agent sessions have their own chip.
  */
 export function PrLinkChips(props: {
   links: PrLinks;
   companyName: (id: string) => string | undefined;
   onOpen: OpenPrLink;
 }) {
-  const sessions = (): LinkItem[] =>
-    props.links.sessions.map((session) => ({
-      key: session.id,
-      content: { type: 'agent', id: session.id },
-      text: () =>
-        session.source === 'agent' ? 'opened by its agent' : 'linked session',
-      label: () => <SessionName id={session.id} />,
-    }));
   const tasks = (): LinkItem[] =>
     props.links.tasks.map((task) => ({
       key: task.id,
@@ -278,22 +352,15 @@ export function PrLinkChips(props: {
         label: text,
       };
     });
-  const channels = (): LinkItem[] =>
-    props.links.channelIds.map((id) => ({
-      key: id,
-      content: { type: 'channel', id },
-      label: () => <ChannelName id={id} />,
-    }));
 
+  // Contents, so a compacting row can stack these pills with its own.
   return (
-    <span class="flex min-w-0 shrink items-center gap-1">
+    <span class="contents">
       <Show when={props.links.origin}>
         {(origin) => <PrOriginBadge origin={origin()} onOpen={props.onOpen} />}
       </Show>
-      <LinkPill
-        kind="Agent session"
-        icon={AgentIcon}
-        items={sessions()}
+      <ChannelOriginPills
+        origins={props.links.channelOrigins}
         onOpen={props.onOpen}
       />
       <LinkPill
@@ -306,12 +373,6 @@ export function PrLinkChips(props: {
         kind="Ticket"
         icon={ListChecksIcon}
         items={tasks()}
-        onOpen={props.onOpen}
-      />
-      <LinkPill
-        kind="Channel"
-        icon={HashIcon}
-        items={channels()}
         onOpen={props.onOpen}
       />
     </span>
@@ -357,7 +418,7 @@ export function PrOriginBadge(props: { origin: PrOrigin; onOpen: OpenPrLink }) {
   const content = () => (
     <>
       <PrOriginIcon tool={props.origin.tool} />
-      <span class="min-w-0 truncate">
+      <span data-pill-text class="min-w-0 truncate">
         {PR_ORIGIN_LABELS[props.origin.tool]}
       </span>
     </>
@@ -368,7 +429,7 @@ export function PrOriginBadge(props: { origin: PrOrigin; onOpen: OpenPrLink }) {
         when={target()}
         fallback={
           <span
-            class="inline-flex h-6 min-w-0 max-w-32 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted"
+            class={rowPillClasses('max-w-32')}
             aria-label={prOriginDescription(props.origin)}
           >
             {content()}
@@ -377,7 +438,7 @@ export function PrOriginBadge(props: { origin: PrOrigin; onOpen: OpenPrLink }) {
       >
         <button
           type="button"
-          class="inline-flex h-6 min-w-0 max-w-32 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          class={tagPillClasses('max-w-32')}
           aria-label={`${prOriginDescription(props.origin)}. Open the session`}
           {...isolate}
           onClick={(event) => {
@@ -401,7 +462,7 @@ export function PrLinksPending() {
   return (
     <span
       aria-hidden="true"
-      class="h-5 w-12 shrink-0 animate-pulse rounded-full bg-ink/5"
+      class="h-6 w-12 shrink-0 animate-pulse rounded-full bg-ink/5"
     />
   );
 }

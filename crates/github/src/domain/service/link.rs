@@ -9,9 +9,12 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubMergeMethod,
-        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestRef,
-        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+        EnrichedGithubPullRequest, GithubAccessToken, GithubDraftOutcome, GithubError, GithubLink,
+        GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
+        GithubPullRequestMergeabilityEntry, GithubPullRequestMergeabilityRequest,
+        GithubPullRequestNumber, GithubPullRequestRef, MergeGithubPullRequestRequest,
+        MergeGithubPullRequestResponse, SetGithubPullRequestDraftRequest,
+        SetGithubPullRequestDraftResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -144,10 +147,10 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
         }
     }
 
-    /// The pull request as GitHub reports it after a merge, written back to
-    /// its foreign entities so the app shows it merged before the webhook
-    /// arrives. Best-effort: the merge already happened.
-    async fn refresh_merged_pull_request(
+    /// The pull request as GitHub reports it after a merge or draft change,
+    /// written back to its foreign entities so the app shows the change
+    /// before the webhook arrives. Best-effort: the change already happened.
+    async fn refresh_changed_pull_request(
         &self,
         access_token: &GithubAccessToken,
         reference: GithubPullRequestRef,
@@ -167,7 +170,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
                     owner=%reference.owner,
                     repo=%reference.repo,
                     number=reference.number,
-                    "failed to refresh GitHub pull request after merge"
+                    "failed to refresh GitHub pull request after a change"
                 );
             })
             .ok()?;
@@ -302,7 +305,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         };
 
         let pull_request = self
-            .refresh_merged_pull_request(&access_token, request.to_reference())
+            .refresh_changed_pull_request(&access_token, request.to_reference())
             .await;
 
         Ok(MergeGithubPullRequestResponse {
@@ -310,6 +313,64 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
             message: merge.message,
             pull_request,
         })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_pull_request_draft(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        request: SetGithubPullRequestDraftRequest,
+    ) -> Result<SetGithubPullRequestDraftResponse, GithubError> {
+        let access_token = self.validated_access_token(macro_user_id).await?;
+
+        let outcome = self
+            .oauth
+            .set_pull_request_draft(
+                access_token.as_str(),
+                &request.owner,
+                &request.repo,
+                request.number,
+                request.draft,
+            )
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))?;
+
+        let draft = match outcome {
+            GithubDraftOutcome::Changed { draft } => draft,
+            GithubDraftOutcome::Rejected { rejection, message } => {
+                return Err(GithubError::PullRequestUpdateRejected { rejection, message });
+            }
+        };
+
+        let pull_request = self
+            .refresh_changed_pull_request(&access_token, request.to_reference())
+            .await;
+
+        Ok(SetGithubPullRequestDraftResponse {
+            draft,
+            pull_request,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_pull_request_mergeability(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        pull_requests: Vec<GithubPullRequestNumber>,
+    ) -> Result<Vec<GithubPullRequestMergeabilityEntry>, GithubError> {
+        if pull_requests.len() > GithubPullRequestMergeabilityRequest::MAX {
+            return Err(GithubError::TooManyPullRequests);
+        }
+        if pull_requests.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let access_token = self.validated_access_token(macro_user_id).await?;
+
+        self.oauth
+            .get_pull_request_mergeability(access_token.as_str(), &pull_requests)
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))
     }
 
     #[tracing::instrument(skip(self), err)]

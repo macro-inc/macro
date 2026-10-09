@@ -5,6 +5,7 @@ import {
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
+import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -33,6 +34,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
 import {
   createEffect,
+  createMemo,
   createSignal,
   type JSX,
   Match,
@@ -42,11 +44,13 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { buildReviewsRows } from '../core/reviews-rows';
 import type { ReviewsListController } from '../primitives/create-reviews-list-controller';
 import type { useReviewsQuery } from '../queries/use-reviews-query';
 import { isAuthoredBy } from '../reviews-filter';
 import {
   type ReviewsScope,
+  type ReviewsSortId,
   scopeMatchesViewerGithubId,
 } from '../reviews-types';
 import { ReviewsEmptyState } from './ReviewsEmptyState';
@@ -62,6 +66,7 @@ export type ReviewsListProps = {
   list: ReviewsListController;
   source: ReturnType<typeof useReviewsQuery>;
   scope: ReviewsScope;
+  sort: ReviewsSortId;
   authorLogin?: string;
   authorId?: string;
   viewerName?: string;
@@ -196,11 +201,39 @@ export function ReviewsList(props: ReviewsListProps) {
   const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
   const listSize = createElementSize(listElement);
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  // Date headings sit among the rows like email's; focus and selection keep
+  // counting pull requests, so their indexes map to rows for scrolling.
+  const rows = createMemo(() =>
+    buildReviewsRows(reviews(), {
+      sort: props.sort,
+      grouped: !props.search.trim(),
+    })
+  );
+  const rowIndexes = createMemo(() => {
+    const indexes: number[] = [];
+    rows().forEach((row, index) => {
+      if (row.kind === 'review') indexes[row.index] = index;
+    });
+    return indexes;
+  });
+  const rowIndex = (reviewIndex: number) =>
+    rowIndexes()[reviewIndex] ?? reviewIndex;
+  const scrollHandle = () => {
+    const handle = virtualizer();
+    return (
+      handle && {
+        scrollToIndex: (
+          index: number,
+          options?: Parameters<VirtualizerHandle['scrollToIndex']>[1]
+        ) => handle.scrollToIndex(rowIndex(index), options),
+      }
+    );
+  };
   const listInteractions = useListInteractions({
     controller: list,
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    scrollHandle: virtualizer,
+    scrollHandle,
     activation: {
       createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
       alternateDescription: 'Open in new split',
@@ -211,7 +244,7 @@ export function ReviewsList(props: ReviewsListProps) {
     getEntity: (review) => review,
     onFocus: (target) => {
       if (target)
-        virtualizer()?.scrollToIndex(target.index, { align: 'nearest' });
+        scrollHandle()?.scrollToIndex(target.index, { align: 'nearest' });
       listElement()?.focus();
     },
   });
@@ -383,57 +416,84 @@ export function ReviewsList(props: ReviewsListProps) {
                   <Virtualizer
                     as={ReviewListElement}
                     item="li"
-                    data={reviews()}
+                    data={rows()}
                     scrollRef={listElement()}
                     ref={setVirtualizer}
                     keepMounted={
-                      list.focus.index() >= 0 ? [list.focus.index()] : undefined
+                      list.focus.index() >= 0
+                        ? [rowIndex(list.focus.index())]
+                        : undefined
                     }
                     bufferSize={320}
                     itemSize={48}
                     onScroll={checkNearEnd}
                   >
-                    {(review) => (
-                      <ReviewRow
-                        review={review}
-                        checked={list.selection.isSelected(review.id)}
-                        authorDisplayName={
-                          isAuthoredBy(
-                            review,
-                            props.authorLogin,
-                            props.authorId
-                          )
-                            ? props.viewerName
-                            : undefined
-                        }
-                        favoriteAction={favoriteAction}
-                        onOpen={props.onOpen}
-                        links={props.links}
-                        onChecked={(checked, shiftKey) =>
-                          listInteractions.selection.set(review.id, checked, {
-                            range: shiftKey,
-                          })
-                        }
-                        onFocus={() =>
-                          list.focus.set(review.id, { reason: 'pointer' })
-                        }
-                        onClick={(event) => {
-                          if (event.metaKey || event.ctrlKey) {
-                            listInteractions.selection.toggle(review.id);
-                            return;
-                          }
-                          list.activate.key(review.id, {
-                            reason: 'pointer',
-                            metadata: { newSplit: event.shiftKey },
-                          });
-                        }}
-                        onActivate={(newSplit) =>
-                          list.activate.key(review.id, {
-                            reason: 'keyboard',
-                            metadata: { newSplit },
-                          })
-                        }
-                      />
+                    {(row) => (
+                      <Switch>
+                        <Match when={row.kind === 'header' ? row : undefined}>
+                          {(header) => (
+                            <DateGroupHeading
+                              label={header().label}
+                              isFirst={rows()[0]?.id === header().id}
+                            />
+                          )}
+                        </Match>
+                        <Match when={row.kind === 'review' ? row : undefined}>
+                          {(item) => {
+                            const review = () => item().review;
+                            return (
+                              <ReviewRow
+                                review={review()}
+                                checked={list.selection.isSelected(review().id)}
+                                authorDisplayName={
+                                  isAuthoredBy(
+                                    review(),
+                                    props.authorLogin,
+                                    props.authorId
+                                  )
+                                    ? props.viewerName
+                                    : undefined
+                                }
+                                favoriteAction={favoriteAction}
+                                onOpen={props.onOpen}
+                                links={props.links}
+                                onChecked={(checked, shiftKey) =>
+                                  listInteractions.selection.set(
+                                    review().id,
+                                    checked,
+                                    {
+                                      range: shiftKey,
+                                    }
+                                  )
+                                }
+                                onFocus={() =>
+                                  list.focus.set(review().id, {
+                                    reason: 'pointer',
+                                  })
+                                }
+                                onClick={(event) => {
+                                  if (event.metaKey || event.ctrlKey) {
+                                    listInteractions.selection.toggle(
+                                      review().id
+                                    );
+                                    return;
+                                  }
+                                  list.activate.key(review().id, {
+                                    reason: 'pointer',
+                                    metadata: { newSplit: event.shiftKey },
+                                  });
+                                }}
+                                onActivate={(newSplit) =>
+                                  list.activate.key(review().id, {
+                                    reason: 'keyboard',
+                                    metadata: { newSplit },
+                                  })
+                                }
+                              />
+                            );
+                          }}
+                        </Match>
+                      </Switch>
                     )}
                   </Virtualizer>
                 </ListLayoutProvider>

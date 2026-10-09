@@ -27,6 +27,16 @@ export type PrLinkSession = {
   parent?: PrLinkSessionParent;
   /** The session's harness slug, for sessions whose agent opened the PR. */
   harness?: string;
+  /** The thread's root message the session was started from, when known. */
+  messageId?: string;
+};
+
+/** A channel message an agent was started from, such as an @mention. */
+export type PrChannelOrigin = {
+  channelId: string;
+  /** The message that started the agent; absent when it is not known. */
+  messageId?: string;
+  sessionId: string;
 };
 
 /** A task the pull request references: a customer ticket when it names a company. */
@@ -47,6 +57,8 @@ export type PrLinks = {
   /** Linked tasks, open first, most urgent first. */
   tasks: PrLinkTask[];
   channelIds: string[];
+  /** The channel messages linked agents were started from, oldest link first. */
+  channelOrigins: PrChannelOrigin[];
   companyIds: string[];
   priority: PrPriority;
   /** Where the pull request was started, when anything gives it away. */
@@ -161,6 +173,7 @@ export function buildPrLinks(input: {
         session.parent?.type === 'channel' ? [session.parent.id] : []
       )
     ),
+    channelOrigins: channelOrigins(input.sessions),
     companyIds: unique([
       ...tasks.flatMap((task) => task.companyIds),
       ...input.sessions.flatMap((session) =>
@@ -170,6 +183,22 @@ export function buildPrLinks(input: {
     priority: derivePriority(tasks, input.labels),
     origin: detectPrOrigin(input),
   };
+}
+
+/** One origin per channel message; sessions from the same message share it. */
+function channelOrigins(sessions: readonly PrLinkSession[]): PrChannelOrigin[] {
+  const origins = new Map<string, PrChannelOrigin>();
+  for (const session of sessions) {
+    if (session.parent?.type !== 'channel') continue;
+    const key = `${session.parent.id}:${session.messageId ?? session.id}`;
+    if (!origins.has(key))
+      origins.set(key, {
+        channelId: session.parent.id,
+        messageId: session.messageId,
+        sessionId: session.id,
+      });
+  }
+  return [...origins.values()];
 }
 
 /** Whether any link of `kind` exists, for the Reviews link filter. */

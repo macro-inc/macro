@@ -185,19 +185,22 @@ export async function fetchPrLinks(
   ];
 
   const taskIds = [...new Set(pullRequests.flatMap(taskIdsFor))];
-  // The harness of a session whose agent opened a PR names the tool it ran.
-  const openerIds = [
+  // The harness of a session whose agent opened a PR names the tool it ran,
+  // and the thread of a session started in a channel names the message.
+  const sessionIds = [
     ...new Set(
       [...sessionsByUrl.values()].flatMap((sessions) =>
         sessions.flatMap((session) =>
-          session.source === 'agent' ? [session.id] : []
+          session.source === 'agent' || session.parent?.type === 'channel'
+            ? [session.id]
+            : []
         )
       )
     ),
   ];
-  const [taskEntities, openerEntities] = await Promise.all([
+  const [taskEntities, sessionEntities] = await Promise.all([
     fetchSoupEntitiesById('df', taskIds),
-    fetchSoupEntitiesById('asf', openerIds),
+    fetchSoupEntitiesById('asf', sessionIds),
   ]);
   const tasks = new Map(
     taskEntities.flatMap((entity) => {
@@ -205,10 +208,18 @@ export async function fetchPrLinks(
       return task ? [[task.id, task] as const] : [];
     })
   );
-  const harnesses = new Map(
-    openerEntities.flatMap((entity) =>
-      entity.type === 'agent_session' && entity.harness
-        ? [[entity.id, entity.harness] as const]
+  const sessionDetails = new Map(
+    sessionEntities.flatMap((entity) =>
+      entity.type === 'agent_session'
+        ? [
+            [
+              entity.id,
+              {
+                harness: entity.harness ?? undefined,
+                messageId: entity.threadId ?? undefined,
+              },
+            ] as const,
+          ]
         : []
     )
   );
@@ -219,7 +230,7 @@ export async function fetchPrLinks(
       buildPrLinks({
         sessions: (sessionsByUrl.get(pullRequest.url) ?? []).map((session) => ({
           ...session,
-          harness: harnesses.get(session.id),
+          ...sessionDetails.get(session.id),
         })),
         tasks: taskIdsFor(pullRequest).flatMap((id) => tasks.get(id) ?? []),
         labels: pullRequest.labels,

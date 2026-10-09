@@ -37,6 +37,8 @@ import type {
   GetUserInfo,
   GetUserLinkExistsParams,
   GithubLinkStatusResponse,
+  GithubPullRequestMergeabilityRequest,
+  GithubPullRequestMergeabilityResponse,
   GmailLinkStatusResponse,
   GtmInviteLink,
   GtmInviteLinkList,
@@ -79,6 +81,8 @@ import type {
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
+  SetGithubPullRequestDraftRequest,
+  SetGithubPullRequestDraftResponse,
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
@@ -1207,6 +1211,91 @@ export const verifyEmailLink = async (
 };
 
 /**
+ * @summary Converts a GitHub pull request to a draft, or marks it ready for review,
+as the authenticated user with their own GitHub grant.
+ */
+export type setGithubPullRequestDraftResponse200 = {
+  data: SetGithubPullRequestDraftResponse;
+  status: 200;
+};
+
+export type setGithubPullRequestDraftResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setGithubPullRequestDraftResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setGithubPullRequestDraftResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setGithubPullRequestDraftResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type setGithubPullRequestDraftResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type setGithubPullRequestDraftResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setGithubPullRequestDraftResponseSuccess =
+  setGithubPullRequestDraftResponse200 & {
+    headers: Headers;
+  };
+export type setGithubPullRequestDraftResponseError = (
+  | setGithubPullRequestDraftResponse401
+  | setGithubPullRequestDraftResponse403
+  | setGithubPullRequestDraftResponse404
+  | setGithubPullRequestDraftResponse422
+  | setGithubPullRequestDraftResponse428
+  | setGithubPullRequestDraftResponse500
+) & {
+  headers: Headers;
+};
+
+export type setGithubPullRequestDraftResponse =
+  | setGithubPullRequestDraftResponseSuccess
+  | setGithubPullRequestDraftResponseError;
+
+export const getSetGithubPullRequestDraftUrl = () => {
+  return `/github_pull_requests/draft`;
+};
+
+export const setGithubPullRequestDraft = async (
+  setGithubPullRequestDraftRequest: SetGithubPullRequestDraftRequest,
+  options?: RequestInit
+): Promise<setGithubPullRequestDraftResponse> => {
+  const res = await fetch(getSetGithubPullRequestDraftUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setGithubPullRequestDraftRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setGithubPullRequestDraftResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setGithubPullRequestDraftResponse;
+};
+
+/**
  * @summary Enriches GitHub pull request references with live GitHub data for the authenticated user.
  */
 export type enrichGithubPullRequestsResponse200 = {
@@ -1368,6 +1457,86 @@ export const mergeGithubPullRequest = async (
     status: res.status,
     headers: res.headers,
   } as mergeGithubPullRequestResponse;
+};
+
+/**
+ * @summary Reads whether each GitHub pull request merges cleanly into its base, as
+the authenticated user sees it. Pull requests the user cannot see are
+left out.
+ */
+export type getGithubPullRequestMergeabilityResponse200 = {
+  data: GithubPullRequestMergeabilityResponse;
+  status: 200;
+};
+
+export type getGithubPullRequestMergeabilityResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getGithubPullRequestMergeabilityResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getGithubPullRequestMergeabilityResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type getGithubPullRequestMergeabilityResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type getGithubPullRequestMergeabilityResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getGithubPullRequestMergeabilityResponseSuccess =
+  getGithubPullRequestMergeabilityResponse200 & {
+    headers: Headers;
+  };
+export type getGithubPullRequestMergeabilityResponseError = (
+  | getGithubPullRequestMergeabilityResponse401
+  | getGithubPullRequestMergeabilityResponse404
+  | getGithubPullRequestMergeabilityResponse422
+  | getGithubPullRequestMergeabilityResponse428
+  | getGithubPullRequestMergeabilityResponse500
+) & {
+  headers: Headers;
+};
+
+export type getGithubPullRequestMergeabilityResponse =
+  | getGithubPullRequestMergeabilityResponseSuccess
+  | getGithubPullRequestMergeabilityResponseError;
+
+export const getGetGithubPullRequestMergeabilityUrl = () => {
+  return `/github_pull_requests/mergeability`;
+};
+
+export const getGithubPullRequestMergeability = async (
+  githubPullRequestMergeabilityRequest: GithubPullRequestMergeabilityRequest,
+  options?: RequestInit
+): Promise<getGithubPullRequestMergeabilityResponse> => {
+  const res = await fetch(getGetGithubPullRequestMergeabilityUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(githubPullRequestMergeabilityRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getGithubPullRequestMergeabilityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getGithubPullRequestMergeabilityResponse;
 };
 
 /**

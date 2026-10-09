@@ -36,6 +36,7 @@ import {
   ChannelMessageWideContent,
   ChannelWideContent,
 } from './channel';
+import { CompactingPills } from './compacting-pills';
 import { EmailWideContent, useOwningInboxForEntity } from './email';
 import {
   GithubPullRequestChecksIndicator,
@@ -89,8 +90,11 @@ export function WideLayout(props: LayoutProps) {
           : props.hideCheckbox
             ? 'grid-cols-[1fr_auto_8ch]'
             : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
-        '[--title-width:10rem]'
+        '[--title-width:10rem]',
+        // Pull request pills give way to the title rather than starve it.
+        isGithubPrEntity(props.entity) && '[container-type:inline-size]'
       )}
+      data-pill-row={isGithubPrEntity(props.entity) ? '' : undefined}
       style={{
         'grid-template-areas': props.hideCheckbox
           ? '"content meta timestamp"'
@@ -119,7 +123,10 @@ export function WideLayout(props: LayoutProps) {
       </Show>
       <Entity.Slot
         placement="content"
-        class="ph-no-capture font-medium truncate items-center gap-2 flex"
+        class={cn(
+          'ph-no-capture font-medium truncate items-center gap-2 flex',
+          isGithubPrEntity(props.entity) && 'min-w-[min(26rem,50cqw)]'
+        )}
       >
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
@@ -169,12 +176,6 @@ export function WideLayout(props: LayoutProps) {
                   <Entity.Title entity={entity()} />
                 </span>
                 <GithubPullRequestChecksIndicator entity={entity()} />
-                {/* One row tall, so labels that don't fit wrap out of view. */}
-                <GithubLabelPills
-                  labels={entity().metadata.labels}
-                  class="h-5 max-w-[40%] flex-wrap overflow-hidden"
-                  pillClass="shrink-0"
-                />
               </span>
             )}
           </Match>
@@ -183,8 +184,32 @@ export function WideLayout(props: LayoutProps) {
           </Match>
         </Switch>
       </Entity.Slot>
-      <Entity.Slot placement="meta" class="flex items-center gap-2">
-        {props.meta}
+      <Entity.Slot
+        placement="meta"
+        class={cn(
+          'flex items-center gap-2',
+          isGithubPrEntity(props.entity) && 'min-w-0 overflow-hidden'
+        )}
+      >
+        <Show
+          when={isGithubPrEntity(props.entity) && props.entity}
+          fallback={props.meta}
+        >
+          {(entity) => (
+            <CompactingPills>
+              {props.meta}
+              <GithubLabelPills
+                labels={entity().metadata.labels}
+                class="contents"
+                pillClass="max-w-32 shrink-0"
+              />
+              <GithubPullRequestPills
+                entity={entity()}
+                authorDisplayName={props.authorDisplayName}
+              />
+            </CompactingPills>
+          )}
+        </Show>
         <Show when={isProjectEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
@@ -249,14 +274,6 @@ export function WideLayout(props: LayoutProps) {
           }
         >
           <SharedBadge ownerId={props.entity.ownerId} />
-        </Show>
-        <Show when={isGithubPrEntity(props.entity) && props.entity}>
-          {(entity) => (
-            <GithubPullRequestPills
-              entity={entity()}
-              authorDisplayName={props.authorDisplayName}
-            />
-          )}
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (

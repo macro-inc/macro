@@ -19,21 +19,28 @@ struct MockServer {
 
 impl MockServer {
     fn start(response: MockResponse) -> Self {
+        Self::start_many(vec![response])
+    }
+
+    /// Answers one connection per response, in order.
+    fn start_many(responses: Vec<MockResponse>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
         let (request_sender, requests) = mpsc::channel();
         let handle = std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let request = read_request(&mut stream);
-            request_sender.send(request).unwrap();
-            write!(
-                stream,
-                "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                response.status,
-                response.body.len(),
-                response.body
-            )
-            .unwrap();
+            for response in responses {
+                let (mut stream, _) = listener.accept().unwrap();
+                let request = read_request(&mut stream);
+                request_sender.send(request).unwrap();
+                write!(
+                    stream,
+                    "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response.status,
+                    response.body.len(),
+                    response.body
+                )
+                .unwrap();
+            }
         });
 
         Self {
@@ -44,8 +51,12 @@ impl MockServer {
     }
 
     fn finish(self) -> String {
+        self.finish_all().remove(0)
+    }
+
+    fn finish_all(self) -> Vec<String> {
         self.handle.join().unwrap();
-        self.requests.recv().unwrap()
+        self.requests.try_iter().collect()
     }
 }
 
@@ -241,4 +252,197 @@ async fn get_repository_merge_settings_defaults_missing_fields_to_allowed() {
 
     assert_eq!(settings.default_method(), Some(GithubMergeMethod::Merge));
     server.finish();
+}
+
+fn graphql_body(request: &str) -> serde_json::Value {
+    let body = request.split("\r\n\r\n").nth(1).unwrap();
+    serde_json::from_str(body).unwrap()
+}
+
+#[tokio::test]
+async fn set_pull_request_draft_converts_an_open_pull_request() {
+    let server = MockServer::start_many(vec![
+        MockResponse {
+            status: "200 OK",
+            body: serde_json::json!({
+                "data": { "repository": { "pullRequest": { "id": "PR_node", "isDraft": false } } }
+            })
+            .to_string(),
+        },
+        MockResponse {
+            status: "200 OK",
+            body: serde_json::json!({
+                "data": { "convertPullRequestToDraft": { "pullRequest": { "isDraft": true } } }
+            })
+            .to_string(),
+        },
+    ]);
+    let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+
+    let outcome = client
+        .set_pull_request_draft("token", "macro", "app", 7, true)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, GithubDraftOutcome::Changed { draft: true });
+    let requests = server.finish_all();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].starts_with("POST /graphql HTTP/1.1"));
+    let lookup = graphql_body(&requests[0]);
+    assert_eq!(
+        lookup["variables"],
+        serde_json::json!({ "owner": "macro", "repo": "app", "number": 7 })
+    );
+    let mutation = graphql_body(&requests[1]);
+    assert!(
+        mutation["query"]
+            .as_str()
+            .unwrap()
+            .contains("convertPullRequestToDraft")
+    );
+    assert_eq!(
+        mutation["variables"],
+        serde_json::json!({ "id": "PR_node" })
+    );
+}
+
+#[tokio::test]
+async fn set_pull_request_draft_skips_the_mutation_when_already_in_state() {
+    let server = MockServer::start(MockResponse {
+        status: "200 OK",
+        body: serde_json::json!({
+            "data": { "repository": { "pullRequest": { "id": "PR_node", "isDraft": false } } }
+        })
+        .to_string(),
+    });
+    let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+
+    let outcome = client
+        .set_pull_request_draft("token", "macro", "app", 7, false)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, GithubDraftOutcome::Changed { draft: false });
+    assert_eq!(server.finish_all().len(), 1);
+}
+
+#[tokio::test]
+async fn set_pull_request_draft_reports_graphql_refusals() {
+    let server = MockServer::start_many(vec![
+        MockResponse {
+            status: "200 OK",
+            body: serde_json::json!({
+                "data": { "repository": { "pullRequest": { "id": "PR_node", "isDraft": true } } }
+            })
+            .to_string(),
+        },
+        MockResponse {
+            status: "200 OK",
+            body: serde_json::json!({
+                "data": { "markPullRequestReadyForReview": null },
+                "errors": [{ "type": "FORBIDDEN", "message": "Resource not accessible" }]
+            })
+            .to_string(),
+        },
+    ]);
+    let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+
+    let outcome = client
+        .set_pull_request_draft("token", "macro", "app", 7, false)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome,
+        GithubDraftOutcome::Rejected {
+            rejection: GithubPullRequestUpdateRejection::Forbidden,
+            message: "Resource not accessible".to_string(),
+        }
+    );
+    let requests = server.finish_all();
+    assert!(
+        graphql_body(&requests[1])["query"]
+            .as_str()
+            .unwrap()
+            .contains("markPullRequestReadyForReview")
+    );
+}
+
+#[tokio::test]
+async fn set_pull_request_draft_reports_a_missing_pull_request() {
+    let server = MockServer::start(MockResponse {
+        status: "200 OK",
+        body: serde_json::json!({
+            "data": { "repository": null },
+            "errors": [{ "type": "NOT_FOUND", "message": "Could not resolve to a Repository" }]
+        })
+        .to_string(),
+    });
+    let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+
+    let outcome = client
+        .set_pull_request_draft("token", "macro", "app", 7, true)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome,
+        GithubDraftOutcome::Rejected {
+            rejection: GithubPullRequestUpdateRejection::NotFound,
+            message: "Could not resolve to a Repository".to_string(),
+        }
+    );
+    server.finish();
+}
+
+#[tokio::test]
+async fn get_pull_request_mergeability_batches_and_skips_hidden_pull_requests() {
+    let server = MockServer::start(MockResponse {
+        status: "200 OK",
+        body: serde_json::json!({
+            "data": {
+                "p0": { "pullRequest": { "mergeable": "CONFLICTING" } },
+                "p1": null,
+                "p2": { "pullRequest": { "mergeable": "UNKNOWN" } }
+            },
+            "errors": [{ "type": "NOT_FOUND", "message": "Could not resolve to a Repository" }]
+        })
+        .to_string(),
+    });
+    let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+    let number = |repo: &str, number| GithubPullRequestNumber {
+        owner: "macro".to_string(),
+        repo: repo.to_string(),
+        number,
+    };
+
+    let entries = client
+        .get_pull_request_mergeability(
+            "token",
+            &[number("app", 7), number("secret", 1), number("app", 9)],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        entries,
+        vec![
+            GithubPullRequestMergeabilityEntry {
+                owner: "macro".to_string(),
+                repo: "app".to_string(),
+                number: 7,
+                mergeability: GithubPullRequestMergeability::Conflicting,
+            },
+            GithubPullRequestMergeabilityEntry {
+                owner: "macro".to_string(),
+                repo: "app".to_string(),
+                number: 9,
+                mergeability: GithubPullRequestMergeability::Unknown,
+            },
+        ]
+    );
+    let body = graphql_body(&server.finish());
+    assert_eq!(body["variables"]["r1"], "secret");
+    assert_eq!(body["variables"]["n2"], 9);
+    assert!(body["query"].as_str().unwrap().contains("p2: repository"));
 }

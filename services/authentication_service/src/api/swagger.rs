@@ -1,8 +1,11 @@
 use github::domain::models::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
     EnrichedGithubPullRequest, GithubMergeMethod, GithubPullRequestCheckRun,
-    GithubPullRequestComment, GithubPullRequestRef, GithubPullRequestStatus,
+    GithubPullRequestComment, GithubPullRequestMergeability, GithubPullRequestMergeabilityEntry,
+    GithubPullRequestMergeabilityRequest, GithubPullRequestMergeabilityResponse,
+    GithubPullRequestNumber, GithubPullRequestRef, GithubPullRequestStatus,
     MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+    SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
 };
 use gtm_invite::inbound::axum_router::dto::{
     CreateGtmInviteLinkRequest, GtmInviteLink, GtmInviteLinkList, GtmInviteLinkStatus,
@@ -111,6 +114,8 @@ use model::user::{
                 /// /github_pull_requests
                 github_pull_requests::handler,
                 github_pull_requests::merge_handler,
+                github_pull_requests::draft_handler,
+                github_pull_requests::mergeability_handler,
 
                 /// /oauth
                 oauth::oauth_redirect::handler,
@@ -266,6 +271,13 @@ use model::user::{
                         GithubMergeMethod,
                         MergeGithubPullRequestRequest,
                         MergeGithubPullRequestResponse,
+                        SetGithubPullRequestDraftRequest,
+                        SetGithubPullRequestDraftResponse,
+                        GithubPullRequestNumber,
+                        GithubPullRequestMergeability,
+                        GithubPullRequestMergeabilityEntry,
+                        GithubPullRequestMergeabilityRequest,
+                        GithubPullRequestMergeabilityResponse,
 
                         UserQuota,
                         UserOrganizationResponse,
@@ -373,6 +385,31 @@ mod tests {
         let response_properties = &schemas["MergeGithubPullRequestResponse"]["properties"];
         assert!(response_properties.get("sha").is_some());
         assert!(response_properties.get("pullRequest").is_some());
+    }
+
+    #[test]
+    fn github_pull_requests_openapi_includes_draft_and_mergeability_paths() {
+        let openapi = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let draft = &openapi["paths"]["/github_pull_requests/draft"]["post"];
+        assert_eq!(draft["operationId"], "set_github_pull_request_draft");
+        assert_eq!(
+            draft["requestBody"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/SetGithubPullRequestDraftRequest")
+        );
+        let mergeability = &openapi["paths"]["/github_pull_requests/mergeability"]["post"];
+        assert_eq!(
+            mergeability["operationId"],
+            "get_github_pull_request_mergeability"
+        );
+        assert_eq!(
+            mergeability["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+                .as_str(),
+            Some("#/components/schemas/GithubPullRequestMergeabilityResponse")
+        );
+        assert_eq!(
+            openapi["components"]["schemas"]["GithubPullRequestMergeability"]["enum"],
+            serde_json::json!(["mergeable", "conflicting", "unknown"])
+        );
     }
 
     #[test]

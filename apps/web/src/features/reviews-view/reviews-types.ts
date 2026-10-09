@@ -4,6 +4,8 @@ export type ReviewsScope =
   | 'assigned'
   | 'involving'
   | 'review_requests';
+/** How the Reviews list lays out pull requests. */
+export type ReviewsLayout = 'list' | 'board';
 export type ReviewsSortId =
   | 'priority'
   | 'recently_updated'
