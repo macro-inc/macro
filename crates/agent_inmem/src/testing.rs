@@ -47,6 +47,14 @@ pub(crate) fn disabled_admission() -> std::sync::Arc<dyn AiAdmissionService> {
 struct UnavailableBilling;
 
 impl ai_billing::domain::BillingService for UnavailableBilling {
+    async fn change_plan(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: ai_billing::domain::plan_change::PlanChange,
+    ) -> ai_billing::domain::Result<()> {
+        panic!("this use case must not change plans")
+    }
+
     async fn check_allowance(
         &self,
         _: &MacroUserIdStr<'_>,

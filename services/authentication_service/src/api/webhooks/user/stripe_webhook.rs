@@ -705,6 +705,15 @@ async fn handle_customer_subscription_event(
         )
         .await?;
     sync_personal_billing_period(ctx, &email, period, verified).await?;
+    if let Some(change) =
+        billing::personal_plan_change(billing_event, &ctx.stripe_prices, is_new_subscription)
+    {
+        let user = MacroUserIdStr::try_from_email(email.as_ref())?;
+        ctx.ai_billing_service
+            .change_plan(&user, change)
+            .await
+            .context("failed to reset upgraded personal seat usage")?;
+    }
 
     // Track conversion events to GA and Meta (fire-and-forget)
     let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
@@ -818,7 +827,21 @@ async fn handle_team_subscription_event<'a>(
                     // Restore stamps every member (owner included) with the team
                     // subscriber role and the tier role of their own seat's plan.
                     ctx.teams_service
-                        .restore_permissions_for_team_members(team_id)
+                        .restore_permissions_for_team_members(
+                            team_id,
+                            tracking_data
+                                .is_new
+                                .then(|| {
+                                    plan_sync.verified.first().map(|facts| {
+                                        teams::domain::open_seat_release::SubscriptionStart {
+                                            at: facts.event_at,
+                                            period_start: facts.period.start,
+                                            period_end: facts.period.end,
+                                        }
+                                    })
+                                })
+                                .flatten(),
+                        )
                         .await?;
                     sync_team_billing_period(ctx, &plan_sync).await?;
 

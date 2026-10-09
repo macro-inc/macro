@@ -239,6 +239,19 @@ export function UsageSettingsView(props: { context: UsageContext }) {
           >
             <SettingsCard>
               <div class="flex flex-col gap-3 p-4">
+                <Show when={developer().openBillingLab}>
+                  {(open) => (
+                    <Button
+                      variant="accent"
+                      depth={3}
+                      size="sm"
+                      class="self-start"
+                      onClick={open()}
+                    >
+                      Open Billing Lab
+                    </Button>
+                  )}
+                </Show>
                 <div class="flex flex-wrap gap-2">
                   <Button
                     variant={

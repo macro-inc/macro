@@ -13,6 +13,8 @@ note: |-
   untyped wire JSON for property-changed rows. In block-agent, `ui/` is
   the presentation layer and `component/` is the composition layer.
 files:
+  - apps/web/src/features/billing-lab/components/**
+  - apps/web/src/features/paywall/components/ai-usage-limit-dialog*
   - apps/web/src/features/routines/components/**
   - apps/web/src/features/scheduling/components/**
   - apps/web/src/features/usage/components/**

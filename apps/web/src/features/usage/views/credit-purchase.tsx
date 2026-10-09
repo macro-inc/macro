@@ -44,6 +44,7 @@ export function CreditPurchaseView(props: {
     try {
       const url = await props.context.checkout.start(amount);
       props.context.navigateToPayment(url);
+      props.onClose();
     } catch (error) {
       const needsPlan = thrownResultErrorHasCode(error, 'PAID_PLAN_REQUIRED');
       setSubscriptionRequired(needsPlan);

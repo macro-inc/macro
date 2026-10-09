@@ -74,12 +74,14 @@ pub trait EntitlementSource: Send + Sync + 'static {
 
 /// Reads recorded, metered AI usage at provider cost.
 pub trait UsageReader: Send + Sync + 'static {
-    /// Usage in cost cents for each of `users` within `period`.
+    /// Usage since the latest new-highest-plan baseline in cost cents for each seat.
+    /// Historical plan changes supply an explicit cumulative liability for settlement.
     ///
     /// Only rows with the persisted `count_usage = TRUE` decision consume a user's
     /// allowance, credits, or overage. Historical and uncounted rows remain available
     /// for cost tracking. The period is inclusive at the start and exclusive at the end;
-    /// users with no counted rows are omitted, and an empty user list returns no rows.
+    /// users with no counted rows or prior overage are omitted, and an empty list
+    /// returns no rows. Upgrade history does not delete or reclassify recorded costs.
     fn usage_cost_cents_by_user(
         &self,
         users: &[MacroUserIdStr<'static>],
@@ -140,6 +142,14 @@ pub trait BillingRepo: Send + Sync + 'static {
         period: BillingPeriod,
         seats: Vec<SeatAllowance>,
     ) -> impl Future<Output = Result<Vec<SeatAllowance>>> + Send;
+
+    /// Record an immutable transition, including downgrades, for chronological
+    /// metering. Replays preserve the original facts and subsequent usage.
+    fn record_plan_change(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        record: super::plan_change::RecordedPlanChange,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// The payer's settings (defaults when no row exists).
     fn settings(
@@ -491,6 +501,15 @@ impl SettlementTrigger for NoOpSettlementTrigger {
 /// (`ai_usage::domain::ports::InvocationFunding`) backed by the reservation and
 /// allocation rules in [`super::policy`]. It must never also enter legacy settlement.
 pub trait BillingService: Send + Sync + 'static {
+    /// Apply a verified transition. Only a new highest plan in the billing
+    /// period resets usage;
+    /// recorded costs, prepaid credits and existing charges remain intact.
+    fn change_plan(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        change: super::plan_change::PlanChange,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// May `user` start another AI request?
     ///
     /// Admission is a read of the position at this instant; usage is

@@ -139,6 +139,7 @@ impl UsageReader for FakeUsage {
                     user: MacroUserIdStr::try_from(user)
                         .map_err(|error| BillingError::Storage(error.into()))?,
                     used_cents,
+                    chargeable_cost_cents: None,
                 })
             })
             .collect()
@@ -177,6 +178,7 @@ struct RepoState {
     reloads: Vec<FakeReload>,
     auto_reload_suspended: bool,
     allowances: HashMap<DateTime<Utc>, PeriodAllowance>,
+    usage_resets: Vec<(String, DateTime<Utc>, DateTime<Utc>)>,
     releases: Vec<(String, DateTime<Utc>, String)>,
     activated_seats: Vec<String>,
     period_writes: Vec<(String, DateTime<Utc>, DateTime<Utc>)>,
@@ -259,6 +261,19 @@ impl BillingRepo for FakeRepo {
                 .any(|user| user == seat.user.as_ref())
         });
         Ok(seats)
+    }
+
+    async fn record_plan_change(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        record: crate::domain::plan_change::RecordedPlanChange,
+    ) -> Result<()> {
+        self.state.lock().unwrap().usage_resets.push((
+            user.to_string(),
+            record.change.period.start,
+            record.change.at,
+        ));
+        Ok(())
     }
 
     async fn settings(&self, _payer: &MacroUserIdStr<'_>) -> Result<BillingSettings> {
@@ -925,6 +940,7 @@ async fn policy_activation_during_analytics_read_cannot_double_bill() {
                 .map(|user| SeatUsage {
                     user: user.clone(),
                     used_cents: 100_000,
+                    chargeable_cost_cents: None,
                 })
                 .collect())
         }
@@ -3039,4 +3055,195 @@ async fn release_rolls_an_ended_anchor_when_the_entitlement_read_fails() {
             "macro|member@x.com".to_string()
         )]
     );
+}
+
+#[tokio::test]
+async fn only_valid_transitions_are_recorded_in_the_original_period() {
+    use crate::domain::plan_change::PlanChange;
+    let (svc, repo, _, _, _, payer, _, current) = anchored_premium(1_500);
+    let at = current.start + chrono::Duration::seconds(1);
+    for (from, to) in [
+        (PlanTier::Free, PlanTier::Free),
+        (PlanTier::Premium, PlanTier::Free),
+        (PlanTier::Max, PlanTier::Free),
+        (PlanTier::Max, PlanTier::Premium),
+        (PlanTier::Max, PlanTier::Max),
+        (PlanTier::Premium, PlanTier::Premium),
+    ] {
+        BillingService::change_plan(
+            &svc,
+            &payer,
+            PlanChange {
+                from,
+                to,
+                at,
+                period: current,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    for at in [current.start - chrono::Duration::seconds(1), current.end] {
+        BillingService::change_plan(
+            &svc,
+            &payer,
+            PlanChange {
+                from: PlanTier::Premium,
+                to: PlanTier::Max,
+                at,
+                period: current,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    assert_eq!(repo.state.lock().unwrap().usage_resets.len(), 3);
+    repo.state.lock().unwrap().usage_resets.clear();
+    for (from, to) in [
+        (PlanTier::Free, PlanTier::Premium),
+        (PlanTier::Free, PlanTier::Max),
+        (PlanTier::Premium, PlanTier::Max),
+    ] {
+        BillingService::change_plan(
+            &svc,
+            &payer,
+            PlanChange {
+                from,
+                to,
+                at,
+                period: current,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    assert_eq!(
+        repo.state.lock().unwrap().usage_resets,
+        vec![(payer.to_string(), current.start, at); 3]
+    );
+}
+
+#[test]
+fn prior_overage_remains_covered_separately_from_the_reset_max_allowance() {
+    let user = user("upgrade@x.com");
+    let seats = [SeatAllowance {
+        user: user.clone(),
+        included_cents: 10_000,
+    }];
+    let usage = [SeatUsage {
+        user,
+        used_cents: 10_500,
+        chargeable_cost_cents: Some(700),
+    }];
+    // An existing 200-cent settlement covers the old Pro overage; the next
+    // settlement must still book the 500 cents newly incurred on Max.
+    assert_eq!(chargeable_cost_cents(&seats, &usage), 700);
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn all_plan_upgrades_reset_the_real_snapshot_and_gate(pool: sqlx::PgPool) {
+    for (from, to) in [
+        (PlanTier::Free, PlanTier::Premium),
+        (PlanTier::Free, PlanTier::Max),
+        (PlanTier::Premium, PlanTier::Max),
+    ] {
+        assert_upgrade_resets_snapshot_and_gate(pool.clone(), from, to).await;
+    }
+}
+
+async fn assert_upgrade_resets_snapshot_and_gate(pool: sqlx::PgPool, from: PlanTier, to: PlanTier) {
+    use crate::domain::plan_change::PlanChange;
+    use crate::outbound::{PgBillingRepo, PgUsageReader};
+    use ai_usage::outbound::PgUsageRepo;
+    use ai_usage::{
+        AiFeature, CompletionUsage, ModelPricing, Price, Usage, UsageAmount, UsageRepo,
+    };
+    let payer = user(&format!("upgrade-{from:?}-{to:?}@x.com"));
+    let ents = FakeEntitlements::default().with(Entitlement::personal(payer.clone(), from));
+    let pricing = AiPricing::testing();
+    let svc = BillingServiceImpl::new(
+        ents.clone(),
+        PgUsageReader::new(pool.clone()),
+        PgBillingRepo::new(pool.clone(), pricing),
+        FakePayments::default(),
+        pricing,
+    )
+    .with_enforcement(AiUsageEnforcement::Enabled);
+    // PostgreSQL stores timestamps at microsecond precision.
+    let now = DateTime::from_timestamp_micros(Utc::now().timestamp_micros()).unwrap();
+    let period = BillingPeriod {
+        start: now - chrono::Duration::days(1),
+        end: now + chrono::Duration::days(29),
+    };
+    svc.sync_period(&payer, period.start, period.end, None)
+        .await
+        .unwrap();
+    let usage_repo = PgUsageRepo::new(pool.clone());
+    let mut usage = CompletionUsage {
+        feature: AiFeature::Chat,
+        user: payer.clone(),
+        entity: None,
+        cost: Usage {
+            amount: UsageAmount::Tokens {
+                input: 1_000_000,
+                output: 0,
+                cache_read: 0,
+                cache_write: 0,
+            },
+            model: "upgrade-test".into(),
+            price: Some(Price {
+                pricing: ModelPricing::Tokens {
+                    input: 20.0,
+                    output: 0.0,
+                    cache_read: None,
+                    cache_write: None,
+                },
+                total: 20.0,
+            }),
+            created_at: now - chrono::Duration::seconds(1),
+        },
+    };
+    usage_repo.insert_usage(&usage, true).await.unwrap();
+    // Usage writes use the database clock, so place this fixture explicitly.
+    sqlx::query("UPDATE ai_usage SET created_at = $2 WHERE id = (SELECT id FROM ai_usage WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)")
+        .bind(payer.as_ref()).bind(usage.cost.created_at).execute(&pool).await.unwrap();
+    assert_eq!(svc.snapshot(&payer).await.unwrap().used_cents, 2_000);
+    assert!(matches!(
+        svc.check_allowance(&payer).await.unwrap(),
+        AllowanceDecision::Deny(_)
+    ));
+    ents.set(Entitlement::personal(payer.clone(), to));
+    let change = PlanChange {
+        from,
+        to,
+        at: now,
+        period,
+    };
+    BillingService::change_plan(&svc, &payer, change)
+        .await
+        .unwrap();
+    let snapshot = svc.snapshot(&payer).await.unwrap();
+    assert_eq!(snapshot.used_cents, 0);
+    assert_eq!(
+        snapshot.included_cents,
+        to.included_ai_cents_per_seat(pricing)
+    );
+    assert_eq!(
+        (snapshot.period_start, snapshot.period_end),
+        (period.start, period.end)
+    );
+    assert!(matches!(
+        svc.check_allowance(&payer).await.unwrap(),
+        AllowanceDecision::Allow
+    ));
+    usage.cost.created_at = now;
+    usage.cost.price.as_mut().unwrap().total = 2.0;
+    usage_repo.insert_usage(&usage, true).await.unwrap();
+    // Usage writes use the database clock, so place this fixture explicitly.
+    sqlx::query("UPDATE ai_usage SET created_at = $2 WHERE id = (SELECT id FROM ai_usage WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)")
+        .bind(payer.as_ref()).bind(usage.cost.created_at).execute(&pool).await.unwrap();
+    BillingService::change_plan(&svc, &payer, change)
+        .await
+        .unwrap();
+    assert_eq!(svc.snapshot(&payer).await.unwrap().used_cents, 200);
 }

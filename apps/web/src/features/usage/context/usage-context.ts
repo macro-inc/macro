@@ -37,6 +37,7 @@ export type UsageContext = {
   navigateToPayment: (url: string) => void;
   openPlans: () => void;
   developer?: {
+    openBillingLab?: () => void;
     active: Accessor<boolean>;
     plan: Accessor<UsagePreviewPlan | undefined>;
     beforeLaunch: Accessor<boolean>;

@@ -21,6 +21,14 @@ impl FakeBilling {
 }
 
 impl BillingService for FakeBilling {
+    async fn change_plan(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: crate::domain::plan_change::PlanChange,
+    ) -> BillingResult<()> {
+        panic!("this use case must not change plans")
+    }
+
     async fn check_allowance(&self, user: &MacroUserIdStr<'_>) -> BillingResult<AllowanceDecision> {
         assert_eq!(user.as_ref(), "macro|user@example.com");
         self.calls.fetch_add(1, Ordering::SeqCst);

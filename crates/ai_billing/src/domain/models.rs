@@ -349,6 +349,11 @@ pub struct SeatUsage {
     pub user: MacroUserIdStr<'static>,
     /// Usage in cents at provider cost.
     pub used_cents: i64,
+    /// Total historical overage across paid allowance intervals, when plan
+    /// history exists. Earlier included costs never become debt on downgrade;
+    /// upgrades preserve old overage and previously consumed credits.
+    /// Without history, the service applies the current seat allowance.
+    pub chargeable_cost_cents: Option<i64>,
 }
 
 /// A user's resolved plan and payer.

@@ -1,78 +1,26 @@
-import {
-  PLAN_BY_TIER,
-  PLAN_USAGE_LABELS,
-  type PlanTier,
-} from '@app/features/paywall/plans';
+import type { PlanTier } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { usePermissions, useUserId } from '@core/context/user';
 import { plural } from '@core/util/string';
-import CheckIcon from '@phosphor/check.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
 import {
   useAiBillingSummaryQuery,
   useChangePlanMutation,
   useCreateCheckoutSessionMutation,
+  useSubscriptionStatusQuery,
 } from '@queries/auth';
+import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { stripeServiceClient } from '@service-stripe/client';
-import { Button, Layer } from '@ui';
-import { createMemo, For, Match, Show, Switch } from 'solid-js';
-import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
-
-/**
- * Plan bullet points. The allowance line appears only with AI usage billing on
- * and describes usage relative to Pro.
- */
-const BILLING_PLAN_FEATURES: Record<
-  PlanTier,
-  (usage: string | undefined) => string[]
-> = {
-  free: (usage) => [
-    'Access to Haiku',
-    ...(usage ? [usage] : []),
-    'MCP access',
-    '5 GB storage',
-  ],
-  premium: (usage) => [
-    'All agents',
-    'All models',
-    ...(usage ? [usage] : []),
-    'No watermark',
-    'AI projections',
-    'Multiple email inboxes',
-    'Calls',
-    'Teams',
-    '1 TB storage',
-  ],
-  max: (usage) => [
-    'Everything in Pro',
-    ...(usage ? [usage] : []),
-    'Priority support',
-  ],
-};
-
-const PlanFeatures = (props: { tier: PlanTier }) => {
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
-  const allowance = () =>
-    aiUsageBilling().enabled ? PLAN_USAGE_LABELS[props.tier] : undefined;
-  return (
-    <For each={BILLING_PLAN_FEATURES[props.tier](allowance())}>
-      {(label) => (
-        <li class="flex items-center gap-2">
-          <CheckIcon class="size-3 text-success" />
-          <span class="text-ink-muted text-xs">{label}</span>
-        </li>
-      )}
-    </For>
-  );
-};
+import { createMemo } from 'solid-js';
+import type { BillingContext } from './context/billing-context';
+import { BillingSettingsView } from './views/billing-settings';
 
 /** "3 Pro seats, 1 Max seat" for a team's members. */
 function describeSeatPlans(members: TeamMember[]): string {
@@ -90,17 +38,6 @@ function describeSeatPlans(members: TeamMember[]): string {
   return parts.join(', ');
 }
 
-const PlanPrice = (props: { tier: PaidPlan }) => {
-  return (
-    <p class="text-ink-extra-muted text-xs">
-      ${PLAN_BY_TIER[props.tier].price} per seat / month
-      <ShowFeatureFlag flag={enableAiUsageBilling}>
-        <Show when={props.tier === 'max'}> · 10× usage</Show>
-      </ShowFeatureFlag>
-    </p>
-  );
-};
-
 export const Billing = () => {
   const permissions = usePermissions();
   const analytics = useAnalytics();
@@ -108,6 +45,7 @@ export const Billing = () => {
   const userId = useUserId();
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
+  const subscriptionStatus = useSubscriptionStatusQuery({ enabled: hasPaid });
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const changePlan = useChangePlanMutation();
   const checkout = useCreateCheckoutSessionMutation();
@@ -117,7 +55,7 @@ export const Billing = () => {
   });
 
   const userTeam = createMemo(() => {
-    const currentTeam = team.data;
+    const currentTeam = team.isSuccess ? team.data : undefined;
     const uid = userId();
     if (!currentTeam || !uid) return;
 
@@ -162,14 +100,17 @@ export const Billing = () => {
 
   const handleChangePlan = async (plan: PaidPlan) => {
     try {
+      const previous = tier();
       await changePlan.mutateAsync({ plan });
       analytics.track('plan_changed', { plan });
       toast.success(
-        plan === 'max'
-          ? aiUsageBilling().enabled
-            ? 'Upgraded to Max. Your larger AI allowance applies right away.'
-            : 'Upgraded to Max.'
-          : 'Switched to Pro.'
+        plan === previous
+          ? `Keeping your ${plan === 'max' ? 'Max' : 'Pro'} plan. Your scheduled downgrade is canceled.`
+          : plan === 'max'
+            ? aiUsageBilling().enabled
+              ? 'Upgraded to Max. Your larger AI allowance applies right away.'
+              : 'Upgraded to Max.'
+            : 'Pro will start at your next renewal. You keep Max until then.'
       );
     } catch (error) {
       console.error(error);
@@ -186,200 +127,33 @@ export const Billing = () => {
     }
   };
 
-  return (
-    <SettingsPage
-      title="Billing"
-      description={
-        <>
-          For questions about billing,{' '}
-          <a
-            class="text-link hover:text-link-hover visited:text-link-visited inline-flex items-center"
-            href="mailto:support@macro.com"
-          >
-            contact us
-            <EnvelopeIcon class="size-4 inline mx-1" />
-          </a>
-        </>
-      }
-    >
-      <SettingsSection title="Subscription">
-        <SettingsCard>
-          <section class="flex flex-col gap-4 p-4">
-            <header class="flex items-center gap-2">
-              <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-2">
-                  <h2 class="text-lg font-medium text-ink">
-                    {PLAN_BY_TIER[tier()].name} plan
-                  </h2>
-
-                  <Layer depth={3}>
-                    <span class="text-xs text-ink-muted px-1.5 py-0.25 border border-edge-muted rounded-md bg-active">
-                      Current
-                    </span>
-                  </Layer>
-                </div>
-                <Switch>
-                  <Match when={teamRole() === 'member' && billedThroughTeam()}>
-                    <p class="text-ink-extra-muted text-xs">
-                      Your seat is billed through your team. Team admins choose
-                      each seat's plan in{' '}
-                      <a
-                        class="text-link hover:text-link-hover"
-                        href="/app/settings/team"
-                      >
-                        Team settings
-                      </a>
-                      .
-                    </p>
-                  </Match>
-                  <Match
-                    when={hasPaid() && teamRole() === 'owner' && team.data}
-                  >
-                    {(team) => (
-                      <p class="text-ink-extra-muted text-xs">
-                        {team().members.length}{' '}
-                        {plural('user', team().members.length)} •{' '}
-                        {describeSeatPlans(team().members)} • set each seat's
-                        plan in{' '}
-                        <a
-                          class="text-link hover:text-link-hover"
-                          href="/app/settings/team"
-                        >
-                          Team settings
-                        </a>
-                      </p>
-                    )}
-                  </Match>
-                </Switch>
-              </div>
-
-              <Show
-                when={canManageSubscription() && hasPaid() && isOwnerOrSolo()}
-              >
-                <Button
-                  class="ml-auto bg-active"
-                  size="sm"
-                  depth={2}
-                  variant="outline"
-                  onClick={handleManage}
-                >
-                  Manage
-                </Button>
-              </Show>
-            </header>
-            <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
-              <PlanFeatures tier={tier()} />
-            </ul>
-          </section>
-        </SettingsCard>
-      </SettingsSection>
-
-      <Show when={canChangePlan()}>
-        <Switch>
-          <Match when={!hasPaid()}>
-            <SettingsSection title="Upgrade">
-              <SettingsCard>
-                <section class="flex flex-col gap-4 p-4">
-                  <header class="flex items-center gap-2">
-                    <div class="flex flex-col">
-                      <h2 class="text-lg font-medium text-ink">Pro</h2>
-                      <PlanPrice tier="premium" />
-                    </div>
-                    <Button
-                      class="ml-auto py-1.5 px-3"
-                      depth={2}
-                      variant="cta"
-                      onClick={() => void handleCheckout('premium')}
-                    >
-                      Upgrade now
-                    </Button>
-                  </header>
-                  <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
-                    <PlanFeatures tier="premium" />
-                  </ul>
-                </section>
-              </SettingsCard>
-              <SettingsCard>
-                <section class="flex flex-col gap-4 p-4">
-                  <header class="flex items-center gap-2">
-                    <div class="flex flex-col">
-                      <h2 class="text-lg font-medium text-ink">Max</h2>
-                      <PlanPrice tier="max" />
-                    </div>
-                    <Button
-                      class="ml-auto py-1.5 px-3"
-                      depth={2}
-                      variant="outline"
-                      onClick={() => void handleCheckout('max')}
-                    >
-                      Get Max
-                    </Button>
-                  </header>
-                  <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
-                    <PlanFeatures tier="max" />
-                  </ul>
-                </section>
-              </SettingsCard>
-            </SettingsSection>
-          </Match>
-          <Match when={tier() === 'premium'}>
-            <SettingsSection
-              title={aiUsageBilling().enabled ? 'Need more AI?' : 'Upgrade'}
-            >
-              <SettingsCard>
-                <section class="flex flex-col gap-4 p-4">
-                  <header class="flex items-center gap-2">
-                    <div class="flex flex-col">
-                      <h2 class="text-lg font-medium text-ink">Max</h2>
-                      <PlanPrice tier="max" />
-                    </div>
-                    <Button
-                      class="ml-auto py-1.5 px-3"
-                      depth={2}
-                      variant="cta"
-                      disabled={changePlan.isPending}
-                      onClick={() => void handleChangePlan('max')}
-                    >
-                      Upgrade to Max
-                    </Button>
-                  </header>
-                  <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
-                    <PlanFeatures tier="max" />
-                  </ul>
-                  <p class="text-xs text-ink-extra-muted">
-                    Prorated for the rest of this period.
-                    <Show when={teamRole() === 'owner'}>
-                      {' '}
-                      This moves only your seat; teammates' plans are set per
-                      seat in Team settings.
-                    </Show>
-                  </p>
-                </section>
-              </SettingsCard>
-            </SettingsSection>
-          </Match>
-          <Match when={tier() === 'max'}>
-            <SettingsSection>
-              <p class="px-6 text-xs text-ink-extra-muted">
-                Want a smaller plan?{' '}
-                <button
-                  type="button"
-                  class="text-link hover:text-link-hover"
-                  disabled={changePlan.isPending}
-                  onClick={() => void handleChangePlan('premium')}
-                >
-                  Switch to Pro
-                </button>{' '}
-                (${PLAN_BY_TIER.premium.price} per seat / month
-                <ShowFeatureFlag flag={enableAiUsageBilling}>
-                  with standard usage
-                </ShowFeatureFlag>
-                ).
-              </p>
-            </SettingsSection>
-          </Match>
-        </Switch>
-      </Show>
-    </SettingsPage>
-  );
+  const context: BillingContext = {
+    tier,
+    renewalDate: () =>
+      queryReadyGate(subscriptionStatus)
+        ? (subscriptionStatus.data.renewalDate ?? undefined)
+        : undefined,
+    scheduledChange: () =>
+      queryReadyGate(subscriptionStatus)
+        ? (subscriptionStatus.data.scheduledChange ?? undefined)
+        : undefined,
+    subscriptionStatusFailed: () => subscriptionStatus.isError,
+    refreshStatus: () => void subscriptionStatus.refetch(),
+    hasPaid,
+    teamRole,
+    billedThroughTeam,
+    isOwnerOrSolo,
+    canManageSubscription: () => !!canManageSubscription(),
+    canChangePlan: () => !!canChangePlan(),
+    aiUsageBilling: () => !!aiUsageBilling().enabled,
+    changingPlan: () => changePlan.isPending,
+    teamSeatDescription: () =>
+      team.isSuccess && team.data
+        ? `${team.data.members.length} ${plural('user', team.data.members.length)} • ${describeSeatPlans(team.data.members)}`
+        : undefined,
+    checkout: handleCheckout,
+    changePlan: handleChangePlan,
+    manage: handleManage,
+  };
+  return <BillingSettingsView context={context} />;
 };

@@ -15,6 +15,13 @@ note: |-
   `files` in each ts-/tsx-feature-* rule. Block-agent uses `ui/` for
   presentation and `component/` for composition.
 files:
+  - apps/web/src/features/billing-lab/context/**
+  - apps/web/src/features/billing-lab/queries/**
+  - apps/web/src/features/billing-lab/primitives/**
+  - apps/web/src/features/billing-lab/components/**
+  - apps/web/src/features/billing-lab/views/**
+  - apps/web/src/features/settings/context/billing-context.ts
+  - apps/web/src/features/settings/views/billing-settings*
   - apps/web/src/features/routines/queries/**
   - apps/web/src/features/routines/primitives/**
   - apps/web/src/features/routines/components/**

@@ -86,6 +86,9 @@ export interface AiPlanCatalog {
 
 export type PaidPlan = 'premium' | 'max';
 
+/** Authoritative renewal and pending change from GET /user/stripe/plan. */
+export type { SubscriptionStatus } from './generated/schemas/subscriptionStatus';
+
 /**
  * A team member with the plan their seat is billed at. Mirrors the auth
  * service's `TeamMember` once `plan` lands in the generated schema.

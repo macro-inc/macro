@@ -2,12 +2,16 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+#[cfg(test)]
+mod test;
+
 use anyhow::Context;
+use macro_user_id::user_id::MacroUserIdStr;
 use stripe::{UpdateSubscription, UpdateSubscriptionItems};
 
 use crate::domain::{
     customer_repo::CustomerRepository,
-    model::{CustomerError, SeatPlan, SeatPrices},
+    model::{CustomerError, ScheduledSeatPlan, SeatPlan, SeatPrices},
 };
 
 /// The CustomerRepositoryImpl struct is a wrapper around a stripe::Client connected to stripe.
@@ -18,6 +22,7 @@ pub struct CustomerRepositoryImpl {
     /// The Stripe price behind each plan's seat item. A team subscription
     /// holds one item per plan its members are on.
     seat_prices: SeatPrices,
+    pool: sqlx::PgPool,
 }
 
 /// One plan's seat item on a subscription.
@@ -28,11 +33,131 @@ struct SeatItem {
 }
 
 impl CustomerRepositoryImpl {
+    async fn read_pending(
+        &self,
+        subscription: &str,
+        record: &str,
+    ) -> Result<PendingChanges, CustomerError> {
+        let id: uuid::Uuid = record
+            .parse()
+            .map_err(|e| CustomerError::StorageLayerError(anyhow::Error::from(e)))?;
+        let row = sqlx::query!("SELECT effective_at, member_plans FROM subscription_plan_schedule WHERE id = $1 AND subscription_id = $2", id, subscription).fetch_one(&self.pool).await.map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+        Ok(PendingChanges {
+            at: row.effective_at.timestamp(),
+            members: serde_json::from_value(row.member_plans)
+                .map_err(|e| CustomerError::StorageLayerError(e.into()))?,
+        })
+    }
+    async fn pending_changes(
+        &self,
+        schedule: &stripe::SubscriptionSchedule,
+        subscription: &stripe::Subscription,
+    ) -> Result<PendingChanges, CustomerError> {
+        match schedule.metadata.as_ref().and_then(|m| m.get(PENDING_KEY)) {
+            Some(record) => self.read_pending(subscription.id.as_str(), record).await,
+            None => Ok(PendingChanges {
+                at: subscription.current_period_end,
+                members: HashMap::new(),
+            }),
+        }
+    }
+
+    async fn release_schedule(
+        &self,
+        id: &stripe::SubscriptionScheduleId,
+    ) -> Result<(), CustomerError> {
+        self.client
+            .post::<stripe::SubscriptionSchedule>(&format!("/subscription_schedules/{id}/release"))
+            .await
+            .map_err(storage)?;
+        Ok(())
+    }
+
+    async fn write_schedule(
+        &self,
+        schedule: &stripe::SubscriptionSchedule,
+        subscription: &stripe::Subscription,
+        mut current: serde_json::Value,
+        pending: PendingChanges,
+        proration: &str,
+    ) -> Result<(), CustomerError> {
+        current["end_date"] = pending.at.into();
+        let mut next = current.clone();
+        next["start_date"] = pending.at.into();
+        next.as_object_mut().unwrap().remove("end_date");
+        next.as_object_mut().unwrap().remove("trial_end");
+        next.as_object_mut().unwrap().remove("add_invoice_items");
+        next["iterations"] = 1.into();
+        next["proration_behavior"] = "none".into();
+        let mut quantities = phase_quantities(&current)?;
+        let max = self.seat_prices.price_id(SeatPlan::Max)?.to_string();
+        let pro = self.seat_prices.price_id(SeatPlan::Premium)?.to_string();
+        let count = pending.members.len() as u64;
+        let source = quantities.get(&max).copied().unwrap_or(0);
+        if source < count {
+            return Err(CustomerError::StorageLayerError(anyhow::anyhow!(
+                "scheduled downgrades exceed active Max seats"
+            )));
+        }
+        // A new lower-price item retains the seat's item-level tax and billing
+        // settings as well as the phase-wide settings copied above.
+        let source_item = next["items"]
+            .as_array()
+            .and_then(|items| {
+                items
+                    .iter()
+                    .find(|item| item["price"].as_str() == Some(max.as_str()))
+            })
+            .cloned();
+        if let Some(mut item) = source_item
+            && !next["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["price"].as_str() == Some(pro.as_str()))
+        {
+            item["price"] = pro.clone().into();
+            next["items"].as_array_mut().unwrap().push(item);
+        }
+        quantities.insert(max, source - count);
+        *quantities.entry(pro).or_default() += count;
+        replace_quantities(&mut next, &quantities);
+        if next.get("metadata").is_none() {
+            next["metadata"] = serde_json::json!({});
+        }
+        let record_id = macro_uuid::generate_uuid_v7();
+        let effective_at =
+            chrono::DateTime::from_timestamp(pending.at, 0).context("invalid scheduled renewal")?;
+        let members = serde_json::to_value(&pending.members)
+            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+        sqlx::query!("INSERT INTO subscription_plan_schedule (id, subscription_id, effective_at, member_plans) VALUES ($1, $2, $3, $4)", record_id, subscription.id.as_str(), effective_at, members).execute(&self.pool).await.map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+        let encoded = record_id.to_string();
+        next["metadata"][APPLIED_KEY] = encoded.clone().into();
+        let request = ScheduleUpdate {
+            phases: vec![current, next],
+            proration_behavior: proration,
+            end_behavior: "release",
+            metadata: HashMap::from([
+                (OWNED_KEY.to_string(), "1".to_string()),
+                (PENDING_KEY.to_string(), encoded),
+            ]),
+        };
+        self.client
+            .post_form::<stripe::SubscriptionSchedule, _>(
+                &format!("/subscription_schedules/{}", schedule.id),
+                &request,
+            )
+            .await
+            .map_err(storage)?;
+        Ok(())
+    }
+
     /// Creates a new instance of CustomerRepositoryImpl
-    pub fn new(stripe_client: stripe::Client, seat_prices: SeatPrices) -> Self {
+    pub fn new(stripe_client: stripe::Client, seat_prices: SeatPrices, pool: sqlx::PgPool) -> Self {
         Self {
             client: Arc::new(stripe_client),
             seat_prices,
+            pool,
         }
     }
 
@@ -107,6 +232,57 @@ impl CustomerRepositoryImpl {
         subscription_id: &stripe::SubscriptionId,
         items: Vec<UpdateSubscriptionItems>,
     ) -> Result<(), CustomerError> {
+        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
+            .await
+            .map_err(storage)?;
+        if let Some(schedule_id) = subscription.schedule.as_ref().map(|s| s.id()) {
+            let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, &schedule_id, &[])
+                .await
+                .map_err(storage)?;
+            require_owned_schedule(&schedule)?;
+            let pending = self.pending_changes(&schedule, &subscription).await?;
+            if pending.at > subscription.current_period_start {
+                let current = current_phase(&schedule, &subscription)?;
+                let mut phase = phase_parameters(current)?;
+                let mut quantities = subscription
+                    .items
+                    .data
+                    .iter()
+                    .filter_map(|i| {
+                        i.price
+                            .as_ref()
+                            .map(|p| (p.id.to_string(), i.quantity.unwrap_or(1)))
+                    })
+                    .collect::<HashMap<_, _>>();
+                for update in &items {
+                    let price = update
+                        .price
+                        .clone()
+                        .or_else(|| {
+                            subscription
+                                .items
+                                .data
+                                .iter()
+                                .find(|i| Some(i.id.as_str()) == update.id.as_deref())
+                                .and_then(|i| i.price.as_ref())
+                                .map(|p| p.id.to_string())
+                        })
+                        .context("missing item price")?;
+                    if update.deleted == Some(true) {
+                        quantities.remove(&price);
+                    } else {
+                        quantities.insert(price, update.quantity.unwrap_or(1));
+                    }
+                }
+                replace_quantities(&mut phase, &quantities);
+                return self
+                    .write_schedule(&schedule, &subscription, phase, pending, "always_invoice")
+                    .await;
+            }
+            // The scheduled phase already became effective. Release it before
+            // an immediate upgrade; acknowledging old metadata cannot undo it.
+            self.release_schedule(&schedule.id).await?;
+        }
         let update_params = UpdateSubscription {
             items: Some(items),
             proration_behavior: Some(
@@ -124,6 +300,41 @@ impl CustomerRepositoryImpl {
 }
 
 impl CustomerRepository for CustomerRepositoryImpl {
+    async fn scheduled_seat_plan(
+        &self,
+        subscription: &stripe::SubscriptionId,
+        schedule: &stripe::SubscriptionScheduleId,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<Option<ScheduledSeatPlan>, CustomerError> {
+        let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, schedule, &[])
+            .await
+            .map_err(storage)?;
+        if schedule
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get(OWNED_KEY))
+            .map(String::as_str)
+            != Some("1")
+            || !matches!(
+                schedule.status,
+                stripe::SubscriptionScheduleStatus::Active
+                    | stripe::SubscriptionScheduleStatus::NotStarted
+            )
+        {
+            return Ok(None);
+        }
+        let Some(record) = schedule.metadata.as_ref().and_then(|m| m.get(PENDING_KEY)) else {
+            return Ok(None);
+        };
+        let changes = self.read_pending(subscription.as_str(), record).await?;
+        let Some(plan) = changes.members.get(user.as_ref()).copied() else {
+            return Ok(None);
+        };
+        let effective_at =
+            chrono::DateTime::from_timestamp(changes.at, 0).context("invalid scheduled renewal")?;
+        Ok(Some(ScheduledSeatPlan { plan, effective_at }))
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn increment_seat_count(
         &self,
@@ -190,6 +401,137 @@ impl CustomerRepository for CustomerRepositoryImpl {
         ];
 
         self.update_items(subscription_id, updates).await
+    }
+
+    async fn schedule_seat_plan(
+        &self,
+        id: &stripe::SubscriptionId,
+        user: &MacroUserIdStr<'_>,
+        plan: Option<SeatPlan>,
+    ) -> Result<(), CustomerError> {
+        let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
+            .await
+            .map_err(storage)?;
+        let existing = if let Some(id) = subscription.schedule.as_ref().map(|s| s.id()) {
+            let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, &id, &[])
+                .await
+                .map_err(storage)?;
+            require_owned_schedule(&schedule)?;
+            Some(schedule)
+        } else {
+            None
+        };
+        if plan.is_none() && existing.is_none() {
+            return Ok(());
+        }
+        let mut pending = if let Some(schedule) = existing.as_ref() {
+            self.pending_changes(schedule, &subscription).await?
+        } else {
+            PendingChanges {
+                at: subscription.current_period_end,
+                members: HashMap::new(),
+            }
+        };
+        if pending.at <= subscription.current_period_start {
+            pending = PendingChanges {
+                at: subscription.current_period_end,
+                members: HashMap::new(),
+            };
+        }
+        match plan {
+            Some(SeatPlan::Premium) => {
+                pending.members.insert(user.to_string(), SeatPlan::Premium);
+            }
+            Some(_) => return Err(CustomerError::PlanUnavailable(plan.unwrap())),
+            None => {
+                pending.members.remove(user.as_ref());
+            }
+        }
+        if pending.members.is_empty() {
+            if let Some(schedule) = existing {
+                self.release_schedule(&schedule.id).await?;
+            }
+            return Ok(());
+        }
+        let schedule = match existing {
+            Some(s) => s,
+            None => {
+                let mut create = stripe::CreateSubscriptionSchedule::new();
+                create.from_subscription = Some(id.as_str());
+                create.metadata = Some(HashMap::from([(OWNED_KEY.to_string(), "1".to_string())]));
+                stripe::SubscriptionSchedule::create(&self.client, create)
+                    .await
+                    .map_err(storage)?
+            }
+        };
+        let current = phase_parameters(current_phase(&schedule, &subscription)?)?;
+        self.write_schedule(&schedule, &subscription, current, pending, "none")
+            .await
+    }
+
+    async fn upgrade_personal_plan(
+        &self,
+        id: &stripe::SubscriptionId,
+        plan: SeatPlan,
+    ) -> Result<(), CustomerError> {
+        let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
+            .await
+            .map_err(storage)?;
+        let item = subscription
+            .items
+            .data
+            .iter()
+            .find(|i| {
+                i.price
+                    .as_ref()
+                    .is_some_and(|p| self.seat_prices.plan_for_price(p.id.as_str()).is_some())
+            })
+            .ok_or(CustomerError::NoMatchingLineItem)?;
+        let params = UpdateSubscription {
+            items: Some(vec![UpdateSubscriptionItems { id: Some(item.id.to_string()), price: Some(self.seat_prices.price_id(plan)?.to_string()), ..Default::default() }]),
+            metadata: Some(HashMap::from([("macro_plan_change_at".to_string(), chrono::Utc::now().to_rfc3339()), (APPLIED_KEY.to_string(), String::new())])),
+            proration_behavior: Some(stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice), ..Default::default()
+        };
+        stripe::Subscription::update(&self.client, id, params)
+            .await
+            .map_err(storage)?;
+        Ok(())
+    }
+
+    async fn renewed_seat_plans(
+        &self,
+        id: &stripe::SubscriptionId,
+    ) -> Result<Vec<(String, SeatPlan)>, CustomerError> {
+        let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
+            .await
+            .map_err(storage)?;
+        let Some(encoded) = subscription
+            .metadata
+            .get(APPLIED_KEY)
+            .filter(|s| !s.is_empty())
+        else {
+            return Ok(Vec::new());
+        };
+        let changes = self.read_pending(id.as_str(), encoded).await?;
+        Ok(if subscription.current_period_start >= changes.at {
+            changes.members.into_iter().collect()
+        } else {
+            Vec::new()
+        })
+    }
+
+    async fn acknowledge_renewed_seat_plans(
+        &self,
+        id: &stripe::SubscriptionId,
+    ) -> Result<(), CustomerError> {
+        let params = stripe::UpdateSubscription {
+            metadata: Some(HashMap::from([(APPLIED_KEY.to_string(), String::new())])),
+            ..Default::default()
+        };
+        stripe::Subscription::update(&self.client, id, params)
+            .await
+            .map_err(storage)?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -263,4 +605,120 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .map(|sub| sub.id)
             .ok_or(CustomerError::SubscriptionNotActive)
     }
+}
+
+const OWNED_KEY: &str = "macro_plan_schedule";
+const PENDING_KEY: &str = "macro_pending_seats";
+const APPLIED_KEY: &str = "macro_renewed_seats";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PendingChanges {
+    at: i64,
+    members: HashMap<String, SeatPlan>,
+}
+#[derive(serde::Serialize)]
+struct ScheduleUpdate<'a> {
+    phases: Vec<serde_json::Value>,
+    proration_behavior: &'a str,
+    end_behavior: &'a str,
+    metadata: HashMap<String, String>,
+}
+fn storage(error: stripe::StripeError) -> CustomerError {
+    CustomerError::StorageLayerError(error.into())
+}
+fn require_owned_schedule(schedule: &stripe::SubscriptionSchedule) -> Result<(), CustomerError> {
+    if schedule
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get(OWNED_KEY))
+        .map(String::as_str)
+        != Some("1")
+    {
+        return Err(CustomerError::StorageLayerError(anyhow::anyhow!(
+            "subscription has an externally managed schedule"
+        )));
+    }
+    Ok(())
+}
+fn current_phase<'a>(
+    schedule: &'a stripe::SubscriptionSchedule,
+    subscription: &stripe::Subscription,
+) -> Result<&'a stripe::SubscriptionSchedulePhaseConfiguration, CustomerError> {
+    schedule
+        .phases
+        .iter()
+        .find(|p| {
+            p.start_date <= subscription.current_period_start
+                && p.end_date > subscription.current_period_start
+        })
+        .ok_or_else(|| {
+            CustomerError::StorageLayerError(anyhow::anyhow!("missing current subscription phase"))
+        })
+}
+// Stripe returns expanded objects where updates require IDs. Keep all phase
+// settings (discounts, taxes, collection and payment settings), normalizing only
+// expandable references and response-only item aliases.
+fn phase_parameters(
+    phase: &stripe::SubscriptionSchedulePhaseConfiguration,
+) -> Result<serde_json::Value, CustomerError> {
+    let mut value =
+        serde_json::to_value(phase).map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+    normalize_references(&mut value);
+    value["proration_behavior"] = "none".into();
+    if value.get("metadata").is_none_or(serde_json::Value::is_null) {
+        value["metadata"] = serde_json::json!({});
+    }
+    Ok(value)
+}
+fn normalize_references(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) if map.contains_key("id") => {
+            *value = map["id"].clone();
+        }
+        serde_json::Value::Object(map) => {
+            map.retain(|key, val| !val.is_null() && key != "plan");
+            for value in map.values_mut() {
+                normalize_references(value);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                normalize_references(value);
+            }
+        }
+        _ => {}
+    }
+}
+fn phase_quantities(phase: &serde_json::Value) -> Result<HashMap<String, u64>, CustomerError> {
+    let items = phase["items"].as_array().context("missing phase items")?;
+    items
+        .iter()
+        .map(|i| {
+            Ok((
+                i["price"]
+                    .as_str()
+                    .context("missing phase price")?
+                    .to_string(),
+                i["quantity"].as_u64().unwrap_or(1),
+            ))
+        })
+        .collect()
+}
+fn replace_quantities(phase: &mut serde_json::Value, quantities: &HashMap<String, u64>) {
+    let old = phase["items"].as_array().cloned().unwrap_or_default();
+    let mut items = quantities
+        .iter()
+        .filter(|(_, n)| **n > 0)
+        .map(|(price, quantity)| {
+            let mut item = old
+                .iter()
+                .find(|i| i["price"].as_str() == Some(price.as_str()))
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({"price": price}));
+            item["quantity"] = (*quantity).into();
+            item
+        })
+        .collect::<Vec<_>>();
+    items.sort_by(|a, b| a["price"].as_str().cmp(&b["price"].as_str()));
+    phase["items"] = items.into();
 }

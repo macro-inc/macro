@@ -358,7 +358,9 @@ impl IntoResponse for SetTeamMemberPlanError {
             )
                 .into_response(),
             SetTeamMemberPlanError::TeamError(e) => e.into_response(),
-            SetTeamMemberPlanError::CustomerError(_) | SetTeamMemberPlanError::RolesError(_) => (
+            SetTeamMemberPlanError::CustomerError(_)
+            | SetTeamMemberPlanError::RolesError(_)
+            | SetTeamMemberPlanError::UsageReset(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "internal server error".into(),

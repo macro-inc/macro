@@ -2237,15 +2237,32 @@ Usage controls, including usage-limit dialogs. Dev tools remain interactive:
 Free and paid previews can be combined with this state, and `Reset preview`
 restores the normal dev view.
 
+Local **Developer tools → Open Billing Lab** opens `/billing-lab.html`, a
+standalone simulator with no login or billing API calls. Its 17 presets include
+Max with a pending Pro downgrade, exhausted allowances, credits, payment
+failures, team roles, loading, and errors. Select **Max → Pro at renewal**
+to start with a scheduled downgrade, and choose **Advance to
+renewal**: Max stays active until renewal, then Pro becomes active and included
+usage resets. Billing displays the scheduled downgrade and effective date;
+**Keep Max plan** cancels it and preserves the active plan and usage. The
+timeline also offers **Cancel scheduled change**. Purchases open a simulated checkout with explicit completion;
+**Fail the next billing request** enables error and retry checks. Scenario links
+restore the preset, not edits. See [Billing Lab setup and boundaries](../../apps/web/src/features/billing-lab/README.md).
+
 `Billing` shows the current plan and `Manage`, an `Upgrade` section for Free
-users with Premium (`Upgrade now`) and Max (`Get Max`), an `Upgrade to Max` card
-on Premium, and a `Switch to Premium` link on Max. On a team, a plan change moves
-only the viewer's own seat. Plan allowance copy uses the backend catalog and
+users with Pro (`Upgrade now`) and Max (`Get Max`), an `Upgrade to Max` card
+on Pro. Pro downgrades take effect at renewal;
+Max stays active until then. Billing shows the renewal date and a scheduled
+downgrade notice with **Keep Max plan** to cancel. Upgrading to Max takes effect
+immediately. Failed renewal-detail reads offer **Try again**. On a team, a plan
+change moves only the viewer's own seat; members who cannot manage billing see
+the notice without its action. Plan allowance copy uses the backend catalog and
 still follows the `enable-ai-usage-billing` flag; usage controls live in Usage.
 
 `Team` (members list; on a paid team each row shows the seat's plan,
-and admins/owners can move a seat between Premium and Max with the `Seat plan`
-menu; moves are prorated at once). CRM (enable/disable; once enabled, a `Deal stages` section
+and admins/owners can move a seat between Pro and Max with the `Seat plan`
+menu; Max upgrades are immediate and prorated, Pro downgrades start at renewal.
+**Keep Max** cancels a pending downgrade). CRM (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`)

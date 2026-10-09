@@ -40,7 +40,7 @@ export type AutoReloadDefaults = {
  */
 export type AutoReloadSnapshot = {
     /**
-     * Whether reloads will fire: overage is on and reloads are not suspended.
+     * Whether reloads will fire: the payer opted in and reloads are not suspended.
      */
     active: boolean;
     /**
@@ -1371,6 +1371,20 @@ export type ResendFusionauthVerifyUserEmailRequest = {
 };
 
 /**
+ * A seat's future plan in the subscription's currently attached schedule.
+ */
+export type ScheduledSeatPlan = {
+    /**
+     * Provider-confirmed time when the future phase starts.
+     */
+    effectiveAt: string;
+    /**
+     * Plan that takes effect at renewal.
+     */
+    plan: SeatPlan;
+};
+
+/**
  * The paid plan a seat is billed at. Every member of a paying team has one;
  * a team may mix them, and its Stripe subscription carries one seat item per
  * plan in use.
@@ -1416,6 +1430,17 @@ export type StripeSessionResponse = {
      * The URL to redirect the user to
      */
     url: string;
+};
+
+/**
+ * Current renewal and scheduled change; empty for accounts without a subscription.
+ */
+export type SubscriptionStatus = {
+    /**
+     * Provider-confirmed subscription renewal date.
+     */
+    renewalDate?: string | null;
+    scheduledChange?: null | ScheduledSeatPlan;
 };
 
 /**
@@ -1568,8 +1593,7 @@ export type ToggleNonAdminInvitesResponse = {
  */
 export type UpdateAutoReloadRequest = {
     /**
-     * Reload credits automatically, billing usage past allowance and
-     * credits to the payer's card. Turning this off also turns off overage.
+     * Purchase prepaid credits automatically using the payer's card.
      */
     enabled: boolean;
     /**
@@ -1578,9 +1602,7 @@ export type UpdateAutoReloadRequest = {
     minimumBalanceCents: number;
     /**
      * Most to reload per calendar month, cents. Omit or `null` for no limit.
-     * Also serves as the per-period overage cap, so it must be at least the
-     * catalog's `overage_limit_min_cents`; larger values are capped at
-     * `overage_limit_max_cents`.
+     * Must be at least the catalog's `overage_limit_min_cents` (legacy name).
      */
     monthlySpendLimitCents?: number | null;
     /**
@@ -1610,7 +1632,7 @@ export type UpdateOverageRequest = {
  */
 export type UsageSnapshot = {
     /**
-     * Automatic credit reload settings. `active` means overage is on and
+     * Automatic credit reload settings. `active` means the payer opted in and
      * reloads are not suspended.
      */
     auto_reload: AutoReloadSnapshot;
@@ -1636,7 +1658,7 @@ export type UsageSnapshot = {
      */
     overage_charged_cents: number;
     /**
-     * Whether overage billing is on.
+     * Legacy API name for the automatic reload opt-in. Never authorizes direct charges.
      */
     overage_enabled: boolean;
     /**
@@ -3755,6 +3777,30 @@ export type CreateCheckoutSessionV2Responses = {
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];
 
+export type GetSubscriptionStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/stripe/plan';
+};
+
+export type GetSubscriptionStatusErrors = {
+    401: ErrorResponse;
+    /**
+     * More than one active subscription
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSubscriptionStatusError = GetSubscriptionStatusErrors[keyof GetSubscriptionStatusErrors];
+
+export type GetSubscriptionStatusResponses = {
+    200: SubscriptionStatus;
+};
+
+export type GetSubscriptionStatusResponse = GetSubscriptionStatusResponses[keyof GetSubscriptionStatusResponses];
+
 export type ChangePlanData = {
     body: ChangePlanRequest;
     path?: never;
@@ -3780,7 +3826,7 @@ export type ChangePlanErrors = {
      */
     404: ErrorResponse;
     /**
-     * Already on this plan, or more than one active subscription
+     * More than one active subscription
      */
     409: ErrorResponse;
     500: ErrorResponse;

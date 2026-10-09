@@ -126,7 +126,13 @@ fn usage_for(user: &MacroUserIdStr<'_>, usage: &[SeatUsage]) -> i64 {
 fn chargeable_cost_cents(seats: &[SeatAllowance], usage: &[SeatUsage]) -> i64 {
     seats
         .iter()
-        .map(|seat| (usage_for(&seat.user, usage) - seat.included_cents).max(0))
+        .map(|seat| {
+            usage
+                .iter()
+                .find(|usage| usage.user == seat.user)
+                .and_then(|usage| usage.chargeable_cost_cents)
+                .unwrap_or_else(|| (usage_for(&seat.user, usage) - seat.included_cents).max(0))
+        })
         .sum()
 }
 
@@ -663,6 +669,40 @@ where
 {
     type Err = BillingError;
 
+    async fn change_plan(
+        &self,
+        member: &MacroUserIdStr<'_>,
+        change: teams::domain::open_seat_release::SeatPlanChange,
+    ) -> Result<()> {
+        let from = change
+            .from
+            .map(Into::into)
+            .unwrap_or(super::models::PlanTier::Free);
+        let to = change.to.into();
+        if from == to {
+            return Ok(());
+        }
+        let period = if let Some((start, end)) = change.period {
+            BillingPeriod { start, end }
+        } else {
+            let entitlement = self.entitlements.entitlement(member).await?;
+            let settings = self.repo.settings(&entitlement.payer).await?;
+            self.usage_period(&entitlement, settings.period_anchor, change.at)
+                .await
+        };
+        BillingService::change_plan(
+            self,
+            member,
+            super::plan_change::PlanChange {
+                from,
+                to,
+                at: change.at,
+                period,
+            },
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn release(&self, team_id: Uuid, member: &MacroUserIdStr<'_>) -> Result<()> {
         self.release_at(team_id, member, Utc::now()).await
@@ -676,6 +716,33 @@ where
     R: BillingRepo,
     P: PaymentGateway,
 {
+    #[tracing::instrument(skip(self), err)]
+    async fn change_plan(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        change: super::plan_change::PlanChange,
+    ) -> Result<()> {
+        if change.is_valid() {
+            self.repo
+                .record_plan_change(
+                    user,
+                    super::plan_change::RecordedPlanChange {
+                        change,
+                        previous_included_cents: change
+                            .from
+                            .is_paid()
+                            .then(|| change.from.included_ai_cents_per_seat(self.pricing)),
+                        new_included_cents: change
+                            .to
+                            .is_paid()
+                            .then(|| change.to.included_ai_cents_per_seat(self.pricing)),
+                    },
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn check_allowance(&self, user: &MacroUserIdStr<'_>) -> Result<AllowanceDecision> {
         if !self.enforcement.is_enabled() {

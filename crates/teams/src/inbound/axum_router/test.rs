@@ -328,6 +328,7 @@ impl TeamService for FakeTeamService {
     async fn restore_permissions_for_team_members(
         &self,
         _team_id: &uuid::Uuid,
+        _started: Option<crate::domain::open_seat_release::SubscriptionStart>,
     ) -> Result<(), RestorePermissionsForTeamMembersError> {
         panic!("unexpected restore_permissions_for_team_members call")
     }

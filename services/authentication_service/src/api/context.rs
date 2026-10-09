@@ -92,6 +92,17 @@ pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::StripePaymentGateway,
 >;
 
+pub(crate) type SubscriptionStatusServiceType =
+    crate::service::subscription_status::SubscriptionStatusService<
+        ai_billing::outbound::RolesTeamsEntitlementSource<
+            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+            teams::outbound::team_repo::TeamRepositoryImpl,
+        >,
+        crate::outbound::subscription_plan::StripePlanGateway<
+            teams::outbound::customer_repo::CustomerRepositoryImpl,
+        >,
+    >;
+
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
@@ -152,6 +163,14 @@ pub(crate) struct ApiContext {
     pub codex_connection: Option<Arc<dyn codex_connection::domain::ConnectionService>>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
+    pub subscription_status: Arc<SubscriptionStatusServiceType>,
+    pub subscription_plan: Arc<
+        crate::service::subscription_plan::PlanService<
+            crate::outbound::subscription_plan::StripePlanGateway<
+                teams::outbound::customer_repo::CustomerRepositoryImpl,
+            >,
+        >,
+    >,
     pub subscription_checkout: Arc<
         crate::service::subscription_checkout::CheckoutService<
             crate::outbound::subscription_checkout::StripeCheckoutGateway<GtmInviteServiceType>,

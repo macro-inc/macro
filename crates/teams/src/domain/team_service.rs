@@ -50,7 +50,7 @@ use crate::domain::{
         TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
         TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
     },
-    open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease},
+    open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{OwnedEntityCleanup, UnwiredOwnedEntityCleanup, clear_team},
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -591,10 +591,15 @@ where
         };
 
         if let Some(subscription_id) = subscription_id.as_ref()
-            && let Err(e) = self
-                .customer_repository
-                .decrement_seat_count(subscription_id, removed_member.plan, 1)
-                .await
+            && let Err(e) = async {
+                self.customer_repository
+                    .schedule_seat_plan(subscription_id, user_id, None)
+                    .await?;
+                self.customer_repository
+                    .decrement_seat_count(subscription_id, removed_member.plan, 1)
+                    .await
+            }
+            .await
         {
             self.team_repository
                 .rollback_remove_user_from_team(&removed_member)
@@ -1697,14 +1702,61 @@ where
     async fn restore_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
+        started: Option<SubscriptionStart>,
     ) -> Result<(), RestorePermissionsForTeamMembersError> {
-        let members = self.team_repository.get_team_members(team_id).await?;
+        let subscription = self
+            .team_repository
+            .get_team_subscription_id(team_id)
+            .await?;
+        let renewed = if let Some(id) = subscription.as_ref() {
+            self.customer_repository.renewed_seat_plans(id).await?
+        } else {
+            Vec::new()
+        };
+        let mut members = self.team_repository.get_team_members(team_id).await?;
+        for member in &mut members {
+            if let Some((_, plan)) = renewed
+                .iter()
+                .find(|(user, _)| user == member.user_id.as_ref())
+            {
+                self.team_repository
+                    .patch_team_member_plan(team_id, &member.user_id, *plan)
+                    .await?;
+                member.plan = *plan;
+            }
+        }
 
         if members.is_empty() {
             return Ok(());
         }
 
         for member in members {
+            if let Some(started) = started {
+                let previous_roles = self
+                    .user_roles_and_permissions_service
+                    .get_user_roles(&member.user_id)
+                    .await?;
+                let from = previous_roles
+                    .iter()
+                    .any(RoleId::is_paid_subscription)
+                    .then(|| SeatPlan::from_roles(&previous_roles));
+                // Reset before stamping roles so a storage failure retains the
+                // source tier and the same upgrade can be retried safely.
+                self.open_seat_release
+                    .change_plan(
+                        &member.user_id,
+                        SeatPlanChange {
+                            from,
+                            to: member.plan,
+                            at: started.at,
+                            period: Some((started.period_start, started.period_end)),
+                        },
+                    )
+                    .await
+                    .map_err(|error| {
+                        RestorePermissionsForTeamMembersError::UsageReset(Box::new(error))
+                    })?;
+            }
             let roles = team_member_roles_to_add(member.plan);
             let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
 
@@ -1721,6 +1773,14 @@ where
                     .await
                     .map_err(RestorePermissionsForTeamMembersError::AddRolesToUserError)?;
             }
+        }
+
+        if !renewed.is_empty()
+            && let Some(id) = subscription.as_ref()
+        {
+            self.customer_repository
+                .acknowledge_renewed_seat_plans(id)
+                .await?;
         }
 
         Ok(())
@@ -1768,14 +1828,11 @@ where
             .clone()
             .into_owned();
 
-        let member = self
+        let mut member = self
             .team_repository
             .get_team_member(&team_id, user_id)
             .await?
             .into_owned();
-        if member.plan == plan {
-            return Ok(member);
-        }
         if !SeatPlan::PURCHASABLE.contains(&plan) {
             return Err(CustomerError::PlanUnavailable(plan).into());
         }
@@ -1804,6 +1861,46 @@ where
             }
         };
 
+        // A request can race renewal's webhook. Reconcile the provider's
+        // effective phase before comparing against the stored member plan.
+        if let Some(subscription) = subscription_id.as_ref() {
+            let renewed = self
+                .customer_repository
+                .renewed_seat_plans(subscription)
+                .await?;
+            if !renewed.is_empty() {
+                self.restore_permissions_for_team_members(&team_id, None)
+                    .await
+                    .map_err(|error| SetTeamMemberPlanError::UsageReset(Box::new(error)))?;
+                member = self
+                    .team_repository
+                    .get_team_member(&team_id, user_id)
+                    .await?
+                    .into_owned();
+            }
+        }
+
+        if let Some(subscription) = subscription_id.as_ref() {
+            if member.plan == plan {
+                self.customer_repository
+                    .schedule_seat_plan(subscription, user_id, None)
+                    .await?;
+                return Ok(member);
+            }
+            if member.plan == SeatPlan::Max && plan == SeatPlan::Premium {
+                self.customer_repository
+                    .schedule_seat_plan(subscription, user_id, Some(plan))
+                    .await?;
+                return Ok(member);
+            }
+            self.customer_repository
+                .schedule_seat_plan(subscription, user_id, None)
+                .await?;
+        } else if member.plan == plan {
+            return Ok(member);
+        }
+
+        let changed_at = chrono::Utc::now();
         if let Some(subscription_id) = subscription_id.as_ref() {
             self.customer_repository
                 .move_seat(subscription_id, member.plan, plan)
@@ -1834,7 +1931,7 @@ where
         // allowance follow the seat.
         let roles_to_add = team_member_roles_to_add(plan);
         let stale_tier_roles = plan.other_tier_roles();
-        let role_result = async {
+        let plan_result = async {
             self.user_roles_and_permissions_service
                 .dangerous_upsert_roles_for_user(
                     user_id,
@@ -1846,10 +1943,47 @@ where
                     .dangerous_remove_roles_from_user(user_id, &stale_tier_roles)
                     .await?;
             }
-            Ok::<(), roles_and_permissions::domain::model::UserRolesAndPermissionsError>(())
+            if !enterprise {
+                self.open_seat_release
+                    .change_plan(
+                        user_id,
+                        SeatPlanChange {
+                            from: Some(member.plan),
+                            to: plan,
+                            at: changed_at,
+                            period: None,
+                        },
+                    )
+                    .await
+                    .map_err(|error| SetTeamMemberPlanError::UsageReset(Box::new(error)))?;
+            }
+            Ok::<(), SetTeamMemberPlanError>(())
         }
         .await;
-        if let Err(e) = role_result {
+        if let Err(e) = plan_result {
+            // The plan and billing update are one use case. Restore permissions
+            // as well as the recorded/Stripe plan if any step fails.
+            let original_roles = team_member_roles_to_add(member.plan);
+            self.user_roles_and_permissions_service
+                .dangerous_upsert_roles_for_user(
+                    user_id,
+                    non_empty::NonEmpty::new(original_roles.as_slice()).unwrap(),
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(?error, "unable to restore original seat roles")
+                })
+                .ok();
+            let stale_roles = member.plan.other_tier_roles();
+            if let Ok(stale_roles) = non_empty::NonEmpty::new(stale_roles.as_slice()) {
+                self.user_roles_and_permissions_service
+                    .dangerous_remove_roles_from_user(user_id, &stale_roles)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(?error, "unable to remove rolled-back seat roles")
+                    })
+                    .ok();
+            }
             self.team_repository
                 .patch_team_member_plan(&team_id, user_id, member.plan)
                 .await
@@ -1872,7 +2006,7 @@ where
                     })
                     .ok();
             }
-            return Err(e.into());
+            return Err(e);
         }
 
         tracing::info!(

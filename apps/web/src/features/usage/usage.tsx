@@ -151,6 +151,11 @@ export function Usage() {
     },
     developer: DEV_MODE_ENV
       ? {
+          openBillingLab: LOCAL_ONLY
+            ? () => {
+                window.open('/billing-lab.html', '_blank', 'noopener');
+              }
+            : undefined,
           active: usagePreview.active,
           plan: usagePreview.plan,
           beforeLaunch: usagePreview.beforeLaunch,
