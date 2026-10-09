@@ -340,9 +340,7 @@ describe('agent-led new conversation', () => {
     const send = page();
     fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
     await screen.findByRole('textbox', { name: 'Search agents and models' });
-    const frontier = within(
-      screen.getByRole('group', { name: 'Frontier models' })
-    );
+    const frontier = within(screen.getByRole('group', { name: 'Suggested' }));
     expect(
       frontier.getAllByRole('button').map((item) => item.textContent?.trim())
     ).toEqual(['Opus 5.5', 'Sonnet 5.5', 'GPT-5.6', 'GPT-6 Astra']);
@@ -380,6 +378,18 @@ describe('agent-led new conversation', () => {
       name: 'Search agents and models',
     });
     await waitFor(() => expect(document.activeElement).toBe(search));
+  });
+  it('focuses desktop search on opening and reopening the model selector', async () => {
+    page();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      openAgents();
+      const search = screen.getByRole('textbox', { name: 'Search models' });
+      await waitFor(() => expect(document.activeElement).toBe(search));
+      fireEvent.input(search, { target: { value: 'Sonnet' } });
+      expect(screen.getByTitle('Sonnet 5.5')).toBeTruthy();
+      fireEvent.keyDown(search, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    }
   });
   it('starts in Chat and switches to Code from the composer', async () => {
     const send = page();
@@ -832,7 +842,7 @@ describe('agent-led new conversation', () => {
       },
     ]);
     openAgents();
-    const modelsGroup = screen.getByRole('group', { name: 'Frontier models' });
+    const modelsGroup = screen.getByRole('group', { name: 'Suggested' });
     const agentsGroup = screen.getByRole('group', { name: 'Your agents' });
     expect(
       modelsGroup.compareDocumentPosition(agentsGroup) &
@@ -848,9 +858,7 @@ describe('agent-led new conversation', () => {
     fireEvent.input(search, { target: { value: '' } });
     expect(screen.queryByRole('menuitem', { name: /Cursor/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /^Macro/ })).toBeNull();
-    const models = within(
-      screen.getByRole('group', { name: 'Frontier models' })
-    );
+    const models = within(screen.getByRole('group', { name: 'Suggested' }));
     expect(
       models.queryByRole('menuitem', { name: /Cursor default/ })
     ).toBeNull();

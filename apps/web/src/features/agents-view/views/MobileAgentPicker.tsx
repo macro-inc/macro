@@ -8,6 +8,7 @@ import { modelLabel } from '@core/component/AI/constant/model-label';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import Check from '@phosphor/check.svg';
+import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import Plus from '@phosphor/plus.svg';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -22,6 +23,7 @@ import type { AgentPickerProps } from './AgentPicker';
 export function MobileAgentPicker(props: AgentPickerProps) {
   const [open, setOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
+  let searchInput: HTMLInputElement | undefined;
   const [browsing, setBrowsing] = createSignal<RosterAgent>();
   const macro = () =>
     props.agents.find((agent) => agent.id === MACRO_PERSONA_ID);
@@ -41,7 +43,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
     }));
     const { frontier, providers } = buildModelCatalog(options);
     const search = query().trim().toLowerCase();
-    return [{ label: 'Frontier models', options: frontier }, ...providers]
+    return [{ label: 'Suggested', options: frontier }, ...providers]
       .map((section) => ({
         label: section.label,
         options: section.options.filter((option) =>
@@ -76,6 +78,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
   const browse = (agent?: RosterAgent) => {
     setQuery('');
     setBrowsing(agent);
+    searchInput?.focus();
   };
   return (
     <MobileDrawer side="bottom" open={open()} onOpenChange={changeOpen}>
@@ -131,13 +134,20 @@ export function MobileAgentPicker(props: AgentPickerProps) {
               )}
             </Show>
           </div>
-          <input
-            aria-label={searchLabel()}
-            placeholder={searchLabel()}
-            value={query()}
-            onInput={(event) => setQuery(event.currentTarget.value)}
-            class="mx-4 mb-3 rounded-xl border border-edge-muted bg-input px-3 py-2 text-base outline-none"
-          />
+          <div class="mx-4 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-full bg-ink/3 px-3">
+            <MagnifyingGlass
+              aria-hidden="true"
+              class="size-4 shrink-0 text-ink-extra-muted"
+            />
+            <input
+              ref={searchInput}
+              aria-label={searchLabel()}
+              placeholder={searchLabel()}
+              value={query()}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+              class="h-full min-w-0 w-full border-0 bg-transparent p-0 text-base outline-none placeholder:text-ink-extra-muted"
+            />
+          </div>
           <MobileDrawer.ScrollBody class="gap-3 rounded-b-none pb-2">
             <Show when={browsing() ?? macro()}>
               <For each={modelSections()}>

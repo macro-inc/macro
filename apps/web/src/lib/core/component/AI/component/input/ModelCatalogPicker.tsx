@@ -254,8 +254,8 @@ export function ModelCatalogMenu(
   > & {
     searchRef?: (element: HTMLInputElement) => void;
     /**
-     * Focus search when this catalog mounts — used by hover-opened agent
-     * submenus, which never fire the root menu's `onOpenAutoFocus`.
+     * Focus search when this catalog mounts, including root agent pickers
+     * and hover-opened submenus without their own autofocus handler.
      */
     autoFocusSearch?: boolean;
     onClose?: () => void;
@@ -279,8 +279,8 @@ export function ModelCatalogMenu(
 
   return (
     <>
-      <div class="sticky top-0 z-10 bg-menu p-1.5">
-        <div class="flex items-center gap-2 px-2">
+      <div class="sticky top-0 z-10 bg-menu py-1">
+        <div class="flex h-8 items-center gap-2 rounded-full bg-ink/3 px-3">
           <MagnifyingGlassIcon
             aria-hidden="true"
             class="size-4 shrink-0 text-ink-extra-muted"
@@ -302,7 +302,7 @@ export function ModelCatalogMenu(
             onKeyUp={(event) => {
               if (event.key !== 'Escape') event.stopPropagation();
             }}
-            class="min-w-0 w-full border-0 bg-transparent py-2 text-sm text-ink outline-none placeholder:text-ink-extra-muted"
+            class="min-w-0 h-full w-full border-0 bg-transparent p-0 text-sm text-ink outline-none placeholder:text-ink-extra-muted"
           />
         </div>
       </div>
@@ -319,7 +319,7 @@ export function ModelCatalogMenu(
           <div class="space-y-2">
             <Show when={catalog().frontier.length > 0}>
               <ModelList
-                label="Frontier models"
+                label="Suggested"
                 options={catalog().frontier}
                 value={props.value}
                 disabled={props.disabled}

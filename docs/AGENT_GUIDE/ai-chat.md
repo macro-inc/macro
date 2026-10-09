@@ -81,7 +81,7 @@ connection**, with runtime/model details below their names. Code opens directly
 on these groups without an empty Models section or an unrelated runtime warning.
 **Create agent** uses the shared rounded pill button with a subtle fill at the
 bottom right of the picker, outside the scrolling list. Model lists start with
-**Frontier models**, then group the remaining choices by provider. Search accepts
+**Suggested**, then group the remaining choices by provider. Search accepts
 model names, IDs, and providers. When browsing an agent, **Use default** in the
 header selects its configured model.
 
@@ -294,11 +294,12 @@ the shimmer.
 - The agent dropdown includes saved agents of the selected mode regardless of
   runtime, plus Cursor in Code mode.
   Macro's models use the same searchable catalog as running sessions:
-  **Frontier models** lists **Opus 5.5**, **Sonnet 5.5**, **GPT-5.6** (Sol in
+  **Suggested** lists **Opus 5.5**, **Sonnet 5.5**, **GPT-5.6** (Sol in
   runtime catalogs), and **GPT-6 Astra**, when available, in that order. The
   remaining models are grouped by provider directly below, including effort
   and speed variants. Every available model appears once; choosing a model
-  does not reorder the sections. Search matches names, IDs, and provider names.
+  does not reorder the sections. Search matches names, IDs, and provider names. The compact rounded search
+  field receives focus when the selector opens or reopens.
   **Built-in**, **Your agents**, and **Needs connection** groups follow when
   they have entries. Each agent row shows its runtime and model, or its setup
   action/availability reason. **Create agent** uses the shared rounded pill
@@ -398,7 +399,7 @@ the shimmer.
   Within an existing session, the model picker remains available on the right.
   Its trigger, model options, and session metadata use the same readable model names
   as the new-conversation picker. Large catalogs share the Settings picker:
-  provider icons, search, **Frontier models** first, and the remaining choices
+  provider icons, search, **Suggested** first, and the remaining choices
   grouped by provider in one scrolling list. The same sections are visible on
   desktop and phone widths without a nested **More models** menu.
 - On desktop, chat agents' empty input types tips about connectors, skills,

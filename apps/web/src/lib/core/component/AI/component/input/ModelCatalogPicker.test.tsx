@@ -248,7 +248,7 @@ describe('ModelCatalogMenu search focus', () => {
 describe('ModelCatalogPicker frontier and providers', () => {
   it('shows frontier models first and all provider groups directly below', () => {
     mountPicker();
-    expect(screen.getByText('Frontier models')).toBeTruthy();
+    expect(screen.getByText('Suggested')).toBeTruthy();
     expect(screen.getByText('Google')).toBeTruthy();
     const frontier = screen.getByText('Opus 5.5 High');
     const provider = screen.getByText('Gemini 3.8 Flash High');
@@ -299,6 +299,6 @@ describe('ModelCatalogPicker frontier and providers', () => {
     });
     expect(screen.getByText('Gemini 3.8 Flash High')).toBeTruthy();
     expect(screen.queryByText('Opus 5.5 High')).toBeNull();
-    expect(screen.queryByText('Frontier models')).toBeNull();
+    expect(screen.queryByText('Suggested')).toBeNull();
   });
 });

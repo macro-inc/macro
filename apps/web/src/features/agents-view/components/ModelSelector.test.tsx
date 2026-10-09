@@ -161,7 +161,7 @@ describe('shared model selector', () => {
     expect(screen.getAllByRole('menuitem')).toHaveLength(60);
     expect(screen.queryByRole('menuitem', { name: /More models/ })).toBeNull();
     expect(screen.getByRole('group', { name: 'OpenAI' })).toBeTruthy();
-    expect(screen.queryByRole('group', { name: 'Frontier models' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Suggested' })).toBeNull();
     fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
       target: { value: 'variant 59' },
     });
