@@ -2470,6 +2470,7 @@ async fn links_for_pull_requests_returns_every_link_to_the_requested_keys(pool: 
         ]
     );
     assert!(rows.iter().all(|row| row.thread_parent.is_none()));
+    assert!(rows.iter().all(|row| row.origin_message_id.is_none()));
     assert!(repo.links_for_pull_requests(&[]).await.unwrap().is_empty());
 }
 

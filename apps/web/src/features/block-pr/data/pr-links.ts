@@ -27,7 +27,7 @@ export type PrLinkSession = {
   parent?: PrLinkSessionParent;
   /** The session's harness slug, for sessions whose agent opened the PR. */
   harness?: string;
-  /** The thread's root message the session was started from, when known. */
+  /** The message that started the session, such as an @mention, when known. */
   messageId?: string;
 };
 

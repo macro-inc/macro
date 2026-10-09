@@ -173,7 +173,9 @@ impl<B: BotFacts + 'static> crate::domain::pull_request_links::SessionPullReques
                 link.source,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = session.thread_id)
-                    AS "thread_parent?: Json<MessageParent>"
+                    AS "thread_parent?: Json<MessageParent>",
+                COALESCE(session.originating_message_id, session.thread_id)
+                    AS "origin_message_id?: Uuid"
             FROM agent_session_pull_request AS link
             JOIN agent_session AS session ON session.id = link.agent_session_id
             WHERE lower(link.github_key) = ANY($1)
@@ -196,6 +198,7 @@ impl<B: BotFacts + 'static> crate::domain::pull_request_links::SessionPullReques
                     PullRequestLinkSource::User
                 },
                 thread_parent: row.thread_parent.map(|parent| parent.0),
+                origin_message_id: row.origin_message_id,
             })
             .collect())
     }

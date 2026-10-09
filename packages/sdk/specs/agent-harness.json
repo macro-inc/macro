@@ -3841,6 +3841,11 @@
         "description": "A session linked to a pull request, as a viewer of that session sees it.",
         "required": ["sessionId", "source"],
         "properties": {
+          "originMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The message that started the session, such as an @mention, when it was\nstarted from a thread. A mention inside a thread is that reply, not the root."
+          },
           "sessionId": {
             "type": "string",
             "format": "uuid",
