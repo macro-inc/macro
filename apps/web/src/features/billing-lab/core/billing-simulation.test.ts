@@ -3,6 +3,7 @@ import {
   advanceDays,
   changePlan,
   createScenario,
+  includedCents,
   parseScenario,
   renew,
   setUsage,
@@ -69,6 +70,13 @@ describe('billing-cycle UI fixtures', () => {
     expect(changePlan(member, 'premium')).toEqual(member);
   });
 
+  it('keeps the owner allowance scoped to their own seat', () => {
+    const owner = createScenario('team-owner');
+    expect(includedCents(owner)).toBe(includedCents(createScenario('max')));
+    expect(owner.usedCents / includedCents(owner)).toBe(0.75);
+    expect(setUsage(owner, 100).usedCents).toBe(20_000);
+  });
+
   it('uses the right limit state for free, paid, and funded accounts', () => {
     expect(setUsage(createScenario('free'), 100).blockedReason).toBe(
       'free_allowance_exhausted'
@@ -82,6 +90,22 @@ describe('billing-cycle UI fixtures', () => {
     expect(
       setUsage(createScenario('unlimited'), 100).blockedReason
     ).toBeUndefined();
+  });
+
+  it('resets reload spend at the UTC month boundary, independently of subscription renewal', () => {
+    const capped = {
+      ...createScenario('spending-limit'),
+      periodStart: '2026-09-20T12:00:00.000Z',
+      periodEnd: '2026-10-20T12:00:00.000Z',
+    };
+    const renewed = renew(capped);
+    expect(renewed.reloadSpentCents).toBe(5_000);
+    expect(renewed.periodEnd).toBe('2026-11-20T12:00:00.000Z');
+    const nextMonth = advanceDays(renewed, 12);
+    expect(nextMonth.now).toBe('2026-11-01T12:00:00.000Z');
+    expect(nextMonth.reloadSpentCents).toBe(0);
+    expect(nextMonth.periodEnd).toBe(renewed.periodEnd);
+    expect(nextMonth.autoReload.enabled).toBe(true);
   });
 
   it('handles unknown scenario links with the downgrade example', () => {

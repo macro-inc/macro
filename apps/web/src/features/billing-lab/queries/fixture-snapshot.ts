@@ -12,7 +12,7 @@ export function fixtureSnapshot(state: BillingSimulation): AiUsageSnapshot {
     unlimited: state.unlimited,
     payer: 'billing-lab',
     can_manage_billing: state.role !== 'member',
-    seats: state.role === 'owner' ? 4 : 1,
+    seats: state.role === 'solo' ? 1 : 4,
     period_start: state.periodStart,
     period_end: state.periodEnd,
     included_cents: included,

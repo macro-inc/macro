@@ -29,6 +29,7 @@ export function toUsageSummary(snapshot: AiUsageSnapshot): UsageSummary {
     periodEnd: snapshot.period_end,
     unlimited: snapshot.unlimited,
     creditBalanceCents: snapshot.credit_balance_cents,
+    creditScope: snapshot.seats > 1 ? 'team' : 'personal',
     existingUsageBilling:
       snapshot.tier !== 'free' &&
       (snapshot.overage_enabled || snapshot.overage_suspended)

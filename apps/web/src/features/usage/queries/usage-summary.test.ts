@@ -64,7 +64,14 @@ describe('usage billing access', () => {
   it.each(['premium', 'max'] as const)(
     'lets a %s payer purchase credits',
     (tier) => {
-      expect(toUsageSummary({ ...snapshot, tier }).billingAccess).toBe('payer');
+      expect(toUsageSummary({ ...snapshot, tier })).toMatchObject({
+        billingAccess: 'payer',
+        creditScope: 'personal',
+      });
+      expect(toUsageSummary({ ...snapshot, tier, seats: 4 })).toMatchObject({
+        billingAccess: 'payer',
+        creditScope: 'team',
+      });
     }
   );
 });

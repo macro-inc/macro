@@ -147,7 +147,9 @@ export function BillingLabView(props: {
                 {SCENARIOS.length} states
               </span>
             </div>
-            <For each={['Plan changes', 'Usage & credits', 'Access & loading']}>
+            <For
+              each={[...new Set(SCENARIOS.map((scenario) => scenario.group))]}
+            >
               {(group) => (
                 <section class="flex flex-col gap-1">
                   <h3 class="mb-2 text-[11px] text-ink-extra-muted">{group}</h3>
@@ -235,13 +237,19 @@ export function BillingLabView(props: {
                 detail={
                   lab.state().unlimited
                     ? 'No monthly limit'
-                    : 'Used in this billing cycle'
+                    : lab.state().role !== 'solo'
+                      ? 'Your seat’s usage this cycle'
+                      : 'Used in this billing cycle'
                 }
               />
               <Metric
-                label="Credits"
+                label={lab.state().role === 'solo' ? 'Credits' : 'Team credits'}
                 value={formatCreditBalance(lab.state().creditBalanceCents)}
-                detail="Prepaid balance carries over"
+                detail={
+                  lab.state().role === 'solo'
+                    ? 'Prepaid balance carries over'
+                    : 'Shared balance • managed by owner'
+                }
               />
               <Metric
                 label="Next renewal"

@@ -57,6 +57,7 @@ export function CreditPurchaseView(props: {
   };
   return (
     <CreditPurchaseDialog
+      sharedWithTeam={props.context.summary()?.creditScope === 'team'}
       selection={selection()}
       customAmount={customAmount()}
       amountCents={amountCents()}

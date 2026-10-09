@@ -3,6 +3,7 @@ export type UsageSummary = {
   periodEnd: string;
   unlimited: boolean;
   creditBalanceCents: number;
+  creditScope: 'personal' | 'team';
   billingAccess: 'free' | 'payer' | 'team-member';
   existingUsageBilling?: { limitCents: number; suspended: boolean };
   autoReload: { settings: AutoReloadSettings; suspended: boolean };
@@ -87,3 +88,10 @@ export function validateAutoReload(
     return `Monthly spend limit must be at least ${formatCreditBalance(MIN_MONTHLY_SPEND_LIMIT_CENTS)}, or leave it blank.`;
   }
 }
+
+/** Reload purchases use UTC calendar months, independently of subscription renewal. */
+export type AutoReloadBudget = {
+  spentCents: number;
+  limitCents: number;
+  resetsAt: string;
+};

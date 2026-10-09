@@ -31,7 +31,7 @@ timeline exposes the same state and also offers **Cancel scheduled change**.
 
 ## Other states and actions
 
-The 17 presets cover Free/Pro/Max, a scheduled cancellation, exhausted
+The 20 presets cover Free/Pro/Max, a scheduled cancellation, exhausted
 allowances, prepaid credits, paused reloads, spending limits, payment failures,
 team members and owners, unlimited access, loading, errors, and pre-launch UI.
 Controls advance time, change the usage percentage and credit balance, and
@@ -43,6 +43,48 @@ Purchases and payment management open an explicitly simulated flow. Choose
 reload settings update the fixture; the lab does not run automatic charges or
 meter AI requests. **Reset** restores the selected preset. **Copy scenario
 link** shares the preset, not subsequent edits; refresh also restores it.
+
+## Monthly reload limit notice
+
+Choose **Monthly reload limit reached**. The lab opens Usage with a $50 monthly
+cap already spent. The shared notice banner puts the amount in its title and
+the reset date on the right. Try both full width and compact layout.
+
+**Adjust limit** opens the real Auto-Reload dialog. Raising the cap clears the
+notice while keeping this month's spend. **Add credits** opens the real purchase
+dialog; manually purchased credits do not change auto-reload spend. Advancing
+into November resets reload spend. Reload budgets use UTC calendar months,
+independently of subscription renewal.
+
+These are design previews. Monthly spend and reset facts come from the lab;
+the live API currently provides only the configured cap, not monthly reload
+spend or a cap-reached status. Live settings therefore show no monthly cap-reached
+notice until authoritative budget facts are added. A limit-reached state does
+not imply existing credits or the included allowance are exhausted.
+
+## Team credit controls
+
+The **Teams** group opens directly to Usage settings. **Mixed-plan team owner**
+starts with a shared $25 credit balance and automatic reload enabled for four
+seats (one Max, three Pro). Use **Add more** to purchase shared credits, or
+**Automatic reload** to configure the minimum balance, target balance, monthly
+spending cap, and payment method through the real application dialogs.
+The section is labeled **Team Usage Credits** with “Credits are shared by your
+entire team.” Purchase and auto-reload dialogs repeat the shared-team scope.
+
+Try **Team credits exhausted**, **Team reload paused**, and **Team monthly reload
+limit** to review empty-balance, payment-recovery, and cap-reached states. Complete
+the simulated payment-method flow and save reload settings to test recovery.
+Manual purchases increase the shared balance without consuming the reload cap.
+Request failures and calendar-month resets work for these scenarios too.
+
+Owners use **Settings → Usage** for shared credit controls in the live app;
+Team settings manages seats. The included-usage meter is always the viewer's
+own seat allowance, not a pooled team allowance. **Team-paid Max member** shows
+the team-managed notice without the balance, purchase, or reload controls.
+The lab simulates one viewer at a time; it does not meter other members' AI
+activity or run automatic charges. Monthly cap-reached facts remain fixture-only
+as described above.
 
 ## Boundaries
 

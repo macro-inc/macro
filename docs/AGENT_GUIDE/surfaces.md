@@ -2368,7 +2368,18 @@ editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
 **Need more usage?** with `$25` / `$50` / `$100` / `Other`. Supported amounts
 redirect to Stripe Checkout; unsupported custom amounts are disabled. Free
 accounts see `View plans` instead of purchase or reload controls; paid team
-members who are not the payer cannot manage billing.
+members who are not the payer see only “Usage credits are managed by your team.”
+Their credit balance and automatic reload row are hidden, with no
+credit-purchase action.
+Team owners who pay for their team's seats manage the shared credit balance and
+automatic reload here in Usage, including purchases, balance thresholds, the
+monthly reload cap, and payment methods. Multi-seat payers see **Team Usage
+Credits**, “Credits are shared by your entire team.” and **Shared team balance**.
+The purchase and auto-reload dialogs also identify the team-wide credit balance.
+Team settings manages seats. Included
+usage remains per seat: the owner's Monthly limit meter describes their own
+usage, not the sum of the team's allowances. Multi-seat payers with a finite
+allowance see “This is your personal monthly usage limit.” beneath the meter.
 Unlimited enterprise plans show `Unlimited` and do not offer credit purchases
 or automatic reload. The development paid-plan preview can still display
 those controls, with purchases disabled.
@@ -2380,9 +2391,11 @@ and the automatic-charge warning. The dialog saves for paid payers:
 `Turn on auto-reload` enables automatic credit purchases with those thresholds,
 `Save` updates them while on, and `Turn off` disables automatic reload. The monthly
 limit caps reload purchases per UTC calendar month. The **Automatic reload**
-switch reflects the saved state. Paid team members who are not the payer see
+switch reflects the saved state and is the billing opt-in indicator. Paid team
+members who are not the payer see
 `Only the account that pays for this plan can change automatic reload.` and
-cannot save. After a failed automatic reload the dialog shows `Your last
+cannot save. After a failed automatic reload the Usage row shows
+`Paused — payment failed` while preserving the enabled setting. The dialog shows `Your last
 automatic reload could not be charged. Update your payment method, then save to
 try again.`; saving retries. Extra usage is funded entirely by prepaid credits.
 If the reload budget runs out or payment fails, uncovered usage cannot trigger a
@@ -2403,7 +2416,7 @@ Free and paid previews can be combined with this state, and `Reset preview`
 restores the normal dev view.
 
 Local **Developer tools → Open Billing Lab** opens `/billing-lab.html`, a
-standalone simulator with no login or billing API calls. Its 17 presets include
+standalone simulator with no login or billing API calls. Its 20 presets include
 Max with a pending Pro downgrade, exhausted allowances, credits, payment
 failures, team roles, loading, and errors. Select **Max → Pro at renewal**
 to start with a scheduled downgrade, and choose **Advance to
@@ -2412,7 +2425,21 @@ usage resets. Billing displays the scheduled downgrade and effective date;
 **Keep Max plan** cancels it and preserves the active plan and usage. The
 timeline also offers **Cancel scheduled change**. Purchases open a simulated checkout with explicit completion;
 **Fail the next billing request** enables error and retry checks. Scenario links
-restore the preset, not edits. See [Billing Lab setup and boundaries](../../apps/web/src/features/billing-lab/README.md).
+restore the preset, not edits. **Monthly reload limit reached** opens Usage with
+a notice banner: **Monthly auto-reload $50 limit reached**, with **resets Nov 1**
+on the right. **Adjust limit** opens Auto-Reload; **Add credits** opens credit purchase.
+Manual credits do not count toward the monthly reload cap, which resets at the
+UTC month boundary. Monthly budget facts are fixture-only until the API exposes
+them; these design notices are not shown for real accounts yet.
+The **Teams** scenario group opens Usage directly. **Mixed-plan team owner**
+previews shared credits and enabled reload for one Max and three Pro seats;
+**Team credits exhausted**, **Team reload paused**, and **Team monthly reload
+limit** exercise the owner's purchase, payment-recovery, and cap controls through
+the same Usage dialogs. Credit purchases add to the shared balance, while the
+included-usage meter remains scoped to the viewer's own seat. **Team-paid Max
+member** previews the notice-only member view. The simulator does not meter
+other members' activity or perform automatic charges.
+See [Billing Lab setup and boundaries](../../apps/web/src/features/billing-lab/README.md).
 
 `Billing` shows the current plan and `Manage`. Free users see separate Pro
 (`Get Pro`) and Max (`Get Max`) cards, side by side when the panel is wide enough

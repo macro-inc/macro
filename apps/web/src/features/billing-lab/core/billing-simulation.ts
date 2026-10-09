@@ -73,9 +73,9 @@ export const SCENARIOS = [
   {
     id: 'spending-limit',
     group: 'Usage & credits',
-    title: 'Spending limit reached',
+    title: 'Monthly reload limit reached',
     description:
-      'Inspect the limit dialog and existing usage-billing controls.',
+      'A monthly auto-reload cap is reached. Adjust the limit, add credits, or wait for reset.',
   },
   {
     id: 'payment-failed',
@@ -85,16 +85,38 @@ export const SCENARIOS = [
   },
   {
     id: 'team-member',
-    group: 'Access & loading',
+    group: 'Teams',
     title: 'Team-paid Max member',
     description:
       'The team pays for this seat; billing controls belong to the owner.',
   },
   {
     id: 'team-owner',
-    group: 'Access & loading',
+    group: 'Teams',
     title: 'Mixed-plan team owner',
-    description: 'An owner with one Max seat and three Pro seats.',
+    description:
+      'Manage shared credits and automatic reload for one Max seat and three Pro seats. Included usage is per seat.',
+  },
+  {
+    id: 'team-owner-exhausted',
+    group: 'Teams',
+    title: 'Team credits exhausted',
+    description:
+      'The owner has exhausted their included usage and the shared credit balance is empty. Buy credits or enable automatic reload.',
+  },
+  {
+    id: 'team-owner-reload-paused',
+    group: 'Teams',
+    title: 'Team reload paused',
+    description:
+      'A reload on the owner’s card failed. Update payment methods and save the team’s reload settings to retry.',
+  },
+  {
+    id: 'team-owner-spending-limit',
+    group: 'Teams',
+    title: 'Team monthly reload limit',
+    description:
+      'The team’s $50 monthly auto-reload cap is spent. The owner can raise it or buy shared credits manually.',
   },
   {
     id: 'unlimited',
@@ -147,6 +169,7 @@ export type BillingSimulation = {
   overageLimitCents: number;
   autoReload: AutoReloadSettings;
   reloadSuspended: boolean;
+  reloadSpentCents: number;
 };
 
 export function parseScenario(value: string | null): ScenarioId {
@@ -156,10 +179,8 @@ export function parseScenario(value: string | null): ScenarioId {
 }
 
 export function includedCents(state: BillingSimulation): number {
-  return (
-    FIXTURE_ALLOWANCES[state.tier] +
-    (state.role === 'owner' ? 3 * FIXTURE_ALLOWANCES.premium : 0)
-  );
+  // The live summary reports the viewer's seat allowance, not a pooled team quota.
+  return FIXTURE_ALLOWANCES[state.tier];
 }
 
 export function createScenario(scenario: ScenarioId): BillingSimulation {
@@ -180,6 +201,20 @@ export function createScenario(scenario: ScenarioId): BillingSimulation {
     overageLimitCents: 5_000,
     autoReload: { ...DEFAULT_AUTO_RELOAD },
     reloadSuspended: false,
+    reloadSpentCents: 0,
+  };
+  const teamOwner: BillingSimulation = {
+    ...state,
+    tier: 'max',
+    role: 'owner',
+    usedCents: 15_000,
+    creditBalanceCents: 2_500,
+    overageEnabled: true,
+    autoReload: {
+      ...state.autoReload,
+      enabled: true,
+      monthlySpendLimitCents: 5_000,
+    },
   };
   return match(scenario)
     .returnType<BillingSimulation>()
@@ -219,8 +254,13 @@ export function createScenario(scenario: ScenarioId): BillingSimulation {
       ...state,
       usedCents: 2_000,
       overageEnabled: true,
-      autoReload: { ...state.autoReload, enabled: true },
-      blockedReason: 'overage_limit_reached',
+      autoReload: {
+        ...state.autoReload,
+        enabled: true,
+        monthlySpendLimitCents: 5_000,
+      },
+      reloadSpentCents: 5_000,
+      blockedReason: 'allowance_exhausted',
     }))
     .with('payment-failed', () => ({
       ...state,
@@ -237,11 +277,27 @@ export function createScenario(scenario: ScenarioId): BillingSimulation {
       role: 'member',
       usedCents: 12_000,
     }))
-    .with('team-owner', () => ({
-      ...state,
-      tier: 'max',
-      role: 'owner',
-      usedCents: 15_000,
+    .with('team-owner', () => teamOwner)
+    .with('team-owner-exhausted', () => ({
+      ...teamOwner,
+      usedCents: FIXTURE_ALLOWANCES.max,
+      creditBalanceCents: 0,
+      overageEnabled: false,
+      autoReload: { ...teamOwner.autoReload, enabled: false },
+      blockedReason: 'allowance_exhausted',
+    }))
+    .with('team-owner-reload-paused', () => ({
+      ...teamOwner,
+      usedCents: FIXTURE_ALLOWANCES.max,
+      creditBalanceCents: 0,
+      reloadSuspended: true,
+      blockedReason: 'allowance_exhausted',
+    }))
+    .with('team-owner-spending-limit', () => ({
+      ...teamOwner,
+      usedCents: FIXTURE_ALLOWANCES.max,
+      creditBalanceCents: 500,
+      reloadSpentCents: 5_000,
     }))
     .with('unlimited', () => ({ ...state, tier: 'max', unlimited: true }))
     .with('loading', () => ({ ...state, status: 'loading' }))
@@ -277,6 +333,10 @@ export function renew(state: BillingSimulation): BillingSimulation {
     tier: state.scheduledPlan ?? state.tier,
     scheduledPlan: undefined,
     now: state.periodEnd,
+    reloadSpentCents:
+      state.periodEnd.slice(0, 7) === state.now.slice(0, 7)
+        ? state.reloadSpentCents
+        : 0,
     periodStart: state.periodEnd,
     periodEnd: nextEnd.toISOString(),
     usedCents: 0,
@@ -293,7 +353,14 @@ export function advanceDays(
   now.setUTCDate(now.getUTCDate() + days);
   let next = state;
   while (now.getTime() >= Date.parse(next.periodEnd)) next = renew(next);
-  return { ...next, now: now.toISOString() };
+  return {
+    ...next,
+    now: now.toISOString(),
+    reloadSpentCents:
+      now.toISOString().slice(0, 7) === next.now.slice(0, 7)
+        ? next.reloadSpentCents
+        : 0,
+  };
 }
 
 export function setUsage(

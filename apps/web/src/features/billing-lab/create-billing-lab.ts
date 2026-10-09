@@ -21,9 +21,16 @@ export type LabPayment =
   | { kind: 'subscription'; tier: 'premium' | 'max' }
   | { kind: 'methods' };
 
+const defaultSurface = (scenario: ScenarioId): LabSurface =>
+  scenario.startsWith('team-') || scenario === 'spending-limit'
+    ? 'usage'
+    : 'billing';
+
 export function createBillingLab(initial: ScenarioId) {
   const [state, setState] = createSignal(createScenario(initial));
-  const [surface, setSurface] = createSignal<LabSurface>('billing');
+  const [surface, setSurface] = createSignal<LabSurface>(
+    defaultSurface(initial)
+  );
   const [pending, setPending] = createSignal(false);
   const [failNext, setFailNext] = createSignal(false);
   const [notice, setNotice] = createSignal('');
@@ -50,6 +57,7 @@ export function createBillingLab(initial: ScenarioId) {
   const selectScenario = (scenario: ScenarioId) => {
     generation++;
     setState(createScenario(scenario));
+    setSurface(defaultSurface(scenario));
     setPending(false);
     setFailNext(false);
     setLimitOpen(false);
@@ -150,6 +158,7 @@ export function createBillingLab(initial: ScenarioId) {
       pending,
       supportedAmounts: () => [2_500, 5_000, 10_000],
       start: async (amountCents) => {
+        if (!manageable()) throw new Error('Credit purchase unavailable');
         await perform('Credit checkout', () =>
           openPayment({ kind: 'credits', amountCents })
         );
@@ -158,11 +167,24 @@ export function createBillingLab(initial: ScenarioId) {
     },
     autoReload: {
       settings: () => state().autoReload,
+      budget: () => {
+        const limitCents = state().autoReload.monthlySpendLimitCents;
+        if (limitCents === null) return;
+        const now = new Date(state().now);
+        return {
+          spentCents: state().reloadSpentCents,
+          limitCents,
+          resetsAt: new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
+          ).toISOString(),
+        };
+      },
       available: manageable,
       pending,
       suspended: () => state().reloadSuspended,
       preview: () => false,
-      save: async (settings) =>
+      save: async (settings) => {
+        if (!manageable()) throw new Error('Auto-Reload unavailable');
         await perform('Automatic reload update', () =>
           update(
             (value) => ({
@@ -174,11 +196,13 @@ export function createBillingLab(initial: ScenarioId) {
             }),
             'Automatic reload settings saved'
           )
-        ),
+        );
+      },
     },
     paymentMethods: {
       pending,
       open: async () => {
+        if (!manageable()) throw new Error('Payment methods unavailable');
         await perform('Payment methods', () =>
           openPayment({ kind: 'methods' })
         );
@@ -254,7 +278,9 @@ export function createBillingLab(initial: ScenarioId) {
                 value.creditBalanceCents + selected.amountCents,
               blockedReason: undefined,
             }),
-            'Credits added to the simulated account'
+            state().role === 'owner'
+              ? 'Credits added to the shared team balance'
+              : 'Credits added to the simulated account'
           );
         if (selected.kind === 'subscription')
           update(

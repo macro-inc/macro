@@ -1,5 +1,6 @@
 import type { Accessor } from 'solid-js';
 import type {
+  AutoReloadBudget,
   AutoReloadSettings,
   UsagePreviewPlan,
   UsageSummary,
@@ -19,6 +20,8 @@ export type UsageContext = {
   };
   autoReload: {
     settings: Accessor<AutoReloadSettings>;
+    /** Monthly spend facts; currently supplied only by the Billing Lab fixture. */
+    budget?: Accessor<AutoReloadBudget | undefined>;
     available: Accessor<boolean>;
     pending: Accessor<boolean>;
     /** The last automatic reload failed to charge; saving retries. */
