@@ -51,10 +51,14 @@ it('resolves reminder shorthand like tmrw 8 and tmrw 8p', () => {
   ).toBeNull();
 
   fireEvent.input(input, { target: { value: 'tmrw 8' } });
-  expect(screen.getByRole('option', { name: /Tomorrow at 8 AM/i })).toBeTruthy();
+  expect(
+    screen.getByRole('option', { name: /Tomorrow at 8 AM/i })
+  ).toBeTruthy();
 
   fireEvent.input(input, { target: { value: 'tmrw 8p' } });
-  expect(screen.getByRole('option', { name: /Tomorrow at 8 PM/i })).toBeTruthy();
+  expect(
+    screen.getByRole('option', { name: /Tomorrow at 8 PM/i })
+  ).toBeTruthy();
 
   fireEvent.input(input, { target: { value: 'fri' } });
   expect(screen.getByRole('option', { name: /fri|Friday/i })).toBeTruthy();
