@@ -385,7 +385,7 @@ export function ChatComposer(props: {
                       fallback={
                         <SendButton
                           appearance="composer"
-                          class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
+                          class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
                           aria-label="Send"
                           title={props.blockedReason}
                           disabled={
@@ -414,7 +414,7 @@ export function ChatComposer(props: {
                       >
                         <SendButton
                           appearance="composer"
-                          class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
+                          class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
                           intent="flush"
                           aria-label="Flush queued messages"
                           tooltip="Flush queued messages"
