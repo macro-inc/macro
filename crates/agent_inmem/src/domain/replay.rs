@@ -52,9 +52,8 @@ pub trait FrameSource: Send + Sync + 'static {
 ///
 /// User prompts open turns and `session/update` notifications fill them in,
 /// mirroring what the live agent pushed into its history as the turn ran. A
-/// `/compact` prompt drops everything recorded before it, exactly as the live
-/// agent's compact handling cleared its history - and, by the same rule, a
-/// `/compact` that carried files is a turn like any other.
+/// Successful summary checkpoints replace earlier model context. A compact
+/// request alone never discards history; failed or interrupted summaries keep it.
 #[must_use]
 pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryEntry> {
     let mut history = Vec::new();
@@ -75,11 +74,7 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 };
                 let prompt = UserPrompt::from_blocks(&prompt.prompt);
                 close_turn(&mut history, &mut open);
-                if prompt.is_compact_command() {
-                    // Compaction dropped everything before it from the
-                    // model's context; replaying it back would undo that.
-                    history.clear();
-                } else {
+                if !prompt.is_compact_command() {
                     open = Some((prompt, Vec::new()));
                 }
             }
@@ -95,6 +90,18 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 else {
                     continue;
                 };
+                if let Some(value) = notification
+                    .meta
+                    .as_ref()
+                    .and_then(|meta| meta.get(crate::domain::agent::META_NAMESPACE))
+                    .and_then(|meta| meta.get(crate::domain::agent::compaction::SUMMARY_META_KEY))
+                    && let Ok(checkpoint) = serde_json::from_value::<
+                        crate::domain::agent::compaction::SummaryCheckpoint,
+                    >(value.clone())
+                {
+                    checkpoint.apply(&mut history);
+                    continue;
+                }
                 // An update outside any turn (the compact acknowledgement,
                 // status chatter) is presentation, not conversation.
                 if let Some((_, parts)) = open.as_mut() {

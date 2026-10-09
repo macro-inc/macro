@@ -45,7 +45,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::domain::admission::admit_turn;
-use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnPurpose, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
@@ -58,6 +58,8 @@ use mcp_toolset::RemoteMcpToolSet;
 
 #[cfg(test)]
 mod test;
+
+pub(crate) mod compaction;
 
 /// A turn that produces nothing for this long is treated as hung and
 /// cancelled, so it cannot wedge the session's turn lock forever.
@@ -236,12 +238,6 @@ impl AgentState {
                 state.history.clear();
             }
             state.acp_session_id = Some(acp_id);
-        }
-    }
-
-    fn clear_history(&self) {
-        if let Some(mut state) = self.store.get_mut(&self.session_id) {
-            state.history.clear();
         }
     }
 
@@ -658,18 +654,6 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
-                    if prompt.is_compact_command() {
-                        state.clear_history();
-                        let _ = connection.send_notification(SessionNotification::new(
-                            request.session_id,
-                            SessionUpdate::AgentMessageChunk(ContentChunk::new(
-                                "Compacted: the earlier conversation is no longer in the \
-                                 model's context."
-                                    .into(),
-                            )),
-                        ));
-                        return responder.respond(PromptResponse::new(StopReason::EndTurn));
-                    }
                     if state.enable_dev_commands
                         && let Some(question) = prompt.text.trim().strip_prefix(ASK_COMMAND)
                     {
@@ -868,6 +852,29 @@ async fn run_turn(
         "agent.turn.admission_wait_ms",
         elapsed_ms(admission_started),
     );
+    if prompt.text.len() > 128_000 {
+        return Err(AcpError::invalid_params().data(
+            "This message is too long. Split it into smaller messages or attach it as a file.",
+        ));
+    }
+    let access = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+    };
+    let explicit_compact = prompt.is_compact_command();
+    compaction::compact_if_needed(
+        state,
+        connection,
+        &acp_session_id,
+        explicit_compact,
+        access,
+        &cancel,
+    )
+    .await?;
+    if explicit_compact {
+        return Ok(StopReason::EndTurn);
+    }
     let mcp_tools = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
@@ -881,17 +888,13 @@ async fn run_turn(
         identity,
         instructions,
     } = state.turn_input(&prompt);
-    let access = tokio::select! {
-        biased;
-        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
-    };
     if !access.allows(&model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
     }
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
+        purpose: TurnPurpose::Conversation,
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
@@ -1056,9 +1059,8 @@ async fn run_ask(
 }
 
 /// The slash commands this agent advertises over ACP: bare names, no
-/// leading slash. `/compact` is still handled if a client sends it, but it
-/// is not listed — dropping history is not a product command for this
-/// harness. `/ask` only while the host enables development commands, since
+/// leading slash. Context is summarized automatically, and `/compact` asks
+/// for a summary now. `/ask` only while the host enables development commands, since
 /// the prompt handler ignores it otherwise.
 fn available_commands(state: &AgentState) -> Vec<AvailableCommand> {
     let name = |command: &str| command.trim_start_matches('/').to_owned();
