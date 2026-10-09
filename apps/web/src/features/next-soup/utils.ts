@@ -729,8 +729,13 @@ export const openEntityInSplitFromUnifiedList = async (
           threadId: channelMessageTarget.threadId,
         }
       : undefined);
+  // A row keeps pointing at its comment notification until that notification is
+  // done, so on touch — where the thread is a drawer over the whole page, not a
+  // margin card beside the text — the row would cover the document with the
+  // same comment on every open. A tap on a document row asks for the document;
+  // the notification list still opens the comment itself.
   const commentParams =
-    !target && entity.type === 'document'
+    !target && entity.type === 'document' && !isTouchDevice()
       ? getDocumentCommentTarget(entity)?.params
       : undefined;
 

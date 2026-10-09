@@ -2217,6 +2217,15 @@ editor and comments arriving after it. Once loaded, click elsewhere in the
 document, then click the same notification again: it should revisit the comment,
 while background comment refreshes should leave the user's position alone.
 
+A document row keeps pointing at its newest comment notification until that
+notification is done, so on desktop the row opens the document at that comment.
+On touch the thread is a drawer over the whole page rather than a margin card,
+so a row tap opens the document itself: no drawer, with the comment's highlight
+still in the text. Verify this from Home, Inbox, and Files with a comment
+notification that has already been read — the drawer must not reappear on every
+open. Tapping the highlighted text still offers `Show comment`, and opening the
+notification itself still opens the thread.
+
 When checking desktop margin placement, scroll a long document while an embed
 or image above the highlighted text changes height. Scroll anchoring may keep
 the text at the same screen position; its comment card should stay aligned
