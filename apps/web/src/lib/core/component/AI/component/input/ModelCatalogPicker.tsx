@@ -81,8 +81,8 @@ function ModelList(props: {
 }) {
   const Row = props.row;
   return (
-    <Dropdown.Group class="bg-transparent">
-      <Dropdown.GroupLabel class="font-medium text-ink-muted">
+    <Dropdown.Group class="bg-transparent py-0">
+      <Dropdown.GroupLabel class="h-6 font-medium text-ink-muted">
         {props.label}
       </Dropdown.GroupLabel>
       <For each={props.options}>
@@ -316,7 +316,7 @@ export function ModelCatalogMenu(
       <Show
         when={normalizedQuery().length > 0}
         fallback={
-          <div class="space-y-2">
+          <div class="space-y-1">
             <Show when={catalog().frontier.length > 0}>
               <ModelList
                 label="Suggested"

@@ -148,12 +148,12 @@ export function MobileAgentPicker(props: AgentPickerProps) {
               class="h-full min-w-0 w-full border-0 bg-transparent p-0 text-base outline-none placeholder:text-ink-extra-muted"
             />
           </div>
-          <MobileDrawer.ScrollBody class="gap-3">
+          <MobileDrawer.ScrollBody class="gap-1">
             <Show when={browsing() ?? macro()}>
               <For each={modelSections()}>
                 {(section) => (
                   <div>
-                    <MobileDrawer.Label class="px-4 font-medium text-ink-muted">
+                    <MobileDrawer.Label class="px-4 pb-1 font-medium text-ink-muted">
                       {section.label}
                     </MobileDrawer.Label>
                     <MobileDrawer.Section
@@ -202,7 +202,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
               <For each={groups()}>
                 {(group) => (
                   <div>
-                    <MobileDrawer.Label class="px-4 font-medium text-ink-muted">
+                    <MobileDrawer.Label class="px-4 pb-1 font-medium text-ink-muted">
                       {group.label}
                     </MobileDrawer.Label>
                     <MobileDrawer.Section
