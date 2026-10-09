@@ -7,3 +7,4 @@ config:
   connection-gateway:jwt_secret_key: fusionauth-jwt-secret-dev
   connection-gateway:legacy_jwt_secret_key: jwt-secret-dev
   connection-gateway:macro_db_secret_key: macro-db-dev
+  connection-gateway:grafanaTelemetryEnabled: true

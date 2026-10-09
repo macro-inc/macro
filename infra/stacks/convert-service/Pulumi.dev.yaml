@@ -2,3 +2,4 @@ config:
   aws-native:region: us-east-1
   aws:region: us-east-1
   convert-service:internal_api_key: document-storage-service-auth-key-dev
+  convert-service:grafanaTelemetryEnabled: true
