@@ -1,5 +1,7 @@
 //! Contains the domain logic for teams handling the customers
 
+use std::collections::HashMap;
+
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{CustomerError, ScheduledSeatPlan, SeatPlan};
@@ -35,6 +37,13 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         subscription: &stripe::SubscriptionId,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<ScheduledSeatPlan>, CustomerError>> + Send;
+
+    /// Read all pending seat changes from the attached, Macro-owned schedule.
+    /// Already applied phases do not count as pending changes.
+    fn pending_seat_plans(
+        &self,
+        subscription: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<HashMap<String, ScheduledSeatPlan>, CustomerError>> + Send;
 
     /// Mark subscription as a team subscription
     fn convert_subscription_to_team(

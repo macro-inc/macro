@@ -221,6 +221,104 @@ async fn pending_status_reads_only_the_callers_seat_from_an_active_owned_schedul
             .is_none()
     );
 }
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pending_seat_plans_reads_all_members_once_and_excludes_applied_or_untrusted_changes(
+    pool: sqlx::PgPool,
+) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    let mut sched = schedule();
+    let id = macro_uuid::generate_uuid_v7();
+    let at = chrono::DateTime::from_timestamp(sub.current_period_end, 0).unwrap();
+    let members = json!({"macro|one@example.com": "premium", "macro|two@example.com": "premium"});
+    sqlx::query!("INSERT INTO subscription_plan_schedule (id, subscription_id, effective_at, member_plans) VALUES ($1, 'sub_team', $2, $3)", id, at, members).execute(&pool).await.unwrap();
+    sched.status = stripe::SubscriptionScheduleStatus::Active;
+    sched
+        .metadata
+        .as_mut()
+        .unwrap()
+        .insert(PENDING_KEY.into(), id.to_string());
+    sub.schedule = Some(stripe::Expandable::Id(sched.id.clone()));
+    Mock::given(method("GET"))
+        .and(path("/v1/subscriptions/sub_team"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response(&sub)))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/subscription_schedules/sub_sched_test"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(response(&sched)))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let repo = repo(&server, pool);
+    let pending = repo.pending_seat_plans(&sub.id).await.unwrap();
+    assert_eq!(pending.len(), 2);
+    for user in ["macro|one@example.com", "macro|two@example.com"] {
+        assert_eq!(
+            pending[user],
+            ScheduledSeatPlan {
+                plan: SeatPlan::Premium,
+                effective_at: at
+            }
+        );
+    }
+    server.verify().await;
+
+    // An applied phase is not a cancellation control, even before its webhook arrives.
+    server.reset().await;
+    sub.current_period_start = sub.current_period_end;
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(
+        &server,
+        "GET",
+        "/v1/subscription_schedules/sub_sched_test",
+        &sched,
+        1,
+    )
+    .await;
+    assert!(repo.pending_seat_plans(&sub.id).await.unwrap().is_empty());
+
+    server.reset().await;
+    sub.current_period_start = subscription().current_period_start;
+    sched.metadata.as_mut().unwrap().remove(OWNED_KEY);
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(
+        &server,
+        "GET",
+        "/v1/subscription_schedules/sub_sched_test",
+        &sched,
+        1,
+    )
+    .await;
+    assert!(repo.pending_seat_plans(&sub.id).await.unwrap().is_empty());
+
+    // A schedule's record must also belong to the retrieved subscription.
+    server.reset().await;
+    sub.id = "sub_other".parse().unwrap();
+    sched
+        .metadata
+        .as_mut()
+        .unwrap()
+        .insert(OWNED_KEY.into(), "1".into());
+    mount(&server, "GET", "/v1/subscriptions/sub_other", &sub, 1).await;
+    mount(
+        &server,
+        "GET",
+        "/v1/subscription_schedules/sub_sched_test",
+        &sched,
+        1,
+    )
+    .await;
+    assert!(repo.pending_seat_plans(&sub.id).await.is_err());
+
+    server.reset().await;
+    sub.schedule = None;
+    mount(&server, "GET", "/v1/subscriptions/sub_other", &sub, 1).await;
+    assert!(repo.pending_seat_plans(&sub.id).await.unwrap().is_empty());
+    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+}
+
 fn fill_missing(value: &mut Value, field: &str) {
     match value {
         Value::Object(map) => {

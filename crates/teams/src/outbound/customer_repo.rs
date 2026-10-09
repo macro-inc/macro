@@ -90,6 +90,41 @@ impl CustomerRepositoryImpl {
         }
     }
 
+    async fn read_scheduled_seat_plans(
+        &self,
+        subscription: &stripe::SubscriptionId,
+        schedule: &stripe::SubscriptionScheduleId,
+    ) -> Result<HashMap<String, ScheduledSeatPlan>, CustomerError> {
+        let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, schedule, &[])
+            .await
+            .map_err(storage)?;
+        if schedule
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get(OWNED_KEY))
+            .map(String::as_str)
+            != Some("1")
+            || !matches!(
+                schedule.status,
+                stripe::SubscriptionScheduleStatus::Active
+                    | stripe::SubscriptionScheduleStatus::NotStarted
+            )
+        {
+            return Ok(HashMap::new());
+        }
+        let Some(record) = schedule.metadata.as_ref().and_then(|m| m.get(PENDING_KEY)) else {
+            return Ok(HashMap::new());
+        };
+        let changes = self.read_pending(subscription.as_str(), record).await?;
+        let effective_at =
+            chrono::DateTime::from_timestamp(changes.at, 0).context("invalid scheduled renewal")?;
+        Ok(changes
+            .members
+            .into_iter()
+            .map(|(user, plan)| (user, ScheduledSeatPlan { plan, effective_at }))
+            .collect())
+    }
+
     async fn release_schedule(
         &self,
         id: &stripe::SubscriptionScheduleId,
@@ -360,33 +395,10 @@ impl CustomerRepository for CustomerRepositoryImpl {
         schedule: &stripe::SubscriptionScheduleId,
         user: &MacroUserIdStr<'_>,
     ) -> Result<Option<ScheduledSeatPlan>, CustomerError> {
-        let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, schedule, &[])
-            .await
-            .map_err(storage)?;
-        if schedule
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get(OWNED_KEY))
-            .map(String::as_str)
-            != Some("1")
-            || !matches!(
-                schedule.status,
-                stripe::SubscriptionScheduleStatus::Active
-                    | stripe::SubscriptionScheduleStatus::NotStarted
-            )
-        {
-            return Ok(None);
-        }
-        let Some(record) = schedule.metadata.as_ref().and_then(|m| m.get(PENDING_KEY)) else {
-            return Ok(None);
-        };
-        let changes = self.read_pending(subscription.as_str(), record).await?;
-        let Some(plan) = changes.members.get(user.as_ref()).copied() else {
-            return Ok(None);
-        };
-        let effective_at =
-            chrono::DateTime::from_timestamp(changes.at, 0).context("invalid scheduled renewal")?;
-        Ok(Some(ScheduledSeatPlan { plan, effective_at }))
+        Ok(self
+            .read_scheduled_seat_plans(subscription, schedule)
+            .await?
+            .remove(user.as_ref()))
     }
 
     async fn pending_seat_plan(
@@ -394,16 +406,24 @@ impl CustomerRepository for CustomerRepositoryImpl {
         id: &stripe::SubscriptionId,
         user: &MacroUserIdStr<'_>,
     ) -> Result<Option<ScheduledSeatPlan>, CustomerError> {
+        Ok(self.pending_seat_plans(id).await?.remove(user.as_ref()))
+    }
+
+    async fn pending_seat_plans(
+        &self,
+        id: &stripe::SubscriptionId,
+    ) -> Result<HashMap<String, ScheduledSeatPlan>, CustomerError> {
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
             .await
             .map_err(storage)?;
         let Some(schedule) = subscription.schedule.as_ref() else {
-            return Ok(None);
+            return Ok(HashMap::new());
         };
-        Ok(self
-            .scheduled_seat_plan(id, &schedule.id(), user)
-            .await?
-            .filter(|change| change.effective_at.timestamp() > subscription.current_period_start))
+        let mut changes = self.read_scheduled_seat_plans(id, &schedule.id()).await?;
+        changes.retain(|_, change| {
+            change.effective_at.timestamp() > subscription.current_period_start
+        });
+        Ok(changes)
     }
 
     #[tracing::instrument(skip(self), err)]

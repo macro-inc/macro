@@ -68,6 +68,13 @@ fn team_member_roles_to_remove() -> Vec<RoleId> {
         .collect()
 }
 
+/// Renewed seat plans may be reconciled without restoring revoked paid access.
+#[derive(Clone, Copy)]
+enum TeamBillingRoleUpdate {
+    RestorePermissions,
+    PreservePermissions,
+}
+
 /// Implementation of the TeamService using a TeamRepository
 #[derive(Debug)]
 pub struct TeamServiceImpl<
@@ -286,10 +293,11 @@ where
     OEC: OwnedEntityCleanup,
 {
     /// Reconcile while the caller holds the owning team billing guard.
-    async fn restore_team_billing_locked(
+    async fn reconcile_team_billing_locked(
         &self,
         team_id: &uuid::Uuid,
         started: Option<SubscriptionStart>,
+        role_update: TeamBillingRoleUpdate,
     ) -> Result<(), RestorePermissionsForTeamMembersError> {
         let subscription = self
             .team_repository
@@ -318,6 +326,21 @@ where
         }
 
         for member in members {
+            if matches!(role_update, TeamBillingRoleUpdate::PreservePermissions) {
+                if !renewed
+                    .iter()
+                    .any(|(user, _)| user == member.user_id.as_ref())
+                {
+                    continue;
+                }
+                let roles = self
+                    .user_roles_and_permissions_service
+                    .get_user_roles(&member.user_id)
+                    .await?;
+                if !roles.contains(&RoleId::TeamSubscriber) {
+                    continue;
+                }
+            }
             if let Some(started) = started {
                 let previous_roles = self
                     .user_roles_and_permissions_service
@@ -344,7 +367,10 @@ where
                         RestorePermissionsForTeamMembersError::UsageReset(Box::new(error))
                     })?;
             }
-            let roles = team_member_roles_to_add(member.plan);
+            let roles = match role_update {
+                TeamBillingRoleUpdate::RestorePermissions => team_member_roles_to_add(member.plan),
+                TeamBillingRoleUpdate::PreservePermissions => vec![member.plan.role()],
+            };
             let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
 
             self.user_roles_and_permissions_service
@@ -638,9 +664,13 @@ where
                 .await?
                 .is_empty()
         {
-            self.restore_team_billing_locked(&team_id, None)
-                .await
-                .map_err(anyhow::Error::from)?;
+            self.reconcile_team_billing_locked(
+                &team_id,
+                None,
+                TeamBillingRoleUpdate::PreservePermissions,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
         }
 
         let roles_to_remove = team_member_roles_to_remove();
@@ -1773,6 +1803,17 @@ where
         &self,
         team_id: &uuid::Uuid,
     ) -> Result<(), RevokePermissionsForTeamMembersError> {
+        // Revocation must not race a renewed seat's tier-role update.
+        let _billing = self
+            .customer_repository
+            .lock_team_billing(team_id)
+            .await
+            .map_err(|error| TeamError::StorageLayerError(error.into()))?;
+        // Plan changes must see the failed payment before revoked roles can
+        // become observable, including while the webhook finishes other work.
+        self.team_repository
+            .update_team_payment_status(team_id, false)
+            .await?;
         let members = self.team_repository.get_team_members(team_id).await?;
 
         if members.is_empty() {
@@ -1801,7 +1842,12 @@ where
         started: Option<SubscriptionStart>,
     ) -> Result<(), RestorePermissionsForTeamMembersError> {
         let _billing = self.customer_repository.lock_team_billing(team_id).await?;
-        self.restore_team_billing_locked(team_id, started).await
+        self.reconcile_team_billing_locked(
+            team_id,
+            started,
+            TeamBillingRoleUpdate::RestorePermissions,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1883,9 +1929,13 @@ where
                 .renewed_seat_plans(subscription)
                 .await?;
             if !renewed.is_empty() {
-                self.restore_team_billing_locked(&team_id, None)
-                    .await
-                    .map_err(|error| SetTeamMemberPlanError::UsageReset(Box::new(error)))?;
+                self.reconcile_team_billing_locked(
+                    &team_id,
+                    None,
+                    TeamBillingRoleUpdate::PreservePermissions,
+                )
+                .await
+                .map_err(|error| SetTeamMemberPlanError::UsageReset(Box::new(error)))?;
                 member = self
                     .team_repository
                     .get_team_member(&team_id, user_id)
@@ -2068,7 +2118,51 @@ where
     ) -> Result<TeamWithMembers, TeamError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
-        self.team_repository.get_team_by_id(&team_id).await
+        let mut team = self.team_repository.get_team_by_id(&team_id).await?;
+        team.scheduled_seat_plans = None;
+        if !entity_access_receipt
+            .entity_permission()
+            .satisfies::<AdminTeamRole>()
+            || team.team.enterprise()
+        {
+            return Ok(team);
+        }
+
+        // Billing-provider availability must not prevent viewing team membership.
+        let pending: anyhow::Result<_> = async {
+            if !self
+                .team_repository
+                .get_team_payment_status(&team_id)
+                .await?
+            {
+                return Ok(None);
+            }
+            let Some(subscription) = self
+                .team_repository
+                .get_team_subscription_id(&team_id)
+                .await?
+            else {
+                return Ok(None);
+            };
+            let mut changes = self
+                .customer_repository
+                .pending_seat_plans(&subscription)
+                .await?;
+            changes.retain(|user, _| {
+                team.members
+                    .iter()
+                    .any(|member| member.user_id.as_ref() == user)
+            });
+            Ok(Some(changes))
+        }
+        .await;
+        match pending {
+            Ok(changes) => team.scheduled_seat_plans = changes,
+            Err(error) => {
+                tracing::warn!(?error, %team_id, "unable to read pending team seat changes")
+            }
+        }
+        Ok(team)
     }
 
     #[tracing::instrument(skip(self), err)]

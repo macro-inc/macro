@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     future::Future,
     sync::{
         Arc, Mutex,
@@ -281,10 +281,18 @@ impl TeamRepository for MockTeamRepository {
 
     fn get_team_payment_status(
         &self,
-        _: &uuid::Uuid,
+        team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send {
         *self.team_payment_status_lookup_calls.lock().unwrap() += 1;
-        let team_payment_status = self.team_payment_status;
+        let team_payment_status = self
+            .payment_update_calls
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|(id, _)| id == team_id)
+            .map(|(_, paying)| *paying)
+            .unwrap_or(self.team_payment_status);
         let fail = self.fail_team_payment_status_lookup;
         async move {
             if fail {
@@ -642,7 +650,11 @@ impl TeamRepository for MockTeamRepository {
         let members = self.team_members.clone();
         async move {
             let team = team.ok_or(TeamError::TeamDoesNotExist)?;
-            Ok(TeamWithMembers { team, members })
+            Ok(TeamWithMembers {
+                team,
+                members,
+                scheduled_seat_plans: None,
+            })
         }
     }
 
@@ -888,6 +900,9 @@ struct MockCustomerRepository {
     move_seat_calls: Arc<Mutex<Vec<(String, SeatPlan, SeatPlan)>>>,
     schedule_calls: Arc<Mutex<Vec<(String, String, Option<SeatPlan>)>>>,
     pending_plan: Option<SeatPlan>,
+    pending_plans: HashMap<String, crate::domain::model::ScheduledSeatPlan>,
+    pending_plans_calls: Arc<Mutex<Vec<String>>>,
+    fail_pending_plans: bool,
     renewed_plans: Vec<(String, SeatPlan)>,
     acknowledged: Arc<Mutex<usize>>,
     fail_move_seat: bool,
@@ -912,6 +927,9 @@ impl Default for MockCustomerRepository {
             move_seat_calls: Arc::new(Mutex::new(Vec::new())),
             schedule_calls: Arc::new(Mutex::new(Vec::new())),
             pending_plan: None,
+            pending_plans: HashMap::new(),
+            pending_plans_calls: Arc::new(Mutex::new(Vec::new())),
+            fail_pending_plans: false,
             renewed_plans: Vec::new(),
             acknowledged: Arc::new(Mutex::new(0)),
             fail_move_seat: false,
@@ -962,6 +980,22 @@ impl CustomerRepository for MockCustomerRepository {
             plan,
             effective_at: chrono::Utc::now() + chrono::Duration::days(10),
         }))
+    }
+
+    async fn pending_seat_plans(
+        &self,
+        subscription: &stripe::SubscriptionId,
+    ) -> Result<HashMap<String, crate::domain::model::ScheduledSeatPlan>, CustomerError> {
+        self.pending_plans_calls
+            .lock()
+            .unwrap()
+            .push(subscription.to_string());
+        if self.fail_pending_plans {
+            return Err(CustomerError::StorageLayerError(anyhow::anyhow!(
+                "pending seat plans failed"
+            )));
+        }
+        Ok(self.pending_plans.clone())
     }
 
     async fn schedule_seat_plan(
@@ -1304,6 +1338,7 @@ struct MockUserRolesAndPermissionsService {
     fail_upsert: bool,
     fail_remove: bool,
     fail_get_roles: bool,
+    role_removal_pause: Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>,
 }
 
 impl UserRolesAndPermissionsService for MockUserRolesAndPermissionsService {
@@ -1372,7 +1407,12 @@ impl UserRolesAndPermissionsService for MockUserRolesAndPermissionsService {
             .unwrap()
             .push((user_id.as_ref().to_string(), role_ids.inner().to_vec()));
         let fail = self.fail_remove;
+        let pause = self.role_removal_pause.clone();
         async move {
+            if let Some((entered, resume)) = pause {
+                entered.notify_one();
+                resume.notified().await;
+            }
             if fail {
                 Err(UserRolesAndPermissionsError::StorageLayerError(
                     anyhow::anyhow!("remove roles failed"),
@@ -3653,6 +3693,79 @@ async fn test_get_team_reports_crm_enabled() {
     let receipt = test_team_receipt::<MemberTeamRole>(team_id, &owner_id);
     let team = service.get_team(receipt).await.unwrap();
     assert!(team.team.crm_enabled());
+}
+
+#[tokio::test]
+async fn get_team_exposes_confirmed_pending_plans_only_to_paid_team_billing_managers() {
+    use entity_access::domain::models::{Entity, EntityPermission, TeamRole as AccessTeamRole};
+
+    for (role, paying, enterprise, provider_failure, has_pending) in [
+        (AccessTeamRole::Admin, true, false, false, true),
+        (AccessTeamRole::Owner, true, false, false, true),
+        (AccessTeamRole::Member, true, false, false, true),
+        (AccessTeamRole::Admin, false, false, false, true),
+        (AccessTeamRole::Admin, true, true, false, true),
+        (AccessTeamRole::Admin, true, false, true, true),
+        (AccessTeamRole::Admin, true, false, false, false),
+    ] {
+        let team_id = uuid::Uuid::from_u128(5501);
+        let owner = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
+        let member = make_team_member(team_id, "macro|max@example.com", TeamRole::Member);
+        let team = Team::new(
+            team_id,
+            "Billing".into(),
+            "BILLING".into(),
+            owner.clone().into_owned(),
+            false,
+            enterprise,
+        );
+        let mut repo = MockTeamRepository::new(Vec::new(), "Billing", Default::default())
+            .with_team(team)
+            .with_team_members(vec![member.clone()]);
+        repo.team_subscription_id = Some("sub_team".parse().unwrap());
+        repo.team_payment_status = paying;
+        repo.enterprise = enterprise;
+        let pending = crate::domain::model::ScheduledSeatPlan {
+            plan: SeatPlan::Premium,
+            effective_at: chrono::Utc::now() + chrono::Duration::days(10),
+        };
+        let customer = MockCustomerRepository {
+            pending_plans: if has_pending {
+                HashMap::from([
+                    (member.user_id.to_string(), pending.clone()),
+                    ("macro|foreign@example.com".into(), pending.clone()),
+                ])
+            } else {
+                HashMap::new()
+            },
+            fail_pending_plans: provider_failure,
+            ..Default::default()
+        };
+        let calls = customer.pending_plans_calls.clone();
+        let service = build_member_plan_service(repo, customer, Default::default());
+        let receipt = EntityAccessReceipt::<MemberTeamRole>::try_new_authenticated_user(
+            owner.into_owned(),
+            Entity {
+                entity_id: team_id.to_string(),
+                entity_type: EntityType::Team,
+            },
+            EntityPermission::TeamRole { role },
+        )
+        .unwrap();
+        let result = service.get_team(receipt).await.unwrap();
+        assert_eq!(*result.team.id(), team_id);
+        assert_eq!(result.members.len(), 1);
+        let may_query = role != AccessTeamRole::Member && paying && !enterprise;
+        assert_eq!(calls.lock().unwrap().len(), usize::from(may_query));
+        let expected = (may_query && !provider_failure).then(|| {
+            if has_pending {
+                HashMap::from([(member.user_id.to_string(), pending)])
+            } else {
+                HashMap::new()
+            }
+        });
+        assert_eq!(result.scheduled_seat_plans, expected);
+    }
 }
 
 /// CrmEnqueuer that records which users had a populate or depopulate enqueued.
@@ -7680,17 +7793,37 @@ async fn removal_before_renewal_webhook_decrements_the_effective_pro_seat() {
         plan: SeatPlan::Max,
         ..make_team_member(team_id, user.as_ref(), TeamRole::Member)
     };
+    let retained = TeamMember {
+        plan: SeatPlan::Max,
+        ..make_team_member(team_id, "macro|retained@example.com", TeamRole::Member)
+    };
+    let unchanged = TeamMember {
+        plan: SeatPlan::Max,
+        ..make_team_member(team_id, "macro|unchanged@example.com", TeamRole::Member)
+    };
     let mut team = MockTeamRepository::new(Vec::new(), "Renewal", Default::default())
-        .with_team_members(vec![member.clone()]);
+        .with_team_members(vec![member.clone(), retained.clone(), unchanged]);
     team.removed_member = Some(member);
     team.team_subscription_id = Some("sub_team".parse().unwrap());
     let customer = MockCustomerRepository {
-        renewed_plans: vec![(user.to_string(), SeatPlan::Premium)],
+        renewed_plans: vec![
+            (user.to_string(), SeatPlan::Premium),
+            (retained.user_id.to_string(), SeatPlan::Premium),
+        ],
         ..Default::default()
     };
     let seat_changes = customer.seat_plan_calls.clone();
     let acknowledged = customer.acknowledged.clone();
-    let service = build_member_plan_service(team, customer, Default::default());
+    let roles = MockUserRolesAndPermissionsService {
+        roles: Arc::new(Mutex::new(HashSet::from([
+            RoleId::TeamSubscriber,
+            RoleId::SubMax,
+        ]))),
+        ..Default::default()
+    };
+    let upserts = roles.upsert_calls.clone();
+    let removals = roles.remove_calls.clone();
+    let service = build_member_plan_service(team, customer, roles);
     service
         .remove_user_from_team(test_team_receipt::<AdminTeamRole>(team_id, &admin), &user)
         .await
@@ -7700,6 +7833,248 @@ async fn removal_before_renewal_webhook_decrements_the_effective_pro_seat() {
         vec![("sub_team".into(), SeatPlan::Premium, 1)]
     );
     assert_eq!(*acknowledged.lock().unwrap(), 1);
+    assert_eq!(
+        *upserts.lock().unwrap(),
+        vec![
+            (user.to_string(), vec![RoleId::SubOpus]),
+            (retained.user_id.to_string(), vec![RoleId::SubOpus]),
+        ]
+    );
+    assert!(removals.lock().unwrap().iter().any(|(user, roles)| {
+        user == retained.user_id.as_ref() && roles.contains(&RoleId::SubMax)
+    }));
+}
+
+#[tokio::test]
+async fn unpaid_member_removal_reconciles_renewed_seats_without_restoring_paid_access() {
+    let team_id = uuid::Uuid::from_u128(5404);
+    let user = MacroUserIdStr::try_from("macro|max@example.com").unwrap();
+    let admin = MacroUserIdStr::try_from("macro|admin@example.com").unwrap();
+    let member = TeamMember {
+        plan: SeatPlan::Max,
+        ..make_team_member(team_id, user.as_ref(), TeamRole::Member)
+    };
+    let retained = TeamMember {
+        plan: SeatPlan::Max,
+        ..make_team_member(team_id, "macro|retained@example.com", TeamRole::Member)
+    };
+    let mut team = MockTeamRepository::new(Vec::new(), "Unpaid renewal", Default::default())
+        .with_team_members(vec![member.clone(), retained.clone()]);
+    team.removed_member = Some(member);
+    team.team_subscription_id = Some("sub_team".parse().unwrap());
+    team.team_payment_status = false;
+    let writes = team.patch_team_member_plan_calls.clone();
+    let customer = MockCustomerRepository {
+        renewed_plans: vec![
+            (user.to_string(), SeatPlan::Premium),
+            (retained.user_id.to_string(), SeatPlan::Premium),
+        ],
+        ..Default::default()
+    };
+    let seat_changes = customer.seat_plan_calls.clone();
+    let acknowledged = customer.acknowledged.clone();
+    // Failed renewal has already revoked paid roles from every team member.
+    let roles = MockUserRolesAndPermissionsService {
+        fail_upsert: true,
+        ..Default::default()
+    };
+    let upserts = roles.upsert_calls.clone();
+    let service = build_member_plan_service(team, customer, roles);
+    service
+        .remove_user_from_team(test_team_receipt::<AdminTeamRole>(team_id, &admin), &user)
+        .await
+        .unwrap();
+    assert_eq!(
+        *writes.lock().unwrap(),
+        vec![
+            (team_id, user.to_string(), SeatPlan::Premium),
+            (team_id, retained.user_id.to_string(), SeatPlan::Premium),
+        ]
+    );
+    assert_eq!(
+        *seat_changes.lock().unwrap(),
+        vec![("sub_team".into(), SeatPlan::Premium, 1)]
+    );
+    assert!(upserts.lock().unwrap().is_empty());
+    assert_eq!(*acknowledged.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn failed_renewal_revocation_waits_for_member_removal_reconciliation() {
+    let team_id = uuid::Uuid::from_u128(5405);
+    let user = MacroUserIdStr::try_from("macro|max@example.com").unwrap();
+    let admin = MacroUserIdStr::try_from("macro|admin@example.com").unwrap();
+    let member = TeamMember {
+        plan: SeatPlan::Max,
+        ..make_team_member(team_id, user.as_ref(), TeamRole::Member)
+    };
+    let retained = TeamMember {
+        plan: SeatPlan::Max,
+        ..make_team_member(team_id, "macro|retained@example.com", TeamRole::Member)
+    };
+    let mut team = MockTeamRepository::new(Vec::new(), "Renewal", Default::default())
+        .with_team_members(vec![member.clone(), retained.clone()]);
+    team.removed_member = Some(member);
+    team.team_subscription_id = Some("sub_team".parse().unwrap());
+    let read = Arc::new(tokio::sync::Notify::new());
+    let resume = Arc::new(tokio::sync::Notify::new());
+    let customer = MockCustomerRepository {
+        renewed_plans: vec![(retained.user_id.to_string(), SeatPlan::Premium)],
+        renewal_read_pause: Some((read.clone(), resume.clone())),
+        ..Default::default()
+    };
+    let roles = MockUserRolesAndPermissionsService {
+        roles: Arc::new(Mutex::new(HashSet::from([
+            RoleId::TeamSubscriber,
+            RoleId::SubMax,
+        ]))),
+        ..Default::default()
+    };
+    let upserts = roles.upsert_calls.clone();
+    let removals = roles.remove_calls.clone();
+    let service = build_member_plan_service(team, customer, roles);
+    let removal_service = service.clone();
+    let removal = tokio::spawn(async move {
+        removal_service
+            .remove_user_from_team(test_team_receipt::<AdminTeamRole>(team_id, &admin), &user)
+            .await
+    });
+    read.notified().await;
+    let revoke_service = service.clone();
+    let mut revoke = tokio::spawn(async move {
+        revoke_service
+            .revoke_permissions_for_team_members(&team_id)
+            .await
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(40), &mut revoke)
+            .await
+            .is_err()
+    );
+    assert!(removals.lock().unwrap().is_empty());
+    resume.notify_one();
+    removal.await.unwrap().unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(2), revoke)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        *upserts.lock().unwrap(),
+        vec![(retained.user_id.to_string(), vec![RoleId::SubOpus])]
+    );
+    let removals = removals.lock().unwrap();
+    let (user, roles) = removals.last().unwrap();
+    assert_eq!(user, retained.user_id.as_ref());
+    assert!(roles.contains(&RoleId::TeamSubscriber));
+    assert!(roles.contains(&RoleId::SubOpus));
+}
+
+#[tokio::test]
+async fn member_plan_reconciliation_preserves_revocation_when_payment_status_lags() {
+    for requested in [SeatPlan::Max, SeatPlan::Premium] {
+        let team_id = uuid::Uuid::from_u128(5406);
+        let user = MacroUserIdStr::try_from("macro|max@example.com").unwrap();
+        let admin = MacroUserIdStr::try_from("macro|admin@example.com").unwrap();
+        let member = TeamMember {
+            plan: SeatPlan::Max,
+            ..make_team_member(team_id, user.as_ref(), TeamRole::Member)
+        };
+        let mut team = MockTeamRepository::new(Vec::new(), "Unpaid renewal", Default::default())
+            .with_team_members(vec![member]);
+        team.team_subscription_id = Some("sub_team".parse().unwrap());
+        // The failure webhook revoked roles but has not yet stamped paying=false.
+        team.team_payment_status = true;
+        let customer = MockCustomerRepository {
+            renewed_plans: vec![(user.to_string(), SeatPlan::Premium)],
+            fail_move_seat: true,
+            ..Default::default()
+        };
+        let roles = MockUserRolesAndPermissionsService {
+            fail_upsert: true,
+            ..Default::default()
+        };
+        let upserts = roles.upsert_calls.clone();
+        let service = build_member_plan_service(team, customer, roles);
+        let result = service
+            .set_team_member_plan(
+                test_team_receipt::<AdminTeamRole>(team_id, &admin),
+                &user,
+                requested,
+            )
+            .await;
+        if requested == SeatPlan::Max {
+            assert!(matches!(
+                result,
+                Err(SetTeamMemberPlanError::CustomerError(_))
+            ));
+        } else {
+            assert_eq!(result.unwrap().plan, SeatPlan::Premium);
+        }
+        assert!(upserts.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn failed_renewal_marks_nonpaying_before_releasing_plan_change_guard() {
+    let team_id = uuid::Uuid::from_u128(5407);
+    let user = MacroUserIdStr::try_from("macro|pro@example.com").unwrap();
+    let admin = MacroUserIdStr::try_from("macro|admin@example.com").unwrap();
+    let member = make_team_member(team_id, user.as_ref(), TeamRole::Member);
+    let mut team = MockTeamRepository::new(Vec::new(), "Renewal", Default::default())
+        .with_team_members(vec![member]);
+    team.team_subscription_id = Some("sub_team".parse().unwrap());
+    team.team_payment_status = true;
+    let payment_updates = team.payment_update_calls.clone();
+    // A successful provider mock proves paying=false itself blocks the upgrade.
+    let customer = MockCustomerRepository::default();
+    let moves = customer.move_seat_calls.clone();
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let resume = Arc::new(tokio::sync::Notify::new());
+    let roles = MockUserRolesAndPermissionsService {
+        roles: Arc::new(Mutex::new(HashSet::from([
+            RoleId::TeamSubscriber,
+            RoleId::SubOpus,
+        ]))),
+        role_removal_pause: Some((entered.clone(), resume.clone())),
+        ..Default::default()
+    };
+    let upserts = roles.upsert_calls.clone();
+    let service = build_member_plan_service(team, customer, roles);
+    let revoke_service = service.clone();
+    let revoke = tokio::spawn(async move {
+        revoke_service
+            .revoke_permissions_for_team_members(&team_id)
+            .await
+    });
+    entered.notified().await;
+    assert_eq!(*payment_updates.lock().unwrap(), vec![(team_id, false)]);
+    let upgrade_service = service.clone();
+    let mut upgrade = tokio::spawn(async move {
+        upgrade_service
+            .set_team_member_plan(
+                test_team_receipt::<AdminTeamRole>(team_id, &admin),
+                &user,
+                SeatPlan::Max,
+            )
+            .await
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(40), &mut upgrade)
+            .await
+            .is_err()
+    );
+    assert!(moves.lock().unwrap().is_empty());
+    assert!(upserts.lock().unwrap().is_empty());
+    resume.notify_one();
+    revoke.await.unwrap().unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(2), upgrade)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(result, Err(SetTeamMemberPlanError::TeamNotPaying)));
+    assert!(moves.lock().unwrap().is_empty());
+    assert!(upserts.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

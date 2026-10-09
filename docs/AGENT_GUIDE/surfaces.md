@@ -2528,7 +2528,8 @@ Team members who cannot manage billing see the notice without its action.
 `Team` (members list; on a paid team each row shows the seat's plan,
 and admins/owners can move a seat between Pro and Max with the `Seat plan`
 menu; Max upgrades are immediate and prorated, Pro downgrades start at renewal.
-**Keep Max** cancels a pending downgrade). CRM (enable/disable; once enabled, a `Deal stages` section
+**Keep Max** appears only for a confirmed pending downgrade and cancels it;
+failed scheduled-plan reads offer **Try again**). CRM (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`)

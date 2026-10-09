@@ -1125,7 +1125,11 @@ impl TeamRepository for TeamRepositoryImpl {
             })
             .collect();
 
-        Ok(TeamWithMembers { team, members })
+        Ok(TeamWithMembers {
+            team,
+            members,
+            scheduled_seat_plans: None,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]
