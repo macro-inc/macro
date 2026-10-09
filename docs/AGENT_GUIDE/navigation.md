@@ -12,6 +12,12 @@ inside the workspace. The top-right split icon opens another Home split, even
 when Home is already open, and is disabled when there is no room for a new split.
 Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
 
+After native bundle updates, verify that Home and channel details load without
+an update toast on every launch. Relative bundled assets such as Loro's WASM
+must load through the webview, not native HTTP. A `vite:preloadError` with
+`scheme tauri not supported` indicates an asset-routing failure; reloading the
+same bundle does not resolve it.
+
 ## Returning from another page
 
 A browser back/forward-cache restore reconnects the GraphQL cache worker and

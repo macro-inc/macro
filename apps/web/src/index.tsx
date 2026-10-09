@@ -8,6 +8,7 @@ import '@fontsource-variable/playfair-display';
 // import 'solid-devtools';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createTauriFetch } from '@core/util/createTauriFetch';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { promptReloadForFailedLoad } from '@core/util/reloadForNewerBuild';
@@ -17,20 +18,13 @@ import { FatalError } from './components/app/FatalError';
 import { registerServiceWorker } from './lib/service-worker/register';
 import { Root } from './routes/Root';
 
-// Override global fetch with platformFetch for Tauri compatibility
-// Skip localhost requests (dev server) to avoid breaking HMR
+// Keep bundled assets and the local dev server in the webview's fetch path.
 if (isTauri()) {
-  const originalFetch = window.fetch;
-  window.fetch = new Proxy(originalFetch, {
-    apply: (target, thisArg, args) => {
-      const url = args[0];
-      const urlString = url instanceof Request ? url.url : String(url);
-      if (urlString.includes('localhost')) {
-        return target.apply(thisArg, args as Parameters<typeof fetch>);
-      }
-      return platformFetch.apply(thisArg, args as Parameters<typeof fetch>);
-    },
-  });
+  window.fetch = createTauriFetch(
+    window.fetch,
+    platformFetch,
+    () => document.baseURI
+  );
 }
 
 initializeLexical();
