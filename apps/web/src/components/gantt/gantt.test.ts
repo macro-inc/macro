@@ -779,6 +779,36 @@ it('shrinks the default sidebar in narrow panes while retaining the current date
   expect(gantt.visibleRange().start).toBeCloseTo(anchor);
 });
 
+it('clips Today decoration past floating panels without shifting bar coordinates', async () => {
+  const { gantt, viewport, container, today, resize } = chartFixture(
+    1000,
+    true
+  );
+  await waitFor(() => expect(gantt.viewport()).toBe(viewport));
+  await Promise.resolve();
+  await Promise.resolve();
+  const body = container.querySelector<HTMLElement>(
+    '[data-gantt-today="body"]'
+  )!;
+  const clip = body.closest<HTMLElement>('[data-gantt-calendar-clip]')!;
+  const bar = container.querySelector<HTMLElement>('[data-gantt-bar]')!;
+  expect(clip.style.left).toBe(`${gantt.sidebar.width()}px`);
+  expect(
+    bar.querySelector<HTMLElement>('[data-gantt-calendar-clip]')!.style.left
+  ).toBe('0px');
+  const markerLeft = body.style.left;
+  viewport.scrollLeft =
+    (today + 0.5 - gantt.range().start) * gantt.pixelsPerDay() - 100;
+  fireEvent.scroll(viewport);
+  expect(clip.style.left).toBe(`${gantt.sidebar.width()}px`);
+  expect(body.style.left).toBe(markerLeft);
+  gantt.sidebar.setOpen(false);
+  expect(clip.style.left).toBe('0px');
+  gantt.sidebar.setOpen(true);
+  resize(240);
+  expect(clip.style.left).toBe('200px');
+  expect(body.style.left).toBe(markerLeft);
+});
 it('centers today once after delayed measurement and keeps both today lines out of sticky labels', async () => {
   const { gantt, viewport, today, resize, setRange, container, scrollTo } =
     chartFixture(0);
