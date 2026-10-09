@@ -10,11 +10,29 @@ use crate::domain::model::{CustomerError, ScheduledSeatPlan, SeatPlan};
 /// with `quantity` = the members on that plan. Implementations add the item
 /// when the first seat on a plan appears and drop it when the last one goes.
 pub trait CustomerRepository: Clone + Send + Sync + 'static {
+    /// Keeps one team's billing reconciliation and seat changes serialized across replicas.
+    /// Dropping the guard releases the lock, including on errors or cancellation.
+    type TeamBillingGuard: Send;
+
+    /// Acquire before reading or changing effective membership plans or renewal facts.
+    fn lock_team_billing(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Self::TeamBillingGuard, CustomerError>> + Send;
+
     /// Read only this user's plan from an attached, Macro-owned schedule.
     fn scheduled_seat_plan(
         &self,
         subscription: &stripe::SubscriptionId,
         schedule: &stripe::SubscriptionScheduleId,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<ScheduledSeatPlan>, CustomerError>> + Send;
+
+    /// Read this member's pending change from the subscription's attached schedule.
+    /// Already applied phases do not count as pending changes.
+    fn pending_seat_plan(
+        &self,
+        subscription: &stripe::SubscriptionId,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<ScheduledSeatPlan>, CustomerError>> + Send;
 
@@ -70,7 +88,8 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         plan: Option<SeatPlan>,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
-    /// Replace the price on a personal subscription immediately, invoicing proration.
+    /// Cancel any pending downgrade and replace the personal price atomically with
+    /// respect to other provider mutations, invoicing proration immediately.
     fn upgrade_personal_plan(
         &self,
         subscription: &stripe::SubscriptionId,

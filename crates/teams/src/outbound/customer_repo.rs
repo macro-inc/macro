@@ -23,6 +23,8 @@ pub struct CustomerRepositoryImpl {
     /// holds one item per plan its members are on.
     seat_prices: SeatPrices,
     pool: sqlx::PgPool,
+    team_locks: sqlx::PgPool,
+    subscription_locks: sqlx::PgPool,
 }
 
 /// One plan's seat item on a subscription.
@@ -33,6 +35,32 @@ struct SeatItem {
 }
 
 impl CustomerRepositoryImpl {
+    async fn billing_guard(
+        locks: &sqlx::PgPool,
+        key: &str,
+    ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CustomerError> {
+        let mut guard = locks
+            .begin()
+            .await
+            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+            .execute(&mut *guard)
+            .await
+            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
+        Ok(guard)
+    }
+
+    async fn subscription_guard(
+        &self,
+        id: &stripe::SubscriptionId,
+    ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CustomerError> {
+        Self::billing_guard(
+            &self.subscription_locks,
+            &format!("subscription-billing:{id}"),
+        )
+        .await
+    }
+
     async fn read_pending(
         &self,
         subscription: &str,
@@ -154,10 +182,27 @@ impl CustomerRepositoryImpl {
 
     /// Creates a new instance of CustomerRepositoryImpl
     pub fn new(stripe_client: stripe::Client, seat_prices: SeatPrices, pool: sqlx::PgPool) -> Self {
+        // Guards hold connections across provider and repository calls. Separate
+        // pools keep waiters from exhausting the pool those calls need, and keep
+        // the team -> subscription lock order from exhausting its own capacity.
+        let lock_pool = || {
+            sqlx::postgres::PgPoolOptions::new()
+                .max_connections(pool.options().get_max_connections())
+                .connect_lazy_with(
+                    pool.connect_options()
+                        .as_ref()
+                        .clone()
+                        .options([("lock_timeout", "30000")]),
+                )
+        };
+        let team_locks = lock_pool();
+        let subscription_locks = lock_pool();
         Self {
             client: Arc::new(stripe_client),
             seat_prices,
             pool,
+            team_locks,
+            subscription_locks,
         }
     }
 
@@ -300,6 +345,15 @@ impl CustomerRepositoryImpl {
 }
 
 impl CustomerRepository for CustomerRepositoryImpl {
+    type TeamBillingGuard = sqlx::Transaction<'static, sqlx::Postgres>;
+
+    async fn lock_team_billing(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Self::TeamBillingGuard, CustomerError> {
+        Self::billing_guard(&self.team_locks, &format!("team-billing:{team_id}")).await
+    }
+
     async fn scheduled_seat_plan(
         &self,
         subscription: &stripe::SubscriptionId,
@@ -335,6 +389,23 @@ impl CustomerRepository for CustomerRepositoryImpl {
         Ok(Some(ScheduledSeatPlan { plan, effective_at }))
     }
 
+    async fn pending_seat_plan(
+        &self,
+        id: &stripe::SubscriptionId,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<Option<ScheduledSeatPlan>, CustomerError> {
+        let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
+            .await
+            .map_err(storage)?;
+        let Some(schedule) = subscription.schedule.as_ref() else {
+            return Ok(None);
+        };
+        Ok(self
+            .scheduled_seat_plan(id, &schedule.id(), user)
+            .await?
+            .filter(|change| change.effective_at.timestamp() > subscription.current_period_start))
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn increment_seat_count(
         &self,
@@ -342,6 +413,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         plan: SeatPlan,
         amount: u64,
     ) -> Result<(), CustomerError> {
+        let _billing = self.subscription_guard(subscription_id).await?;
         let items = self.get_seat_items(subscription_id).await?;
         let existing = items.get(&plan);
         let quantity = existing
@@ -360,6 +432,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         plan: SeatPlan,
         amount: u64,
     ) -> Result<(), CustomerError> {
+        let _billing = self.subscription_guard(subscription_id).await?;
         let items = self.get_seat_items(subscription_id).await?;
         let Some(existing) = items.get(&plan) else {
             return Err(CustomerError::NoMatchingLineItem);
@@ -386,6 +459,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         if from == to {
             return Ok(());
         }
+        let _billing = self.subscription_guard(subscription_id).await?;
         // Make sure the target plan is sold before touching anything.
         self.seat_prices.price_id(to)?;
 
@@ -409,6 +483,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         user: &MacroUserIdStr<'_>,
         plan: Option<SeatPlan>,
     ) -> Result<(), CustomerError> {
+        let _billing = self.subscription_guard(id).await?;
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
             .await
             .map_err(storage)?;
@@ -474,9 +549,20 @@ impl CustomerRepository for CustomerRepositoryImpl {
         id: &stripe::SubscriptionId,
         plan: SeatPlan,
     ) -> Result<(), CustomerError> {
+        let _billing = self.subscription_guard(id).await?;
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
             .await
             .map_err(storage)?;
+        // Both cancellation and the price replacement use this same guard.
+        // Calling the public schedule method here would acquire it recursively.
+        if let Some(schedule) = subscription.schedule.as_ref() {
+            let schedule =
+                stripe::SubscriptionSchedule::retrieve(&self.client, &schedule.id(), &[])
+                    .await
+                    .map_err(storage)?;
+            require_owned_schedule(&schedule)?;
+            self.release_schedule(&schedule.id).await?;
+        }
         let item = subscription
             .items
             .data
@@ -524,6 +610,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         id: &stripe::SubscriptionId,
     ) -> Result<(), CustomerError> {
+        let _billing = self.subscription_guard(id).await?;
         let params = stripe::UpdateSubscription {
             metadata: Some(HashMap::from([(APPLIED_KEY.to_string(), String::new())])),
             ..Default::default()
@@ -539,6 +626,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         subscription_id: &stripe::SubscriptionId,
     ) -> Result<(), CustomerError> {
+        let _billing = self.subscription_guard(subscription_id).await?;
         // Cancelling is idempotent: a subscription that is already cancelled,
         // or that went away with its customer, needs nothing further.
         match stripe::Subscription::retrieve(&self.client, subscription_id, &[]).await {
@@ -570,6 +658,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         team_id: &uuid::Uuid,
         team_owner_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<(), CustomerError> {
+        let _billing = self.subscription_guard(subscription_id).await?;
         let mut metadata = HashMap::new();
         metadata.insert("team_id".to_string(), team_id.to_string());
         metadata.insert("owner_id".to_string(), team_owner_id.to_string());

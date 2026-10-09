@@ -125,13 +125,7 @@ impl<C: CustomerRepository> PlanGateway for StripePlanGateway<C> {
                     .await
             }
             PlanAction::KeepCurrent => self.customer.schedule_seat_plan(&id, user, None).await,
-            PlanAction::Upgrade => {
-                self.customer
-                    .schedule_seat_plan(&id, user, None)
-                    .await
-                    .map_err(anyhow::Error::from)?;
-                self.customer.upgrade_personal_plan(&id, target).await
-            }
+            PlanAction::Upgrade => self.customer.upgrade_personal_plan(&id, target).await,
         }
         .map_err(anyhow::Error::from)?;
         Ok(())

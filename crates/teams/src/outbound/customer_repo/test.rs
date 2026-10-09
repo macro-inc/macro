@@ -166,6 +166,21 @@ async fn pending_status_reads_only_the_callers_seat_from_an_active_owned_schedul
         .unwrap();
     assert_eq!(pending.plan, SeatPlan::Premium);
     assert_eq!(pending.effective_at.timestamp(), sub.current_period_end);
+    let mut attached = sub.clone();
+    attached.schedule = Some(stripe::Expandable::Id(sched.id.clone()));
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &attached, 2).await;
+    assert_eq!(
+        repo.pending_seat_plan(&sub.id, &user).await.unwrap(),
+        Some(pending)
+    );
+    attached.current_period_start = sub.current_period_end;
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &attached, 1).await;
+    assert!(
+        repo.pending_seat_plan(&sub.id, &user)
+            .await
+            .unwrap()
+            .is_none()
+    );
     let other = MacroUserIdStr::try_from("macro|other@example.com").unwrap();
     assert!(
         repo.scheduled_seat_plan(&sub.id, &sched.id, &other)
@@ -357,7 +372,10 @@ async fn unrelated_upgrade_keeps_other_seats_pending_and_prorates_only_current_p
     let update = form(
         requests
             .iter()
-            .find(|r| r.method.as_str() == "POST")
+            .find(|r| {
+                r.method.as_str() == "POST"
+                    && r.url.path() == "/v1/subscription_schedules/sub_sched_test"
+            })
             .unwrap(),
     );
     assert_eq!(update["proration_behavior"], "always_invoice");
@@ -388,14 +406,31 @@ async fn scheduled_members_are_returned_only_after_the_provider_renews(pool: sql
     );
 }
 
-#[tokio::test]
-async fn personal_upgrade_replaces_the_existing_item_and_invoices_proration() {
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn personal_upgrade_replaces_the_existing_item_and_invoices_proration(pool: sqlx::PgPool) {
     let server = MockServer::start().await;
     let mut sub = subscription();
     sub.items.data = vec![item("si_personal", "price_pro", 1)];
+    let schedule = schedule();
+    sub.schedule = Some(stripe::Expandable::Id(schedule.id.clone()));
     mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(
+        &server,
+        "GET",
+        "/v1/subscription_schedules/sub_sched_test",
+        &schedule,
+        1,
+    )
+    .await;
+    mount(
+        &server,
+        "POST",
+        "/v1/subscription_schedules/sub_sched_test/release",
+        &schedule,
+        1,
+    )
+    .await;
     mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
-    let pool = sqlx::PgPool::connect_lazy("postgres://user@localhost/unused").unwrap();
     repo(&server, pool)
         .upgrade_personal_plan(&sub.id, SeatPlan::Max)
         .await
@@ -404,13 +439,171 @@ async fn personal_upgrade_replaces_the_existing_item_and_invoices_proration() {
     let update = form(
         requests
             .iter()
-            .find(|r| r.method.as_str() == "POST")
+            .find(|r| r.method.as_str() == "POST" && r.url.path() == "/v1/subscriptions/sub_team")
             .unwrap(),
     );
     assert_eq!(update["items[0][id]"], "si_personal");
     assert_eq!(update["items[0][price]"], "price_max");
     assert_eq!(update["proration_behavior"], "always_invoice");
+    let release = requests
+        .iter()
+        .position(|request| request.url.path().ends_with("/release"))
+        .unwrap();
+    let upgrade = requests
+        .iter()
+        .position(|request| {
+            request.method.as_str() == "POST" && request.url.path() == "/v1/subscriptions/sub_team"
+        })
+        .unwrap();
+    assert!(release < upgrade);
     assert!(
         chrono::DateTime::parse_from_rfc3339(&update["metadata[macro_plan_change_at]"]).is_ok()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_instances_preserve_all_scheduled_members_and_seat_additions(
+    pool: sqlx::PgPool,
+) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    let sched = schedule();
+    sub.schedule = Some(stripe::Expandable::Id(sched.id.clone()));
+    let provider = Arc::new(std::sync::Mutex::new((sub, sched)));
+    let read_sub = provider.clone();
+    Mock::given(method("GET"))
+        .and(path("/v1/subscriptions/sub_team"))
+        .respond_with(move |_: &wiremock::Request| {
+            ResponseTemplate::new(200)
+                .set_body_json(response(&read_sub.lock().unwrap().0))
+                .set_delay(std::time::Duration::from_millis(30))
+        })
+        .mount(&server)
+        .await;
+    let read_schedule = provider.clone();
+    Mock::given(method("GET"))
+        .and(path("/v1/subscription_schedules/sub_sched_test"))
+        .respond_with(move |_: &wiremock::Request| {
+            ResponseTemplate::new(200).set_body_json(response(&read_schedule.lock().unwrap().1))
+        })
+        .mount(&server)
+        .await;
+    let write = provider.clone();
+    Mock::given(method("POST"))
+        .and(path("/v1/subscription_schedules/sub_sched_test"))
+        .respond_with(move |request: &wiremock::Request| {
+            let fields = form(request);
+            let mut state = write.lock().unwrap();
+            state.1.metadata.as_mut().unwrap().insert(
+                PENDING_KEY.into(),
+                fields["metadata[macro_pending_seats]"].clone(),
+            );
+            let original = state.1.phases[0].clone();
+            state.1.phases = (0..2)
+                .map(|phase_index| {
+                    let mut phase = original.clone();
+                    phase.items = (0..3)
+                        .filter_map(|index| {
+                            let price = fields
+                                .get(&format!("phases[{phase_index}][items][{index}][price]"))?;
+                            let quantity = fields
+                                [&format!("phases[{phase_index}][items][{index}][quantity]")]
+                                .parse()
+                                .unwrap();
+                            Some(stripe::SubscriptionScheduleConfigurationItem {
+                                price: stripe::Expandable::Id(price.parse().unwrap()),
+                                quantity: Some(quantity),
+                                ..Default::default()
+                            })
+                        })
+                        .collect();
+                    phase
+                })
+                .collect();
+            state.0.items.data = state.1.phases[0]
+                .items
+                .iter()
+                .map(|seat| {
+                    let price = seat.price.id();
+                    item(
+                        if price.as_str() == "price_max" {
+                            "si_max"
+                        } else {
+                            "si_pro"
+                        },
+                        price.as_str(),
+                        seat.quantity.unwrap(),
+                    )
+                })
+                .collect();
+            ResponseTemplate::new(200).set_body_json(response(&state.1))
+        })
+        .mount(&server)
+        .await;
+    // Separate adapters (and lock pools) simulate independent service replicas.
+    let one = repo(&server, pool.clone());
+    let two = repo(&server, pool.clone());
+    let seats = repo(&server, pool);
+    let subscription = "sub_team".parse().unwrap();
+    let first = MacroUserIdStr::try_from("macro|one@example.com").unwrap();
+    let second = MacroUserIdStr::try_from("macro|two@example.com").unwrap();
+    let (a, b, c) = tokio::join!(
+        one.schedule_seat_plan(&subscription, &first, Some(SeatPlan::Premium)),
+        two.schedule_seat_plan(&subscription, &second, Some(SeatPlan::Premium)),
+        seats.increment_seat_count(&subscription, SeatPlan::Premium, 1),
+    );
+    a.unwrap();
+    b.unwrap();
+    c.unwrap();
+    let schedule = provider.lock().unwrap().1.clone();
+    let sub = provider.lock().unwrap().0.clone();
+    let pending = one.pending_changes(&schedule, &sub).await.unwrap();
+    assert_eq!(pending.members.len(), 2);
+    assert_eq!(
+        pending.members.get(first.as_ref()),
+        Some(&SeatPlan::Premium)
+    );
+    assert_eq!(
+        pending.members.get(second.as_ref()),
+        Some(&SeatPlan::Premium)
+    );
+    assert_eq!(
+        phase_quantities(&phase_parameters(&schedule.phases[0]).unwrap()).unwrap(),
+        HashMap::from([("price_max".into(), 2), ("price_pro".into(), 3)])
+    );
+    assert_eq!(
+        phase_quantities(&phase_parameters(&schedule.phases[1]).unwrap()).unwrap(),
+        HashMap::from([("price_pro".into(), 5)])
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cancelling_a_guard_holder_releases_the_subscription_for_another_instance(
+    pool: sqlx::PgPool,
+) {
+    let server = MockServer::start().await;
+    let holder = repo(&server, pool.clone());
+    let waiter = repo(&server, pool);
+    let locked = Arc::new(tokio::sync::Notify::new());
+    let acquired = locked.clone();
+    let task = tokio::spawn(async move {
+        let id = "sub_team".parse().unwrap();
+        let _guard = holder.subscription_guard(&id).await.unwrap();
+        acquired.notify_one();
+        std::future::pending::<()>().await;
+    });
+    locked.notified().await;
+    let id = "sub_team".parse().unwrap();
+    let mut waiting = Box::pin(waiter.subscription_guard(&id));
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(40), &mut waiting)
+            .await
+            .is_err()
+    );
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    let _guard = tokio::time::timeout(std::time::Duration::from_secs(2), waiting)
+        .await
+        .unwrap()
+        .unwrap();
 }
