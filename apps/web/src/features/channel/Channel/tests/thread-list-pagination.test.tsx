@@ -70,6 +70,7 @@ function setup(followOnAppend = true) {
     Array.from({ length: 20 }, (_, index) => String(index))
   );
   const paginate = vi.fn();
+  const onScroll = vi.fn();
   let navigation: ThreadListNavigation | undefined;
   const { container } = render(() => (
     <ThreadList
@@ -79,6 +80,7 @@ function setup(followOnAppend = true) {
         navigation = value;
       }}
       onScrollNearTop={paginate}
+      onScroll={onScroll}
     >
       {({ id }) => <div>{id}</div>}
     </ThreadList>
@@ -95,7 +97,14 @@ function setup(followOnAppend = true) {
       ...previous,
     ]);
   };
-  return { element, paginate, prepend, setKeys, navigation: () => navigation };
+  return {
+    element,
+    paginate,
+    prepend,
+    setKeys,
+    onScroll,
+    navigation: () => navigation,
+  };
 }
 
 describe('history loading ahead of scrolling', () => {
@@ -177,4 +186,23 @@ describe('server acknowledgement scroll anchoring', () => {
     await waitFor(() => expect(f.element.scrollHeight).toBe(19 * 96 + 160));
     expect(f.element.scrollTop).toBe(before);
   });
+});
+
+it('coalesces explicit destination changes into a post-render layout notification', async () => {
+  const f = setup();
+  await waitFor(() => expect(f.navigation()).toBeDefined());
+  await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
+  f.onScroll.mockClear();
+  const before = f.element.scrollTop;
+  f.navigation()?.requestLayoutUpdate();
+  f.navigation()?.requestLayoutUpdate();
+  expect(f.onScroll).not.toHaveBeenCalled();
+  await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
+  expect(f.onScroll).toHaveBeenCalledOnce();
+  expect(f.element.scrollTop).toBe(before);
+  cleanup();
+  f.onScroll.mockClear();
+  f.navigation()?.requestLayoutUpdate();
+  await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
+  expect(f.onScroll).not.toHaveBeenCalled();
 });

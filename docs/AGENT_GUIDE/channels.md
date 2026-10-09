@@ -43,17 +43,21 @@ See the [rollout/recovery gates](../SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
 
 ## Collapsed reply chains
 
-Collapsed threads show the first three complete message groups. Consecutive
-replies from the same sender within the five-minute avatar-grouping window count
-as one group, so a run of short messages stays together. A different sender or a
-longer gap starts another group; returning to an earlier sender also starts a new
-group. Deleted replies and agent replies triggered by different users keep the
-same group boundaries as their avatar display.
+Collapsed channel threads show up to the first three replies from the timeline
+preview. New replies arriving while the channel is open must not enlarge that
+collapsed preview, even when they share a sender with earlier replies. Expanding
+shows the full thread; collapsing returns to the three-reply preview. The
+`N more replies` control counts individual hidden replies.
 
-The `N more replies` control counts individual hidden replies and expands the
-whole thread. Check a thread with more than three consecutive replies from one
-sender (all remain visible), then one with four groups (the first three groups
-remain visible in full). Standalone thread previews follow the same rule.
+Check a long thread that receives replies while expanded, then collapse it:
+new replies must be hidden and included in the hidden count. Repeat while it is
+already collapsed, while its full replies are loading, and after scrolling the
+row out of view and back. Expanding again must retain every incoming reply.
+
+Standalone thread previews show the first three complete message groups instead.
+Consecutive replies from the same sender within the five-minute avatar-grouping
+window count as one group. Different senders, longer gaps, deleted replies, and
+agent replies triggered by different users preserve their avatar group boundaries.
 
 ## Agent session entities
 
@@ -382,20 +386,28 @@ A newer message navigation cancels a pending jump to latest. Scrolling manually
 or choosing another destination also cancels the initial target's delayed fallback.
 A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 
-The **Unread notification** chip points to the most recent unread notification.
-There is only one chip: above the list for a target above the viewport, or below
-for a target below it. The number counts distinct parent-message threads across
-the channel, not individual notifications. Three replies and a mention in the
-same thread count as one; reactions do not count. Clicking jumps to the target
-and expands its thread. A collapsed unread reply in a visible thread is reachable
-with the bottom chip. A visible target has no chip. Notifications are marked seen
-when their message mounts, including virtualized overscan. Collapsed replies that
-are not rendered remain unread.
-The count and target update as notifications arrive or become seen. Check an old
-thread receiving a new reply while a newer thread is also unread: the chip must
-point upward to the old thread, still show two stacks, and preserve the scroll
-position until clicked. Check a target below the viewport, loading an unloaded
-parent, and switching channels while notifications are loading. Loading this
+The **Unread notification** chip navigates unread threads whose destinations are
+outside the viewport. A collapsed thread with hidden unread replies shows a
+dot and accent border on its show-replies control. While that control is visible,
+those hidden replies do not contribute to the floating chip; scrolling it out of
+view restores the chip, pointing toward the control. Expanded threads use actual
+unread message positions. A visible unread reply does not hide other offscreen
+unread replies in the same thread.
+There is one chip, targeting the most recently active eligible unread thread.
+Its count includes only distinct offscreen unread threads, not notifications.
+Three replies and a mention in one thread count as one; reactions do not count.
+Clicking the chip expands the target thread and reveals an unread message.
+Scrolling an inline indicator into view does not expand the thread or mark its
+hidden replies seen. Notifications are still marked seen when their message mounts,
+including virtualized overscan. Collapsed replies that are not rendered remain
+unread.
+Check the last channel message with a long collapsed unread thread: at the bottom,
+the inline dot and accent border should be visible without a downward chip. With
+another unread thread above, an upward chip should remain and count only that offscreen thread.
+Scroll the disclosure out of view and back, expand and manually collapse the
+thread, and check composer/mobile insets. The indicator must appear even before
+full reply data loads. Check a target below the viewport, an unloaded parent, live
+notifications, and switching channels while notifications load. Loading this
 channel's notification edge must not delay its messages or activate the global
 GraphQL notification feed.
 

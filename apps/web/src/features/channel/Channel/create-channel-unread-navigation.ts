@@ -2,41 +2,41 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { isTransientRequestError } from '@core/util/request-error';
-import { MessageNotificationIndexContext } from '@notifications/components/MarkMessageNotifications';
 import { compositeEntity } from '@notifications/types';
 import { indexUnreadMessageNotifications } from '@notifications/unread-message-notifications';
 import { createChannelNotificationsQuery } from '@queries/channel/notifications';
 import { queryReadyGate } from '@queries/gate';
 import { useMessageTimelineByIdsQuery } from '@queries/messages/timeline';
 import type { MessageListItem } from '@service-storage/messages';
-import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
+import { createUnreadDestinationRegistry } from './create-unread-destination-registry';
 import type { ThreadListScrollState } from './ThreadList';
 import {
-  type UnreadNotificationChip,
+  unreadDestinationPositions,
   unreadNotificationChip,
   unreadThreads,
 } from './unread-thread-navigation';
 
 /** Data and viewport wiring for the channel's unread navigation affordance. */
-export function ChannelUnreadNotifications(props: {
+export function createChannelUnreadNavigation(options: {
   channelId: string;
   messages: Accessor<MessageListItem[]>;
   scrollState: Accessor<ThreadListScrollState | undefined>;
   container: Accessor<HTMLElement | undefined>;
   insets: Accessor<{ start: number; end: number }>;
-  children: (chip: Accessor<UnreadNotificationChip | undefined>) => JSX.Element;
+  onDestinationsChanged: () => void;
 }) {
   const notificationSource = useGlobalNotificationSource();
   const graphqlNotifications = useFeatureFlag(enableGraphqlSoup);
   const channelNotifications = createChannelNotificationsQuery(
-    props.channelId,
+    options.channelId,
     () => graphqlNotifications().enabled
   );
   const notifications = createMemo(() => {
     if (!graphqlNotifications().enabled) {
       return (
         notificationSource.notificationsByEntity()[
-          compositeEntity({ type: 'channel', id: props.channelId })
+          compositeEntity({ type: 'channel', id: options.channelId })
         ] ?? []
       );
     }
@@ -56,15 +56,22 @@ export function ChannelUnreadNotifications(props: {
     indexUnreadMessageNotifications(notifications())
   );
   const unread = createMemo(() => unreadThreads(notifications()));
+  const unreadByThread = createMemo(
+    () =>
+      new Map(unread().map((thread) => [thread.threadId, thread.messageIds]))
+  );
+  const destinationRegistry = createUnreadDestinationRegistry(() =>
+    options.onDestinationsChanged()
+  );
   // A reply's timestamp says nothing about where its parent sits in history.
-  // Resolve only the target parent without loading the timeline around it.
+  // Only the first unloaded unread parent can become the next target.
+  // Resolve it without loading entire timelines or every offscreen thread.
   const unreadRoots = useMessageTimelineByIdsQuery(
-    () => ({ type: 'channel', id: props.channelId }),
+    () => ({ type: 'channel', id: options.channelId }),
     () => {
-      const id = unread()[0]?.threadId;
-      return id && !props.messages().some((message) => message.id === id)
-        ? [id]
-        : [];
+      const loaded = new Set(options.messages().map((message) => message.id));
+      const target = unread().find((thread) => !loaded.has(thread.threadId));
+      return target ? [target.threadId] : [];
     }
   );
   const unreadChip = createMemo(() => {
@@ -74,39 +81,33 @@ export function ChannelUnreadNotifications(props: {
         message,
       ])
     );
-    for (const message of props.messages()) positions.set(message.id, message);
-    const scroll = props.scrollState();
-    const target = unread()[0];
-    const container = props.container();
+    for (const message of options.messages())
+      positions.set(message.id, message);
+    const scroll = options.scrollState();
+    const container = options.container();
     const viewport = container?.querySelector('[data-channel-scroll]');
-    const element =
-      target &&
-      container?.querySelector(
-        `[data-message-id="${CSS.escape(target.messageId)}"]`
-      );
-    let targetPosition: 'above' | 'below' | 'visible' | undefined;
-    if (viewport && element) {
-      const bounds = viewport.getBoundingClientRect();
-      const message = element.getBoundingClientRect();
-      const insets = props.insets();
-      targetPosition =
-        message.bottom <= bounds.top + insets.start
-          ? 'above'
-          : message.top >= bounds.bottom - insets.end
-            ? 'below'
-            : 'visible';
-    }
+    const destinations =
+      container && viewport
+        ? unreadDestinationPositions(
+            unread(),
+            destinationRegistry.elements,
+            viewport,
+            options.insets()
+          )
+        : undefined;
     return unreadNotificationChip(
       unread(),
       positions,
       scroll?.didInitialScroll ? scroll.visibleRange : undefined,
-      targetPosition
+      destinations
     );
   });
 
-  return (
-    <MessageNotificationIndexContext.Provider value={unreadByMessage}>
-      {props.children(unreadChip)}
-    </MessageNotificationIndexContext.Provider>
-  );
+  return {
+    chip: unreadChip,
+    unreadByThread,
+    unreadByMessage,
+    onMessageMount: destinationRegistry.registerMessage,
+    onDisclosureMount: destinationRegistry.registerDisclosure,
+  };
 }

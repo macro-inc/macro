@@ -41,6 +41,8 @@ export type ThreadListInitialPosition =
   | { type: 'restore'; snapshot: ThreadListScrollSnapshot };
 
 export type ThreadListNavigation = {
+  /** Publish geometry after registered destinations finish mounting/unmounting. */
+  requestLayoutUpdate: () => void;
   scrollToLatest: () => boolean;
   scrollToMessage: (
     id: string,
@@ -397,6 +399,7 @@ export function ThreadList(props: ThreadListProps) {
     (scrollEl()?.clientHeight ?? 0) > 0;
 
   const navigation: ThreadListNavigation = {
+    requestLayoutUpdate: scheduleScrollState,
     scrollToLatest: () => {
       if (!canNavigate() || !props.keys().length) return false;
       lifecycle.send('navigate');
