@@ -186,6 +186,14 @@ impl Storage for OwnerOnlyStorage {
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.0.clear().await
     }
+
+    async fn reset_with_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.0.reset_with_records(entries, projections).await
+    }
 }
 
 #[test]
@@ -499,6 +507,7 @@ mutation SetEntityProperty($input: SetEntityPropertyInput!) {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000002",
                     query: mutation,
                     operation_name: Some("SetEntityProperty"),

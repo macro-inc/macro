@@ -538,7 +538,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
 
 /**
  * Error response body.
@@ -675,6 +675,10 @@ export type HttpSendChatMessageRequest = {
      * The model to respond with (`provider/model` id)
      */
     model: string;
+    /**
+     * Inference speed, validated against the selected model. Defaults to standard.
+     */
+    speed?: ModelSpeed;
     /**
      * Which toolset to use. Defaults to `all`
      */
@@ -876,6 +880,11 @@ export type MessageWithAttachments = {
     content: string;
     date: string;
 };
+
+/**
+ * The requested inference speed. Standard is backward compatible with old clients.
+ */
+export type ModelSpeed = 'standard' | 'fast' | 'ultrafast';
 
 export type NewAttachment = {
     attachment_id: string;

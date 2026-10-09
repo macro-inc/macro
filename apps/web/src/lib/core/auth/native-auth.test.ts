@@ -9,7 +9,11 @@ vi.mock('@core/util/platform', () => ({
 }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke }));
 
-import { createNativeAuthSession } from './native-auth';
+import {
+  createNativeAuthSession,
+  DESKTOP_AUTH_CALLBACK_URL,
+  openDesktopAuthSession,
+} from './native-auth';
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -69,6 +73,35 @@ describe('native browser authentication', () => {
       success: false,
       error: 'User canceled login',
     });
+  });
+
+  it('hands the desktop flow to the system browser', async () => {
+    mocks.invoke.mockResolvedValue(undefined);
+    await expect(
+      openDesktopAuthSession('https://gateway.macro.com/auth/login/sso')
+    ).resolves.toEqual({ success: true });
+    expect(mocks.invoke).toHaveBeenCalledWith('plugin:opener|open_url', {
+      url: 'https://gateway.macro.com/auth/login/sso',
+    });
+  });
+
+  it('settles a desktop browser that will not open', async () => {
+    mocks.invoke.mockRejectedValueOnce(new Error('no opener'));
+    await expect(
+      openDesktopAuthSession('https://gateway.macro.com/auth/login/sso')
+    ).resolves.toEqual({
+      success: false,
+      error: 'Unable to start authentication',
+    });
+  });
+
+  // The deep-link bridge maps this to a `/login` router navigation, and only
+  // an empty host parses that way — `macro://login` would arrive as a host.
+  it('points the desktop callback at a route that redeems a session code', () => {
+    const callback = new URL(DESKTOP_AUTH_CALLBACK_URL);
+    expect(callback.protocol).toBe('macro:');
+    expect(callback.host).toBe('');
+    expect(callback.pathname).toBe('/login');
   });
 
   it('accepts account-link callbacks without a login session token', async () => {

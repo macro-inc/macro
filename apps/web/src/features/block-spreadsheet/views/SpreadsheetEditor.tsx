@@ -1,5 +1,12 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import {
+  type DropdownOptions,
+  dropdownRule,
+  overlappingValidations,
+  replaceValidations,
+  validationReference,
+} from '@macro-inc/spreadsheet/data-validation';
 import { parseChartReference } from '@macro-inc/spreadsheet/sheet-drawings';
 import { Button } from '@ui/components/Button';
 import {
@@ -13,9 +20,14 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ChartDialog } from '../components/ChartDialog';
+import {
+  DropdownDialog,
+  type DropdownDialogState,
+} from '../components/DropdownDialog';
 import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import { SpreadsheetFindDialog } from '../components/SpreadsheetDialogs';
+import { SpreadsheetGoalSeekDialog } from '../components/SpreadsheetGoalSeekDialog';
 import {
   renderedSelectionCell,
   SpreadsheetGrid,
@@ -44,6 +56,7 @@ import {
 } from '../core/grid-selection';
 import { selectionToggleStyles } from '../core/selection-formatting';
 import {
+  dropdownOptions,
   listItems,
   type RangeValues,
   rangeAddresses,
@@ -62,6 +75,7 @@ import { CSV_MAX_BYTES } from '../core/workbook-file-types';
 import { createCalculation } from '../primitives/create-calculation';
 import { createCalculationStatus } from '../primitives/create-calculation-status';
 import { createDrawingActions } from '../primitives/create-drawing-actions';
+import { createGoalSeek } from '../primitives/create-goal-seek';
 import { createGridController } from '../primitives/create-grid-controller';
 import { createSheetActions } from '../primitives/create-sheet-actions';
 import type { SpreadsheetStore } from '../primitives/create-spreadsheet-store';
@@ -74,6 +88,8 @@ export function SpreadsheetEditor(props: {
   autoFocus?: boolean;
   commentLocation?: SpreadsheetCommentAnchor;
   comments?: SpreadsheetCommentsCapability;
+  /** Whether a clipboard shortcut fired outside the grid is meant for it. */
+  ownsClipboard?: (event: ClipboardEvent) => boolean;
   onExport: (content: string) => void;
   onExportXlsx: (bytes: Uint8Array) => void;
 }) {
@@ -176,6 +192,72 @@ export function SpreadsheetEditor(props: {
       ? { title: rule.promptTitle, message: rule.prompt ?? '' }
       : undefined;
   };
+  const dropdownRanges = createMemo(() =>
+    (props.store.activeSheet().metadata?.validations ?? [])
+      .filter((rule) => rule.type === 'list' && rule.dropdown !== false)
+      .map((rule) => rule.range)
+  );
+  const [dropdownDialog, setDropdownDialog] = createSignal<
+    DropdownDialogState & { sheetId: string }
+  >();
+  const [dropdownError, setDropdownError] = createSignal<string>();
+  const selectionRange = () => {
+    const bounds = selectionBounds(grid.selection());
+    const first = cellAddress({ row: bounds.top, column: bounds.left });
+    const last = cellAddress({ row: bounds.bottom, column: bounds.right });
+    return first === last ? first : `${first}:${last}`;
+  };
+  function openDropdownDialog() {
+    if (!editable()) return;
+    const range = selectionRange();
+    const validations = props.store.activeSheet().metadata?.validations;
+    setDropdownError(undefined);
+    setDropdownDialog({
+      sheetId: props.store.activeSheetId(),
+      range,
+      current: dropdownOptions(activeValidation()),
+      removable: overlappingValidations(validations, range).length > 0,
+    });
+  }
+  function changeDropdown(options?: DropdownOptions) {
+    const dialog = dropdownDialog();
+    if (
+      !dialog ||
+      !editable() ||
+      dialog.sheetId !== props.store.activeSheetId()
+    ) {
+      setDropdownDialog(undefined);
+      return;
+    }
+    try {
+      const sheet =
+        options && 'range' in options
+          ? validationReference(options.range)?.sheet
+          : undefined;
+      if (
+        sheet !== undefined &&
+        !props.store
+          .workbook()
+          .some((entry) => entry.name.toLowerCase() === sheet.toLowerCase())
+      )
+        throw new Error(`There is no sheet named “${sheet}”.`);
+      const metadata = props.store.activeSheet().metadata;
+      const validations = replaceValidations(
+        metadata?.validations,
+        dialog.range,
+        options && dropdownRule(options)
+      );
+      props.store.setMetadata({
+        ...metadata,
+        validations: validations.length ? validations : undefined,
+      });
+      setDropdownDialog(undefined);
+    } catch (error) {
+      setDropdownError(
+        error instanceof Error ? error.message : 'Unable to save the dropdown.'
+      );
+    }
+  }
   const workbookActions = createWorkbookActions({
     store: props.store,
     values: calculation.workbookValues,
@@ -235,6 +317,45 @@ export function SpreadsheetEditor(props: {
     gridElement
       ?.querySelector(`[data-address="${cellAddress(grid.selection().focus)}"]`)
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const goalSeek = createGoalSeek({
+    sheets: () =>
+      props.store.workbook().map((sheet) => ({
+        id: sheet.id,
+        name: sheet.name,
+      })),
+    activeSheetId: props.store.activeSheetId,
+    activeAddress: grid.activeAddress,
+    cell: (sheetId, address) =>
+      props.store.workbook().find((sheet) => sheet.id === sheetId)?.cells[
+        address
+      ],
+    canEdit: editable,
+    revision: props.store.revision,
+    seek: (request) => calculation.goalSeek(request),
+    apply: (sheetId, address, value) => {
+      const sheet = props.store
+        .workbook()
+        .find((entry) => entry.id === sheetId);
+      if (!sheet) return 'That sheet is no longer in the workbook.';
+      const outcome = validateInput(
+        validationAt(sheet.metadata?.validations, address),
+        value,
+        rangeValues(sheetId),
+        definedNames(sheetId)
+      );
+      if (!outcome.valid && outcome.style === 'stop') return outcome.message;
+      props.store.setSheetCells(sheetId, { [address]: { value } });
+    },
+    select: (sheetId, address) => {
+      const position = positionFromAddress(address);
+      if (!position) return;
+      props.store.setActiveSheet(sheetId);
+      queueMicrotask(() => {
+        grid.select(position);
+        revealSelection();
+      });
+    },
+  });
   // Comment links drive the imperative grid selection and scroll without moving
   // keyboard focus out of the comment composer.
   createEffect(
@@ -272,8 +393,10 @@ export function SpreadsheetEditor(props: {
     }
     if (
       actions.findOpen() ||
+      goalSeek.open() ||
       workbookActions.preview() ||
-      workbookActions.sheetDialog()
+      workbookActions.sheetDialog() ||
+      dropdownDialog()
     )
       return;
     if (grid.editing() === 'cell') {
@@ -292,7 +415,8 @@ export function SpreadsheetEditor(props: {
   };
   const menuCommand = (action: SpreadsheetCommand) => {
     // Create a new focus owner only after the menu's focus trap has closed.
-    if (action.startsWith('insert-')) pendingMenuAction = action;
+    if (action.startsWith('insert-') || action === 'dropdown')
+      pendingMenuAction = action;
     else command(action);
   };
   const statisticsSelection = createDeferred(grid.selection, {
@@ -383,6 +507,17 @@ export function SpreadsheetEditor(props: {
       .with('fill-right', () => grid.fillDirection('right'))
       .with('select-all', actions.selectAll)
       .with('find', () => actions.setFindOpen(true))
+      .with('goal-seek', () => {
+        if (calculation.busy() || calculation.error()) {
+          actions.setNotice(
+            calculation.error()
+              ? 'Fix the calculation error before using Goal Seek.'
+              : 'Wait for the sheet to finish calculating, then try Goal Seek again.'
+          );
+          return;
+        }
+        goalSeek.show();
+      })
       .with('export-csv', exportCsv)
       .with('import', () => importInput.click())
       .with('export-xlsx', () => {
@@ -399,6 +534,7 @@ export function SpreadsheetEditor(props: {
         void actions.sort(true);
       })
       .with('trim-whitespace', actions.trimWhitespace)
+      .with('dropdown', openDropdownDialog)
       .with('border-all', () => actions.borders('all'))
       .with('border-outer', () => actions.borders('outer'))
       .with('border-none', () => actions.borders('none'))
@@ -746,6 +882,7 @@ export function SpreadsheetEditor(props: {
           editing={!!grid.editing()}
           complete={calculation.complete}
           selectionRequest={grid.editorSelection()}
+          references={grid.draftReferences()}
           pickingReference={
             grid.pickingReference() ||
             (isTouchDevice() && !!grid.referenceSelection())
@@ -843,6 +980,7 @@ export function SpreadsheetEditor(props: {
           revealDrawing={revealDrawing()}
           inputMessage={inputMessage()}
           listItems={activeList()}
+          dropdownRanges={dropdownRanges()}
           onPickListItem={(item) => {
             if (!editable()) return;
             grid.commit();
@@ -867,6 +1005,8 @@ export function SpreadsheetEditor(props: {
           }
           editorSelection={grid.editorSelection()}
           referenceSelection={grid.referenceSelection()}
+          referenceHighlights={grid.referenceHighlights()}
+          draftReferences={grid.draftReferences()}
           pickingReference={grid.pickingReference()}
           onTextSelection={grid.setTextSelection}
           onReferenceStart={grid.beginReference}
@@ -916,10 +1056,18 @@ export function SpreadsheetEditor(props: {
           onPaste={(text, metadata) => {
             actions.pasteText(text, metadata);
           }}
+          ownsClipboard={props.ownsClipboard}
           onClear={grid.clear}
           onGridReady={(element) => {
             gridElement = element;
-            if (props.autoFocus) focusGrid();
+            // The sheet loads asynchronously; never take focus from a dialog
+            // or control the user reached in the meantime.
+            const active = document.activeElement;
+            if (
+              props.autoFocus &&
+              (!active || active === document.body || active.contains(element))
+            )
+              focusGrid();
           }}
         />
       </Show>
@@ -956,6 +1104,7 @@ export function SpreadsheetEditor(props: {
             });
           }}
           onDelete={(id) => workbookActions.openSheetDialog('delete', id)}
+          onMove={workbookActions.moveSheet}
           onAddRows={
             editable() && props.store.rowCount() < SPREADSHEET_MAX_ROWS
               ? () => {
@@ -1119,6 +1268,14 @@ export function SpreadsheetEditor(props: {
           else focusGrid();
         }}
       />
+      <DropdownDialog
+        dialog={dropdownDialog()}
+        error={dropdownError()}
+        onSave={changeDropdown}
+        onRemove={() => changeDropdown()}
+        onClose={() => setDropdownDialog(undefined)}
+        onRestoreFocus={focusGrid}
+      />
       <SpreadsheetSheetDialog
         onRestoreFocus={() => {
           focusGrid();
@@ -1146,6 +1303,28 @@ export function SpreadsheetEditor(props: {
         progress={workbookActions.importProgress()}
         onConfirm={workbookActions.confirmImport}
         onClose={workbookActions.closePreview}
+      />
+      <SpreadsheetGoalSeekDialog
+        onRestoreFocus={() => {
+          focusGrid();
+          revealSelection();
+        }}
+        open={goalSeek.open()}
+        onClose={goalSeek.close}
+        setCell={goalSeek.setCell()}
+        onSetCell={goalSeek.setSetCell}
+        goal={goalSeek.goal()}
+        onGoal={goalSeek.setGoal}
+        changingCell={goalSeek.changingCell()}
+        onChangingCell={goalSeek.setChangingCell}
+        seeking={goalSeek.seeking()}
+        solution={goalSeek.solution()}
+        message={goalSeek.message()}
+        onSeek={() => {
+          void goalSeek.seek();
+        }}
+        onApply={goalSeek.apply}
+        onEdit={goalSeek.clearSolution}
       />
       <SpreadsheetFindDialog
         onRestoreFocus={() => {

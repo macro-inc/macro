@@ -131,19 +131,26 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 /// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
 ///
 /// `enforcement` is validated by the host at startup and shared with all other
-/// AI entry points. It configures both quota admission and prospective counting.
-/// `pricing` is the host's mandatory AI pricing configuration, shared with every
-/// other billing component it composes.
+/// AI entry points. It configures quota admission here and must be the policy
+/// `recorder` was composed with. `pricing` is the host's mandatory AI pricing
+/// configuration, shared with every other billing component it composes.
+///
+/// `recorder` is the host's configured usage recorder, shared by every tool in
+/// the context that calls a model. The host composes it so that one process
+/// records, counts, and requests settlement for usage one way: through
+/// [`ai_billing::composition::pg_settling_recorder`] where its usage is
+/// chargeable, or [`ai_usage::pg_recorder_with_enforcement`] where it is not.
 ///
 /// `event_task_tracker` tracks event publishes started by the context. Callers
 /// must retain the original tracker, pass a clone here, and close and drain the
 /// original after the host stops broker-backed work.
-#[tracing::instrument(skip(pool, event_task_tracker), err)]
+#[tracing::instrument(skip(pool, event_task_tracker, recorder), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
     event_task_tracker: TaskTracker,
     enforcement: ai_usage::AiUsageEnforcement,
     pricing: ai_billing::AiPricing,
+    recorder: Arc<dyn ai_usage::UsageRecorder>,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -351,7 +358,10 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
         lexical_client.clone(),
         sync_client.as_ref().clone(),
-        ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
+        ReqwestEditingWorkerClient::new(
+            ai_editing_worker_url.clone(),
+            Arc::new(reqwest::Client::new()),
+        ),
         env.document_permission_jwt.to_string(),
         crate::tool_context::build_message_service_with_side_effects(
             pool.clone(),
@@ -480,9 +490,24 @@ pub async fn build_tool_service_context_from_env(
         pool.clone(),
     );
 
-    let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
+    let forms_tool_context = crate::tool_context::build_forms_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        &databases_tool_context,
+        &calendar_tool_context,
+        Some(side_effect_clients.connection_gateway.as_ref().clone()),
+        crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        crate::tool_context::FormsToolConfig {
+            app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
+            editing_worker_url: ai_editing_worker_url,
+        },
+    );
 
     Ok(ToolServiceContext {
+        connector_tool_context: crate::tool_context::build_connector_tool_context(
+            pool.clone(),
+            crate::mcp_app_catalog::pipedream_client_from_env()?,
+        ),
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
         soup_service,
@@ -502,12 +527,19 @@ pub async fn build_tool_service_context_from_env(
         email_tool_context,
         call_tool_context,
         calendar_tool_context,
+        team_calendar_tool_context: crate::tool_context::build_team_calendar_tool_context(
+            pool.clone(),
+            macro_env_var::maybe_read_env("CALENDAR_TEAM_SHARING_ENABLED")
+                .and_then(|value| value.parse::<bool>().ok())
+                .unwrap_or(false),
+        ),
         booking_link_tool_context: crate::tool_context::build_booking_link_tool_context(
             pool.clone(),
             environment,
         ),
         notification_tool_context,
         databases_tool_context,
+        forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,

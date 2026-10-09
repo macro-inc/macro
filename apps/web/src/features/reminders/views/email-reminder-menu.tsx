@@ -12,16 +12,14 @@ type Props = Omit<
 
 export function EmailReminderMenu(props: Props) {
   const [query, setQuery] = createSignal('');
-  const [condition, setCondition] = createSignal(
-    props.initialCondition ?? 'if_no_reply'
-  );
+  const [condition, setCondition] = createSignal<EmailReminderCondition>();
   const times = createReminderTimeOptions(query);
   return (
     <EmailReminderForm
       {...props}
       query={query()}
       onQueryChange={setQuery}
-      condition={condition()}
+      condition={condition() ?? props.initialCondition ?? 'if_no_reply'}
       onConditionChange={setCondition}
       times={times()}
     />

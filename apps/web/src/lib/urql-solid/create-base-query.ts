@@ -6,9 +6,13 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
+import { createStore, produce, reconcile } from 'solid-js/store';
 import { useOptionalUrqlClient } from './context';
 import type { ObserverClientOptions, UrqlObserverFactory } from './observer';
+import {
+  containsReactiveStore,
+  supportsStoreReconciliation,
+} from './reactive-selection';
 
 /** Bridges a framework-neutral urql observer into one reactive Solid store. */
 export function createBaseQuery<
@@ -61,6 +65,20 @@ export function createBaseQuery<
         if (Object.is(previous[key], next[key])) {
           // reconcile unwraps its entire input before comparing it. Existing
           // store proxies let unwrap skip unchanged branches in constant time.
+          reconciled[key] = state[key];
+        } else if (
+          key === 'data' &&
+          (containsReactiveStore(next[key]) ||
+            containsReactiveStore(previous[key]) ||
+            !supportsStoreReconciliation(next[key]) ||
+            !supportsStoreReconciliation(previous[key]))
+        ) {
+          // Preserve store ownership and fields that Solid reconcile skips.
+          setState(
+            produce((draft) => {
+              draft[key] = next[key];
+            })
+          );
           reconciled[key] = state[key];
         }
       }

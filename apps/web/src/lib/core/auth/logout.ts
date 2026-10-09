@@ -5,11 +5,15 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
 import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
+import { rotateCacheScope } from '@graphql-cache/scope';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
-import { queryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
-import { notificationKeys } from '@queries/notification/keys';
-import { propertiesKeys } from '@queries/properties/keys';
+import { clearTeamCalendarQueries } from '@queries/calendar/team-cache';
+import { queryClient, queryPersistence } from '@queries/client';
+import {
+  clearLocalDrafts,
+  flushLocalDrafts,
+  listLocalDrafts,
+} from '@queries/email/local-drafts';
 import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
@@ -17,6 +21,9 @@ import { authServiceClient } from '@service-auth/client';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
+import { confirmDialog } from '@ui';
+import { getOwner } from 'solid-js';
+import { clearComposerStorage } from './clear-composer-storage';
 import { unregisterPushRegistrationsForLogout } from './push-registration-lifecycle';
 
 const unauthenticatedUserInfo: UserInfoData = {
@@ -42,26 +49,66 @@ export async function clearLocalAuthSession() {
   syncLoginStorage(false);
   const documentContextsCleared = clearOfflineDocumentContexts();
   clearDocumentQueryCache(queryClient);
-  queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
-  queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
-  queryClient.removeQueries({ queryKey: notificationKeys._def });
+  clearTeamCalendarQueries();
+  // Start every wipe before waiting, including stores not hydrated this session.
+  const results = await Promise.allSettled([
+    Promise.resolve().then(clearComposerStorage),
+    documentContextsCleared,
+    clearRegisteredCaches(),
+    queryPersistence.clear(),
+    clearLocalDrafts(),
+  ]);
+  if (results.some((result) => result.status === 'rejected')) {
+    await rotateCacheScope();
+  }
   resetGraphqlSoupDoneSession();
-  queryClient.removeQueries({ queryKey: propertiesKeys._def });
-  // The billing position (usage, credits, overage settings) belongs to the
-  // account that fetched it; never let it render for the next sign-in.
-  queryClient.removeQueries({ queryKey: authKeys.aiBillingSummary.queryKey });
-
-  // Queued mutations are user intent; never allow them to replay under a
-  // subsequent account sharing this anonymous device cache scope.
-  await Promise.all([documentContextsCleared, clearRegisteredCaches()]);
+  queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   clearMcpAuthAttempts();
 }
 
 export function useLogout() {
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const owner = getOwner();
 
   return createCallback(async () => {
+    let warning: string | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const inspectDrafts = async () => {
+        await flushLocalDrafts();
+        return await listLocalDrafts();
+      };
+      const drafts = await Promise.race([
+        inspectDrafts(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Draft storage timed out')),
+            3000
+          );
+        }),
+      ]);
+      const unsynced = drafts.filter((draft) => draft.status !== 'synced');
+      if (unsynced.length)
+        warning = `${unsynced.length} draft(s) have changes saved only on this device. Signing out removes those changes and their pending attachments.`;
+    } catch {
+      warning =
+        'Draft storage could not be checked. Signing out removes drafts and attachments saved only on this device, including any changes that have not synced.';
+    } finally {
+      clearTimeout(timer);
+    }
+    if (
+      warning &&
+      !(await confirmDialog(
+        {
+          title: 'Sign out and remove local drafts?',
+          body: warning,
+          confirmLabel: 'Sign out',
+        },
+        { owner }
+      ))
+    )
+      return;
     clearPostLoginRedirect();
     // Must run before the session is torn down — the unregister call is
     // authenticated. Time-boxed so a hung request can't block logout.
@@ -78,6 +125,9 @@ export function useLogout() {
         redirect: 'manual',
       }).catch(() => {});
       navigate('/login');
+      // Native login reuses this WebView. End the document lifetime so queued
+      // editor callbacks can never adopt the next account's draft session.
+      window.location.reload();
     } else {
       window.location.href = SERVER_HOSTS['auth-logout'];
     }

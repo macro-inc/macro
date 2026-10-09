@@ -7,11 +7,15 @@ import { indexUnreadMessageNotifications } from '@notifications/unread-message-n
 import { createChannelNotificationsQuery } from '@queries/channel/notifications';
 import { queryReadyGate } from '@queries/gate';
 import { useMessageTimelineByIdsQuery } from '@queries/messages/timeline';
-import type { MessageListItem } from '@service-storage/messages';
+import type {
+  MessageListItem,
+  TimelineActivity,
+} from '@service-storage/messages';
 import { type Accessor, createMemo } from 'solid-js';
 import { createUnreadDestinationRegistry } from './create-unread-destination-registry';
 import type { ThreadListScrollState } from './ThreadList';
 import {
+  type ThreadPosition,
   unreadDestinationPositions,
   unreadNotificationChip,
   unreadThreads,
@@ -21,6 +25,8 @@ import {
 export function createChannelUnreadNavigation(options: {
   channelId: string;
   messages: Accessor<MessageListItem[]>;
+  /** Activity rows can be the first visible row, so they need positions too. */
+  activities?: Accessor<ReadonlyMap<string, TimelineActivity>>;
   scrollState: Accessor<ThreadListScrollState | undefined>;
   container: Accessor<HTMLElement | undefined>;
   insets: Accessor<{ start: number; end: number }>;
@@ -75,7 +81,7 @@ export function createChannelUnreadNavigation(options: {
     }
   );
   const unreadChip = createMemo(() => {
-    const positions = new Map(
+    const positions = new Map<string, ThreadPosition>(
       (queryReadyGate(unreadRoots) ? unreadRoots.data : []).map((message) => [
         message.id,
         message,
@@ -83,6 +89,8 @@ export function createChannelUnreadNavigation(options: {
     );
     for (const message of options.messages())
       positions.set(message.id, message);
+    for (const [key, activity] of options.activities?.() ?? [])
+      positions.set(key, { id: activity.id, created_at: activity.occurred_at });
     const scroll = options.scrollState();
     const container = options.container();
     const viewport = container?.querySelector('[data-channel-scroll]');

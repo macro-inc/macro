@@ -10,6 +10,7 @@ use super::models::{
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::Report;
 use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
 
@@ -392,6 +393,19 @@ pub trait McpAppCatalog: Send + Sync + 'static {
     /// `true` when `slug` is a connectable Pipedream app.
     fn is_connectable_app(&self, slug: &str)
     -> impl Future<Output = Result<bool, BotError>> + Send;
+}
+
+/// Every bot a team has owned, for removing the team.
+///
+/// `bots.team_id` is the only link from a team bot to its team, and it
+/// cascades when the team row is deleted, so ask before deleting the team.
+pub trait TeamBotRoster: Send + Sync + 'static {
+    /// The bots of `team_id` in id order, soft-deleted bots included. An
+    /// unknown team has none.
+    fn team_bot_ids(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<BotId>, Report>> + Send;
 }
 
 /// Bot service error.

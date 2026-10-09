@@ -71,6 +71,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
   enableDatabases: {},
+  enableForms: {},
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -174,6 +175,9 @@ vi.mock('@queries/storage/instructions-md', () => ({
 }));
 vi.mock('@queries/storage/databases', () => ({
   useDatabasesQuery: () => ({ data: mocks.databases, isSuccess: true }),
+}));
+vi.mock('@queries/storage/forms', () => ({
+  useFormsQuery: () => ({ data: [], isSuccess: true }),
 }));
 vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,

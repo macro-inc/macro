@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use authentication_service::service::signup_policy::SignupPolicy;
+use crate::service::signup_policy::SignupPolicy;
 use axum::http::StatusCode;
 use macro_user_id::email::Email;
 use model::authentication::webhooks::{

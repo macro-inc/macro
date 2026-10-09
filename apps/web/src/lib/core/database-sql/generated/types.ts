@@ -128,8 +128,13 @@ export type Column = {
   placement: ColumnId;
   /**  The column's display name. */
   name: string;
-  /**  What the column holds. */
+  /**
+   *  What the column holds; for a derived column, what its formula
+   *  yields.
+   */
   kind: ColumnKind;
+  /**  For a derived column, how its cells are computed: it stores none. */
+  formula?: Formula | null;
 };
 
 /**  A change to one column. */
@@ -214,6 +219,15 @@ export type ColumnChange =
       color?: string | null;
     }
   /**
+   *  Give a derived column a new formula. Its cells follow at once: it
+   *  stores none.
+   */
+  | {
+      kind: 'set_formula';
+      /**  The formula, over the table's other columns. */
+      formula: Formula;
+    }
+  /**
    *  Remove one option of a select or tag column, and take it out of every
    *  cell holding it: a single-valued cell is emptied, a multi-valued one
    *  keeps its other options. Like [`ColumnChange::UpdateOption`], an
@@ -283,7 +297,9 @@ export type ColumnResult =
   /**  One of its options was relabelled or recoloured. */
   | { kind: 'option_updated' }
   /**  One of its options was removed. */
-  | { kind: 'option_deleted' };
+  | { kind: 'option_deleted' }
+  /**  Its formula changed. */
+  | { kind: 'formula_set' };
 
 /**  One column placement and the property definition behind it. */
 export type ColumnSchema = {
@@ -297,6 +313,11 @@ export type ColumnSchema = {
   property: PropertyType;
   /**  The definition's options, in any order. */
   options: OptionSchema[];
+  /**
+   *  For a derived column, its formula; its definition says what the
+   *  formula yields.
+   */
+  formula?: Formula | null;
 };
 
 /**  How a group's conditions combine. */
@@ -587,6 +608,69 @@ export type FilterTest =
       entities: string[];
     };
 
+/**  An expression over one row's cells. */
+export type Formula =
+  /**
+   *  The row's cell in another column of the table: a number, date or
+   *  derived column.
+   */
+  | {
+      kind: 'column';
+      /**  The column placement. */
+      column: ColumnId;
+    }
+  /**  A constant. Added to or subtracted from a date, it counts days. */
+  | {
+      kind: 'number';
+      /**  The value; finite. */
+      value: number;
+    }
+  /**  Two expressions combined. */
+  | {
+      kind: 'binary';
+      /**  How. */
+      operator: Operator;
+      /**  The left operand. */
+      left: Formula;
+      /**  The right operand. */
+      right: Formula;
+    }
+  /**  An expression's negation. */
+  | {
+      kind: 'negate';
+      /**  The expression negated; a number. */
+      operand: Formula;
+    };
+
+/**  What a formula typed into a derived column's editor reads as. */
+export type FormulaReading =
+  /**  It parses and its types fit. */
+  | {
+      status: 'valid';
+      /**  The formula, columns by id. */
+      formula: Formula;
+      /**  What its cells hold. */
+      result: FormulaType;
+    }
+  /**  It does not, and why. */
+  | {
+      status: 'invalid';
+      /**  What is wrong, in words for the person typing. */
+      message: string;
+      /**
+       *  The part of the text it is about, in UTF-16 code units as a
+       *  browser counts them, when it is about a part.
+       */
+      span?: Span | null;
+    };
+
+/**  What a formula's cells hold. */
+export type FormulaType =
+  /**  A number. */
+  | 'number'
+  /**  A date-time. */
+  | 'date';
+
 /**  Every GraphQL query a plan can send. */
 export type GqlQuery =
   /**  `Query.soup` scoped to one table, paged to completion. */
@@ -646,7 +730,9 @@ export type Input =
   /**  What a view's read produced. */
   | 'outcome'
   /**  The stored positions of a board's cards. */
-  | 'positions';
+  | 'positions'
+  /**  A derived column's formula, or the table or column it is for. */
+  | 'formula';
 
 /**  The values a joined relation is matched on. */
 export type KeyHint = {
@@ -702,6 +788,20 @@ export type NewColumn =
        *  text column.
        */
       inferType?: boolean;
+    }
+  /**
+   *  A derived column: its cells are what `formula` computes from the
+   *  row's other cells, and nothing writes them.
+   */
+  | {
+      source: 'derived';
+      /**  The column's name, unique within the table ignoring case. */
+      name: string;
+      /**
+       *  How its cells are computed: arithmetic over the table's number,
+       *  date and other derived columns.
+       */
+      formula: Formula;
     }
   /**
    *  An existing property, a person's, a team's or a system one, bound
@@ -929,7 +1029,20 @@ export type OpResultKind =
   /**  [`ViewResult::CardMoved`] of an [`OpResult::View`]. */
   | 'cardMoved'
   /**  [`OpResult::ReorderTables`]. */
-  | 'tablesReordered';
+  | 'tablesReordered'
+  /**  [`ColumnResult::FormulaSet`] of an [`OpResult::Column`]. */
+  | 'formulaSet';
+
+/**  An arithmetic operator. */
+export type Operator =
+  /**  `+`: numbers, or days onto a date. */
+  | 'add'
+  /**  `-`: numbers, days off a date, or the days between two dates. */
+  | 'subtract'
+  /**  `*`: numbers. */
+  | 'multiply'
+  /**  `/`: numbers; dividing by zero leaves the cell empty. */
+  | 'divide';
 
 /**  Identifier of an option of a select or tag column. */
 export type OptionId = string;
@@ -1293,6 +1406,15 @@ export type ResolveError =
   /**  A column named twice in an `INSERT` column list or `UPDATE`. */
   | {
       kind: 'duplicateInsertColumn';
+      /**  The column. */
+      column: string;
+    }
+  /**
+   *  An `INSERT` or `UPDATE` writes a derived column, whose cells its
+   *  formula computes.
+   */
+  | {
+      kind: 'derivedColumn';
       /**  The column. */
       column: string;
     }

@@ -215,6 +215,45 @@ fn worker_json_contract_omits_optional_fields_and_round_trips_response() {
 }
 
 #[test]
+fn dropdown_operations_and_read_validations_match_the_worker_contract() {
+    let operation: SpreadsheetOperation = serde_json::from_value(serde_json::json!({
+        "type": "set_dropdown", "sheetId": "sheet1", "range": "B2:B50",
+        "items": ["Open", "Done"], "rejectInvalid": false
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&operation).unwrap(),
+        serde_json::json!({
+            "type": "set_dropdown", "sheetId": "sheet1", "range": "B2:B50",
+            "items": ["Open", "Done"], "rejectInvalid": false
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(SpreadsheetOperation::ClearValidation {
+            sheet_id: "sheet1".into(),
+            range: "B2".into(),
+        })
+        .unwrap(),
+        serde_json::json!({"type": "clear_validation", "sheetId": "sheet1", "range": "B2"})
+    );
+    let parsed: SpreadsheetResponse = serde_json::from_value(serde_json::json!({
+        "action":"read", "revision":"r", "warnings":[], "sheets":[],
+        "ranges":[{"sheetId":"sheet1","sheetName":"Sheet1","range":"B2","truncated":false,"cells":[],
+            "validations":[{"range":"B2:B50","type":"list","items":["Open","Done"],"dropdown":true,"rejectInvalid":true}]}]
+    }))
+    .unwrap();
+    let SpreadsheetResponse::Read { ranges, .. } = parsed else {
+        panic!("expected a read response");
+    };
+    assert_eq!(ranges[0].validations[0].kind, "list");
+    assert_eq!(
+        ranges[0].validations[0].items.as_deref(),
+        Some(&["Open".to_owned(), "Done".to_owned()][..])
+    );
+    assert!(ranges[0].validations[0].reject_invalid);
+}
+
+#[test]
 fn imported_styles_round_trip_through_the_ai_contract() {
     let json = serde_json::json!({
         "numberFormat": "#,##0.00;[Red](#,##0.00)",

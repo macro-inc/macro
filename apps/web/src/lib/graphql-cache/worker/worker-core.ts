@@ -10,6 +10,8 @@ import type {
   CacheRequest,
   CacheResponse,
   CacheRevisionResult,
+  CalendarCommitCacheResult,
+  CalendarRangeCacheResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheResult,
   HydrationResult,
@@ -110,8 +112,16 @@ function isOrderingBarrier(request: CacheRequest): boolean {
   );
 }
 
-function isQueryDataWrite(request: CacheRequest): boolean {
-  return request.kind === 'write' || request.kind === 'hydrate';
+function isAuthoritativeWrite(request: CacheRequest): boolean {
+  // A calendar commit records coverage for data written just before it, so it
+  // must never overtake that write or hydration.
+  return (
+    request.kind === 'write' ||
+    request.kind === 'hydrate' ||
+    request.kind === 'commit-optimistic-write' ||
+    request.kind === 'delete-records' ||
+    request.kind === 'calendar-commit'
+  );
 }
 
 function revisionAdvancementCategory(
@@ -126,7 +136,12 @@ function revisionAdvancementCategory(
   | 'clear'
   | undefined {
   return match(request.kind)
-    .with('write', 'hydrate', () => 'authoritative-write' as const)
+    .with(
+      'write',
+      'hydrate',
+      'calendar-commit',
+      () => 'authoritative-write' as const
+    )
     .with('enqueue-optimistic-mutation', () => 'optimistic-enqueue' as const)
     .with('commit-optimistic-write', () => 'optimistic-commit' as const)
     .with('rollback-optimistic-write', () => 'optimistic-rollback' as const)
@@ -145,6 +160,7 @@ function requestPriority(request: CacheRequest): number {
   }
   if (
     request.kind === 'write' ||
+    request.kind === 'calendar-commit' ||
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
@@ -166,6 +182,7 @@ function readSignature(request: CacheRequest): string | undefined {
     request.operationName ?? null,
     request.variables ?? null,
     request.entityResolvers ?? null,
+    request.watch ?? null,
   ]);
 }
 
@@ -393,7 +410,7 @@ export class CacheWorkerCore {
 
   /**
    * Runs the highest-priority request before the next lifecycle barrier.
-   * Cache-view writes retain FIFO order with each other; overlapping reads
+   * Authoritative writes retain FIFO order with each other; overlapping reads
    * may observe the newer state, which is linearizable and avoids stale work.
    */
   private drainQueue(): void {
@@ -404,9 +421,9 @@ export class CacheWorkerCore {
     );
     if (segmentEnd === -1) segmentEnd = this.queue.length;
 
-    const firstQueryDataWrite = this.queue
+    const firstAuthoritativeWrite = this.queue
       .slice(0, segmentEnd)
-      .findIndex((queued) => isQueryDataWrite(queued.request));
+      .findIndex((queued) => isAuthoritativeWrite(queued.request));
     let index = 0;
     if (segmentEnd > 0) {
       for (let i = 1; i < segmentEnd; i += 1) {
@@ -414,8 +431,8 @@ export class CacheWorkerCore {
         const selected = this.queue[index];
         const preservesWriteOrder =
           !candidate ||
-          !isQueryDataWrite(candidate.request) ||
-          i === firstQueryDataWrite;
+          !isAuthoritativeWrite(candidate.request) ||
+          i === firstAuthoritativeWrite;
         if (
           candidate &&
           selected &&
@@ -451,6 +468,16 @@ export class CacheWorkerCore {
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
+    if ('variables' in request && request.variables !== undefined) {
+      // Structured clone retains undefined object fields; serde-wasm-bindgen
+      // reads them as null. Match the JSON sent to GraphQL and stored in durable
+      // link recipes, or a query and its optimistic updates address different
+      // cache fields. Explicit nulls (including array slots) remain distinct.
+      request = {
+        ...request,
+        variables: JSON.parse(JSON.stringify(request.variables)),
+      };
+    }
     return await match(request)
       .with({ kind: 'init' }, async (request) => {
         await this.init(request.scope, request.hotCapacity);
@@ -466,6 +493,18 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'read' }, async (request) => {
         const engine = this.requireEngine();
+        if (request.watch) {
+          if (!engine.watchQuery || !request.opId)
+            return { kind: 'unsupported' };
+          return await engine.watchQuery(
+            request.opId,
+            request.query,
+            request.operationName,
+            request.variables,
+            request.entityResolvers,
+            request.watch.since
+          );
+        }
         const result: ReadResult = await engine.readQuery(
           request.opId,
           request.query,
@@ -499,6 +538,26 @@ export class CacheWorkerCore {
         return result.kind === 'unsupported'
           ? result
           : { ...result, revision: parseCacheRevision(result.revision) };
+      })
+      .with({ kind: 'calendar-range' }, async (request) => {
+        const result: CalendarRangeCacheResult =
+          await this.requireEngine().calendarRange(request.request);
+        return result.kind === 'unsupported'
+          ? result
+          : { ...result, revision: parseCacheRevision(result.revision) };
+      })
+      .with({ kind: 'calendar-commit' }, async (request) => {
+        const result = await this.requireEngine().calendarCommit(
+          request.commit
+        );
+        result.revision = parseCacheRevision(result.revision);
+        this.fanOut(result, true);
+        const committed: CalendarCommitCacheResult = {
+          kind: 'committed',
+          revision: result.revision,
+          changed: result.changed,
+        };
+        return committed;
       })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
@@ -566,7 +625,9 @@ export class CacheWorkerCore {
             request.createdAtMs,
             request.owner,
             request.nowMs,
-            request.leaseExpiresAtMs
+            request.leaseExpiresAtMs,
+            request.clientMetadata,
+            request.uncertainCalendarEventKeys
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -595,9 +656,13 @@ export class CacheWorkerCore {
           request.query,
           request.operationName,
           request.path,
-          request.variableFilters ?? []
+          JSON.parse(JSON.stringify(request.variableFilters ?? []))
         );
       })
+      .with(
+        { kind: 'inspect-mutations' },
+        async () => await this.requireEngine().inspectMutations()
+      )
       .with({ kind: 'claim-next-mutation' }, async (request) => {
         const engine = this.requireEngine();
         return await engine.claimNextMutation(
@@ -1056,6 +1121,9 @@ export class CacheWorkerCore {
         kind: 'ops-affected',
         opIds: result.affectedOps,
         keys: result.changed,
+        ...(result.fieldChanges === undefined
+          ? {}
+          : { fieldChanges: result.fieldChanges }),
       });
     }
     if (cacheChanged && result.revisionAdvanced) {

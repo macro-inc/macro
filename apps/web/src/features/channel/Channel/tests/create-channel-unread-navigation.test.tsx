@@ -378,3 +378,67 @@ it('hands off to the inline unread indicator, keeps other offscreen threads reac
   expect(view.queryByText('Unread notification')).toBeNull();
   expect(bulkMarkAsRead).toHaveBeenCalledOnce();
 });
+
+it('places the chip when an activity row is the first visible row', () => {
+  mocks.source.mockReturnValue({
+    notificationsByEntity: vi.fn(),
+    withLocalOverrides: (n: UnifiedNotification) => n,
+  });
+  mocks.query.mockReturnValue({
+    isEnabled: true,
+    isPending: false,
+    data: [notification('root-1', 12)],
+  });
+  const messages = [1, 3].map(
+    (i) =>
+      ({
+        id: `root-${i}`,
+        created_at: `2026-08-0${i}T00:00:00Z`,
+      }) as MessageListItem
+  );
+  const activities = new Map([
+    [
+      'activity:joined',
+      {
+        id: 'joined',
+        actor_id: 'macro|user@example.com',
+        occurred_at: '2026-08-02T00:00:00Z',
+        action: 'participant_added',
+        payload: null,
+      },
+    ],
+  ]);
+  const view = render(() => {
+    const unread = createChannelUnreadNavigation({
+      channelId: 'channel',
+      messages: () => messages,
+      activities: () => activities,
+      scrollState: () => ({
+        didInitialScroll: true,
+        visibleRange: { first: 'activity:joined', last: 'root-3' },
+        isNearBottom: false,
+        isScrollingDown: false,
+        distanceFromBottom: 500,
+        distanceFromTop: 500,
+        viewportSize: 500,
+      }),
+      container: () => undefined,
+      insets: () => ({ start: 0, end: 0 }),
+      onDestinationsChanged: () => {},
+    });
+    return (
+      <Show when={unread.chip()}>
+        {(value) => (
+          <UnreadNotificationsOverlay
+            direction={value().direction}
+            count={value().count}
+            onClick={() => {}}
+          />
+        )}
+      </Show>
+    );
+  });
+  expect(
+    view.getByRole('button', { name: '1 unread notification stack above' })
+  ).toBeTruthy();
+});

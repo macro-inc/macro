@@ -436,6 +436,65 @@
         }
       }
     },
+    "/agent-sessions/by-pull-requests": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "List the sessions associated with each of up to 100 pull requests that the caller can view,\nwith the thread each session was started from.",
+        "operationId": "agent_sessions_for_pull_requests",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PullRequestUrls"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullRequestsSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/preview": {
       "post": {
         "tags": ["agent-sessions"],
@@ -529,6 +588,7 @@
       "get": {
         "tags": ["agent-sessions"],
         "summary": "Get an agent session by id.",
+        "description": "A caller holding no grant is answered 401; an id with no session behind it\nat all is answered 404. They used to be the same answer, which left a\nclient that read a session before its create had landed unable to tell a\nrace it should retry from a refusal it should not.",
         "operationId": "get_agent_session",
         "parameters": [
           {
@@ -554,7 +614,7 @@
             }
           },
           "401": {
-            "description": "",
+            "description": "the session exists but is not this caller's",
             "content": {
               "text/plain": {
                 "schema": {
@@ -565,6 +625,16 @@
           },
           "403": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "no session with this id: not created yet, or deleted since",
             "content": {
               "text/plain": {
                 "schema": {
@@ -3661,6 +3731,55 @@
         "description": "Who associated a pull request with a session.",
         "enum": ["agent", "user"]
       },
+      "PullRequestLinkedSession": {
+        "type": "object",
+        "description": "A session linked to a pull request, as a viewer of that session sees it.",
+        "required": ["sessionId", "source"],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session id."
+          },
+          "source": {
+            "$ref": "#/components/schemas/PullRequestLinkSource",
+            "description": "Who associated the pull request with the session."
+          },
+          "threadParent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageParent",
+                "description": "The channel, task, or CRM record whose thread the session was started from, if any."
+              }
+            ]
+          }
+        }
+      },
+      "PullRequestSessions": {
+        "type": "object",
+        "description": "The sessions linked to one pull request that the caller can view.",
+        "required": ["url", "githubKey", "sessions"],
+        "properties": {
+          "githubKey": {
+            "type": "string",
+            "description": "The pull request's `owner/repo/pull/number` key."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PullRequestLinkedSession"
+            },
+            "description": "Linked sessions the caller can view, oldest link first."
+          },
+          "url": {
+            "type": "string",
+            "description": "The requested pull request URL, canonicalized."
+          }
+        }
+      },
       "PullRequestSessionsResponse": {
         "type": "object",
         "description": "The sessions associated with a pull request.",
@@ -3684,6 +3803,34 @@
           "url": {
             "type": "string",
             "description": "The pull request's GitHub URL, such as `https://github.com/owner/repo/pull/12`."
+          }
+        }
+      },
+      "PullRequestUrls": {
+        "type": "object",
+        "description": "GitHub pull requests, by URL.",
+        "required": ["urls"],
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Pull request GitHub URLs, at most 100."
+          }
+        }
+      },
+      "PullRequestsSessionsResponse": {
+        "type": "object",
+        "description": "The sessions associated with each requested pull request.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PullRequestSessions"
+            },
+            "description": "One entry per requested pull request, in request order."
           }
         }
       },

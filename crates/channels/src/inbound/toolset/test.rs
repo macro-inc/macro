@@ -169,6 +169,14 @@ impl messages::domain::api::MessageReader for RecordingMessages {
     ) -> Result<messages::domain::ports::MessagePage, messages::domain::ports::MessageError> {
         unimplemented!("read path unused by mutation tools")
     }
+    async fn timeline_entries(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: messages::domain::ports::MessageTimelineQuery,
+    ) -> Result<messages::domain::ports::MessageTimelinePage, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by mutation tools")
+    }
     async fn preceding(
         &self,
         _: EntityAccessReceipt<messages::domain::service::MessageView>,

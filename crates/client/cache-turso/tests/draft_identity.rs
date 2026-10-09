@@ -61,6 +61,7 @@ async fn enqueue(
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: UUID,
                 query: if delete { DELETE } else { SAVE },
                 operation_name: Some(if delete {
@@ -79,6 +80,7 @@ async fn enqueue(
                     query: PAGE.into(),
                     operation_name: Some("EmailThreadPage".into()),
                     variables_json: json!({"threadId":"local-thread"}).to_string(),
+                    only_on_link_failure: false,
                 }],
                 identity_bindings: &bindings(delete),
                 created_at_ms: now,
@@ -115,6 +117,7 @@ async fn read(
     id: &str,
 ) -> Vec<cache_core::record_selection::SelectedRecord> {
     let selection = RecordSelection::parse(
+        cache_core::meta::bundled_schema_ref(),
         "fragment Draft on GraphqlSoupEmailMessage { id threadId bodyHtmlSanitized }",
         "Draft",
     )
@@ -128,6 +131,7 @@ async fn read(
 
 async fn preview_visible(engine: &mut Engine<TursoStorage>) -> bool {
     let selection = RecordSelection::parse(
+        cache_core::meta::bundled_schema_ref(),
         "fragment Preview on GraphqlMailPreviewMessage { id subject }",
         "Preview",
     )

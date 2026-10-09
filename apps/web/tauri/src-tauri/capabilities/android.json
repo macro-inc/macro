@@ -9,6 +9,7 @@
   "permissions": [
     "android-auth:allow-authenticate",
     "android-mobile:default",
-    "android-push:default"
+    "android-push:default",
+    "network-status:allow-watch-status"
   ]
 }

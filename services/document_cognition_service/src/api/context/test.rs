@@ -68,6 +68,10 @@ pub async fn test_model_access(ctx: &ApiContext) -> DcsChatModelAccess {
 pub struct MockConnectionRepo;
 
 impl MockConnectionRepo {
+    #[expect(
+        clippy::new_ret_no_self,
+        reason = "tests take the mock as the trait object ApiContext stores"
+    )]
     pub fn new() -> Arc<dyn ConnectionRepo> {
         Arc::new(Self)
     }
@@ -134,6 +138,10 @@ pub struct MockStreamRepo {
 }
 
 impl MockStreamRepo {
+    #[expect(
+        clippy::new_ret_no_self,
+        reason = "tests take the mock as the trait object ApiContext stores"
+    )]
     pub fn new() -> Arc<dyn StreamRepo> {
         let (tx, _) = broadcast::channel(16);
         Arc::new(Self { tx })
@@ -455,7 +463,26 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         pool.clone(),
     );
 
+    let calendar_tool_context = ai_tools::build_calendar_tool_context(
+        pool.clone(),
+        macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+        "test-internal-api-key".to_string(),
+    );
+    let forms_tool_context = ai_tools::build_forms_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        &databases_tool_context,
+        &calendar_tool_context,
+        None,
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        ai_tools::FormsToolConfig {
+            app_origin: "https://macro.test".into(),
+            editing_worker_url: "http://localhost:8933".into(),
+        },
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
+        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
@@ -481,8 +508,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
         ),
+        team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(pool.clone(), true),
         notification_tool_context: notification_tool_context.clone(),
         databases_tool_context,
+        forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
         chat_tool_context,

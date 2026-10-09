@@ -63,6 +63,15 @@ export type {
   CacheRequest,
   CacheResponse,
   CacheRevision,
+  CalendarCommitArgs,
+  CalendarCommitCacheResult,
+  CalendarFreshness,
+  CalendarLinkWatermarkWire,
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
+  CalendarSpanKind,
+  CalendarSpanWire,
+  CalendarWatermarkUpdateWire,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
@@ -88,3 +97,8 @@ export {
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from './protocol';
+
+export {
+  createLiveQuery,
+  type LiveQueryOptions,
+} from './solid/create-live-query';

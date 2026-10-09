@@ -561,6 +561,17 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
         normalizedCacheOptimistic: {
           linkPatches: [
             {
+              recordRoot: {
+                entityKey: `GraphqlSoupDocument:task-${index + 1}`,
+              },
+              operation: {
+                kind: 'upsertByField',
+                entityKey: `GraphqlProperty:assignment-task-${index + 1}`,
+                whereField: 'propertyDefinitionId',
+                equals: 'priority',
+              },
+            },
+            {
               operation: {
                 kind: 'removeEmbeddedLink',
                 entityKey: `GraphqlSoupDocument:task-${index + 1}`,
@@ -574,6 +585,10 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
             },
           ],
           revalidations: [
+            {
+              operationName: 'EntityProperties',
+              onlyOnLinkFailure: true,
+            },
             {
               operationName: 'GroupSoupMembership',
               variablesJson: JSON.stringify({ input }),
@@ -846,6 +861,73 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
       'settled:test',
     ]);
   });
+
+  it('saves values requested by an editor that has already closed', async () => {
+    const onSettled = vi.fn();
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        _variables: unknown,
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: async () => ({
+          operation: { kind: 'mutation', context } as Operation,
+          data: { setEntityProperty: { id: 'assignment-1' } },
+          stale: false,
+          hasNext: false,
+        }),
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    let save!: ReturnType<typeof createGraphqlBulkSaveEntityPropertiesMutation>;
+    // The project picker closes before its save settles, taking the owner of
+    // these mutations with it.
+    createRoot((rootDispose) => {
+      save = createGraphqlBulkSaveEntityPropertiesMutation({ onSettled });
+      rootDispose();
+    });
+
+    const result = await save.mutateAsync({
+      properties: [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          property: {
+            propertyId: 'assignment-1',
+            propertyDefinitionId: 'project',
+            displayName: 'Project',
+            valueType: 'ENTITY',
+            isMultiSelect: false,
+          } as Property,
+          apiValues: {
+            valueType: 'ENTITY',
+            refs: [{ entity_id: 'project-1', entity_type: 'INITIATIVE' }],
+          },
+        },
+      ],
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(mutation).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        input: {
+          entityType: 'DOCUMENT',
+          entityId: 'task-1',
+          propertyDefinitionId: 'project',
+          value: {
+            entityReference: {
+              entityId: 'project-1',
+              entityType: 'INITIATIVE',
+              specificMessageId: null,
+            },
+          },
+        },
+      },
+      expect.anything()
+    );
+    expect(onSettled).toHaveBeenCalledOnce();
+  });
 });
 
 describe('createGraphqlEntityPropertiesQuery', () => {
@@ -993,7 +1075,9 @@ describe('createGraphqlEntityPropertiesQuery', () => {
     const refresh = refetchGraphqlInitiativeProperties('initiative-1');
     await vi.waitFor(() => expect(requests).toHaveLength(2));
     expect(requests[1].operation.context.requestPolicy).toBe('network-only');
-    requests[1].next({ data });
+    // HTTP returns a new snapshot; reusing the prior object would advertise
+    // unchanged data to the live query selector despite changing the mapper.
+    requests[1].next({ data: structuredClone(data) });
     await refresh;
     await vi.waitFor(() =>
       expect(query.result.data?.[0].value).toBe('In progress')

@@ -69,6 +69,8 @@ pub mod sharing;
 /// Routes associating pull requests with sessions.
 pub mod pull_requests;
 
+mod owned_purge;
+
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
 pub struct AgentSessionRouterState<T, Access, Auth> {
@@ -229,6 +231,10 @@ where
             delete(delete_user_sessions_handler::<R, Access, Auth>),
         )
         .route(
+            "/internal/{session_id}",
+            delete(owned_purge::purge_owned_session_handler::<R, Access, Auth>),
+        )
+        .route(
             "/{session_id}/control",
             post(control_agent_session_handler::<R, Access, Auth>),
         )
@@ -385,6 +391,7 @@ impl IntoResponse for AgentSessionApiError {
             }
             Self::Domain(
                 error @ (AgentSessionError::TooManyPreviewIds(_)
+                | AgentSessionError::TooManyPullRequests(_)
                 | AgentSessionError::InvalidPullRequestUrl),
             ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
             Self::Domain(error @ AgentSessionError::Archived(_)) => {
@@ -684,12 +691,22 @@ impl AgentSessionResponse {
     params(("session_id" = Uuid, Path, description = "ID of the agent session")),
     responses(
         (status = 200, body = AgentSessionResponse),
-        (status = 401, body = String),
+        (status = 401, body = String, description = "the session exists but is not this caller's"),
         (status = 403, body = String),
+        (
+            status = 404,
+            body = String,
+            description = "no session with this id: not created yet, or deleted since"
+        ),
         (status = 500, body = String),
     )
 )]
 /// Get an agent session by id.
+///
+/// A caller holding no grant is answered 401; an id with no session behind it
+/// at all is answered 404. They used to be the same answer, which left a
+/// client that read a session before its create had landed unable to tell a
+/// race it should retry from a refusal it should not.
 #[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
 pub async fn get_agent_session_handler<
     T: AgentSessionService,

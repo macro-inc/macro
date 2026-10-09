@@ -59,6 +59,18 @@ Consecutive replies from the same sender within the five-minute avatar-grouping
 window count as one group. Different senders, longer gaps, deleted replies, and
 agent replies triggered by different users preserve their avatar group boundaries.
 
+Channel timelines show system updates alongside messages: participant additions
+and removals, renames, profile picture changes, and completed calls with their
+duration. These rows have no reply, edit, or reaction actions. Long descriptions
+stay on one line; hover to read the full text. Dates, message navigation, and
+scrolling through older history include these updates. A call's completed row
+appears when the call ends; active calls retain their existing live indicator.
+To verify live updates, scroll into history and change the channel from another
+session. The visible message should stay at the same position. Return to latest
+and reload to verify that the system entry persists in chronological order.
+Also reload a short channel containing mostly system updates. Every entry should
+remain visible when the entire timeline fits without scrolling.
+
 ## Agent session entities
 
 The Agents list includes owned and shared sessions. Rows show the shared agent
@@ -188,9 +200,12 @@ email at all. The bot's prompt carries the current date and time in the mentioni
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
 bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
-`@coder` / `@cursor` / `@codex` / `@claude` for everyone — opens
+`@cursor` / `@codex` / `@claude` when available — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+Macro Coding Agent (`@coder`) is unavailable in mention suggestions, including
+when it appears among existing participants or bots. Check with the agents
+rollout both enabled and disabled.
 When the backend is configured with AI usage enforcement, a rejected classic
 `@Macro` request gets a thread reply explaining the allowance failure (for example,
 `ai_allowance_exhausted`) or temporary validation failure (`ai_billing_unavailable`),
@@ -377,6 +392,8 @@ else's message. Check both root messages and thread replies from a Home split:
 an incoming selection must not mark the Home item done or edit the thread root.
 Press `Escape` to clear selection; the parent Home shortcut is then available
 again. Typing `e` in the composer or inline editor should still enter text.
+Verify a message link in a fresh browser tab as well as inside an open channel:
+the initial page should center the requested message, including older history.
 Returning through split navigation restores the saved message position and expanded
 threads. Switching channel tabs and returning restores the Messages position,
 expanded threads, and pending reply from when the tab was left. The `Scroll to bottom` control appears when scrolling down through history;
@@ -478,8 +495,14 @@ seen without moving the conversation. No notification read marking runs
 from an abbreviated list result, even if that result is empty. Access failures
 show **Conversation unavailable** and stay hidden during retry until access is
 confirmed. A route without cached channel metadata shows **Loading conversation**
-until its channel arrives. Mobile and opening in a new split retain the block
-host's existing notification-before-navigation flow.
+until its channel arrives. On mobile, opening from Recent, Channels, or DMs
+also navigates immediately: a slow or failed notification lookup must not prevent
+messages and the composer from loading. Full-edge notification hydration runs
+only after navigation is accepted; failure leaves unread state unchanged and
+must not show an “Unable to open conversation” toast. A late response must not
+reopen the channel or mark it read after the user leaves its mobile pane. Message
+loading retains its own access/error states. Verify with the notification request
+held, then failed, and with rapid back-navigation while it is pending.
 
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title.
@@ -1032,5 +1055,9 @@ Picture changes refresh other participants' open sessions, including after
 reconnecting.
 Members see the picture without editing controls. One-to-one direct messages
 continue to show the other person's user picture.
+
+Opening the slash menu with `/` lists Normal Text, headings, and the other
+Markdown options before Database. Typing `/database` filters to the Database
+action.
 
 When Databases is enabled, type `/database` in a channel message or thread reply and choose **Database** to insert a live question. Ask with Enter or the Ask button, then accept the answer before sending the message. Enter in the question box belongs to the question and must not send the channel draft. Recipients can read the live answer subject to their database access.

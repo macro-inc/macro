@@ -28,7 +28,10 @@ pub async fn get_organization_retention(
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("testing")))]
+    #[sqlx::test(
+        migrations = false,
+        fixtures(path = "../../../fixtures", scripts("schema", "testing"))
+    )]
     async fn test_soft_delete_documents(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
         let result = get_organization_retention(pool.clone()).await?;
 

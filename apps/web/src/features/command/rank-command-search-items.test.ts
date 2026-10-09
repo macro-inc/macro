@@ -134,4 +134,27 @@ describe('command menu search ranking', () => {
     ];
     expect(ids(items, 'qtr')).toEqual(['direct-match', 'project']);
   });
+
+  it('keeps server-matched people the fuzzy matcher misses, without the cache projection', () => {
+    const person: CommandMenuItem = {
+      id: 'macro|asher@macro.com',
+      kind: 'user',
+      bucket: 'person',
+      searchText: 'Asher Smith | asher@macro.com',
+      sortTimestamp: NOW,
+      timestamps: {},
+      data: {
+        id: 'macro|asher@macro.com',
+        email: 'asher@macro.com',
+        name: 'Asher Smith',
+      },
+    };
+    const items = [person, channel('unrelated', 'Planning')];
+    expect(
+      rankCommandSearchItems(items, 'hckrnn', {
+        preserveAdditionalEntityMatches: false,
+        preservedIds: new Set([person.id]),
+      }).map((item) => item.id)
+    ).toEqual([person.id]);
+  });
 });

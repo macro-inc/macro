@@ -7,7 +7,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { CrmRecordDependencies } from './dependencies';
 import { toCrmContactEntity } from './graphql';
 
-/** Cursor-paged GraphQL source shared by suggestions and the People directory. */
+/** Cursor-paged GraphQL source for contact suggestions. */
 export function useCrmContactsQuery(
   deps: Pick<CrmRecordDependencies, 'client'>,
   enabled: Accessor<boolean>,
@@ -22,13 +22,17 @@ export function useCrmContactsQuery(
         enabled: enabled(),
         staleTime: 60_000,
         initialPageParam: null as string | null,
-        queryFn: ({ pageParam, signal }) =>
-          fetchCrmContacts({
+        // Each page names the search it answers, so a consumer reading
+        // pages during a key change cannot attribute them to the new search.
+        queryFn: async ({ pageParam, signal }) => ({
+          ...(await fetchCrmContacts({
             cursor: pageParam,
             search: searchTerm,
             limit,
             signal,
-          }),
+          })),
+          search: searchTerm,
+        }),
         getNextPageParam: (page) => page.nextCursor,
       };
     },

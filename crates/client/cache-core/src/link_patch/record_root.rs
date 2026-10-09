@@ -21,7 +21,11 @@ pub struct RecordRoot {
 }
 
 impl RecordRoot {
-    pub(super) fn validate(&self, patch: &OptimisticLinkPatch) -> Result<(), LinkPatchError> {
+    pub(super) fn validate(
+        &self,
+        schema: &crate::meta::Schema,
+        patch: &OptimisticLinkPatch,
+    ) -> Result<(), LinkPatchError> {
         validate_entity_key(self.entity_key.borrowed())?;
         if patch.operation_name.is_some()
             || serde_json::from_str::<Value>(&patch.variables_json).map_err(invalid)?
@@ -38,7 +42,7 @@ impl RecordRoot {
             ));
         }
         let selection =
-            RecordSelection::parse(&patch.query, &self.fragment_name).map_err(invalid)?;
+            RecordSelection::parse(schema, &patch.query, &self.fragment_name).map_err(invalid)?;
         if !selection
             .type_names()
             .iter()
@@ -53,17 +57,19 @@ impl RecordRoot {
 
     pub(super) fn resolve(
         &self,
+        schema: &crate::meta::Schema,
         effective: &HashMap<EntityKey<'static>, Record>,
         patch: &OptimisticLinkPatch,
     ) -> Result<ResolvedTarget, LinkPatchError> {
         let selection =
-            RecordSelection::parse(&patch.query, &self.fragment_name).map_err(invalid)?;
+            RecordSelection::parse(schema, &patch.query, &self.fragment_name).map_err(invalid)?;
         if let Some(typename) = effective.get(&self.entity_key).and_then(Record::typename)
             && typename != self.type_name()
         {
             return Err(invalid("cached record type does not match its key"));
         }
         resolve_from_record(
+            schema,
             effective,
             &self.entity_key,
             self.type_name(),

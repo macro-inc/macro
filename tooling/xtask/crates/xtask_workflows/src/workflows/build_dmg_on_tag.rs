@@ -25,10 +25,6 @@ pub fn build_dmg() -> Workflow {
             )),
         )
         .add_job("build-dmg", build_dmg_job("${{ inputs.ref }}"))
-        .add_job(
-            "publish-dmg",
-            publish_dmg_job("${{ inputs.ref }}").add_needs("build-dmg"),
-        )
 }
 
 /// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
@@ -48,6 +44,7 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         .add_step(configure_nix_cache())
         .add_step(configure_signing_identity())
         .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(build_appimage_on_tag::prepare_desktop_release(ref_expr))
         .add_step(nix_build_dmg())
         .add_step(save_nix_cache())
         .add_step(collect_dmg())
@@ -57,10 +54,6 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
             "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
             xtask_paths::runtime_path!("artifacts/*"),
         ))
-}
-
-fn publish_dmg_job(ref_expr: &str) -> Job {
-    build_appimage_on_tag::publish_job(ref_expr, xtask_paths::runtime_path!("release-artifacts/*"))
 }
 
 fn assert_arm64() -> Step<Run> {

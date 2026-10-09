@@ -4,12 +4,15 @@ import {
   type CacheResponse,
   isCachePush,
   isCacheResponse,
+  isCacheRevision,
   isValidCacheSearchBucket,
   isValidCacheSearchCursor,
   isValidCacheSearchLimit,
   isValidCacheSearchNowMs,
   isValidCacheSearchProfile,
   isValidCacheSearchQuery,
+  isValidCalendarCommitArgs,
+  isValidCalendarRangeArgs,
   isValidNormalizedRecordKey,
   isWorkerMessage,
   MAX_RECONCILIATION_BASELINE,
@@ -20,7 +23,7 @@ import {
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 6 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 8 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -59,7 +62,7 @@ export type ActivationFailureCode =
 
 export type TabToCoordinatorEnvelope =
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'register-tab';
       scope: string;
       tabId: string;
@@ -70,40 +73,40 @@ export type TabToCoordinatorEnvelope =
       buildTime: number;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'cache-request';
       tabId: string;
       request: CacheRequest;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'attach-engine-port';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       enginePort: MessagePort;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'graceful-departure';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'navigation-departure';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       reason: string;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-lost';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       reason: string;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'disconnect-tab';
       tabId: string;
       reason: string;
@@ -111,12 +114,12 @@ export type TabToCoordinatorEnvelope =
 
 export type CoordinatorToTabEnvelope =
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'registered';
       tabId: string;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'become-owner';
       scope: string;
       tabId: string;
@@ -126,25 +129,25 @@ export type CoordinatorToTabEnvelope =
       hotCapacity?: number;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'cache-message';
       message: WorkerMessage;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'terminate-engine';
       tabId: string;
       ownerEpoch: OwnerEpoch;
       reason: string;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'retire-complete';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-startup';
       ownerEpoch: OwnerEpoch;
       phase: EngineStartupPhase;
@@ -152,46 +155,46 @@ export type CoordinatorToTabEnvelope =
       timeoutMs: number;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-replaced';
       ownerEpoch: OwnerEpoch;
       /** Whether this engine reopened durable data or created/reset it. */
       openOutcome: EngineOpenOutcome;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'protocol-error';
       error: string;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'terminal-error';
       error: string;
       storageUntouched?: true;
     }
   | {
       /** Another context holds the database; stop using the cache until reload. */
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'cache-unavailable';
       reason: string;
     }
   | {
       /** A newer app build took the database over. The page stops using the
        * cache and reloads into that build. */
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'cache-superseded';
       reason: string;
     }
   | {
       /** No other build has live tabs, so the owner may delete stale databases. */
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'remove-stale-databases';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     };
 
 export type PageToEngineEnvelope = {
-  coordinatorVersion: 6;
+  coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
   kind: 'activate-engine';
   scope: string;
   tabId: string;
@@ -204,24 +207,24 @@ export type PageToEngineEnvelope = {
 export type CoordinatorToEngineEnvelope =
   | {
       /** Storage grant, sent only after `owner-lock-acquired`. */
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'open-engine';
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-request';
       ownerEpoch: OwnerEpoch;
       routeId: RouteId;
       request: CacheRequest;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'drain-engine';
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'heartbeat';
       ownerEpoch: OwnerEpoch;
       heartbeatId: number;
@@ -229,34 +232,34 @@ export type CoordinatorToEngineEnvelope =
 
 export type EngineToCoordinatorEnvelope =
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-assets-ready';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
       /** Holds the owner lock, has not touched storage, awaits `open-engine`. */
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'owner-lock-acquired';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
       /** The owner lock was held elsewhere on this attempt; retrying. */
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'owner-lock-busy';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
       /** Gave up on the owner lock without touching storage. */
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'owner-lock-unavailable';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-ready';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -266,26 +269,26 @@ export type EngineToCoordinatorEnvelope =
       openOutcome: EngineOpenOutcome;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-response';
       ownerEpoch: OwnerEpoch;
       routeId: RouteId;
       response: CacheResponse;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-push';
       ownerEpoch: OwnerEpoch;
       push: CachePush;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-drained';
       tabId: string;
       ownerEpoch: OwnerEpoch;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'engine-fatal';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -293,7 +296,7 @@ export type EngineToCoordinatorEnvelope =
       fatalCode: EngineFatalCode;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'activation-failed';
       tabId: string;
       ownerEpoch: OwnerEpoch;
@@ -301,7 +304,7 @@ export type EngineToCoordinatorEnvelope =
       failureCode: ActivationFailureCode;
     }
   | {
-      coordinatorVersion: 6;
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'heartbeat-ack';
       ownerEpoch: OwnerEpoch;
       heartbeatId: number;
@@ -309,14 +312,14 @@ export type EngineToCoordinatorEnvelope =
 
 /** Starts a disposable worker that deletes this scope's stale databases. */
 export type PageToCleanupEnvelope = {
-  coordinatorVersion: 6;
+  coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
   kind: 'remove-stale-databases';
   scope: string;
 };
 
 /** Tally from a stale-database cleanup worker. */
 export type CleanupToPageEnvelope = {
-  coordinatorVersion: 6;
+  coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
   kind: 'stale-databases-removed';
   removed: number;
   inUse: number;
@@ -483,6 +486,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
       );
     case 'current-revision':
     case 'current-storage-generation':
+    case 'inspect-mutations':
       return hasOnlyKeys(value, ['id', 'kind']);
     case 'read':
       return (
@@ -495,13 +499,20 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'variables',
           'priority',
           'entityResolvers',
+          'watch',
         ]) &&
         isOptionalString(value.opId) &&
         isString(value.query) &&
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&
         (value.priority === undefined || value.priority === 'user-visible') &&
-        isEntityResolvers(value.entityResolvers)
+        isEntityResolvers(value.entityResolvers) &&
+        (value.watch === undefined ||
+          (isRecord(value.watch) &&
+            isNonEmptyString(value.opId) &&
+            hasOnlyKeys(value.watch, ['since']) &&
+            (value.watch.since === undefined ||
+              isCacheRevision(value.watch.since))))
       );
     case 'write':
       return (
@@ -555,11 +566,19 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'linkPatches',
           'revalidations',
           'identityBindings',
+          'uncertainCalendarEventKeys',
+          'clientMetadata',
           'createdAtMs',
           'owner',
           'nowMs',
           'leaseExpiresAtMs',
         ]) &&
+        (value.uncertainCalendarEventKeys === undefined ||
+          (Array.isArray(value.uncertainCalendarEventKeys) &&
+            value.uncertainCalendarEventKeys.length <= 256 &&
+            value.uncertainCalendarEventKeys.every(
+              isValidNormalizedRecordKey
+            ))) &&
         isOptionalString(value.originOpId) &&
         isString(value.uuid) &&
         isString(value.query) &&
@@ -569,6 +588,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         (value.linkPatches === undefined || Array.isArray(value.linkPatches)) &&
         (value.revalidations === undefined ||
           Array.isArray(value.revalidations)) &&
+        isOptionalRecord(value.clientMetadata) &&
         (value.identityBindings === undefined ||
           (Array.isArray(value.identityBindings) &&
             value.identityBindings.length <= 32 &&
@@ -703,6 +723,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'limit',
           'baseline',
           'mail',
+          'liveQuery',
         ]) &&
         isRecord(request.filters) &&
         ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
@@ -710,6 +731,28 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         ) &&
         (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
         isValidCacheSearchLimit(request.limit) &&
+        (request.liveQuery === undefined ||
+          (isRecord(request.liveQuery) &&
+            hasOnlyKeys(request.liveQuery, [
+              'id',
+              'document',
+              'fragmentName',
+              'since',
+              'release',
+            ]) &&
+            typeof request.liveQuery.id === 'string' &&
+            request.liveQuery.id.length > 0 &&
+            request.liveQuery.id.length <= 128 &&
+            typeof request.liveQuery.document === 'string' &&
+            request.liveQuery.document.length > 0 &&
+            typeof request.liveQuery.fragmentName === 'string' &&
+            request.liveQuery.fragmentName.length > 0 &&
+            (request.liveQuery.since === undefined ||
+              isCacheRevision(request.liveQuery.since)) &&
+            (request.liveQuery.release === undefined ||
+              typeof request.liveQuery.release === 'boolean') &&
+            request.mail === undefined &&
+            request.baseline !== undefined)) &&
         (request.mail === undefined ||
           (isRecord(request.mail) &&
             hasOnlyKeys(request.mail, ['view', 'cursor']) &&
@@ -734,6 +777,16 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
             )))
       );
     }
+    case 'calendar-range':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+        isValidCalendarRangeArgs(value.request)
+      );
+    case 'calendar-commit':
+      return (
+        hasOnlyKeys(value, ['id', 'kind', 'commit']) &&
+        isValidCalendarCommitArgs(value.commit)
+      );
     case 'inspect-query':
       return (
         hasOnlyKeys(value, [
@@ -1325,7 +1378,7 @@ export function tabIdFromLivenessLockName(
  * and the engine checks its WASM before touching storage.
  */
 export const CACHE_STORAGE_VERSION = {
-  schemaCompatibilityEpoch: 3,
+  schemaCompatibilityEpoch: 4,
   formatVersion: 3,
   storageSchemaVersion: 11,
 } as const;

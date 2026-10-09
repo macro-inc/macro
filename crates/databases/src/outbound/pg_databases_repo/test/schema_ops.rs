@@ -21,6 +21,72 @@ use crate::domain::ports::{DatabasesRepo, DatabasesService};
 use crate::outbound::pg_definition_store::PgDefinitionStore;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn protected_schema_ops_are_refused_and_stale_writes_are_rechecked(pool: PgPool) {
+    let guests = guests(&pool).await;
+    // A write planned before the protection was registered must also be refused.
+    let planned = Writes {
+        database_id: guests.database_id,
+        created_by: viewer().user_id,
+        writes: vec![Write::DeleteColumn {
+            table_id: guests.table_id,
+            column_id: guests.name,
+            definition_id: guests.name_definition,
+            views: vec![],
+            related: None,
+        }],
+        related_rows: vec![],
+        expected_versions: vec![],
+        journal: crate::domain::journal::JournalPlan::default(),
+    };
+    sqlx::query!(
+        "INSERT INTO database_column_protections (column_id, capability) VALUES ($1, 'delete'), ($1, 'change_type')",
+        guests.name.into_uuid()
+    ).execute(&pool).await.unwrap();
+    let before = version(&pool, guests.table_id).await;
+    for change in [
+        ColumnChange::Delete,
+        ColumnChange::ChangeType {
+            to: ColumnKind::Number,
+        },
+    ] {
+        let result = service(&pool)
+            .apply_ops(
+                edit(guests.database_id),
+                viewer(),
+                vec![DatabaseOp::Column {
+                    table: guests.table_id,
+                    column: guests.name,
+                    change,
+                }]
+                .into(),
+            )
+            .await;
+        assert!(
+            matches!(result, Err(DatabaseError::InvalidOp(ref refusal)) if refusal.reason.contains("protected")),
+            "{result:?}"
+        );
+    }
+    let store = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    assert_eq!(
+        store.apply_writes(&planned).await.unwrap(),
+        WritesOutcome::ColumnProtected {
+            write: 0,
+            capability: crate::domain::models::ColumnProtection::Delete,
+        }
+    );
+    assert_eq!(version(&pool, guests.table_id).await, before);
+    let repository = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    assert!(
+        repository
+            .columns_for_tables(&[guests.table_id])
+            .await
+            .unwrap()
+            .iter()
+            .any(|column| column.id == guests.name)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn one_batch_creates_a_table_a_select_column_on_it_and_rows_filling_it(pool: PgPool) {
     let guests = guests(&pool).await;
     let before = version(&pool, guests.table_id).await;
@@ -716,5 +782,153 @@ async fn a_type_change_converts_stored_cells_and_rewrites_views_testing_the_colu
                 direction: SortDirection::Ascending,
             }],
         }
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn protected_columns_refuse_direct_sql_but_allow_parent_deletion(pool: PgPool) {
+    let guests = guests(&pool).await;
+    sqlx::query!("INSERT INTO database_column_protections (column_id, capability) VALUES ($1, 'delete'), ($1, 'change_type')", guests.name.into_uuid()).execute(&pool).await.unwrap();
+    let error = sqlx::query!(
+        "DELETE FROM database_columns WHERE id = $1",
+        guests.name.into_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().constraint(),
+        Some("database_column_protected")
+    );
+    let error = sqlx::query!(
+        "UPDATE property_definitions SET data_type = 'NUMBER' WHERE id = $1",
+        guests.name_definition
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().constraint(),
+        Some("database_column_protected")
+    );
+    sqlx::query!(
+        "UPDATE database_columns SET display_name = 'Renamed' WHERE id = $1",
+        guests.name.into_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "DELETE FROM database_entities WHERE database_id = $1",
+        guests.database_id.into_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edits(pool: PgPool) {
+    use crate::domain::models::ColumnConfig;
+    use models_databases::{Formula, Operator};
+    let guests = guests(&pool).await;
+    let (seats, doubled) = (ColumnId::new(), ColumnId::new());
+    let times = |factor: f64| Formula::Binary {
+        operator: Operator::Multiply,
+        left: Box::new(Formula::Column { column: seats }),
+        right: Box::new(Formula::Number { value: factor }),
+    };
+    service(&pool)
+        .apply_ops(
+            edit(guests.database_id),
+            viewer(),
+            vec![
+                DatabaseOp::Column {
+                    table: guests.table_id,
+                    column: seats,
+                    change: ColumnChange::Create {
+                        definition: NewColumn::New {
+                            name: "Seats".into(),
+                            kind: ColumnKind::Number,
+                            options: vec![],
+                            infer_type: false,
+                        },
+                        after: None,
+                    },
+                },
+                DatabaseOp::Column {
+                    table: guests.table_id,
+                    column: doubled,
+                    change: ColumnChange::Create {
+                        definition: NewColumn::Derived {
+                            name: "Doubled".into(),
+                            formula: times(2.0),
+                        },
+                        after: None,
+                    },
+                },
+            ]
+            .into(),
+        )
+        .await
+        .unwrap();
+    let repository = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    let stored = |columns: Vec<crate::domain::models::Column>| {
+        columns
+            .into_iter()
+            .find(|column| column.id == doubled)
+            .unwrap()
+    };
+    let created = stored(
+        repository
+            .columns_for_tables(&[guests.table_id])
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        created.config,
+        Some(ColumnConfig::Derived {
+            formula: times(2.0)
+        })
+    );
+
+    let results = service(&pool)
+        .apply_ops(
+            edit(guests.database_id),
+            viewer(),
+            vec![DatabaseOp::Column {
+                table: guests.table_id,
+                column: doubled,
+                change: ColumnChange::SetFormula {
+                    formula: times(3.0),
+                },
+            }]
+            .into(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        results.as_slice(),
+        [OpResult::Column {
+            change: ColumnResult::FormulaSet,
+            ..
+        }]
+    ));
+    let edited = stored(
+        repository
+            .columns_for_tables(&[guests.table_id])
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        edited.config,
+        Some(ColumnConfig::Derived {
+            formula: times(3.0)
+        })
+    );
+    assert_eq!(
+        edited.property_definition_id,
+        created.property_definition_id
     );
 }

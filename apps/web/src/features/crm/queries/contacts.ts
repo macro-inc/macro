@@ -49,6 +49,20 @@ export function useCrmContactByEmailQuery(
   );
 }
 
+function contactQueryOptions(deps: CrmRecordDependencies, contactId: string) {
+  return queryOptions({
+    queryKey: crmKeys.contact(contactId).queryKey,
+    queryFn: () => {
+      if (!contactId) {
+        throw new Error('contact id is required to fetch contact');
+      }
+      return throwOnErr(() => deps.storage.getContact({ contactId }));
+    },
+    staleTime: CONTACT_STALE_TIME,
+    enabled: !!contactId,
+  });
+}
+
 /**
  * Fetches a single CRM contact by id via `GET /crm/contacts/{id}`.
  * The endpoint is role-aware: admins/owners see hidden contacts too,
@@ -60,20 +74,7 @@ export function useContactQuery(
   contactId: Accessor<string>
 ) {
   return useQuery(
-    () => {
-      const id = contactId();
-      return {
-        queryKey: crmKeys.contact(id).queryKey,
-        queryFn: () => {
-          if (!id) {
-            throw new Error('contact id is required to fetch contact');
-          }
-          return throwOnErr(() => deps.storage.getContact({ contactId: id }));
-        },
-        staleTime: CONTACT_STALE_TIME,
-        enabled: !!id,
-      };
-    },
+    () => contactQueryOptions(deps, contactId()),
     () => deps.client
   );
 }

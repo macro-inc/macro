@@ -6,14 +6,17 @@ use crate::domain::{
         TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
         TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
     },
+    owned_entity_cleanup::ClearedTeam,
     team_repo::{TeamMembersService, TeamRepository},
 };
+use entity_access_db_utils::{EntityAccessSourceType, delete_source_grants, team_share};
 use macro_user_id::{
     cowlike::CowLike,
     email::{Email, ReadEmailParts},
     lowercased::Lowercase,
     user_id::MacroUserIdStr,
 };
+use model_owner::Owner;
 use models_permissions::share_permission::LinkShare;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
@@ -691,9 +694,26 @@ impl TeamRepository for TeamRepositoryImpl {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
-    async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), TeamError> {
+    #[tracing::instrument(skip(self, cleared), fields(team_id = %cleared.team_id()), err)]
+    async fn delete_team(&self, cleared: &ClearedTeam) -> Result<(), TeamError> {
+        let team_id = cleared.team_id();
         let mut transaction = self.pool.begin().await?;
+        team_share::acquire_guard(&mut transaction).await?;
+
+        delete_source_grants(
+            &mut *transaction,
+            EntityAccessSourceType::Team,
+            &Owner::Team(team_id).principal_id(),
+        )
+        .await?;
+        for bot_id in cleared.bot_ids() {
+            delete_source_grants(
+                &mut *transaction,
+                EntityAccessSourceType::Bot,
+                &Owner::Bot(*bot_id).principal_id(),
+            )
+            .await?;
+        }
 
         sqlx::query!(
             r#"

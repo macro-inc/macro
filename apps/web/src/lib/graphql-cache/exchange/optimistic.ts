@@ -13,6 +13,7 @@ import {
   type Client,
   CombinedError,
   type Operation,
+  type OperationContext,
   type OperationResult,
   type OperationResultSource,
   stringifyDocument,
@@ -111,17 +112,23 @@ export type OptimisticUpdate = OptimisticLinkPatchWire & {
 export type QueryRevalidation = {
   document: DocumentNode;
   variables: AnyVariables;
+  /** Recover incomplete relations without refetching successful local edits. */
+  onlyOnLinkFailure?: boolean;
 };
 
 export type OptimisticMutationOptions = {
   /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
   uuid: string;
+  /** Opaque durable client correlation; never included in GraphQL variables. */
+  clientMetadata?: Record<string, unknown>;
   identityBindings?: readonly IdentityBindingWire[];
   /** Runs after durable layer installation, independently of HTTP settlement. */
   onEnqueued?: () => void;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
+  /** Calendar events whose occurrence set the mutation cannot predict. */
+  uncertainCalendarEventKeys?: readonly string[];
 };
 
 /** Existing records may be patched; newly created records must be complete. */
@@ -131,12 +138,24 @@ export type OptimisticResponse<T> = T extends readonly (infer Item)[]
     ? { [Key in keyof T]?: OptimisticResponse<T[Key]> }
     : T;
 
+/** Partial predicted records must retain their cache identity. */
+export type OptimisticPatch<T> = T extends readonly (infer Item)[]
+  ? OptimisticPatch<Item>[]
+  : T extends { id: string }
+    ? { id: string } & { [K in Exclude<keyof T, 'id'>]?: OptimisticPatch<T[K]> }
+    : T extends object
+      ? { [K in keyof T]?: OptimisticPatch<T[K]> }
+      : T;
+
 export type OptimisticMutationContext<TData = unknown> = {
   uuid: string;
   optimisticResponse: TData;
+  /** Opaque durable client correlation; never included in GraphQL variables. */
+  clientMetadata?: Record<string, unknown>;
   identityBindings?: IdentityBindingWire[];
   linkPatches: OptimisticLinkPatchWire[];
   revalidations: QueryRevalidationWire[];
+  uncertainCalendarEventKeys?: string[];
 };
 
 /** Caller-facing disposition of one durable optimistic mutation submission. */
@@ -236,6 +255,7 @@ function serializeRevalidation(
     query: stringifyDocument(revalidation.document),
     operationName: documentOperationName(revalidation.document),
     variablesJson: JSON.stringify(revalidation.variables ?? {}),
+    ...(revalidation.onlyOnLinkFailure ? { onlyOnLinkFailure: true } : {}),
   };
 }
 
@@ -465,24 +485,53 @@ export function executeOptimisticMutation<
   optimisticData: OptimisticResponse<NoInfer<TData>>,
   options: OptimisticMutationOptions
 ): OperationResultSource<OperationResult<TData, TVariables>> {
-  if (!validateUuid(options.uuid)) {
-    throw new TypeError(`invalid optimistic mutation UUID: ${options.uuid}`);
+  return client.mutation(
+    document,
+    variables,
+    optimisticMutationContext(optimisticData, options)
+  );
+}
+
+/** Defaults to a fresh transaction; UUID reuse remains an explicit decision. */
+export type OptimisticCallOptions = Omit<OptimisticMutationOptions, 'uuid'> & {
+  uuid?: string;
+};
+
+declare module '@urql/core' {
+  interface OperationContext {
+    /** Options for automatic optimistic recipes; false explicitly opts out. */
+    optimisticMutation?: OptimisticCallOptions | false;
   }
-  const context: OptimisticMutationContext<OptimisticResponse<TData>> = {
-    uuid: options.uuid,
+}
+
+/** Shared compiler used by mutation authoring interfaces and the legacy API. */
+export function optimisticMutationContext<TData>(
+  optimisticData: TData,
+  options: OptimisticCallOptions = {}
+): Partial<OperationContext> {
+  const uuid = options.uuid ?? crypto.randomUUID();
+  if (!validateUuid(uuid)) {
+    throw new TypeError(`invalid optimistic mutation UUID: ${uuid}`);
+  }
+  const context: OptimisticMutationContext<TData> = {
+    uuid,
+    clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
     identityBindings: options.identityBindings
       ? [...options.identityBindings]
       : undefined,
     linkPatches: [...(options.updates ?? [])],
     revalidations: (options.revalidations ?? []).map(serializeRevalidation),
+    ...(options.uncertainCalendarEventKeys?.length
+      ? { uncertainCalendarEventKeys: [...options.uncertainCalendarEventKeys] }
+      : {}),
   };
-  return client.mutation(document, variables, {
+  return {
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: context,
     ...(options.onEnqueued
       ? { [OPTIMISTIC_ENQUEUED_CONTEXT_KEY]: options.onEnqueued }
       : {}),
-  });
+  };
 }
 
 /** Acknowledge installation without allowing caller code to interrupt queue routing. */
@@ -516,6 +565,7 @@ export function optimisticContextOf(
     }
     return {
       uuid: context.uuid,
+      clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
       identityBindings: context.identityBindings,
       linkPatches: Array.isArray(context.linkPatches)
@@ -524,6 +574,11 @@ export function optimisticContextOf(
       revalidations: Array.isArray(context.revalidations)
         ? context.revalidations
         : [],
+      uncertainCalendarEventKeys: Array.isArray(
+        context.uncertainCalendarEventKeys
+      )
+        ? context.uncertainCalendarEventKeys
+        : undefined,
     };
   }
   return undefined;

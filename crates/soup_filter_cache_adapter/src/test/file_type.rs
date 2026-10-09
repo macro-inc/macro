@@ -153,9 +153,15 @@ async fn seed<S: PredicateIndexStorage>(engine: &mut Engine<S>) {
         .replace("fileType", "fileType isFavorited properties { id }");
     let data = json!({"user":{"id":"viewer","soup":{"items":(0..FILE_TYPES.len()).map(item).collect::<Vec<_>>()}}});
     let vars = serde_json::Map::new();
-    let projections =
-        authoritative_projection_mutations(&query, Some("SoupBackfill"), &data).unwrap();
+    let projections = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        &query,
+        Some("SoupBackfill"),
+        &data,
+    )
+    .unwrap();
     let projections = crate::properties::augment_authoritative(
+        cache_core::meta::bundled_schema_ref(),
         engine.storage(),
         &query,
         Some("SoupBackfill"),
@@ -236,6 +242,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         }}]}]}});
         // Start from pdf, then change its membership only in the pending layer.
         let projections = crate::properties::augment_optimistic(
+            cache_core::meta::bundled_schema_ref(),
             engine.storage(),
             RENAME,
             Some("Rename"),
@@ -249,6 +256,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
             .begin_optimistic_write_with_projections(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-0000-0000-000000000100",
                     query: RENAME,
                     operation_name: Some("Rename"),
@@ -289,9 +297,15 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         engine = reopened;
         assert_updated_type(&mut engine, &json!("pdf")).await;
 
-        let projections =
-            authoritative_projection_mutations(RENAME, Some("Rename"), &data).unwrap();
+        let projections = authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
+            RENAME,
+            Some("Rename"),
+            &data,
+        )
+        .unwrap();
         let projections = crate::properties::augment_authoritative(
+            cache_core::meta::bundled_schema_ref(),
             engine.storage(),
             RENAME,
             Some("Rename"),
@@ -326,9 +340,13 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
 fn every_soup_profile_compiles_file_type_negation_with_sql_null_semantics() {
     let data =
         json!({"user":{"soup":{"items":(0..FILE_TYPES.len()).map(item).collect::<Vec<_>>()}}});
-    let documents =
-        authoritative_projection_mutations(SUPPLEMENT_BACKFILL, Some("SoupBackfill"), &data)
-            .unwrap();
+    let documents = authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        SUPPLEMENT_BACKFILL,
+        Some("SoupBackfill"),
+        &data,
+    )
+    .unwrap();
     for compile in [
         item_filter_index::compile_soup_flat_v1,
         item_filter_index::compile_soup_flat_v2,
@@ -388,6 +406,7 @@ fn malformed_file_type_data_is_still_rejected_but_unknown_filter_inputs_are_not_
         item["fileType"] = file_type;
         assert!(
             authoritative_projection_mutations(
+                cache_core::meta::bundled_schema_ref(),
                 SUPPLEMENT_BACKFILL,
                 Some("SoupBackfill"),
                 &json!({"user":{"soup":{"items":[item]}}})
@@ -399,6 +418,7 @@ fn malformed_file_type_data_is_still_rejected_but_unknown_filter_inputs_are_not_
     missing.as_object_mut().unwrap().remove("fileType");
     assert!(
         authoritative_projection_mutations(
+            cache_core::meta::bundled_schema_ref(),
             SUPPLEMENT_BACKFILL,
             Some("SoupBackfill"),
             &json!({"user":{"soup":{"items":[missing]}}})

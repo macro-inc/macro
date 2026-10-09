@@ -20,9 +20,6 @@ export const useCrmPermissions = (
 export const useDealStages = (
   ...args: Parameters<CrmContext['createDealStages']>
 ) => useCrmContext().createDealStages(...args);
-export const useCrmUnavailable = (
-  ...args: Parameters<CrmContext['createUnavailable']>
-) => useCrmContext().createUnavailable(...args);
 export const useClosedStageIds = (
   ...args: Parameters<CrmContext['createClosedStageIds']>
 ) => useCrmContext().createClosedStageIds(...args);

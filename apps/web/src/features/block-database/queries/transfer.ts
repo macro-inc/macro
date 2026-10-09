@@ -10,14 +10,14 @@ import type { ImportTable } from '@service-storage/generated/schemas/importTable
 import type { Table } from '@service-storage/generated/schemas/table';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { err, ok, type ResultAsync } from 'neverthrow';
-import { encodeDatabaseCsv } from '../core/csv';
-import { relatedRowIds } from '../core/database-relations';
+import { encodeDatabaseCsv } from '../../database/core/csv';
+import { relatedRowIds } from '../../database/core/database-relations';
 import type {
   DatabaseCellValue,
   DatabaseViewColumn,
-} from '../core/database-view';
-import { gridRows } from '../core/grid-cells';
-import { formatCellValue } from '../core/table';
+} from '../../database/core/database-view';
+import { gridRows } from '../../database/core/grid-cells';
+import { formatCellValue } from '../../database/core/table';
 import { tableRowsStatement } from '../sql';
 import { toViewColumn } from './table-rows';
 
@@ -38,17 +38,21 @@ export function importDatabaseTable(
 type DatabaseExportFailure = DatabaseSqlFailure | { kind: 'too-large' };
 
 /**
- * A cell as the grid shows it. Relation cells have no row names loaded
- * here, so they keep the related rows' ids rather than claiming those rows
- * are unavailable.
+ * A cell as the CSV carries it: what the grid shows, except where its display
+ * drops data. Dates keep their stored moment (the grid shows the day) and
+ * numbers every digit (the grid rounds). Relation cells have no row names
+ * loaded here, so they keep the related rows' ids rather than claiming those
+ * rows are unavailable.
  */
-function exportedValue(
+export function exportedValue(
   column: DatabaseViewColumn,
   value: DatabaseCellValue
 ): string {
-  return column.relation
-    ? relatedRowIds(value).join(', ')
-    : formatCellValue(column, value);
+  if (column.relation) return relatedRowIds(value).join(', ');
+  if (column.dataType === 'DATE' && typeof value === 'string') return value;
+  if (column.dataType === 'NUMBER' && typeof value === 'number')
+    return String(value);
+  return formatCellValue(column, value);
 }
 
 /** Never silently export a partial read. */

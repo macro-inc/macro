@@ -4,16 +4,13 @@ import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
-import { Button } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
-import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
 import {
   type ProjectSource,
   type ProjectsContext,
   useProjectsContext,
 } from '../context/projects-context';
 import {
-  canDeleteProject,
   canEditProject,
   type ProjectDetail,
   type ProjectSection,
@@ -37,14 +34,12 @@ export function ProjectWorkspace(props: {
   source: ProjectSource;
   commands: ReturnType<ProjectsContext['createCommands']>;
   section: ProjectSection;
-  onDelete(): void;
   onOpenTask: ProjectTasksListProps['onOpenTask'];
   onCreateTask(): void;
   discussion: JSX.Element;
   description: JSX.Element;
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
-  const [deleting, setDeleting] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const canEdit = () => canEditProject(props.project);
   const run = async (action: () => Promise<void>) => {
@@ -89,22 +84,6 @@ export function ProjectWorkspace(props: {
           )}
         </Show>
       </SidePanel.Section>
-      <Show when={canDeleteProject(props.project)}>
-        <SidePanel.HeaderActions>
-          <Button
-            variant="ghost"
-            size="sm"
-            depth={2}
-            class="gap-1.5 border border-edge-muted px-2"
-            onClick={() => {
-              setError(undefined);
-              setDeleting(true);
-            }}
-          >
-            Delete project
-          </Button>
-        </SidePanel.HeaderActions>
-      </Show>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <Show when={error()}>
           {(message) => (
@@ -191,22 +170,6 @@ export function ProjectWorkspace(props: {
           </Switch>
         </div>
       </div>
-      <Show when={deleting()}>
-        <DeleteProjectsDialog
-          count={1}
-          pending={props.commands.pending()}
-          error={error()}
-          onOpenChange={(open) => {
-            if (!open) setDeleting(false);
-          }}
-          onDelete={() =>
-            void run(async () => {
-              await props.commands.delete(props.project.id);
-              props.onDelete();
-            })
-          }
-        />
-      </Show>
     </SidePanel.Layout>
   );
 }

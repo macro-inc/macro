@@ -1,9 +1,19 @@
 import { throwOnErr } from '@core/util/result';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { type CrmListConfig, isCrmListConfig } from '../core/navigation';
-import type { CrmQueryDependencies } from './dependencies';
+import type {
+  CrmQueryDependencies,
+  CrmRecordDependencies,
+} from './dependencies';
 import { crmKeys } from './keys';
+
+function crmListsQueryOptions(deps: CrmRecordDependencies) {
+  return queryOptions({
+    queryKey: crmKeys.lists.queryKey,
+    queryFn: () => throwOnErr(() => deps.storage.views.getSavedViews()),
+  });
+}
 
 /** Personal collections use saved-view storage, with explicit membership and team scope. */
 export function useCrmLists(
@@ -12,11 +22,7 @@ export function useCrmLists(
 ) {
   const client = deps.client;
   const query = useQuery(
-    () => ({
-      queryKey: crmKeys.lists.queryKey,
-      queryFn: () => throwOnErr(() => deps.storage.views.getSavedViews()),
-      enabled: !!teamId(),
-    }),
+    () => ({ ...crmListsQueryOptions(deps), enabled: !!teamId() }),
     () => deps.client
   );
   const lists = () =>

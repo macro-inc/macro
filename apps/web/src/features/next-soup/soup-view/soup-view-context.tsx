@@ -2,8 +2,6 @@ import {
   entityMatchesTagFilter,
   isListViewID,
   type ListView,
-  soupItemMatchesListView,
-  soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import {
@@ -15,7 +13,6 @@ import {
   type SoupState,
 } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/';
-import { emailItemMatchesImportance } from '@app/features/next-soup/filters/email-signal';
 import {
   compileToAst,
   NIL_UUID,
@@ -39,6 +36,13 @@ import {
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
 import { INBOX_FILTER_ENTRY_KEY } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
+import {
+  createSoupViewItemFilter,
+  emailImportanceInsertFilter,
+  entityMatchesReadFilter,
+  type ReadFilter,
+  type SoupViewItemFilterSnapshot,
+} from '@app/features/next-soup/soup-view/soup-view-item-filter';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
 import { deduplicateEntities } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -65,6 +69,11 @@ import {
   unreadFilterFn,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
+import {
+  createLocalDraftSource,
+  localDraftEntities,
+  localDraftMatchesFilters,
+} from '@queries/email/local-draft-source';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
@@ -74,10 +83,6 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import {
-  isDisplayableSoupItem,
-  mapApiSoupItemToEntity,
-} from '@queries/soup/transform-utils';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
@@ -97,10 +102,7 @@ import {
   useContext,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import {
-  applyDocumentTabScope,
-  withDocumentTabItemScope,
-} from './document-tab-scope';
+import { applyDocumentTabScope } from './document-tab-scope';
 import { resolveInitialViewFilters } from './initial-view-filters';
 
 type DataSource<T> = {
@@ -157,7 +159,7 @@ type SoupViewInitializeOptions = {
   itemMembershipFilter?: (item: SoupApiItem) => boolean;
 };
 
-export type ReadFilter = 'all' | 'unread' | 'read';
+export type { ReadFilter };
 
 /** List/board display mode — currently only the Customers view offers a board. */
 export type SoupViewMode = 'list' | 'board';
@@ -771,22 +773,6 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     };
   };
 
-  // A row the status filter admitted stays admitted for the rest of the visit
-  // (see `admittedByStatusFilter`). The inbox opens rows in a preview pane, and
-  // previewing marks the row read — so without this the row the user just
-  // clicked drops out from under the preview they are still reading, taking the
-  // list position with it. The row re-renders in its read styling, it just keeps
-  // its place.
-  const entityMatchesInboxReadFilter = (entity: EntityData): boolean => {
-    const filter = readFilter();
-    if (filter === 'all' || !isHomeView()) return true;
-    const isUnread = unreadFilterFn(entity);
-    return (
-      (filter === 'unread' ? isUnread : !isUnread) ||
-      admittedByStatusFilter().ids.has(entity.id)
-    );
-  };
-
   const applyViewFilters = (state: QueryState): QueryState => {
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
@@ -906,32 +892,28 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const activeTagFilterMode = () =>
     queryFilters.state.include.tagFilterMode ?? 'any';
 
-  const soupItemMatchesActiveFilters = (
-    item: SoupApiItem,
+  // Live, not snapshotted: the cache membership filter reads `.current` when it
+  // runs. Declared before the query hooks below, whose options accessors run
+  // synchronously at setup. Written by `admittedByStatusFilter` once it exists.
+  const admittedIds: { current: ReadonlySet<string> } = { current: new Set() };
+
+  // Everything else the cache membership filter needs, read at options time so
+  // the options accessor tracks it. The filter itself is built at module scope
+  // so the cached query never retains this provider's scope.
+  const itemFilterSnapshot = (
     view: ListView | undefined
-  ): boolean => {
-    if (!soupItemMatchesListView(item, view)) return false;
-
-    if (
-      !soupItemMatchesTagFilter(
-        item,
-        activeTagOptionIds(),
-        activeTagFilterMode()
-      )
-    ) {
-      return false;
-    }
-
-    const membershipFilter = config().itemMembershipFilter;
-    if (membershipFilter && !membershipFilter(item)) return false;
-
-    if (!isDisplayableSoupItem(item)) return false;
-    const entity = mapApiSoupItemToEntity(item) as SoupEntity;
-    return (
-      soup.predicates.test(entity, getFilterContext()) &&
-      entityMatchesInboxReadFilter(entity)
-    );
-  };
+  ): SoupViewItemFilterSnapshot => ({
+    view,
+    tab: view === 'documents' ? activeTab() : undefined,
+    userId: userId(),
+    tagOptionIds: activeTagOptionIds(),
+    tagFilterMode: activeTagFilterMode(),
+    membershipFilter: config().itemMembershipFilter,
+    testPredicates: soup.predicates.test,
+    filterContext: getFilterContext(),
+    readFilter: readFilter(),
+    admittedIds,
+  });
 
   // The Soup query facade owns GraphQL eligibility and REST fallback. Its urql
   // implementation keeps loaded pages subscribed to the normalized cache.
@@ -955,13 +937,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
-          itemFilter: withDocumentTabItemScope(
-            view === 'documents' ? activeTab() : undefined,
-            userId(),
-            (item) => soupItemMatchesActiveFilters(item, view)
-          ),
-          insertFilter: (item) =>
-            emailItemMatchesImportance(item, emailImportance),
+          itemFilter: createSoupViewItemFilter(itemFilterSnapshot(view)),
+          insertFilter: emailImportanceInsertFilter(emailImportance),
         },
       };
     }
@@ -991,13 +968,28 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const itemsSource = () => soupItemsSource;
 
+  const localDrafts = createLocalDraftSource(
+    () => itemsQuery.transport === 'graphql'
+  );
+  const localDraftRows = () => {
+    const filters = applyViewFilters(queryFilters.state);
+    if (!search.isSearching() && filters.emailView !== 'drafts') return [];
+    return localDraftEntities(
+      localDrafts
+        .drafts()
+        .filter((draft) => localDraftMatchesFilters(draft, filters))
+    ).map((entity) => attachNotifications(entity)) as SoupEntity[];
+  };
   const items = createMemo<SoupEntity[]>(
     (prev) => {
       const searching = search.isSearching();
 
       if (!searching) {
         const data = itemsSource().data();
-        const extras = config().additionalEntities?.() ?? [];
+        const extras = [
+          ...(config().additionalEntities?.() ?? []),
+          ...localDraftRows(),
+        ];
         const extraEntities = extras.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
@@ -1008,9 +1000,11 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           // navigation. Once the active query fails, those rows belong to
           // the previous query and must go so the load-error state can
           // render — only client-local rows remain valid.
-          return itemsSource().error() ? extraEntities : prev;
+          return itemsSource().error()
+            ? extraEntities
+            : deduplicateEntities([...extraEntities, ...prev]);
         }
-        if (data.groups) return prev;
+        if (data.groups) return localDraftRows();
 
         const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
@@ -1018,13 +1012,25 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
         if (extraEntities.length === 0) return base;
 
-        return [...extraEntities, ...base];
+        const extraIds = new Set(
+          extraEntities.map((entity) => `${entity.type}:${entity.id}`)
+        );
+        return [
+          ...extraEntities,
+          ...base.filter(
+            (entity) => !extraIds.has(`${entity.type}:${entity.id}`)
+          ),
+        ];
       }
 
       const local = search.localFuzzyResults();
       const service = search.serviceSearchResults();
 
-      const merged: SoupEntity[] = [...service, ...local];
+      const needle = search.searchText().toLowerCase();
+      const recovery = localDraftRows().filter((entity) =>
+        entity.name.toLowerCase().includes(needle)
+      );
+      const merged: SoupEntity[] = [...recovery, ...service, ...local];
 
       if (
         merged.length === 0 &&
@@ -1049,13 +1055,15 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   );
 
   // Ids that have matched the inbox status filter at some point during this
-  // visit, so `entityMatchesInboxReadFilter` can keep admitting a row after the
-  // user reads it.
+  // visit, so `entityMatchesReadFilter` can keep admitting a row after the user
+  // reads it.
   //
   // A visit is one view/tab/filter combination: changing any of them starts a
   // new set, and returning a new object is what re-runs every consumer. An
   // effect that emptied the set in place would not — a plain Set notifies
   // nothing — and the list would keep rendering the previous visit's rows.
+  // The memo also publishes the set to `admittedIds`, so the cache membership
+  // filter reads it without holding this provider's reactive graph.
   const admittedByStatusFilter = createMemo<{
     scope: string;
     ids: Set<string>;
@@ -1071,6 +1079,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       }
     }
 
+    admittedIds.current = ids;
     return { scope, ids };
   });
 
@@ -1079,13 +1088,20 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     const ctx = getFilterContext();
     const tagOptionIds = activeTagOptionIds();
     const tagFilterMode = activeTagFilterMode();
+    const statusFilter = readFilter();
+    const homeView = isHomeView();
+    // Only an active status filter on Home consults the admitted rows.
+    const admitted =
+      statusFilter !== 'all' && homeView
+        ? admittedByStatusFilter().ids
+        : new Set<string>();
 
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
         continue;
       }
-      if (!entityMatchesInboxReadFilter(entity)) {
+      if (!entityMatchesReadFilter(entity, statusFilter, homeView, admitted)) {
         continue;
       }
       if (!entityMatchesTagFilter(entity, tagOptionIds, tagFilterMode)) {
@@ -1150,13 +1166,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: withDocumentTabItemScope(
-            view === 'documents' ? activeTab() : undefined,
-            userId(),
-            (item) => soupItemMatchesActiveFilters(item, view)
-          ),
-          insertFilter: (item) =>
-            emailItemMatchesImportance(item, emailImportance),
+          itemFilter: createSoupViewItemFilter(itemFilterSnapshot(view)),
+          insertFilter: emailImportanceInsertFilter(emailImportance),
         },
       };
     },
@@ -1377,17 +1388,56 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
     const result: SoupRow[] = [];
     let globalIndex = 0;
+    // Local working copies have no server group membership yet. Keep them
+    // discoverable, subject to the same filters as the flat Drafts view.
+    const recovery = entities();
+    const recoveryIds = new Set(
+      recovery.map((entity) => `${entity.type}:${entity.id}`)
+    );
+    if (recovery.length) {
+      const key = 'local-email-drafts';
+      const group: GroupMeta = {
+        key,
+        value: key,
+        label: 'Saved on this device',
+        count: recovery.length,
+        isExpanded: () => soup.grouping.isExpanded(key),
+        toggle: () => soup.grouping.toggle(key),
+      };
+      result.push(
+        soup.buildRow({
+          id: `header:${key}`,
+          index: globalIndex++,
+          original: recovery[0],
+          group,
+          isGrouped: true,
+        })
+      );
+      for (const entity of recovery)
+        result.push(
+          soup.buildRow({
+            id: entity.id,
+            index: globalIndex++,
+            original: entity,
+            group,
+          })
+        );
+    }
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
       const groupData = groupQueryFor(apiGroup.key)?.data();
       const groupEntities =
-        groupData?.entities?.map(
-          (entity) =>
-            (isWithNotification(entity)
-              ? entity
-              : attachNotifications(entity)) as SoupEntity
-        ) ?? [];
+        groupData?.entities
+          ?.map(
+            (entity) =>
+              (isWithNotification(entity)
+                ? entity
+                : attachNotifications(entity)) as SoupEntity
+          )
+          .filter(
+            (entity) => !recoveryIds.has(`${entity.type}:${entity.id}`)
+          ) ?? [];
 
       const firstEntity = groupEntities[0];
       if (!firstEntity) continue;
@@ -1437,6 +1487,12 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const searchSourceError = () =>
     (searchQuery.error as Error | null) ??
     nativeOfflineLoadError(searchSourceHasData);
+  const hasLocalRecoveryRows = () => {
+    const ids = new Set(localDraftRows().map((entity) => entity.id));
+    return entities().some(
+      (entity) => entity.type === 'email' && ids.has(entity.id)
+    );
+  };
 
   const context = {
     extensions: props.extensions,
@@ -1454,6 +1510,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         search.isSearching()
           ? searchSourceHasData()
           : itemsSource().hasData() ||
+            hasLocalRecoveryRows() ||
             // Rows retained across a query rebind count as data so the view
             // doesn't flash, but once the query errors only client-local
             // rows remain and must not suppress the load-error state.

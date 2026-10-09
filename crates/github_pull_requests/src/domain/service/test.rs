@@ -1,3 +1,4 @@
+mod events;
 mod index;
 mod initialization;
 mod refresh;

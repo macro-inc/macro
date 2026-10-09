@@ -37,3 +37,6 @@ pub mod search_service;
 /// Contact listing models shared by Soup and the CRM service.
 #[cfg(feature = "ports")]
 pub mod contact_listing;
+/// CRM pipelines and their lifecycle.
+#[cfg(feature = "ports")]
+pub mod pipelines;

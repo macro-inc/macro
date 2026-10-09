@@ -136,6 +136,17 @@ const operation = z.discriminatedUnion('type', [
         .max(26),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal('set_dropdown'),
+      sheetId,
+      range,
+      items: z.array(z.string().min(1).max(255)).min(1).max(1_000).optional(),
+      source: z.string().min(2).max(300).optional(),
+      rejectInvalid: z.boolean().optional(),
+    })
+    .strict(),
+  z.object({ type: z.literal('clear_validation'), sheetId, range }).strict(),
 ]);
 
 export const spreadsheetRequestSchema = z.discriminatedUnion('action', [

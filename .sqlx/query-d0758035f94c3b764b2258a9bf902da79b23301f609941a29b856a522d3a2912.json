@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH members AS (\n                SELECT teammate.user_id FROM team_user viewer JOIN team_user teammate ON teammate.team_id = viewer.team_id WHERE viewer.user_id = $1\n                UNION SELECT $1::text\n            )\n            SELECT md5(COALESCE(string_agg(jsonb_build_array(members.user_id, policy.sharing, policy.updated_at,\n                account.id, account.sync_status IN ('ready','syncing'), account.last_sync_error IS NULL,\n                COALESCE(account.last_synced_at > now() - interval '15 minutes', false), calendar.id, calendar.access_role,\n                calendar.synced_at IS NULL, calendar.snapshot_normalization_version, calendar.is_deleted, calendar.is_primary, calendar.name, calendar.time_zone,\n                calendar.last_sync_error IS NULL, calendar.materialized_starts_at, calendar.materialized_ends_at,\n                calendar.materialized_start_date, calendar.materialized_end_date,\n                preference.contributes_to_availability, counter.seq)::text, '|' ORDER BY members.user_id, account.id, calendar.id), '')) AS \"revision!\"\n            FROM members LEFT JOIN calendar_team_sharing policy ON policy.user_id = members.user_id\n            LEFT JOIN calendar_accounts account ON (account.owner_id = members.user_id OR EXISTS (\n                SELECT 1 FROM macro_user_links link WHERE link.link_id = account.email_link_id AND link.primary_macro_id = members.user_id\n            ))\n            LEFT JOIN calendars calendar ON calendar.account_id = account.id\n            LEFT JOIN calendar_availability_preferences preference ON preference.calendar_id = calendar.id AND preference.user_id = members.user_id\n            LEFT JOIN calendar_change_counters counter ON counter.link_id = account.email_link_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "revision!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d0758035f94c3b764b2258a9bf902da79b23301f609941a29b856a522d3a2912"
+}

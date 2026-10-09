@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INITIAL_CACHE_REVISION } from '../protocol';
+import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
@@ -9,6 +9,109 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it('uses GraphQL JSON variable semantics for every WASM query and mutation path', async () => {
+    const written = {
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+      revalidations: [],
+    };
+    const engine = {
+      readQuery: vi.fn().mockResolvedValue({ kind: 'miss' }),
+      watchQuery: vi.fn().mockResolvedValue({ kind: 'miss', ...written }),
+      writeQuery: vi.fn().mockResolvedValue(written),
+      hydrateQuery: vi.fn().mockResolvedValue({ ...written, data: null }),
+      enqueueOptimisticMutation: vi.fn().mockResolvedValue({
+        ...written,
+        transactionId: '1',
+        upsertKind: { kind: 'inserted' },
+        initialClaim: { kind: 'not-runnable' },
+      }),
+      commitOptimisticWrite: vi.fn().mockResolvedValue({
+        ...written,
+        kind: 'committed',
+      }),
+      inspectQuery: vi.fn().mockResolvedValue([]),
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue(engine),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const variables = {
+      useDefault: undefined,
+      input: {
+        groupBy: { field: 'PROPERTY', entityType: undefined },
+        cleared: null,
+        values: [undefined, null, { omitted: undefined, value: 'kept' }],
+      },
+    };
+    const expected = {
+      input: {
+        groupBy: { field: 'PROPERTY' },
+        cleared: null,
+        values: [null, null, { value: 'kept' }],
+      },
+    };
+    const query = 'query Test($input: GroupedSoupInput!) { user { id } }';
+    const payload = { query, variables, data: { user: { id: 'user' } } };
+    const requests: CacheRequest[] = [
+      { id: 2, kind: 'read', query, variables },
+      { id: 3, kind: 'read', query, variables, opId: 'watch', watch: {} },
+      { id: 4, kind: 'write', ...payload },
+      { id: 5, kind: 'hydrate', ...payload },
+      {
+        id: 6,
+        kind: 'enqueue-optimistic-mutation',
+        ...payload,
+        uuid: 'mutation',
+        createdAtMs: 0,
+        owner: 'runner',
+        nowMs: 0,
+        leaseExpiresAtMs: 1000,
+      },
+      {
+        id: 7,
+        kind: 'commit-optimistic-write',
+        ...payload,
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+      },
+      {
+        id: 8,
+        kind: 'inspect-query',
+        query,
+        path: [{ field: 'user' }],
+        variableFilters: [variables],
+      },
+    ];
+    for (const request of requests) await core.handleRequest(port, request);
+
+    for (const [method, variableIndex] of [
+      ['readQuery', 3],
+      ['watchQuery', 3],
+      ['writeQuery', 3],
+      ['hydrateQuery', 2],
+      ['enqueueOptimisticMutation', 4],
+      ['commitOptimisticWrite', 5],
+    ] as const) {
+      expect(engine[method]).toHaveBeenCalledOnce();
+      expect(engine[method].mock.calls[0][variableIndex]).toStrictEqual(
+        expected
+      );
+    }
+    expect(engine.inspectQuery.mock.calls[0][3]).toStrictEqual([expected]);
+    expect(messages).not.toContainEqual(expect.objectContaining({ ok: false }));
+    // Normalization must not modify the query caller's objects.
+    expect(Object.hasOwn(variables, 'useDefault')).toBe(true);
+    expect(Object.hasOwn(variables.input.groupBy, 'entityType')).toBe(true);
+  });
+
   it.each([
     { errorCode: undefined, superseded: false },
     { errorCode: 'DRAFT_ALREADY_SENT', superseded: false },
@@ -556,6 +659,124 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('keeps a calendar commit behind the hydration it covers and fans out its deletions', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const range = {
+      kind: 'range' as const,
+      revision: '1',
+      occurrenceKeys: [],
+      gaps: [],
+      freshness: 'fresh' as const,
+      uncertainEventKeys: [],
+      optimistic: false,
+      watermark: null,
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: vi.fn(async () => {
+          order.push('read');
+          markBlockerStarted();
+          await blocker;
+          return { kind: 'miss' as const };
+        }),
+        hydrateQuery: vi.fn(async () => {
+          order.push('hydrate');
+          return {
+            revision: '1',
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+            data: null,
+          };
+        }),
+        calendarRange: vi.fn(async () => {
+          order.push('calendar-range');
+          return range;
+        }),
+        calendarCommit: vi.fn(async () => {
+          order.push('calendar-commit');
+          return {
+            revision: '2',
+            revisionAdvanced: true,
+            changed: ['GraphqlCalendarOccurrence:e1:k'],
+            affectedOps: ['client:7'],
+            reset: false,
+            searchChangedBuckets: [],
+          };
+        }),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: vi.fn((message) => messages.push(message)) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query CalendarOccurrences { occurrences }',
+      data: { occurrences: [] },
+    });
+    const commit = core.handleRequest(port, {
+      id: 4,
+      kind: 'calendar-commit',
+      commit: {
+        coverage: [{ kind: 'timed', start: 0, end: 10 }],
+        deletedEventKeys: ['GraphqlCalendarEvent:e1'],
+      },
+    });
+    const read = core.handleRequest(port, {
+      id: 5,
+      kind: 'calendar-range',
+      request: { startMs: 0, endMs: 10, startDay: 0, endDay: 1 },
+    });
+    releaseBlocker();
+    await Promise.all([running, hydration, commit, read]);
+
+    expect(order).toEqual([
+      'read',
+      'calendar-range',
+      'hydrate',
+      'calendar-commit',
+    ]);
+    expect(messages).toContainEqual({ id: 5, ok: true, result: range });
+    expect(messages).toContainEqual({
+      kind: 'ops-affected',
+      opIds: ['client:7'],
+      keys: ['GraphqlCalendarOccurrence:e1:k'],
+    });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: '2',
+      searchChangedBuckets: [],
+    });
+    expect(messages).toContainEqual({
+      id: 4,
+      ok: true,
+      result: {
+        kind: 'committed',
+        revision: '2',
+        changed: ['GraphqlCalendarOccurrence:e1:k'],
+      },
+    });
+  });
+
   it('does not let stale hydration overwrite a newer queued write', async () => {
     let releaseBlocker!: () => void;
     let markBlockerStarted!: () => void;
@@ -625,6 +846,77 @@ describe('CacheWorkerCore', () => {
     expect(record).toEqual({ id: 'doc-1', title: 'newer' });
     expect(hydrateQuery).toHaveBeenCalledBefore(writeQuery);
   });
+
+  it.each(['commit', 'delete'] as const)(
+    'preserves a %s after older hydration queued behind a busy worker',
+    async (action) => {
+      const blocker = Promise.withResolvers<void>();
+      const started = Promise.withResolvers<void>();
+      let title: string | undefined = 'initial';
+      const written = {
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          readQuery: async () => {
+            started.resolve();
+            await blocker.promise;
+            return { kind: 'miss' };
+          },
+          hydrateQuery: async () => {
+            title = 'stale';
+            return { ...written, kind: 'data', data: null };
+          },
+          commitOptimisticWrite: async () => {
+            title = 'committed';
+            return { ...written, kind: 'committed' };
+          },
+          deleteKeys: async () => {
+            title = undefined;
+            return written;
+          },
+        }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      const running = core.handleRequest(port, {
+        id: 2,
+        kind: 'read',
+        query: 'query Blocker { blocker }',
+      });
+      await started.promise;
+      const hydration = core.handleRequest(port, {
+        id: 3,
+        kind: 'hydrate',
+        query: 'query Old { document { title } }',
+        data: { document: { title: 'stale' } },
+      });
+      const write = core.handleRequest(
+        port,
+        action === 'commit'
+          ? {
+              id: 4,
+              kind: 'commit-optimistic-write',
+              transactionId: 'txn',
+              leaseOwner: 'runner',
+              leaseGeneration: '1',
+              query: 'mutation Save { document { title } }',
+              data: { document: { title: 'committed' } },
+            }
+          : { id: 4, kind: 'delete-records', keys: ['Document:doc-1'] }
+      );
+      blocker.resolve();
+      await Promise.all([running, hydration, write]);
+      expect(title).toBe(action === 'commit' ? 'committed' : undefined);
+      expect(port.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false })
+      );
+    }
+  );
 
   it('checks storage generation after earlier hydration before later foreground reads', async () => {
     const order: string[] = [];

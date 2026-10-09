@@ -310,6 +310,8 @@ export const TOKENS = {
     agentNewSplit: 'create.agentNewSplit',
     database: 'create.database',
     databaseNewSplit: 'create.databaseNewSplit',
+    form: 'create.form',
+    formNewSplit: 'create.formNewSplit',
     close_menu: 'create.close_menu',
   },
 

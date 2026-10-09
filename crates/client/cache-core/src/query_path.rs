@@ -1,7 +1,6 @@
 //! Shared GraphQL response-path helpers used by query-rooted cache APIs.
 
 use crate::document::{FieldNode, MissingVariable, Selection, resolve_args_key};
-use crate::meta;
 use crate::value::{FieldKey, field_key};
 use serde_json::Value as Json;
 
@@ -11,6 +10,7 @@ use serde_json::Value as Json;
 /// patches retain their existing first-match behavior, while inspection
 /// performs a separate ambiguity check before traversal.
 pub(crate) fn selected_field<'a>(
+    schema: &crate::meta::Schema,
     selections: &'a [Selection],
     concrete: &str,
     response_key: &str,
@@ -22,11 +22,12 @@ pub(crate) fn selected_field<'a>(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } if type_condition
                 .as_deref()
-                .is_none_or(|condition| meta::type_matches(concrete, condition)) =>
+                .is_none_or(|condition| schema.type_matches(concrete, condition)) =>
             {
-                if let Some(field) = selected_field(selection_set, concrete, response_key) {
+                if let Some(field) = selected_field(schema, selection_set, concrete, response_key) {
                     return Some(field);
                 }
             }
@@ -41,6 +42,7 @@ pub(crate) fn selected_field<'a>(
 /// Unlike [`selected_field`], this treats abstract type overlaps as possible
 /// so inspection can reject ambiguous paths before consulting cache data.
 pub(crate) fn possible_selected_fields<'a>(
+    schema: &crate::meta::Schema,
     selections: &'a [Selection],
     type_name: &str,
     response_key: &str,
@@ -53,25 +55,26 @@ pub(crate) fn possible_selected_fields<'a>(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } if type_condition
                 .as_deref()
-                .is_none_or(|condition| types_overlap(type_name, condition)) =>
+                .is_none_or(|condition| types_overlap(schema, type_name, condition)) =>
             {
-                possible_selected_fields(selection_set, type_name, response_key, out);
+                possible_selected_fields(schema, selection_set, type_name, response_key, out);
             }
             Selection::Fragment { .. } => {}
         }
     }
 }
 
-fn types_overlap(left: &str, right: &str) -> bool {
-    if left == right || meta::type_matches(left, right) || meta::type_matches(right, left) {
+fn types_overlap(schema: &crate::meta::Schema, left: &str, right: &str) -> bool {
+    if left == right || schema.type_matches(left, right) || schema.type_matches(right, left) {
         return true;
     }
-    let Some(left) = meta::type_meta(left) else {
+    let Some(left) = schema.type_meta(left) else {
         return false;
     };
-    let Some(right) = meta::type_meta(right) else {
+    let Some(right) = schema.type_meta(right) else {
         return false;
     };
     left.possible_types
@@ -89,6 +92,12 @@ pub(crate) fn selected_storage_key(
 }
 
 /// Returns the named schema type selected by `field` on `concrete`.
-pub(crate) fn selected_type(concrete: &str, field: &FieldNode) -> Option<&'static str> {
-    meta::field_meta(concrete, &field.name).map(|metadata| metadata.ty.name)
+pub(crate) fn selected_type<'schema>(
+    schema: &'schema crate::meta::Schema,
+    concrete: &str,
+    field: &FieldNode,
+) -> Option<&'schema str> {
+    schema
+        .field_meta(concrete, &field.name)
+        .map(|metadata| metadata.ty.name)
 }

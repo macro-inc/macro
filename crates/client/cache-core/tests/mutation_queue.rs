@@ -16,6 +16,7 @@ use serde_json::json;
 #[test]
 fn optimistic_source_supports_versioned_and_legacy_json() {
     let source = OptimisticSource {
+        client_metadata: Some(json!({"kind": "email-draft", "revision": 10})),
         identity_bindings: Vec::new(),
         mutation_data: json!({"rename": {"name": "next"}}),
         link_patches: Vec::new(),
@@ -50,6 +51,7 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
                 }],
             },
         ],
+        uncertain_calendar_event_keys: vec![EntityKey::entity("GraphqlCalendarEvent", &["e1"])],
     };
     assert_eq!(
         decode_optimistic_source(&encode_optimistic_source(&source)).unwrap(),
@@ -77,6 +79,14 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
         json!({"rename": {"name": "legacy"}})
     );
     assert!(legacy_v2.projection_mutations.is_empty());
+    assert!(legacy_v2.client_metadata.is_none());
+    let without_metadata = encode_optimistic_source(&OptimisticSource {
+        client_metadata: None,
+        uncertain_calendar_event_keys: Vec::new(),
+        ..source
+    });
+    assert!(!without_metadata.contains("clientMetadata"));
+    assert!(!without_metadata.contains("uncertainCalendarEventKeys"));
     assert!(
         decode_optimistic_source(
             r#"@macro-cache/optimistic-source:{"version":2,"mutationData":{},"projectionMutations":[]}"#,

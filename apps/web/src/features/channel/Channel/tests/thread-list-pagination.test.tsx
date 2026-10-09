@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadList, type ThreadListNavigation } from '../ThreadList';
 
 const rowHeights = new Map<string, number>();
+let viewportHeight = 400;
 
 const platform = vi.hoisted(() => ({ safari: true }));
 vi.mock('@solid-primitives/platform', () => ({
@@ -19,16 +20,19 @@ vi.mock('@core/component/CustomScrollbar', () => ({
 beforeEach(() => {
   platform.safari = true;
   rowHeights.clear();
+  viewportHeight = 400;
   // Supply layout for the real virtualizer; jsdom does not measure DOM nodes.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
     function (this: HTMLElement) {
       return this.hasAttribute('data-index')
         ? (rowHeights.get(this.textContent ?? '') ?? 96)
-        : 400;
+        : viewportHeight;
     }
   );
   vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(400);
-  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(
+    () => viewportHeight
+  );
   vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(
     function (this: HTMLElement) {
       return Number.parseFloat(
@@ -108,6 +112,61 @@ function setup(followOnAppend = true) {
 }
 
 describe('history loading ahead of scrolling', () => {
+  it.each([false, true])(
+    'renders every row of a short list that fits the viewport (safari=%s)',
+    async (safari) => {
+      platform.safari = safari;
+      // The estimated rows fit, so the initial end scroll clamps to zero
+      // without emitting a scroll event.
+      viewportHeight = 1000;
+      const keys = Array.from({ length: 10 }, (_, i) => `row-${i}`);
+      for (const key of keys) rowHeights.set(key, 50);
+      const { container } = render(() => (
+        <ThreadList keys={() => keys}>{({ id }) => <div>{id}</div>}</ThreadList>
+      ));
+      await waitFor(() =>
+        expect(container.querySelectorAll('[data-index]')).toHaveLength(
+          keys.length
+        )
+      );
+      const element = container.querySelector<HTMLDivElement>(
+        '[data-channel-scroll]'
+      )!;
+      expect(element.scrollTop).toBe(0);
+      expect(element.scrollHeight).toBe(element.clientHeight);
+      expect(container.querySelector('[data-index="0"]')?.textContent).toBe(
+        keys[0]
+      );
+    }
+  );
+
+  it('preserves a restored history offset during the initial readback', async () => {
+    platform.safari = false;
+    const keys = Array.from({ length: 20 }, (_, index) => String(index));
+    const onScroll = vi.fn();
+    const { container } = render(() => (
+      <ThreadList
+        keys={() => keys}
+        initialPosition={{
+          type: 'restore',
+          snapshot: { scrollOffset: 700, isNearBottom: false },
+        }}
+        onScroll={onScroll}
+      >
+        {({ id }) => <div>{id}</div>}
+      </ThreadList>
+    ));
+    await waitFor(() =>
+      expect(onScroll).toHaveBeenLastCalledWith(
+        expect.objectContaining({ distanceFromTop: 700, isNearBottom: false }),
+        expect.objectContaining({ scrollOffset: 700 })
+      )
+    );
+    expect(container.querySelector('[data-channel-scroll]')?.scrollTop).toBe(
+      700
+    );
+  });
+
   it('fills a bounded Safari buffer before a gesture and preserves the bottom pin', async () => {
     const f = setup();
     await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());

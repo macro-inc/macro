@@ -23,6 +23,7 @@ local_auth = ["macro_authorization/local_auth"]
 [dependencies]
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
 ai_usage = { path = "../../crates/ai_usage" }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
 bots = { path = "../../crates/bots", features = ["outbound"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
@@ -31,18 +32,24 @@ agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", default
 agent_session = { path = "../../crates/agent_session", default-features = false, features = ["admission"] }
 bot_id = { path = "../../crates/bot_id" }
 channel_sender = { path = "../../crates/channel_sender" }
-channels = { path = "../../crates/channels", default-features = false }
-documents = { path = "../../crates/documents", default-features = false }
+channels = { path = "../../crates/channels", default-features = false, features = ["outbound"] }
+crm = { path = "../../crates/crm", default-features = false, features = ["ports"] }
+documents = { path = "../../crates/documents", default-features = false, features = ["outbound", "ports"] }
 document_sub_type = { path = "../../crates/document_sub_type" }
-email = { path = "../../crates/email", default-features = false }
+email = { path = "../../crates/email", default-features = false, features = ["outbound"] }
+entity_access_management = { path = "../../crates/entity_access_management" }
+frecency = { path = "../../crates/frecency", features = ["postgres"] }
+jev = { path = "../../crates/jev", features = ["outbound"] }
+lexical_client = { path = "../../crates/lexical_client" }
+mention_utils = { path = "../../crates/mention_utils" }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["inbound", "outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_event_topics = { path = "../../crates/macro_event_topics" }
-messages = { path = "../../crates/messages", features = ["broker"] }
+messages = { path = "../../crates/messages", features = ["broker", "outbound"] }
 models_properties = { path = "../../crates/models_properties" }
-properties = { path = "../../crates/properties", default-features = false }
+properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 system_properties = { path = "../../crates/system_properties" }
 rdkafka = { workspace = true }
 reqwest = { workspace = true }

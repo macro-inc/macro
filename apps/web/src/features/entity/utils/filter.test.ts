@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { EmailEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import { unreadFilterFn } from './filter';
@@ -23,6 +23,34 @@ it('shows an unseen reminder dot on a read email without changing mailbox state'
   expect(unreadFilterFn(email)).toBe(false);
   state = 'done';
   expect(unreadFilterFn(email)).toBe(false);
+});
+
+it('reads a GraphQL soup reminder array on a read email', () => {
+  const email = {
+    type: 'email',
+    id: 'thread',
+    isRead: true,
+    notifications: [
+      {
+        entity_type: 'email_thread',
+        notification_event_type: 'reminder',
+        state: 'unseen',
+      } as Notification,
+    ],
+  } as unknown as WithNotification<EmailEntity>;
+  expect(unreadFilterFn(email)).toBe(true);
+});
+
+it('does not read notifications for an unread email', () => {
+  const notifications = vi.fn((): Notification[] => []);
+  const email = {
+    type: 'email',
+    id: 'thread',
+    isRead: false,
+    notifications,
+  } as unknown as WithNotification<EmailEntity>;
+  expect(unreadFilterFn(email)).toBe(true);
+  expect(notifications).not.toHaveBeenCalled();
 });
 
 it('keeps ordinary new-mail dots tied to mailbox read state', () => {

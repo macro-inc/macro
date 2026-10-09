@@ -43,6 +43,29 @@ pub async fn get_document_access(
         return Ok(access_level);
     }
 
+    // A separate statement on purpose: an owner grant settles the result, and
+    // planning the union below costs more than executing it.
+    let is_direct_owner = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM entity_access
+            WHERE entity_id = $1
+              AND entity_type = 'document'
+              AND source_id = ANY($2)
+              AND access_level = 'owner'
+        ) AS "is_direct_owner!"
+        "#,
+        document_id,
+        &source_ids.0,
+    )
+    .fetch_one(pool)
+    .await?;
+
+    if is_direct_owner {
+        return Ok(Some(AccessLevel::Owner));
+    }
+
     let user_id_str = user_id.map(AsRef::as_ref).unwrap_or("");
 
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(

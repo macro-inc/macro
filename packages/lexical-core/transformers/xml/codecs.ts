@@ -67,6 +67,7 @@ const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   heading: 1,
   quote: 1,
   list: 1,
+  'task-list': 1,
   listitem: 1,
   table: 1,
   tablerow: 1,
@@ -225,7 +226,7 @@ export function serializeNode(node: SerNode): FxpNode {
         ...(n.checked && { checked: 'true' }),
       })
     )
-    .with({ type: 'list' }, (n) =>
+    .with({ type: 'list' }, { type: 'task-list' }, (n) =>
       container(n.listType === 'number' ? 'ol' : 'ul', n, {
         ...(n.listType === 'check' && { listType: 'check' }),
         ...(n.start !== 1 && { start: String(n.start) }),

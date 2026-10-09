@@ -1,8 +1,15 @@
 # Android development
 
-Macro's Android package is `com.macro.app.prod`. Its Gradle project lives in
+Macro's Android package is `com.macro.workspace.mobile`. Its Gradle project lives in
 `apps/web/tauri/src-tauri/gen/android`. Keep the project and wrapper in source
 control; do not regenerate them to repair a build error.
+
+The Android-specific Tauri config overrides the shared identifier. iOS and desktop
+retain `com.macro.app.prod`. The Android activity package and native certificate
+verifier's JNI symbol must match the Android identifier.
+When switching an existing checkout, remove the obsolete ignored
+`gen/android/app/src/main/java/com/macro/app/prod/generated` directory. Tauri
+generates classes for the new package during the build; keep the Gradle project.
 
 ## Prerequisites
 
@@ -55,12 +62,13 @@ signed artifacts. Debug builds do not fetch release signing credentials.
 ## Release signing
 
 The existing upload keystore and signing credentials are stored in Doppler
-`android-release/prd`, secret `ANDROID_UPLOAD_SIGNING_JSON`. It contains
+`android-release/prd`, secret `ANDROID_UPLOAD_SIGNING_JSON_V2`. It contains
 `keystore_base64`, `keystore_sha256`, `certificate_sha256`, `package_name`,
 `key_alias`, `key_password`, and `store_password`. Keep them outside the checkout
 and provision them securely for CI.
-Coordinate key replacement with Play Console; do not generate a new key for
-routine builds.
+The V2 signing metadata names the new Android package and retains the existing
+upload key. Keep the unversioned metadata for builds of older commits. Coordinate
+key replacement with Play Console; do not generate a new key for routine builds.
 
 `just android-build` preserves existing `gen/android/keystore.properties`
 configuration, including CI-provisioned signing. When it is missing, the launcher
@@ -133,11 +141,50 @@ and are removed even when the build fails. Only APK/checksum files are attached
 to the release; the separate `android-build-log` Actions artifact is retained for
 seven days, including on failed builds.
 
-Release tags must follow `vYYYY.M.D.N`, with a valid date, years 2000–2099, and a
-daily revision from 0–99. Android's `versionCode` is `YYYYMMDDNN` (for example,
-`v2026.9.28.1` becomes `2026092801`), and `versionName` is `2026.9.28-1`.
-New releases must increase the date/revision; a rerun retains the same version.
-Always keep the signing key to allow upgrades over earlier distributed APKs.
+Android's native release identity lives in
+`apps/web/tauri/src-tauri/tauri.android.conf.json`: `version` is the user-visible
+versionName, and `bundle.android.versionCode` is an independent positive integer
+counter. Local Tauri builds and CI use the same values. Release tags may be
+`vYYYY.M.D` or `vYYYY.M.D.N` (valid dates, years 2000–2099, revision 0–99); they
+identify source and artifact filenames, and do not determine either Android
+version field.
+
+The first release using this counter is build **1**. Before each subsequent
+native release (including a new binary with the same marketing version), run
+from `apps/web`:
+
+```sh
+just android-bump
+```
+
+Commit the changed config before tagging the release. This increments only
+`versionCode`; edit `version` separately when changing the marketing version.
+Builds never increment the counter implicitly, so retries of the same release
+retain its identity. Never distribute different releases with the same code or
+reuse a code already uploaded to Google Play. Keep the signing key for upgrades.
+The counter may not exceed [Google Play's 2,100,000,000 limit](https://developer.android.com/studio/publish/versioning).
+
+This deliberately resets the former date-based/test codes. The new Android package
+is a separate installation from the former `com.macro.app.prod` test APK; it does
+not update that app or inherit its local data. Do not carry the old test APK into
+the Play rollout. Uninstall the old app when moving testers to the new package:
+both apps claim the same `macro://` authentication and navigation callbacks.
+
+`MIN_NATIVE_BUILD_ANDROID` remains a separate compatibility floor. For the first
+build with runtime GraphQL SDL and schema 3 OTA support (#7724 and #7303), it is
+**1**. Set it alongside `MIN_NATIVE_BUILD_IOS` when building the OTA frontend.
+Retain the floor as the native counter increases; raise it only when the frontend
+requires newer native capabilities. Older date-coded test APKs exceed this floor,
+so retire them rather than relying on it to exclude those test installs.
+
+When moving to Google Play, keep this same counter for AAB builds across all
+tracks (internal testing, closed testing, and production). Promote the same
+uploaded artifact between tracks; allocate a new code for a new binary. The
+existing `just android-build --aab` path uses the same Tauri config. The workflow
+below still publishes APKs; Play upload, signing enrollment, and track promotion
+are a separate setup. Use [Play App Signing](https://developer.android.com/studio/publish/app-signing) and preserve its app-signing key once
+Play distribution starts; the upload key and installed-app signing key are
+separate roles.
 
 Before upload, CI verifies the signing certificate, package/version, ARM64 ABI,
 non-debuggable manifest, and 16 KiB ZIP alignment. Publishing waits for the web,
@@ -185,19 +232,19 @@ payload's recipient against the registered account to reject delayed pushes
 from an earlier session.
 
 For verification, test foreground, background, and ordinary process death
-separately. Background the app, then use `adb shell am kill com.macro.app.prod`
+separately. Background the app, then use `adb shell am kill com.macro.workspace.mobile`
 for the process-dead case. Android force-stop is a different state that prevents
 FCM delivery until the user opens the app again. Also test permission and channel
 revocation, logout/account switching, repeated delivery, notification taps, and
 read/done clearing. Silent clearing uses normal-priority FCM and may be delayed
 by Doze. A local display test alone does not verify backend event delivery.
 
-The launcher requires package **com.macro.app.prod** and validates these projects:
+The launcher requires package **com.macro.workspace.mobile** and validates these projects:
 
 | Build command | Firebase project |
 | --- | --- |
 | `android-dev` | `macro-app-dev-12ae0` |
-| `android-build` (including `--debug`) | `macro-app-955f1` |
+| `android-build` (including `--debug`) | `macro-app-prod` |
 
 ### Reproducible configuration
 
@@ -215,7 +262,7 @@ of the UTF-8 value with leading/trailing whitespace removed. It validates the
 Firebase project and Android package before atomically writing the ignored
 `tauri/src-tauri/gen/android/app/google-services.json` consumed by Gradle.
 
-Each config has a versioned key, initially `GOOGLE_SERVICES_JSON_V1`. Missing
+Each config has a versioned key, currently `GOOGLE_SERVICES_JSON_V2`. Missing
 authentication, a missing key, a checksum mismatch, or an invalid config stops
 the build before Cargo starts. Existing local config files are not a fallback:
 they cannot silently change which Firebase configuration a commit builds with.
@@ -241,7 +288,7 @@ just android-build --firebase-config /absolute/path/google-services.json
 ```
 
 An explicit file bypasses the Doppler fetch and checksum pin. It still must
-contain `com.macro.app.prod`, the current Android package. Other Firebase project
+contain `com.macro.workspace.mobile`, the current Android package. Other Firebase project
 IDs are allowed for forks; Macro's known dev/prod projects are still rejected
 when used with the opposite build command. Forks changing the Android package
 must also update the package validation in `scripts/android-firebase.ts` and
@@ -257,12 +304,12 @@ their own Firebase resources.
 1. Download the updated Android config from the intended Firebase project and
    validate its package and project ID.
 2. Store it under a **new** key in the matching `android-release` Doppler config
-   (for example, `GOOGLE_SERVICES_JSON_V2`). Keep every older pinned key unchanged
+   (for example, `GOOGLE_SERVICES_JSON_V3`). Keep every older pinned key unchanged
    so older commits remain buildable. Pass the value through stdin, not a command
    argument, and suppress command output to avoid printing it:
 
    ```sh
-   doppler secrets set GOOGLE_SERVICES_JSON_V2 --project android-release --config prd < /path/google-services.json > /dev/null
+   doppler secrets set GOOGLE_SERVICES_JSON_V3 --project android-release --config prd < /path/google-services.json > /dev/null
    ```
 
 3. Update that environment's key and SHA-256 in `scripts/android-firebase.lock.json`.
@@ -276,6 +323,26 @@ their own Firebase resources.
    `bun scripts/android-firebase.ts build --doppler /tmp/android-firebase-check/google-services.json`
    (use `dev` for development). Review and commit the lock-file change; never
    replace the checksum just to silence an unexpected mismatch.
+
+### Production Firebase project setup
+
+The production Android app is registered as `com.macro.workspace.mobile` in
+`macro-app-prod`; development uses `macro-app-dev-12ae0`. The Google services
+Gradle plugin and Firebase Messaging SDK are already integrated. The console's
+generic SDK snippets do not need to be added again.
+
+The downloaded `google-services.json` configures the Android client only. The
+notification backend delivers Android pushes through an AWS SNS platform
+application, whose FCM credential must belong to the same Firebase project.
+For production, store the new project's service-account JSON securely in the
+AWS Secrets Manager secret selected by `notification-service:fcm_secret_key`
+(`fcm-credential-prod` in `Pulumi.prod.yaml`), then update the notification-service
+stack so its SNS platform application receives the credential. Do not deploy a
+credential replacement until existing Android installations using the former
+Firebase project have been accounted for; their tokens belong to that project.
+Verify real push delivery after the change. The client config alone cannot prove
+the backend is configured or that delivery works. Never commit or print a
+service-account private key.
 
 ## Browser authentication
 
@@ -387,7 +454,7 @@ physical-device matrix.
 
 ## App Links
 
-App Links require a domain association for `com.macro.app.prod` and the certificate
+App Links require a domain association for `com.macro.workspace.mobile` and the certificate
 that signed the installed APK. From `apps/web`, generate a candidate association:
 
 ```sh
@@ -408,12 +475,12 @@ re-verifying. Do not force a domain to `approved` or `verified` to claim success
 After installing an APK signed with an associated certificate:
 
 ```sh
-adb shell pm verify-app-links --re-verify com.macro.app.prod
-adb shell pm get-app-links com.macro.app.prod
+adb shell pm verify-app-links --re-verify com.macro.workspace.mobile
+adb shell pm get-app-links com.macro.workspace.mobile
 adb shell am start -W -a android.intent.action.VIEW -c android.intent.category.DEFAULT -c android.intent.category.BROWSABLE -d 'https://dev.macro.com/app/task/TASK_ID'
 ```
 
-Adding `-p com.macro.app.prod` tests routing but does not prove domain verification.
+Adding `-p com.macro.workspace.mobile` tests routing but does not prove domain verification.
 Test cold/warm links, auth cancellation/retry, email-code login, relaunch with a
 session, logout/account switching, and entity links through login. Repeat with
 signed release builds and actual provider sign-in.
@@ -426,7 +493,7 @@ Publication procedure for the hosting owner:
    `/.well-known/*` origin. Confirm the endpoint returns HTTP 200 with JSON
    directly, without a redirect or an HTML fallback.
 2. Obtain the SHA-256 **app-signing** fingerprint from Play Console for
-   `com.macro.app.prod`. The upload certificate is only suitable for testing
+   `com.macro.workspace.mobile`. The upload certificate is only suitable for testing
    locally signed builds. If staging is used for such a test, explicitly select
    the local-release certificate; keep debug certificates confined to dev.
 3. Download and retain the existing association JSON, S3 ETag and object metadata.
@@ -460,3 +527,124 @@ Publication procedure for the hosting owner:
    route result. If rollback is needed, restore the saved JSON and metadata with
    a conditional write against the published ETag, then invalidate the same URL.
    Reconcile concurrent edits before restoring anything.
+
+## Offline and OTA qualification (Task 05)
+
+Use a dedicated installation. Local APK upgrades need the same package and
+signing key and an increasing versionCode. A local test key may sign a
+release-optimized APK; preserve it outside the checkout for local upgrades and
+never use it for Play uploads. To build an emulator APK, run
+`cargo tauri android build --target x86_64 --apk --ci` from
+`apps/web/tauri/src-tauri` inside the Android Nix shell. ARM64 uses the launcher
+above. Keep OTA enabled for update acceptance; `--no-default-features` qualifies
+only embedded behavior. Shared OTA builds need both `MIN_NATIVE_BUILD_ANDROID`
+and `MIN_NATIVE_BUILD_IOS`; see the
+[native compatibility contract](../apps/web/tauri/src-tauri/README.md).
+
+Android ConnectivityManager reports the validated default network and takes a
+fresh snapshot on resume. Captive/unvalidated networks count as offline. Older
+native binaries lacking the command retain browser connectivity. Neither signal
+proves a particular backend is reachable. The activity unregisters its monitor
+on destruction.
+
+Android backup is disabled. API 31+ cloud-backup/device-transfer rules exclude
+normal and device-protected private storage, databases, preferences, and external
+app files, including credentials, WebView cookies, cache, drafts, and staging.
+An app upgrade still preserves app-private data. Logout clears all query stores,
+including unhydrated entries, fences pending hydration, and clears the native
+normalized cache/queue. Failed wipes quarantine the disk namespace. The new query
+namespace deliberately discards legacy read caches on the first upgrade.
+
+Record device/API/WebView, APK certificate/versionCode, embedded/active bundle
+build, and these results for locally installed release builds:
+
+| Case | Required evidence |
+| --- | --- |
+| Acknowledged edit, queued/optimistic mutation, cached document/list, durable draft/upload workflows | Background/resume and process kill/relaunch preserve state; reconnect drains queued work without duplication |
+| Airplane mode, Wi-Fi/cellular transition, captive network | Correct native status; cached reads; session refresh; websocket subscriptions recover |
+| Missed websocket events | Replay deduplicates retained events; gaps resynchronize |
+| Logout and second-account login, including offline logout | No prior-account records, drafts, staged files, or queued writes appear or replay |
+| Local native upgrade signed with the same key | Data survives and build detection returns installed versionCode |
+| Higher Android minimum in a newer iOS/shared bundle; legacy/unknown metadata | Older Android stays functional and rejects incompatible JS |
+| Kill during download/extraction; truncated archive; cache eviction | Partial assets are never selected; failures retain working embedded/active assets |
+| Revocation, apply on resume, unavailable store handler/listing | Embedded fallback; correct generation acknowledgment; dismissible update dialog |
+| Lower-end physical hardware | Cold/warm launch and hydration times, large lists/documents, peak PSS, background CPU/battery and Doze |
+
+Background then use `adb shell am kill com.macro.workspace.mobile` and verify the PID
+has disappeared for normal process death. Force-stop/relaunch is a separate case.
+Use `adb shell am start -W -n com.macro.workspace.mobile/.MainActivity` for launch timings,
+`adb shell dumpsys meminfo com.macro.workspace.mobile` for PSS, and Perfetto/Android Studio
+for rendering/CPU/battery evidence. A VM emulator cannot qualify physical battery,
+cellular handoffs, OEM memory pressure, or lower-end hardware. Do not reset shared
+device statistics or account data. Keep evidence free of credentials/content.
+
+Task 07 owns live Play listing verification and a real Play-delivered update.
+Task 05 retains offline/account isolation and shared-JS/older-native acceptance,
+using local release installations and local version upgrades. No Play Console is
+required.
+
+Local evidence recorded on 2026-09-30 uses an isolated API 36 x86_64 emulator
+with 2 GB RAM, production frontend, OTA enabled, and a local test signing key.
+Release versionCodes 2005000, 2005001, and 2005002 installed successfully.
+The final 2005001 → 2005002 upgrade preserved a committed native cache record and
+a WebView storage value; native build detection returned 2005002. Airplane mode
+reported offline then online; disabling Wi-Fi retained emulator cellular
+connectivity. Acknowledged native records and optimistic queued mutations
+survived background process death. The recovered queue allowed only one lease
+at a time; changing a synthetic account identity cleared the records and queue.
+The update-required dialog rendered and its explicit OK button dismissed it on
+Android; a mobile component regression covers unavailable-store failure.
+
+Signed-out launch was 837 ms initially and 186 ms after process death, with
+approximately 137 MiB app PSS after relaunch. A synthetic 5,000-document native
+cache write took 2.39 s; five cached reads took 15–21 ms, with approximately
+173 MiB app PSS afterward. These measure native cache/IPC, not document/list
+rendering or signed-in hydration. Immediate WebView writes need a disk flush:
+an immediate replacement-install test lost its sentinel; backgrounding for
+10 seconds before replacement preserved it. Acknowledged native database writes
+survived process death and upgrade independently of that WebView flush.
+
+Automated coverage includes platform-specific OTA minima and legacy rejection,
+interrupted extraction and missing completion markers, eviction/revocation and
+embedded fallback, cache/queue reopen, logout hydration fencing and durable
+query-store wiping, draft/upload persistence, session refresh, websocket
+reconnect/replay, native reachability, and store-link failure recovery.
+Additional installed-release evidence on 2026-10-01 uses two dedicated signed-in
+accounts and local signed upgrades through versionCode 2005005. Both accounts'
+acknowledged document edits and offline edits survived background process death
+and reopening the cached document. A fresh authenticated sync client confirmed
+account A's queued edit reached the server. A server-acknowledged peer edit made
+while the Android client was offline appeared exactly once after reconnect.
+Real offline logout followed by the second account's email-code login exposed
+neither the first account's draft nor its cached test document. A fresh
+authenticated sync client also confirmed account B's queued edit reached the
+server. Online logout of account B removed its session and composer storage.
+
+The Home Ask AI composer's unsent text and a file selected there while offline
+both disappeared after process death. Loss of these unsent Home inputs is an
+accepted behavior for Task 05, not an acceptance blocker. The original selected
+file remains on the device. This exception does not cover acknowledged document
+edits, durable drafts elsewhere, or committed upload workflows. Existing
+persisted Home/Agents composer and attachment projections use account-specific
+keys, and logout clears both legacy and scoped keys.
+
+A loopback-only controlled OTA feed exercised the installed release with real
+production assets. Dropped downloads, truncated archives, bad checksums, legacy
+and unknown schemas, and incompatible Android minima were rejected. Rejected
+updates retained an existing active bundle. Killing the process during Unzipping
+retained the previous complete bundle; retry completed. Resume applied a valid
+bundle with an Android-compatible minimum and a much newer iOS minimum.
+Background process death during download retained embedded assets, and retry
+completed. Revocation recovered to embedded assets. These tests found an embedded-entrypoint
+routing bug that could load the previous OTA index after rollback; the resolver
+now selects the embedded index, with regression coverage and installed-release
+rollback verification. The local-feed APK is a test artifact: its feed override
+must be omitted from a distributed release.
+
+Actual Android OS cache eviction is not qualified: the API 36 emulator's
+`pm clear --cache-only com.macro.app.prod` command hung and did not remove the
+active OTA cache. Missing-assets/eviction recovery remains covered by updater
+unit tests. Expired-session refresh, all pending-upload and queued-write logout
+paths, actual large-document rendering/hydration, and physical memory-pressure,
+battery, and cellular testing remain necessary for full Task 05 acceptance.
+Play verification remains Task 07.

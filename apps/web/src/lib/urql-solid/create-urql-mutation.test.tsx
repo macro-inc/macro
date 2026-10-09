@@ -158,6 +158,40 @@ describe('createUrqlMutation', () => {
     });
   });
 
+  it('completes a mutation requested as its owner tears down', async () => {
+    const { client, executions } = makeFakeClient();
+    const onSettled = vi.fn();
+    let mutation!: UrqlMutationResult<Data, Variables>;
+    createRoot((dispose) => {
+      mutation = createUrqlMutation<Data, Variables>(() => ({
+        mutation: DOCUMENT,
+        client,
+        onSettled,
+      }));
+      dispose();
+    });
+
+    const promise = mutation.mutateAsync({ input: 'closing' });
+    expect(executions).toHaveLength(1);
+
+    const result: OperationResult<Data, Variables> = {
+      operation: operation(),
+      data: { updateValue: 'saved' },
+      stale: false,
+      hasNext: false,
+    };
+    executions[0].deferred.resolve(result);
+
+    await expect(promise).resolves.toBe(result);
+    expect(onSettled).toHaveBeenCalledWith(
+      result.data,
+      null,
+      { input: 'closing' },
+      undefined,
+      result
+    );
+  });
+
   it('supports custom execution with merged operation context', async () => {
     const { client } = makeFakeClient();
     const pending = deferred<OperationResult<Data, Variables>>();
