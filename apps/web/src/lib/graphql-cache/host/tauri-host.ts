@@ -98,6 +98,7 @@ export interface TauriHostOptions {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
+const WATCH_COMMAND = 'graphql_cache_watch';
 const CALENDAR_RANGE_COMMAND = 'graphql_cache_calendar_range';
 const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
 const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
@@ -131,6 +132,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // no longer receive these OTA bundles. OTA updates cannot add Rust commands.
   // Keep this per host so a new native binary is probed again after restarting.
   let entityFilterUnavailable = false;
+  // Binaries before incremental watches still serve full reads.
+  let watchUnavailable = false;
   // Native binaries before the calendar range index answer `unsupported`, so
   // the calendar keeps reading from the network until the app updates.
   let calendarUnavailable = false;
@@ -318,14 +321,21 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async watchQuery(args) {
       await ready;
-      return await request('graphql_cache_watch', {
-        opId: opId(args.opKey),
-        query: args.query,
-        operationName: args.operationName,
-        variables: args.variables,
-        entityResolvers: args.entityResolvers,
-        since: args.since,
-      });
+      if (watchUnavailable) return { kind: 'unsupported' };
+      try {
+        return await request(WATCH_COMMAND, {
+          opId: opId(args.opKey),
+          query: args.query,
+          operationName: args.operationName,
+          variables: args.variables,
+          entityResolvers: args.entityResolvers,
+          since: args.since,
+        });
+      } catch (error) {
+        if (!isMissingCommand(error, WATCH_COMMAND)) throw error;
+        watchUnavailable = true;
+        return { kind: 'unsupported' };
+      }
     },
 
     async readRecordsByKeys(
