@@ -98,7 +98,7 @@ export function GanttLabel(
           'sticky z-20 flex min-w-0 items-center overflow-clip px-2 text-xs text-ink',
           !drawer() && 'left-0 h-full border-r border-edge-muted',
           drawer() &&
-            'left-2 border-x border-edge-muted bg-surface light-mode:border-ink/15 light-mode:bg-[color-mix(in_oklch,var(--color-surface)_97%,var(--color-ink))] transition-[transform,visibility] duration-200 ease-out motion-reduce:transition-none',
+            'left-2 border-x border-edge-muted bg-surface light-mode:border-ink/15 light-mode:bg-[color-mix(in_oklch,var(--color-surface)_97%,var(--color-ink))] transition-[translate,visibility] duration-200 ease-out motion-reduce:transition-none',
           drawer() && first() && 'rounded-t-lg border-t',
           drawer() && last() && 'rounded-b-lg border-b',
           hidden() &&

@@ -538,6 +538,13 @@ it('opens the item drawer without shifting dates and restores focus after dismis
   expect(container.querySelector('[data-gantt-sidebar-surface]')).toBeNull();
   expect(drawerLabel.style.width).toBe('264px');
   expect(drawerLabel.classList.contains('overflow-clip')).toBe(true);
+  const { compile } = await import('tailwindcss');
+  const utilities = await compile('@tailwind utilities;');
+  const panelCss = utilities.build([...drawerLabel.classList]);
+  expect(panelCss).toContain(
+    'translate: var(--tw-translate-x) var(--tw-translate-y);'
+  );
+  expect(panelCss).toContain('transition-property: translate,visibility;');
 
   fireEvent.click(toggle);
   const item = view.getByRole('button', { name: 'Item list entry' });
