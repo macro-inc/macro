@@ -91,6 +91,13 @@ impl Storage for BrowserStorage {
         self.inner.delete_batch(keys).await
     }
 
+    async fn scan_records_of_type(
+        &self,
+        typename: &str,
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
+        self.inner.scan_records_of_type(typename).await
+    }
+
     async fn load_search_documents(
         &self,
         profile: SearchProfile,

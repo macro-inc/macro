@@ -316,11 +316,13 @@ impl Subscriber {
             .await
             .unwrap();
         let revision = match update {
-            QueryUpdate::Hit { data, revision } => {
+            QueryUpdate::Hit { data, revision, .. } => {
                 self.data = Json::clone(&data);
                 revision
             }
-            QueryUpdate::Patch { patches, revision } => {
+            QueryUpdate::Patch {
+                patches, revision, ..
+            } => {
                 for patch in patches {
                     apply_patch(&mut self.data, patch);
                 }

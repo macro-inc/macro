@@ -29,6 +29,21 @@ pub(crate) use projection::QueryProjection;
 /// batch-fetched records).
 pub trait RecordSource {
     fn get(&self, key: &EntityKey<'static>) -> Option<&Record>;
+
+    /// The derived value of a declared relation list, once the engine has
+    /// computed it. Without one, the read uses the stored evidence.
+    fn derived_list(&self, _owner: &EntityKey<'static>, _field: &str) -> Option<&CacheValue> {
+        None
+    }
+}
+
+/// A declared relation list the read met before its value was derived.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DerivationRequest {
+    pub owner: EntityKey<'static>,
+    pub field: String,
+    pub relation: crate::membership::RelationId,
+    pub arguments: std::sync::Arc<serde_json::Map<String, Json>>,
 }
 
 impl RecordSource for std::collections::BTreeMap<EntityKey<'static>, Record> {
@@ -162,6 +177,8 @@ pub(crate) struct ReadSession<'a> {
     schema: &'a crate::meta::Schema,
     data: Json,
     pub(crate) projection: Option<QueryProjection>,
+    /// Collects declared relation lists the source has not derived yet.
+    pub(crate) derivations: Option<Vec<DerivationRequest>>,
     pending: Vec<PendingRecord<'a>>,
     deleted_items: BTreeSet<Vec<ResponsePath<'a>>>,
     miss: Option<(EntityKey<'static>, String)>,
@@ -202,6 +219,7 @@ impl<'a> ReadSession<'a> {
             schema,
             data: Json::Null,
             projection: None,
+            derivations: None,
             pending: vec![PendingRecord {
                 key: key.clone(),
                 type_name,
@@ -238,6 +256,7 @@ impl<'a> ReadSession<'a> {
                 path: pending.destination.unwrap_or_default(),
                 retain_output,
                 projection: &mut self.projection,
+                derivations: &mut self.derivations,
             };
             let data = walk.read_record(
                 &pending.key,
@@ -309,6 +328,7 @@ struct Walk<'a, 'document, S: RecordSource, D: DependencyTracker> {
     path: Vec<ResponsePath<'document>>,
     retain_output: bool,
     projection: &'a mut Option<QueryProjection>,
+    derivations: &'a mut Option<Vec<DerivationRequest>>,
 }
 
 impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D> {
@@ -400,6 +420,21 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                         )?;
                         projection.selected_field(owner, key, value, &self.path, selection);
                     }
+                    FieldSource::Derived { key, relation, .. } => {
+                        // The binding tracks the evidence; its stamp and every
+                        // child record can also change the derived list.
+                        let value = fields.get(key.as_ref());
+                        projection.selected_field(
+                            owner,
+                            key,
+                            value,
+                            &self.path,
+                            projection::ValueProjection::Structural,
+                        );
+                        projection.relation_type(crate::membership::EVIDENCE_TYPENAME);
+                        projection
+                            .relation_type(&self.schema.membership().get(*relation).child_type);
+                    }
                     FieldSource::Entity { storage_key, .. } | FieldSource::Missing(storage_key) => {
                         projection.guard(owner, storage_key, fields.get(storage_key.as_ref()))
                     }
@@ -457,6 +492,41 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                 let Some(value) = fields.get(key.as_ref()) else {
                     self.mark_miss(owner, key.to_string());
                     return Ok(None);
+                };
+                self.read_value(owner, field.node, ty, value).map(Some)
+            }
+            FieldSource::Derived {
+                key,
+                ty,
+                relation,
+                arguments,
+            } => {
+                self.deps.field(owner, concrete, key);
+                self.deps.record(&crate::membership::evidence_key(owner));
+                self.deps
+                    .relation(&self.schema.membership().get(*relation).child_type);
+                // No evidence means the server never answered this list.
+                let Some(evidence) = fields.get(key.as_ref()) else {
+                    self.mark_miss(owner, key.to_string());
+                    return Ok(None);
+                };
+                let value = match self.source.derived_list(owner, key) {
+                    Some(value) => value,
+                    None => {
+                        if let Some(requests) = self.derivations.as_mut()
+                            && !requests
+                                .iter()
+                                .any(|request| request.owner == *owner && request.field == *key)
+                        {
+                            requests.push(DerivationRequest {
+                                owner: owner.clone(),
+                                field: key.to_string(),
+                                relation: *relation,
+                                arguments: std::sync::Arc::clone(arguments),
+                            });
+                        }
+                        evidence
+                    }
                 };
                 self.read_value(owner, field.node, ty, value).map(Some)
             }

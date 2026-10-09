@@ -38,12 +38,20 @@ pub(crate) fn between(
         .filter_map(|key| {
             let old = before.get(key).and_then(Option::as_ref);
             let new = after.get(key).and_then(Option::as_ref);
-            if old == new {
+            if old == new || is_bookkeeping(key) {
                 return None;
             }
-            Some(record_change(key, old, new))
+            match record_change(key, old, new) {
+                RecordFieldChange::Fields { fields, .. } if fields.is_empty() => None,
+                change => Some(change),
+            }
         })
         .collect()
+}
+
+/// Membership stamps are engine bookkeeping, never visible fields.
+pub(crate) fn is_bookkeeping(key: &EntityKey<'static>) -> bool {
+    key.typename() == Some(crate::membership::EVIDENCE_TYPENAME)
 }
 
 fn record_change(
@@ -62,7 +70,9 @@ fn record_change(
         .chain(after.fields.keys())
         .collect::<BTreeSet<_>>()
     {
-        if before.fields.get(name) == after.fields.get(name) {
+        if before.fields.get(name) == after.fields.get(name)
+            || crate::membership::is_internal_field(name)
+        {
             continue;
         }
         if name == "id" || name == "__typename" {
@@ -100,6 +110,9 @@ pub(crate) fn from_update(
     before: &Record,
     update: &Record,
 ) -> Option<RecordFieldChange> {
+    if is_bookkeeping(key) {
+        return None;
+    }
     let mut fields = BTreeMap::new();
     for (name, value) in &update.fields {
         if before.fields.get(name) == Some(value) {

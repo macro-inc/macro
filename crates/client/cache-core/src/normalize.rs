@@ -358,6 +358,17 @@ fn write_object_fields(
                 .dependencies
                 .keys
                 .field(owner, concrete, &storage_key);
+            // A read of this field derives its members from the child type.
+            if let Some(relation) = schema.membership().relation(concrete, &f.name) {
+                context
+                    .dependencies
+                    .keys
+                    .record(&crate::membership::evidence_key(owner));
+                context
+                    .dependencies
+                    .keys
+                    .relation(&schema.membership().get(relation).child_type);
+            }
         }
 
         // GraphQL guarantees selected fields are present in data. Missing

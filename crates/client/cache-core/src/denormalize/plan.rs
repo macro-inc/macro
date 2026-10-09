@@ -18,6 +18,14 @@ pub(super) enum FieldSource<'a> {
         key: Cow<'a, str>,
         ty: meta::FieldType<'a>,
     },
+    /// A declared relation list: the stored value is server evidence that the
+    /// engine adjusts by later child changes.
+    Derived {
+        key: Cow<'a, str>,
+        ty: meta::FieldType<'a>,
+        relation: crate::membership::RelationId,
+        arguments: Arc<serde_json::Map<String, Json>>,
+    },
     Entity {
         key: EntityKey<'static>,
         ty: meta::FieldType<'a>,
@@ -114,9 +122,17 @@ fn compile_field<'a>(
             },
             None => FieldSource::Missing(storage_key),
         },
-        None => FieldSource::Stored {
-            key: storage_key,
-            ty: metadata.ty,
+        None => match schema.membership().relation(concrete, &node.name) {
+            Some(relation) => FieldSource::Derived {
+                key: storage_key,
+                ty: metadata.ty,
+                relation,
+                arguments: Arc::new(arguments),
+            },
+            None => FieldSource::Stored {
+                key: storage_key,
+                ty: metadata.ty,
+            },
         },
     };
     Ok(Field { node, source })

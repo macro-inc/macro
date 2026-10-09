@@ -105,6 +105,7 @@ const CREATE_SCHEMA: [&str; 28] = [
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
 const RECORD_DELETE: &str = "DELETE FROM records WHERE __typename = ?1 AND id = ?2";
+const RECORD_SCAN_TYPE: &str = "SELECT id, value FROM records WHERE __typename = ?1";
 // Turso otherwise chooses the browse index's profile prefix for a direct composite-key delete.
 // Force a point lookup through the existing primary-key index, then delete by its rowid.
 const SEARCH_ROWID: &str = "SELECT rowid FROM search_documents INDEXED BY sqlite_autoindex_search_documents_1 WHERE profile = ? AND __typename = ? AND id = ?";
@@ -917,6 +918,33 @@ impl Storage for TursoStorage {
                 }
                 calendar::delete_ranges(&connection, &keys)
             })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn scan_records_of_type(
+        &self,
+        typename: &str,
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            let connection = self.connection();
+            // The primary key leads with the type, so this is one range scan.
+            let rows = driver::read_transaction(&connection, || {
+                driver::query(&connection, RECORD_SCAN_TYPE, vec![text(typename)])
+            })?;
+            rows.into_iter()
+                .map(|row| {
+                    let key = RecordKey {
+                        typename: typename.to_owned(),
+                        id: required_text(&row, 0)?,
+                    }
+                    .into_entity()?;
+                    let record = decode_record(&required_blob(&row, 1)?)
+                        .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+                    Ok((key, record))
+                })
+                .collect()
         })();
         self.latch_result(result)
     }

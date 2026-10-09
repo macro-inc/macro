@@ -38,9 +38,21 @@ export type QuerySplicePatch = {
   splice: QuerySpliceOp[];
 };
 export type QueryPatch = QueryFieldPatch | QuerySplicePatch;
+/** `membershipUnknown`: a derived list kept its server evidence because the
+ * cache could not decide its members locally; a refetch would settle it. */
 export type QueryUpdate =
-  | { kind: 'hit'; data: unknown; revision: CacheRevision }
-  | { kind: 'patch'; patches: QueryPatch[]; revision: CacheRevision }
+  | {
+      kind: 'hit';
+      data: unknown;
+      revision: CacheRevision;
+      membershipUnknown?: true;
+    }
+  | {
+      kind: 'patch';
+      patches: QueryPatch[];
+      revision: CacheRevision;
+      membershipUnknown?: true;
+    }
   | { kind: 'miss'; revision: CacheRevision }
   | { kind: 'unsupported' };
 

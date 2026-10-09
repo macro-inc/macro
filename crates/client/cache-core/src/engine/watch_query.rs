@@ -32,11 +32,24 @@ pub enum QueryUpdate {
         #[serde(serialize_with = "serialize_shared")]
         data: Arc<Json>,
         revision: String,
+        /// A derived list kept its server evidence because its membership
+        /// could not be decided locally; a refetch would settle it.
+        #[serde(
+            rename = "membershipUnknown",
+            skip_serializing_if = "std::ops::Not::not"
+        )]
+        membership_unknown: bool,
     },
     /// Ordered edits, including an empty update for no change.
     Patch {
         patches: Vec<QueryPatch>,
         revision: String,
+        /// As for [`QueryUpdate::Hit`], for the patched result.
+        #[serde(
+            rename = "membershipUnknown",
+            skip_serializing_if = "std::ops::Not::not"
+        )]
+        membership_unknown: bool,
     },
     /// Required data is missing; the caller must use its normal network policy.
     Miss { revision: String },
@@ -143,6 +156,8 @@ struct QueryWatch {
     base: Base,
     revision: CacheRevision,
     bytes: usize,
+    /// The base kept evidence for a list whose membership was unknown.
+    membership_unknown: bool,
 }
 
 /// The subscriber's result at the watch revision: the base for re-read diffs.
@@ -158,6 +173,7 @@ impl QueryWatch {
         projection: QueryProjection,
         base: Base,
         revision: CacheRevision,
+        membership_unknown: bool,
     ) -> Self {
         let bytes = spec.query.len()
             + serde_json::to_vec(&spec.variables).map_or(0, |json| json.len())
@@ -169,6 +185,7 @@ impl QueryWatch {
             base,
             revision,
             bytes,
+            membership_unknown,
         }
     }
 
@@ -281,6 +298,15 @@ impl<S: Storage> Engine<S> {
         else {
             return self.read_watched(op_id, spec, Some(view.into_base())).await;
         };
+        // A derived list can gain members the bindings have never seen, and
+        // can reorder through a bound leaf; re-read before patching leaves.
+        if changes
+            .records
+            .iter()
+            .any(|key| view.projection.derives_from(key))
+        {
+            return self.read_watched(op_id, spec, Some(view.into_base())).await;
+        }
         let keys = changes
             .records
             .into_iter()
@@ -300,10 +326,12 @@ impl<S: Storage> Engine<S> {
         // Values (especially opaque scalars) may grow between reads.
         view.base.bytes = view.base.bytes.saturating_add_signed(data_delta);
         view.bytes = view.bytes.saturating_add_signed(binding_delta + data_delta);
+        let membership_unknown = view.membership_unknown;
         self.query_watches.put(op_id, view);
         Ok(QueryUpdate::Patch {
             patches: patches.into_iter().map(QueryPatch::Set).collect(),
             revision: self.revision.to_string(),
+            membership_unknown,
         })
     }
 
@@ -315,7 +343,11 @@ impl<S: Storage> Engine<S> {
         spec: QuerySpec,
         base: Option<Base>,
     ) -> Result<QueryUpdate, EngineError<S::Error>> {
-        let (result, projection) = self
+        let TrackedRead {
+            result,
+            projection,
+            membership_unknown,
+        } = self
             .read_query_tracked(
                 Some(op_id),
                 &spec.query,
@@ -333,6 +365,7 @@ impl<S: Storage> Engine<S> {
             return Ok(QueryUpdate::Hit {
                 data: Arc::new(data),
                 revision,
+                membership_unknown,
             });
         };
         let diff = base.and_then(|base| {
@@ -346,6 +379,7 @@ impl<S: Storage> Engine<S> {
                 QueryUpdate::Patch {
                     patches: diff.patches,
                     revision,
+                    membership_unknown,
                 },
                 bytes.saturating_add_signed(diff.byte_delta),
             ),
@@ -353,6 +387,7 @@ impl<S: Storage> Engine<S> {
                 QueryUpdate::Hit {
                     data: Arc::clone(&data),
                     revision,
+                    membership_unknown,
                 },
                 diff::json_bytes(&data),
             ),
@@ -360,7 +395,7 @@ impl<S: Storage> Engine<S> {
         let base = Base { data, bytes };
         self.query_watches.put(
             op_id,
-            QueryWatch::new(spec, projection, base, self.revision),
+            QueryWatch::new(spec, projection, base, self.revision, membership_unknown),
         );
         Ok(update)
     }

@@ -3,6 +3,7 @@
 //! Tauri) expose over RPC.
 
 mod calendar;
+mod membership;
 #[cfg(test)]
 mod test;
 
@@ -64,6 +65,7 @@ use predicate_index::{
 use serde_json::Value as Json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -370,6 +372,8 @@ pub struct Engine<S: Storage> {
     /// Compact durable catalogs are loaded lazily for text search. Empty
     /// queries use the storage index directly and do not populate this map.
     search_catalogs: SearchCatalogs,
+    /// Derived list membership: clock, stamped children and derived lists.
+    membership: membership::MembershipState,
 }
 
 impl<S: Storage> Engine<S> {
@@ -400,7 +404,13 @@ impl<S: Storage> Engine<S> {
             optimistic: Vec::new(),
             optimistic_hydrated: false,
             search_catalogs: SearchCatalogs::default(),
+            membership: membership::MembershipState::default(),
         }
+    }
+
+    /// Declared relation lists that failed validation and stay opaque.
+    pub fn membership_diagnostics(&self) -> &[String] {
+        self.schema.membership().diagnostics()
     }
 
     /// Returns the current effective-view revision of this engine generation.
@@ -817,7 +827,7 @@ impl<S: Storage> Engine<S> {
             false,
         )
         .await
-        .map(|(result, _)| result)
+        .map(|read| read.result)
     }
 
     async fn read_query_tracked(
@@ -828,8 +838,7 @@ impl<S: Storage> Engine<S> {
         variables: &serde_json::Map<String, Json>,
         entity_resolvers: &[EntityResolver],
         track_projection: bool,
-    ) -> Result<(ReadResult, Option<crate::denormalize::QueryProjection>), EngineError<S::Error>>
-    {
+    ) -> Result<TrackedRead, EngineError<S::Error>> {
         let entity_resolvers = EntityResolverLookup::compile(&self.schema, entity_resolvers)?;
         self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
@@ -861,67 +870,101 @@ impl<S: Storage> Engine<S> {
         // to promote into the hot tier afterwards).
         let mut fetched_base: HashMap<EntityKey<'static>, Record> = HashMap::new();
         let mut known_absent: BTreeSet<EntityKey<'static>> = BTreeSet::new();
-        let mut deps = QueryDependencies::default();
-
-        let mut plans = ReadPlans::default();
-        let mut session = ReadSession::new(
-            &self.schema,
-            &EntityKey::root(),
-            self.schema.query_root(),
-            &op.selection_set,
-        );
-        if track_projection {
-            session.projection = Some(Default::default());
-        }
-        let outcome = loop {
-            let source = EngineSource {
-                hot: &self.hot,
-                fetched: &fetched_base,
-                composed: &composed,
-            };
-            match session.resume(variables, &source, &mut deps, &entity_resolvers, &mut plans)? {
-                ReadOutcome::Complete(data) => break ReadResult::Hit { data },
-                ReadOutcome::Miss { .. } => break ReadResult::Miss,
-                ReadOutcome::NeedRecords(missing) => {
-                    let to_fetch: Vec<EntityKey<'static>> = missing
-                        .into_iter()
-                        .filter(|k| {
-                            !known_absent.contains(k)
-                                && !fetched_base.contains_key(k)
-                                && !composed.contains_key(k)
-                        })
-                        .collect();
-                    if to_fetch.is_empty() {
-                        // Everything missing is genuinely absent → miss.
-                        break ReadResult::Miss;
-                    }
-                    let fetched = self
-                        .storage
-                        .get_batch(&to_fetch)
-                        .await
-                        .map_err(EngineError::Storage)?;
-                    for (key, record) in to_fetch.into_iter().zip(fetched) {
-                        match record {
-                            Some(r) => {
-                                if let Some(update) = optimistic.get(&key) {
-                                    let mut merged = r.clone();
-                                    merged.merge(update.clone());
-                                    composed.insert(key.clone(), merged);
+        // Declared relation lists are derived between passes: a pass that
+        // meets an underived list reads its evidence and asks for it, and the
+        // next pass reads the derived value. Records fetched so far are kept.
+        let schema = Arc::clone(&self.schema);
+        let mut derived = membership::DerivedLists::new();
+        let mut attempted = BTreeSet::new();
+        let mut membership_unknown = false;
+        let mut round = 0;
+        let (outcome, projection, deps) = loop {
+            let mut deps = QueryDependencies::default();
+            let mut plans = ReadPlans::default();
+            let mut session = ReadSession::new(
+                &schema,
+                &EntityKey::root(),
+                schema.query_root(),
+                &op.selection_set,
+            );
+            if track_projection {
+                session.projection = Some(Default::default());
+            }
+            session.derivations = Some(Vec::new());
+            let outcome = loop {
+                let source = EngineSource {
+                    hot: &self.hot,
+                    fetched: &fetched_base,
+                    composed: &composed,
+                    derived: &derived,
+                };
+                match session.resume(
+                    variables,
+                    &source,
+                    &mut deps,
+                    &entity_resolvers,
+                    &mut plans,
+                )? {
+                    ReadOutcome::Complete(data) => break ReadResult::Hit { data },
+                    ReadOutcome::Miss { .. } => break ReadResult::Miss,
+                    ReadOutcome::NeedRecords(missing) => {
+                        let to_fetch: Vec<EntityKey<'static>> = missing
+                            .into_iter()
+                            .filter(|k| {
+                                !known_absent.contains(k)
+                                    && !fetched_base.contains_key(k)
+                                    && !composed.contains_key(k)
+                            })
+                            .collect();
+                        if to_fetch.is_empty() {
+                            // Everything missing is genuinely absent → miss.
+                            break ReadResult::Miss;
+                        }
+                        let fetched = self
+                            .storage
+                            .get_batch(&to_fetch)
+                            .await
+                            .map_err(EngineError::Storage)?;
+                        for (key, record) in to_fetch.into_iter().zip(fetched) {
+                            match record {
+                                Some(r) => {
+                                    if let Some(update) = optimistic.get(&key) {
+                                        let mut merged = r.clone();
+                                        merged.merge(update.clone());
+                                        composed.insert(key.clone(), merged);
+                                    }
+                                    fetched_base.insert(key, r);
                                 }
-                                fetched_base.insert(key, r);
-                            }
-                            None => {
-                                if let Some(update) = optimistic.get(&key) {
-                                    // Entity exists only optimistically.
-                                    composed.insert(key, update.clone());
-                                } else {
-                                    known_absent.insert(key);
+                                None => {
+                                    if let Some(update) = optimistic.get(&key) {
+                                        // Entity exists only optimistically.
+                                        composed.insert(key, update.clone());
+                                    } else {
+                                        known_absent.insert(key);
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            };
+            let requests: Vec<_> = session
+                .derivations
+                .take()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|request| {
+                    !attempted.contains(&(request.owner.clone(), request.field.clone()))
+                })
+                .collect();
+            if requests.is_empty() || round == membership::MAX_DERIVATION_ROUNDS {
+                membership_unknown |= !requests.is_empty();
+                break (outcome, session.projection, deps);
             }
+            round += 1;
+            membership_unknown |= self
+                .derive_lists(requests, &mut derived, &mut attempted)
+                .await?;
         };
 
         // Refresh borrowed hot records before cold promotions can evict them.
@@ -934,7 +977,11 @@ impl<S: Storage> Engine<S> {
         if let Some(op_id) = op_id {
             self.deps.set_query_deps(op_id, deps);
         }
-        Ok((outcome, session.projection))
+        Ok(TrackedRead {
+            result: outcome,
+            projection,
+            membership_unknown,
+        })
     }
 
     /// Projects a bounded explicit set of normalized entity keys through a
@@ -1099,12 +1146,15 @@ impl<S: Storage> Engine<S> {
         let mut completed = BTreeMap::new();
         let mut known_absent = BTreeSet::new();
         let mut dependencies = live_query::RowDependencies::new();
+        // Row projections read relation lists as their stored evidence.
+        let evidence_only = membership::DerivedLists::new();
         while !pending.is_empty() {
             let mut missing = BTreeSet::new();
             let source = EngineSource {
                 hot: &self.hot,
                 fetched: &fetched_base,
                 composed: &composed,
+                derived: &evidence_only,
             };
             let current: Vec<_> = pending.keys().cloned().collect();
             for key in current {
@@ -1523,6 +1573,14 @@ impl<S: Storage> Engine<S> {
                 candidates
                     .into_iter()
                     .filter(|key| before.get(key) != after.get(key))
+                    // Layers never write evidence stamps; a newer stamp alone
+                    // can change a derived list.
+                    .chain(
+                        changed
+                            .iter()
+                            .filter(|key| crate::field_changes::is_bookkeeping(key))
+                            .cloned(),
+                    )
                     .collect()
             } else {
                 changed.clone()
@@ -1636,9 +1694,10 @@ impl<S: Storage> Engine<S> {
     /// keys whose durable contents actually changed.
     async fn persist_updates(
         &mut self,
-        updates: RecordUpdates,
+        mut updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
     ) -> Result<PersistedChanges, EngineError<S::Error>> {
+        let stamp = self.stamp_membership(&mut updates).await?;
         let projection_keys = projections
             .iter()
             .map(|mutation| mutation.record_key().clone())
@@ -1701,18 +1760,27 @@ impl<S: Storage> Engine<S> {
                     (existing, did_change)
                 }
                 None => {
-                    field_changes.push(crate::field_changes::RecordFieldChange::Invalidate {
-                        key: key.clone(),
-                    });
+                    if !crate::field_changes::is_bookkeeping(&key) {
+                        field_changes.push(crate::field_changes::RecordFieldChange::Invalidate {
+                            key: key.clone(),
+                        });
+                    }
                     collect_search_changes(&key, None, Some(&update), &mut search_changed_buckets);
                     (update, true)
                 }
             };
+            let mut merged = merged;
             if did_change {
+                if let Some(stamp) = &stamp {
+                    stamp.child(&self.schema, &key, &mut merged);
+                }
                 changed.insert(key.clone());
                 to_persist.push((key.clone(), merged.clone()));
             }
             touched.push((key, merged));
+        }
+        if let Some(stamp) = &stamp {
+            to_persist.push(stamp.clock.clone());
         }
 
         // Unchanged bases are already durable, including those fetched after
@@ -1744,6 +1812,10 @@ impl<S: Storage> Engine<S> {
         // Publish only after the atomic write succeeds. Otherwise a failed
         // write could poison the hot tier and make its retry look unchanged.
         self.update_loaded_search_catalogs(&touched);
+        if stamp.is_some() {
+            self.membership
+                .note_written(touched.iter().map(|(key, record)| (key, record)));
+        }
         for (key, record) in touched {
             self.hot.put(key, record);
         }
@@ -2586,6 +2658,8 @@ impl<S: Storage> Engine<S> {
         let mut settled_identities = stored_identities;
         settled_identities.extend(identities.clone());
         identity::apply_record_lifecycle(&mut updates, &bindings, &settled_identities);
+        // Before loading bases, so evidence stamp records merge into theirs.
+        let stamp = self.stamp_membership(&mut updates).await?;
         let mut candidates = layer_keys(&self.optimistic);
         candidates.extend(updates.keys().cloned());
         let (mut candidates, bases) = self
@@ -2602,7 +2676,16 @@ impl<S: Storage> Engine<S> {
             apply_link_patches(&self.schema, &mut effective, &mut updates, &recipes, true)?;
         revalidations
             .retain(|query| !query.only_on_link_failure || recipes.is_empty() || !links_applied);
-        let (durable_changed, entries) = stage_updates(&bases, updates);
+        let (durable_changed, mut entries) = stage_updates(&bases, updates);
+        if let Some(stamp) = &stamp {
+            for (key, record) in &mut entries {
+                if durable_changed.contains(key) {
+                    stamp.child(&self.schema, key, record);
+                }
+            }
+        }
+        let mut durable_entries = entries.clone();
+        durable_entries.extend(stamp.as_ref().map(|stamp| stamp.clock.clone()));
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)
             .await?;
@@ -2625,7 +2708,7 @@ impl<S: Storage> Engine<S> {
             .complete_mutation_with_shadow(
                 transaction,
                 claim,
-                entries.clone(),
+                durable_entries,
                 projections,
                 reconciliation,
             )
@@ -2636,6 +2719,10 @@ impl<S: Storage> Engine<S> {
         }
         let revision = self.advance_revision()?;
         self.update_loaded_search_catalogs(&entries);
+        if stamp.is_some() {
+            self.membership
+                .note_written(entries.iter().map(|(key, record)| (key, record)));
+        }
         for (key, record) in entries {
             self.hot.put(key, record);
         }
@@ -2935,6 +3022,7 @@ impl<S: Storage> Engine<S> {
         self.docs.clear();
         self.optimistic.clear();
         self.search_catalogs.clear();
+        self.membership.clear();
         // Another engine may have rebound the shared storage and changed the
         // durable queue, so both identity and optimism must re-hydrate.
         self.optimistic_hydrated = false;
@@ -2971,6 +3059,7 @@ impl<S: Storage> Engine<S> {
         let mut affected = BTreeSet::new();
         for key in keys {
             self.hot.pop(key);
+            self.membership.forget(key);
             affected.extend(self.deps.ops_for_keys([key]));
         }
         // The durable projection was updated by the writing context. Reload
@@ -3000,6 +3089,7 @@ impl<S: Storage> Engine<S> {
             self.hot.pop(key);
             self.search_catalogs.remove(key);
         }
+        self.membership.note_deleted(keys);
         self.advance_revision()?;
         Ok(self.revisioned(affected))
     }
@@ -3015,6 +3105,7 @@ impl<S: Storage> Engine<S> {
         self.optimistic.clear();
         self.optimistic_hydrated = true;
         self.search_catalogs.clear();
+        self.membership.clear();
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
@@ -3158,6 +3249,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             self.hot.pop(key);
             self.search_catalogs.remove(key);
         }
+        self.membership.note_deleted(keys);
         self.advance_revision()?;
         Ok(self.revisioned(affected))
     }
@@ -3203,6 +3295,15 @@ impl<S: PredicateIndexStorage> Engine<S> {
     }
 }
 
+/// One cache read with its optional projection.
+struct TrackedRead {
+    result: ReadResult,
+    projection: Option<crate::denormalize::QueryProjection>,
+    /// A derived list kept its server evidence because membership could not
+    /// be decided locally; the caller should refetch it.
+    membership_unknown: bool,
+}
+
 /// Read view over the durable tiers plus the optimistic composition. Uses
 /// `peek` (no recency mutation) — recency is refreshed once per read from
 /// the dep set.
@@ -3213,6 +3314,8 @@ struct EngineSource<'a> {
     /// Optimistically touched keys: durable base + layers, pre-merged.
     /// Takes precedence over both durable tiers.
     composed: &'a HashMap<EntityKey<'static>, Record>,
+    /// Declared relation lists derived for this read.
+    derived: &'a membership::DerivedLists,
 }
 
 impl RecordSource for EngineSource<'_> {
@@ -3221,6 +3324,17 @@ impl RecordSource for EngineSource<'_> {
             .get(key)
             .or_else(|| self.fetched.get(key))
             .or_else(|| self.hot.peek(key))
+    }
+
+    fn derived_list(
+        &self,
+        owner: &EntityKey<'static>,
+        field: &str,
+    ) -> Option<&crate::value::CacheValue> {
+        if self.derived.is_empty() {
+            return None;
+        }
+        self.derived.get(&(owner.clone(), field.to_owned()))
     }
 }
 
