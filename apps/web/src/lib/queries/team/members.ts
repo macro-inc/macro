@@ -87,7 +87,7 @@ type SetTeamMemberPlanCallbacks = MutationCallbacks<
 >;
 
 /**
- * Move one member's seat between Premium and Max. Team admins only; the
+ * Move one member's seat between Pro and Max. Team admins only; the
  * team's subscription is re-billed (prorated) and that seat's AI allowance
  * changes at once, so the billing summary is refreshed too.
  */
@@ -105,7 +105,7 @@ export function useSetTeamMemberPlanMutation(
           invalidateTeam(teamId);
           void invalidateAiBillingSummary();
           toast.success(
-            plan === 'max' ? 'Seat moved to Max' : 'Seat moved to Premium'
+            plan === 'max' ? 'Seat moved to Max' : 'Seat moved to Pro'
           );
         },
 

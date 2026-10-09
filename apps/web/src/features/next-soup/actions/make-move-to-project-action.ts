@@ -8,13 +8,12 @@ export const makeMoveToProjectAction = () => {
   const canExecute = (entity: EntityData): boolean => {
     return (
       entity.type !== 'database' &&
+      entity.type !== 'form' &&
       entity.type !== 'agent_session' &&
       entity.type !== 'channel' &&
       entity.type !== 'channel_message' &&
       entity.type !== 'channel_thread' &&
-      entity.type !== 'foreign' &&
-      // Reminders are private to their owner and live outside the folder tree.
-      entity.type !== 'reminder'
+      entity.type !== 'foreign'
     );
   };
 

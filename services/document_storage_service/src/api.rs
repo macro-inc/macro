@@ -216,6 +216,17 @@ fn api_router(state: ApiContext) -> Router {
         .merge(calendar_events::inbound::axum_router::calendar_router(
             state.calendar_state.clone(),
         ))
+        .merge(calendar_events::inbound::team_router::team_calendar_router(
+            calendar_events::inbound::team_router::CalendarTeamRouterState::new(
+                std::sync::Arc::new(calendar_events::domain::team::CalendarTeamServiceImpl::new(
+                    calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(
+                        state.db.clone(),
+                    ),
+                    state.config.calendar_team_sharing_enabled,
+                )),
+                state.authorization_state.clone(),
+            ),
+        ))
         .nest(
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
@@ -272,6 +283,10 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/forms",
+            forms::inbound::axum_router::forms_router(state.forms_state.clone()),
+        )
+        .nest(
             "/collab_surfaces",
             collab_surface::inbound::axum_router::collab_surface_router(
                 state.collab_surface_state.clone(),
@@ -308,7 +323,10 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/crm",
-            crm::inbound::axum_router::crm_router(state.crm_state.clone()),
+            crm::inbound::axum_router::crm_router(state.crm_state.clone()).nest(
+                "/pipelines",
+                crm::inbound::pipelines::router(state.pipeline_state.clone()),
+            ),
         )
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(

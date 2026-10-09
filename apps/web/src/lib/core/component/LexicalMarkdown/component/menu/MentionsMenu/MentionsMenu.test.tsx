@@ -9,6 +9,20 @@ import { MentionsMenu } from './MentionsMenu';
 const mocks = vi.hoisted(() => ({
   crmEnabled: false,
   requestedBuckets: [] as string[],
+  contacts: [] as import('@core/context/quickAccess').EntityItem[],
+}));
+
+vi.mock('@app/features/crm/record-adapter', () => ({
+  useCrmContactMentionSource: () => {
+    mocks.requestedBuckets.push('crm_contact');
+    return {
+      entities: () => mocks.contacts,
+      totalCount: () => mocks.contacts.length,
+      hasMore: () => false,
+      isLoadingMore: () => false,
+      loadMore: async () => {},
+    };
+  },
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
@@ -82,6 +96,7 @@ const originalScrollIntoView = Element.prototype.scrollIntoView;
 afterEach(() => {
   mocks.crmEnabled = false;
   mocks.requestedBuckets = [];
+  mocks.contacts = [];
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -130,7 +145,7 @@ it('keeps matching category and row nodes mounted across typing and updated peop
   expect(menu.isOpen()).toBe(false);
 });
 
-it('offers CRM companies but not CRM contacts', () => {
+it('offers CRM companies and contacts', () => {
   mocks.crmEnabled = true;
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
@@ -150,5 +165,23 @@ it('offers CRM companies but not CRM contacts', () => {
     />
   ));
   expect(mocks.requestedBuckets).toContain('crm_company');
-  expect(mocks.requestedBuckets).not.toContain('crm_contact');
+  expect(mocks.requestedBuckets).toContain('crm_contact');
+});
+
+it('opens cell pickers without replaying the menu entrance animation', () => {
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const { container } = render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => []}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+      animate={false}
+    />
+  ));
+  expect(screen.getByText('No results')).toBeTruthy();
+  expect(container.querySelector('.menu-open-animation')).toBeNull();
 });

@@ -119,6 +119,21 @@ describe('busyIntervalsFromOccurrences', () => {
     ]);
   });
 
+  it('does not let an imported point remove any free time', () => {
+    const busyIntervals = busyIntervalsFromOccurrences([
+      timedItem({ start, end: start }),
+    ]);
+    expect(busyIntervals).toEqual([]);
+    const settings = {
+      rangeKey: 'today' as const,
+      settings: SETTINGS,
+      now: MONDAY_10AM,
+    };
+    expect(computeAvailability({ ...settings, busyIntervals })).toEqual(
+      computeAvailability({ ...settings, busyIntervals: [] })
+    );
+  });
+
   it('ignores events that do not block time', () => {
     const items = [
       timedItem({ start, end, isCancelled: true }),

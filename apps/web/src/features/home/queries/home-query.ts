@@ -19,7 +19,6 @@ export type HomeQueryCapabilities = {
   calendar: boolean;
   foreignEntities: boolean;
   notifiedSort: boolean;
-  reminders: boolean;
   snippets: boolean;
 };
 
@@ -82,10 +81,6 @@ function signalClause(
     );
   }
 
-  if (capabilities.reminders) {
-    filters.remf = clause.eq('includeReminders', true);
-  }
-
   if (capabilities.calendar) {
     filters.calf = clause.eq('calendarEventDone', false);
   }
@@ -103,16 +98,6 @@ function noiseClause(): FacetClause {
   });
 }
 
-function remindersClause(): FacetClause {
-  return confine({
-    remf: clause.and(
-      clause.eq('includeReminders', true),
-      clause.eq('reminderCompleted', false),
-      clause.eq('reminderFired', false)
-    ),
-  });
-}
-
 function tabClause(
   tab: HomeTab,
   capabilities: HomeQueryCapabilities,
@@ -122,7 +107,6 @@ function tabClause(
   return match(tab)
     .with('signal', () => signalClause(capabilities, now, userId))
     .with('noise', noiseClause)
-    .with('reminders', remindersClause)
     .exhaustive();
 }
 
@@ -185,7 +169,7 @@ export function buildHomeQuery(
       sort_method: homeTabOrdersByNotification(context)
         ? 'notified_at'
         : 'updated_at',
-      sort_direction: context.tab === 'reminders' ? 'asc' : 'desc',
+      sort_direction: 'desc',
     },
     body,
   };

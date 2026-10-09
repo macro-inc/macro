@@ -61,8 +61,13 @@ use crate::domain::{
         TeamMember, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
         TryJoinTeamByDomainError,
     },
+    owned_entity_cleanup::ClearedTeam,
     team_repo::TeamRepository,
 };
+
+mod delete_team;
+
+use delete_team::{Journal, RecordingOwnedEntityCleanup, Step};
 
 // Historical thresholds are regression fixtures, not membership policy.
 const FORMER_FREE_MEMBER_LIMIT: i32 = 5;
@@ -132,6 +137,7 @@ struct MockTeamRepository {
     team_ids: Vec<uuid::Uuid>,
     reject_owner: bool,
     user_teams: Vec<Team>,
+    journal: Journal,
 }
 
 impl MockTeamRepository {
@@ -210,6 +216,7 @@ impl MockTeamRepository {
             team_ids: Vec::new(),
             reject_owner: false,
             user_teams: Vec::new(),
+            journal: Journal::default(),
         }
     }
 
@@ -498,9 +505,16 @@ impl TeamRepository for MockTeamRepository {
 
     fn delete_team(
         &self,
-        team_id: &uuid::Uuid,
+        cleared: &ClearedTeam,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
-        self.delete_team_calls.lock().unwrap().push(*team_id);
+        self.delete_team_calls
+            .lock()
+            .unwrap()
+            .push(cleared.team_id());
+        self.journal.record(Step::DeleteTeam {
+            team_id: cleared.team_id(),
+            bot_ids: cleared.bot_ids().to_vec(),
+        });
         let fail = self.fail_delete_team;
         async move {
             if fail {
@@ -841,6 +855,7 @@ struct MockCustomerRepository {
     fail_increment: bool,
     fail_decrement: bool,
     no_active_subscription: bool,
+    journal: Journal,
 }
 
 impl Default for MockCustomerRepository {
@@ -857,6 +872,7 @@ impl Default for MockCustomerRepository {
             fail_increment: false,
             fail_decrement: false,
             no_active_subscription: false,
+            journal: Journal::default(),
         }
     }
 }
@@ -968,9 +984,11 @@ impl CustomerRepository for MockCustomerRepository {
 
     fn cancel_subscription(
         &self,
-        _: &stripe::SubscriptionId,
+        subscription_id: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send {
-        async { unimplemented!() }
+        self.journal
+            .record(Step::CancelSubscription(subscription_id.to_string()));
+        async { Ok(()) }
     }
 }
 
@@ -1333,6 +1351,7 @@ struct PublishedTeamEvent {
 struct RecordingEventBroker {
     events: Arc<Mutex<Vec<PublishedTeamEvent>>>,
     fail_scheduling: bool,
+    journal: Journal,
 }
 
 impl RecordingEventBroker {
@@ -1363,11 +1382,16 @@ impl MacroEventBroker for RecordingEventBroker {
             ));
         }
 
-        self.events.lock().unwrap().push(PublishedTeamEvent {
+        let published = PublishedTeamEvent {
             topic: event.topic(),
             key: event.key().to_string(),
             envelope: serde_json::to_value(event.event())?,
-        });
+        };
+        let event_type = published.envelope["event_type"]
+            .as_str()
+            .unwrap_or_default();
+        self.journal.record(Step::Published(event_type.to_owned()));
+        self.events.lock().unwrap().push(published);
 
         Ok(tokio::spawn(async { Ok(()) }))
     }
@@ -3543,6 +3567,7 @@ fn build_service_with_repo_and_broker(
         NoOpTeamCrmSettingsRepository,
     )
     .with_event_broker(event_broker)
+    .with_owned_entity_cleanup(RecordingOwnedEntityCleanup::default())
 }
 
 fn build_service_with_team(

@@ -1,6 +1,5 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
-import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
 import {
   getChannelParams,
   navigateToChannelMessage,
@@ -356,12 +355,12 @@ function getSupportedHandler(
         }
       )
       .with('reminder', () => {
+        if (notification.entity_type !== 'email_thread') return null;
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          openReminderDetail(notification.entity_id, {
-            manager: lm,
-            handle: sourceHandle,
-            openInNewSplit: newSplit,
-            ...(onApplied ? { onApplied } : {}),
+          openSplitIfNotOpen(lm, 'email', notification.entity_id, {
+            newSplit,
+            sourceHandle,
+            onApplied,
           });
         };
       })

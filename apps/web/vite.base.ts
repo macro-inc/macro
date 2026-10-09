@@ -187,6 +187,9 @@ export const createAppViteConfig = (): UserConfigFn => {
         outDir: 'dist',
         emptyOutDir: true,
         minify: !NO_MINIFY,
+        // The gzip-size console report re-compresses every chunk, adding ~20 s
+        // to each build; nothing reads it.
+        reportCompressedSize: false,
         rollupOptions: {
           input: {
             app: resolve(__dirname, 'index.html'),

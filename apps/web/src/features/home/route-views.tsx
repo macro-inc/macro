@@ -21,7 +21,6 @@ type HomeDetailParams = Partial<HomePreviewRouteParams> & {
   channelId?: string;
   documentType?: string;
   documentId?: string;
-  reminderId?: string;
   period?: CalendarPeriodView;
 };
 
@@ -52,7 +51,6 @@ export const HomeRouteView = withAuth(() => {
   const params = useParams<HomeDetailParams>();
   const detailRequested = () =>
     homeDetailParamsFromRoute(params) !== undefined ||
-    typeof params.reminderId === 'string' ||
     typeof params.period === 'string';
 
   return (

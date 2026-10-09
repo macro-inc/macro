@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT source.provider_access_role = calendar.access_role AS \"eligible!\" FROM calendar_event_sources source JOIN calendars calendar ON calendar.id=source.calendar_id WHERE source.event_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "eligible!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "354282687eab48f146f07c5645e912454428fd700d977d2154f1ed2f48cd242d"
+}

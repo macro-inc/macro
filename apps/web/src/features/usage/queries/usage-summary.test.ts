@@ -1,5 +1,6 @@
 import type { AiUsageSnapshot } from '@service-auth/ai-billing-types';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_AUTO_RELOAD } from '../core/usage';
 import { toUsageSummary } from './usage-summary';
 
 const snapshot: AiUsageSnapshot = {
@@ -66,4 +67,39 @@ describe('usage billing access', () => {
       expect(toUsageSummary({ ...snapshot, tier }).billingAccess).toBe('payer');
     }
   );
+});
+
+describe('automatic reload', () => {
+  it('treats usage billing as the opt-in and reads thresholds from the backend', () => {
+    expect(
+      toUsageSummary({
+        ...snapshot,
+        tier: 'premium',
+        overage_enabled: true,
+        overage_limit_cents: 7_500,
+        auto_reload: {
+          minimum_balance_cents: 500,
+          target_balance_cents: 2_000,
+          monthly_spend_limit_cents: 7_500,
+          suspended: true,
+          active: false,
+        },
+      }).autoReload
+    ).toEqual({
+      settings: {
+        enabled: true,
+        minimumBalanceCents: 500,
+        targetBalanceCents: 2_000,
+        monthlySpendLimitCents: 7_500,
+      },
+      suspended: true,
+    });
+  });
+
+  it('falls back to the default thresholds when the snapshot has none', () => {
+    expect(toUsageSummary(snapshot).autoReload).toEqual({
+      settings: DEFAULT_AUTO_RELOAD,
+      suspended: false,
+    });
+  });
 });

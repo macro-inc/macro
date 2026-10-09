@@ -6,8 +6,8 @@ mod test;
 
 use super::NoOpPaymentGateway;
 use crate::domain::{
-    BillingError, BillingPeriod, CreditCheckoutRequest, OverageChargeRequest, PaymentGateway,
-    Result, SubscriptionScope,
+    BillingError, BillingPeriod, CreditCheckoutRequest, CreditReloadRequest, OverageChargeRequest,
+    PaymentGateway, Result, SubscriptionScope,
 };
 use authentication_service_client::AuthServiceClient;
 use macro_uuid::Uuid;
@@ -42,6 +42,10 @@ impl PaymentGateway for HttpPaymentGateway {
 
     async fn open_overage_invoice(&self, request: OverageChargeRequest) -> Result<String> {
         NoOpPaymentGateway.open_overage_invoice(request).await
+    }
+
+    async fn open_credit_reload_invoice(&self, request: CreditReloadRequest) -> Result<String> {
+        NoOpPaymentGateway.open_credit_reload_invoice(request).await
     }
 
     async fn pay_overage_invoice(

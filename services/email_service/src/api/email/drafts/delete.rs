@@ -1,9 +1,9 @@
 use crate::api::context::ApiContext;
+use crate::util::gmail::send::cleanup_draft_attachments;
 use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use email_service::util::gmail::send::cleanup_draft_attachments;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;

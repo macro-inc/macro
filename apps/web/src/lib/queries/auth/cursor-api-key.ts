@@ -6,6 +6,14 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 
 import { authKeys } from './keys';
 
+function fetchCursorApiKeyStatus() {
+  return throwOnErr(() => authServiceClient.getCursorApiKeyStatus());
+}
+
+function fetchCursorModels() {
+  return throwOnErr(() => authServiceClient.listCursorModels());
+}
+
 /**
  * What the query reads as before its answer arrives. Placeholder rather than
  * pending, so reading `data` never suspends the surface asking — the message
@@ -32,8 +40,7 @@ export function useCursorApiKeyStatusQuery(
   return useQuery(() => ({
     queryKey: authKeys.cursorApiKeyStatus.queryKey,
     enabled: enabled(),
-    queryFn: async () =>
-      throwOnErr(async () => await authServiceClient.getCursorApiKeyStatus()),
+    queryFn: fetchCursorApiKeyStatus,
     placeholderData: NOT_CONNECTED,
   }));
 }
@@ -86,8 +93,7 @@ export function useDisconnectCursorApiKey() {
 export function useCursorModelsQuery(enabled: () => boolean) {
   return useQuery(() => ({
     queryKey: authKeys.cursorModels.queryKey,
-    queryFn: async () =>
-      throwOnErr(async () => await authServiceClient.listCursorModels()),
+    queryFn: fetchCursorModels,
     enabled: enabled(),
     staleTime: 5 * 60 * 1000,
   }));

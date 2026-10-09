@@ -139,10 +139,12 @@ impl EmailFollowupRepo for PgRemindersRepo {
             }
         }
         if !enabled {
-            // Same retraction semantics as ordinary reminder removal.
+            // Remove only this snooze's notification on the original email thread.
             sqlx::query!(
-                r#"DELETE FROM notification WHERE event_item_id = $1 AND event_item_type = 'reminder'"#,
+                r#"DELETE FROM notification WHERE event_item_type = 'email_thread' AND event_item_id = $2
+                       AND notification_event_type = 'reminder' AND metadata->>'reminderId' = $1"#,
                 f.reminder_id.to_string(),
+                f.thread_id.to_string(),
             ).execute(&mut *tx).await.map_err(db)?;
         }
         tx.commit().await.map_err(db)

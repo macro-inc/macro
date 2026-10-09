@@ -75,6 +75,28 @@ describe('createRetirableCacheHost', () => {
     expect(inner.teardown).not.toHaveBeenCalled();
   });
 
+  it('forwards retry accounting and permanent-failure codes', async () => {
+    const inner = createNoopCacheHost();
+    const defer = vi.spyOn(inner, 'deferOptimisticWrite');
+    const rollback = vi.spyOn(inner, 'rollbackOptimisticWrite');
+    const host = createRetirableCacheHost(inner);
+    const claim = { owner: 'runner', generation: '2' };
+    await host.deferOptimisticWrite('1', claim, 100, 'server failed', true);
+    expect(defer).toHaveBeenCalledWith('1', claim, 100, 'server failed', true);
+    await host.rollbackOptimisticWrite(
+      '1',
+      claim,
+      'exhausted',
+      'MUTATION_RETRY_EXHAUSTED'
+    );
+    expect(rollback).toHaveBeenCalledWith(
+      '1',
+      claim,
+      'exhausted',
+      'MUTATION_RETRY_EXHAUSTED'
+    );
+  });
+
   it('retires once', () => {
     const inner = disposedLikeHost();
     const host = createRetirableCacheHost(inner);

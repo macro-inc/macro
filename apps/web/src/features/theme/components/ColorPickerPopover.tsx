@@ -1,14 +1,13 @@
 import { Popover } from '@kobalte/core/popover';
 import { Slider } from '@kobalte/core/slider';
-import { Tabs } from '@kobalte/core/tabs';
-import { cn, Layer } from '@ui';
+import { cn, Input, Layer, Select } from '@ui';
+import { inputClasses } from '@ui/components/Input';
 import Color from 'colorjs.io';
 import {
   batch,
   createEffect,
   createMemo,
   createSignal,
-  For,
   type JSX,
   onCleanup,
   onMount,
@@ -115,7 +114,8 @@ function ColorField(props: {
   return (
     <div
       ref={ref}
-      class="relative h-40 flex-1 cursor-crosshair touch-none overflow-hidden rounded-md"
+      data-color-field
+      class="relative h-40 w-full shrink-0 cursor-crosshair touch-none overflow-hidden rounded-md"
       onPointerDown={(e) => {
         setDragging(true);
         apply(e);
@@ -138,11 +138,6 @@ function ColorField(props: {
     </div>
   );
 }
-
-// Vertical hue gradient, 0° at the top → 360° at the bottom. Pairs with the
-// slider's `inverted` flag so the thumb (value 0 at top) tracks the gradient.
-const HUE_GRADIENT =
-  'linear-gradient(to bottom, oklch(0.7 0.2 0deg), oklch(0.7 0.2 60deg), oklch(0.7 0.2 120deg), oklch(0.7 0.2 180deg), oklch(0.7 0.2 240deg), oklch(0.7 0.2 300deg), oklch(0.7 0.2 360deg))';
 
 const HORIZONTAL_HUE_GRADIENT =
   'linear-gradient(to right, hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%), hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%))';
@@ -189,15 +184,11 @@ function ChannelSlider(props: {
   );
 }
 
-/** Vertical hue slider (0 → 360), backed by Kobalte's generic Slider so pointer
- *  dragging and keyboard control come for free; we only style the rail/thumb.
- *  `inverted` keeps 0° at the top (matching the prior hand-rolled slider). */
+/** Keyboard-accessible horizontal hue slider. */
 function HueSlider(props: { h: () => number; onH: (n: number) => void }) {
   return (
     <Slider
-      class="relative flex h-40 w-3 shrink-0 touch-none select-none"
-      orientation="vertical"
-      inverted
+      class="relative flex h-3 w-full shrink-0 touch-none select-none"
       minValue={0}
       maxValue={360}
       step={1}
@@ -207,12 +198,10 @@ function HueSlider(props: { h: () => number; onH: (n: number) => void }) {
     >
       <Slider.Track
         class="relative h-full w-full rounded-full"
-        style={{ background: HUE_GRADIENT }}
+        style={{ background: HORIZONTAL_HUE_GRADIENT }}
       >
-        {/* Kobalte positions the thumb on the main (vertical) axis via `bottom` +
-            its own transform; we only center it horizontally and paint it. */}
         <Slider.Thumb
-          class="absolute left-1/2 -ml-[7px] size-3.5 rounded-full border-2 border-[white] shadow-[0_1px_3px_oklch(0_0_0/0.4)] outline-none"
+          class="absolute top-1/2 -mt-[7px] size-3.5 rounded-full border-2 border-[white] shadow-[0_1px_3px_oklch(0_0_0/0.4)] outline-none"
           style={{ 'background-color': `oklch(0.7 0.2 ${props.h()}deg)` }}
         >
           <Slider.Input />
@@ -237,12 +226,18 @@ export function ColorPickerPopover(props: {
   onH: (n: number) => void;
   onAlpha?: (n: number) => void;
   ariaLabel: string;
+  formats?: ['hex', ...('rgb' | 'hsl')[]];
   title?: string;
   subtitle?: string;
   /** Width passed to the default trigger swatch (full-width by default). */
   triggerWidth?: string;
   /** Custom trigger content (replaces the default swatch). */
   trigger?: JSX.Element;
+  /** Optional preset controls below the custom color controls. */
+  children?: JSX.Element;
+  class?: string;
+  triggerClass?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const pickerColor = createMemo(() =>
     sanitizeOklch({
@@ -369,9 +364,16 @@ export function ColorPickerPopover(props: {
   };
 
   return (
-    <Popover placement="bottom-end" gutter={8}>
+    <Popover
+      placement="bottom-end"
+      gutter={8}
+      onOpenChange={props.onOpenChange}
+    >
       <Popover.Trigger
-        class="block appearance-none border-none bg-transparent p-0"
+        class={cn(
+          'block appearance-none border-none bg-transparent p-0',
+          props.triggerClass
+        )}
         aria-label={props.ariaLabel}
       >
         <Show
@@ -389,7 +391,10 @@ export function ColorPickerPopover(props: {
           <Popover.Content class="z-modal">
             <Popover.Arrow class="fill-surface" />
             <div
-              class="flex w-[34rem] max-w-[calc(100vw-2rem)] flex-col gap-4 rounded-xl glass bg-menu-glass p-4"
+              class={cn(
+                'flex max-h-[min(calc(100vh-2rem),var(--kb-popper-content-available-height))] w-[34rem] max-w-[calc(100vw-2rem)] flex-col overflow-y-auto gap-4 rounded-xl border border-edge glass bg-menu-glass p-4',
+                props.class
+              )}
               role="dialog"
               aria-label={props.ariaLabel}
             >
@@ -410,7 +415,7 @@ export function ColorPickerPopover(props: {
                 </div>
               </Show>
 
-              <div class="flex gap-4">
+              <div class="flex shrink-0 flex-col gap-4">
                 <ColorField
                   l={lightness}
                   c={chroma}
@@ -449,24 +454,6 @@ export function ColorPickerPopover(props: {
                   {Math.round(alpha() * 100)}%
                 </span>
               </Slider>
-
-              <Tabs
-                value={format()}
-                onChange={(value) => setFormat(value as ColorFormat)}
-              >
-                <Tabs.List class="grid grid-cols-3 overflow-hidden rounded-md border border-edge-muted bg-inset p-0.5">
-                  <For each={['hex', 'rgb', 'hsl'] as const}>
-                    {(value) => (
-                      <Tabs.Trigger
-                        value={value}
-                        class="rounded-sm px-3 py-1.5 text-xs uppercase text-ink-muted outline-none data-selected:bg-surface data-selected:text-ink data-selected:shadow-sm"
-                      >
-                        {value}
-                      </Tabs.Trigger>
-                    )}
-                  </For>
-                </Tabs.List>
-              </Tabs>
 
               <Show when={format() === 'rgb'}>
                 <div class="flex flex-col gap-3 rounded-md bg-inset p-3">
@@ -545,16 +532,41 @@ export function ColorPickerPopover(props: {
                 </div>
               </Show>
 
-              <input
-                class={cn(
-                  'h-10 rounded-md border border-edge-muted bg-transparent px-3 text-center font-mono text-sm text-ink outline-none focus:border-accent',
-                  colorInvalid() && 'border-failure text-failure'
-                )}
-                value={colorText()}
-                onInput={(e) => setColorTextValue(e.currentTarget.value)}
-                spellcheck={false}
-                aria-label={`${format().toUpperCase()} color`}
-              />
+              <div class="flex items-center gap-2">
+                <Select<ColorFormat>
+                  options={props.formats ?? ['hex', 'rgb', 'hsl']}
+                  disabled={props.formats?.length === 1}
+                  value={format()}
+                  onChange={(value) => value && setFormat(value)}
+                >
+                  <Select.Trigger
+                    aria-label="Color format"
+                    class={inputClasses({
+                      size: 'md',
+                      class: 'w-20 shrink-0 text-xs uppercase',
+                    })}
+                  >
+                    <Select.Value<ColorFormat>>
+                      {(state) => state.selectedOption()}
+                    </Select.Value>
+                    <Show when={props.formats?.length !== 1}>
+                      <Select.Icon />
+                    </Show>
+                  </Select.Trigger>
+                  <Select.Content>
+                    <Select.Listbox />
+                  </Select.Content>
+                </Select>
+                <Input
+                  class="text-center font-mono text-xs"
+                  aria-invalid={colorInvalid()}
+                  value={colorText()}
+                  onInput={(e) => setColorTextValue(e.currentTarget.value)}
+                  spellcheck={false}
+                  aria-label={`${format().toUpperCase()} color`}
+                />
+              </div>
+              {props.children}
             </div>
           </Popover.Content>
         </Layer>

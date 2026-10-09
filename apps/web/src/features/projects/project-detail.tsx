@@ -1,24 +1,37 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import {
+  makeCopyEntityIdAction,
+  makeCopyLinkAction,
+} from '@app/features/next-soup/actions';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
   projectTaskRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { TabsInset } from '@core/component/TabsInset';
+import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import StackIcon from '@phosphor/stack.svg';
-import { Button, Tabs } from '@ui';
-import { Match, Show, Suspense, Switch } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { Property } from '@property/types';
+import { Button } from '@ui';
+import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import { DeleteProjectsDialog } from './components/delete-projects-dialog';
+import { ProjectMenuDropdown } from './components/project-row-menu';
 import { ProjectContentSkeleton } from './components/project-skeletons';
+import { RenameProjectDialog } from './components/rename-project-dialog';
 import {
+  type ProjectSource,
   type ProjectsContext,
   useProjectsContext,
 } from './context/projects-context';
@@ -28,7 +41,8 @@ import {
   type ProjectDetail as ProjectDetailData,
   type ProjectSection,
 } from './core/project';
-import type { ProjectRoute } from './core/route';
+import { type ProjectRoute, projectRouteId } from './core/route';
+import { openProject } from './open-project';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
@@ -84,19 +98,103 @@ type ProjectDetailProps = {
   onDelete?(): void;
 };
 
-function ProjectShareTrigger(props: {
+function ProjectTitleMenu(props: {
   project: ProjectDetailData;
+  source: ProjectSource;
   commands: ReturnType<ProjectsContext['createCommands']>;
+  section: ProjectSection;
+  onShare(): void;
+  onDelete(): void;
 }) {
-  const panel = useSplitPanelOrThrow();
-  const openShare = useProjectShareModal(() => props.project, props.commands);
+  const definitions = useProjectsContext().createPropertyDefinitionsSource();
+  const layout = useSplitLayout();
+  const copyLink = makeCopyLinkAction();
+  const copyId = makeCopyEntityIdAction();
+  const [renaming, setRenaming] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+  const [error, setError] = createSignal<string>();
+  const definition = (id: string) =>
+    definitions
+      .properties()
+      .find((property) => property.propertyDefinitionId === id);
+  const ownValue = (property: Property) =>
+    props.source
+      .properties()
+      .find(
+        (current) =>
+          current.propertyDefinitionId === property.propertyDefinitionId
+      ) ?? property;
+  const setOption = async (property: Property, optionId: string) => {
+    try {
+      await props.commands.saveProperty(props.project.id, ownValue(property), {
+        valueType: 'SELECT_STRING',
+        values: [optionId],
+      });
+    } catch (error) {
+      console.error('Failed to update project', error);
+      toast.failure(`Could not update ${property.displayName.toLowerCase()}`);
+    }
+  };
+  const deleteProject = async () => {
+    setError(undefined);
+    try {
+      await props.commands.delete(props.project.id);
+      props.onDelete();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not delete project.'
+      );
+    }
+  };
   return (
-    <ShareTrigger
-      onClick={openShare}
-      id={props.project.id}
-      blockType="initiative"
-      hotkeyScope={panel.splitHotkeyScope}
-    />
+    <>
+      <ProjectMenuDropdown
+        targets={() => [
+          { project: props.project, properties: props.source.properties() },
+        ]}
+        status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
+        priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
+        canOpenInNewSplit={globalSplitManager()?.canAppendSplit() ?? false}
+        onOpenInNewSplit={(row) =>
+          openProject(layout, row.project.id, {
+            section: props.section,
+            newSplit: true,
+          })
+        }
+        onRename={() => setRenaming(true)}
+        onSetOption={(_, property, optionId) =>
+          void setOption(property, optionId)
+        }
+        onCopyLink={(row) =>
+          void copyLink.executeByBlock(
+            projectRouteId({ id: row.project.id, section: 'overview' }),
+            'component'
+          )
+        }
+        onCopyId={(row) => void copyId.executeById(row.project.id)}
+        onShare={props.onShare}
+        onDelete={() => {
+          setError(undefined);
+          setDeleting(true);
+        }}
+      />
+      <Show when={renaming()}>
+        <RenameProjectDialog
+          name={props.project.name}
+          onOpenChange={setRenaming}
+          onRename={(name) => props.commands.rename(props.project.id, name)}
+        />
+      </Show>
+      <Show when={deleting()}>
+        <DeleteProjectsDialog
+          count={1}
+          pending={props.commands.pending()}
+          error={error()}
+          onOpenChange={setDeleting}
+          onDelete={() => void deleteProject()}
+        />
+      </Show>
+    </>
   );
 }
 
@@ -105,6 +203,8 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const source = context.createProjectSource(() => props.route.id);
   useSplitDisplayName(() => source.project()?.name ?? 'Project');
   const commands = context.createCommands();
+  const openShare = useProjectShareModal(source.project, commands);
+  const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
   const section = (section: ProjectSection) =>
@@ -126,50 +226,60 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       },
     });
   };
-  const navigation = () => (
-    <Tabs
-      list={[
-        { value: 'overview', label: 'Overview' },
-        { value: 'tasks', label: 'Tasks' },
-      ]}
-      value={props.route.section}
-      onChange={(value) => section(value as ProjectSection)}
-      aria-label="Project sections"
-      class="w-max shrink-0 whitespace-nowrap"
-    />
-  );
-  const loading = () => (
-    <>
-      <Show when={props.route.section === 'overview'}>
-        <div class="min-w-0 shrink-0 overflow-x-auto scrollbar-hidden px-4 py-2">
-          {navigation()}
-        </div>
-      </Show>
-      <div class="min-h-0 flex-1">
-        <ProjectContentSkeleton
-          section={props.route.section}
-          navigation={navigation()}
-        />
-      </div>
-    </>
-  );
   return (
     <>
       <Show when={props.breadcrumb}>
         {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
       </Show>
-      <EntityDetailTopBar>
+      <EntityDetailTopBar
+        titleMenu={
+          <Show when={source.project()}>
+            {(project) => (
+              <ProjectTitleMenu
+                project={project()}
+                source={source}
+                commands={commands}
+                section={props.route.section}
+                onShare={openShare}
+                onDelete={
+                  props.onDelete ??
+                  (() => navigate({ route: tasksSplitRoute, params: {} }))
+                }
+              />
+            )}
+          </Show>
+        }
+        navigation={
+          <TabsInset
+            list={[
+              { value: 'overview', label: 'Overview' },
+              { value: 'tasks', label: 'Tasks' },
+            ]}
+            value={props.route.section}
+            onChange={(value) => section(value as ProjectSection)}
+            aria-label="Project sections"
+            class="shrink-0 whitespace-nowrap"
+          />
+        }
+      >
         <Show when={source.project()}>
           {(project) => (
-            <ProjectShareTrigger project={project()} commands={commands} />
+            <ShareTrigger
+              onClick={openShare}
+              id={project().id}
+              blockType="initiative"
+              hotkeyScope={panel.splitHotkeyScope}
+            />
           )}
         </Show>
       </EntityDetailTopBar>
-      <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        <Suspense fallback={loading()}>
+      <div class="relative min-h-0 min-w-0 flex-1">
+        <Suspense
+          fallback={<ProjectContentSkeleton section={props.route.section} />}
+        >
           <Switch>
             <Match when={source.loading() && !source.project()}>
-              {loading()}
+              <ProjectContentSkeleton section={props.route.section} />
             </Match>
             <Match when={source.project()}>
               {(project) => (
@@ -178,11 +288,6 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                   source={source}
                   commands={commands}
                   section={props.route.section}
-                  navigation={navigation()}
-                  onDelete={
-                    props.onDelete ??
-                    (() => navigate({ route: tasksSplitRoute, params: {} }))
-                  }
                   onOpenTask={(task, options) => {
                     const event = options?.event;
                     if (
@@ -228,7 +333,6 @@ function ProjectDetailHost(props: ProjectDetailProps) {
               )}
             </Match>
             <Match when={true}>
-              <div class="px-4 py-2">{navigation()}</div>
               <div role="alert" class="p-6">
                 <p>
                   Project unavailable. It may have been deleted, or you may no

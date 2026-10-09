@@ -42,7 +42,7 @@ import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import { Topbar } from '../components/Topbar';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
-import { type AgentKind, modeForKind } from '../core/agent-kind';
+import { type AgentKind, kindForMode, modeForKind } from '../core/agent-kind';
 import type { AgentsMode } from '../core/mode';
 import { type AgentsPage, parseAgentsPage } from '../core/pages';
 import {
@@ -54,6 +54,7 @@ import {
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
+import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { agentsTour } from '../tour';
 import { NewChatPage, type StartConversation } from './NewChatPage';
@@ -82,7 +83,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   useWarmAgentSessionQuery(userId);
   const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
-  const dataMode = () => dataModeFor(mode());
+  const workspace = createWorkspaceMode(userId());
+  // A session opened from elsewhere brings its own mode, so it is never
+  // hidden from the sidebar it lands in.
+  if (props.initialRoute) workspace.setMode(props.initialRoute.mode);
+  const dataMode = () => dataModeFor(workspace.mode());
   const [localPage, setPage] = createSignal<AgentsPage>('new');
   const isRoutinesPage = () => {
     const content = panel.handle.content();
@@ -218,6 +223,12 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const openRoster = (_kind: AgentKind) => {
     openPage('agents');
   };
+  const changeMode = (next: AgentsMode) => {
+    if (next === workspace.mode()) return;
+    workspace.setMode(next);
+    // The open conversation belongs to the other mode now.
+    if (selected()) showComposer();
+  };
   const openConversation = (
     conversation: AgentConversationTarget,
     event?: MouseEvent,
@@ -294,6 +305,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   const sidebar = () => (
     <AgentsSidebar
+      mode={workspace.mode()}
+      onModeChange={changeMode}
       activePage={selected() ? undefined : page()}
       onOpenPage={(next) =>
         next === 'agents' ? openRoster('agent') : openPage(next)
@@ -380,23 +393,28 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                               class="contents"
                               classList={{ hidden: page() !== 'new' }}
                             >
-                              <NewChatPage
-                                active={
-                                  !isTouchDevice() ||
-                                  (!mobileList() && page() === 'new')
-                                }
-                                registerFocus={(focus) => {
-                                  composerFocus = focus;
-                                }}
-                                workspaceId={panel.handle.id}
-                                draft={draft()}
-                                onDraftChange={setDraft}
-                                roster={rosterSource.roster()}
-                                rosterLoading={rosterSource.loading()}
-                                availabilityLoading={rosterSource.availabilityLoading()}
-                                onStart={startConversation}
-                                onOpenRoster={openRoster}
-                              />
+                              <Show when={workspace.mode()} keyed>
+                                {(kind) => (
+                                  <NewChatPage
+                                    kind={kindForMode(kind)}
+                                    active={
+                                      !isTouchDevice() ||
+                                      (!mobileList() && page() === 'new')
+                                    }
+                                    registerFocus={(focus) => {
+                                      composerFocus = focus;
+                                    }}
+                                    workspaceId={panel.handle.id}
+                                    draft={draft()}
+                                    onDraftChange={setDraft}
+                                    roster={rosterSource.roster()}
+                                    rosterLoading={rosterSource.loading()}
+                                    availabilityLoading={rosterSource.availabilityLoading()}
+                                    onStart={startConversation}
+                                    onOpenRoster={openRoster}
+                                  />
+                                )}
+                              </Show>
                             </div>
                           </Suspense>
                         </div>

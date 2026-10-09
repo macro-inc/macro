@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE reminder_occurrence SET sent_at = now()\n               WHERE reminder_id = $1 AND scheduled_for = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e8971a962b6008a6612d24ad31ba2319938bc65aaf8b0c1272ff43203bc2786"
+}

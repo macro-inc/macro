@@ -9,18 +9,23 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentKind } from '../core/agent-kind';
 import {
   buildAgentRoster,
   type PersistedAgentLike,
   type RuntimeLike,
 } from '../core/roster';
+import { NEW_CONVERSATION_ATTACHMENTS_KEY } from '../primitives/composer-draft';
 import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
+  userId: () => 'user' as string | undefined,
   touch: false,
+  freePlan: false,
+  modelsPending: false,
   openSettings: vi.fn(),
   capabilitiesPending: false,
   attachments: [] as InputAttachmentData[],
@@ -40,7 +45,9 @@ vi.mock('@channel/Input', async () => ({
   ...(await import('../../channel/Input/attachment-tracker')),
   uploadInputAttachments: vi.fn(),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => mocks.userId(),
+}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: mocks.openSettings }),
 }));
@@ -115,10 +122,10 @@ vi.mock('@queries/agents/models', () => ({
     enabled: () => boolean
   ) => ({
     get isSuccess() {
-      return enabled();
+      return enabled() && !mocks.modelsPending;
     },
     get isPending() {
-      return false;
+      return mocks.modelsPending;
     },
     get isError() {
       return false;
@@ -126,6 +133,13 @@ vi.mock('@queries/agents/models', () => ({
     get data() {
       if (!enabled()) throw new Error('Pending resource must not be read');
       const harness = target().harness;
+      if (harness === 'in-memory' && mocks.freePlan) {
+        return {
+          status: 'available',
+          currentModel: 'google/gemini-3.8-flash',
+          models: [{ id: 'google/gemini-3.8-flash', name: 'Gemini 3.8 Flash' }],
+        };
+      }
       return {
         status: 'available',
         currentModel: harness === 'cursor' ? 'cursor-default' : 'chat-default',
@@ -166,6 +180,7 @@ type ComposerProps = {
   drawer: JSX.Element;
   drawerOpen: boolean;
   draft: string;
+  attachments: InputAttachmentData[];
   onDraftChange: (draft: string) => void;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
 };
@@ -173,6 +188,9 @@ vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
     <>
       {props.selector}
+      <output data-testid="attachments">
+        {props.attachments.map((a) => a.name).join(',')}
+      </output>
       <div data-testid="drawer" hidden={!props.drawerOpen}>
         {props.drawer}
       </div>
@@ -197,18 +215,21 @@ vi.mock('../components/ChatComposer', () => ({
 
 beforeEach(() => {
   localStorage.clear();
+  mocks.userId = () => 'user';
 });
 
 function page(
   connected = true,
   agents: PersistedAgentLike[] = [],
   availabilityLoading = false,
-  runtimes: RuntimeLike[] = []
+  runtimes: RuntimeLike[] = [],
+  kind?: AgentKind
 ) {
   const onStart = vi.fn();
   render(() => (
     <NewChatPage
       compact={mocks.touch}
+      kind={kind}
       roster={buildAgentRoster({
         agents,
         runtimes,
@@ -262,6 +283,8 @@ describe('agent-led new conversation', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
     mocks.capabilitiesPending = false;
+    mocks.freePlan = false;
+    mocks.modelsPending = false;
     mocks.touch = false;
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
@@ -310,6 +333,7 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
+        onFailure: expect.any(Function),
         prompt: 'Phone draft',
         botId: CURSOR_BOT_ID,
         modelOverride: 'gpt-5',
@@ -353,9 +377,23 @@ describe('agent-led new conversation', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
+      modelOverride: 'chat-default',
+    });
+  });
+  it('flags a send before the model catalog loads as a model fallback', () => {
+    mocks.modelsPending = true;
+    const send = page();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      botId: undefined,
+      repoUrl: undefined,
+      modelFallback: true,
     });
   });
   it('selects a coding agent, keeps the draft, and only sends the repository to coding agents', async () => {
@@ -383,6 +421,7 @@ describe('agent-led new conversation', () => {
     ).toBe('Shared draft');
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Shared draft',
       botId: undefined,
       repoUrl: undefined,
@@ -393,10 +432,51 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
       prompt: 'Shared draft',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
     });
+  });
+  it('offers only chat agents in Work and keeps the composer compact', async () => {
+    const send = page(true, [], false, [], 'agent');
+    expect(
+      screen.getByRole('heading', { name: 'What should we work on?' })
+    ).toBeTruthy();
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
+    openAgents();
+    expect(
+      screen.getByRole('menuitem', { name: /^Chat default$/ })
+    ).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /Cursor/ })).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      botId: undefined,
+      repoUrl: undefined,
+      modelOverride: 'chat-default',
+    });
+  });
+  it('offers only coding agents in Code and opens the repository drawer', async () => {
+    const send = page(true, [], false, [], 'coder');
+    expect(
+      screen.getByRole('heading', { name: 'What should we build?' })
+    ).toBeTruthy();
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
+    openAgents();
+    expect(screen.getByRole('menuitem', { name: /Cursor/ })).toBeTruthy();
+    expect(
+      screen.queryByRole('menuitem', { name: /^Chat default$/ })
+    ).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
+    );
   });
   it('restores an unsent draft after the page remounts', () => {
     page();
@@ -422,6 +502,7 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       repoUrl: undefined,
     });
@@ -456,12 +537,14 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/other',
     });
   });
-  it('uses a saved agent without sending a per-session model override', async () => {
+  it('uses Gemini for a free user starting a saved in-memory agent', async () => {
+    mocks.freePlan = true;
     const send = page(true, [
       {
         bot: { id: 'saved-agent', name: 'Reviewer', handle: 'reviewer' },
@@ -472,11 +555,12 @@ describe('agent-led new conversation', () => {
     await selectAgent(/Reviewer/);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: 'saved-agent',
       repoUrl: undefined,
+      modelOverride: 'google/gemini-3.8-flash',
     });
-    expect(send.mock.calls[0][0]).not.toHaveProperty('modelOverride');
   });
   it.each(['claude-cloud', 'codex-cloud', 'future-runtime'])(
     'shows the drawer for a saved %s coding agent without forwarding unsupported repository overrides',
@@ -501,6 +585,7 @@ describe('agent-led new conversation', () => {
       expect(screen.getByRole('button', { name: 'Branch' })).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       expect(send).toHaveBeenCalledWith({
+        onFailure: expect.any(Function),
         prompt: 'Prompt',
         botId: 'saved-cloud-agent',
         repoUrl: undefined,
@@ -534,6 +619,7 @@ describe('agent-led new conversation', () => {
     expect(branch.hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: 'local-agent',
       repoUrl: 'https://github.com/macro-inc/macro',
@@ -615,6 +701,7 @@ describe('agent-led new conversation', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: CURSOR_BOT_ID,
       repoUrl: undefined,
@@ -698,6 +785,7 @@ describe('agent-led new conversation', () => {
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
@@ -761,6 +849,27 @@ describe('agent-led new conversation', () => {
     page();
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
       'Sonnet 5.5'
+    );
+  });
+  it('uses the free catalog default instead of a persisted paid model', async () => {
+    mocks.freePlan = true;
+    mocks.preferredInmemModel = 'anthropic/claude-sonnet-5-5';
+    const send = page();
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Gemini 3.8 Flash'
+    );
+    openAgents();
+    await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy());
+    expect(screen.queryByTitle('Sonnet 5.5')).toBeNull();
+    expect(
+      within(screen.getByRole('menu')).getByTitle('Gemini 3.8 Flash')
+    ).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelOverride: 'google/gemini-3.8-flash',
+      })
     );
   });
   it('restores the most recently used supported agent', async () => {
@@ -834,6 +943,7 @@ it('starts a conversation with an uploaded image and no text', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(start).toHaveBeenCalledWith(
     expect.objectContaining({
+      onFailure: expect.any(Function),
       prompt: '',
       attachments: [
         {
@@ -845,4 +955,113 @@ it('starts a conversation with an uploaded image and no text', () => {
       ],
     })
   );
+});
+
+it('restores a text-only draft when startup configuration fails', () => {
+  mocks.attachments = [];
+  const start = page();
+  fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+    target: { value: 'Keep my unsent prompt' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+    target: { value: '' },
+  });
+  start.mock.calls[0][0].onFailure();
+  expect(
+    (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+  ).toBe('Keep my unsent prompt');
+});
+
+it('retains uploaded attachments until first delivery is accepted', () => {
+  mocks.attachments = [
+    {
+      id: 'retained-file',
+      name: 'keep.txt',
+      kind: 'document',
+      mimeType: 'text/plain',
+      size: 12,
+    },
+  ];
+  localStorage.setItem(
+    `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
+    JSON.stringify(mocks.attachments)
+  );
+  const start = page();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(
+    JSON.parse(
+      localStorage.getItem(`${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`)!
+    )
+  ).toEqual(mocks.attachments);
+  start.mock.calls[0][0].onFailure();
+  expect(
+    JSON.parse(
+      localStorage.getItem(`${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`)!
+    )
+  ).toEqual(mocks.attachments);
+  start.mock.calls[0][0].onDelivered();
+  expect(
+    JSON.parse(
+      localStorage.getItem(`${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`)!
+    )
+  ).toEqual([]);
+});
+
+it('isolates drafts and attachment projections as identity arrives and changes', () => {
+  const [identity, setIdentity] = createSignal<string>();
+  mocks.userId = identity;
+  const base = 'attachment-tracker-agents-new-conversation-persist-v0';
+  const attachment = { id: 'private', name: 'alice-only.txt', kind: 'file' };
+  localStorage.setItem(`${base}:`, JSON.stringify([attachment]));
+  localStorage.setItem(`${base}:alice`, JSON.stringify([attachment]));
+  page();
+  expect(screen.getByTestId('attachments').textContent).toBe('');
+  fireEvent.input(screen.getByLabelText('Draft'), {
+    target: { value: 'anonymous' },
+  });
+  setIdentity('alice');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+  expect(screen.getByTestId('attachments').textContent).toBe('alice-only.txt');
+  fireEvent.input(screen.getByLabelText('Draft'), {
+    target: { value: 'Alice private' },
+  });
+  setIdentity('bob');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+  expect(screen.getByTestId('attachments').textContent).toBe('');
+  setIdentity('alice');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe(
+    'Alice private'
+  );
+});
+
+it('does not restore a failed first prompt into another account', () => {
+  const [identity, setIdentity] = createSignal<string | undefined>('alice');
+  mocks.userId = identity;
+  mocks.attachments = [];
+  const start = page();
+  fireEvent.input(screen.getByLabelText('Draft'), {
+    target: { value: 'Alice prompt' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  setIdentity('bob');
+  start.mock.calls[0][0].onFailure();
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+});
+
+it('clears delivered attachments after switching away and back to the submitting account', () => {
+  const [identity, setIdentity] = createSignal<string | undefined>('alice');
+  mocks.userId = identity;
+  mocks.attachments = [{ id: 'sent-file', name: 'sent.txt', kind: 'document' }];
+  localStorage.setItem(
+    `${NEW_CONVERSATION_ATTACHMENTS_KEY}:alice`,
+    JSON.stringify(mocks.attachments)
+  );
+  const start = page();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  setIdentity('bob');
+  setIdentity('alice');
+  expect(screen.getByTestId('attachments').textContent).toBe('sent.txt');
+  start.mock.calls[0][0].onDelivered();
+  expect(screen.getByTestId('attachments').textContent).toBe('');
 });

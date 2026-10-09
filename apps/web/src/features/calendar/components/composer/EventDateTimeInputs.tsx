@@ -9,6 +9,7 @@ import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { formatLocalDate, parseLocalDate } from '../../utils/calendar-date';
+import { EventComposerPopoverPortal } from './EventComposerPopoverPortal';
 import {
   DAY_TIME_OPTIONS,
   type EventTimeOption,
@@ -148,7 +149,7 @@ export function EventTimeInput(props: EventTimeInputProps) {
         />
       </div>
 
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={4}>
           <Popover.Content
             class="z-action-menu max-h-64 min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu-glass p-1.5 glass menu-open-animation"
@@ -189,7 +190,7 @@ export function EventTimeInput(props: EventTimeInputProps) {
             />
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }

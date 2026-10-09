@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { DatabaseColumnCasts } from '../core/column-schema';
+import type { DatabaseColumnCasts } from '../../database/core/column-schema';
 import { createColumnCasts } from './column-casts';
 
 const transport = vi.hoisted(() => ({

@@ -1,5 +1,6 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
 import type { AppEvents } from '@app/lib/analytics/app-events';
+import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { CheckoutTerms } from '../core/checkout';
@@ -107,6 +108,10 @@ export type OnboardingContext = {
   joinTeam(inviteId: string): Promise<void>;
   /** The invite promotion the account holds; null when it has none. */
   createInviteOffer(): Accessor<Loadable<InviteOffer | null>>;
+  createPlanCatalog(): {
+    catalog: Accessor<Loadable<AiPlanCatalog>>;
+    retry(): void;
+  };
   /** The hosted checkout URL; rejects with a message fit to show. */
   startCheckout(tier: PaidPlanTier, terms: CheckoutTerms): Promise<string>;
   /**

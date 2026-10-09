@@ -1,12 +1,12 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::email::messages::BATCH_UPDATE_MESSAGE_LIMIT;
+use crate::pubsub::publish_email_event;
 use anyhow::Context;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
-use email_service::pubsub::publish_email_event;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use models_email::service;

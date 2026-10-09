@@ -65,6 +65,12 @@ export function seedThreadRepliesFromMessageTimeline(
   });
 }
 
+// Cached selectors outlive mounted rows. Keep this outside the hook so its
+// closure cannot retain component accessors and detached thread DOM.
+function selectThreadReplies(thread: MessageThread) {
+  return thread.replies;
+}
+
 export function useThreadRepliesQuery(
   parent: Accessor<MessageParent>,
   messageId: Accessor<string>,
@@ -76,7 +82,7 @@ export function useThreadRepliesQuery(
     return {
       ...threadRepliesQueryOptions(parent(), messageId()),
       enabled: enabled(),
-      select: (thread: MessageThread) => thread.replies,
+      select: selectThreadReplies,
     };
   });
 }

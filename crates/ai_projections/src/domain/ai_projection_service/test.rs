@@ -9,6 +9,7 @@ use crate::domain::{
     ai_projection_repo::AiProjectionRepository,
     ai_projection_service::{
         AiProjectionService, AiProjectionServiceImpl, hash_projection_version,
+        requires_professional_features,
     },
     model::{
         AiProjection, AiProjectionError, Expiry, ProjectionStatus, RefreshCadence, TargetType,
@@ -787,4 +788,19 @@ async fn upsert_projection_rejects_empty_id_and_prompt() {
         .await
         .unwrap_err();
     assert!(matches!(err, UpsertProjectionError::BadRequest(_)));
+}
+
+#[test]
+fn only_gemini_flash_is_available_without_professional_features() {
+    assert!(!requires_professional_features(Some(
+        "google/gemini-3.8-flash"
+    )));
+    assert!(requires_professional_features(Some(
+        "anthropic/claude-haiku-4-5"
+    )));
+    assert!(requires_professional_features(Some(
+        "anthropic/claude-sonnet-5"
+    )));
+    assert!(requires_professional_features(Some("unknown/model")));
+    assert!(requires_professional_features(None));
 }

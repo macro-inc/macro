@@ -1,5 +1,6 @@
 import { $dfsIterator } from '@lexical/utils';
 import { $getRoot, type LexicalNode } from 'lexical';
+import { match, P } from 'ts-pattern';
 import {
   $isAgentSessionMentionNode,
   type AgentSessionMentionInfo,
@@ -16,6 +17,7 @@ import {
   type DateMentionInfo,
   type DateMentionNode,
 } from '../nodes/DateMentionNode';
+import { $isDocumentCardNode } from '../nodes/DocumentCardNode';
 import {
   $isDocumentMentionNode,
   type DocumentMentionInfo,
@@ -92,32 +94,23 @@ export type ChannelMention = {
  * `document`.
  */
 function documentMentionEntityType(blockName: string): string {
-  switch (blockName) {
-    case 'channel':
-      return 'channel';
-    case 'project':
-      return 'project';
-    case 'chat':
-      return 'chat';
-    case 'email':
-      return 'thread';
-    case 'call':
-      return 'call';
-    case 'calendar':
-      return 'calendar_event';
-    case 'routine':
-    case 'automation':
-      return 'automation';
-    case 'company':
-      return 'crm_company';
-    case 'contact':
-      return 'crm_contact';
-    // A task project. Not a message reference type, so it is dropped below.
-    case 'initiative':
-      return 'initiative';
-    default:
-      return 'document';
-  }
+  return (
+    match(blockName)
+      .with(
+        P.union('channel', 'project', 'chat', 'call', 'automation', 'form'),
+        (kind) => kind
+      )
+      // A routine is still referenced under its old item type.
+      .with('routine', () => 'automation')
+      .with('email', () => 'thread')
+      .with('calendar', () => 'calendar_event')
+      .with('company', () => 'crm_company')
+      .with('contact', () => 'crm_contact')
+      // A task project. Not a message reference type, so it is dropped below.
+      .with('initiative', () => 'initiative')
+      .with(P._, () => 'document')
+      .exhaustive()
+  );
 }
 
 /**
@@ -141,8 +134,11 @@ export function $extractChannelMentions(): ChannelMention[] {
     out.push(mention);
   };
 
-  for (const node of $extractAllMentions()) {
-    if ($isDocumentMentionNode(node)) {
+  for (const { node } of $dfsIterator($getRoot())) {
+    if (
+      $isDocumentMentionNode(node) ||
+      ($isDocumentCardNode(node) && node.getBlockName() === 'form')
+    ) {
       push({
         entityType: documentMentionEntityType(node.getBlockName()),
         entityId: node.getDocumentId(),

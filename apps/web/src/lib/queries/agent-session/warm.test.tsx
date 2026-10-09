@@ -56,8 +56,10 @@ function prepared(id: string) {
 function setup() {
   const client = new QueryClient();
   clients.push(client);
-  const take = (options: Parameters<typeof takeWarmAgentSession>[0] = {}) =>
+  const claim = (options: Parameters<typeof takeWarmAgentSession>[0] = {}) =>
     takeWarmAgentSession({ userId: OWNER, ...options }, client);
+  const take = (options: Parameters<typeof takeWarmAgentSession>[0] = {}) =>
+    claim(options).id;
   const replenish = () => replenishWarmAgentSession(OWNER, client);
   const settled = () => vi.waitFor(() => expect(client.isFetching()).toBe(0));
   const mount = () => {
@@ -80,7 +82,7 @@ function setup() {
     disposers.add(unmount);
     return unmount;
   };
-  return { take, replenish, settled, mount };
+  return { claim, take, replenish, settled, mount };
 }
 
 it('does not warm for an owner who has no existing warming query', () => {
@@ -110,23 +112,30 @@ it('retries a failed initial preparation only after successful creation', async 
 
 it('deduplicates page mounts and preserves a reservation for the matching owner and settings', async () => {
   warm.mockResolvedValueOnce(prepared('warm-id'));
-  const { mount, settled, take, replenish } = setup();
+  const { mount, settled, claim, take, replenish } = setup();
   mount();
   mount();
   await settled();
   expect(warm).toHaveBeenCalledTimes(1);
-  expect(take({ userId: 'other' })).toBeUndefined();
-  expect(take({ userId: undefined })).toBeUndefined();
-  expect(take({ botId: 'another-bot' })).toBeUndefined();
-  expect(take({ repoUrl: 'https://github.com/example/repo' })).toBeUndefined();
-  expect(take({ modelOverride: 'different' })).toBeUndefined();
-  expect(take({ instructions: 'different' })).toBeUndefined();
+  expect(claim({ userId: 'other' })).toEqual({ claim: 'miss_none_ready' });
+  expect(claim({ userId: undefined })).toEqual({ claim: 'not_attempted' });
+  expect(claim({ botId: 'another-bot' })).toEqual({ claim: 'not_attempted' });
+  expect(claim({ repoUrl: 'https://github.com/example/repo' })).toEqual({
+    claim: 'not_attempted',
+  });
+  expect(claim({ modelOverride: 'different' })).toEqual({
+    claim: 'miss_model',
+  });
+  expect(claim({ instructions: 'different' })).toEqual({
+    claim: 'miss_other',
+  });
   replenish();
   await settled();
   expect(warm).toHaveBeenCalledTimes(1);
-  expect(take({ botId: MACRO_NEW_BOT_ID, modelOverride: 'model-a' })).toBe(
-    'warm-id'
-  );
+  expect(claim({ botId: MACRO_NEW_BOT_ID, modelOverride: 'model-a' })).toEqual({
+    id: 'warm-id',
+    claim: 'hit',
+  });
   expect(take()).toBeUndefined();
   await settled();
 });

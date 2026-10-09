@@ -21,7 +21,6 @@ import type {
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateTeamRequest,
-  CreateUserRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
   CursorApiKeyStatus,
@@ -89,6 +88,7 @@ import type {
   TeamWithMembers,
   ToggleAutoJoinDomainResponse,
   ToggleNonAdminInvitesResponse,
+  UpdateAutoReloadRequest,
   UpdateOverageRequest,
   UsageSnapshot,
   UserLinkResponse,
@@ -98,6 +98,86 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
+
+/**
+ * @summary Turn automatic credit reloads on with the given
+thresholds, or off. Payer only. Enabling settles right away, so a balance
+already under the minimum reloads immediately.
+ */
+export type updateAiBillingAutoReloadResponse200 = {
+  data: UsageSnapshot;
+  status: 200;
+};
+
+export type updateAiBillingAutoReloadResponse400 = {
+  data: AiBillingErrorBody;
+  status: 400;
+};
+
+export type updateAiBillingAutoReloadResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type updateAiBillingAutoReloadResponse402 = {
+  data: AiBillingErrorBody;
+  status: 402;
+};
+
+export type updateAiBillingAutoReloadResponse403 = {
+  data: AiBillingErrorBody;
+  status: 403;
+};
+
+export type updateAiBillingAutoReloadResponse500 = {
+  data: AiBillingErrorBody;
+  status: 500;
+};
+
+export type updateAiBillingAutoReloadResponseSuccess =
+  updateAiBillingAutoReloadResponse200 & {
+    headers: Headers;
+  };
+export type updateAiBillingAutoReloadResponseError = (
+  | updateAiBillingAutoReloadResponse400
+  | updateAiBillingAutoReloadResponse401
+  | updateAiBillingAutoReloadResponse402
+  | updateAiBillingAutoReloadResponse403
+  | updateAiBillingAutoReloadResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateAiBillingAutoReloadResponse =
+  | updateAiBillingAutoReloadResponseSuccess
+  | updateAiBillingAutoReloadResponseError;
+
+export const getUpdateAiBillingAutoReloadUrl = () => {
+  return `/ai-billing/auto-reload`;
+};
+
+export const updateAiBillingAutoReload = async (
+  updateAutoReloadRequest: UpdateAutoReloadRequest,
+  options?: RequestInit
+): Promise<updateAiBillingAutoReloadResponse> => {
+  const res = await fetch(getUpdateAiBillingAutoReloadUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAutoReloadRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAiBillingAutoReloadResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateAiBillingAutoReloadResponse;
+};
 
 /**
  * @summary Start a Stripe Checkout for a credit pack. Payer only.
@@ -178,7 +258,7 @@ export const createAiCreditCheckout = async (
 };
 
 /**
- * @summary Turn overage billing on or off and set the per-period cap. Payer only.
+ * @summary Retired direct-usage opt-in. Enabling is rejected; disabling remains supported.
  */
 export type updateAiBillingOverageResponse200 = {
   data: UsageSnapshot;
@@ -256,7 +336,8 @@ export const updateAiBillingOverage = async (
 };
 
 /**
- * @summary The plan catalog, credit packs, and overage cap bounds.
+ * @summary The plan catalog, credit packs, overage cap bounds, and automatic reload
+defaults and bounds.
  */
 export type getAiBillingPlansResponse200 = {
   data: PlanCatalogResponse;
@@ -4531,69 +4612,6 @@ export const getUserInvites = async (
     status: res.status,
     headers: res.headers,
   } as getUserInvitesResponse;
-};
-
-/**
- * @summary Creates a new user.
- */
-export type createUserResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type createUserResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type createUserResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type createUserResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type createUserResponseSuccess = createUserResponse200 & {
-  headers: Headers;
-};
-export type createUserResponseError = (
-  | createUserResponse400
-  | createUserResponse403
-  | createUserResponse500
-) & {
-  headers: Headers;
-};
-
-export type createUserResponse =
-  | createUserResponseSuccess
-  | createUserResponseError;
-
-export const getCreateUserUrl = () => {
-  return `/user`;
-};
-
-export const createUser = async (
-  createUserRequest: CreateUserRequest,
-  options?: RequestInit
-): Promise<createUserResponse> => {
-  const res = await fetch(getCreateUserUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createUserRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createUserResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createUserResponse;
 };
 
 /**

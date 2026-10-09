@@ -342,7 +342,7 @@ pub fn resolve(catalog: &Catalog, statement: Statement) -> Result<Query, Resolve
         }
         Statement::AlterColumnType(alter) => {
             let table = writable(names::table(catalog, &alter.table)?)?;
-            let column = names::column(table, &alter.column)?;
+            let column = write::stored_column(names::column(table, &alter.column)?)?;
             // No data is read here, so the column is taken to hold values;
             // the writer knows better and lets an empty one take any type.
             if let Cast::Never(reason) = cast(

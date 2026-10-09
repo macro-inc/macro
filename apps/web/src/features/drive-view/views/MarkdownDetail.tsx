@@ -19,6 +19,7 @@ import {
 } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
@@ -181,7 +182,12 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
               <MarkdownDetailContent
                 documentId={props.documentId}
                 kind={props.kind ?? 'document'}
-                fallbackName={props.fallbackName ?? 'Untitled'}
+                fallbackName={
+                  props.fallbackName ||
+                  blockNameToDefaultFile(
+                    props.kind && props.kind !== 'document' ? props.kind : 'md'
+                  )
+                }
                 data={data()}
                 children={props.children}
               />

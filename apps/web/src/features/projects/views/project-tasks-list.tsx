@@ -1,5 +1,5 @@
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
-import { TaskList } from '@app/features/tasks-view/components/task-list/TaskList';
+import { TasksContent } from '@app/features/tasks-view/tasks-content';
 import {
   TasksViewProvider,
   type TasksViewProviderProps,
@@ -24,10 +24,9 @@ export type ProjectTasksListProps = Omit<
   projectName: string;
   onCreateTask?: () => void;
   addTasksAction?: JSX.Element;
-  navigation?: JSX.Element;
 };
 
-/** Embeds the actual Tasks list, including its controllers, menus and row editors. */
+/** Embeds Tasks layouts with project-scoped data, controllers, menus and editors. */
 export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
   const context = useProjectsContext();
   return (
@@ -37,6 +36,7 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           initialState={{ tab: 'team-tasks', groupBy: 'status', facets: {} }}
           restoreEntryState
           scopeKey={`initiative:${projectId}:tasks`}
+          searchNamespace="projectTasks"
           onOpenTask={props.onOpenTask}
           onCloseTask={() => {}}
           sourceFactory={(state, options) =>
@@ -71,7 +71,6 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
   return (
     <div class="flex size-full min-h-0 flex-col">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
-        {props.navigation}
         <ProjectTaskSearch
           projectName={props.projectName}
           value={state.search}
@@ -99,7 +98,7 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           </Button>
         </div>
       </Show>
-      <TaskList />
+      <TasksContent />
     </div>
   );
 }

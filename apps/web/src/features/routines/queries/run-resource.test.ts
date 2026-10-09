@@ -4,7 +4,9 @@ import {
   decodeExecutionResult,
   getExecutionResource,
   getHistoryResource,
+  getHistorySkip,
   resourcesMatch,
+  toHistoryRecord,
 } from './run-resource';
 
 const chat = { type: 'chat', id: 'same-id' } as const;
@@ -118,5 +120,48 @@ describe('versioned execution results', () => {
     expect(
       getHistoryResource({ result: { version: 1 }, resource_id: chat.id })
     ).toBeUndefined();
+  });
+});
+
+describe('skipped runs', () => {
+  const skipped = (condition: unknown) => ({
+    version: 1,
+    resource: null,
+    error: null,
+    condition,
+  });
+
+  it('decodes unmet and unavailable conditions', () => {
+    expect(
+      getHistorySkip({
+        result: skipped({ status: 'not_met', probability: 0.12 }),
+      })
+    ).toEqual({ reason: 'not_met', probability: 0.12 });
+    expect(
+      getHistorySkip({ result: skipped({ status: 'unavailable' }) })
+    ).toEqual({ reason: 'unavailable' });
+  });
+
+  it.for([null, 'chat-id', {}, skipped(null), skipped({ status: 'other' })])(
+    'treats %j as a run, not a skip',
+    (result) => {
+      expect(getHistorySkip({ result })).toBeUndefined();
+    }
+  );
+
+  it('carries the skip into history records', () => {
+    expect(
+      toHistoryRecord({
+        id: 'record',
+        result: skipped({ status: 'not_met', probability: 0.2 }),
+        resource_id: null,
+        start_time: '2026-10-05T09:00:00Z',
+        end_time: '2026-10-05T09:00:00Z',
+        is_success: true,
+      })
+    ).toMatchObject({
+      resource: undefined,
+      skipped: { reason: 'not_met', probability: 0.2 },
+    });
   });
 });

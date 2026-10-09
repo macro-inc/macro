@@ -103,6 +103,7 @@ export function TaskList(props: TaskListProps) {
     registerListActivationHandler,
     openTask,
     scopeKey,
+    filterByTag,
   } = useTasksView();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
@@ -521,6 +522,7 @@ export function TaskList(props: TaskListProps) {
                               checked={list.selection.isSelected(
                                 entityRow().id
                               )}
+                              onFilterByTag={filterByTag}
                               onMouseMove={() =>
                                 list.focus.set(entityRow().id, {
                                   reason: 'hover',

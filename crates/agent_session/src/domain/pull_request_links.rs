@@ -1,6 +1,7 @@
 //! Pull requests associated with sessions: the one a session's agent opened, and any a person
 //! linked afterwards.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -10,6 +11,7 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::models::MessageParent;
 
 use super::error::{AgentSessionError, Result};
 use super::model::AgentSessionId;
@@ -47,6 +49,49 @@ pub struct SessionPullRequestLink {
     pub created_at: DateTime<Utc>,
 }
 
+/// The most pull requests one batch lookup answers, one Reviews page.
+pub const MAX_PULL_REQUESTS_PER_LOOKUP: usize = 100;
+
+/// A stored link between a pull request and a session, with where the session started.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PullRequestSessionLinkRow {
+    /// The pull request's `owner/repo/pull/number` key, as stored.
+    pub github_key: String,
+    /// The linked session.
+    pub session: AgentSessionId,
+    /// Who associated the pull request with the session.
+    pub source: PullRequestLinkSource,
+    /// The entity whose thread the session was started from, if any.
+    pub thread_parent: Option<MessageParent>,
+}
+
+/// A session linked to a pull request, as a viewer of that session sees it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PullRequestLinkedSession {
+    /// The session id.
+    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
+    pub session_id: Uuid,
+    /// Who associated the pull request with the session.
+    pub source: PullRequestLinkSource,
+    /// The channel, task, or CRM record whose thread the session was started from, if any.
+    pub thread_parent: Option<MessageParent>,
+}
+
+/// The sessions linked to one pull request that the caller can view.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PullRequestSessions {
+    /// The requested pull request URL, canonicalized.
+    pub url: String,
+    /// The pull request's `owner/repo/pull/number` key.
+    pub github_key: String,
+    /// Linked sessions the caller can view, oldest link first.
+    pub sessions: Vec<PullRequestLinkedSession>,
+}
+
 /// The `owner/repo/pull/number` key of a GitHub pull request URL.
 pub(crate) fn pull_request_key(url: &str) -> Result<String> {
     let url = canonical_url(url)?;
@@ -82,6 +127,13 @@ pub trait SessionPullRequestLinkRepo: Send + Sync + 'static {
         &self,
         github_key: &str,
     ) -> impl Future<Output = Result<Vec<AgentSessionId>>> + Send;
+
+    /// Every link to the pull requests `github_keys`, compared case-insensitively, oldest
+    /// first, with the thread each linked session was started from.
+    fn links_for_pull_requests(
+        &self,
+        github_keys: &[String],
+    ) -> impl Future<Output = Result<Vec<PullRequestSessionLinkRow>>> + Send;
 }
 
 /// Associating pull requests with sessions and finding them again.
@@ -113,6 +165,14 @@ pub trait SessionPullRequestLinks: Send + Sync + 'static {
         viewer: &MacroUserIdStr<'static>,
         url: &str,
     ) -> impl Future<Output = Result<Vec<AgentSessionId>>> + Send;
+
+    /// The sessions linked to each pull request in `urls` that `viewer` may view, in request
+    /// order. At most [`MAX_PULL_REQUESTS_PER_LOOKUP`] URLs.
+    fn sessions_for_pull_requests(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        urls: &[String],
+    ) -> impl Future<Output = Result<Vec<PullRequestSessions>>> + Send;
 }
 
 /// Pull request links over the session store, answering session visibility with `view_access`.
@@ -179,6 +239,71 @@ impl<R: SessionPullRequestLinkRepo> SessionPullRequestLinks for SessionPullReque
             }
         }
         Ok(visible)
+    }
+
+    #[tracing::instrument(err, skip(self, urls), fields(urls = urls.len()))]
+    async fn sessions_for_pull_requests(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        urls: &[String],
+    ) -> Result<Vec<PullRequestSessions>> {
+        if urls.len() > MAX_PULL_REQUESTS_PER_LOOKUP {
+            return Err(AgentSessionError::TooManyPullRequests(
+                MAX_PULL_REQUESTS_PER_LOOKUP,
+            ));
+        }
+        let mut requested = Vec::with_capacity(urls.len());
+        for url in urls {
+            let url = canonical_url(url)?;
+            let github_key = url.trim_start_matches("https://github.com/").to_owned();
+            requested.push(PullRequestSessions {
+                url,
+                github_key,
+                sessions: Vec::new(),
+            });
+        }
+        if requested.is_empty() {
+            return Ok(requested);
+        }
+
+        let mut keys: Vec<String> = requested
+            .iter()
+            .map(|pull_request| pull_request.github_key.to_lowercase())
+            .collect();
+        keys.sort();
+        keys.dedup();
+        let rows = self.repo.links_for_pull_requests(&keys).await?;
+
+        // One access check per session, however many pull requests it links.
+        let mut viewable = HashMap::<AgentSessionId, bool>::new();
+        let mut by_key = HashMap::<String, Vec<PullRequestLinkedSession>>::new();
+        for row in rows {
+            let can_view = match viewable.get(&row.session) {
+                Some(can_view) => *can_view,
+                None => {
+                    let can_view = self.view_access.can_view(viewer, row.session).await?;
+                    viewable.insert(row.session, can_view);
+                    can_view
+                }
+            };
+            if !can_view {
+                continue;
+            }
+            by_key
+                .entry(row.github_key.to_lowercase())
+                .or_default()
+                .push(PullRequestLinkedSession {
+                    session_id: row.session.as_uuid(),
+                    source: row.source,
+                    thread_parent: row.thread_parent,
+                });
+        }
+        for pull_request in &mut requested {
+            if let Some(sessions) = by_key.get(&pull_request.github_key.to_lowercase()) {
+                pull_request.sessions = sessions.clone();
+            }
+        }
+        Ok(requested)
     }
 }
 

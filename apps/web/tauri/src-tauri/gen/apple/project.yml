@@ -58,8 +58,8 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CFBundleShortVersionString: 2.0.8
-        CFBundleVersion: "183"
+        CFBundleShortVersionString: 2.0.9
+        CFBundleVersion: "185"
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - macro
@@ -126,7 +126,7 @@ targets:
       - sdk: UIKit.framework
       - sdk: WebKit.framework
     preBuildScripts:
-      - script: export PATH="$PATH:$HOME/.cargo/bin" && cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
+      - script: export TMPDIR="$(/usr/bin/getconf DARWIN_USER_TEMP_DIR)" && export PATH="$PATH:$HOME/.cargo/bin" && cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
         basedOnDependencyAnalysis: false
         outputFiles:
@@ -141,8 +141,8 @@ targets:
       path: ShareExtension/Info.plist
       properties:
         CFBundleDisplayName: Share to Macro
-        CFBundleShortVersionString: 2.0.8
-        CFBundleVersion: "183"
+        CFBundleShortVersionString: 2.0.9
+        CFBundleVersion: "185"
         LSApplicationQueriesSchemes:
           - macro
         NSExtension:
@@ -176,8 +176,8 @@ targets:
       path: NotificationServiceExtension/Info.plist
       properties:
         CFBundleDisplayName: NotificationServiceExtension
-        CFBundleShortVersionString: 2.0.8
-        CFBundleVersion: "183"
+        CFBundleShortVersionString: 2.0.9
+        CFBundleVersion: "185"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

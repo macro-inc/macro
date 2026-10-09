@@ -1,0 +1,44 @@
+[package]
+edition = "2024"
+name = "psd_engine"
+publish = false
+version = "0.1.0"
+
+[lib]
+# `cdylib` for the browser build; `rlib` so native tools and tests link it.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# The `psd_render` developer CLI (renders, round trips, fidelity scoring
+# against the merged image Photoshop stores in each file).
+cli = ["dep:clap"]
+
+[[bin]]
+name = "psd_render"
+required-features = ["cli"]
+
+[dependencies]
+clap = { workspace = true, optional = true }
+# The Figma engine supplies the shared design foundation: fonts (the
+# registry, WOFF/WOFF2, glyph outlines), image decoding, and the JPEG
+# encoder.
+fig_engine = { path = "../fig_engine", default-features = false }
+miniz_oxide = { workspace = true }
+png = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tiny-skia = { workspace = true }
+
+# The wasm-bindgen shell in `wasm`, which only exists on wasm32.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = { workspace = true }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.custom]
+wasm-opt = false

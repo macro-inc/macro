@@ -70,6 +70,21 @@ async fn with_admission<Engine: TurnEngine, Out>(
     admission: Arc<dyn AiAdmissionService>,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
 ) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
+    with_model_access(
+        engine,
+        admission,
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        scenario,
+    )
+    .await
+}
+
+async fn with_model_access<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    model_access: Arc<dyn InMemModelAccess>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
     let store = Arc::new(SessionStore::new());
     let session_id = AgentSessionId::new();
     store.insert(
@@ -83,11 +98,13 @@ async fn with_admission<Engine: TurnEngine, Out>(
         ),
         engine,
         admission,
+        model_access,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
         enable_dev_commands: true,
@@ -419,7 +436,8 @@ async fn new_session_advertises_the_engine_supported_models() {
             .collect::<Vec<_>>(),
         vec![
             ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
-            ("other-model", "other-model")
+            ("other-model", "other-model"),
+            (chat::domain::models::FREE_MODEL, "Gemini 3.8 Flash")
         ]
     );
 
@@ -935,12 +953,14 @@ async fn serve_with_mcp(
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         enable_dev_commands: false,
         mcp,
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -968,6 +988,83 @@ async fn serve_with_mcp(
     (connection, session, abort)
 }
 
+#[derive(Default)]
+struct RefreshingConnector {
+    connected: AtomicBool,
+    fail: AtomicBool,
+    asked: std::sync::Mutex<Vec<Vec<String>>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for Arc<RefreshingConnector> {
+    async fn refresh(
+        &self,
+        _: AgentSessionId,
+        advertised: Vec<AcpMcpServer>,
+    ) -> anyhow::Result<Option<Vec<AcpMcpServer>>> {
+        anyhow::ensure!(!self.fail.load(Ordering::SeqCst), "refresh failed");
+        assert!(
+            !advertised.is_empty(),
+            "retain the attached session credential"
+        );
+        let servers = if self.connected.load(Ordering::SeqCst) {
+            vec![AcpMcpServer::Http(
+                agent_client_protocol::schema::v1::McpServerHttp::new(
+                    "notion",
+                    "https://egress.test/mcp/notion",
+                ),
+            )]
+        } else {
+            vec![]
+        };
+        Ok(Some(servers))
+    }
+    async fn connect(
+        &self,
+        servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<RemoteMcpToolSet> {
+        self.asked
+            .lock()
+            .unwrap()
+            .push(servers.into_iter().map(|server| server.name).collect());
+        None
+    }
+}
+
+#[tokio::test]
+async fn each_turn_refreshes_newly_connected_apps_without_recreating_the_session() {
+    let connector = Arc::new(RefreshingConnector::default());
+    let state = Arc::new(AgentState {
+        session_id: AgentSessionId::new(),
+        owner: model_owner::Owner::User(MacroUserIdStr::try_from_email("owner@macro.com").unwrap()),
+        engine: Arc::new(ScriptedEngine::new(vec![])),
+        admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
+        store: Arc::new(SessionStore::new()),
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
+        mcp: Arc::new(connector.clone()),
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
+        mcp_connect: std::sync::Mutex::new(None),
+        client_renders_forms: AtomicBool::new(false),
+    });
+    state.start_connect_mcp(test_mcp_servers());
+    state.mcp_tools_for_turn().await.unwrap();
+    assert!(connector.asked.lock().unwrap().last().unwrap().is_empty());
+    connector.connected.store(true, Ordering::SeqCst);
+    state.mcp_tools_for_turn().await.unwrap();
+    assert_eq!(
+        connector.asked.lock().unwrap().last().unwrap(),
+        &vec!["notion".to_string()]
+    );
+    connector.connected.store(false, Ordering::SeqCst);
+    state.mcp_tools_for_turn().await.unwrap();
+    assert!(connector.asked.lock().unwrap().last().unwrap().is_empty());
+    connector.fail.store(true, Ordering::SeqCst);
+    assert!(state.mcp_tools_for_turn().await.is_err());
+}
+
 /// The servers `session/new` carries are dialed in the background, minus
 /// Macro's own, whose tools this runtime already has natively.
 #[tokio::test]
@@ -990,12 +1087,14 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
         admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         enable_dev_commands: false,
         mcp: Arc::new(Arc::clone(&spy)),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -1078,12 +1177,14 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         ),
         engine: Arc::clone(&engine) as Arc<dyn TurnEngine>,
         admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         enable_dev_commands: false,
         mcp: Arc::new(Arc::clone(&connector)),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -1181,12 +1282,14 @@ where
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         client_renders_forms: AtomicBool::new(false),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         enable_dev_commands,
     });
@@ -1813,4 +1916,180 @@ async fn effort_is_validated_and_model_changes_return_complete_options() {
         );
     })
     .await;
+}
+
+#[tokio::test]
+async fn free_session_defaults_to_gemini_and_rejects_paid_model_changes() {
+    use crate::domain::model_access::ModelAccess;
+    use chat::domain::models::FREE_MODEL;
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    let access = Arc::new(crate::testing::TestModelAccess::new(ModelAccess::Free));
+    let (_, config, ()) = with_model_access(
+        engine.clone(),
+        Arc::new(DisabledAiAdmissionService),
+        access.clone(),
+        async |connection, session, state| {
+            assert_eq!(
+                state.store.get(&state.session_id).unwrap().model,
+                FREE_MODEL
+            );
+            let error = connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    SessionConfigValueId::new("other-model"),
+                ))
+                .block_task()
+                .await
+                .unwrap_err();
+            assert_eq!(
+                serde_json::to_value(error).unwrap()["data"]["code"],
+                "model_access_denied"
+            );
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .unwrap();
+            assert_eq!(engine.requests()[0].model, FREE_MODEL);
+            assert!(
+                access
+                    .owners
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|owner| owner == &state.owner)
+            );
+        },
+    )
+    .await;
+    let selection = agent_fold::domain::model_selection::model_selection(&config).unwrap();
+    assert_eq!(selection.options.len(), 1);
+}
+
+#[tokio::test]
+async fn downgrade_and_permission_failure_cannot_run_a_paid_model() {
+    use crate::domain::model_access::{ModelAccess, ModelAccessError};
+    for failure in [Ok(ModelAccess::Free), Err(ModelAccessError::Unavailable)] {
+        let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+        let access = Arc::new(crate::testing::TestModelAccess::paid());
+        with_model_access(
+            engine.clone(),
+            Arc::new(DisabledAiAdmissionService),
+            access.clone(),
+            async |connection, session, state| {
+                *access.result.lock().unwrap() = failure;
+                let error = connection
+                    .send_request(text_prompt(&session, "blocked"))
+                    .block_task()
+                    .await
+                    .unwrap_err();
+                let code = if failure.is_ok() {
+                    "model_access_denied"
+                } else {
+                    "model_access_unavailable"
+                };
+                assert_eq!(serde_json::to_value(error).unwrap()["data"]["code"], code);
+                assert!(engine.requests().is_empty());
+                assert!(
+                    state
+                        .store
+                        .get(&state.session_id)
+                        .unwrap()
+                        .history
+                        .is_empty()
+                );
+                if failure.is_ok() {
+                    let restored = connection
+                        .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                        .block_task()
+                        .await
+                        .unwrap();
+                    let selection = agent_fold::domain::model_selection::model_selection(
+                        restored.config_options.as_deref().unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(selection.options.len(), 1);
+                    connection
+                        .send_request(text_prompt(&session, "resumed"))
+                        .block_task()
+                        .await
+                        .unwrap();
+                    assert_eq!(engine.requests()[0].model, chat::domain::models::FREE_MODEL);
+                }
+            },
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
+    struct SpeedEngine(ScriptedEngine);
+    impl TurnEngine for SpeedEngine {
+        fn supported_models(&self) -> &[&str] {
+            &["anthropic/claude-sonnet-5-5", "anthropic/claude-opus-5-5"]
+        }
+        fn run_turn(
+            &self,
+            request: TurnRequest,
+        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+            self.0.run_turn(request)
+        }
+    }
+    let engine = Arc::new(SpeedEngine(ScriptedEngine::new(vec![])));
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    "speed",
+                    "fast"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-opus-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                "speed",
+                "fast",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "fast please"))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-sonnet-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "standard please"))
+            .block_task()
+            .await
+            .unwrap();
+    })
+    .await;
+    let requests = engine.0.requests();
+    assert_eq!(requests[0].speed, agent::ModelSpeed::Fast);
+    assert_eq!(requests[1].speed, agent::ModelSpeed::Standard);
 }

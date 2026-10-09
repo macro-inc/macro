@@ -29,6 +29,11 @@ pub struct UploadFolderRequest {
     /// Optional parent project id to upload the folder into
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+    /// Relative paths of folders to create even when they hold no files.
+    ///
+    /// Uses the same shape as [FolderItem::relative_path], root folder included.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub folders: Vec<String>,
 }
 
 pub struct UploadFolderWithIdsResponse {
@@ -95,11 +100,22 @@ impl FileSystemNode {
     pub fn build_file_system(
         root_folder_name: &str,
         content: Vec<FolderItem>,
+        folders: &[String],
     ) -> anyhow::Result<FileSystemNode> {
         let mut root = FileSystemNode::Folder(HashMap::from([(
             root_folder_name.to_string(),
             FileSystemNode::Folder(HashMap::new()),
         )]));
+
+        for folder in folders {
+            let mut current_node = &mut root;
+            for component in folder.split('/').filter(|s| !s.is_empty()) {
+                current_node = current_node
+                    .as_folder_mut()?
+                    .entry(component.to_string())
+                    .or_insert_with(|| FileSystemNode::Folder(HashMap::new()));
+            }
+        }
 
         for item in content {
             // Split the relative_path into components, including the root folder name

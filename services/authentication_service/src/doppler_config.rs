@@ -1,9 +1,5 @@
-#![allow(unused)]
-#![recursion_limit = "256"]
-
+use authentication_service::Config;
 use macro_env::Environment;
-
-mod config;
 
 const DOPPLER_PROJECT: &str = "authentication-service";
 
@@ -16,8 +12,9 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .expect("able to grab doppler project");
 
-    let dev_config = dev.load::<config::Config>().await?;
+    let dev_config = dev.load::<Config>().await?;
     dev_config.signup_policy_for_environment(Environment::Develop)?;
+    dev_config.validate_account_link_state_secret()?;
 
     let prd = doppler_config::DopplerConfig::builder()
         .token_from_env("DOPPLER_TOKEN")
@@ -26,8 +23,9 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .expect("able to grab doppler project");
 
-    let prd_config = prd.load::<config::Config>().await?;
+    let prd_config = prd.load::<Config>().await?;
     prd_config.signup_policy_for_environment(Environment::Production)?;
+    prd_config.validate_account_link_state_secret()?;
 
     Ok(())
 }

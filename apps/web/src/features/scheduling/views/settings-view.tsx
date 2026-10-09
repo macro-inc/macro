@@ -64,7 +64,7 @@ function CreateAction(props: {
             {label()}
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content class="z-action-menu min-w-48 rounded-xl border border-edge-muted bg-menu p-1 text-sm shadow-lg">
+            <DropdownMenu.Content class="menu-surface z-action-menu min-w-48 p-1 text-sm">
               <div class="px-3 py-2 text-xs text-ink-muted">Create for</div>
               <For each={editable()}>
                 {(owner) => (

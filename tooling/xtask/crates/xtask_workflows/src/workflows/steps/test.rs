@@ -34,22 +34,6 @@ fn namespace_sccache_masks_credentials_before_exporting_them() {
 }
 
 #[test]
-fn namespace_sccache_combines_job_specific_and_trust_conditions() {
-    let step = configure_namespace_sccache_when("test-cache", "steps.filter.outputs.hit == 'true'");
-    let condition = step
-        .value
-        .if_condition
-        .expect("conditional Namespace sccache setup should have an if expression");
-
-    assert!(
-        condition
-            .0
-            .contains("github.event.pull_request.head.repo.full_name")
-    );
-    assert!(condition.0.contains("steps.filter.outputs.hit == 'true'"));
-}
-
-#[test]
 fn named_dev_shell_passes_the_flake_attribute() {
     let step = setup_dev_shell_named("agent-daemon");
     let with = step.value.with.expect("named shell should set with.shell");

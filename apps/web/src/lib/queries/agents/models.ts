@@ -29,8 +29,8 @@ export function buildAgentModelTargets(
   return targets;
 }
 
-/** In-memory models are compiled into the harness and do not change at runtime. */
-const IN_MEMORY_MODELS_STALE_TIME = Number.POSITIVE_INFINITY;
+/** The in-memory catalog depends on current plan permissions. */
+const IN_MEMORY_MODELS_STALE_TIME = 60 * 1000;
 
 /**
  * Cursor and macrod catalogs can change, but not between two mounts of the

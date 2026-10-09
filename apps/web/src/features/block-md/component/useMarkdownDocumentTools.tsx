@@ -18,6 +18,7 @@ import {
 import { isMobile } from '@core/mobile/isMobile';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import ClockCounterClockwise from '@phosphor/clock-counter-clockwise.svg';
+import Copy from '@phosphor/copy.svg';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
@@ -31,7 +32,10 @@ import {
   useDispatchAgentSplitFileActions,
 } from './DispatchAgentMenu';
 import { useMarkdownName } from './MarkdownNameProvider';
-import { useDownloadDocumentAsMarkdownText } from './useMarkdownDocumentDownload';
+import {
+  useCopyDocumentAsMarkdown,
+  useDownloadDocumentAsMarkdownText,
+} from './useMarkdownDocumentDownload';
 
 function useMarkdownShareModal() {
   const { documentId, kind, permissions } = useMarkdownDocument();
@@ -64,6 +68,7 @@ export function useMarkdownDocumentTools() {
   const { documentId, kind, element } = useMarkdownDocument();
   const history = useHistory();
   const { displayName } = useMarkdownName();
+  const copyAsMarkdown = useCopyDocumentAsMarkdown();
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
   const openShare = useMarkdownShareModal();
   const dispatchAgentActions = useDispatchAgentSplitFileActions();
@@ -94,7 +99,12 @@ export function useMarkdownDocumentTools() {
       : []),
     ...(isDocument
       ? ([
-          { ...dispatchAgentActions.copyAsPrompt, group: 'file' as const },
+          {
+            group: 'sharing' as const,
+            label: 'Copy as markdown',
+            icon: Copy,
+            action: copyAsMarkdown,
+          },
         ] satisfies FileOperation[])
       : []),
     {

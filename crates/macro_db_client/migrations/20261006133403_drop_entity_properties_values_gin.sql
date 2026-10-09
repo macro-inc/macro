@@ -1,0 +1,12 @@
+-- no-transaction
+-- Inserts maintain this GIN on every property row, and flushing its pending
+-- list is most of the entity_properties insert time. Nothing in the measured
+-- week scanned it. Filters use the expression indexes on values->'value'
+-- (assignee, status, project). project_task_ids in this change reads that
+-- expression with the Project id as a literal, so it uses
+-- idx_ep_project_value_gin.
+--
+-- This migration deploys first. Until the service rolls, the previous
+-- whole-value query uses the property_definition_id btree. It returns the
+-- same rows.
+DROP INDEX CONCURRENTLY IF EXISTS idx_entity_properties_values_gin;

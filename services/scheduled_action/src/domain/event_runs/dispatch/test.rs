@@ -334,3 +334,199 @@ fn preparation_binds_receipt_to_authenticated_owner_entity_and_kind() {
         .is_ok()
     );
 }
+
+fn conditional(repo: &Repo, filters: serde_json::Value) {
+    repo.0.lock().unwrap().configurations[0].filters = serde_json::from_value(filters).unwrap();
+}
+
+fn probability(value: f32) -> jev::domain::Probability {
+    jev::domain::Probability::new(value).unwrap()
+}
+
+fn skipped_condition(repo: &Repo) -> serde_json::Value {
+    let state = repo.0.lock().unwrap();
+    assert_eq!(state.history.len(), 1);
+    state.history[0].result["condition"].clone()
+}
+
+#[tokio::test]
+async fn unmet_condition_skips_with_history_and_never_executes() {
+    let (repo, access, executor, pending) = setup();
+    conditional(
+        &repo,
+        json!([{"events":["document.updated"], "condition":"Is this urgent?"}]),
+    );
+    let conditions = Arc::new(Conditions::default());
+    conditions
+        .verdicts
+        .lock()
+        .unwrap()
+        .push_back(Ok(ConditionVerdict::NotMet(probability(0.25))));
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone())
+        .with_conditions(conditions.clone());
+
+    assert_eq!(
+        dispatch(&service, pending.clone()).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::ConditionNotMet)
+    );
+
+    assert!(executor.calls.lock().unwrap().is_empty());
+    assert_eq!(
+        conditions.calls.lock().unwrap().as_slice(),
+        [vec![
+            jev::domain::YesNoQuestion::try_from("Is this urgent?").unwrap()
+        ]]
+    );
+    assert_eq!(
+        skipped_condition(&repo),
+        json!({"status": "not_met", "probability": 0.25})
+    );
+    let state = repo.0.lock().unwrap();
+    assert!(state.pending.is_empty());
+    assert!(state.history[0].is_success);
+    assert_eq!(state.history[0].action_id, pending.action_id);
+    assert_eq!(state.history[0].resource_id, None);
+}
+
+#[tokio::test]
+async fn met_condition_runs_normally() {
+    let (repo, access, executor, pending) = setup();
+    conditional(
+        &repo,
+        json!([{"events":["document.updated"], "condition":"Is this urgent?"}]),
+    );
+    let conditions = Arc::new(Conditions::default());
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone())
+        .with_conditions(conditions.clone());
+
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Finished(FinalizationResult::Finalized)
+    );
+
+    assert_eq!(conditions.calls.lock().unwrap().len(), 1);
+    assert_eq!(executor.calls.lock().unwrap().len(), 1);
+    assert!(repo.0.lock().unwrap().history.is_empty());
+}
+
+#[tokio::test]
+async fn a_matching_filter_without_a_condition_skips_the_check() {
+    for filters in [
+        json!([{"events":["document.updated", "channel.created"]}]),
+        json!([
+            {"events":["document.updated"], "condition":"Is this urgent?"},
+            {"events":["document.updated"]}
+        ]),
+        // Only a filter that matches the event contributes its condition.
+        json!([
+            {"events":["document.updated"]},
+            {"events":["channel.created"], "condition":"Is this urgent?"}
+        ]),
+    ] {
+        let (repo, access, executor, pending) = setup();
+        conditional(&repo, filters.clone());
+        let conditions = Arc::new(Conditions::default());
+        let service = EventDispatchService::new(repo, access, executor.clone())
+            .with_conditions(conditions.clone());
+
+        assert_eq!(
+            dispatch(&service, pending).await.unwrap(),
+            DispatchResult::Finished(FinalizationResult::Finalized),
+            "{filters}"
+        );
+        assert!(conditions.calls.lock().unwrap().is_empty(), "{filters}");
+        assert_eq!(executor.calls.lock().unwrap().len(), 1);
+    }
+}
+
+#[tokio::test]
+async fn every_matching_condition_is_asked_once() {
+    let (repo, access, executor, pending) = setup();
+    conditional(
+        &repo,
+        json!([
+            {"events":["document.updated"], "condition":"Is this urgent?"},
+            {"events":["document.updated", "channel.created"], "condition":"Is this urgent?"},
+            {"events":["document.updated"], "condition":"Is it about billing?"}
+        ]),
+    );
+    let conditions = Arc::new(Conditions::default());
+    let service =
+        EventDispatchService::new(repo, access, executor).with_conditions(conditions.clone());
+
+    dispatch(&service, pending).await.unwrap();
+
+    let asked = conditions.calls.lock().unwrap();
+    assert_eq!(
+        asked[0]
+            .iter()
+            .map(|question| question.as_str())
+            .collect::<Vec<_>>(),
+        ["Is it about billing?", "Is this urgent?"]
+    );
+}
+
+#[tokio::test]
+async fn unavailable_condition_retries_within_the_window_then_skips() {
+    let (repo, access, executor, mut pending) = setup();
+    conditional(
+        &repo,
+        json!([{"events":["document.updated"], "condition":"Is this urgent?"}]),
+    );
+    let conditions = Arc::new(Conditions::default());
+    conditions.verdicts.lock().unwrap().extend([
+        Err(ConditionError::Transient(rootcause::report!("jev down"))),
+        Err(ConditionError::Transient(rootcause::report!("jev down"))),
+    ]);
+    let service = EventDispatchService::new(repo.clone(), access, executor.clone())
+        .with_conditions(conditions);
+
+    assert!(dispatch(&service, pending.clone()).await.is_err());
+    assert_eq!(repo.0.lock().unwrap().pending.len(), 1);
+    assert!(repo.0.lock().unwrap().history.is_empty());
+
+    pending.admitted_at = Utc::now() - CONDITION_RETRY_WINDOW - chrono::Duration::seconds(1);
+    repo.0.lock().unwrap().pending[0].admitted_at = pending.admitted_at;
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::ConditionUnavailable)
+    );
+    assert!(executor.calls.lock().unwrap().is_empty());
+    assert_eq!(skipped_condition(&repo), json!({"status": "unavailable"}));
+    assert!(!repo.0.lock().unwrap().history[0].is_success);
+}
+
+#[tokio::test]
+async fn rejected_or_unconfigured_conditions_skip_immediately() {
+    for configured in [true, false] {
+        let (repo, access, executor, pending) = setup();
+        conditional(
+            &repo,
+            json!([{"events":["document.updated"], "condition":"Is this urgent?"}]),
+        );
+        let result = if configured {
+            let conditions = Arc::new(Conditions::default());
+            conditions
+                .verdicts
+                .lock()
+                .unwrap()
+                .push_back(Err(ConditionError::Permanent(rootcause::report!(
+                    "rejected"
+                ))));
+            let service = EventDispatchService::new(repo.clone(), access, executor.clone())
+                .with_conditions(conditions);
+            dispatch(&service, pending).await
+        } else {
+            let service = EventDispatchService::new(repo.clone(), access, executor.clone());
+            dispatch(&service, pending).await
+        };
+
+        assert_eq!(
+            result.unwrap(),
+            DispatchResult::Cancelled(CancellationReason::ConditionUnavailable),
+            "configured: {configured}"
+        );
+        assert!(executor.calls.lock().unwrap().is_empty());
+        assert_eq!(skipped_condition(&repo), json!({"status": "unavailable"}));
+    }
+}

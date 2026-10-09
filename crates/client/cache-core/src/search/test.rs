@@ -117,3 +117,30 @@ fn soup_entity_recency_prefers_viewed_at_over_newer_activity() {
         );
     }
 }
+
+#[test]
+fn crm_contact_projection_indexes_name_email_and_removes_hidden_records() {
+    let mut record = string_record(&[
+        ("__typename", "GraphqlSoupCrmContact"),
+        ("name", "Pat Example"),
+        ("email", "pat@example.com"),
+        ("lastInteraction", "2025-01-02T03:04:05.123Z"),
+        ("createdAt", "2026-01-02T03:04:05.123Z"),
+        ("updatedAt", "2026-01-03T03:04:05.123Z"),
+        ("viewedAt", "2026-01-04T03:04:05.123Z"),
+    ]);
+    let key = EntityKey::entity("GraphqlSoupCrmContact", &["c1"]);
+    let documents = project_search_documents(&key, &record);
+    assert_eq!(documents[0].bucket, "crm_contact");
+    assert!(documents[0].search_text.contains("pat@example.com"));
+    assert_eq!(documents[0].timestamp_ms, 1_735_787_045_123);
+    assert!(
+        SearchProfile::QuickAccessV1
+            .buckets()
+            .contains(&"crm_contact")
+    );
+    record
+        .fields
+        .insert("hidden".into(), CacheValue::Bool(true));
+    assert!(project_search_documents(&key, &record).is_empty());
+}

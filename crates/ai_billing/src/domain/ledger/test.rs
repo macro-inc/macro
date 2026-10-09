@@ -1,5 +1,8 @@
 use super::*;
-use crate::domain::models::{OVERAGE_CHARGE_THRESHOLD_CENTS, PayerScope};
+use crate::domain::models::{
+    AUTO_RELOAD_TARGET_MAX_CENTS, BillingError, OVERAGE_CHARGE_THRESHOLD_CENTS,
+    OVERAGE_LIMIT_MIN_CENTS, PayerScope,
+};
 use crate::domain::pricing::AiPricing;
 use chrono::{TimeZone, Utc};
 
@@ -173,6 +176,96 @@ fn settling_in_chunks_books_the_same_money_as_settling_once() {
     );
 }
 
+fn reload_state(balance: i64, uncovered: i64, spent: i64) -> ReloadState {
+    ReloadState {
+        credit_balance_cents: balance,
+        uncovered_cents: uncovered,
+        spent_this_month_cents: spent,
+    }
+}
+
+fn thresholds(minimum: i64, target: i64, monthly_limit: Option<i64>) -> AutoReloadThresholds {
+    AutoReloadThresholds {
+        minimum_cents: minimum,
+        target_cents: target,
+        monthly_limit_cents: monthly_limit,
+    }
+}
+
+#[test]
+fn no_reload_at_or_above_the_minimum() {
+    let t = thresholds(1_000, 10_000, None);
+    assert_eq!(plan_reload(reload_state(1_000, 0, 0), &t), None);
+    assert_eq!(plan_reload(reload_state(5_000, 0, 0), &t), None);
+    // Uncovered usage is subtracted first, but 1_500 - 500 still meets the minimum.
+    assert_eq!(plan_reload(reload_state(1_500, 500, 0), &t), None);
+}
+
+#[test]
+fn reload_tops_the_effective_balance_up_to_the_target() {
+    let t = thresholds(1_000, 10_000, None);
+    assert_eq!(plan_reload(reload_state(999, 0, 0), &t), Some(9_001));
+    assert_eq!(plan_reload(reload_state(500, 0, 0), &t), Some(9_500));
+    // Uncovered usage past the balance leaves a negative effective balance
+    // that the reload also has to cover.
+    assert_eq!(plan_reload(reload_state(500, 2_000, 0), &t), Some(11_500));
+}
+
+#[test]
+fn monthly_limit_caps_the_reload() {
+    let t = thresholds(1_000, 10_000, Some(5_000));
+    assert_eq!(plan_reload(reload_state(0, 0, 0), &t), Some(5_000));
+    assert_eq!(plan_reload(reload_state(0, 0, 3_000), &t), Some(2_000));
+    // The limit is spent (or overspent): nothing left to reload.
+    assert_eq!(plan_reload(reload_state(0, 0, 5_000), &t), None);
+    assert_eq!(plan_reload(reload_state(0, 0, 6_000), &t), None);
+}
+
+#[test]
+fn reload_below_the_stripe_minimum_is_skipped() {
+    // Only 49 cents of monthly room left.
+    let t = thresholds(1_000, 10_000, Some(5_000));
+    assert_eq!(plan_reload(reload_state(0, 0, 4_951), &t), None);
+    assert_eq!(plan_reload(reload_state(0, 0, 4_950), &t), Some(50));
+}
+
+#[test]
+fn default_thresholds_are_valid() {
+    let defaults = AutoReloadThresholds::default();
+    assert_eq!(defaults, thresholds(1_000, 10_000, None));
+    assert!(defaults.validate().is_ok());
+}
+
+#[test]
+fn thresholds_reject_each_invalid_setting() {
+    let invalid = [
+        thresholds(0, 10_000, None),
+        thresholds(-1, 10_000, None),
+        thresholds(1_000, 1_049, None),
+        thresholds(1_000, AUTO_RELOAD_TARGET_MAX_CENTS + 1, None),
+        thresholds(1_000, 10_000, Some(0)),
+        thresholds(1_000, 10_000, Some(-1)),
+        thresholds(1_000, 10_000, Some(OVERAGE_LIMIT_MIN_CENTS - 1)),
+    ];
+    for t in invalid {
+        assert!(
+            matches!(t.validate(), Err(BillingError::InvalidAutoReload(_))),
+            "{t:?} should be invalid"
+        );
+    }
+
+    assert!(thresholds(1_000, 1_050, None).validate().is_ok());
+    assert!(
+        thresholds(
+            1_000,
+            AUTO_RELOAD_TARGET_MAX_CENTS,
+            Some(OVERAGE_LIMIT_MIN_CENTS)
+        )
+        .validate()
+        .is_ok()
+    );
+}
+
 fn snapshot_for(
     tier: PlanTier,
     settings: BillingSettings,
@@ -259,7 +352,7 @@ fn gate_counts_unsettled_usage_against_credits() {
 }
 
 #[test]
-fn gate_uses_overage_room_and_reports_the_cap() {
+fn gate_never_counts_legacy_overage_room_as_funding() {
     let settings = BillingSettings {
         overage_enabled: true,
         overage_limit_cents: 2_000,
@@ -272,10 +365,13 @@ fn gate_uses_overage_room_and_reports_the_cap() {
         PeriodLedger::default(),
         0,
     );
-    // 1_500 cost over is 1_575 owed against 2_000 of room: 425 left pays for 404 cost cents.
+    // The historical cap cannot fund any of the 1_575 uncovered cents.
     assert_eq!(s.uncovered_cents, 1_575);
-    assert_eq!(s.remaining_cents, 404);
-    assert_eq!(decide(&s), AllowanceDecision::Allow);
+    assert_eq!(s.remaining_cents, 0);
+    assert_eq!(
+        decide(&s),
+        AllowanceDecision::Deny(DenyReason::AllowanceExhausted)
+    );
 
     let s = snapshot_for(
         PlanTier::Premium,
@@ -290,7 +386,7 @@ fn gate_uses_overage_room_and_reports_the_cap() {
     assert_eq!(s.remaining_cents, 0);
     assert_eq!(
         decide(&s),
-        AllowanceDecision::Deny(DenyReason::OverageLimitReached)
+        AllowanceDecision::Deny(DenyReason::AllowanceExhausted)
     );
 }
 
@@ -310,11 +406,11 @@ fn a_single_cent_of_headroom_does_not_pay_for_marked_up_usage() {
 }
 
 #[test]
-fn gate_reports_failed_payment_when_suspended() {
+fn gate_reports_failed_reload_when_suspended() {
     let settings = BillingSettings {
         overage_enabled: true,
         overage_limit_cents: 2_000,
-        overage_suspended_at: Some(Utc::now()),
+        auto_reload_suspended_at: Some(Utc::now()),
         ..Default::default()
     };
     let s = snapshot_for(
@@ -328,6 +424,53 @@ fn gate_reports_failed_payment_when_suspended() {
         decide(&s),
         AllowanceDecision::Deny(DenyReason::OveragePaymentFailed)
     );
+}
+
+#[test]
+fn snapshot_reports_auto_reload_settings_and_activity() {
+    let s = snapshot_for(
+        PlanTier::Premium,
+        BillingSettings::default(),
+        0,
+        PeriodLedger::default(),
+        0,
+    );
+    assert_eq!(s.auto_reload.minimum_balance_cents, 1_000);
+    assert_eq!(s.auto_reload.target_balance_cents, 10_000);
+    assert_eq!(s.auto_reload.monthly_spend_limit_cents, None);
+    assert!(!s.auto_reload.suspended);
+    assert!(!s.auto_reload.active, "overage off: reloads never fire");
+
+    let settings = BillingSettings {
+        overage_enabled: true,
+        overage_limit_cents: 2_000,
+        auto_reload: thresholds(2_000, 20_000, Some(50_000)),
+        ..Default::default()
+    };
+    let s = snapshot_for(
+        PlanTier::Premium,
+        settings.clone(),
+        0,
+        PeriodLedger::default(),
+        0,
+    );
+    assert_eq!(s.auto_reload.minimum_balance_cents, 2_000);
+    assert_eq!(s.auto_reload.target_balance_cents, 20_000);
+    assert_eq!(s.auto_reload.monthly_spend_limit_cents, Some(50_000));
+    assert!(s.auto_reload.active);
+
+    let s = snapshot_for(
+        PlanTier::Premium,
+        BillingSettings {
+            auto_reload_suspended_at: Some(Utc::now()),
+            ..settings
+        },
+        0,
+        PeriodLedger::default(),
+        0,
+    );
+    assert!(s.auto_reload.suspended);
+    assert!(!s.auto_reload.active);
 }
 
 #[test]

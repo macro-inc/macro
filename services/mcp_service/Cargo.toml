@@ -20,6 +20,7 @@ teams = { path = "../../crates/teams", default-features = false, features = ["ou
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 ai_usage = { path = "../../crates/ai_usage" }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 attachment = { path = "../../crates/attachment" }
@@ -70,7 +71,6 @@ notification = { path = "../../crates/notification", features = ["ai_tool"] }
 prompt = { path = "../../crates/prompt" }
 readonly_pool = { path = "../../crates/readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
-reminders = { path = "../../crates/reminders", default-features = false, features = ["ports"] }
 reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 search_service_client = { path = "../../crates/search_service_client" }

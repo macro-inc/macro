@@ -7,6 +7,7 @@
 import type { ColumnResultOneOf } from './columnResultOneOf';
 import type { ColumnResultOneOfFive } from './columnResultOneOfFive';
 import type { ColumnResultOneOfNine } from './columnResultOneOfNine';
+import type { ColumnResultOneOfOnefive } from './columnResultOneOfOnefive';
 import type { ColumnResultOneOfOneone } from './columnResultOneOfOneone';
 import type { ColumnResultOneOfOnethree } from './columnResultOneOfOnethree';
 import type { ColumnResultOneOfSeven } from './columnResultOneOfSeven';
@@ -22,4 +23,5 @@ export type ColumnResult =
   | ColumnResultOneOfSeven
   | ColumnResultOneOfNine
   | ColumnResultOneOfOneone
-  | ColumnResultOneOfOnethree;
+  | ColumnResultOneOfOnethree
+  | ColumnResultOneOfOnefive;

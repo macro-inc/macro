@@ -62,7 +62,7 @@ export function AuthView(props: {
     onVerified: props.onVerified,
   });
   createSessionIdentity(context);
-  redeemSessionToken(context, props.token);
+  redeemSessionToken(context, () => props.token);
   onMount(() => context.pageView(props.intent));
 
   const user = () => {

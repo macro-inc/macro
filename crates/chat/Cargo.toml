@@ -60,6 +60,7 @@ models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

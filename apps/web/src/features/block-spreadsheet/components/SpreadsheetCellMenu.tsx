@@ -2,6 +2,7 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowDown from '@phosphor/arrow-down.svg?component-solid';
 import ArrowRight from '@phosphor/arrow-right.svg?component-solid';
+import CaretCircleDown from '@phosphor/caret-circle-down.svg?component-solid';
 import Chat from '@phosphor/chat-circle.svg?component-solid';
 import Clipboard from '@phosphor/clipboard.svg?component-solid';
 import Copy from '@phosphor/copy.svg?component-solid';
@@ -22,6 +23,7 @@ export type CellAction =
       | 'clear-formatting'
       | 'fill-down'
       | 'fill-right'
+      | 'dropdown'
     >
   | 'comment';
 
@@ -107,6 +109,8 @@ export function SpreadsheetCellMenu(props: {
             ArrowRight,
             props.readonly || !props.canFillRight
           )}
+          <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
+          {item('Dropdown…', 'dropdown', CaretCircleDown)}
           <Show when={props.hasComments}>
             <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
             {item('Comment', 'comment', Chat, !props.canComment)}

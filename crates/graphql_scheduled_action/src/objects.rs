@@ -70,6 +70,8 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
     events: Vec<GraphqlScheduledActionEventName>,
     /// Entity ids that can satisfy this filter. Null matches every id; an empty list matches nothing.
     entity_ids: Option<Vec<ID>>,
+    /// Yes/no question the triggering content must answer with yes before the routine runs.
+    condition: Option<String>,
 }
 
 /// The agent task a routine runs.
@@ -241,6 +243,9 @@ fn event_filters(
                 entity_ids: filter
                     .ids()
                     .map(|ids| ids.iter().map(|id| ID(id.to_string())).collect()),
+                condition: filter
+                    .condition()
+                    .map(|condition| condition.as_str().to_owned()),
             })
             .collect(),
     }

@@ -10,9 +10,10 @@ use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::CreationPrincipal;
+use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -131,6 +132,15 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Delete one action while `expected_owner` still owns it, including a
+    /// disabled or claimed one. Internal owner removal only. A missing action
+    /// is already purged; one under another owner is untouched.
+    fn purge_owned_action(
+        &self,
+        id: Uuid,
+        expected_owner: &Owner,
+    ) -> impl Future<Output = Result<OwnedPurgeOutcome>> + Send;
 
     /// Records `principal.owner()`. A non-user owner is `OwnerNotUserError`
     /// before validation and before any write. `BotForUser` records the user.

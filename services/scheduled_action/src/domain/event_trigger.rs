@@ -10,6 +10,7 @@ use chrono_tz::Tz;
 use document_sub_type::DocumentSubType;
 use documents::domain::events::DocumentTopicEvent;
 use email::domain::events::EmailTopicEvent;
+use jev::domain::YesNoQuestion;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::{
@@ -253,7 +254,8 @@ pub enum FilterValidationError {
     IdCount,
 }
 
-/// An event name AND an entity ID must match within the same filter.
+/// An event name AND an entity ID must match within the same filter. A
+/// condition further requires the event's content to answer it with yes.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, ToSchema)]
 #[serde(try_from = "FilterInput")]
 pub struct EventFilter {
@@ -261,6 +263,11 @@ pub struct EventFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Vec<String>>)]
     ids: Option<Vec<Uuid>>,
+    /// Yes/no question about the triggering content, e.g. "Is this email an
+    /// invoice?". The routine runs only when the answer is yes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>, max_length = 500)]
+    condition: Option<YesNoQuestion>,
 }
 
 #[derive(Deserialize)]
@@ -269,13 +276,15 @@ struct FilterInput {
     events: Vec<EventName>,
     #[serde(default)]
     ids: Option<Vec<Uuid>>,
+    #[serde(default)]
+    condition: Option<YesNoQuestion>,
 }
 
 impl TryFrom<FilterInput> for EventFilter {
     type Error = FilterValidationError;
 
     fn try_from(input: FilterInput) -> Result<Self, Self::Error> {
-        Self::new(input.events, input.ids)
+        Ok(Self::new(input.events, input.ids)?.with_condition(input.condition))
     }
 }
 
@@ -299,7 +308,16 @@ impl EventFilter {
             ids.sort_unstable();
             ids.dedup();
         }
-        Ok(Self { events, ids })
+        Ok(Self {
+            events,
+            ids,
+            condition: None,
+        })
+    }
+
+    pub fn with_condition(mut self, condition: Option<YesNoQuestion>) -> Self {
+        self.condition = condition;
+        self
     }
 
     pub fn events(&self) -> &[EventName] {
@@ -309,6 +327,10 @@ impl EventFilter {
     /// `None` matches every ID; `Some([])` matches nothing.
     pub fn ids(&self) -> Option<&[Uuid]> {
         self.ids.as_deref()
+    }
+
+    pub fn condition(&self) -> Option<&YesNoQuestion> {
+        self.condition.as_ref()
     }
 
     pub fn accepts(&self, name: EventName, entity_id: Uuid) -> bool {
@@ -358,6 +380,42 @@ impl EventFilters {
                 .iter()
                 .any(|filter| filter.accepts(event.event_name, event.entity_id))
     }
+
+    pub fn has_conditions(&self) -> bool {
+        self.0.iter().any(|filter| filter.condition.is_some())
+    }
+
+    /// What a matching event must satisfy before its run starts. A matching
+    /// filter without a condition runs unconditionally; otherwise any one of
+    /// the matching filters' conditions is enough.
+    pub fn condition_requirement(&self, event: &EventReference) -> ConditionRequirement {
+        let mut conditions = Vec::new();
+        for filter in self
+            .0
+            .iter()
+            .filter(|filter| filter.accepts(event.event_name, event.entity_id))
+        {
+            match &filter.condition {
+                None => return ConditionRequirement::Unconditional,
+                Some(condition) => conditions.push(condition.clone()),
+            }
+        }
+        conditions.sort_unstable();
+        conditions.dedup();
+        if conditions.is_empty() {
+            ConditionRequirement::Unconditional
+        } else {
+            ConditionRequirement::AnyOf(conditions)
+        }
+    }
+}
+
+/// Conditions an event must meet before a matching routine runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConditionRequirement {
+    Unconditional,
+    /// Distinct, nonempty; one yes is enough.
+    AnyOf(Vec<YesNoQuestion>),
 }
 
 /// A verified RFC UUIDv7 whose embedded publication timestamp is representable.

@@ -8,16 +8,18 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
+use jev::{domain::JevClassifier, outbound::TypesafeJev};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl};
+use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl, LexicalServiceUrl};
 use scheduled_action::config::Config;
 use scheduled_action::domain::event_runs::{
-    PageSize, admission::EventAdmissionService, dispatch::EventDispatchService,
+    PageSize, admission::EventAdmissionService, condition::ConditionGate,
+    dispatch::EventDispatchService,
 };
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
@@ -31,6 +33,7 @@ use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consum
 use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::event_access::EventAccessAdapter;
+use scheduled_action::outbound::event_content::EventContentAdapter;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
@@ -143,11 +146,42 @@ async fn main() -> Result<()> {
     // eventually block cron dispatch or its shutdown.
     drop(execution_rx);
 
+    let typesafe = config
+        .typesafe_api_key
+        .value()
+        .map(TypesafeJev::new)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?;
+    let conditions_enabled = typesafe.is_some();
+    let conditions = match typesafe {
+        Some(provider) => Some(ConditionGate::new(
+            Arc::new(event_content(
+                &db,
+                &registrar,
+                Arc::clone(&access),
+                &config,
+            )?),
+            // Condition evaluation is the only model work this process meters
+            // (agent targets are funded by the harness). Counted usage asks the
+            // authentication service to settle the payer, as every other host does.
+            Arc::new(JevClassifier::new(
+                provider,
+                ai_billing::composition::pg_settling_recorder(
+                    db.clone(),
+                    config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
+                ),
+            )),
+        )),
+        None => None,
+    };
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
         Arc::clone(&service_executor),
-    );
+    )
+    .with_conditions(Arc::new(conditions));
     let brokers = config.kafka_brokers.to_string();
     let intake_shutdown = lifecycle.stop_consumers.clone();
     start_event_tasks(
@@ -181,6 +215,7 @@ async fn main() -> Result<()> {
             access.clone(),
         )
         .with_event_management_enabled(config.event_routines_enabled)
+        .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(
             sessions,
             config.routine_agents_enabled,
@@ -205,6 +240,7 @@ async fn main() -> Result<()> {
     tracing::info!(
         event_routines_enabled = config.event_routines_enabled,
         routine_agents_enabled = config.routine_agents_enabled,
+        routine_conditions_enabled = conditions_enabled,
         "scheduled_action service listening on {addr}"
     );
 
@@ -222,6 +258,61 @@ async fn main() -> Result<()> {
         SHUTDOWN_TIMEOUT,
     )
     .await
+}
+
+/// Read-only views of the domains whose events can trigger a routine, for
+/// condition checks. None of these reads notify, publish or enqueue.
+fn event_content(
+    db: &sqlx::PgPool,
+    registrar: &OwnedEntityRegistrar<PgBotsRepo>,
+    access: Arc<EntityAccessServiceImpl<PgAccessRepository>>,
+    config: &Config,
+) -> Result<impl scheduled_action::domain::event_runs::condition::EventContentReader + use<>> {
+    Ok(EventContentAdapter::new(
+        email::domain::service::EmailServiceImpl::new(
+            email::outbound::EmailPgRepo::new(db.clone()),
+            frecency::domain::services::FrecencyQueryServiceImpl::new(
+                frecency::outbound::postgres::FrecencyPgStorage::new(db.clone()),
+            ),
+            email::domain::ports::NoOpEnqueuer,
+            crm::domain::service::NoOpCrmService,
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+            0,
+        ),
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::domain::ports::NoMessageEventPublisher,
+        ),
+        channels::domain::service::ChannelServiceImpl::new(
+            channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+        ),
+        documents::outbound::pg_document_repo::PgDocumentRepo::new(db.clone(), registrar.clone()),
+        properties::PropertiesServiceImpl::new(
+            properties::PropertiesPgRepo::new(db.clone()),
+            Some(properties::PermissionServiceImpl::new(db.clone(), access)),
+            None::<NoTaskNotifications>,
+        ),
+        lexical_client::LexicalClient::new(
+            config.internal_api_key.to_string(),
+            LexicalServiceUrl::new()?.to_string(),
+        ),
+    ))
+}
+
+/// Condition checks only read properties; they never assign tasks.
+struct NoTaskNotifications;
+
+impl properties::NotificationService for NoTaskNotifications {
+    type Err = anyhow::Error;
+
+    async fn send_task_assigned<'a>(
+        &self,
+        _: properties::domain::model::TaskAssignedNotification<'a>,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
 }
 
 #[derive(Default)]

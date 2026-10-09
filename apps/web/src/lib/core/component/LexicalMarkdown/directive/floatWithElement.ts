@@ -41,6 +41,8 @@ export function floatWithElement(
   accessor: Accessor<FloatWithElementOptions | undefined>
 ) {
   style(floatingEl, { position: 'absolute' });
+  // An anchored menu must not paint at its unpositioned portal location.
+  if (accessor()) style(floatingEl, { visibility: 'hidden' });
   let referenceEl: Element | null;
   let cleanup: () => void = () => {};
 

@@ -105,7 +105,6 @@ vi.mock('@app/features/email-view/email-view', () => ({}));
 vi.mock('@app/features/email-view/components/EmailDetailView', () => ({
   EmailDetailRouteView: () => null,
 }));
-vi.mock('@app/features/getting-started', () => ({}));
 vi.mock('@app/features/home/home-view', () => ({
   HomeDetailRouteView: () => null,
   HomeCalendarRouteView: () => null,
@@ -115,7 +114,6 @@ vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
-vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
 vi.mock('@app/features/settings/Settings', () => ({
   SettingsPanelComponentWrapper: () => null,
 }));

@@ -4,8 +4,8 @@ mod test;
 use analytics_client::{MetaActionSource, MetaUserData};
 use std::{collections::HashSet, future::Future};
 
+use crate::service::signup_policy::SignupPolicy;
 use anyhow::Context;
-use authentication_service::service::signup_policy::SignupPolicy;
 use axum::{
     extract::{self, State},
     http::StatusCode,
@@ -14,16 +14,16 @@ use axum::{
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use rand::Rng;
 
+use crate::service::user::create_user::create_user;
+use crate::service::user::support_channel_welcome::{
+    AuthorizedSupportChannelMessages, post_support_channel_welcome,
+};
 use crate::{
     api::{
         context::{ApiContext, AuthorizationService},
         signup_policy::signup_forbidden_response,
     },
     rate_limit_config::RATE_LIMIT_CONFIG,
-};
-use authentication_service::service::user::create_user::create_user;
-use authentication_service::service::user::support_channel_welcome::{
-    AuthorizedSupportChannelMessages, post_support_channel_welcome,
 };
 use channels::domain::{
     models::{ChannelType, CreateChannelRequest},

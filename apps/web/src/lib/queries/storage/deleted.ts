@@ -3,7 +3,7 @@ import { itemToSafeName } from '@core/constant/allBlocks';
 
 import { storageServiceClient } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { useQuery } from '@tanstack/solid-query';
+import { keepPreviousData, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { storageKeys } from './keys';
 
@@ -35,23 +35,30 @@ function transformItems(items: Item[]): Item[] {
   return items.map((item) => ({ ...item, name: itemToSafeName(item) }));
 }
 
+// Cached selectors outlive the caller; keep them at module scope.
+function selectDeletedItems(data: DeletedItemsQueryResponse): Item[] {
+  return transformItems(data.items);
+}
+
 function _useDeletedItemsQuery() {
   return useQuery(() => ({
     ...deletedItemsQueryOptions(),
-    placeholderData: (prev) => prev,
-    select: (data: DeletedItemsQueryResponse): Item[] =>
-      transformItems(data.items),
+    placeholderData: keepPreviousData,
+    select: selectDeletedItems,
   }));
 }
 
 type FileTree = ReturnType<typeof buildFileTree>;
 
+function selectDeletedTree(data: DeletedItemsQueryResponse): FileTree {
+  return buildFileTree(transformItems(data.items));
+}
+
 function _useDeletedTreeQuery() {
   return useQuery(() => ({
     ...deletedItemsQueryOptions(),
-    placeholderData: (prev) => prev,
-    select: (data: DeletedItemsQueryResponse): FileTree =>
-      buildFileTree(transformItems(data.items)),
+    placeholderData: keepPreviousData,
+    select: selectDeletedTree,
   }));
 }
 

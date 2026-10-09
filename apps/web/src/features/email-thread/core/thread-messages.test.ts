@@ -3,6 +3,29 @@ import { message, thread } from '../tests/fixtures';
 import { selectThreadMessages, selectThreadSender } from './thread-messages';
 
 describe('thread message selection', () => {
+  it.each([false, true])(
+    'selects the most recently edited reply draft independently of transport order (reverse=%s)',
+    (reverse) => {
+      const older = message('older-draft', {
+        is_draft: true,
+        replying_to_id: 'parent',
+        updated_at: '2026-09-01T10:00:00Z',
+        internal_date_ts: '2026-09-03T10:00:00Z',
+      });
+      const newer = message('newer-draft', {
+        is_draft: true,
+        replying_to_id: 'parent',
+        updated_at: '2026-09-02T10:00:00Z',
+        internal_date_ts: '2026-09-01T10:00:00Z',
+      });
+      const drafts = reverse ? [newer, older] : [older, newer];
+      expect(selectThreadMessages(thread(drafts)).draftMap.parent).toBe(newer);
+      // Local replies do not have received/sent timestamps.
+      older.internal_date_ts = undefined;
+      newer.internal_date_ts = undefined;
+      expect(selectThreadMessages(thread(drafts)).draftMap.parent).toBe(newer);
+    }
+  );
   it('targets the original external sender for sender actions regardless of transport order', () => {
     const original = message('original', {
       from: { email: 'originator@example.com' },

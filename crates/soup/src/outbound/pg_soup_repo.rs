@@ -3,7 +3,8 @@ use crate::{
         models::{
             AdvancedSortParams, GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest,
             SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField,
-            TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
+            TouchedEntity, TouchedSoupRequest, WorkFeedCandidate, WorkFeedCandidateRequest,
+            grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -29,6 +30,7 @@ mod initiative;
 mod notified;
 mod touched;
 mod unexpanded;
+mod work_feed;
 
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
@@ -317,6 +319,13 @@ impl SoupRepo for PgSoupRepo {
     ) -> Result<Vec<NotifiedEntity>, Self::Err> {
         notified::notified_soup_page(&self.pool.0, req).await
     }
+
+    async fn work_feed_soup_page<'a>(
+        &self,
+        req: WorkFeedCandidateRequest<'a>,
+    ) -> Result<Vec<WorkFeedCandidate>, Self::Err> {
+        work_feed::work_feed_soup_page(&self.pool.0, req).await
+    }
 }
 
 fn sort_and_truncate_hydrations(
@@ -423,12 +432,12 @@ pub(crate) async fn populate_properties(
                 SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
                 SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::CrmContact(_) => None,
                 SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
                 SoupItem::CalendarEvent(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
-                | SoupItem::Reminder(_)
                 | SoupItem::AgentSession(_) => None,
                 SoupItem::DatabaseRow(x) => properties_map.get(&x.id.to_string()),
             }

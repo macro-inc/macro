@@ -1,6 +1,7 @@
 //! In-memory ports for domain policy tests. PostgreSQL locking/fencing has its
 //! own integration coverage in the repository adapter.
 
+use super::condition::{ConditionError, ConditionVerdict, EventConditionCheck};
 use super::*;
 use crate::domain::{
     event_trigger::{ActionTrigger, EventPayload},
@@ -131,6 +132,7 @@ pub struct State {
     pub pending: Vec<PendingEventRun>,
     pub started: Vec<(PendingEventRun, ClaimToken, DateTime<Utc>)>,
     pub finished: Vec<(EventRunKey, EventRunOutcome)>,
+    pub history: Vec<ActionExecutionRecord>,
     pub pages: Vec<Option<Uuid>>,
     pub fail_page: Option<usize>,
     pub fail_claim: bool,
@@ -333,6 +335,27 @@ impl EventRunRepository for Repo {
         }
         Ok(())
     }
+    async fn skip_pending(
+        &self,
+        key: EventRunKey,
+        revision: ConfigurationRevision,
+        reason: CancellationReason,
+        record: ActionExecutionRecord,
+    ) -> Result<(), Report> {
+        let mut state = self.0.lock().unwrap();
+        if let Some(index) = state
+            .pending
+            .iter()
+            .position(|p| p.key() == key && p.revision == revision)
+        {
+            state.pending.remove(index);
+            state
+                .finished
+                .push((key, EventRunOutcome::Cancelled { reason }));
+            state.history.push(record);
+        }
+        Ok(())
+    }
     async fn reconcile(&self, now: DateTime<Utc>, limit: PageSize) -> Result<u16, Report> {
         let mut state = self.0.lock().unwrap();
         let mut count = 0;
@@ -376,6 +399,31 @@ impl EventExecutor for Executor {
                 .unwrap_or(EventRunOutcome::Succeeded),
             record: None,
         }
+    }
+}
+
+/// Scripted condition answers; met when the script runs out.
+#[derive(Default)]
+pub struct Conditions {
+    pub verdicts: Mutex<VecDeque<Result<ConditionVerdict, ConditionError>>>,
+    pub calls: Mutex<Vec<Vec<jev::domain::YesNoQuestion>>>,
+}
+impl EventConditionCheck for Conditions {
+    async fn check(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        run: &AuthorizedEventRun,
+        conditions: &[jev::domain::YesNoQuestion],
+    ) -> Result<ConditionVerdict, ConditionError> {
+        assert!(run.access.authorizes(owner, &run.pending.event));
+        self.calls.lock().unwrap().push(conditions.to_vec());
+        self.verdicts
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or(Ok(ConditionVerdict::Met(
+                jev::domain::Probability::new(1.0).unwrap(),
+            )))
     }
 }
 

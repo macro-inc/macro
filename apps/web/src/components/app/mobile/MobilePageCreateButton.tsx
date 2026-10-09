@@ -7,7 +7,6 @@ import {
 import { openCreateCompanyModal } from '@app/features/crm/crm-create';
 import { hapticImpact } from '@core/mobile/haptics';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import BellIcon from '@phosphor/bell.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import MessageIcon from '@phosphor/chat-circle.svg';
 import MoreIcon from '@phosphor/dots-three.svg';
@@ -67,7 +66,6 @@ export function MobilePageCreateButton() {
   const calendarActions = (): MobileCreateMenuItem[] => {
     const blocks = createBlocks();
     const call = blocks.find((block) => block.blockName === 'call');
-    const reminder = blocks.find((block) => block.blockName === 'reminder');
     return [
       {
         label: 'Event',
@@ -80,15 +78,6 @@ export function MobilePageCreateButton() {
               label: 'Call',
               icon: PhoneIcon,
               onSelect: () => void call.keyDownHandler(),
-            },
-          ]
-        : []),
-      ...(reminder
-        ? [
-            {
-              label: 'Reminder',
-              icon: BellIcon,
-              onSelect: () => void reminder.keyDownHandler(),
             },
           ]
         : []),

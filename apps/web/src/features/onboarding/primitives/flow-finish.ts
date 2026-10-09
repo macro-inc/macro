@@ -1,4 +1,8 @@
-import type { PaidPlanTier, PlanTier } from '@app/features/paywall/plans';
+import {
+  billingMessage,
+  type PaidPlanTier,
+  type PlanTier,
+} from '@app/features/paywall/plans';
 import { type Accessor, createSignal } from 'solid-js';
 import type {
   CompletionResult,
@@ -102,7 +106,7 @@ export function createFlowFinish(
     } catch (error) {
       context.notifyFailure(
         error instanceof Error
-          ? error.message
+          ? billingMessage(error.message)
           : "Couldn't start checkout — please try again"
       );
       setFinishing(false);
@@ -113,7 +117,7 @@ export function createFlowFinish(
     finishing,
     afterTarget,
     persistNext,
-    /** Finish as a Guest (or with the plan step skipped) and enter the app. */
+    /** Finish on Free (or with the plan step skipped) and enter the app. */
     finishFree: (planSkipped = false) => complete('free', planSkipped),
     startPremiumCheckout,
     /** Finish after checkout confirmed payment, recording the tier Stripe returned. */

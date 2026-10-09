@@ -10,6 +10,7 @@ import {
   invalidateAllAfterLogin,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { queryReadyGate } from '@queries/gate';
 import { detect } from 'detect-browser';
 import type { AuthContext, AuthSession } from './context/auth-context';
 import {
@@ -29,7 +30,7 @@ export function createAppAuthContext(): AuthContext {
   const sendWelcomeEmail = useSendMobileWelcomeEmail();
 
   const session = (): AuthSession => {
-    const data = userInfo.isSuccess ? userInfo.data : undefined;
+    const data = queryReadyGate(userInfo) ? userInfo.data : undefined;
     // A signed-out visitor's request 401s rather than answering unauthenticated.
     const authenticated = deriveIsAuthenticated({
       isLoading: userInfo.isLoading,

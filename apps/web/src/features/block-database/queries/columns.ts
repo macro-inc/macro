@@ -9,7 +9,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type {
   DatabaseColumnKind,
   DatabaseSchemaChange,
-} from '../core/column-schema';
+} from '../../database/core/column-schema';
 import { opColumnKind } from './column-schema';
 
 /**

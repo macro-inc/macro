@@ -42,7 +42,9 @@ describe('leaving onboarding', () => {
       failures: { checkout: message },
     });
     await finish.startPremiumCheckout('premium');
-    expect(fake.notifications()).toEqual([message]);
+    expect(fake.notifications()).toEqual([
+      'The 30-day trial is only available for your first Pro subscription',
+    ]);
     expect(fake.calls()).not.toContain('completeOnboarding');
     expect(navigate).not.toHaveBeenCalled();
     expect(redirect).not.toHaveBeenCalled();

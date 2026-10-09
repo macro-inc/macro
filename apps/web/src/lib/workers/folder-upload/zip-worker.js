@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 
 self.onmessage = function (event) {
-  const { taskId, action, files, fileDetails } = event.data;
+  const { taskId, action, files, fileDetails, folderPaths } = event.data;
 
   if (action === 'zipFiles') {
     self.postMessage({
@@ -12,13 +12,18 @@ self.onmessage = function (event) {
       },
     });
 
-    zipFiles(taskId, files, fileDetails);
+    zipFiles(taskId, files, fileDetails, folderPaths ?? []);
   }
 };
 
-async function zipFiles(taskId, files, fileDetails) {
+async function zipFiles(taskId, files, fileDetails, folderPaths) {
   try {
     const zip = new JSZip();
+
+    // Explicit folder entries keep empty folders in the upload.
+    for (const folderPath of folderPaths) {
+      zip.folder(folderPath);
+    }
     const totalFiles = files.length;
     let processedFiles = 0;
 

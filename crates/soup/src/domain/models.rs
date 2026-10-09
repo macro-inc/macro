@@ -1,3 +1,4 @@
+pub(crate) mod contact_listing;
 pub mod grouping;
 
 mod exclusions;
@@ -28,11 +29,10 @@ use item_filters::{
             PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to,
             properties_filter_matches_propertyless,
         },
-        reminder::ReminderLiteral,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 use models_grouping::GroupingConfig;
 use models_pagination::{
     Cursor, CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
@@ -41,7 +41,6 @@ use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
-use reminders::domain::models::SoupOrder;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -56,7 +55,7 @@ use uuid::Uuid;
 pub enum SoupSortDirection {
     /// Smallest sort value first — oldest, or soonest for a future timestamp.
     Asc,
-    /// Largest sort value first. What every view but Scheduled reminders wants.
+    /// Largest sort value first.
     #[default]
     Desc,
 }
@@ -326,7 +325,7 @@ pub struct SoupRequest<T> {
     /// Initial query or pagination cursor to execute.
     pub cursor: SoupQuery<T>,
     /// Direction the merged page is ordered in. Defaults to descending, which
-    /// is what every feed but reminders wants.
+    /// is the default feed ordering.
     ///
     /// One choice per request: the paginator sorts the whole merged page, so
     /// this cannot differ per entity type within a single feed. It is a
@@ -651,58 +650,6 @@ impl SoupRequest<Option<EntityFilterAst>> {
         })
     }
 
-    /// Build the reminder leg of the query.
-    ///
-    /// Unlike every other entity type, reminders are **opt-in**: a query that
-    /// says nothing about them gets none. Adding reminders to Soup therefore
-    /// left every existing view's results unchanged; only views that ask (today
-    /// just the Inbox Signal filter) see them.
-    ///
-    /// Reminders also carry no properties, so an active properties filter that
-    /// cannot match a propertyless item skips the leg — the same gate channels
-    /// and foreign entities use.
-    pub(crate) fn build_reminder_request(
-        &self,
-        limit: i64,
-    ) -> Option<GetRemindersRequest<'static>> {
-        if self.properties_filter_blocks_propertyless() {
-            return None;
-        }
-        // Reminders sort on `next_run_at` regardless of the requested method,
-        // so there is nothing to translate — but frecency has no reminder
-        // scoring and reminders record no activity, so both paths skip them.
-        // Notified-at keeps the leg: a fired reminder notifies its owner, and
-        // the handler narrows `reminder_ids` to the page's candidates.
-        if matches!(self.cursor, SoupQuery::Frecency(_) | SoupQuery::Touched(_)) {
-            return None;
-        }
-
-        // Absent filter means the query never mentioned reminders, which is the
-        // opt-out. Every pre-existing Soup view lands here.
-        let tree = self.entity_ast().and_then(|a| a.reminder_filter.as_ref())?;
-        let mut extract = ReminderFilterExtract::default();
-        if !extract_reminder_filter(tree, &mut extract) {
-            // Fail closed: an unsupported AST shape would widen the result set.
-            return None;
-        }
-        if !extract.opted_in() {
-            return None;
-        }
-
-        Some(GetRemindersRequest {
-            user_id: self.user.clone(),
-            reminder_ids: extract.ids,
-            entities: extract.entities,
-            completed: extract.completed,
-            fired: extract.fired,
-            order: match self.sort_direction {
-                SoupSortDirection::Asc => SoupOrder::SoonestFirst,
-                SoupSortDirection::Desc => SoupOrder::LatestFirst,
-            },
-            limit,
-        })
-    }
-
     pub(crate) fn build_comms_request(&self) -> Option<GetChannelsRequest> {
         if self.properties_filter_blocks_propertyless() || exclusions::channel(self.entity_ast()) {
             return None;
@@ -948,8 +895,6 @@ pub struct NotifiedHydratableTypes {
     pub email_threads: bool,
     /// The foreign-entity leg is active.
     pub foreign_entities: bool,
-    /// The reminder leg is active (the request opted into reminders).
-    pub reminders: bool,
 }
 
 /// One notified entity: what it is and when the user was last notified.
@@ -959,6 +904,119 @@ pub struct NotifiedEntity {
     pub entity: Entity<'static>,
     /// When the user's latest notification about it was created.
     pub notified_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Which reasons admit an entity to the work feed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WorkFeedSoupMode {
+    /// Live notifications plus the viewer's own work.
+    Work,
+    /// Live notifications only.
+    Attention,
+}
+
+/// Keyset position for a work feed page: the sort time and entity id of the
+/// last candidate the previous page walked.
+///
+/// Like [`NotifiedPagePosition`], the id stays the raw stored string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkFeedPagePosition {
+    /// The last candidate's sort time: the later of its attention and
+    /// own-work timestamps.
+    pub sort_at: chrono::DateTime<chrono::Utc>,
+    /// The last candidate's entity id — the tiebreaker on equal sort times.
+    pub entity_id: String,
+}
+
+/// Parameters for one page of work feed candidates.
+#[derive(Debug)]
+pub struct WorkFeedCandidateRequest<'a> {
+    /// User whose feed is listed; also the access-check subject.
+    pub user_id: MacroUserIdStr<'a>,
+    /// Maximum candidates to return.
+    pub limit: u16,
+    /// Whether own work admits candidates.
+    pub mode: WorkFeedSoupMode,
+    /// Resume after this position; `None` for the first page.
+    pub after: Option<WorkFeedPagePosition>,
+    /// Entity types the caller asked for. Narrowed further by the filter
+    /// and by which hydration legs are active.
+    pub types: &'a [EntityType],
+    /// Entity filters folded into the candidate gates where soup owns the
+    /// fold, exactly as for the notified-at feed.
+    pub filter: Option<&'a EntityFilterAst>,
+    /// Every inbox the caller can read; gates email-thread candidates.
+    pub link_ids: &'a [Uuid],
+    /// Sources whose stored foreign entities the caller may see.
+    pub foreign_entity_sources: &'a [SourceId],
+    /// Entity types whose candidates the domain can hydrate for this request.
+    pub hydratable: NotifiedHydratableTypes,
+    /// Restrict the feed to these candidate keys, for recomputing known items.
+    pub only: Option<&'a [Entity<'static>]>,
+}
+
+/// One work feed candidate and the timestamps of its two reasons.
+///
+/// Each candidate carries the reason that places it in the feed: its
+/// `sort_at` is the later of the two timestamps, and exactly one of the
+/// candidate query's two streams emits it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkFeedCandidate {
+    /// The candidate's entity; channel-thread candidates are keyed on their
+    /// thread root as a `channel_message`, like the notified-at feed.
+    pub entity: Entity<'static>,
+    /// The latest live notification keyed to the candidate, when at least
+    /// one of them is not done.
+    pub attention_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The viewer's latest own (non-view) activity on the candidate. Always
+    /// `None` in attention mode.
+    pub touched_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Where the candidate sits in the feed.
+    pub sort_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Request for one page of the hydrated work feed.
+#[derive(Debug, Clone)]
+pub struct WorkFeedSoupRequest {
+    /// User whose feed is listed.
+    pub user: MacroUserIdStr<'static>,
+    /// Every inbox the caller can read.
+    pub link_ids: Vec<Uuid>,
+    /// Maximum items to return.
+    pub limit: u16,
+    /// Whether own work admits items.
+    pub mode: WorkFeedSoupMode,
+    /// Entity types to include.
+    pub types: Vec<EntityType>,
+    /// Membership filters, folded into the candidate gates and applied in
+    /// full by each domain's hydration leg.
+    pub filter: EntityFilterAst,
+    /// Resume after this position; `None` for the first page.
+    pub after: Option<WorkFeedPagePosition>,
+    /// Restrict the feed to these candidate keys, for recomputing known items.
+    pub only: Option<Vec<Entity<'static>>>,
+}
+
+/// One hydrated work feed item and its reason timestamps.
+#[derive(Debug)]
+pub struct WorkFeedSoupItem {
+    /// The authorized Soup item with its server facts.
+    pub hydration: SoupProjectionHydration,
+    /// See [`WorkFeedCandidate::attention_at`].
+    pub attention_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// See [`WorkFeedCandidate::touched_at`].
+    pub touched_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// See [`WorkFeedCandidate::sort_at`].
+    pub sort_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// One page of the hydrated work feed.
+#[derive(Debug)]
+pub struct WorkFeedSoupPage {
+    /// The page's items, newest first.
+    pub items: Vec<WorkFeedSoupItem>,
+    /// Where the next page starts; `None` once the feed is exhausted.
+    pub next: Option<WorkFeedPagePosition>,
 }
 
 /// Whether the notified-at candidate query can fold this calendar filter.
@@ -1116,111 +1174,6 @@ fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtr
     }
 }
 
-/// Parameters for the reminder leg of a soup query.
-#[derive(Debug)]
-pub struct GetRemindersRequest<'a> {
-    /// Whose reminders to list. Reminders are private to their owner, so this
-    /// is the whole of the access check.
-    pub user_id: MacroUserIdStr<'a>,
-    /// Filter to specific reminder ids. Empty = all of the user's reminders.
-    pub reminder_ids: Vec<Uuid>,
-    /// Filter to reminders attached to these entities, each `"{type}:{id}"`.
-    /// Empty = no entity constraint.
-    pub entities: Vec<String>,
-    /// Filter on whether the owner marked the reminder done. `None` returns both.
-    pub completed: Option<bool>,
-    /// Filter on whether the reminder has come due. `None` returns both.
-    pub fired: Option<bool>,
-    /// Which end of the `next_run_at` ordering to take `limit` rows from.
-    /// Mirrors the request's sort direction so the leg and the merge agree.
-    pub order: SoupOrder,
-    /// Upper bound on rows returned — the soup paginator re-slices.
-    pub limit: i64,
-}
-
-/// Outcome of walking a `ReminderLiteral` AST.
-#[derive(Debug, Default)]
-pub(crate) struct ReminderFilterExtract {
-    pub(crate) include: bool,
-    pub(crate) ids: Vec<Uuid>,
-    pub(crate) entities: Vec<String>,
-    pub(crate) completed: Option<bool>,
-    pub(crate) fired: Option<bool>,
-}
-
-impl ReminderFilterExtract {
-    /// Whether the query asked for reminders at all. Reminders are off unless
-    /// something in the filter names them.
-    fn opted_in(&self) -> bool {
-        self.include || !self.ids.is_empty() || !self.entities.is_empty()
-    }
-}
-
-/// Walks a `ReminderLiteral` AST collecting ids, entity tokens, and a single
-/// single `Completed(bool)`/`Fired(bool)` constraint. Returns `false` (fail
-/// closed) on `Not(_)`, on conflicting literals, and on an `Or` branch that is not a pure
-/// id/entity sub-tree — the same shape restrictions as the CRM extractor, for
-/// the same reason: a flat extract cannot represent those set semantics.
-fn extract_reminder_filter(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilterExtract) -> bool {
-    match expr {
-        Expr::Literal(ReminderLiteral::Include) => {
-            out.include = true;
-            true
-        }
-        Expr::Literal(ReminderLiteral::Id(id)) => {
-            out.ids.push(*id);
-            true
-        }
-        Expr::Literal(ReminderLiteral::Entity(entity)) => {
-            out.entities.push(entity.clone());
-            true
-        }
-        Expr::Literal(ReminderLiteral::Completed(b)) => match out.completed {
-            Some(prev) if prev != *b => false,
-            _ => {
-                out.completed = Some(*b);
-                true
-            }
-        },
-        Expr::Literal(ReminderLiteral::Fired(b)) => match out.fired {
-            Some(prev) if prev != *b => false,
-            _ => {
-                out.fired = Some(*b);
-                true
-            }
-        },
-        Expr::And(a, b) => extract_reminder_filter(a, out) && extract_reminder_filter(b, out),
-        Expr::Or(a, b) => {
-            // The repo ANDs `ids` against `entities`, so an `Or` spanning both
-            // would come out as an `And` — narrower than asked. Only reject
-            // when this `Or` actually contributes both; ids-only or
-            // entities-only branches still flatten faithfully.
-            let (ids_before, entities_before) = (out.ids.len(), out.entities.len());
-            let ok = reminder_or_is_sets_only(a, out) && reminder_or_is_sets_only(b, out);
-            ok && !(out.ids.len() > ids_before && out.entities.len() > entities_before)
-        }
-        Expr::Not(_) => false,
-    }
-}
-
-/// Helper for [`extract_reminder_filter`]: an `Or` branch must be a pure
-/// id/entity sub-tree — a `Completed`, `Fired`, `And`, or `Not` inside fails
-/// closed.
-fn reminder_or_is_sets_only(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilterExtract) -> bool {
-    match expr {
-        Expr::Literal(ReminderLiteral::Id(id)) => {
-            out.ids.push(*id);
-            true
-        }
-        Expr::Literal(ReminderLiteral::Entity(entity)) => {
-            out.entities.push(entity.clone());
-            true
-        }
-        Expr::Or(a, b) => reminder_or_is_sets_only(a, out) && reminder_or_is_sets_only(b, out),
-        _ => false,
-    }
-}
-
 /// Authoritative document facts that are unavailable as direct Soup fields.
 ///
 /// This value is internal hydration state. It is deliberately separate from
@@ -1334,9 +1287,6 @@ pub enum SoupErr {
     /// CRM lookup failed.
     #[error("A CRM error has occurred, see logs for more details")]
     CrmErr,
-    /// Reminder lookup failed.
-    #[error("A reminder error has occurred, see logs for more details")]
-    ReminderErr,
     /// A touched-by-me query carried a filter kind this mode cannot
     /// evaluate (the fold lives in another domain's query builder).
     /// Rejecting beats silently returning a feed with that type missing.

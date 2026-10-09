@@ -8,6 +8,7 @@
 //!
 //! NOTE: this workflow must NOT be added to required status checks — PRs
 //! should be mergeable regardless of preview deploy status.
+//! A `[no preview]` marker in the PR title opts out without skipping CI.
 
 use gh_workflow::{
     Concurrency, Env, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType,
@@ -46,6 +47,9 @@ fn pull_request_event() -> PullRequest {
 
 fn deploy() -> Job {
     Job::default()
+        .cond(Expression::new(
+            "!contains(github.event.pull_request.title, '[no preview]')",
+        ))
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .permissions(
             Permissions::default()

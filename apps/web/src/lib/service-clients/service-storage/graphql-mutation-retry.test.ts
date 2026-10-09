@@ -33,7 +33,7 @@ describe('GraphQL mutation retries', () => {
     ).toBe(false);
   });
 
-  it('honors explicit GraphQL retry metadata on an HTTP error', () => {
+  it('ignores legacy GraphQL retry metadata on an HTTP error', () => {
     expect(
       shouldRetryGraphqlMutation(
         new CombinedError({
@@ -43,7 +43,7 @@ describe('GraphQL mutation retries', () => {
           response: new Response(null, { status: 400 }),
         })
       )
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('keeps transport failures retryable', () => {
@@ -55,17 +55,33 @@ describe('GraphQL mutation retries', () => {
   });
 
   it.each(['INVALID', 'UNAUTHORIZED', 'DRAFT_ALREADY_SENT', 'INTERNAL'])(
-    'does not retry %s without explicit server permission',
+    'does not retry %s even with legacy server permission',
     (code) => {
       expect(
         shouldRetryGraphqlMutation(
           new CombinedError({
-            graphQLErrors: [{ message: 'failed', extensions: { code } }],
+            graphQLErrors: [
+              { message: 'failed', extensions: { code, retryable: true } },
+            ],
           })
         )
       ).toBe(false);
     }
   );
+
+  it('does not let a transport error override an application rejection', () => {
+    expect(
+      shouldRetryGraphqlMutation(
+        new CombinedError({
+          graphQLErrors: [
+            { message: 'failed', extensions: { retryable: true } },
+          ],
+          networkError: new Error('connection lost'),
+          response: new Response(null, { status: 503 }),
+        })
+      )
+    ).toBe(false);
+  });
 
   it('does not retry a response that also contains a permanent rejection', () => {
     expect(

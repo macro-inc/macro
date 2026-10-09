@@ -6,8 +6,8 @@ import {
 import { databasesKeys } from '@queries/storage/keys';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
-import type { DatabaseSchemaChange } from '../core/column-schema';
-import type { TableCreationResult } from '../core/table-creation';
+import type { DatabaseSchemaChange } from '../../database/core/column-schema';
+import type { TableCreationResult } from '../../database/core/table-creation';
 
 /**
  * Create a table with its Name column, which infers its type like any new

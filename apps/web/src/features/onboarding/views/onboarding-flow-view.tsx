@@ -5,7 +5,6 @@ import {
   focusStepHeading,
 } from '../components/motion/step-change';
 import { OnboardingShell } from '../components/onboarding-shell';
-import { PlanComparison } from '../components/plan-comparison';
 import { StepFallback } from '../components/step-fallback';
 import { OnboardingTrustDetails } from '../components/trust-details';
 import { useOnboardingContext } from '../context/onboarding-context';
@@ -20,6 +19,7 @@ import {
 import { createFlowFinish } from '../primitives/flow-finish';
 import { createOnboardingFlow } from '../primitives/onboarding-flow';
 import { EmailStep } from './email-step';
+import { PlanComparisonView } from './plan-comparison-view';
 import { type InviteOfferSlot, PlanStep } from './plan-step';
 import { StoryStageView } from './story-stage-view';
 import { TeamStep } from './team-step';
@@ -142,13 +142,16 @@ export function OnboardingFlowView(props: {
           )}
         </Show>
       }
-      explainerLabel={showPlanOffer() ? 'Continue as Guest' : undefined}
+      explainerLabel={showPlanOffer() ? 'Continue with Free' : undefined}
       explainer={
         showPlanOffer() ? (
-          <PlanComparison
+          <PlanComparisonView
             disabled={finish.finishing()}
-            onContinueGuest={() => void finish.finishFree()}
+            onContinueFree={() => void finish.finishFree()}
             onBackToPro={() => focusStepHeading(content, true)}
+            onStartMax={() =>
+              void finish.startPremiumCheckout('max', 'standard')
+            }
           />
         ) : step() === 'security' ||
           step() === 'work' ||

@@ -21,77 +21,12 @@ use nom::bytes::complete::take;
 use nom::combinator::{cut, eof, map_opt, opt, peek};
 use nom::multi::separated_list1;
 use nom::sequence::{delimited, preceded, terminated};
-use nom::{Finish, IResult, Input, Parser};
+use nom::{Finish, IResult, Parser};
 
 use super::ParseError;
 use super::ast::{ColumnRef, Identifier, Literal, Statement, TableName};
 use super::lexer::{Token, TokenKind};
-
-/// The input: the statement's tokens and where the statement ends. A
-/// newtype because nom implements [`Input`] only for bytes and `&str`.
-#[derive(Debug, Clone, Copy)]
-pub struct Tokens<'a> {
-    tokens: &'a [Token],
-    end: usize,
-}
-
-impl std::ops::Deref for Tokens<'_> {
-    type Target = [Token];
-    fn deref(&self) -> &Self::Target {
-        self.tokens
-    }
-}
-
-impl<'a> Input for Tokens<'a> {
-    type Item = &'a Token;
-    type Iter = std::slice::Iter<'a, Token>;
-    type IterIndices = std::iter::Enumerate<std::slice::Iter<'a, Token>>;
-
-    fn input_len(&self) -> usize {
-        self.tokens.len()
-    }
-    fn take(&self, index: usize) -> Self {
-        Tokens {
-            tokens: &self.tokens[..index],
-            end: self.end,
-        }
-    }
-    fn take_from(&self, index: usize) -> Self {
-        Tokens {
-            tokens: &self.tokens[index..],
-            end: self.end,
-        }
-    }
-    fn take_split(&self, index: usize) -> (Self, Self) {
-        let (head, tail) = self.tokens.split_at(index);
-        (
-            Tokens {
-                tokens: tail,
-                end: self.end,
-            },
-            Tokens {
-                tokens: head,
-                end: self.end,
-            },
-        )
-    }
-    fn position<Predicate: Fn(Self::Item) -> bool>(&self, predicate: Predicate) -> Option<usize> {
-        self.tokens.iter().position(predicate)
-    }
-    fn iter_elements(&self) -> Self::Iter {
-        self.tokens.iter()
-    }
-    fn iter_indices(&self) -> Self::IterIndices {
-        self.tokens.iter().enumerate()
-    }
-    fn slice_index(&self, count: usize) -> Result<usize, nom::Needed> {
-        if count <= self.tokens.len() {
-            Ok(count)
-        } else {
-            Err(nom::Needed::new(count - self.tokens.len()))
-        }
-    }
-}
+pub(crate) use super::tokens::Tokens;
 
 type ParseResult<'a, Output> = IResult<Tokens<'a>, Output, ParseError>;
 

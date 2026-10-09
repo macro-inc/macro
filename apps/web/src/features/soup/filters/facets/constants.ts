@@ -228,14 +228,6 @@ export const FILTER_TARGETS = {
     includeAgentSessions: { backend: 'inc', compile: 'unit' },
   },
 
-  // remf — reminders
-  remf: {
-    reminderId: { backend: 'id' },
-    reminderCompleted: { backend: 'comp', domain: [true, false] },
-    reminderFired: { backend: 'fired', domain: [true, false] },
-    includeReminders: { backend: 'inc', compile: 'unit' },
-  },
-
   // propf — properties
   propf: {
     properties: { backend: 'properties' },
@@ -380,14 +372,6 @@ type FilterTargetsMeta = {
     includeAgentSessions: boolean;
   };
 
-  // remf — reminders
-  remf: {
-    reminderId: string[];
-    reminderCompleted: boolean;
-    reminderFired: boolean;
-    includeReminders: boolean;
-  };
-
   // propf — properties
   propf: {
     properties: PropertyFilter[];
@@ -421,7 +405,6 @@ export const TARGETS: Target[] = [
   'ghprf',
   'ccf',
   'asf',
-  'remf',
   'propf',
 ];
 
@@ -445,7 +428,6 @@ export const ENTITY_TARGETS: EntityTarget[] = [
   'fef',
   'ccf',
   'asf',
-  'remf',
 ];
 
 export const ENTITY_ID_BACKENDS: Record<EntityTarget, string> = {
@@ -460,7 +442,6 @@ export const ENTITY_ID_BACKENDS: Record<EntityTarget, string> = {
   fef: 'id',
   ccf: 'id',
   asf: 'id',
-  remf: 'id',
 };
 
 export const ENTITY_ID_FIELDS: Record<EntityTarget, string> = {
@@ -475,7 +456,6 @@ export const ENTITY_ID_FIELDS: Record<EntityTarget, string> = {
   fef: 'foreignEntityRecordId',
   ccf: 'crmCompanyId',
   asf: 'agentSessionId',
-  remf: 'reminderId',
 };
 
 export const NIL_ID = '00000000-0000-0000-0000-000000000000';

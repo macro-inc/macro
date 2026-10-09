@@ -347,8 +347,8 @@ export function PullRequestPreviewCard(props: {
   fallbackLabel?: string;
 }) {
   return (
-    <div class="select-none overflow-hidden w-80 text-ink">
-      <Surface depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">
+    <div class="select-none w-80 text-ink">
+      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
         <Suspense
           fallback={
             <div class="p-3 flex items-center justify-center text-sm text-ink-muted">

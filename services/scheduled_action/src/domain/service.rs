@@ -9,9 +9,10 @@ use entity_access::domain::{
     },
     ports::ScheduledActionGrants,
 };
+use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::CreationPrincipal;
+use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
 use super::event_runs::ConfigurationRevision;
@@ -34,6 +35,7 @@ pub struct ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets = ModelOnlyTarge
     grants: Arc<Grants>,
     dispatcher_tx: Sender<DispatchEvent>,
     event_management_enabled: bool,
+    conditions_enabled: bool,
     targets: Targets,
 }
 
@@ -51,6 +53,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             grants,
             dispatcher_tx,
             event_management_enabled: false,
+            conditions_enabled: false,
             targets: ModelOnlyTargets,
         }
     }
@@ -69,12 +72,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
             event_management_enabled: self.event_management_enabled,
+            conditions_enabled: self.conditions_enabled,
             targets,
         }
     }
 
     pub fn with_event_management_enabled(mut self, enabled: bool) -> Self {
         self.event_management_enabled = enabled;
+        self
+    }
+
+    /// Accept trigger conditions only when dispatch can check them.
+    pub fn with_conditions_enabled(mut self, enabled: bool) -> Self {
+        self.conditions_enabled = enabled;
         self
     }
 
@@ -100,9 +110,30 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         }
     }
 
+    /// Delete `action` and hand its removal to the dispatcher. The permit is
+    /// reserved first so a stopped dispatcher fails while the row still exists
+    /// for a retry to find.
+    async fn delete_and_dispatch(&self, id: &Uuid, action: ScheduledAction) -> Result<()> {
+        let permit = self.dispatcher_tx.reserve().await?;
+        self.repo.delete_action(id).await?;
+        permit.send(DispatchEvent::Delete(action));
+        Ok(())
+    }
+
     fn check_event_management(&self, trigger: &ActionTrigger) -> Result<()> {
         if trigger.event_filters().is_some() && !self.event_management_enabled {
             return Err(ActionPolicyError::EventManagementDisabled.into());
+        }
+        Ok(())
+    }
+
+    fn check_conditions(&self, trigger: &ActionTrigger) -> Result<()> {
+        if trigger
+            .event_filters()
+            .is_some_and(|filters| filters.has_conditions())
+            && !self.conditions_enabled
+        {
+            return Err(ActionPolicyError::ConditionsDisabled.into());
         }
         Ok(())
     }
@@ -127,6 +158,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         if !disable_only {
             self.check_event_management(&action.trigger)?;
             self.check_event_management(&input.trigger)?;
+            self.check_conditions(&input.trigger)?;
         }
         let now = Utc::now();
         if claim_blocks_replacement(&action, now) && !disable_only {
@@ -235,13 +267,29 @@ where
             let Some(id) = action.id else {
                 bail!("cannot delete action without id");
             };
-            // Reserve before deleting: a stopped dispatcher must not leave us
-            // reporting failure after losing the row needed to retry its event.
-            let permit = self.dispatcher_tx.reserve().await?;
-            self.repo.delete_action(&id).await?;
-            permit.send(DispatchEvent::Delete(action));
+            self.delete_and_dispatch(&id, action).await?;
         }
         Ok(())
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, expected_owner),
+        fields(%id, owner.kind = ?expected_owner.owner_type())
+    )]
+    async fn purge_owned_action(
+        &self,
+        id: Uuid,
+        expected_owner: &Owner,
+    ) -> Result<OwnedPurgeOutcome> {
+        let Some(action) = self.repo.get_action(&id).await? else {
+            return Ok(OwnedPurgeOutcome::Purged);
+        };
+        if action.owner != *expected_owner {
+            return Ok(OwnedPurgeOutcome::OwnedElsewhere);
+        }
+        self.delete_and_dispatch(&id, action).await?;
+        Ok(OwnedPurgeOutcome::Purged)
     }
 
     async fn create_action(
@@ -255,6 +303,7 @@ where
         })?;
         let input = ActionConfiguration::from(input);
         self.check_event_management(&input.trigger)?;
+        self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;

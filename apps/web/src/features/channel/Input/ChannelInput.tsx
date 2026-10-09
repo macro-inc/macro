@@ -293,6 +293,7 @@ export function ChannelInput(props: ChannelInputProps) {
       void commands.send();
       return true;
     },
+    sendMessage: () => void commands.send(),
     onPasteFilesAndDirs: (files, directories) => {
       void handleFileFolderDrop(files, directories, (entries) =>
         inputState.commands.attachFiles(entries.map((entry) => entry.file))

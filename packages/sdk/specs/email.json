@@ -4747,7 +4747,7 @@
               "endsAt": {
                 "type": "string",
                 "format": "date-time",
-                "description": "Exclusive end instant."
+                "description": "Exclusive end instant; equal to the start for an imported point event."
               },
               "kind": {
                 "type": "string",

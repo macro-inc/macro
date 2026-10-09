@@ -13,7 +13,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import { createEffect, onMount, Show } from 'solid-js';
+import { onMount, Show } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
 import { HomeList } from './components/HomeList';
 import { HomeListLayout } from './components/HomeListLayout';
@@ -82,20 +82,9 @@ function HomeListPane(props: {
 
 function HomeViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const {
-    state,
-    setTab,
-    previewTarget,
-    calendarOpen,
-    reminderOpen,
-    openPreview,
-    closePreview,
-  } = useHomeView();
+  const { previewTarget, calendarOpen, openPreview, closePreview } =
+    useHomeView();
 
-  createEffect(() => {
-    if (state.tab !== 'reminders') return;
-    setTab('signal');
-  });
   const newChat = closePreview;
   const onPreviewEntityChange = (entity: PreviewSelection | undefined) => {
     if (entity) openPreview(entity);
@@ -126,9 +115,7 @@ function HomeViewRoot() {
                       <DebugSuspense name="HomeView.list-pane">
                         <HomeListPane
                           hasPreview={
-                            previewTarget() !== undefined ||
-                            calendarOpen() ||
-                            reminderOpen()
+                            previewTarget() !== undefined || calendarOpen()
                           }
                           onPreviewEntityChange={onPreviewEntityChange}
                           onNewChat={newChat}
@@ -157,9 +144,7 @@ function HomeViewRoot() {
                   <DebugSuspense name="HomeView.list-pane">
                     <HomeListPane
                       hasPreview={
-                        previewTarget() !== undefined ||
-                        calendarOpen() ||
-                        reminderOpen()
+                        previewTarget() !== undefined || calendarOpen()
                       }
                       onPreviewEntityChange={onPreviewEntityChange}
                       onNewChat={newChat}

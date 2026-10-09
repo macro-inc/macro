@@ -738,6 +738,26 @@ export const authServiceClient = {
     );
   },
 
+  async updateAiAutoReload(args: {
+    enabled: boolean;
+    minimumBalanceCents: number;
+    targetBalanceCents: number;
+    monthlySpendLimitCents: number | null;
+  }) {
+    return await fetchWithAuth<AiUsageSnapshot>(
+      `${authHost}/ai-billing/auto-reload`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          enabled: args.enabled,
+          minimumBalanceCents: args.minimumBalanceCents,
+          targetBalanceCents: args.targetBalanceCents,
+          monthlySpendLimitCents: args.monthlySpendLimitCents,
+        }),
+      }
+    );
+  },
+
   async createAiCreditCheckout(args: {
     amountCents: number;
     successUrl: string;
@@ -1119,7 +1139,7 @@ export const authServiceClient = {
               message:
                 typeof message === 'string'
                   ? message
-                  : 'This domain cannot be used for auto-join',
+                  : "Auto-join isn't available for this domain",
             };
           }
           return {

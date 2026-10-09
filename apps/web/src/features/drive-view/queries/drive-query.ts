@@ -34,7 +34,6 @@ function excludedEntityTargets(): BackendAstMap {
     ef: literal('ThreadId', NIL_UUID),
     fef: literal('id', NIL_UUID),
     pf: literal('pid', NIL_UUID),
-    remf: literal('id', NIL_UUID),
   };
 }
 

@@ -17,7 +17,7 @@ export interface EmailFollowup {
   linkId: string;
   /** Confirmed schedule. */
   remindAt: string;
-  /** Its ordinary reminder, used by the existing alert/management surfaces. */
+  /** Identity of the snooze and its delivery records. */
   reminderId: string;
   /** Last accepted operation; edits/removal compare this to prevent stale undo. */
   revision: string;

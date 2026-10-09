@@ -8,7 +8,6 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import {
   enableCalendarUi,
-  enableReminders,
   enableSnippets,
   enableSupportedSoupForeignEntities,
   isCalendarSearchUiEnabled,
@@ -118,15 +117,8 @@ const getInboxSignalFilters = () => {
       foreignEntityDone: false,
       foreignEntityIncludesMe: true,
       emailShared: 'exclude',
-      // Reminders are off by default server-side rather than excluded by
-      // `defineQueryFilters` (there is no `remf` entry in ID_FIELD_NAMES), so
-      // this literal is the only thing that surfaces them; the inbox Reminders
-      // tab below sends it too, for the not-yet-fired slice. Behind the flag
-      // so an unflagged user never pays for the reminders lookup on every
-      // Signal fetch.
-      ...(isFeatureEnabled(enableReminders) ? { includeReminders: true } : {}),
       // Agent sessions the user was notified about (finished, asking, or a
-      // mention). Off by default server-side like reminders, so this literal
+      // mention). Off by default server-side, so this literal
       // is what surfaces them in the feed.
       includeAgentSessions: true,
       // Calendar events with a not-done notification (a fired event alarm).
@@ -241,21 +233,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         },
         clientFilters: { and: ['explicit-noise'] },
         groupBy: 'date',
-        sortMethod: 'updated_at',
-      }),
-      // Every reminder still on the hook: the ones coming up and the ones that
-      // have fired and are waiting to be dealt with (fired ones also surface in
-      // Signal as their notification). Only marking one done drops it. Ascending
-      // by fire time, so overdue leads and upcoming follows soonest-first.
-      reminders: () => ({
-        filters: defineQueryFilters({
-          include: {
-            includeReminders: true,
-            reminderCompleted: false,
-          },
-        }),
-        clientFilters: { and: ['reminders-not-done'] },
-        sortDirection: 'asc',
         sortMethod: 'updated_at',
       }),
     },
@@ -551,17 +528,6 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
-  // One collection: completion and scheduling are independent row state.
-  reminders: {
-    default: 'all',
-    tabs: {
-      all: () => ({
-        filters: defineQueryFilters({ include: { includeReminders: true } }),
-        clientFilters: { and: ['reminders'] },
-        sortDirection: 'asc',
-      }),
-    },
-  },
   search: {
     default: 'all',
     tabs: {
@@ -627,7 +593,7 @@ export function getViewPreset(
   const config = VIEW_TAB_PRESETS[view];
   if (!config) return undefined;
 
-  const tabId = view === 'reminders' ? 'all' : (tab ?? config.default);
+  const tabId = tab ?? config.default;
   const resolver = config.tabs[tabId];
   if (!resolver) return undefined;
 

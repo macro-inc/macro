@@ -66,6 +66,21 @@ fn payload_actions_carry_their_payload_fields() {
 }
 
 #[test]
+fn a_form_response_reads_as_responded() {
+    let event = GraphqlActivityEvent::from(ActivityRecord {
+        entity_type: activity::EntityType::Form,
+        entity_id: "0199b1f2-3e22-75b2-97eb-d9c6b91accb0".to_string(),
+        ..record(RecordedAction::Known(Action::Responded))
+    });
+
+    assert!(event.entity_type == GraphqlEntityType::Form);
+    match event.action {
+        GraphqlActivityAction::Responded(_) => {}
+        other => panic!("expected Responded, got {}", type_name(&other)),
+    }
+}
+
+#[test]
 fn unknown_actions_surface_their_raw_row() {
     let event = GraphqlActivityEvent::from(record(RecordedAction::Unknown {
         tag: "transmogrified".to_string(),
@@ -91,6 +106,7 @@ fn type_name(action: &GraphqlActivityAction) -> &'static str {
         GraphqlActivityAction::Deleted(_) => "Deleted",
         GraphqlActivityAction::Messaged(_) => "Messaged",
         GraphqlActivityAction::Sent(_) => "Sent",
+        GraphqlActivityAction::Responded(_) => "Responded",
         GraphqlActivityAction::PropertyChanged(_) => "PropertyChanged",
         GraphqlActivityAction::ParticipantAdded(_) => "ParticipantAdded",
         GraphqlActivityAction::ParticipantRemoved(_) => "ParticipantRemoved",

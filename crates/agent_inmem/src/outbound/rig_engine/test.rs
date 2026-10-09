@@ -128,7 +128,7 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
 
 #[test]
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
-    let prompt = system_prompt(&TOOLS, None, Some("be terse"), None);
+    let prompt = system_prompt(&TOOLS, None, Some("be terse"), None).to_string();
 
     assert!(
         prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
@@ -152,7 +152,7 @@ fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
         name: "Grunk".to_owned(),
         handle: "grunk".to_owned(),
     };
-    let prompt = system_prompt(&TOOLS, Some(&identity), None, None);
+    let prompt = system_prompt(&TOOLS, Some(&identity), None, None).to_string();
     let identity_section = prompt::agent_identity::render("Grunk", "grunk");
 
     assert!(
@@ -168,7 +168,7 @@ fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
 /// as an instruction.
 #[test]
 fn memory_follows_instructions_rather_than_preceding_them() {
-    let prompt = system_prompt(&TOOLS, None, Some("be terse"), Some("prefers Rust"));
+    let prompt = system_prompt(&TOOLS, None, Some("be terse"), Some("prefers Rust")).to_string();
 
     let instructions = prompt
         .find("<session_instructions>")
@@ -179,11 +179,46 @@ fn memory_follows_instructions_rather_than_preceding_them() {
     assert!(instructions < memory);
 }
 
+/// Two sessions of one agent differ only after the static Macro prompt, so
+/// the part before it is cached once for all of them.
+#[test]
+fn sessions_of_an_agent_share_everything_before_their_instructions() {
+    let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    };
+    let first = system_prompt(
+        &TOOLS,
+        Some(&identity),
+        Some("task A"),
+        Some("prefers Rust"),
+    );
+    let second = system_prompt(&TOOLS, Some(&identity), Some("task B"), None);
+
+    let shared = format!(
+        "{}\n{}\n{}\n{TOOLS}",
+        prompt::agent_identity::render("Grunk", "grunk"),
+        prompt::agent_session::PROMPT,
+        opener::ALREADY_OPENED,
+    );
+    assert_eq!(first.shared(), Some(shared.as_str()));
+    assert_eq!(second.shared(), Some(shared.as_str()));
+    assert_eq!(
+        first.rest(),
+        "\n<session_instructions>\ntask A\n</session_instructions>\n<user_memory>\nprefers Rust\n</user_memory>"
+    );
+    assert_eq!(
+        second.rest(),
+        "\n<session_instructions>\ntask B\n</session_instructions>"
+    );
+}
+
 /// Absent instructions add no section at all, rather than an empty one the
 /// model would have to interpret.
 #[test]
 fn no_instructions_means_no_section() {
-    let prompt = system_prompt(&TOOLS, None, None, Some("prefers Rust"));
+    let prompt = system_prompt(&TOOLS, None, None, Some("prefers Rust")).to_string();
 
     assert!(!prompt.contains("session_instructions"));
     assert!(prompt.contains("<user_memory>\nprefers Rust\n</user_memory>"));
@@ -193,7 +228,76 @@ fn no_instructions_means_no_section() {
 /// not become a blank delimited section.
 #[test]
 fn empty_instructions_add_no_section() {
-    let prompt = system_prompt(&TOOLS, None, Some(""), None);
+    let prompt = system_prompt(&TOOLS, None, Some(""), None).to_string();
 
     assert!(!prompt.contains("session_instructions"));
+}
+
+#[tokio::test]
+async fn opening_verdict_split_across_deltas_keeps_the_head_of_the_line() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    for delta in ["tr", "ue|Hi", " there", "!"] {
+        lines.send(delta.to_owned()).await.unwrap();
+    }
+
+    let verdict = opener::verdict(&mut receiver).await;
+
+    assert!(matches!(verdict, Some(opener::Verdict::Complete(head)) if head == "Hi"));
+    assert_eq!(receiver.recv().await.as_deref(), Some(" there"));
+}
+
+#[tokio::test]
+async fn opening_verdict_reads_false_as_an_opening_only() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    lines
+        .send("false| Let me check your calendar.".to_owned())
+        .await
+        .unwrap();
+
+    let verdict = opener::verdict(&mut receiver).await;
+
+    assert!(matches!(
+        verdict,
+        Some(opener::Verdict::Opening(head)) if head == "Let me check your calendar."
+    ));
+}
+
+#[tokio::test]
+async fn opening_verdict_skip_shows_nothing() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    for delta in ["sk", "ip|"] {
+        lines.send(delta.to_owned()).await.unwrap();
+    }
+
+    let verdict = opener::verdict(&mut receiver).await;
+
+    assert!(matches!(verdict, Some(opener::Verdict::Silent)));
+}
+
+#[tokio::test]
+async fn opening_without_a_verdict_is_dropped() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    lines
+        .send("Sure, let me look into it.".to_owned())
+        .await
+        .unwrap();
+    drop(lines);
+
+    assert!(opener::verdict(&mut receiver).await.is_none());
+}
+
+#[test]
+fn opening_transcript_leaves_out_the_hidden_agent_context() {
+    let messages = vec![agent::types::ChatMessage {
+        content: agent::types::ChatMessageContent::Text(
+            "<m-agent-context>{\"version\":1,\"text\":\"<session owner=\\\"wolf@macro.com\\\"/>\"}</m-agent-context>\n\nwhat is going on in my workspace".to_owned(),
+        ),
+        role: agent::types::Role::User,
+        attachments: None,
+    }];
+
+    assert_eq!(
+        opener::transcript(&messages),
+        "User: what is going on in my workspace"
+    );
 }

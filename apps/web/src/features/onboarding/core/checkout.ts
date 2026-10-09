@@ -6,11 +6,11 @@ export type CheckoutReturn =
   | { t: 'cancelled' };
 
 /**
- * What the checkout grants: the automatic first-subscription trial, or the
+ * What the checkout grants: standard paid terms, the first-subscription trial, or the
  * promotion an invite link redeemed (which the server applies, and which a
  * trial would replace).
  */
-export type CheckoutTerms = 'trial' | 'invite-offer';
+export type CheckoutTerms = 'trial' | 'invite-offer' | 'standard';
 
 export type OnboardingCheckoutRequest = {
   successUrl: string;

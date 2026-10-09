@@ -164,7 +164,7 @@ impl<Access, InMemory, Cursor, Macrod> AgentCapabilitiesService
     for AgentCapabilitiesServiceImpl<Access, InMemory, Cursor, Macrod>
 where
     Access: HarnessCapabilityAccess,
-    InMemory: CapabilityProbe<Target = ()>,
+    InMemory: CapabilityProbe<Target = MacroUserIdStr<'static>>,
     Cursor: CapabilityProbe<Target = MacroUserIdStr<'static>>,
     Macrod: CapabilityProbe<Target = HarnessId>,
 {
@@ -175,7 +175,7 @@ where
     ) -> Result<AgentCapabilities, DiscoverAgentCapabilitiesError> {
         match (request.harness, request.harness_id) {
             (CapabilityHarness::InMemory, None) => {
-                self.discover(&self.in_memory, &(), request.model.as_deref())
+                self.discover(&self.in_memory, &caller, request.model.as_deref())
                     .await
             }
             (CapabilityHarness::Cursor, None) => {

@@ -263,24 +263,7 @@ export const databasesClient = {
     /** The engine's ops: the generated `ApplyOpsRequest` drops `null` from optional fields. */
     request: { ops: DatabaseOp[]; baseVersions?: Record<string, number> };
   }): ResultAsync<ApplyOpsResponse, DatabaseOpsError[]> {
-    return new ResultAsync(
-      fetchWithToken<ApplyOpsResponse, 'INVALID_OP'>(
-        `${documentStorageHost}/databases/${id}/ops`,
-        {
-          method: 'POST',
-          body: JSON.stringify(request),
-          errorResponseHandler: async (response): Promise<DatabaseOpsError> => {
-            const { body, message } = await errorBody(response);
-            const code = statusCode(response.status, 'INVALID_OP');
-            return {
-              code,
-              message,
-              refusal: code === 'INVALID_OP' ? opRefusalOf(body) : null,
-            };
-          },
-        }
-      )
-    ).mapErr((errors) => errors.map(withRefusal));
+    return fetchDatabaseOps(`/databases/${id}/ops`, request);
   },
 
   /**
@@ -325,3 +308,28 @@ export const databasesClient = {
     });
   },
 };
+
+/** Typed database operations can be hosted by another entity’s authorized endpoint. */
+export function fetchDatabaseOps(
+  path: string,
+  request: { ops: DatabaseOp[]; baseVersions?: Record<string, number> }
+): ResultAsync<ApplyOpsResponse, DatabaseOpsError[]> {
+  return new ResultAsync(
+    fetchWithToken<ApplyOpsResponse, 'INVALID_OP'>(
+      `${documentStorageHost}${path}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+        errorResponseHandler: async (response): Promise<DatabaseOpsError> => {
+          const { body, message } = await errorBody(response);
+          const code = statusCode(response.status, 'INVALID_OP');
+          return {
+            code,
+            message,
+            refusal: code === 'INVALID_OP' ? opRefusalOf(body) : null,
+          };
+        },
+      }
+    )
+  ).mapErr((errors) => errors.map(withRefusal));
+}

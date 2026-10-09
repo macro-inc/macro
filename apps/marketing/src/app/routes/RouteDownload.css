@@ -33,10 +33,11 @@
 .downloads-header h1 {
   margin: 0 0 14px;
   font:
-    500 clamp(30px, 4vw, 40px) / 1.2 "Inter Variable",
-    Inter,
-    sans-serif;
-  letter-spacing: -0.045em;
+    315 clamp(30px, 4vw, 40px) / 1.12 "Roboto Slab Variable",
+    display,
+    serif;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
 }
 
 .downloads-header p {
@@ -50,12 +51,6 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
-}
-
-.downloads-action p {
-  color: #777;
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 /* Preserve the shared primary button's ink over the legacy anchor reset. */
@@ -81,6 +76,13 @@
 .downloads-release svg {
   width: 13px;
   height: 13px;
+}
+
+.downloads-page .downloads-version {
+  margin-top: 8px;
+  color: #777;
+  font-size: 12px;
+  text-align: center;
 }
 
 @media (max-width: 600px) {

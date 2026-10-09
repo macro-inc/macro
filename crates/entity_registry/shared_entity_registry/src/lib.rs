@@ -3,7 +3,8 @@
 //!
 //! Reads and owner-grant policy live in `entity_registry`. Transactional writes
 //! go through `entity_registry_db_utils`, which applies that policy when
-//! registering owned entities.
+//! registering owned entities. [`PurgeOwnedEntity`] is the permanent delete
+//! each owning service exposes to callers that remove an owner.
 //!
 //! ```
 //! use model_entity::EntityType;
@@ -23,12 +24,17 @@ mod test;
 use chrono::{DateTime, Utc};
 use model_entity::EntityType;
 use rootcause::Report;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use model_owner::Owner;
 
 /// The entity kinds the `entity` table accepts: its CHECK constraint as a type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// Serializes as its [`EntityType`] spelling, and deserializing any other
+/// kind fails.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(into = "EntityType", try_from = "EntityType")]
 pub enum RegisteredEntityType {
     /// `project`
     Project,
@@ -197,3 +203,27 @@ pub enum EntityRegistryError {
 
 /// Typed report returned by every registry operation, read or write.
 pub type EntityRegistryResult<T> = Result<T, Report<EntityRegistryError>>;
+
+/// What an owner-checked permanent delete did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnedPurgeOutcome {
+    /// The entity is gone: deleted by this call, or already missing.
+    Purged,
+    /// The entity exists under a different owner. Nothing was deleted.
+    OwnedElsewhere,
+}
+
+/// Permanent delete of one entity, conditional on its recorded owner.
+///
+/// The service that owns each [`RegisteredEntityType`] implements it, for
+/// callers that remove everything an owner holds. Those callers retry until
+/// the owner lists nothing, so a repeated call must converge.
+pub trait PurgeOwnedEntity: Send + Sync {
+    /// Permanently delete `entity_id`, live or trashed, if `expected_owner`
+    /// is its recorded owner. A missing entity is [`OwnedPurgeOutcome::Purged`].
+    fn purge_owned(
+        &self,
+        entity_id: Uuid,
+        expected_owner: &Owner,
+    ) -> impl Future<Output = Result<OwnedPurgeOutcome, Report>> + Send;
+}

@@ -48,6 +48,11 @@
   `list_network_requests` (resourceTypes xhr/fetch), then `get_network_request` on the
   suspicious reqid for headers/body. Pairing the console error with the failing request
   localizes the fault in one step.
+- If the app root is empty, include `script` requests: a 502 for a Vite module
+  prevents the entry module from rendering, even when `/app/` returns 200. Check
+  proxy logs for Docker-to-host dial timeouts. The generated Vite proxy limits
+  upstream connections to 16 to avoid exhausting the host listener during module
+  loading; reload after updating and restarting only the affected proxy.
 - `net::ERR_NETWORK_CHANGED` spam means the environment's network flapped: verify the stack
   with curl from the shell, then `navigate_page` reload.
 - Full-screen "Something went terribly wrong" dialogs: `Home` recovers navigation-level

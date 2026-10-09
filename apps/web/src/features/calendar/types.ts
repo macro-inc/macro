@@ -4,7 +4,10 @@ import type { CalendarEventSourceContent } from '@service-storage/generated/sche
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { multiDayTimedDisplayRange } from './utils/calendar-date';
+import {
+  isTimedPointEvent,
+  multiDayTimedDisplayRange,
+} from './utils/calendar-date';
 import { canEditCalendarEventTime } from './utils/event-interaction';
 
 /** Supported FullCalendar period views. */
@@ -44,6 +47,13 @@ export interface CalendarSource {
 
 /** Calendar occurrence data, independent from FullCalendar. */
 export interface CalendarEvent {
+  /** A sanitized team projection grants read access only, never provider actions. */
+  teamProjection?: {
+    ownerId: string;
+    kind: 'busy' | 'details';
+    /** Legacy OOO status does not carry an availability classification. */
+    contributesToAvailability?: boolean;
+  };
   /** Stable identifier for this rendered occurrence. */
   id: string;
   /** Stable canonical calendar event identifier. */
@@ -275,12 +285,18 @@ export function mapCalendarEventToFullCalendar(
   // ranges. Keep projected timed events fixed so their timestamps are not
   // accidentally replaced with date-only API values.
   const interactionEditable = timeEditable && allDayRange === undefined;
+  // FullCalendar replaces an equal end with its default one-hour duration.
+  // Give an instant a minimal rendering footprint without changing the model.
+  // Point events cannot be dragged/resized, so this display end is never saved.
+  const displayEnd = isTimedPointEvent(event)
+    ? new Date(Date.parse(event.start) + 1).toISOString()
+    : event.end;
 
   return {
     id: event.id,
     title: event.title,
     start: allDayRange?.start ?? event.start,
-    end: allDayRange?.end ?? event.end,
+    end: allDayRange?.end ?? displayEnd,
     allDay: isRenderedAllDay,
     display: 'auto',
     startEditable: interactionEditable,

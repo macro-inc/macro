@@ -73,6 +73,23 @@ pub(crate) fn take_description(
         .unwrap_or_else(|| name.to_owned())
 }
 
+/// A tool's definition as providers receive it, from its schema.
+pub(crate) fn provider_definition(
+    name: String,
+    description: String,
+    schema: &schemars::Schema,
+) -> rig_core::completion::ToolDefinition {
+    let mut parameters =
+        serde_json::to_value(schema).unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    normalize_request_schema(&mut parameters);
+    let description = take_description(&name, description, &mut parameters);
+    rig_core::completion::ToolDefinition {
+        name,
+        description,
+        parameters,
+    }
+}
+
 type Deserializer<Context> = Arc<
     dyn Fn(
             &serde_json::Value,
@@ -205,12 +222,11 @@ impl DynToolSetAdapter {
                      description,
                      schema,
                  }| {
-                    let schema_json = serde_json::to_value(&schema)
-                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                    let definition = provider_definition(name, description, &schema);
                     Self::build(
-                        name,
-                        description,
-                        schema_json,
+                        definition.name,
+                        definition.description,
+                        definition.parameters,
                         toolset.clone(),
                         context.clone(),
                         request_context.clone(),
@@ -237,12 +253,11 @@ impl DynToolSetAdapter {
     where
         Context: Clone + Send + Sync + 'static,
     {
-        let schema_json = serde_json::to_value(&schema)
-            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        let definition = provider_definition(name, description, &schema);
         Self::build(
-            name,
-            description,
-            schema_json,
+            definition.name,
+            definition.description,
+            definition.parameters,
             toolset,
             context,
             request_context,
@@ -252,7 +267,7 @@ impl DynToolSetAdapter {
     fn build<Context>(
         name: String,
         description: String,
-        mut schema: serde_json::Value,
+        schema: serde_json::Value,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
         request_context: Arc<RwLock<RequestContext>>,
@@ -260,8 +275,6 @@ impl DynToolSetAdapter {
     where
         Context: Clone + Send + Sync + 'static,
     {
-        normalize_request_schema(&mut schema);
-        let description = take_description(&name, description, &mut schema);
         let tool_name = name.clone();
         DynamicTool::new(
             name,

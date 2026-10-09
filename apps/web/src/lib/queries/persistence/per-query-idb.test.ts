@@ -23,6 +23,45 @@ const store = () =>
 afterEach(() => vi.restoreAllMocks());
 
 describe('clearable query persistence', () => {
+  it('rejects a strict flush on storage failure and retries the pending data', async () => {
+    const db = store();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(() => {
+      throw new Error('Storage unavailable');
+    });
+    db.set(entry('pending'));
+    await expect(db.flush({ throwOnError: true })).rejects.toThrow(
+      'Storage unavailable'
+    );
+    await db.flush({ throwOnError: true });
+    expect(await db.get('pending')).toEqual(entry('pending'));
+  });
+
+  it('strict flush waits for an already started write with an empty pending queue', async () => {
+    const db = store();
+    await db.clear();
+    const started = Promise.withResolvers<void>();
+    const put = IDBObjectStore.prototype.put;
+    let completed = false;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(function (
+      this: IDBObjectStore,
+      value,
+      key
+    ) {
+      this.transaction.addEventListener('complete', () => {
+        completed = true;
+      });
+      started.resolve();
+      return put.call(this, value, key);
+    });
+    db.set(entry('pending'));
+    const background = db.flush();
+    await started.promise;
+    await db.flush({ throwOnError: true });
+    expect(completed).toBe(true);
+    await background;
+  });
+
   it('fences pending puts and deletes', async () => {
     const db = store();
     db.set(entry('old'));

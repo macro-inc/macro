@@ -29,7 +29,10 @@ type ArchiveEntry = {
 };
 
 /** Validate the ZIP directory: bounded, unencrypted, no path aliases. */
-function archiveEntries(bytes: Uint8Array): {
+function archiveEntries(
+  bytes: Uint8Array,
+  { allowMacros }: { allowMacros: boolean }
+): {
   entries: ArchiveEntry[];
   centralStart: number;
 } {
@@ -115,10 +118,10 @@ function archiveEntries(bytes: Uint8Array): {
     !names.has('xl/workbook.xml')
   )
     throw invalid();
-  if ([...names].some((name) => /vbaProject\.bin$/i.test(name)))
-    throw new Error(
-      'Macro-enabled workbooks are not supported. Save a macro-free .xlsx copy first.'
-    );
+  // Imports drop macros with a warning; Macro's own exports must never
+  // contain them.
+  if (!allowMacros && [...names].some(isMacroPart))
+    throw new Error('Workbooks written by Macro must not contain macros.');
   return { entries, centralStart };
 }
 
@@ -159,7 +162,9 @@ function inflateEntry(
 
 /** Validate ZIP metadata and inflate every entry into fixed buffers. */
 export function inspectXlsxArchive(bytes: Uint8Array) {
-  const { entries, centralStart } = archiveEntries(bytes);
+  const { entries, centralStart } = archiveEntries(bytes, {
+    allowMacros: false,
+  });
   const files: Record<string, Uint8Array> = Object.create(null);
   for (const entry of entries)
     files[entry.name] = inflateEntry(bytes, entry, centralStart);
@@ -174,7 +179,9 @@ export type XlsxArchive = {
 
 /** Validate the directory up front, then inflate entries only when read. */
 export function openXlsxArchive(bytes: Uint8Array): XlsxArchive {
-  const { entries, centralStart } = archiveEntries(bytes);
+  const { entries, centralStart } = archiveEntries(bytes, {
+    allowMacros: true,
+  });
   const byName = new Map(entries.map((entry) => [entry.name, entry]));
   return {
     names: [...byName.keys()],
@@ -183,6 +190,14 @@ export function openXlsxArchive(bytes: Uint8Array): XlsxArchive {
       return entry && inflateEntry(bytes, entry, centralStart);
     },
   };
+}
+
+/** VBA projects, their signatures, and Excel 4.0 macro sheets. */
+function isMacroPart(name: string) {
+  return (
+    /(^|\/)vbaProject(Signature(Agile|V3)?)?\.bin$/i.test(name) ||
+    /^xl\/macrosheets\//i.test(name)
+  );
 }
 
 /** Warnings for package parts Macro does not import, from entry names alone. */
@@ -197,6 +212,14 @@ export function xlsxFeatureWarnings(names: string[]): string[] {
       warnings.add(
         'Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.'
       );
+    if (/(^|\/)vbaProject\.bin$/i.test(name))
+      warnings.add(
+        'VBA macros are not imported. Cells, formulas and formatting are; the macros do not run in Macro.'
+      );
+    if (/^xl\/macrosheets\//i.test(name))
+      warnings.add('Excel 4.0 macro sheets are not imported.');
+    if (/^xl\/(activeX|ctrlProps)\//i.test(name))
+      warnings.add('Form and ActiveX controls are not imported.');
   }
   return [...warnings];
 }

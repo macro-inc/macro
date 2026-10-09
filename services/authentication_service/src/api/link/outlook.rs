@@ -11,9 +11,9 @@ use model::response::ErrorResponse;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
-use crate::api::{
-    context::{ApiContext, AuthorizationService},
-    oauth2::OAuthState,
+use crate::{
+    account_link_state::{AccountLinkState, LinkProvider, sign_account_link_state},
+    api::context::{ApiContext, AuthorizationService},
 };
 
 #[cfg(test)]
@@ -103,6 +103,9 @@ pub async fn init_outlook_link_handler(
         .map_err(map_identity_provider_lookup_error)?;
 
     let fusion_user_id = &authorization.authorization.user.user_context.fusion_user_id;
+    let initiator = macro_uuid::string_to_uuid(fusion_user_id).map_err(|error| {
+        InitOutlookLinkError::InternalError(error.context("fusion user id must be a uuid"))
+    })?;
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
@@ -119,18 +122,24 @@ pub async fn init_outlook_link_handler(
         fusion_user_id,
     )
     .await?;
-    let state = OAuthState {
-        identity_provider_id: microsoft_idp_id,
-        link_id: Some(link_id),
-        original_url: original_url.map(|url| url.0.to_string()),
-        is_mobile: None,
-    };
-    let redirect_uri = crate::api::oauth2::format_redirect_uri("microsoft");
+    // Signed and bound to this user, this link, and the Microsoft callback;
+    // see `account_link_state` for what the callback refuses.
+    let state = AccountLinkState::new(
+        LinkProvider::Microsoft,
+        microsoft_idp_id,
+        link_id,
+        initiator,
+        original_url.map(|url| url.0.to_string()),
+    );
+    let redirect_uri = crate::api::oauth2::format_redirect_uri(LinkProvider::Microsoft.as_str());
 
-    let authorization_url = match ctx
-        .auth_client
-        .construct_microsoft_authorize_url(&redirect_uri, &state)
-    {
+    let authorization_url = match sign_account_link_state(&state, &ctx.account_link_state_key)
+        .map_err(|error| InitOutlookLinkError::InternalError(error.into()))
+        .and_then(|state| {
+            ctx.auth_client
+                .construct_microsoft_authorize_url(&redirect_uri, &state)
+                .map_err(map_microsoft_oauth_error)
+        }) {
         Ok(authorization_url) => authorization_url,
         Err(error) => {
             let _ = macro_db_client::in_progress_user_link::delete_in_progress_user_link(
@@ -144,7 +153,7 @@ pub async fn init_outlook_link_handler(
                     "failed to clean up pending Outlook link"
                 );
             });
-            return Err(map_microsoft_oauth_error(error));
+            return Err(error);
         }
     };
 

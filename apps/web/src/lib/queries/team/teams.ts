@@ -22,18 +22,25 @@ import { type MutationCallbacks, withCallbacks } from '../utils';
 
 import { teamKeys } from './keys';
 
+function fetchUserTeams() {
+  return throwOnErr(() => authServiceClient.getUserTeams());
+}
+
+function fetchTeam() {
+  return throwOnErr(() => authServiceClient.getTeam());
+}
+
 export function useUserTeamsQuery() {
   return useQuery(() => ({
     queryKey: teamKeys.userTeams.queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => authServiceClient.getUserTeams()),
+    queryFn: fetchUserTeams,
   }));
 }
 
 export function useTeamQuery(teamId: Accessor<string>) {
   return useQuery(() => ({
     queryKey: teamKeys.detail(teamId()).queryKey,
-    queryFn: async () => await throwOnErr(() => authServiceClient.getTeam()),
+    queryFn: fetchTeam,
     enabled: !!teamId(),
   }));
 }
@@ -42,7 +49,7 @@ export function useTeamQuery(teamId: Accessor<string>) {
 export function useCurrentTeamQuery(enabled?: Accessor<boolean>) {
   return useQuery(() => ({
     queryKey: teamKeys.currentTeam.queryKey,
-    queryFn: async () => await throwOnErr(() => authServiceClient.getTeam()),
+    queryFn: fetchTeam,
     enabled: enabled?.() ?? true,
   }));
 }

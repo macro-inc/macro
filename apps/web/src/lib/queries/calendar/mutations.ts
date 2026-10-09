@@ -15,6 +15,14 @@ import type { CalendarEventSourceContent } from '@service-storage/generated/sche
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
+import { answeringGraphqlCalendarHost } from './graphql/flag';
+import {
+  committedEvent,
+  executeGraphqlCreate,
+  executeGraphqlDelete,
+  executeGraphqlRsvp,
+  executeGraphqlUpdate,
+} from './graphql/mutations';
 import {
   type CalendarInvitationsData,
   invalidateCalendarInvitations,
@@ -101,7 +109,7 @@ function answeredByRsvp(
 }
 
 type RsvpCallbacks = MutationCallbacks<
-  CalendarEventEntity,
+  CalendarEventEntity | undefined,
   Error,
   RsvpCalendarEventArgs,
   RsvpMutationContext
@@ -247,17 +255,20 @@ function readAnsweredResponses(
 export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
   return useMutation(() => ({
     mutationKey: RSVP_MUTATION_KEY,
-    mutationFn: async (args: RsvpCalendarEventArgs) =>
-      await throwOnErr(() =>
+    mutationFn: async (args: RsvpCalendarEventArgs) => {
+      const host = answeringGraphqlCalendarHost();
+      if (host) return committedEvent(await executeGraphqlRsvp(host, args));
+      return await throwOnErr(() =>
         emailClient.rsvpCalendarEvent(args.eventId, {
           response: args.response,
           respondingEmail: args.respondingEmail,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
         })
-      ),
+      );
+    },
     ...withCallbacks<
-      CalendarEventEntity,
+      CalendarEventEntity | undefined,
       Error,
       RsvpCalendarEventArgs,
       RsvpMutationContext
@@ -425,14 +436,20 @@ type DeleteCallbacks = MutationCallbacks<
 /** Deletes an event (a recurring event's entire series) at the provider. */
 export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
   return useMutation(() => ({
-    mutationFn: async (args: DeleteCalendarEventArgs) =>
-      await throwOnErr(() =>
+    mutationFn: async (args: DeleteCalendarEventArgs) => {
+      const host = answeringGraphqlCalendarHost();
+      if (host) {
+        await executeGraphqlDelete(host, args);
+        return;
+      }
+      return await throwOnErr(() =>
         emailClient.deleteCalendarEvent(args.eventId, {
           calendarId: args.calendarId,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
         })
-      ),
+      );
+    },
     ...withCallbacks<
       unknown,
       Error,
@@ -471,7 +488,7 @@ export interface UpdateCalendarEventArgs {
 }
 
 type UpdateCallbacks = MutationCallbacks<
-  CalendarEventEntity,
+  CalendarEventEntity | undefined,
   Error,
   UpdateCalendarEventArgs,
   CalendarMutationContext
@@ -548,17 +565,20 @@ function applyEventPatch(
  */
 export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
   return useMutation(() => ({
-    mutationFn: async (args: UpdateCalendarEventArgs) =>
-      await throwOnErr(() =>
+    mutationFn: async (args: UpdateCalendarEventArgs) => {
+      const host = answeringGraphqlCalendarHost();
+      if (host) return committedEvent(await executeGraphqlUpdate(host, args));
+      return await throwOnErr(() =>
         emailClient.updateCalendarEvent(args.eventId, {
           ...args.patch,
           calendarId: args.calendarId,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
         })
-      ),
+      );
+    },
     ...withCallbacks<
-      CalendarEventEntity,
+      CalendarEventEntity | undefined,
       Error,
       UpdateCalendarEventArgs,
       CalendarMutationContext
@@ -597,14 +617,18 @@ type CreateCallbacks = MutationCallbacks<
 
 /**
  * Creates an event on the selected calendar, defaulting to the requester's
- * primary calendar when no `calendarId` is given. There is no optimistic
- * insert — the entity id is only known once the provider echo lands — so
- * the viewport refetches on settle.
+ * primary calendar when no `calendarId` is given. With calendar reads on the
+ * cache, the event shows at once under a client id the server echo replaces;
+ * over REST the entity id is only known once the provider echo lands, so the
+ * viewport refetches on settle.
  */
 export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
   return useMutation(() => ({
-    mutationFn: async (args: CreateCalendarEventRequest) =>
-      await throwOnErr(() => emailClient.createCalendarEvent(args)),
+    mutationFn: async (args: CreateCalendarEventRequest) => {
+      if (answeringGraphqlCalendarHost())
+        return (await executeGraphqlCreate(args)).event;
+      return await throwOnErr(() => emailClient.createCalendarEvent(args));
+    },
     ...withCallbacks<CalendarEventEntity, Error, CreateCalendarEventRequest>(
       {
         onSettled: () => invalidateCalendarOccurrences(),

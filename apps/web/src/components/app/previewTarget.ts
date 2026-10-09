@@ -5,7 +5,6 @@ import {
   calendarViewTargetForEntity,
   getChannelEntityTarget,
   getDocumentCommentTarget,
-  type ReminderPreviewSelection,
 } from '@app/features/next-soup/utils';
 import { getChannelParams } from '@block-channel/utils/link';
 import type {
@@ -37,6 +36,7 @@ type IdOnlyPreviewSelection = {
     | 'crm_company'
     | 'crm_contact'
     | 'database'
+    | 'form'
     | 'email'
     | 'project';
 };
@@ -59,10 +59,7 @@ export type PreviewPanelSelection =
   | ChannelPreviewSelection;
 
 /** What a list row may ask to preview: a block or a feature-owned detail view. */
-export type PreviewSelection =
-  | PreviewPanelSelection
-  | CalendarPreviewSelection
-  | ReminderPreviewSelection;
+export type PreviewSelection = PreviewPanelSelection | CalendarPreviewSelection;
 
 /** The block a selection opens, plus the params that load or locate its content. */
 export type PreviewBlockTarget = {

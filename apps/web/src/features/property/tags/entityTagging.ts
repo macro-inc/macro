@@ -41,10 +41,10 @@ export function tagEntityType(
         'crm_contact',
         'agent_session',
         'routine',
-        'reminder',
         'calendar_event',
         'foreign',
-        'database'
+        'database',
+        'form'
       ),
       () => undefined
     )

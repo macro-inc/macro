@@ -3,24 +3,47 @@ import type { NotificationSource } from '@notifications';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SoupState } from '../create-soup-state';
+import type { MarkDoneDelegate, PreparedMarkDone } from './mark-done-delegate';
+import {
+  type DoneWriteArgs,
+  reportDoneWriteOutcomes,
+} from './tests/done-write-fixture';
 
 const mocks = vi.hoisted(() => ({
   splitHandle: {
     content: vi.fn(() => ({ id: 'other' })),
     referredFrom: vi.fn(() => undefined),
   },
-  executeMarkEntitiesDone: vi.fn(async () => [] as string[]),
-  executeMarkEntitiesUndone: vi.fn(async () => {}),
+  executeMarkEntitiesDone: vi.fn(
+    async (_args: DoneWriteArgs) => [] as string[]
+  ),
+  executeMarkEntitiesUndone: vi.fn(async (_args: DoneWriteArgs) => {}),
   graphqlSoupEnabled: vi.fn(() => false),
   mutateAsync: vi.fn(async (_variables: unknown) => {}),
   openEntityInSplitFromUnifiedList: vi.fn(async () => {}),
   resolveMarkEntitiesDoneVariables: vi.fn(() => ({
     emailIds: [] as string[],
     notificationIds: [] as string[],
-    reminderIds: [] as string[],
   })),
   toNotificationEntityRef: vi.fn(),
-  undoableOptionsFactory: vi.fn(),
+  mutationOptionsFactory: vi.fn(),
+  pushUndo: vi.fn(
+    (_entry: {
+      undo: () => Promise<void>;
+      redo: () => Promise<void>;
+      onUndone?: () => void;
+      onRedone?: () => void;
+    }) => ({ id: 'undo', undo: vi.fn(async () => {}), dispose: vi.fn() })
+  ),
+  applyOptimistic: vi.fn(() => ({
+    applyUndone: vi.fn(),
+    reapply: vi.fn(),
+    rollback: vi.fn(),
+    settle: vi.fn(),
+    releaseGraphql: vi.fn(),
+  })),
+  delegatedOptionsFactory: vi.fn(),
+  delegatedMutateAsync: vi.fn(async (_variables: unknown) => {}),
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -42,6 +65,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
     dismiss: vi.fn(),
     failure: vi.fn(),
     success: vi.fn(),
+    alert: vi.fn(),
   },
 }));
 
@@ -50,17 +74,46 @@ vi.mock('@queries/notification/entity-mutations', () => ({
   updateNotificationsForEntities: vi.fn(),
 }));
 
+vi.mock('./graphql-done-optimism', () => ({
+  applyGraphqlDoneOptimistic: mocks.applyOptimistic,
+}));
+
 vi.mock('@queries/undo', () => ({
+  useMutationUndoContext: () => ({ pushUndo: mocks.pushUndo }),
   useUndoableMutation: (optionsFactory: () => unknown) => {
-    mocks.undoableOptionsFactory.mockImplementation(optionsFactory);
+    mocks.delegatedOptionsFactory.mockImplementation(optionsFactory);
+    return { mutateAsync: mocks.delegatedMutateAsync };
+  },
+}));
+vi.mock('@tanstack/solid-query', () => ({
+  useMutation: (optionsFactory: () => unknown) => {
+    mocks.mutationOptionsFactory.mockImplementation(optionsFactory);
     return { mutateAsync: mocks.mutateAsync };
   },
 }));
 
 vi.mock('@app/features/next-soup/utils', () => ({
-  applyEntitiesDoneOptimistic: vi.fn(),
-  executeMarkEntitiesDone: mocks.executeMarkEntitiesDone,
-  executeMarkEntitiesUndone: mocks.executeMarkEntitiesUndone,
+  applyEntitiesDoneOptimistic: mocks.applyOptimistic,
+  executeMarkEntitiesDone: async (args: DoneWriteArgs) => {
+    const [result] = await Promise.allSettled([
+      mocks.executeMarkEntitiesDone(args),
+    ]);
+    reportDoneWriteOutcomes(args, result);
+    if (result.status === 'rejected') throw result.reason;
+    return result.value;
+  },
+  executeMarkEntitiesUndone: async (args: DoneWriteArgs) => {
+    const [result] = await Promise.allSettled([
+      mocks.executeMarkEntitiesUndone(args),
+    ]);
+    reportDoneWriteOutcomes(
+      args,
+      result.status === 'fulfilled'
+        ? { status: 'fulfilled', value: [] }
+        : result
+    );
+    if (result.status === 'rejected') throw result.reason;
+  },
   openEntityInSplitFromUnifiedList: mocks.openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables: mocks.resolveMarkEntitiesDoneVariables,
   restoreSoupFocus: vi.fn(),
@@ -107,10 +160,11 @@ function createSoup() {
   return { soup, focusSet };
 }
 
-function createAction() {
+function createAction(delegate?: MarkDoneDelegate) {
   return createRoot((dispose) => ({
     action: makeMarkDoneAction({
       notificationSource: () => notificationSource,
+      delegate: delegate ? () => delegate : undefined,
     }),
     dispose,
   }));
@@ -148,13 +202,15 @@ describe('makeMarkDoneAction', () => {
     mocks.executeMarkEntitiesDone.mockResolvedValue([]);
     mocks.executeMarkEntitiesUndone.mockClear();
     mocks.graphqlSoupEnabled.mockReturnValue(false);
-    mocks.mutateAsync.mockClear();
+    mocks.mutateAsync.mockReset();
+    mocks.mutateAsync.mockResolvedValue(undefined);
+    mocks.pushUndo.mockClear();
+    mocks.applyOptimistic.mockClear();
     mocks.openEntityInSplitFromUnifiedList.mockClear();
     mocks.resolveMarkEntitiesDoneVariables.mockReset();
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: [],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReset();
   });
@@ -174,132 +230,11 @@ describe('makeMarkDoneAction', () => {
     dispose();
   });
 
-  it('keeps ordinary reminders undoable when selected with a workflow mirror', async () => {
-    const mirror = {
-      type: 'reminder',
-      id: 'mirror',
-      emailFollowup: { threadId: 'thread' },
-    } as EntityData;
-    const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
-    const { action, dispose } = createAction();
-    const onUndoHandle = vi.fn();
-    await action.execute([mirror, ordinary], undefined, { onUndoHandle });
-    expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
-    const mirrorVariables = mocks.mutateAsync.mock.calls[0][0];
-    const ordinaryVariables = mocks.mutateAsync.mock.calls[1][0];
-    expect(mirrorVariables).toMatchObject({ entities: [mirror] });
-    expect(ordinaryVariables).toMatchObject({
-      entities: [ordinary],
-      onUndoHandle,
-    });
-    const options = mocks.undoableOptionsFactory() as {
-      onPushed: (
-        handle: { dispose: () => void },
-        variables: unknown
-      ) => unknown;
-    };
-    const mirrorHandle = { dispose: vi.fn() };
-    const ordinaryHandle = { dispose: vi.fn() };
-    options.onPushed(mirrorHandle, mirrorVariables);
-    options.onPushed(ordinaryHandle, ordinaryVariables);
-    expect(mirrorHandle.dispose).toHaveBeenCalledOnce();
-    expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
-    expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
-    dispose();
-  });
-
-  it.each(['resolve', 'reject'] as const)(
-    'waits for the mirror to %s before publishing ordinary Undo',
-    async (settlement) => {
-      const mirror = {
-        type: 'reminder',
-        id: 'mirror',
-        emailFollowup: { threadId: 'thread' },
-      } as EntityData;
-      const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
-      let resolveMirror!: () => void;
-      let rejectMirror!: (reason: Error) => void;
-      const pendingMirror = new Promise<void>((resolve, reject) => {
-        resolveMirror = resolve;
-        rejectMirror = reject;
-      });
-      const failure = new Error('mirror failed');
-      const { action, dispose } = createAction();
-      const onUndoHandle = vi.fn();
-      const ordinaryHandle = { dispose: vi.fn() };
-      const options = mocks.undoableOptionsFactory() as {
-        onPushed: (
-          handle: { dispose: () => void },
-          variables: unknown
-        ) => unknown;
-      };
-      mocks.mutateAsync.mockImplementationOnce(() => pendingMirror);
-      mocks.mutateAsync.mockImplementationOnce(async (variables) => {
-        options.onPushed(ordinaryHandle, variables);
-      });
-      try {
-        const result = action
-          .execute([mirror, ordinary], undefined, { onUndoHandle })
-          .catch((error) => error);
-        await Promise.resolve();
-        expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
-        expect(onUndoHandle).not.toHaveBeenCalled();
-        if (settlement === 'reject') rejectMirror(failure);
-        else resolveMirror();
-        expect(await result).toBe(
-          settlement === 'reject' ? failure : undefined
-        );
-        expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
-        expect(onUndoHandle).toHaveBeenCalledWith(ordinaryHandle);
-        expect(ordinaryHandle.dispose).not.toHaveBeenCalled();
-      } finally {
-        dispose();
-      }
-    }
-  );
-
-  it.each(['mirror', 'ordinary'])(
-    'attempts both mixed groups when the %s group fails',
-    async (failedId) => {
-      const mirror = {
-        type: 'reminder',
-        id: 'mirror',
-        emailFollowup: { threadId: 'thread' },
-      } as EntityData;
-      const ordinary = { type: 'reminder', id: 'ordinary' } as EntityData;
-      const failure = new Error(`${failedId} failed`);
-      mocks.mutateAsync.mockImplementationOnce(async () => {
-        if (failedId === 'mirror') throw failure;
-      });
-      mocks.mutateAsync.mockImplementationOnce(async () => {
-        if (failedId === 'ordinary') throw failure;
-      });
-      const { action, dispose } = createAction();
-      const onUndoHandle = vi.fn();
-      try {
-        await expect(
-          action.execute([mirror, ordinary], undefined, { onUndoHandle })
-        ).rejects.toBe(failure);
-        expect(mocks.mutateAsync).toHaveBeenCalledTimes(2);
-        expect(mocks.mutateAsync.mock.calls[1][0]).toMatchObject({
-          entities: [ordinary],
-          onUndoHandle,
-        });
-        expect(mocks.mutateAsync.mock.calls[0][0]).toMatchObject({
-          entities: [mirror],
-        });
-      } finally {
-        dispose();
-      }
-    }
-  );
-
   it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['agent-notification'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'agent_session',
@@ -366,7 +301,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: ['current'],
       notificationIds: ['notification-1'],
-      reminderIds: [],
     });
     const { action, dispose } = createAction();
 
@@ -388,7 +322,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: ['current'],
       notificationIds: ['notification-1'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'email',
@@ -414,7 +347,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['channel-notification'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'channel',
@@ -440,7 +372,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['thread-notification'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'channel_thread',
@@ -476,7 +407,6 @@ describe('makeMarkDoneAction', () => {
     const variables = {
       emailIds: ['current'],
       exactNotificationIds: { current: ['exact-id'] },
-      reminderIds: [],
     };
     const context = {
       applyUndone: vi.fn(),
@@ -484,9 +414,19 @@ describe('makeMarkDoneAction', () => {
       settle: vi.fn(),
       releaseGraphql: vi.fn(),
     };
-    const options = mocks.undoableOptionsFactory() as {
-      undoFn: (input: typeof variables, ctx: typeof context) => Promise<void>;
+    const options = mocks.mutationOptionsFactory() as {
+      onSuccess: (
+        data: void,
+        input: typeof variables & { entities: EntityData[] },
+        ctx: typeof context
+      ) => void;
     };
+    options.onSuccess(
+      undefined,
+      { ...variables, entities: [currentEntity] },
+      context
+    );
+    context.settle.mockClear();
     let finish!: () => void;
     mocks.executeMarkEntitiesUndone.mockImplementationOnce(
       () =>
@@ -494,7 +434,7 @@ describe('makeMarkDoneAction', () => {
           finish = resolve;
         })
     );
-    const undo = options.undoFn(variables, context);
+    const undo = mocks.pushUndo.mock.calls[0][0].undo();
     expect(context.applyUndone).toHaveBeenCalledOnce();
     expect(context.settle).not.toHaveBeenCalled();
     finish();
@@ -508,7 +448,6 @@ describe('makeMarkDoneAction', () => {
     const variables = {
       emailIds: ['current'],
       exactNotificationIds: { current: ['exact-id'] },
-      reminderIds: [],
     };
     const context = {
       applyUndone: vi.fn(),
@@ -516,13 +455,23 @@ describe('makeMarkDoneAction', () => {
       settle: vi.fn(),
       releaseGraphql: vi.fn(),
     };
-    const options = mocks.undoableOptionsFactory() as {
-      undoFn: (input: typeof variables, ctx: typeof context) => Promise<void>;
+    const options = mocks.mutationOptionsFactory() as {
+      onSuccess: (
+        data: void,
+        input: typeof variables & { entities: EntityData[] },
+        ctx: typeof context
+      ) => void;
     };
+    options.onSuccess(
+      undefined,
+      { ...variables, entities: [currentEntity] },
+      context
+    );
+    context.settle.mockClear();
     mocks.executeMarkEntitiesUndone.mockRejectedValueOnce(
       new Error('partial failure')
     );
-    await expect(options.undoFn(variables, context)).rejects.toThrow(
+    await expect(mocks.pushUndo.mock.calls[0][0].undo()).rejects.toThrow(
       'partial failure'
     );
     expect(context.reapply).toHaveBeenCalledOnce();
@@ -536,7 +485,6 @@ describe('makeMarkDoneAction', () => {
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: ['current'],
       notificationIds: ['optimistic-notification'],
-      reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReturnValue({
       type: 'email',
@@ -551,44 +499,156 @@ describe('makeMarkDoneAction', () => {
       emailIds: string[];
       exactNotificationIds: { current: string[] };
       notificationEntities: Array<{ type: string; id: string }>;
-      reminderIds: string[];
     };
-    const mutationOptions = mocks.undoableOptionsFactory() as {
+    const mutationOptions = mocks.mutationOptionsFactory() as {
+      onMutate: (
+        input: typeof variables
+      ) => ReturnType<typeof mocks.applyOptimistic>;
       mutationFn: (input: typeof variables) => Promise<void>;
-      redoFn: (input: typeof variables, context: undefined) => Promise<void>;
-      undoFn: (input: typeof variables, context: undefined) => Promise<void>;
+      onSuccess: (
+        data: void,
+        input: typeof variables,
+        context: ReturnType<typeof mocks.applyOptimistic>
+      ) => void;
     };
 
+    const context = mutationOptions.onMutate(variables);
     await mutationOptions.mutationFn(variables);
+    mutationOptions.onSuccess(undefined, variables, context);
     expect(mocks.executeMarkEntitiesDone).toHaveBeenCalledWith({
       emailIds: ['current'],
       notificationIds: [],
       notificationEntities: [{ type: 'email', id: 'current' }],
-      reminderIds: [],
+      onWriteSettled: expect.any(Function),
     });
-    expect(variables.exactNotificationIds.current).toEqual([
-      'authoritative-notification',
-    ]);
 
-    await mutationOptions.undoFn(variables, undefined);
+    await mocks.pushUndo.mock.calls[0][0].undo();
     expect(mocks.executeMarkEntitiesUndone).toHaveBeenCalledWith({
       emailIds: ['current'],
       notificationIds: ['authoritative-notification'],
-      reminderIds: [],
+      onWriteSettled: expect.any(Function),
     });
 
     mocks.executeMarkEntitiesDone.mockClear();
-    await mutationOptions.redoFn(variables, undefined);
+    await mocks.pushUndo.mock.calls[0][0].redo();
     expect(mocks.executeMarkEntitiesDone).toHaveBeenCalledWith({
       emailIds: ['current'],
       notificationIds: ['authoritative-notification'],
-      reminderIds: [],
+      onWriteSettled: expect.any(Function),
     });
     dispose();
   });
 });
 
-it('keeps original Email Reminders rows eligible for the email archive action', async () => {
-  const { canExecuteMarkDoneOnView } = await import('./make-mark-done-action');
-  expect(canExecuteMarkDoneOnView('mail', 'reminders')).toBe(true);
+describe('makeMarkDoneAction with a delegating list', () => {
+  beforeEach(() => {
+    mocks.mutateAsync.mockReset();
+    mocks.delegatedMutateAsync.mockReset();
+    mocks.resolveMarkEntitiesDoneVariables.mockClear();
+  });
+
+  function preparedDone() {
+    const show = vi.fn();
+    const undo = vi.fn(async () => {});
+    const prepared: PreparedMarkDone = {
+      hide: vi.fn(() => show),
+      commit: vi.fn(async () => ({ undo })),
+    };
+    return { prepared, show, undo };
+  }
+
+  it('completes delegated rows through the delegate', async () => {
+    const { prepared } = preparedDone();
+    const delegate = {
+      canComplete: () => true,
+      prepare: vi.fn(() => prepared),
+    };
+    const { action, dispose } = createAction(delegate);
+
+    await action.execute([currentEntity]);
+
+    expect(delegate.prepare).toHaveBeenCalledWith([currentEntity]);
+    expect(mocks.delegatedMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ entities: [currentEntity], prepared })
+    );
+    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+    expect(mocks.resolveMarkEntitiesDoneVariables).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('falls back to the entity path for rows the delegate does not own', async () => {
+    const { action, dispose } = createAction({
+      canComplete: () => undefined,
+      prepare: () => undefined,
+    });
+
+    await action.execute([currentEntity]);
+
+    expect(mocks.delegatedMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.mutateAsync).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it('hides, commits, undoes and redoes through the prepared done', async () => {
+    const { prepared, show, undo } = preparedDone();
+    const { dispose } = createAction({
+      canComplete: () => true,
+      prepare: () => prepared,
+    });
+    const options = mocks.delegatedOptionsFactory() as {
+      onMutate: (input: unknown) => { show: () => void };
+      mutationFn: (input: unknown) => Promise<void>;
+      onError: (error: Error, input: unknown, context: unknown) => void;
+      undoFn: (input: unknown, context: unknown) => Promise<void>;
+      redoFn: (input: unknown, context: unknown) => Promise<void>;
+    };
+    const variables = { entities: [currentEntity], prepared, undo: {} };
+
+    const context = options.onMutate(variables);
+    expect(prepared.hide).toHaveBeenCalledOnce();
+
+    await options.mutationFn(variables);
+    expect(prepared.commit).toHaveBeenCalledOnce();
+
+    await options.undoFn(variables, context);
+    expect(show).toHaveBeenCalledOnce();
+    expect(undo).toHaveBeenCalledOnce();
+
+    await options.redoFn(variables, context);
+    expect(prepared.hide).toHaveBeenCalledTimes(2);
+    expect(prepared.commit).toHaveBeenCalledTimes(2);
+
+    options.onError(new Error('down'), variables, context);
+    expect(show).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+});
+
+describe('makeMarkDoneAction rows with nothing to acknowledge', () => {
+  beforeEach(() => {
+    mocks.mutateAsync.mockReset();
+    mocks.delegatedMutateAsync.mockReset();
+  });
+
+  it('offers no done on a delegated row with only own work', async () => {
+    const prepare = vi.fn();
+    const ownWork = { type: 'document', id: 'own-work' } as EntityData;
+    const delegate: MarkDoneDelegate = {
+      canComplete: (entity) => entity.id !== 'own-work',
+      prepare,
+    };
+    const { action, dispose } = createAction(delegate);
+
+    expect(action.canExecute(ownWork)).toBe(false);
+    expect(action.canExecute(currentEntity)).toBe(true);
+
+    await action.execute([ownWork]);
+    expect(prepare).not.toHaveBeenCalled();
+    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+
+    // In a mixed selection only the completable row is sent.
+    await action.execute([ownWork, currentEntity]);
+    expect(prepare).toHaveBeenCalledWith([currentEntity]);
+    dispose();
+  });
 });

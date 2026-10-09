@@ -58,6 +58,7 @@ export const unsubscribeItemParams = zod.object({
     'static_file',
     'crm_company',
     'crm_contact',
+    'crm_pipeline',
     'reminder',
     'skill',
     'agent_session',
@@ -65,6 +66,7 @@ export const unsubscribeItemParams = zod.object({
     'initiative',
     'database',
     'database_row',
+    'form',
   ]),
   item_id: zod.string(),
 });
@@ -101,6 +103,7 @@ export const removeUnsubscribeItemParams = zod.object({
     'static_file',
     'crm_company',
     'crm_contact',
+    'crm_pipeline',
     'reminder',
     'skill',
     'agent_session',
@@ -108,6 +111,7 @@ export const removeUnsubscribeItemParams = zod.object({
     'initiative',
     'database',
     'database_row',
+    'form',
   ]),
   item_id: zod.string(),
 });
@@ -209,6 +213,7 @@ export const listTypedNotificationsResponse = zod
                 'static_file',
                 'crm_company',
                 'crm_contact',
+                'crm_pipeline',
                 'reminder',
                 'skill',
                 'agent_session',
@@ -216,6 +221,7 @@ export const listTypedNotificationsResponse = zod
                 'initiative',
                 'database',
                 'database_row',
+                'form',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -2103,6 +2109,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'static_file',
                 'crm_company',
                 'crm_contact',
+                'crm_pipeline',
                 'reminder',
                 'skill',
                 'agent_session',
@@ -2110,6 +2117,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'initiative',
                 'database',
                 'database_row',
+                'form',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -3991,6 +3999,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'static_file',
                 'crm_company',
                 'crm_contact',
+                'crm_pipeline',
                 'reminder',
                 'skill',
                 'agent_session',
@@ -3998,6 +4007,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'initiative',
                 'database',
                 'database_row',
+                'form',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -5884,6 +5894,7 @@ export const getTypedNotificationByIdResponse = zod
         'static_file',
         'crm_company',
         'crm_contact',
+        'crm_pipeline',
         'reminder',
         'skill',
         'agent_session',
@@ -5891,6 +5902,7 @@ export const getTypedNotificationByIdResponse = zod
         'initiative',
         'database',
         'database_row',
+        'form',
       ])
       .describe('The type of an entity in Macro'),
   })

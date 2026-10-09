@@ -13,8 +13,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use agent::ReasoningEffort;
+use crate::domain::model_access::{InMemModelAccess, ModelAccess, ModelAccessError};
 use agent::types::{AssistantMessagePart, ChatMessage};
+use agent::{ModelSpeed, ReasoningEffort};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
@@ -34,7 +35,7 @@ use agent_client_protocol::{
 };
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_session::domain::model::AgentSessionId;
-use ai_billing::domain::{AiAdmissionError, AiAdmissionService};
+use ai_billing::domain::AiAdmissionService;
 use ai_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
 };
@@ -104,6 +105,7 @@ struct TurnInput {
     model: String,
     /// Reasoning effort the turn runs with.
     reasoning_effort: ReasoningEffort,
+    speed: ModelSpeed,
     /// Who this agent is, for the engine's system prompt.
     identity: Option<AgentIdentity>,
     /// The session's instructions, for the engine's system prompt.
@@ -120,6 +122,8 @@ pub struct AgentState {
     pub engine: Arc<dyn TurnEngine>,
     /// Admission for new provider-backed turns, including direct ACP requests.
     pub admission: Arc<dyn AiAdmissionService>,
+    /// Current model permissions for the trusted session owner.
+    pub model_access: Arc<dyn InMemModelAccess>,
     /// Conversation state, shared with the manager so it survives reattach.
     pub store: Arc<SessionStore>,
     /// Every outstanding turn's cancellation token - the running turn and any
@@ -133,6 +137,8 @@ pub struct AgentState {
     /// The tools of those servers, once dialed; `None` until then or when
     /// there were none.
     pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
+    /// Attached entries retain the credential used to resolve live connections.
+    pub mcp_servers: Mutex<Vec<AcpMcpServer>>,
     /// In-flight `connect_mcp` from `session/new` / `session/resume`. The
     /// handshake does not join it; the first turn does, so SearchTools still
     /// sees the catalog.
@@ -147,7 +153,7 @@ pub struct AgentState {
 
 impl AgentState {
     /// Dial the servers a session request carried and keep their tools for
-    /// every turn that follows. Started at `session/new`/`session/resume` so
+    /// the next turn. Started at `session/new`/`session/resume` so
     /// the handshake is not held by `tools/list`; the first turn joins the
     /// same work so SearchTools still has the catalog.
     async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
@@ -170,6 +176,10 @@ impl AgentState {
     /// Start [`Self::connect_mcp`] without joining it. `session/new` and
     /// `session/resume` call this so create can return while listing runs.
     fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
+        *self
+            .mcp_servers
+            .lock()
+            .expect("mcp servers lock should not be poisoned") = servers.clone();
         let state = Arc::clone(self);
         let handle = tokio::spawn(async move {
             state.connect_mcp(servers).await;
@@ -180,9 +190,9 @@ impl AgentState {
             .expect("mcp connect lock should not be poisoned") = Some(handle);
     }
 
-    /// The tools the next turn should compose, waiting out an in-flight
-    /// connect so the searchable catalog is not empty on turn one.
-    async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
+    /// Wait for the initial listing, then refresh permitted connections so
+    /// authorization or disconnection takes effect without a new session.
+    async fn mcp_tools_for_turn(&self) -> anyhow::Result<Option<RemoteMcpToolSet>> {
         let handle = self
             .mcp_connect
             .lock()
@@ -191,10 +201,19 @@ impl AgentState {
         if let Some(handle) = handle {
             let _ = handle.await;
         }
-        self.mcp_tools
+        let advertised = self
+            .mcp_servers
+            .lock()
+            .expect("mcp servers lock should not be poisoned")
+            .clone();
+        if let Some(servers) = self.mcp.refresh_dyn(self.session_id, advertised).await? {
+            self.connect_mcp(servers).await;
+        }
+        Ok(self
+            .mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned")
-            .clone()
+            .clone())
     }
 
     fn expect_session(&self, requested: &SessionId) -> Result<(), AcpError> {
@@ -231,6 +250,9 @@ impl AgentState {
             if !ReasoningEffort::supported(&model).contains(&state.reasoning_effort) {
                 state.reasoning_effort = ReasoningEffort::default();
             }
+            if !state.speed.supported(&model) {
+                state.speed = ModelSpeed::Standard;
+            }
             state.model = model;
         }
     }
@@ -243,14 +265,15 @@ impl AgentState {
 
     /// ACP model configuration backed by the engine's supported-model source
     /// and this session's current selection.
-    fn session_config_options(&self) -> Vec<SessionConfigOption> {
+    fn session_config_options(&self, access: ModelAccess) -> Vec<SessionConfigOption> {
         let Some(session) = self.store.get(&self.session_id) else {
             return Vec::new();
         };
         crate::domain::model_options::session_config_options(
             &session.model,
-            self.engine.supported_models(),
+            &access.models(self.engine.supported_models()),
             session.reasoning_effort,
+            session.speed,
         )
     }
 
@@ -262,6 +285,7 @@ impl AgentState {
                 messages: messages_for_turn(&[], prompt),
                 model: String::new(),
                 reasoning_effort: ReasoningEffort::default(),
+                speed: ModelSpeed::Standard,
                 identity: None,
                 instructions: None,
             },
@@ -269,6 +293,7 @@ impl AgentState {
                 messages: messages_for_turn(&state.history, prompt),
                 model: state.model.clone(),
                 reasoning_effort: state.reasoning_effort,
+                speed: state.speed,
                 identity: state.identity.clone(),
                 instructions: state.instructions.clone(),
             },
@@ -553,12 +578,25 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: NewSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
+                    let access = match state.model_access.access(&state.owner).await {
+                        Ok(access) => access,
+                        Err(error) => {
+                            return responder.respond_with_error(model_access_error(error));
+                        }
+                    };
+                    if let Some(model) = state
+                        .store
+                        .get(&state.session_id)
+                        .map(|session| session.model.clone())
+                    {
+                        state.set_model(access.default_model(&model).to_owned());
+                    }
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
                     state.start_connect_mcp(request.mcp_servers);
                     let responded = responder.respond(
                         NewSessionResponse::new(acp_id.clone())
-                            .config_options(state.session_config_options()),
+                            .config_options(state.session_config_options(access)),
                     );
                     advertise_commands(&state, &connection, acp_id);
                     responded
@@ -571,6 +609,19 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: ResumeSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
+                    let access = match state.model_access.access(&state.owner).await {
+                        Ok(access) => access,
+                        Err(error) => {
+                            return responder.respond_with_error(model_access_error(error));
+                        }
+                    };
+                    if let Some(model) = state
+                        .store
+                        .get(&state.session_id)
+                        .map(|session| session.model.clone())
+                    {
+                        state.set_model(access.default_model(&model).to_owned());
+                    }
                     // Kept when the state already belongs to this ACP id -
                     // either this process served the session, or a cold
                     // attach replayed the frame log back into it (see
@@ -578,7 +629,8 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     state.bind_acp_session(request.session_id.clone(), true);
                     state.start_connect_mcp(request.mcp_servers);
                     let responded = responder.respond(
-                        ResumeSessionResponse::new().config_options(state.session_config_options()),
+                        ResumeSessionResponse::new()
+                            .config_options(state.session_config_options(access)),
                     );
                     advertise_commands(&state, &connection, request.session_id);
                     responded
@@ -654,14 +706,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             // Admission failure must not tear down resumable state.
                             let _ = match result {
                                 Ok(stop) => responder.respond(PromptResponse::new(stop)),
-                                Err(error) => responder.respond_with_error(
-                                    AcpError::new(-32603, error.to_string()).data(
-                                        serde_json::json!({
-                                            "code": error.code(),
-                                            "retryable": error.is_retryable(),
-                                        }),
-                                    ),
-                                ),
+                                Err(error) => responder.respond_with_error(error),
                             };
                             Ok(())
                         }
@@ -680,6 +725,12 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     if let Err(error) = state.expect_session(&request.session_id) {
                         return responder.respond_with_error(error);
                     }
+                    let access = match state.model_access.access(&state.owner).await {
+                        Ok(access) => access,
+                        Err(error) => {
+                            return responder.respond_with_error(model_access_error(error));
+                        }
+                    };
                     let Some(value) = request.value.as_value_id() else {
                         return responder.respond_with_error(
                             AcpError::invalid_params().data("the config option takes a value id"),
@@ -696,7 +747,31 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                                     AcpError::invalid_params().data("unsupported model"),
                                 );
                             }
+                            if !access.allows(&value.to_string()) {
+                                return responder.respond_with_error(model_access_error(
+                                    ModelAccessError::Forbidden,
+                                ));
+                            }
                             state.set_model(value.to_string());
+                        }
+                        "speed" => {
+                            let speed = ModelSpeed::parse(&value.to_string());
+                            let Some(speed) = speed else {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params().data("unknown speed"),
+                                );
+                            };
+                            let mut session = state
+                                .store
+                                .get_mut(&state.session_id)
+                                .expect("active session exists");
+                            if !speed.supported(&session.model) || !access.allows(&session.model) {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params()
+                                        .data("speed is not available for this model"),
+                                );
+                            }
+                            session.speed = speed;
                         }
                         REASONING_EFFORT_CONFIG_ID => {
                             let Ok(effort) = value.to_string().parse() else {
@@ -725,7 +800,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         }
                     }
                     responder.respond(SetSessionConfigOptionResponse::new(
-                        state.session_config_options(),
+                        state.session_config_options(access),
                     ))
                 }
             },
@@ -748,6 +823,15 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .await
 }
 
+fn model_access_error(error: ModelAccessError) -> AcpError {
+    let (code, retryable) = match error {
+        ModelAccessError::Forbidden => ("model_access_denied", false),
+        ModelAccessError::Unavailable => ("model_access_unavailable", true),
+    };
+    AcpError::new(-32603, error.to_string())
+        .data(serde_json::json!({ "code": code, "retryable": retryable }))
+}
+
 /// Run one turn to completion, streaming updates as they arrive.
 async fn run_turn(
     state: &AgentState,
@@ -755,7 +839,7 @@ async fn run_turn(
     acp_session_id: SessionId,
     prompt: UserPrompt,
     cancel: CancellationToken,
-) -> Result<StopReason, AiAdmissionError> {
+) -> Result<StopReason, AcpError> {
     // Include lock and admission waits in time to first output.
     let started = Instant::now();
     // Mark every exit (including denial or a dropped connection) complete so
@@ -774,7 +858,11 @@ async fn run_turn(
     tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = admit_turn(state.admission.as_ref(), &state.owner) => result?,
+        result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+            AcpError::new(-32603, error.to_string()).data(serde_json::json!({
+                "code": error.code(), "retryable": error.is_retryable(),
+            }))
+        )?,
     }
     span.record(
         "agent.turn.admission_wait_ms",
@@ -783,15 +871,24 @@ async fn run_turn(
     let mcp_tools = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        tools = state.mcp_tools_for_turn() => tools,
+        tools = state.mcp_tools_for_turn() => tools.map_err(|error| AcpError::new(-32603, format!("Could not refresh connector tools: {error}")))?,
     };
     let TurnInput {
         messages,
         model,
         reasoning_effort,
+        speed,
         identity,
         instructions,
     } = state.turn_input(&prompt);
+    let access = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+    };
+    if !access.allows(&model) {
+        return Err(model_access_error(ModelAccessError::Forbidden));
+    }
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
@@ -800,6 +897,7 @@ async fn run_turn(
         owner: state.owner.clone(),
         model,
         reasoning_effort,
+        speed,
         identity,
         instructions,
         messages,

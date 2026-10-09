@@ -44,8 +44,16 @@
   .homepage-testimonials { padding: 56px 12px; margin-top: 32px; }
   .homepage-testimonials figure { gap: 32px; }
 }
+/* Phones: a full list of posts under a homepage-style slab heading instead of
+   a one-row carousel that shows a single title and clips the next. */
 @media (max-width: 699px) {
-  .homepage-blog > header { gap: 20px; }
-  .homepage-blog-track > li { padding-inline: 20px; }
-  .homepage-blog h3 { font-size: 15px; }
+  .homepage-blog { padding: 48px 0 32px; }
+  .homepage-blog > header { align-items: baseline; gap: 20px; margin-bottom: 20px; }
+  .homepage-blog h2 { color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; font-size: 28px; font-weight: 315; line-height: 1.25; letter-spacing: -.035em; }
+  .homepage-blog-track { flex-direction: column; overflow: visible; scroll-snap-type: none; }
+  .homepage-blog-track > li, .homepage-blog-track > li:first-child, .homepage-blog-track > li:last-child { padding: 0; border-left: 0; border-top: 1px solid var(--color-edge-muted); }
+  .homepage-blog-track > li:last-child { border-bottom: 1px solid var(--color-edge-muted); }
+  .homepage-blog-track a { gap: 14px; min-height: 60px; padding: 14px 0; }
+  .homepage-blog h3 { overflow: visible; white-space: normal; font-size: 16px; line-height: 1.4; }
+  .homepage-blog-controls { display: none; }
 }

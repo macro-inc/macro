@@ -70,6 +70,7 @@
 			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/machine",
+			"packages/graphics",
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",

@@ -13,6 +13,7 @@ import { EVENT_MODIFIER_KEYS } from '@core/hotkey/constants';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
+import { isPlatform } from '@core/util/platform';
 import CloseIcon from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Panel } from '@ui';
@@ -270,7 +271,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 'touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
                 props.handle.isSpotLight()
                   ? 'rounded-xl'
-                  : multipleSplits()
+                  : isPlatform('desktop') || multipleSplits()
                     ? 'rounded-md'
                     : 'rounded-none',
                 splitUnfocusedStyling() && 'split-panel-inactive',
@@ -280,7 +281,11 @@ export function SplitPanel(props: SplitPanelProps) {
                 }
               )}
               depth={isTouchDevice() ? 0 : 1}
-              hideBorder={!props.handle.isSpotLight() && !multipleSplits()}
+              hideBorder={
+                !props.handle.isSpotLight() &&
+                !isPlatform('desktop') &&
+                !multipleSplits()
+              }
             >
               <Show when={!usesComposableLayout()}>
                 <Panel.Header

@@ -1,5 +1,6 @@
 import {
   EntityDetail,
+  type EntityDetailContext,
   entityDetailBlockType,
 } from '@app/components/entity-detail/EntityDetail';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
@@ -7,18 +8,35 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { createSearchParams, useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { useMarkdownName } from '@block-md/component/MarkdownNameProvider';
+import { useMarkdownDocumentTools } from '@block-md/component/useMarkdownDocumentTools';
+import { useMarkdownDocument } from '@block-md/context/markdown-document-context';
 import { ChannelDetailTopBar } from '@channel/Channel/ChannelDetail';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import type { PreviewBlockTarget } from '@components/app/previewTarget';
 import { SidePanel } from '@components/app/side-panel';
 import {
+  type FileOperation,
+  SplitFileMenu,
+} from '@components/app/split-layout/components/SplitFileMenu';
+import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { getPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
-import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import {
+  type Accessor,
+  createMemo,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { isHomeDocumentType } from '../home-route-schema';
 import { useHomeView } from '../home-view-context';
 import { HomeReturnBreadcrumb } from './HomeReturnBreadcrumb';
@@ -29,9 +47,119 @@ type DetailParams = {
   documentId?: string;
 };
 
-function HomeEntityDisplayName(props: { name: Accessor<string | undefined> }) {
+function HomeEntityBreadcrumb(props: {
+  name: Accessor<string | undefined>;
+  target: EntityDetailTarget;
+  value: Accessor<string>;
+  fileMenu?: JSX.Element;
+}) {
   useSplitDisplayName(props.name);
-  return null;
+
+  return (
+    <ViewBreadcrumbs.Item
+      value={props.value()}
+      metadata={props.target}
+      order={1}
+    >
+      {(item) => (
+        <div class="flex min-w-0 items-center">
+          <ViewBreadcrumbs.Button
+            class="gap-1.5"
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+            tooltip={props.name()}
+          >
+            <EntityIcon
+              targetType={entityDetailBlockType(props.target) ?? 'channel'}
+              size="xs"
+              class="shrink-0"
+            />
+            <span class="truncate">{props.name()}</span>
+          </ViewBreadcrumbs.Button>
+          <Show when={props.fileMenu}>
+            <div class="shrink-0">{props.fileMenu}</div>
+          </Show>
+        </div>
+      )}
+    </ViewBreadcrumbs.Item>
+  );
+}
+
+function HomeMarkdownBreadcrumb(props: {
+  target: EntityDetailTarget;
+  value: Accessor<string>;
+}) {
+  const { displayName } = useMarkdownName();
+  const { documentId, kind, permissions } = useMarkdownDocument();
+  const { fileOperations, menuTools } = useMarkdownDocumentTools();
+  const blockType = () => {
+    const documentKind = kind();
+    return documentKind === 'document' ? 'md' : documentKind;
+  };
+  const name = () => displayName() || blockNameToDefaultFile(blockType());
+  const menuPermissions = () => {
+    if (permissions.isOwner()) return Permissions.OWNER;
+    if (permissions.canEdit()) return Permissions.CAN_EDIT;
+    if (permissions.canComment()) return Permissions.CAN_COMMENT;
+    return Permissions.CAN_VIEW;
+  };
+
+  return (
+    <HomeEntityBreadcrumb
+      name={name}
+      target={props.target}
+      value={props.value}
+      fileMenu={
+        <SplitFileMenu
+          id={documentId()}
+          itemType="document"
+          name={name()}
+          ops={fileOperations}
+          tools={menuTools}
+          entityKind={blockType()}
+          permissions={menuPermissions()}
+        />
+      }
+    />
+  );
+}
+
+type HomeDocumentContext = Extract<EntityDetailContext, { type: 'document' }>;
+
+function HomeDocumentBreadcrumb(props: {
+  context: HomeDocumentContext;
+  target: EntityDetailTarget;
+  value: Accessor<string>;
+}) {
+  const blockType = () => entityDetailBlockType(props.target) ?? 'unknown';
+  const name = () =>
+    props.context.documentMetadata.documentName ||
+    blockNameToDefaultFile(blockType());
+  const fileOperations = (): FileOperation[] => [
+    { op: 'copy' },
+    { op: 'rename' },
+    { op: 'moveToProject' },
+    ...(props.context.operations ?? []),
+    { op: 'delete' },
+  ];
+
+  return (
+    <HomeEntityBreadcrumb
+      name={name}
+      target={props.target}
+      value={props.value}
+      fileMenu={
+        <SplitFileMenu
+          id={props.context.documentMetadata.documentId}
+          itemType="document"
+          name={name()}
+          ops={fileOperations()}
+          entityKind={blockType()}
+          permissions={getPermissions(props.context.userAccessLevel)}
+        />
+      }
+    />
+  );
 }
 
 /** The shared details that can render without a legacy block instance. */
@@ -130,30 +258,54 @@ function HomeEntityDetailBody(props: {
                 case 'channel':
                   return context.name();
                 case 'document':
-                  return context.documentMetadata.documentName;
+                  return (
+                    context.documentMetadata.documentName ||
+                    blockNameToDefaultFile(entityDetailBlockType(props.target))
+                  );
               }
             };
             const channel = () =>
               context.type === 'channel' ? context : undefined;
+            const document = () =>
+              context.type === 'document' ? context : undefined;
+            const blockType = entityDetailBlockType(props.target);
+            const isMarkdown =
+              context.type === 'document' &&
+              (blockType === 'md' ||
+                blockType === 'task' ||
+                blockType === 'snippet' ||
+                blockType === 'skill');
 
             return (
               <>
-                <HomeEntityDisplayName name={name} />
-                <ViewBreadcrumbs.Item
-                  value={props.value()}
-                  metadata={props.target}
-                  order={1}
-                >
-                  {(item) => (
-                    <ViewBreadcrumbs.Button
-                      isActive={item.isActive()}
-                      onClick={item.onSelect}
-                      tooltip={name()}
+                <Show
+                  when={isMarkdown}
+                  fallback={
+                    <Show
+                      when={document()}
+                      fallback={
+                        <HomeEntityBreadcrumb
+                          name={name}
+                          target={props.target}
+                          value={props.value}
+                        />
+                      }
                     >
-                      <span class="truncate">{name()}</span>
-                    </ViewBreadcrumbs.Button>
-                  )}
-                </ViewBreadcrumbs.Item>
+                      {(current) => (
+                        <HomeDocumentBreadcrumb
+                          context={current()}
+                          target={props.target}
+                          value={props.value}
+                        />
+                      )}
+                    </Show>
+                  }
+                >
+                  <HomeMarkdownBreadcrumb
+                    target={props.target}
+                    value={props.value}
+                  />
+                </Show>
                 <Show when={channel()}>
                   {(current) => (
                     <ChannelDetailTopBar

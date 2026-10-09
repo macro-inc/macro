@@ -7,11 +7,13 @@ const webDirectory = fileURLToPath(new URL('../../../../../', import.meta.url));
 export default defineConfig({
   testDir: directory,
   testMatch: [
+    'calendar-points.browser.e2e.ts',
     'coordinator.browser.e2e.ts',
     'cache-startup.browser.e2e.ts',
     'cache-artifact-compatibility.browser.e2e.ts',
     'cache-wasm-packaging.browser.e2e.ts',
     'cache-lifecycle.browser.e2e.ts',
+    'mutation-retry.browser.e2e.ts',
   ],
   timeout: 90_000,
   fullyParallel: false,

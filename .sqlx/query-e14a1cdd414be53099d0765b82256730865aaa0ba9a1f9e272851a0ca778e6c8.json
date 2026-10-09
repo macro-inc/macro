@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE ai_credit_ledger ADD CONSTRAINT reject_test_reload\n         CHECK (stripe_reference <> 'in_retry')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e14a1cdd414be53099d0765b82256730865aaa0ba9a1f9e272851a0ca778e6c8"
+}

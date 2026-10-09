@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "models_forms"
+publish = false
+version = "0.1.0"
+
+# The wire vocabulary of Macro Forms, shared by the service, the web client
+# and the SDK. Answers and gate rules are `models_databases` types unchanged.
+[features]
+schema = ["dep:schemars", "models_databases/schema"]
+
+[dependencies]
+schemars = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+macro_uuid = { path = "../macro_uuid" }
+models_databases = { path = "../models_databases" }
+serde = { workspace = true }
+specta = { workspace = true, features = ["chrono", "uuid"] }
+strum = { workspace = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

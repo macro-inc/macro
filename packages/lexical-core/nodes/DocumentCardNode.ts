@@ -33,7 +33,9 @@ export type CanvasPreviewData = {
   };
 };
 
-export type PreviewData = CanvasPreviewData;
+/** Layout hint persisted with a poll card before its form is fetched. */
+export type PollPreviewData = { poll: { optionCount: number } };
+export type PreviewData = CanvasPreviewData | PollPreviewData;
 
 // Shared base interface for document reference data
 export type DocumentReferenceData = {
@@ -412,7 +414,7 @@ function $removeEmptyElementChain(
 export function $convertMentionToCard(
   mentionNode: DocumentMentionNode,
   previewBox?: [string | number, string | number],
-  previewData?: { view: { x: number; y: number; scale: number } }
+  previewData?: PreviewData
 ): DocumentCardNode {
   // Create the card node with the same document reference data
   const cardNode = $createDocumentCardNode({
@@ -483,7 +485,7 @@ export function $convertCardToMention(
 export function $toggleDocumentNodeType(
   node: DocumentMentionNode | DocumentCardNode,
   previewBox?: [string | number, string | number],
-  previewData?: { view: { x: number; y: number; scale: number } }
+  previewData?: PreviewData
 ): DocumentMentionNode | DocumentCardNode {
   if ($isDocumentMentionNode(node)) {
     return $convertMentionToCard(node, previewBox, previewData);

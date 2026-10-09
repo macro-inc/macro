@@ -1,6 +1,6 @@
 use crate::domain::models::{ParsedAddresses, RecipientType, UpsertedContacts, UpsertedRecipient};
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 /// Upsert contacts from parsed addresses. Called outside a transaction to avoid deadlocks.
@@ -10,8 +10,9 @@ pub(crate) async fn upsert_contacts(
     link_id: Uuid,
     addresses: ParsedAddresses,
 ) -> Result<UpsertedContacts, sqlx::Error> {
-    // Collect all unique email addresses and normalize names
-    let mut unique_map: HashMap<String, Option<String>> = HashMap::new();
+    // Collect all unique email addresses and normalize names. Sorted so that concurrent inserts of
+    // overlapping addresses claim their unique keys in the same order and cannot deadlock.
+    let mut unique_map: BTreeMap<String, Option<String>> = BTreeMap::new();
 
     let from_lower = addresses.from_email.to_lowercase();
     let from_name_normalized =
@@ -68,13 +69,15 @@ pub(crate) async fn upsert_contacts(
         .collect();
 
     // Step 2: Update names for existing contacts that don't have one yet
-    let name_updates: Vec<(Uuid, String)> = unique_map
+    let mut name_updates: Vec<(Uuid, String)> = unique_map
         .iter()
         .filter_map(|(email, name)| {
             name.as_ref()
                 .and_then(|n| email_to_id.get(email).map(|id| (*id, n.clone())))
         })
         .collect();
+    // The update locks rows in array order, so concurrent updates must agree on it.
+    name_updates.sort_unstable_by_key(|(id, _)| *id);
 
     if !name_updates.is_empty() {
         let update_ids: Vec<Uuid> = name_updates.iter().map(|(id, _)| *id).collect();
