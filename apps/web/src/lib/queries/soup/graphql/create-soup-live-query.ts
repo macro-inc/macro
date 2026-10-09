@@ -19,7 +19,6 @@ import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
 import { normalizedCacheResultMetadata } from '../../../graphql-cache/exchange/normalized-cache-exchange';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
 import type { CacheRevision } from '../../../graphql-cache/protocol';
-import { createPredicateQuery } from '../../../graphql-cache/solid/create-predicate-query';
 import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
@@ -42,6 +41,7 @@ import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinit
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
+import { createPredicateQuery } from './create-predicate-query';
 import { isCachedMailView } from './mail-view';
 import {
   usePendingGraphqlSoupDeleteIds,
@@ -78,6 +78,8 @@ const hasSoupPage = (page: SoupQuery | ChannelListSoupQuery): boolean =>
 
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
  * Data is a non-suspending accessor of reactive GraphQL records, before UI mapping.
+ * This is the one GraphQL Soup list source; feature code reads it through
+ * `useSoupAstItemsQuery`.
  */
 export function createSoupLiveQuery(
   request: Accessor<SoupLiveQueryInput | undefined>,

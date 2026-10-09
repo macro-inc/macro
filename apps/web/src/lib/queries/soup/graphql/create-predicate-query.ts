@@ -9,13 +9,13 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
-import type { RecordSelection } from '../exchange/record-selection';
-import type { CacheHost } from '../host/types';
+import type { RecordSelection } from '../../../graphql-cache/exchange/record-selection';
+import type { CacheHost } from '../../../graphql-cache/host/types';
 import {
   type CacheRevision,
   type EntityFilterCacheArgs,
   parseCacheRevision,
-} from '../protocol';
+} from '../../../graphql-cache/protocol';
 
 /** A declared source and generated fragment; no mutation-specific query updates. */
 export type PredicateQueryRequest<T> = {
@@ -44,7 +44,13 @@ type LiveQueryHost = Pick<
   'entityFilter' | 'onCacheChanged' | 'onCacheGenerationChanged'
 >;
 
-/** Owns subscription, coalescing, generation recovery, and keyed Solid rows. */
+/**
+ * Binds one cache-engine maintained view for `createSoupLiveQuery`. Owns
+ * subscription, coalescing, generation recovery, and keyed Solid rows.
+ *
+ * Internal to the Soup query layer, not a general reactive query API: GraphQL
+ * documents use `createLiveQuery`, and Soup lists use `createSoupLiveQuery`.
+ */
 export function createPredicateQuery<T extends object>(options: {
   host: Accessor<LiveQueryHost | undefined>;
   query: Accessor<PredicateQueryRequest<T> | undefined>;

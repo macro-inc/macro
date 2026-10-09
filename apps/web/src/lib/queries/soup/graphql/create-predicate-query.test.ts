@@ -2,15 +2,18 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { gql } from '@urql/core';
 import { createComputed, createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it } from 'vitest';
-import { selectRecords } from '../exchange/record-selection';
-import { createNoopCacheHost } from '../host/noop-host';
-import type { CacheChangeListener, CacheHost } from '../host/types';
+import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
+import { createNoopCacheHost } from '../../../graphql-cache/host/noop-host';
+import type {
+  CacheChangeListener,
+  CacheHost,
+} from '../../../graphql-cache/host/types';
 import {
   type EntityFilterCacheArgs,
   type EntityFilterCacheResult,
   type LiveQueryUpdate,
   parseCacheRevision,
-} from '../protocol';
+} from '../../../graphql-cache/protocol';
 import { createPredicateQuery } from './create-predicate-query';
 
 type Row = {

@@ -1,4 +1,4 @@
-import { createKeyedProjection } from '@app/lib/urql-solid/create-keyed-projection';
+import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
 import type { Accessor } from 'solid-js';
 
 /** Stable row identity, with independent tracking and reconciliation per row. */
