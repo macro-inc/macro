@@ -1,7 +1,9 @@
 //! First assignments remain linked across enqueue, replay, settlement and rollback.
 
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
-use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch, RecordRoot};
+use cache_core::link_patch::{
+    LinkOperation, LinkPathSegment, OptimisticLinkPatch, QueryRevalidation, RecordRoot,
+};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::RecordSelection;
 use cache_core::store::{InMemoryStorage, Storage};
@@ -300,6 +302,68 @@ fn failure_removes_the_temporary_link() {
         let claim = claim(&mut engine, 2).await;
         engine.rollback_optimistic_write(txn, claim).await.unwrap();
         assert_eq!(properties(&read(&mut engine).await), &json!([]));
+    });
+}
+
+#[test]
+fn persisted_recovery_query_runs_only_when_the_assignment_link_cannot_be_repaired() {
+    block_on(async {
+        for (include_patch, evict_parent) in [(true, false), (false, false), (true, true)] {
+            let mut engine = seeded().await;
+            let recovery = QueryRevalidation {
+                query: QUERY.into(),
+                operation_name: Some("Properties".into()),
+                variables_json: serde_json::to_string(&variables()).unwrap(),
+                only_on_link_failure: true,
+            };
+            let patches = if include_patch { vec![patch()] } else { vec![] };
+            let txn = engine
+                .begin_optimistic_write(
+                    None,
+                    BeginOptimisticWrite {
+                        client_metadata: None,
+                        identity_bindings: &[],
+                        uuid: UUID,
+                        query: MUTATION,
+                        operation_name: Some("Set"),
+                        variables: &variables(),
+                        data: &response("temporary-1", "urgent"),
+                        link_patches: &patches,
+                        revalidations: std::slice::from_ref(&recovery),
+                        created_at_ms: 1,
+                    },
+                )
+                .await
+                .unwrap()
+                .0;
+            let mut storage = engine.into_storage();
+            if evict_parent {
+                storage
+                    .delete_batch(&[EntityKey("GraphqlSoupDocument:task-1".into())])
+                    .await
+                    .unwrap();
+            }
+            // Recovery intent survives closing the original tab before commit.
+            let mut engine = Engine::new(storage);
+            let claim = claim(&mut engine, 2).await;
+            let result = engine
+                .commit_optimistic_write(
+                    txn,
+                    claim,
+                    MUTATION,
+                    Some("Set"),
+                    &variables(),
+                    &response("server-1", "urgent"),
+                )
+                .await
+                .unwrap();
+            if include_patch && !evict_parent {
+                assert!(result.revalidations.is_empty());
+                assert_eq!(properties(&read(&mut engine).await)[0]["id"], "server-1");
+            } else {
+                assert_eq!(result.revalidations, vec![recovery]);
+            }
+        }
     });
 }
 

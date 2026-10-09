@@ -1057,7 +1057,7 @@ export const isInstructionsMdDoc = (
   item: SoupApiItem,
   instructionsIdQuery: Pick<
     UseQueryResult<string | null | undefined, Error>,
-    'isSuccess' | 'data'
+    'data' | 'isSuccess'
   >
 ) => {
   if (item.tag !== 'document') return false;
@@ -1072,7 +1072,7 @@ export const mapSoupPageToEntityList: (
   options: {
     instructionsIdQuery: Pick<
       UseQueryResult<string | null | undefined, Error>,
-      'isSuccess' | 'data'
+      'data' | 'isSuccess'
     >;
     showSupportedForeignEntities?: boolean;
   }

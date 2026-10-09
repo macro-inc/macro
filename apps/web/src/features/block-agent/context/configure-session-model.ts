@@ -54,14 +54,21 @@ export async function configureSessionModel(
     await confirmSessionControl(session, { type: 'setModel', model });
   }
   if (!effort) return;
-  const option = effortConfigOption(
-    (await session.snapshot()).metadata.configOptions
-  );
+  const options = (await session.snapshot()).metadata.configOptions;
+  const candidate = options.find((option) => option.id === 'speed');
+  const option =
+    effort.configId === 'speed'
+      ? candidate?.type === 'select'
+        ? candidate
+        : undefined
+      : effortConfigOption(options);
   if (
     option?.id !== effort.configId ||
     !option.options.some((choice) => choice.value === effort.value)
   ) {
-    throw new Error('The selected model no longer supports this effort.');
+    throw new Error(
+      `The selected model no longer supports this ${effort.configId === 'speed' ? 'speed' : 'effort'}.`
+    );
   }
   if (option.currentValue === effort.value) return;
   await confirmSessionControl(session, {

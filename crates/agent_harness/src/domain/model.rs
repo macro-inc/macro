@@ -19,6 +19,10 @@ use messages::domain::events::MessageEventAttachment;
 use trigger_context::TriggerContext;
 mod session_origin;
 pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
+mod coding_preferences;
+pub use coding_preferences::{
+    CREATE_TASKS_INSTRUCTIONS, OPEN_PULL_REQUESTS_INSTRUCTIONS, with_coding_preferences,
+};
 
 /// How a channel message's attached files are named to an agent.
 ///

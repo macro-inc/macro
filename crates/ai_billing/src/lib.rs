@@ -29,12 +29,16 @@
 //! # Layout
 //!
 //! - [`domain`] — plan catalog, the configured pricing, the settlement ledger
-//!   (pure), ports, and the service.
+//!   (pure), ports, the service, and the reconciliation sweep that settles
+//!   whoever nobody asked to settle.
 //! - [`outbound`] — Postgres repos over `ai_usage` and the billing tables, the
-//!   Stripe gateway, the roles + teams entitlement resolver, and the recorder
-//!   wrapper that triggers settlement after usage lands.
+//!   Stripe gateway, the roles + teams entitlement resolver, the sweep's
+//!   candidate finder, and the recorder wrapper that triggers settlement after
+//!   usage lands.
 //! - [`inbound`] — the axum router (summary, overage settings, credit
-//!   checkout, internal settle).
+//!   checkout, internal settle) and the scheduled sweep worker.
+//! - [`composition`] — how a host that does not own Stripe composes admission
+//!   and the settling recorder.
 //! - [`config`] — startup configuration: the mandatory pricing values and the
 //!   `ENABLE_AI_USAGE_BILLING` loader, the default-off policy that gates
 //!   settlement in every environment.

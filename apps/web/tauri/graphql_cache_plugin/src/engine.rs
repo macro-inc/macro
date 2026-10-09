@@ -57,6 +57,9 @@ pub enum ReadResultWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResultWire {
+    /// Effective scalar patches; absent when a query reread is required.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     /// Bindings omitted while preserving a normalizable server response.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub identity_errors: Vec<String>,
@@ -400,6 +403,7 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
+        field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
@@ -537,6 +541,36 @@ impl EngineHandle {
             .map_err(|e| e.to_string())
     }
 
+    /// Incrementally project a query; operation teardown releases its bindings.
+    pub async fn watch(
+        &self,
+        op_id: String,
+        query: String,
+        operation_name: Option<String>,
+        variables: Variables,
+        entity_resolvers: Vec<EntityResolver>,
+        since: Option<String>,
+    ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
+        let since = since
+            .map(|value| value.parse::<CacheRevision>())
+            .transpose()
+            .map_err(|error| error.to_string())?;
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops, .. } = &mut *state;
+        let op = ops.intern(&op_id);
+        engine
+            .watch_query(
+                op,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &entity_resolvers,
+                since,
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Projects explicit normalized entity keys without scanning storage.
     pub async fn read_records_by_keys(
         &self,
@@ -579,7 +613,14 @@ impl EngineHandle {
         request: EntityFilterRequest,
     ) -> Result<EntityFilterResult, String> {
         let mut state = self.inner.lock().await;
-        soup::filter(&mut state.engine, &self.mail_generation, request).await
+        let state = &mut *state;
+        soup::filter(
+            &mut state.engine,
+            &mut state.selections,
+            &self.mail_generation,
+            request,
+        )
+        .await
     }
 
     /// Recovers cached query variables without materializing each variant.

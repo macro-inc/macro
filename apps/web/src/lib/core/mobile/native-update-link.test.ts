@@ -9,7 +9,7 @@ describe('native update destination', () => {
     const url = new URL(nativeUpdateLink('android'));
     expect(url.protocol).toBe('https:');
     expect(url.hostname).toBe('play.google.com');
-    expect(url.searchParams.get('id')).toBe('com.macro.app.prod');
+    expect(url.searchParams.get('id')).toBe('com.macro.workspace.mobile');
     expect(nativeUpdateLink('ios')).toContain('id6743133649');
   });
 

@@ -8,11 +8,13 @@ import Circle from '@phosphor/circle.svg';
 import Cursor from '@phosphor/cursor.svg';
 import Eraser from '@phosphor/eraser.svg';
 import Hand from '@phosphor/hand.svg';
+import Minus from '@phosphor/minus.svg';
 import Pencil from '@phosphor/pencil-simple.svg';
+import Plus from '@phosphor/plus.svg';
 import Rectangle from '@phosphor/rectangle.svg';
 import Text from '@phosphor/text-t.svg';
 import { Button, Dropdown, Hotkey, Toolbar } from '@ui';
-import { type ComponentProps, For, Show } from 'solid-js';
+import { type ComponentProps, For, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { CanvasSnapMode } from '../core/snapping';
 import type {
@@ -34,6 +36,7 @@ const tools = [
 export function CanvasDrawingToolbar(props: {
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
+  readOnly?: boolean;
 }) {
   return (
     <div class="pointer-events-none absolute bottom-4 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
@@ -43,7 +46,15 @@ export function CanvasDrawingToolbar(props: {
         class="pointer-events-auto relative max-w-full overflow-x-auto"
       >
         <Toolbar.Group>
-          <For each={tools}>
+          <For
+            each={
+              props.readOnly
+                ? tools.filter(
+                    (tool) => tool.id === 'select' || tool.id === 'pan'
+                  )
+                : tools
+            }
+          >
             {(tool) => (
               <Toolbar.Button
                 label={`${tool.label} tool`}
@@ -117,15 +128,13 @@ function CanvasViewCheckboxItem(
   );
 }
 
-export function CanvasViewControls(props: {
+type CanvasZoomProps = {
   scale: number;
-  grid: boolean;
-  onGrid: (visible: boolean) => void;
   onZoom: (factor: number) => void;
   onFit: () => void;
-  snapMode: CanvasSnapMode;
-  onSnapMode: (mode: CanvasSnapMode) => void;
-}) {
+};
+
+function CanvasZoomMenu(props: ParentProps<CanvasZoomProps>) {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
@@ -167,33 +176,73 @@ export function CanvasViewControls(props: {
             )}
           </For>
         </Dropdown.Group>
-        <Dropdown.Group>
-          <CanvasViewCheckboxItem checked={props.grid} onChange={props.onGrid}>
-            Toggle dot grid
-          </CanvasViewCheckboxItem>
-        </Dropdown.Group>
-        <Dropdown.Group>
-          <For
-            each={
-              [
-                { mode: 'none', label: 'No snapping' },
-                { mode: 'pixel', label: 'Snap to px' },
-                { mode: 'auto', label: 'Auto snapping' },
-              ] as const
-            }
-          >
-            {(option) => (
-              <CanvasViewCheckboxItem
-                closeOnSelect
-                checked={props.snapMode === option.mode}
-                onChange={() => props.onSnapMode(option.mode)}
-              >
-                {option.label}
-              </CanvasViewCheckboxItem>
-            )}
-          </For>
-        </Dropdown.Group>
+        {props.children}
       </Dropdown.Content>
     </Dropdown>
+  );
+}
+
+export function CanvasZoomToolbar(props: CanvasZoomProps) {
+  return (
+    <div class="absolute bottom-4 left-4 z-40">
+      <Toolbar size="icon-sm" aria-label="Canvas zoom">
+        <Toolbar.Group>
+          <Toolbar.Button
+            label="Zoom out"
+            onClick={() => props.onZoom(1 / 1.2)}
+          >
+            <Minus />
+          </Toolbar.Button>
+          <CanvasZoomMenu {...props} />
+          <Toolbar.Button label="Zoom in" onClick={() => props.onZoom(1.2)}>
+            <Plus />
+          </Toolbar.Button>
+        </Toolbar.Group>
+      </Toolbar>
+    </div>
+  );
+}
+
+export function CanvasViewControls(
+  props: CanvasZoomProps & {
+    grid: boolean;
+    onGrid: (visible: boolean) => void;
+    snapMode: CanvasSnapMode;
+    onSnapMode: (mode: CanvasSnapMode) => void;
+  }
+) {
+  return (
+    <CanvasZoomMenu
+      scale={props.scale}
+      onZoom={props.onZoom}
+      onFit={props.onFit}
+    >
+      <Dropdown.Group>
+        <CanvasViewCheckboxItem checked={props.grid} onChange={props.onGrid}>
+          Toggle dot grid
+        </CanvasViewCheckboxItem>
+      </Dropdown.Group>
+      <Dropdown.Group>
+        <For
+          each={
+            [
+              { mode: 'none', label: 'No snapping' },
+              { mode: 'pixel', label: 'Snap to px' },
+              { mode: 'auto', label: 'Auto snapping' },
+            ] as const
+          }
+        >
+          {(option) => (
+            <CanvasViewCheckboxItem
+              closeOnSelect
+              checked={props.snapMode === option.mode}
+              onChange={() => props.onSnapMode(option.mode)}
+            >
+              {option.label}
+            </CanvasViewCheckboxItem>
+          )}
+        </For>
+      </Dropdown.Group>
+    </CanvasZoomMenu>
   );
 }

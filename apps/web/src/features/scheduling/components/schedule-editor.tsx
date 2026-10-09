@@ -108,7 +108,7 @@ function CopyHours(props: {
         <Copy class="size-4" />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-action-menu w-56 rounded-xl border border-edge bg-menu p-4 text-ink shadow-xl">
+        <Popover.Content class="menu-surface z-action-menu w-56 p-4">
           <h4 class="mb-3 text-sm font-semibold">Copy times to</h4>
           <div class="flex flex-col gap-3">
             <For

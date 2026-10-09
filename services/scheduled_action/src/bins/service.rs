@@ -165,11 +165,16 @@ async fn main() -> Result<()> {
     let conditions = match typesafe {
         Some(provider) => Some(ConditionGate::new(
             event_content,
+            // Condition evaluation is the only model work this process meters
+            // (agent targets are funded by the harness). Counted usage asks the
+            // authentication service to settle the payer, as every other host does.
             Arc::new(JevClassifier::new(
                 provider,
-                ai_usage::pg_recorder_with_enforcement(
+                ai_billing::composition::pg_settling_recorder(
                     db.clone(),
                     config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
                 ),
             )),
         )),

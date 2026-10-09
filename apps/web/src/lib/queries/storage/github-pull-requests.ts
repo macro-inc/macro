@@ -55,6 +55,8 @@ export type GithubPullRequestWithDetails = GithubPullRequest & {
   description?: string | null;
   authorLogin?: string | null;
   labels?: GithubPullRequestLabel[] | null;
+  /** Whether the pull request is a draft. Absent when the source did not say. */
+  draft?: boolean;
 };
 
 function toGithubPullRequestRef(

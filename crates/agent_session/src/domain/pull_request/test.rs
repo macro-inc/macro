@@ -1,6 +1,37 @@
 use super::*;
 use crate::domain::ports::AgentSessionLogRepo;
+use crate::domain::session_task::{LinkedTask, SessionTaskError, SessionTasks, TaskPullRequests};
 use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
+
+/// Sessions without tasks; linking a pull request to one has nothing to do.
+struct NoTasks;
+
+impl SessionTasks for NoTasks {
+    fn link_task<'a>(
+        &'a self,
+        _session: AgentSessionId,
+        _owner: &'a MacroUserIdStr<'static>,
+        _task: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<LinkedTask, SessionTaskError>> + Send + 'a>> {
+        unimplemented!("pull request tests link no tasks")
+    }
+
+    fn task_pull_requests<'a>(
+        &'a self,
+        _owner: &'a MacroUserIdStr<'static>,
+        _task: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<TaskPullRequests, SessionTaskError>> + Send + 'a>> {
+        unimplemented!("pull request tests list no tasks")
+    }
+
+    fn link_session_pull_request<'a>(
+        &'a self,
+        _session: AgentSessionId,
+        _owner: &'a MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), SessionTaskError>> + Send + 'a>> {
+        Box::pin(async { Ok(()) })
+    }
+}
 
 #[test]
 fn normalizes_pr_urls_and_rejects_non_pr_destinations() {
@@ -35,7 +66,7 @@ async fn persists_and_publishes_once_and_rejects_another_owner() {
     let session = test_agent_session(AgentSessionId::new());
     repo.insert_session(session.clone());
     let realtime = RecordingRealtime::new();
-    let service = SessionPullRequestService::new(repo.clone(), realtime.clone());
+    let service = SessionPullRequestService::new(repo.clone(), realtime.clone(), Arc::new(NoTasks));
     let url = "https://github.com/org/repo/pull/123";
     let other = MacroUserIdStr::try_from_email("other@example.com").unwrap();
     assert!(matches!(
@@ -89,7 +120,8 @@ async fn gateway_failure_does_not_undo_the_persisted_link() {
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_agent_session(AgentSessionId::new());
     repo.insert_session(session.clone());
-    let service = SessionPullRequestService::new(repo.clone(), RecordingRealtime::down());
+    let service =
+        SessionPullRequestService::new(repo.clone(), RecordingRealtime::down(), Arc::new(NoTasks));
     let url = "https://github.com/org/repo/pull/123";
     service
         .set_pull_request(session.id, session.owner_user().unwrap(), url, None)
@@ -121,7 +153,7 @@ async fn superseded_claim_cannot_publish_even_an_unchanged_url() {
         panic!("reclaim")
     };
     let realtime = RecordingRealtime::new();
-    let service = SessionPullRequestService::new(repo.clone(), realtime.clone());
+    let service = SessionPullRequestService::new(repo.clone(), realtime.clone(), Arc::new(NoTasks));
     let current_url = "https://github.com/org/repo/pull/2";
     service
         .set_pull_request(

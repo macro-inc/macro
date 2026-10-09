@@ -150,6 +150,8 @@ struct JsQueryRegistration {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     identity_errors: Vec<String>,
     revision: String,
@@ -187,6 +189,8 @@ struct JsInspectionPathSegment {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsEnqueueOptimisticMutationResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     transaction_id: String,
     upsert_kind: JsMutationUpsertKind,
     revision: String,
@@ -329,6 +333,7 @@ fn unwrap_storage(storage: BrowserStorage) -> TursoStorage {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct JsEntityFilterRequest {
+    live_query: Option<soup_filter_cache_adapter::live_query::LiveQueryRequest>,
     filters: serde_json::Value,
     sort_method: String,
     sort_direction: String,
@@ -347,6 +352,10 @@ struct JsPredicateBaselineEntry {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 enum JsEntityFilterResult {
+    LiveQuery {
+        #[serde(flatten)]
+        update: cache_core::engine::live_query::LiveQueryUpdate,
+    },
     Reconciled {
         revision: String,
         keys: Vec<String>,
@@ -444,6 +453,7 @@ enum JsRollbackOptimisticWriteResult {
 
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
+        field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
@@ -1335,6 +1345,49 @@ impl CacheEngine {
         })
     }
 
+    /// Incrementally projects an ordinary query at one engine revision.
+    #[wasm_bindgen(js_name = watchQuery)]
+    pub fn watch_query(
+        &self,
+        op_id: String,
+        query: String,
+        operation_name: Option<String>,
+        variables: JsValue,
+        entity_resolvers: JsValue,
+        since: Option<String>,
+    ) -> js_sys::Promise {
+        let state = self.state.clone();
+        let ops = self.ops.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let variables = parse_variables(variables)?;
+            let entity_resolvers: Vec<EntityResolver> = parse_vec(entity_resolvers)?;
+            let since = since
+                .map(|value| value.parse())
+                .transpose()
+                .map_err(err_js)?;
+            let op = ops.borrow_mut().intern(&op_id);
+            let result = state
+                .engine_mut()?
+                .watch_query(
+                    op,
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &entity_resolvers,
+                    since,
+                )
+                .await;
+            let result = state.engine_result(result)?;
+            let data = match &result {
+                cache_core::engine::watch_query::QueryUpdate::Hit { data, .. } => Some(data),
+                _ => None,
+            };
+            read_response_to_js(&result, data)
+        })
+    }
+
     /// Projects explicit normalized entity keys through a named GraphQL
     /// fragment without scanning storage.
     #[wasm_bindgen(js_name = readRecordsByKeys)]
@@ -1395,6 +1448,17 @@ impl CacheEngine {
             state.ensure_callable()?;
             let request: JsEntityFilterRequest =
                 serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            if let Some(live) = &request.live_query {
+                if live.release {
+                    state.engine_mut()?.release_live_query(&live.id);
+                    return to_js(&JsEntityFilterResult::Unsupported);
+                }
+                if request.mail.is_some() || request.baseline.is_none() {
+                    return Err(err_js(
+                        "live queries require a reconciled baseline and do not accept mail cursors",
+                    ));
+                }
+            }
             if let Some(mail) = request.mail {
                 let generation = state.mail_generation.clone();
                 let result = soup_filter_cache_adapter::mail::page_current(
@@ -1441,6 +1505,32 @@ impl CacheEngine {
                         })
                         .collect::<Result<Vec<_>, _>>()
                         .map_err(err_js)?;
+                    if let Some(live) = request.live_query {
+                        let schema = state.engine_mut()?.schema_snapshot();
+                        let selection = state
+                            .selections
+                            .get(&schema, live.document, live.fragment_name)
+                            .map_err(err_js)?;
+                        let since = live
+                            .since
+                            .map(|revision| revision.parse::<cache_core::revision::CacheRevision>())
+                            .transpose()
+                            .map_err(err_js)?;
+                        let result = state
+                            .engine_mut()?
+                            .read_live_query(
+                                &live.id,
+                                cache_core::engine::live_query::LiveQuerySpec {
+                                    query,
+                                    baseline,
+                                    selection,
+                                },
+                                since,
+                            )
+                            .await;
+                        let update = state.engine_result(result)?;
+                        return to_js(&JsEntityFilterResult::LiveQuery { update });
+                    }
                     let result = state
                         .engine_mut()?
                         .reconcile_predicate_index(&query, &baseline)
@@ -1830,6 +1920,7 @@ impl CacheEngine {
                 },
             };
             to_js(&JsEnqueueOptimisticMutationResult {
+                field_changes: result.write_result.field_changes,
                 transaction_id: result.transaction_id.to_string(),
                 upsert_kind: result.upsert_kind.into(),
                 revision: result.write_result.revision.to_string(),

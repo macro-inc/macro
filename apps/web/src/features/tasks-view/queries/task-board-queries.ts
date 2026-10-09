@@ -1,7 +1,9 @@
 import { canEditProject } from '@app/features/projects/core/project';
-import { projectDetailQueryOptions } from '@app/features/projects/queries/project-identity';
+import { createProjectDetailQuery } from '@app/features/projects/queries/project-identity';
+import { toProjectDetail } from '@app/features/projects/queries/project-model';
 import type { FacetSelection, SortSelection } from '@app/features/soup';
 import { sortItems } from '@app/features/soup/collection/transforms';
+import { throwOnErr } from '@core/util/result';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -10,9 +12,9 @@ import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentAccessLevelsQuery } from '@queries/storage/document-metadata';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { initiativeClient } from '@service-storage/initiative';
-import { useQueries, useQueryClient } from '@tanstack/solid-query';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal, mapArray } from 'solid-js';
 import { TASK_SORT_DEFINITIONS } from '../constants';
 import type { TaskBoardActions } from '../context/task-board';
 import type { TaskBoardColumn, TaskBoardGrouping } from '../core/task-board';
@@ -36,7 +38,6 @@ export function createTaskBoardQueries(options: {
   facets?: Accessor<FacetSelection>;
   sort?: Accessor<SortSelection<TaskSortId>[]>;
 }) {
-  const queryClient = useQueryClient();
   const [propertySaving, setPropertySaving] = createSignal<ReadonlySet<string>>(
     new Set()
   );
@@ -126,22 +127,15 @@ export function createTaskBoardQueries(options: {
     return rawColumns().flatMap((column) => (column.id ? [column.id] : []));
   });
 
-  const projects = useQueries(() => ({
-    queries: projectIds().map((id) => ({
-      ...projectDetailQueryOptions(initiativeClient, options.userId(), id),
-      enabled: !!options.userId(),
-    })),
-  }));
+  const projects = mapArray(projectIds, (id) =>
+    createProjectDetailQuery(getGraphqlSoupClient, options.userId, () => id)
+  );
 
   const projectMap = createMemo(() => {
-    const entries = projects.flatMap((query) => {
-      if (!query.isSuccess) {
-        return [];
-      }
+    const entries = projects().flatMap((query) => {
+      const project = query.isSuccess ? query.data?.project : undefined;
 
-      const project = query.data.project;
-
-      return [[project.id, project] as const];
+      return project ? [[project.id, project] as const] : [];
     });
 
     return new Map(entries);
@@ -295,15 +289,14 @@ export function createTaskBoardQueries(options: {
         }
 
         for (const ref of apiValues.refs ?? []) {
-          const detail = await queryClient.ensureQueryData(
-            projectDetailQueryOptions(
-              initiativeClient,
-              options.userId(),
-              ref.entity_id
-            )
-          );
+          // A project column already holds this project's live detail.
+          const project =
+            projectMap().get(ref.entity_id) ??
+            toProjectDetail(
+              await throwOnErr(() => initiativeClient.get(ref.entity_id))
+            );
 
-          if (!canEditProject(detail.project)) {
+          if (!canEditProject(project)) {
             throw new Error('Project is not editable');
           }
         }

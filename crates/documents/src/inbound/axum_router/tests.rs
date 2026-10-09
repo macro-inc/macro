@@ -366,6 +366,14 @@ impl DocumentService for FakeDocumentService {
         panic!("unexpected get_task_branch_name call")
     }
 
+    async fn get_task_identity(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        _document_context: &DocumentBasic,
+    ) -> Result<crate::domain::models::TaskIdentity, DocumentError> {
+        panic!("unexpected get_task_identity call")
+    }
+
     async fn get_task_github_pull_requests(
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,

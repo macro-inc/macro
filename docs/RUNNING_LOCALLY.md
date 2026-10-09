@@ -235,6 +235,11 @@ Keys in the file override the code-defined defaults, so you only need to list th
 
 ## Tracing, Logs, and the Debug Browser
 
+Local service console logs rotate at 20 MB per file and retain three files per
+container. The limits apply when a container is created; recreate older
+containers with the existing Compose project/files to adopt them. Repeated
+worker errors still need their underlying dependency or configuration fixed.
+
 `just run_local` and `just stack up` support two global (per-machine, shared
 across instances) debugging containers:
 

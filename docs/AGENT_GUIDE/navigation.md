@@ -782,6 +782,9 @@ restart rules still apply.
 Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
+Settings → Agents → Agents ends with **Coding sessions**: per-user **Create
+tasks** and **Open pull requests** switches, both off by default. Each saves on
+toggle and reverts with a toast if the save fails.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
 Settings → Agents → Runtimes, above Cursor, with the
@@ -896,7 +899,7 @@ The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons,
 
 When newer frontend JS requires a newer native app, the mobile shell offers
 **Update app** and **OK**. Update app uses the native opener; Android targets the
-HTTPS Play listing for `com.macro.app.prod`, allowing a browser when the Store app
+HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the Store app
 is absent. An opener failure displays an inline error and the dialog stays
 dismissible. A missing listing is handled in the external store/browser: return
 to Macro, dismiss, and retry later. Task 07 verifies the live listing.

@@ -3,6 +3,7 @@ import type { NotificationSource } from '@notifications';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SoupState } from '../create-soup-state';
+import type { MarkDoneDelegate, PreparedMarkDone } from './mark-done-delegate';
 import {
   type DoneWriteArgs,
   reportDoneWriteOutcomes,
@@ -41,6 +42,8 @@ const mocks = vi.hoisted(() => ({
     settle: vi.fn(),
     releaseGraphql: vi.fn(),
   })),
+  delegatedOptionsFactory: vi.fn(),
+  delegatedMutateAsync: vi.fn(async (_variables: unknown) => {}),
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -77,6 +80,10 @@ vi.mock('./graphql-done-optimism', () => ({
 
 vi.mock('@queries/undo', () => ({
   useMutationUndoContext: () => ({ pushUndo: mocks.pushUndo }),
+  useUndoableMutation: (optionsFactory: () => unknown) => {
+    mocks.delegatedOptionsFactory.mockImplementation(optionsFactory);
+    return { mutateAsync: mocks.delegatedMutateAsync };
+  },
 }));
 vi.mock('@tanstack/solid-query', () => ({
   useMutation: (optionsFactory: () => unknown) => {
@@ -153,10 +160,11 @@ function createSoup() {
   return { soup, focusSet };
 }
 
-function createAction() {
+function createAction(delegate?: MarkDoneDelegate) {
   return createRoot((dispose) => ({
     action: makeMarkDoneAction({
       notificationSource: () => notificationSource,
+      delegate: delegate ? () => delegate : undefined,
     }),
     dispose,
   }));
@@ -528,6 +536,119 @@ describe('makeMarkDoneAction', () => {
       notificationIds: ['authoritative-notification'],
       onWriteSettled: expect.any(Function),
     });
+    dispose();
+  });
+});
+
+describe('makeMarkDoneAction with a delegating list', () => {
+  beforeEach(() => {
+    mocks.mutateAsync.mockReset();
+    mocks.delegatedMutateAsync.mockReset();
+    mocks.resolveMarkEntitiesDoneVariables.mockClear();
+  });
+
+  function preparedDone() {
+    const show = vi.fn();
+    const undo = vi.fn(async () => {});
+    const prepared: PreparedMarkDone = {
+      hide: vi.fn(() => show),
+      commit: vi.fn(async () => ({ undo })),
+    };
+    return { prepared, show, undo };
+  }
+
+  it('completes delegated rows through the delegate', async () => {
+    const { prepared } = preparedDone();
+    const delegate = {
+      canComplete: () => true,
+      prepare: vi.fn(() => prepared),
+    };
+    const { action, dispose } = createAction(delegate);
+
+    await action.execute([currentEntity]);
+
+    expect(delegate.prepare).toHaveBeenCalledWith([currentEntity]);
+    expect(mocks.delegatedMutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ entities: [currentEntity], prepared })
+    );
+    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+    expect(mocks.resolveMarkEntitiesDoneVariables).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('falls back to the entity path for rows the delegate does not own', async () => {
+    const { action, dispose } = createAction({
+      canComplete: () => undefined,
+      prepare: () => undefined,
+    });
+
+    await action.execute([currentEntity]);
+
+    expect(mocks.delegatedMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.mutateAsync).toHaveBeenCalledOnce();
+    dispose();
+  });
+
+  it('hides, commits, undoes and redoes through the prepared done', async () => {
+    const { prepared, show, undo } = preparedDone();
+    const { dispose } = createAction({
+      canComplete: () => true,
+      prepare: () => prepared,
+    });
+    const options = mocks.delegatedOptionsFactory() as {
+      onMutate: (input: unknown) => { show: () => void };
+      mutationFn: (input: unknown) => Promise<void>;
+      onError: (error: Error, input: unknown, context: unknown) => void;
+      undoFn: (input: unknown, context: unknown) => Promise<void>;
+      redoFn: (input: unknown, context: unknown) => Promise<void>;
+    };
+    const variables = { entities: [currentEntity], prepared, undo: {} };
+
+    const context = options.onMutate(variables);
+    expect(prepared.hide).toHaveBeenCalledOnce();
+
+    await options.mutationFn(variables);
+    expect(prepared.commit).toHaveBeenCalledOnce();
+
+    await options.undoFn(variables, context);
+    expect(show).toHaveBeenCalledOnce();
+    expect(undo).toHaveBeenCalledOnce();
+
+    await options.redoFn(variables, context);
+    expect(prepared.hide).toHaveBeenCalledTimes(2);
+    expect(prepared.commit).toHaveBeenCalledTimes(2);
+
+    options.onError(new Error('down'), variables, context);
+    expect(show).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+});
+
+describe('makeMarkDoneAction rows with nothing to acknowledge', () => {
+  beforeEach(() => {
+    mocks.mutateAsync.mockReset();
+    mocks.delegatedMutateAsync.mockReset();
+  });
+
+  it('offers no done on a delegated row with only own work', async () => {
+    const prepare = vi.fn();
+    const ownWork = { type: 'document', id: 'own-work' } as EntityData;
+    const delegate: MarkDoneDelegate = {
+      canComplete: (entity) => entity.id !== 'own-work',
+      prepare,
+    };
+    const { action, dispose } = createAction(delegate);
+
+    expect(action.canExecute(ownWork)).toBe(false);
+    expect(action.canExecute(currentEntity)).toBe(true);
+
+    await action.execute([ownWork]);
+    expect(prepare).not.toHaveBeenCalled();
+    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+
+    // In a mixed selection only the completable row is sent.
+    await action.execute([ownWork, currentEntity]);
+    expect(prepare).toHaveBeenCalledWith([currentEntity]);
     dispose();
   });
 });

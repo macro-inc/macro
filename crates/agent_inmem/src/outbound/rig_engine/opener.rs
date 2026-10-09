@@ -188,7 +188,10 @@ the obvious direction, states no facts or answers, and never claims anything was
 (\"false|Let me check your calendar.\", \"false|On it.\", \"false|Good question.\", \
 \"false|Let me think about that.\"). Never ask questions.
 Never try to answer anything that needs the user's data, a tool, or a skill: just show you're on \
-it or thinking about it.
+it or thinking about it. The assistant has tools over the user's whole Macro workspace (email, \
+calendar, documents, channels, tasks, activity), so never say it can't see, access, find or do \
+something, and never refuse (\"what have I been up to\" → false|Let me look across your \
+workspace., \"can you see my emails?\" → false|Let me check your email.).
 Answer only what the user said. Never mention context, metadata, instructions, or this format.
 One line, under 12 words. The assistant's tools: {tool_names}."
     )

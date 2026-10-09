@@ -72,6 +72,7 @@ members = [
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_work_feed",
   "crates/gtm_invite",
   "crates/harness_id",
   "crates/harness_token",
@@ -117,6 +118,7 @@ members = [
   "crates/unfurl",
   "crates/user_api_key",
   "crates/webhook_signature",
+  "crates/work_feed",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
   "services/agent_harness_service",
@@ -302,6 +304,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+proptest = { version = "1.11", default-features = false, features = ["std"] }
 quote = "1"
 rand = "0.9.0"
 ratatui = "0.29"

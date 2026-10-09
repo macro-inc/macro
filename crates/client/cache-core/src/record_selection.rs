@@ -18,7 +18,7 @@ use thiserror::Error;
 pub const MAX_RECORD_SELECTION_KEYS: usize = 500;
 
 /// A validated named fragment that can be applied to normalized records.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordSelection {
     type_names: Vec<String>,
     selection_set: Vec<Selection>,
@@ -53,7 +53,10 @@ impl RecordSelection {
         }
         Ok(Self {
             type_names,
-            selection_set: fragment.selection_set.clone(),
+            selection_set: crate::document::prepare_selections(
+                &fragment.selection_set,
+                &serde_json::Map::new(),
+            )?,
         })
     }
 
@@ -145,6 +148,7 @@ fn validate_selections(
             Selection::Fragment {
                 type_condition,
                 selection_set,
+                ..
             } => match type_condition {
                 None => validate_selections(schema, selection_set, parent_type)?,
                 Some(condition) => {

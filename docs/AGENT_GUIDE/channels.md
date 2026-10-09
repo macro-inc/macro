@@ -229,13 +229,16 @@ one truncated line of agent output. Failure explanations replace that preview; t
 commands and other secondary details stay inside the session. There are no tooltips.
 Click the card or **Open session** to read the full response or answer a question;
 click the PR to open its Macro split (GitHub until its entity has synced). While the
-synced PR is open, a green **Merge** button sits at the end of the PR row. It asks
+synced PR is open, not a draft, and every check on its head commit has finished
+with a success, skipped, or neutral conclusion, a green **Merge** button sits at
+the end of the PR row. It asks
 **Merge pull request?** first, showing the title and repository/PR number in the
 shared confirmation dialog (a bottom drawer on phones). **Cancel** returns to the
 chip; **Merge pull request** merges on GitHub with your own linked GitHub account,
 so GitHub's permissions and branch protections apply; a refusal shows
 GitHub's reason as a toast, and success flips the chip to merged without a reload.
-Merged and closed PRs show no Merge button. Expanded session mentions retain their
+Draft PRs, PRs with no checks, and PRs whose checks are still running or failing
+show no Merge button. Merged and closed PRs show no Merge button. Expanded session mentions retain their
 collapse control. The card never expands in place.
 
 `@codex` and `@claude` are offered to every user before account setup. The built-in
@@ -284,9 +287,10 @@ service at `/mcp/internal` on its egress listener, separately from workspace MCP
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
 The shared Macro system instructions ask agents to register PRs when
-`macro_internal.set_pull_request` is available. Macro Internal MCP also advertises
-this guidance in its server instructions. It is not prepended to individual user
-messages. Cursor
+`macro_internal.set_pull_request` is available, to open them ready for review
+rather than as drafts, and to get CI passing before handing off. Macro Internal
+MCP also advertises this guidance in its server instructions. It is not prepended
+to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is
@@ -309,6 +313,12 @@ duplicate and changed metadata updates, and opening the exact PR URL were verifi
 in Chromium with mocked session snapshots and realtime invalidation. This UI check
 does not prove live provider discovery; backend tests separately cover delayed
 provider metadata.
+
+When an agent links its session to a task with `macro_internal.link_task`, the
+session header (and the side panel's **Task** row) shows a task chip before the
+PR chip: the task title, or `Task` while loading or without access. Clicking it
+opens the task in a new split (in place on touch devices). Linking a different
+task sends the same session-update notification, so mounted headers refresh.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's

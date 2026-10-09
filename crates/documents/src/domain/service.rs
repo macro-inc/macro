@@ -66,7 +66,7 @@ use super::models::{
     EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestTasks,
     GithubPullRequestTasksResponse, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
     LocationQueryParams, MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP, NewDocument, TaskBranchName,
-    TeamTaskMetadata,
+    TaskIdentity, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -1245,6 +1245,34 @@ impl<
         Ok(TaskBranchName {
             short_id,
             branch_name,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, document_context))]
+    async fn get_task_identity(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> Result<TaskIdentity, DocumentError> {
+        if document_context.sub_type != Some(DocumentSubType::Task) {
+            return Err(DocumentError::BadRequest(
+                "document is not a task".to_string(),
+            ));
+        }
+        let document_id = &entity_access_receipt.entity().entity_id;
+        if document_context.deleted_at.is_some() {
+            return Err(DocumentError::NotFound(document_id.clone()));
+        }
+        let team_task = self
+            .repo
+            .get_team_task_number(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        Ok(TaskIdentity {
+            document_id: document_id.clone(),
+            title: document_context.document_name.clone(),
+            short_id: short_id_for_entity_id(document_id)?,
+            team_task,
         })
     }
 
