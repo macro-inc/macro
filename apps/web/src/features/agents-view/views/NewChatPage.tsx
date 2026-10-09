@@ -305,6 +305,11 @@ export function NewChatPage(props: {
       drawerOpen={coding()}
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
+      supportsImages={
+        selectedCatalog
+          .models()
+          .find((model) => model.id === composerModelOverride())?.supportsImages
+      }
       attachments={attachmentTracker.attachments()}
       onAttachFiles={attachFiles}
       onRemoveAttachment={(attachment) =>

@@ -42,6 +42,7 @@ export * from './agentConfigSelectOptionDtoGroup';
 export * from './agentModelDto';
 export * from './agentModelDtoDescription';
 export * from './agentModelDtoGroup';
+export * from './agentModelDtoSupportsImages';
 export * from './agentModelsStatusDto';
 export * from './agentPermissionAction';
 export * from './agentPromptAction';

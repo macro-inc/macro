@@ -666,3 +666,49 @@ it.each(['Repository', 'Branch'])(
     expect(screen.getByTestId('editor')).toBe(input);
   }
 );
+
+it('blocks existing images on text-only models and preserves the draft until switching back', () => {
+  const send = vi.fn();
+  const [supportsImages, setSupportsImages] = createSignal(false);
+  const attachment: InputAttachmentData = {
+    id: 'image',
+    name: 'test.png',
+    kind: 'image',
+  };
+  render(() => (
+    <ChatSessionInput
+      onSend={send}
+      supportsImages={supportsImages()}
+      attachments={[attachment]}
+    />
+  ));
+  type('Describe this');
+  expect(screen.getByRole('status').textContent).toContain(
+    'does not support images'
+  );
+  expect(
+    screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
+  ).toBe(true);
+  editor.enter?.(undefined, 'Describe this');
+  expect(send).not.toHaveBeenCalled();
+  expect(editor.clear).not.toHaveBeenCalled();
+  setSupportsImages(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(send).toHaveBeenCalledWith('Describe this', [attachment]);
+});
+
+it('refuses pasted images for text-only models but still accepts documents', () => {
+  const attach = vi.fn();
+  render(() => (
+    <ChatSessionInput
+      onSend={vi.fn()}
+      onAttachFiles={attach}
+      supportsImages={false}
+    />
+  ));
+  const document = new File(['hello'], 'note.txt', { type: 'text/plain' });
+  // Missing browser MIME types still use the image extension.
+  const image = new File(['image'], 'picture.PNG');
+  editor.paste?.([image, document], []);
+  expect(attach).toHaveBeenCalledWith([document]);
+});

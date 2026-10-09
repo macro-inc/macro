@@ -21,6 +21,16 @@ pub fn session_config_options(
                 SessionConfigValueId::new((*model).to_owned()),
                 super::models::display_name(model),
             )
+            .meta(super::models::supports_images(model).map(|supported| {
+                serde_json::Map::from_iter([(
+                    "macro.supportsImages".to_owned(),
+                    serde_json::Value::Bool(supported),
+                )])
+            }))
+            .description(
+                (super::models::supports_images(model) == Some(false))
+                    .then(|| "Text only — image attachments are not supported".to_owned()),
+            )
         })
         .collect();
     let mut config = vec![
