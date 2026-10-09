@@ -1537,6 +1537,9 @@ type GraphqlCalendarCapabilities {
 	Whether event-level automatic invitation declines are supported.
 	"""
 	autoDecline: Boolean!
+	"""
+	Conferencing system available when creating an online meeting.
+	"""
 	conferenceProvider: GraphqlCalendarConferenceProvider
 	"""
 	Whether arbitrary RFC 5545 recurrence properties can be written.

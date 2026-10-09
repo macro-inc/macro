@@ -551,6 +551,7 @@ impl From<CalendarProvider> for GraphqlCalendarProvider {
 pub struct GraphqlCalendarCapabilities {
     /// Whether event-level automatic invitation declines are supported.
     auto_decline: bool,
+    /// Conferencing system available when creating an online meeting.
     conference_provider: Option<GraphqlCalendarConferenceProvider>,
     /// Whether arbitrary RFC 5545 recurrence properties can be written.
     custom_recurrence: bool,
