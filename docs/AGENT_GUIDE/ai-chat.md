@@ -78,7 +78,7 @@ without first focusing or expanding the message input. Tap an agent to use its
 default model, or its model arrow to choose a model; **Create agent** opens the
 roster. Desktop navigation remains unchanged.
 
-The mobile Home composer is a filled, rounded input with the short “Message Macro
+The mobile Home composer is an opaque, rounded input with the short “Message Macro
 AI” placeholder. Its collapsed height matches the New button, with the model
 selector and Send always visible. Tap the input to expand across the row, hiding
 the New button and giving the draft a full-width text area above the controls.

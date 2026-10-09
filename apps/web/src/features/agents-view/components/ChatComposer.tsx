@@ -291,7 +291,7 @@ export function ChatComposer(props: {
           data-composer-expanded={
             (isTouchDevice() && !collapsed()) || undefined
           }
-          class="relative z-10 min-w-0 rounded-[32px] touch:island touch:bg-chrome transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
+          class="relative z-10 min-w-0 rounded-[32px] touch:min-h-[40px] touch:min-w-[40px] touch:bg-composer touch:text-composer-ink touch:shadow-menu touch:ring touch:ring-edge-muted transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
           style={{
             height: height() === undefined ? undefined : `${height()}px`,
           }}
