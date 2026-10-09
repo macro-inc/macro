@@ -13,6 +13,8 @@ type Wording = (whose: string) => string;
  * `null` for the tools that use nobody's access and so are never held.
  */
 const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
+  ApplyDocumentOperations: (whose) => `edit ${whose} documents`,
+  ReadDocumentState: (whose) => `read ${whose} documents`,
   BashCodeExecution: (whose) => `run code with ${whose} access`,
   BulkSetEntityPropertyOptions: (whose) =>
     `change property options in ${whose} workspace`,

@@ -7,6 +7,8 @@ publish = false
 [dependencies]
 agent_session = { path = "../agent_session", default-features = false }
 ai_toolset = { path = "../ai_toolset" }
+ai_billing = { path = "../ai_billing" }
+ai_usage = { path = "../ai_usage" }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
@@ -17,6 +19,9 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 rootcause = { workspace = true }
+reqwest = { workspace = true, features = ["json", "stream"] }
+futures = { workspace = true }
+macro_tower_layers = { path = "../macro_tower_layers" }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

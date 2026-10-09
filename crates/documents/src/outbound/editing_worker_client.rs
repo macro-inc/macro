@@ -69,6 +69,33 @@ impl ReqwestEditingWorkerClient {
 impl EditingWorkerService for ReqwestEditingWorkerClient {
     #[cfg(feature = "ai_tools")]
     #[tracing::instrument(skip_all, fields(document_id), err)]
+    async fn code_document(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        request: &crate::domain::code_editing::CodeDocumentRequest,
+    ) -> anyhow::Result<crate::domain::code_editing::CodeDocumentResponse> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self.client.post(format!("{}/code-mode/document", self.worker_url))
+            .headers(headers)
+            .timeout(std::time::Duration::from_secs(28))
+            .json(&serde_json::json!({ "documentId": document_id, "documentToken": document_token.as_str(), "request": request }))
+            .send().await?;
+        let status = response.status();
+        let body: serde_json::Value = response.json().await?;
+        anyhow::ensure!(
+            status.is_success(),
+            "{} (HTTP {status})",
+            body.get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("Document operation failed. Read before retrying edits.")
+        );
+        Ok(serde_json::from_value(body)?)
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(skip_all, fields(document_id), err)]
     async fn spreadsheet(
         &self,
         document_id: &str,

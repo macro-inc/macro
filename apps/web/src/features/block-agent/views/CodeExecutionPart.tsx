@@ -1,13 +1,17 @@
 import { useAgentCodeExecutionQuery } from '@queries/agent-session/code-execution';
 import { ExecutionReceipt } from '@service-cognition/generated/tools/schemas';
 import { createMemo, Suspense } from 'solid-js';
-import { validate as isUuid } from 'uuid';
 import { CodeExecutionToolCall } from '../component/parts/CodeExecutionToolCall';
 import type {
   ToolCallCommon,
   ToolCallContext,
   ToolUsePart,
 } from '../component/parts/shared';
+
+// Rust accepts UUIDs with reserved versions/variants too. Model-selected IDs
+// still identify real records; keep their document cards and failure status.
+const isExecutionId = (value: string) =>
+  /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value);
 
 /** Production wiring; the result components receive only data and context. */
 export function CodeExecutionPart(props: {
@@ -24,7 +28,7 @@ export function CodeExecutionPart(props: {
           ? detail.output
           : undefined;
     const parsed = ExecutionReceipt.safeParse(raw);
-    return parsed.success && isUuid(parsed.data.executionId)
+    return parsed.success && isExecutionId(parsed.data.executionId)
       ? parsed.data
       : undefined;
   });
@@ -40,7 +44,7 @@ export function CodeExecutionPart(props: {
       value !== null &&
       'execution_id' in value &&
       typeof value.execution_id === 'string' &&
-      isUuid(value.execution_id)
+      isExecutionId(value.execution_id)
       ? value.execution_id
       : undefined;
   };

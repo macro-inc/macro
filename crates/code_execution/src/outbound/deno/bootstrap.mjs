@@ -1,5 +1,6 @@
-// This is the only executable entrypoint in Deno's initial module graph.
+// Only trusted bootstrap/SDK code enters Deno's initial module graph.
 // Generated JavaScript arrives as data on stdin; never import the snippet file.
+import { createSdk } from './sdk.mjs';
 const encode = new TextEncoder().encode.bind(new TextEncoder());
 const stringify = JSON.stringify.bind(JSON);
 const parse = JSON.parse.bind(JSON);
@@ -51,12 +52,7 @@ const host = Object.freeze({
 const progress = (value) => emit({ type: "progress", value });
 // SDK discovery and authorization live on the trusted host. This proxy only
 // spells sdk.ToolName(args) as the private call protocol; it grants no access.
-const sdk = new Proxy(Object.create(null), {
-  get(_target, name) {
-    if (typeof name !== "string" || name === "then") return undefined;
-    return (args = {}) => host.call(name, args);
-  },
-});
+const sdk = createSdk(host.call);
 const consoleMethod = (level) => (...args) =>
   emit({
     type: "log",

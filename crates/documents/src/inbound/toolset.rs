@@ -1,5 +1,6 @@
 //! Toolset inbound adapter for Documents.
 
+mod code_editing;
 mod comment_on_document;
 mod create_document;
 mod design;
@@ -340,6 +341,15 @@ impl<
             .map_err(comment_access_error)
     }
 
+    /// Permission-scoped deterministic editing with this host's worker.
+    pub fn code_editing(&self) -> crate::domain::code_editing::CodeEditingService<DSvc, EDSvc> {
+        crate::domain::code_editing::CodeEditingService::new(
+            self.service.clone(),
+            self.editing.clone(),
+            self.document_permission_jwt_secret.clone(),
+        )
+    }
+
     /// Who these tools create entities as when acting for `user`.
     pub fn creation_principal(&self, user: MacroUserIdStr<'static>) -> CreationPrincipal {
         CreationPrincipal::BotForUser {
@@ -411,4 +421,17 @@ fn comment_error(description: &'static str) -> impl FnOnce(MessageError) -> Tool
             internal_error: anyhow::Error::new(err),
         }
     }
+}
+
+/// Document primitives registered only on the code SDK's tool dispatcher.
+pub fn code_document_toolset<DSvc, ESvc, EDSvc>()
+-> AsyncToolCollection<DocumentToolContext<DSvc, ESvc, EDSvc>>
+where
+    DSvc: DocumentService + DocumentCreationService,
+    ESvc: EntityAccessService,
+    EDSvc: EditingWorkerService,
+{
+    AsyncToolCollection::new()
+        .add_tool::<code_editing::ReadDocumentState, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<code_editing::ApplyDocumentOperations, DocumentToolContext<DSvc, ESvc, EDSvc>>()
 }

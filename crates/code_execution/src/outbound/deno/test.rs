@@ -1,5 +1,75 @@
 use super::*;
 
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn bundled_sdk_edits_with_real_library_templates_and_parallel_ai() {
+    let (_root, service) = setup(Limits::default()).await;
+    let mut handle = service.execute(ExecuteRequest {
+        source: r#"
+          const docs = await sdk.help('documents.editor');
+          if (!docs.includes('appendParagraph')) throw new Error('missing editor docs');
+          const doc = await sdk.documents.open({documentId:'doc'});
+          const [a,b] = await Promise.all([
+            sdk.ai.generateText({prompt:'one'}),
+            sdk.ai.generateText({prompt:'two'})
+          ]);
+          const paragraph = doc.editor.appendParagraph(sdk.templates.render('{{a}} / {{b}}', {a:a.text, b:b.text}));
+          doc.editor.bold(paragraph, 'one');
+          return await doc.save();
+        "#.into(), timeout_ms: 10_000,
+    }).unwrap();
+    let mut names = Vec::new();
+    loop {
+        match handle.events.recv().await.unwrap().kind {
+            EventKind::HostCall { call } => {
+                names.push(call.method.clone());
+                let value = match call.method.as_str() {
+                    "ReadDocumentState" => {
+                        serde_json::json!({"documentId":"doc","revision":"r1","xml":"<doc/>","state":{},"nodeIds":[]})
+                    }
+                    "GenerateCodeText" => serde_json::json!({"text":call.args["prompt"]}),
+                    "ApplyDocumentOperations" => {
+                        assert_eq!(call.args["expectedRevision"], "r1");
+                        assert_eq!(call.args["operations"][0]["spec"]["text"], "one / two");
+                        assert_eq!(call.args["operations"][1]["format"], "bold");
+                        assert_eq!(
+                            call.args["operations"][0]["ref"],
+                            call.args["operations"][1]["node"]
+                        );
+                        serde_json::json!({"revision":"r2","applied":true})
+                    }
+                    name => panic!("unexpected SDK call {name}"),
+                };
+                handle
+                    .replies
+                    .send(HostReply {
+                        id: call.id,
+                        result: HostResult::Ok { value },
+                    })
+                    .await
+                    .unwrap();
+            }
+            EventKind::Finished { outcome } => {
+                assert!(
+                    matches!(outcome, Outcome::Succeeded { value } if value["applied"] == true)
+                );
+                break;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(
+        names,
+        [
+            "ReadDocumentState",
+            "GenerateCodeText",
+            "GenerateCodeText",
+            "ApplyDocumentOperations"
+        ]
+    );
+    service.shutdown().await;
+}
+
 // Real-runtime tests are opt-in so machines without Deno can run the pure Rust
 // suite. CI/local verification must also run `cargo test -p code_execution -- --ignored`.
 async fn setup(limits: Limits) -> (tempfile::TempDir, ExecutionService) {

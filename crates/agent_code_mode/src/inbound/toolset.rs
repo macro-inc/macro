@@ -109,6 +109,9 @@ pub struct DescribeCodeTools {
 /// Runtime and discovery instructions beside the selected schemas.
 #[derive(Serialize, JsonSchema)]
 pub struct CodeToolsDescription {
+    /// Curated namespaces and runnable examples; explore details with sdk.help(topic).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sdk_guide: Option<String>,
     /// How to execute methods and interpret discovery results.
     pub instructions: String,
     /// Registered methods; schemas are null in the compact catalog.
@@ -154,6 +157,7 @@ impl AsyncTool<CodeModeToolContext> for DescribeCodeTools {
         _request: RequestContext,
     ) -> ToolResult<Self::Output> {
         Ok(CodeToolsDescription {
+            sdk_guide: Some(crate::domain::sdk_guide()),
             instructions: "Methods are async: await sdk.ToolName(input). Input and output schemas are JSON-encoded strings including their definitions. Null schemas mean this is the compact catalog; request exact names for details. Use Promise.all for independent calls, await every call, and return JSON. The SDK enforces the session owner's permissions. Use ordinary direct tools for human interaction or subagents. console.log is diagnostic only; use return for model-visible data.".into(),
             tools: context.service.describe(&self.names).map_err(tool_error)?.into_iter().map(CodeToolDescription::from).collect(),
         })

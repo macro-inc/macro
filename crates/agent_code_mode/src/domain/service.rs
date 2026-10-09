@@ -161,7 +161,7 @@ impl CodeModeService {
 
 // Human-finished tools retain their existing host lifecycle. Discovery, delegation,
 // and execution itself stay outside the SDK to prevent recursive execution trees.
-fn allowed_tool(tool: &ToolDocumentation) -> bool {
+pub(super) fn allowed_tool(tool: &ToolDocumentation) -> bool {
     !tool.user_tool
         && !matches!(
             tool.name.as_str(),

@@ -224,9 +224,29 @@ pub const EAGER_TOOLS: &[&str] = &[
 /// Assemble the toolset and tool-use prompt for a host. These are actually
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
+    tools_for_inner(host, false)
+}
+
+/// Agent-session tools plus the deterministic document primitives used by code mode.
+pub fn code_mode_tools() -> Arc<AiToolSet> {
+    tools_for_inner(AiHost::AgentSession, true).toolset
+}
+
+fn code_document_tools() -> AiToolSet {
+    AsyncToolCollection::new().add_subtoolset::<ToolDocumentToolContext>(
+        documents::inbound::toolset::code_document_toolset(),
+    )
+}
+
+fn tools_for_inner(host: AiHost, code_mode: bool) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<RoutineToolContext>(routines::inbound::routine_toolset());
+    let toolset = if code_mode {
+        toolset.add_toolset(code_document_tools())
+    } else {
+        toolset
+    };
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
@@ -293,6 +313,7 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::Chat))
         .merge(&agent_code_mode::inbound::toolset::toolset())
+        .merge(&code_document_tools())
         .merge(&read::read_thread())
         .build()
 }

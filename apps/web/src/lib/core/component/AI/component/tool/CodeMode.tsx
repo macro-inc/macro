@@ -1,6 +1,7 @@
+import { ItemPreview } from '@core/component/ItemPreview';
 import CaretRight from '@phosphor/caret-right.svg';
 import CodeIcon from '@phosphor/code.svg';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
@@ -70,6 +71,100 @@ export const executeCodeHandler = createToolRenderer({
             class="flex items-center gap-2"
           >
             <span>{ctx.response?.data.status}</span>
+            <CaretRight
+              class="size-3.5"
+              classList={{ 'rotate-90': expanded() }}
+            />
+          </button>
+        </Show>
+      </BaseTool>
+    );
+  },
+});
+
+export const readDocumentStateHandler = createToolRenderer({
+  name: 'ReadDocumentState',
+  render: (ctx) => {
+    const [expanded, setExpanded] = createSignal(false);
+    return (
+      <BaseTool
+        icon={CodeIcon}
+        renderContext={ctx.renderContext}
+        type="call"
+        response={
+          <Show when={expanded()}>
+            <pre class="max-h-96 overflow-auto whitespace-pre-wrap break-words p-3 text-xs">
+              {JSON.stringify(ctx.response?.data, null, 2)}
+            </pre>
+          </Show>
+        }
+      >
+        <div class="min-w-0 flex-1">
+          Read{' '}
+          <Suspense>
+            <ItemPreview
+              class="inline-flex align-middle ring-0"
+              id={ctx.tool.data.documentId}
+              type="document"
+            />
+          </Suspense>
+        </div>
+        <Show when={ctx.response}>
+          <button
+            type="button"
+            aria-label="Show document state"
+            aria-expanded={expanded()}
+            onClick={() => setExpanded(!expanded())}
+            class="flex items-center gap-2"
+          >
+            <span>{ctx.response?.data.nodeIds.length} nodes</span>
+            <CaretRight
+              class="size-3.5"
+              classList={{ 'rotate-90': expanded() }}
+            />
+          </button>
+        </Show>
+      </BaseTool>
+    );
+  },
+});
+
+export const applyDocumentOperationsHandler = createToolRenderer({
+  name: 'ApplyDocumentOperations',
+  render: (ctx) => {
+    const [expanded, setExpanded] = createSignal(false);
+    return (
+      <BaseTool
+        icon={CodeIcon}
+        renderContext={ctx.renderContext}
+        type="call"
+        response={
+          <Show when={expanded()}>
+            <pre class="max-h-96 overflow-auto whitespace-pre-wrap break-words p-3 text-xs">
+              {JSON.stringify(ctx.response?.data, null, 2)}
+            </pre>
+          </Show>
+        }
+      >
+        <div class="min-w-0 flex-1">
+          Edit{' '}
+          <Suspense>
+            <ItemPreview
+              class="inline-flex align-middle ring-0"
+              id={ctx.tool.data.documentId}
+              type="document"
+            />
+          </Suspense>
+        </div>
+        <Show when={ctx.response}>
+          <button
+            type="button"
+            aria-label="Show document save result"
+            aria-expanded={expanded()}
+            onClick={() => setExpanded(!expanded())}
+            class="flex items-center gap-2"
+          >
+            <span>{ctx.response?.data.applied ? 'Saved' : 'No changes'}</span>
             <CaretRight
               class="size-3.5"
               classList={{ 'rotate-90': expanded() }}
