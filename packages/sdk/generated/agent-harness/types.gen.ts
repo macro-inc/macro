@@ -1557,7 +1557,7 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime is disconnected
+     * Macrod runtime or Cursor account is not connected
      */
     409: unknown;
     /**
@@ -1640,7 +1640,7 @@ export type LoadAgentModelsHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime is disconnected
+     * Macrod runtime or Cursor account is not connected
      */
     409: unknown;
     /**
