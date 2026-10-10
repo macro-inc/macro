@@ -146,6 +146,7 @@ pub(crate) struct ScriptedEngine {
 /// What one turn asked of the engine, as far as tests care.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RecordedTurn {
+    pub(crate) purpose: crate::domain::engine::TurnPurpose,
     /// Model the turn was to run on.
     pub(crate) model: String,
     /// Reasoning effort the turn was to use.
@@ -185,6 +186,7 @@ impl TurnEngine for ScriptedEngine {
             .lock()
             .expect("requests lock")
             .push(RecordedTurn {
+                purpose: request.purpose,
                 model: request.model.clone(),
                 reasoning_effort: request.reasoning_effort,
                 speed: request.speed,

@@ -26,7 +26,7 @@ mod test;
 /// anything else is described to the model by name and URL, since there is
 /// no way to show it the bytes and the URL is still something its tools can
 /// fetch.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct UserPrompt {
     /// The prompt's text blocks, joined.
     pub text: String,
@@ -80,6 +80,15 @@ impl UserPrompt {
     #[must_use]
     pub fn is_compact_command(&self) -> bool {
         self.text.trim() == COMPACT_COMMAND && self.attachments.is_empty()
+    }
+
+    /// How many of the attached files reach the model as images.
+    #[must_use]
+    pub fn image_count(&self) -> usize {
+        self.attachments
+            .iter()
+            .filter(|attachment| is_image(attachment))
+            .count()
     }
 
     /// The model-facing form of the attached files, `None` without any.
@@ -195,7 +204,8 @@ use super::engine::AgentIdentity;
 
 /// One entry of the conversation, in the shape
 /// [`agent::to_rig_messages`] round-trips.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum HistoryEntry {
     /// A prompt from a user.
     User(UserPrompt),

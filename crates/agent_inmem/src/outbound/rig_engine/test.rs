@@ -286,6 +286,14 @@ async fn opening_without_a_verdict_is_dropped() {
     assert!(opener::verdict(&mut receiver).await.is_none());
 }
 
+#[tokio::test]
+async fn a_summary_turns_closed_opener_has_no_verdict() {
+    // A summary turn races nothing: its opener is closed before it speaks.
+    let mut receiver = mpsc::channel::<String>(1).1;
+
+    assert!(opener::verdict(&mut receiver).await.is_none());
+}
+
 #[test]
 fn opening_transcript_leaves_out_the_hidden_agent_context() {
     let messages = vec![agent::types::ChatMessage {

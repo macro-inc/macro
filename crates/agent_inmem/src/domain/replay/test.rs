@@ -30,6 +30,10 @@ fn prompt_frame(text: &str) -> Message {
 /// A logged `session/update` notification, the shape the agent streams.
 fn update_frame(update: SessionUpdate) -> Message {
     let notification = SessionNotification::new(acp_session(), update);
+    notification_frame(notification)
+}
+
+fn notification_frame(notification: SessionNotification) -> Message {
     let raw: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
         "jsonrpc": "2.0",
         "method": "session/update",
@@ -37,6 +41,61 @@ fn update_frame(update: SessionUpdate) -> Message {
     }))
     .expect("a notification frame should deserialize");
     Message::ToServer(ToServerMessage::Acp(AcpMessage(raw)))
+}
+
+/// The notification the live agent sends once it has summarized: the
+/// summary, and the recent entries it kept whole.
+fn checkpoint_frame(text: &str, retained: Vec<HistoryEntry>) -> Message {
+    let mut meta = agent_client_protocol::schema::v1::Meta::new();
+    meta.insert(
+        "macro".to_owned(),
+        serde_json::json!({
+            "contextSummary": {"text": text, "retained": retained}
+        }),
+    );
+    notification_frame(SessionNotification::new(acp_session(), message_chunk("")).meta(meta))
+}
+
+fn kept_turn(prompt: &str, answer: &str) -> Vec<HistoryEntry> {
+    vec![
+        HistoryEntry::User(UserPrompt::text(prompt)),
+        HistoryEntry::Assistant(vec![AssistantMessagePart::Text {
+            text: answer.to_owned(),
+        }]),
+    ]
+}
+
+#[test]
+fn a_saved_summary_restores_recent_turns_and_the_prompt_that_triggered_compaction() {
+    let history = replay_history(vec![
+        prompt_frame("Email the report"),
+        update_frame(message_chunk("Sent")),
+        prompt_frame("Use concise replies"),
+        update_frame(message_chunk("Understood")),
+        prompt_frame("What next?"),
+        checkpoint_frame(
+            "The report was already emailed.",
+            kept_turn("Use concise replies", "Understood"),
+        ),
+        update_frame(message_chunk("Review the result")),
+    ]);
+    let messages =
+        crate::domain::session::messages_for_turn(&history, &UserPrompt::text("continue"));
+    let texts: Vec<_> = messages
+        .iter()
+        .map(|message| message.content.message_text())
+        .collect();
+    assert_eq!(
+        &texts[1..],
+        [
+            "The report was already emailed.",
+            "Use concise replies",
+            "Understood",
+            "What next?",
+            "Review the result",
+            "continue"
+        ]
+    );
 }
 
 /// A logged `session/prompt` whose text is followed by one file link.
@@ -148,7 +207,7 @@ fn a_logged_turn_replays_as_the_history_the_live_agent_recorded() {
 }
 
 #[test]
-fn a_compact_prompt_drops_everything_recorded_before_it() {
+fn a_compact_request_without_a_saved_summary_preserves_history() {
     let history = replay_history(vec![
         prompt_frame("remember this"),
         update_frame(message_chunk("noted")),
@@ -160,9 +219,16 @@ fn a_compact_prompt_drops_everything_recorded_before_it() {
         update_frame(message_chunk("fresh")),
     ]);
 
-    let [HistoryEntry::User(prompt), HistoryEntry::Assistant(parts)] = history.as_slice() else {
-        panic!("only the post-compact turn should replay, got {history:#?}");
+    let [
+        HistoryEntry::User(before),
+        _,
+        HistoryEntry::User(prompt),
+        HistoryEntry::Assistant(parts),
+    ] = history.as_slice()
+    else {
+        panic!("the full conversation should replay, got {history:#?}");
     };
+    assert_eq!(before.text, "remember this");
     assert_eq!(prompt.text, "after");
     assert_eq!(
         parts.as_slice(),
@@ -278,4 +344,64 @@ fn speed_replays_only_from_confirmed_configuration() {
     frames.push(config_frame("model", "other-model"));
     frames.push(config_response(serde_json::json!({"configOptions":[]})));
     assert_eq!(replay_speed(&frames), ModelSpeed::Standard);
+}
+
+/// A prompt that failed before it ran is in the log but was never part of
+/// the live conversation; the summary keeps what the live agent kept.
+#[test]
+fn a_saved_summary_keeps_the_live_window_around_a_prompt_that_never_ran() {
+    let history = replay_history(vec![
+        prompt_frame("Email the report"),
+        update_frame(message_chunk("Sent")),
+        prompt_frame("Use concise replies"),
+        update_frame(message_chunk("Understood")),
+        prompt_frame("A message far too long to run"),
+        prompt_frame("What next?"),
+        checkpoint_frame(
+            "The report was already emailed.",
+            kept_turn("Use concise replies", "Understood"),
+        ),
+        update_frame(message_chunk("Review the result")),
+    ]);
+    let messages =
+        crate::domain::session::messages_for_turn(&history, &UserPrompt::text("continue"));
+    let texts: Vec<_> = messages
+        .iter()
+        .map(|message| message.content.message_text())
+        .collect();
+    assert_eq!(
+        &texts[1..],
+        [
+            "The report was already emailed.",
+            "Use concise replies",
+            "Understood",
+            "What next?",
+            "Review the result",
+            "continue"
+        ]
+    );
+}
+
+/// A `/compact` from before compaction summarized cleared the model's
+/// context; its log still replays that way.
+#[test]
+fn a_compact_that_cleared_the_context_still_clears_it_on_replay() {
+    let history = replay_history(vec![
+        prompt_frame("remember this"),
+        update_frame(message_chunk("noted")),
+        prompt_frame("/compact"),
+        update_frame(message_chunk(
+            "Compacted: the earlier conversation is no longer in the model's context.",
+        )),
+        prompt_frame("after"),
+        update_frame(message_chunk("fresh")),
+    ]);
+    let messages =
+        crate::domain::session::messages_for_turn(&history, &UserPrompt::text("continue"));
+    let texts: Vec<_> = messages
+        .iter()
+        .map(|message| message.content.message_text())
+        .collect();
+    assert_eq!(&texts[texts.len() - 3..], ["after", "fresh", "continue"]);
+    assert!(!texts.iter().any(|text| text == "remember this"));
 }
