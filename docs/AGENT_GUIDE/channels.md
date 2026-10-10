@@ -12,8 +12,27 @@ An external email can be selected as a channel participant. For an unregistered 
 
 ## Imported Slack history
 
-Import starts in **Settings → Team → Connections → Import from Slack**, not the
-channel composer. Only explicitly selected Slack IDs create work. Slack public
+Import starts from the **Import from Slack** chip below the Chat sidebar tabs,
+or **Settings → Team → Connections → Import from Slack**. The chip is visible
+to team admins and owners when Slack archive import is enabled, and opens the
+same dialog without leaving Chat. Its **Dismiss Slack import** button hides the
+card and remembers the choice in this browser for that user and Macro team.
+Successful archive imports (including partial imports with a completed channel)
+and server-confirmed channel-only imports also hide it. Failed or cancelled
+imports do not. Dismissing or completing an import keeps the Settings entry
+available; completion does not close an open progress dialog. Check persistence
+after reload and confirm dismissal does not affect another user or team.
+Closing the dialog returns focus to the chip when it is still visible.
+The dialog offers **Import with history** (recommended) and **Import channels
+without history**. The first needs a ZIP export provided by a Slack workspace
+owner or admin; its upload screen links to Slack's export instructions. Files
+and attachments are excluded. The second opens a dedicated channel import flow:
+it reuses an enabled Pipedream Slack connection or requests authorization, then
+automatically discovers public channels. Select channels and click **Import N
+channels** to create their names and matching Macro teammates. It requires no
+Slack admin role, but workspace app-approval policies still apply. Neither method
+sets up ongoing message sync. Previous ZIP imports are collapsed under a disclosure.
+Only explicitly selected Slack IDs create work. Slack public
 channels become Team channels with automatic team joining off; private channels
 and group DMs become Private. Two-person DMs keep exactly their mapped pair and
 never gain the importing admin as a third participant. Existing names, roles,
