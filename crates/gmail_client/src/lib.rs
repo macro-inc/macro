@@ -311,7 +311,8 @@ impl GmailClient {
     /// Fetches all of the user's main contacts, handling pagination.
     /// Returns raw Gmail PersonResource objects and a sync token for future incremental updates.
     /// Callers should map PersonResource to service layer Contact.
-    #[tracing::instrument(skip(self, access_token, sync_token), err)]
+    /// Failures log at WARN: expired sync tokens and missing contacts scopes are routine.
+    #[tracing::instrument(skip(self, access_token, sync_token), err(level = "warn"))]
     pub async fn get_contacts(
         &self,
         access_token: &str,
@@ -324,7 +325,8 @@ impl GmailClient {
     /// These are typically contacts auto-created from interactions.
     /// Returns raw Gmail PersonResource objects and a sync token.
     /// Callers should map PersonResource to service layer Contact.
-    #[tracing::instrument(skip(self, access_token, sync_token), err)]
+    /// Failures log at WARN: expired sync tokens and missing contacts scopes are routine.
+    #[tracing::instrument(skip(self, access_token, sync_token), err(level = "warn"))]
     pub async fn get_other_contacts(
         &self,
         access_token: &str,

@@ -1,10 +1,59 @@
+use tracing::Level;
 use uuid::Uuid;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, ResponseTemplate};
 
 use super::repository;
-use crate::domain::models::AccessToken;
+use crate::domain::models::{AccessToken, EmailApiError};
 use crate::domain::ports::MailboxContactsClient;
+use crate::log_capture::EventLevels;
+
+const EXPIRED_SYNC_TOKEN_BODY: &str = r#"{
+  "error": {
+    "code": 400,
+    "message": "Sync token is expired. Clear local cache and retry call without the sync token.",
+    "status": "FAILED_PRECONDITION",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        "reason": "EXPIRED_SYNC_TOKEN",
+        "domain": "people.googleapis.com"
+      }
+    ]
+  }
+}"#;
+
+#[tokio::test]
+async fn expired_sync_tokens_are_outdated_cursors_logged_below_error() {
+    let (server, repository) = repository().await;
+    for endpoint in ["/people/me/connections", "/otherContacts"] {
+        Mock::given(method("GET"))
+            .and(path(endpoint))
+            .and(query_param("syncToken", "expired"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_raw(EXPIRED_SYNC_TOKEN_BODY, "application/json"),
+            )
+            .mount(&server)
+            .await;
+    }
+    let levels = EventLevels::default();
+    let _capture = levels.capture();
+
+    let token = AccessToken::new("token");
+    let link_id = Uuid::now_v7();
+    let contacts = repository
+        .list_contacts(&token, link_id, Some("expired"))
+        .await;
+    let other_contacts = repository
+        .list_other_contacts(&token, link_id, Some("expired"))
+        .await;
+
+    assert_eq!(contacts.unwrap_err(), EmailApiError::OutdatedCursor);
+    assert_eq!(other_contacts.unwrap_err(), EmailApiError::OutdatedCursor);
+    assert_eq!(levels.count(Level::ERROR), 0);
+    assert_eq!(levels.count(Level::WARN), 4);
+}
 
 #[tokio::test]
 async fn paginates_contacts_and_returns_the_final_sync_token() {
