@@ -125,10 +125,8 @@ function WebDefaultActions(props: {
   );
 }
 
-function IosDefaultActions(props: {
-  input: InputData;
-  dictation: DictationController;
-}) {
+// The iOS keyboard dictates on its own, so there is no microphone to place.
+function IosDefaultActions(props: { input: InputData }) {
   return (
     <>
       <Input.Layout.ActionsLeft>
@@ -138,7 +136,6 @@ function IosDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <DictationButton dictation={props.dictation} />
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
@@ -156,7 +153,7 @@ function DefaultActions(props: {
         <WebDefaultActions input={props.input} dictation={props.dictation} />
       }
     >
-      <IosDefaultActions input={props.input} dictation={props.dictation} />
+      <IosDefaultActions input={props.input} />
     </Show>
   );
 }
@@ -550,7 +547,6 @@ export function ChannelInput(props: ChannelInputProps) {
           getFocusTarget={() => lexicalEditor().getRootElement()}
           onAttach={collapsedInput.attach}
           onOpen={collapsedInput.expand}
-          trailingAction={<DictationButton dictation={dictation} />}
           onSend={() => void commands.send()}
         />
       </Show>
