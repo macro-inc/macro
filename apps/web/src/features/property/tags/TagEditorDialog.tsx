@@ -91,12 +91,6 @@ export function TagEditorDialog(props: {
         ? 'user'
         : initialScope(mode)
     );
-
-    if (mode.type === 'create') {
-      requestAnimationFrame(() => {
-        nameInputRef?.focus();
-      });
-    }
   });
 
   const title = () =>
@@ -183,6 +177,11 @@ export function TagEditorDialog(props: {
       open={props.open}
       onOpenChange={(open) => !open && close()}
       onCloseAutoFocus={props.onCloseAutoFocus}
+      onOpenAutoFocus={(event) => {
+        if (props.mode?.type !== 'create') return;
+        event.preventDefault();
+        nameInputRef?.focus();
+      }}
     >
       <CommandMenuShell depth={2} class="text-sm" onKeyDown={handleKeyDown}>
         <CommandMenuShell.Header class="my-0 gap-3 border-b-0">
@@ -210,7 +209,6 @@ export function TagEditorDialog(props: {
             <EditorRow label="Name">
               <input
                 ref={nameInputRef}
-                autofocus={props.mode?.type === 'create'}
                 value={label()}
                 onInput={(event) => setLabel(event.currentTarget.value)}
                 onKeyDown={(event) => {
