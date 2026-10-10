@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { createCiTelemetryRole } from './ci';
 import { createNetwork } from './network';
 import { renderUserData } from './render';
 import {
@@ -40,6 +41,13 @@ validateSettings({
   tracesBucket: 'validate-traces',
 });
 validateRegionalArn(alarmTopicArn, 'sns', region);
+const ciIngestSecretArn =
+  stack === 'prod' ? config.require('ciIngestSecretArn') : undefined;
+if (ciIngestSecretArn)
+  validateRegionalArn(ciIngestSecretArn, 'secretsmanager', 'us-east-1');
+export const ciTelemetryRoleArn = ciIngestSecretArn
+  ? createCiTelemetryRole(ciIngestSecretArn)
+  : undefined;
 const vpc = createNetwork(region, tags);
 const subnet = vpc.privateSubnet;
 const subnetId = subnet.id;
