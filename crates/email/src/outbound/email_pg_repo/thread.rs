@@ -76,14 +76,14 @@ pub(super) async fn thread_mail_projections_by_ids(
     // pre-aggregated `rules` lateral; `draft_sender_is_signal` (domain
     // service/user.rs) mirrors its sender-override precedence. Change all four
     // together.
+    //
+    // The share check tests each source table on its own. A union of the
+    // viewer's sources has no distinct estimate, and the planner then probes
+    // `entity_access` once per source, thousands of times for some viewers,
+    // instead of once per requested thread.
     let rows = sqlx::query!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp
-            WHERE cp.user_id = $2 AND cp.left_at IS NULL
-            UNION ALL SELECT team_id::text FROM team_user WHERE user_id = $2
-            UNION ALL SELECT $2::text
-        ), message_facts AS (
+        WITH message_facts AS (
             SELECT m.id, m.thread_id, m.is_draft, m.is_read,
                 m.is_draft AND m.provider_id IS NULL AS macro_draft,
                 (('INBOX' = ANY(labels.provider_names) AND NOT 'SENT' = ANY(labels.provider_names))
@@ -164,7 +164,10 @@ pub(super) async fn thread_mail_projections_by_ids(
             t.has_calendar_attachment,
             EXISTS (SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id = t.id AND ea.entity_type = 'email_thread'
-                  AND ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+                  AND (ea.source_id = $2
+                    OR ea.source_id IN (SELECT team_id::text FROM team_user WHERE user_id = $2)
+                    OR ea.source_id IN (SELECT cp.channel_id::text FROM comms_channel_participants cp
+                        WHERE cp.user_id = $2 AND cp.left_at IS NULL))
             ) AS "has_thread_share!",
             CASE WHEN am.id IS NOT NULL THEN jsonb_build_object(
                 'id', am.id, 'subject', am.subject, 'snippet', am.snippet, 'is_draft', am.is_draft,

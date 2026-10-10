@@ -162,7 +162,7 @@ async fn canonical_tab_previews_and_share_facts(pool: Pool<Postgres>) -> anyhow:
     assert!(metadata.cache_facts.has_calendar_attachment);
     assert!(
         !metadata.cache_facts.has_thread_share,
-        "ownership is not a share grant"
+        "neither ownership nor grants on other entity types share a thread"
     );
     assert!(get(direct).cache_facts.has_thread_share);
     assert!(get(team).cache_facts.has_thread_share);
