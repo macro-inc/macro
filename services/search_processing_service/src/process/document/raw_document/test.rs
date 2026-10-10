@@ -175,6 +175,42 @@ fn test_design_content_is_indexed_but_other_vector_files_are_name_only() {
     assert!(should_index_parent_only(&FileType::Dwg));
 }
 
+#[test]
+fn raw_document_key_is_under_the_stored_owner() {
+    let owner: Owner = "macro|owner@macro.com".to_string().try_into().unwrap();
+    let message = |user_id: &str, version: Option<&str>| SearchExtractorMessage {
+        user_id: user_id.to_string(),
+        document_id: "DDD".to_string(),
+        file_type: FileType::Md,
+        document_version_id: version.map(str::to_string),
+        index_override: None,
+    };
+    let latest = build_cloud_storage_bucket_document_key(&owner, "DDD", "7");
+    let converted = build_docx_to_pdf_converted_document_key(&owner, "DDD");
+
+    let check = |message: SearchExtractorMessage, version: &str, expected: Option<&str>| {
+        assert_eq!(
+            raw_document_key(&owner, &message, version).as_deref(),
+            expected,
+            "{message:?} at version {version}"
+        );
+    };
+
+    check(message("", None), "7", Some(&latest));
+    check(message("", Some("7")), "7", Some(&latest));
+    check(
+        message("macro|other@macro.com", Some("7")),
+        "7",
+        Some(&latest),
+    );
+    check(message("", Some("6")), "7", None);
+    check(
+        message("", Some(CONVERTED_DOCUMENT_FILE_NAME)),
+        CONVERTED_DOCUMENT_FILE_NAME,
+        Some(&converted),
+    );
+}
+
 #[tokio::test]
 async fn test_unreadable_designs_are_read_errors() {
     for file_type in [FileType::Psd, FileType::Psb, FileType::Ai, FileType::Md] {
