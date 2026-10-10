@@ -276,6 +276,22 @@ async fn init_user(
             InitError::BadRequest("link has not completed authentication yet".to_string())
         })?;
 
+        // Calendar-only path: when the consent request asked only for calendar
+        // (not Gmail), create a minimal link for calendar data without starting
+        // Gmail sync. This supports connecting a Google Calendar without also
+        // connecting email.
+        if !completed_grant.requested_gmail {
+            return init_calendar_only_link(
+                &ctx,
+                &user_context.fusion_user_id,
+                &macro_user_id,
+                linked_email,
+                link_id,
+                &completed_grant,
+            )
+            .await;
+        }
+
         // Dispatch on whether the linked email already belongs to another macro user.
         // Same-user → fall through to the data-source path. Cross-user → add a graph
         // edge instead of creating a duplicate email_links row.
@@ -828,6 +844,9 @@ async fn fetch_token_scopes(access_token: &str) -> anyhow::Result<Vec<String>> {
         .collect())
 }
 
+/// The Gmail modify scope that must be present for email sync to work.
+const GMAIL_MODIFY_SCOPE: &str = "https://www.googleapis.com/auth/gmail.modify";
+
 /// The Google grant a completed link flow carries back, with what the consent
 /// request asked for — the grant alone cannot say whether calendar scopes were
 /// wanted or merely re-issued.
@@ -835,6 +854,9 @@ async fn fetch_token_scopes(access_token: &str) -> anyhow::Result<Vec<String>> {
 struct CompletedGoogleGrant {
     intent: CalendarGrantIntent,
     granted_scopes: Vec<String>,
+    /// Whether the consent request asked for Gmail mailbox access. When false,
+    /// this is a calendar-only connection and Gmail sync should not be started.
+    requested_gmail: bool,
 }
 
 impl CompletedGoogleGrant {
@@ -845,6 +867,10 @@ impl CompletedGoogleGrant {
     fn from_in_progress(in_progress: &InProgressUserLink) -> Self {
         let requested =
             GoogleScopeSet::from_scopes(in_progress.requested_google_scopes.iter().cloned());
+        let requested_gmail = in_progress
+            .requested_google_scopes
+            .iter()
+            .any(|s| s == GMAIL_MODIFY_SCOPE);
         Self {
             intent: if requested.has_calendar_capability() {
                 CalendarGrantIntent::CalendarRequested
@@ -852,6 +878,7 @@ impl CompletedGoogleGrant {
                 CalendarGrantIntent::Incidental
             },
             granted_scopes: in_progress.granted_google_scopes.clone(),
+            requested_gmail,
         }
     }
 }
@@ -910,6 +937,97 @@ async fn apply_and_consume_calendar_grant(
         .ok();
 
     Ok(applied)
+}
+
+/// Initialize a calendar-only link: creates an `email_links` row and applies
+/// the calendar grant, but does not start Gmail sync or email backfill.
+///
+/// This supports connecting a Google Calendar without also connecting email.
+/// The link exists primarily to store the calendar grant and associate
+/// calendar data with a Google account.
+#[tracing::instrument(skip(ctx, grant), fields(linked_email = %linked_email), err)]
+async fn init_calendar_only_link(
+    ctx: &ApiContext,
+    fusion_user_id: &str,
+    macro_user_id: &MacroUserIdStr<'static>,
+    linked_email: String,
+    in_progress_link_id: Uuid,
+    grant: &CompletedGoogleGrant,
+) -> Result<Response, InitError> {
+    let pg_repo = EmailPgRepo::new(ctx.db.clone());
+
+    // Check for an existing link for this email under this user.
+    if let Some(existing_link) = pg_repo
+        .link_by_fusionauth_email_provider(fusion_user_id, &linked_email, UserProvider::Gmail)
+        .await
+        .context("Failed to check existing link by email")?
+    {
+        // Link already exists — just apply the calendar grant upgrade.
+        let applied =
+            apply_and_consume_calendar_grant(ctx, existing_link.id, in_progress_link_id, grant)
+                .await?;
+        tracing::info!(
+            link_id = %existing_link.id,
+            grant_version = applied.grant_version,
+            changed = applied.changed,
+            calendar_jobs = applied.jobs.len(),
+            "Applied calendar permission upgrade to existing link"
+        );
+        return Ok((
+            StatusCode::OK,
+            Json(InitResponse {
+                link_id: existing_link.id,
+                backfill_job_id: None,
+            }),
+        )
+            .into_response());
+    }
+
+    // Create a new link for calendar-only use. Unlike the Gmail path, we don't
+    // register a Gmail subscription or store a history_id — there's no email
+    // sync to track.
+    let provisional_link = new_gmail_link(
+        fusion_user_id.to_string(),
+        macro_user_id.clone(),
+        linked_email,
+    )?;
+
+    // Calendar-only links have sync disabled since there's no Gmail access.
+    let link = Link {
+        is_sync_active: false,
+        ..provisional_link
+    };
+
+    let mut tx = ctx
+        .db
+        .begin()
+        .await
+        .context("Failed to begin calendar-only link transaction")?;
+
+    let link = email_db_client::links::insert::upsert_link(&mut *tx, link)
+        .await
+        .context("Failed to create calendar-only link")?;
+
+    tx.commit()
+        .await
+        .context("Failed to commit calendar-only link transaction")?;
+
+    // Apply the calendar grant to enable calendar sync.
+    apply_and_consume_calendar_grant(ctx, link.id, in_progress_link_id, grant).await?;
+
+    tracing::info!(
+        link_id = %link.id,
+        "Created calendar-only link (no Gmail sync)"
+    );
+
+    Ok((
+        StatusCode::OK,
+        Json(InitResponse {
+            link_id: link.id,
+            backfill_job_id: None,
+        }),
+    )
+        .into_response())
 }
 
 fn classify_provider_init_error(error: EmailApiError) -> InitError {
