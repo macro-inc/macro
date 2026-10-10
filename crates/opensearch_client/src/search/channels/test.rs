@@ -84,7 +84,10 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     "bool": {
                         "minimum_should_match": 1,
                         "should": [
-                            {"match_phrase": {"content": "test"}}
+                            {"bool": {"minimum_should_match": 1, "should": [
+                                {"match_phrase": {"content": "test"}},
+                                {"match_phrase": {"imported_author": "test"}}
+                            ]}}
                         ]
                     }
                 }
@@ -114,8 +117,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
 
 #[test]
 fn test_build_bool_query_multi_term_ands_inside_opensearch() -> anyhow::Result<()> {
-    // Two terms — each becomes its own `match_phrase` clause and they
-    // combine with `must` so both must appear in the same message.
+    // Terms may match the body or author but must belong to the same message.
     // Quoted phrases like "foo bar" arrive here as a single token and use
     // the same `match_phrase` path.
     let builder = ChannelMessageQueryBuilder::new(vec!["foo".to_string(), "bar baz".to_string()])
@@ -135,8 +137,14 @@ fn test_build_bool_query_multi_term_ands_inside_opensearch() -> anyhow::Result<(
                             {
                                 "bool": {
                                     "must": [
-                                        { "match_phrase": { "content": "foo" } },
-                                        { "match_phrase": { "content": "bar baz" } }
+                                        {"bool": {"minimum_should_match": 1, "should": [
+                                            {"match_phrase": {"content": "foo"}},
+                                            {"match_phrase": {"imported_author": "foo"}}
+                                        ]}},
+                                        {"bool": {"minimum_should_match": 1, "should": [
+                                            {"match_phrase": {"content": "bar baz"}},
+                                            {"match_phrase": {"imported_author": "bar baz"}}
+                                        ]}}
                                     ]
                                 }
                             }

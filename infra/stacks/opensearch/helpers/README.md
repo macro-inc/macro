@@ -42,6 +42,22 @@ that can be swapped without a code deploy.
 
 All migration scripts default to `DRY_RUN=true`; pass `DRY_RUN=false` to apply.
 
+## Repair missing channel message snippets
+
+Deploy the search code that queries `imported_author` directly, then run
+`DRY_RUN=false bun scripts/add_imported_author.ts` with the intended cluster's
+`OPENSEARCH_*` configuration. Preview with `DRY_RUN=true`; `INDEX` optionally
+targets a physical index instead of the `channels` alias.
+
+This explicitly clears `imported_author.copy_to`. On OpenSearch 3.5, copying
+the author into `content` makes body highlighting read the author source instead
+of the message body, even for native messages with no imported author. The
+mapping repair restores existing body snippets immediately; no reindex or
+message rewrite is needed. The direct author query preserves author searches
+for future imports. Running `create_indices.ts` alone does not clear an existing
+`copy_to` parameter. After applying, verify a body search returns
+`highlight.content` and an imported-author search still finds its message.
+
 ## Manual provisioning
 
 Provision indices and aliases manually using the canonical declarations in

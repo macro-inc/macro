@@ -41,6 +41,10 @@ function mappingServer(options: MappingServerOptions = {}): {
 }
 
 describe('addImportedAuthor', () => {
+  test('explicitly removes copy_to from existing author mappings', () => {
+    expect(IMPORTED_AUTHOR_MAPPING.copy_to).toEqual([]);
+  });
+
   test('adds only author mapping to the live alias and can be rerun', async () => {
     const { client, server, requests } = mappingServer();
     try {
