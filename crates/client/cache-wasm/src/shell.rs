@@ -1104,7 +1104,7 @@ fn query_update_values(
 ) -> Vec<&serde_json::Value> {
     use cache_core::engine::watch_query::QueryUpdate;
     match update {
-        QueryUpdate::Hit { data, .. } => vec![data],
+        QueryUpdate::Hit { data, .. } => vec![data.as_ref()],
         QueryUpdate::Patch { patches, .. } => patches.iter().map(|patch| &patch.value).collect(),
         QueryUpdate::Miss { .. } => Vec::new(),
     }

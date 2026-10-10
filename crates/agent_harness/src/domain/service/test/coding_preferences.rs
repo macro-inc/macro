@@ -38,6 +38,7 @@ fn assignment_command(kind: AgentKind, harness: &str) -> OpenSession {
         discussion_id: macro_uuid::generate_uuid_v7(),
         actor: sender(),
         prompt: "Private assignment instructions".to_owned(),
+        context: None,
     });
     command
 }

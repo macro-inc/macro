@@ -198,6 +198,7 @@ where
                         action: AgentAction::prompt(prompt),
                         actor: Some(owner_user),
                         announce: None,
+                        context: None,
                     }),
                 )
                 .await
@@ -352,6 +353,7 @@ where
                     action: AgentAction::prompt(raw_prompt),
                     actor: Some(owner_user),
                     announce: None,
+                    context: None,
                 }),
             )
             .await

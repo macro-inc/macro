@@ -128,6 +128,10 @@ export type AgentModelDto = {
      * Display name.
      */
     name: string;
+    /**
+     * Image input support, absent when the runtime does not advertise it.
+     */
+    supportsImages?: boolean | null;
 };
 
 /**
@@ -716,6 +720,13 @@ export type CompleteRequest = {
  */
 export type ControlRequest = AgentAction & {
     actionId?: null | AgentActionId;
+    /**
+     * Why the agent is being asked. Only a runtime forwarding a triggered
+     * prompt may send it; a user's request carrying it is refused.
+     */
+    context?: {
+        [key: string]: unknown;
+    } | null;
 };
 
 /**

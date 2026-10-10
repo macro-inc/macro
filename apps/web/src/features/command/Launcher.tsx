@@ -986,6 +986,7 @@ type LauncherBodyState = {
   blocks: Accessor<CreatableBlock[]>;
   selectedIndex: Accessor<number>;
   searchMode: Accessor<boolean>;
+  shiftHeld: Accessor<boolean>;
   itemId: (item: CreatableBlock) => string;
   select: (index: number) => void;
   step: (direction: number) => void;
@@ -1304,6 +1305,7 @@ export const LauncherShell = (
             blocks,
             selectedIndex: focusedIndex,
             searchMode,
+            shiftHeld,
             itemId: (item) => `create-menu-${launcherItemKey(item)}`,
             select: listController.setSelectedIndexFromPointer,
             step: (direction) => {

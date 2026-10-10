@@ -5,7 +5,7 @@ import {
   ComponentResource,
   type ComponentResourceOptions,
 } from '@pulumi/pulumi';
-import { stack } from '../../../shared';
+import { grafanaTelemetryEnabled, stack } from '../../../shared';
 
 const DATADOG_API_KEY_SECRET_KEY = 'datadog-api-key';
 
@@ -78,7 +78,9 @@ export const fargateLogRouterSidecarContainer = {
     type: 'fluentbit',
     options: {
       'config-file-type': 'file',
-      'config-file-value': '/fluent-bit/configs/parse-json.conf',
+      'config-file-value': grafanaTelemetryEnabled
+        ? '/tmp/observability-extra.conf'
+        : '/fluent-bit/configs/parse-json.conf',
       'enable-ecs-log-metadata': 'true',
     },
   },
@@ -96,6 +98,24 @@ export const fargateLogRouterSidecarContainer = {
       value: stack,
     },
   ],
+  ...(grafanaTelemetryEnabled
+    ? {
+        entryPoint: ['/bin/sh', '-ec'],
+        command: [
+          `cat /fluent-bit/configs/parse-json.conf > /tmp/observability-extra.conf
+cat >> /tmp/observability-extra.conf <<'CONFIG'
+[OUTPUT]
+    Name forward
+    Match *-firelens-*
+    Host 127.0.0.1
+    Port 24225
+    Retry_Limit 1
+    net.connect_timeout 2
+CONFIG
+exec /entrypoint.sh`,
+        ],
+      }
+    : {}),
   memoryReservation: 50,
 } satisfies ecs.TaskDefinitionContainerDefinitionArgs;
 

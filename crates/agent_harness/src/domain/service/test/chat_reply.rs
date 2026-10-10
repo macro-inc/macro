@@ -24,6 +24,7 @@ fn assignment_open_command() -> OpenSession {
         discussion_id: macro_uuid::generate_uuid_v7(),
         actor: sender(),
         prompt: "Private assignment instructions".to_owned(),
+        context: None,
     });
     command
 }
@@ -53,8 +54,7 @@ async fn assignment_instructions_reach_system_and_prompt_only_runtimes() {
             calls[0].1.as_deref(),
             kind.folds_instructions().then_some(instructions.as_str())
         );
-        assert_eq!(calls[0].2, Some(ConversationContext::default()));
-        assert_eq!(*composer.parents.lock().unwrap(), vec![None]);
+        assert_eq!(calls[0].2, None);
         assert!(!context.authorized().is_empty());
     }
 }
@@ -461,6 +461,7 @@ mod elicitation {
                     ),
                     action_id: None,
                     actor: Some(sender()),
+                    context: None,
                 })),
             )
             .await

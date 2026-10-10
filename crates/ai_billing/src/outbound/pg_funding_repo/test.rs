@@ -1084,3 +1084,133 @@ async fn domain_facade_rejects_exemption_and_exclusion_on_billable_funding(pool:
     };
     assert!(service.finalize(record).await.is_err());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn max_upgrade_stops_using_the_old_pro_funding_policy_but_preserves_history(pool: PgPool) {
+    let repo = PgFundingRepo::new(pool.clone(), AiPricing::testing());
+    let billing = PgBillingRepo::new(pool, AiPricing::testing());
+    let (rollout, baseline) = rollout_observation();
+    repo.observe(&rollout, baseline.clone(), true)
+        .await
+        .unwrap();
+    let renewal = next_renewal(baseline);
+    repo.observe(&rollout, renewal.clone(), true).await.unwrap();
+    let period = renewal.subscription.period;
+    let at = period.start + Duration::days(1);
+    billing
+        .reset_usage(
+            &user("seat"),
+            period.start,
+            at,
+            Some(2_000),
+            crate::domain::PlanTier::Max,
+        )
+        .await
+        .unwrap();
+    assert!(repo.period(user("seat"), at).await.unwrap().is_none());
+    assert_eq!(
+        repo.period(user("seat"), at - Duration::seconds(1))
+            .await
+            .unwrap()
+            .unwrap()
+            .policy,
+        UsagePolicy::PublicAllowanceV1
+    );
+    let seats = vec![SeatAllowance {
+        user: user("seat"),
+        included_cents: 10_000,
+    }];
+    assert_eq!(
+        billing
+            .legacy_seats(&user("payer"), period, seats.clone())
+            .await
+            .unwrap(),
+        seats
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn free_to_pro_upgrade_preserves_the_new_public_funding_policy(pool: PgPool) {
+    let repo = PgFundingRepo::new(pool.clone(), AiPricing::testing());
+    let billing = PgBillingRepo::new(pool, AiPricing::testing());
+    let (rollout, baseline) = rollout_observation();
+    repo.observe(&rollout, baseline.clone(), true)
+        .await
+        .unwrap();
+    let renewal = next_renewal(baseline);
+    repo.observe(&rollout, renewal.clone(), true).await.unwrap();
+    let period = renewal.subscription.period;
+    let at = period.start + Duration::days(1);
+    billing
+        .reset_usage(
+            &user("seat"),
+            period.start,
+            at,
+            None,
+            crate::domain::PlanTier::Premium,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.period(user("seat"), at).await.unwrap().unwrap().policy,
+        UsagePolicy::PublicAllowanceV1
+    );
+    assert!(
+        billing
+            .legacy_seats(
+                &user("payer"),
+                period,
+                vec![SeatAllowance {
+                    user: user("seat"),
+                    included_cents: 2_000,
+                }]
+            )
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+trait UpgradeFixture {
+    async fn reset_usage(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        start: chrono::DateTime<Utc>,
+        at: chrono::DateTime<Utc>,
+        previous: Option<i64>,
+        to: crate::domain::PlanTier,
+    ) -> crate::domain::Result<()>;
+}
+impl UpgradeFixture for crate::outbound::PgBillingRepo {
+    async fn reset_usage(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        start: chrono::DateTime<Utc>,
+        at: chrono::DateTime<Utc>,
+        previous: Option<i64>,
+        to: crate::domain::PlanTier,
+    ) -> crate::domain::Result<()> {
+        use crate::domain::{BillingRepo, PlanTier};
+        self.record_plan_change(
+            user,
+            crate::domain::plan_change::RecordedPlanChange {
+                change: crate::domain::plan_change::PlanChange {
+                    from: if previous.is_some() {
+                        PlanTier::Premium
+                    } else {
+                        PlanTier::Free
+                    },
+                    to,
+                    at,
+                    period: crate::domain::BillingPeriod {
+                        start,
+                        end: start + chrono::Duration::days(30),
+                    },
+                },
+                previous_included_cents: previous,
+                new_included_cents: Some(if to == PlanTier::Max { 10_000 } else { 2_000 }),
+            },
+        )
+        .await
+    }
+}

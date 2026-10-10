@@ -166,6 +166,12 @@ export const channelInviteRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** Sign-in, onboarding, invite, and handoff pages, without the app's chrome. */
+export const authRoute = defineRoute({ id: 'auth' });
+
+/** Booking pages a visitor opens from a shared link, in the focused shell. */
+export const publicRoute = defineRoute({ id: 'public' });
+
 /** The split layout; its children are the pane routes. */
 export const appRoute = defineRoute({ id: APP_ROUTE_ID });
 

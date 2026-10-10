@@ -1,30 +1,35 @@
 import type { CreatableBlock } from '../types';
 
-export type CreateMenuGroupId = 'docs' | 'visual' | 'talk' | 'plan' | 'ai';
+export type CreateMenuGroupId =
+  | 'docs'
+  | 'organization'
+  | 'design'
+  | 'data'
+  | 'comms'
+  | 'tasks'
+  | 'ai'
+  | 'other';
 
 export type CreateMenuGroup = {
-  id: CreateMenuGroupId | 'other' | 'recent';
+  id: CreateMenuGroupId | 'recent';
   label: string;
   tagline: string;
 };
 
 export const CREATE_MENU_GROUPS: readonly CreateMenuGroup[] = [
-  { id: 'docs', label: 'Docs & files', tagline: 'Write, template, organize' },
+  { id: 'docs', label: 'Docs', tagline: 'Write and template' },
   {
-    id: 'visual',
-    label: 'Visual & data',
-    tagline: 'Diagram, design, crunch numbers',
+    id: 'organization',
+    label: 'Organization',
+    tagline: 'Keep related work together',
   },
-  { id: 'talk', label: 'Communicate', tagline: 'Reach people' },
-  { id: 'plan', label: 'Plan & track', tagline: 'Stay on top of the work' },
-  { id: 'ai', label: 'AI & automation', tagline: 'Put agents to work' },
+  { id: 'design', label: 'Design', tagline: 'Diagram, sketch, design' },
+  { id: 'data', label: 'Data', tagline: 'Collect, organize, analyze' },
+  { id: 'comms', label: 'Comms', tagline: 'Reach people' },
+  { id: 'tasks', label: 'Tasks', tagline: 'Stay on top of the work' },
+  { id: 'ai', label: 'AI', tagline: 'Put agents to work' },
+  { id: 'other', label: 'Other', tagline: 'Everything else' },
 ];
-
-const OTHER_GROUP: CreateMenuGroup = {
-  id: 'other',
-  label: 'More',
-  tagline: 'Everything else',
-};
 
 export type CreateMenuDetails = {
   group: CreateMenuGroupId;
@@ -57,112 +62,112 @@ const DETAILS: Record<string, CreateMenuDetails> = {
     examples: ['Doc template', 'Checklist', 'Canned reply'],
   },
   Code: {
-    group: 'docs',
+    group: 'other',
     tagline: 'Code file with syntax highlighting',
     details:
       'A standalone source file for scripts, queries and config, in whatever language you need.',
     examples: ['Python script', 'SQL query', 'Config file'],
   },
   Folder: {
-    group: 'docs',
+    group: 'organization',
     tagline: 'Keep related files together',
     details:
       'Organize documents, files and other folders in one place, and share them together.',
     examples: ['Client files', 'Archive', 'Team drive'],
   },
   Canvas: {
-    group: 'visual',
+    group: 'design',
     tagline: 'Whiteboard for diagrams and sketches',
     details:
       'An infinite canvas for flowcharts, mind maps, architecture diagrams and freeform brainstorming.',
     examples: ['Flowchart', 'Mind map', 'Architecture diagram'],
   },
   Design: {
-    group: 'visual',
+    group: 'design',
     tagline: 'Figma-compatible design editor',
     details:
       'Create interface mockups and graphics with frames and vector shapes, then save your work as a Figma file.',
     examples: ['App mockup', 'Social graphic', 'Design system'],
   },
-  Spreadsheet: {
-    group: 'visual',
-    tagline: 'Excel-style workbook with formulas',
-    details:
-      'A collaborative spreadsheet with formulas, multiple sheets and AI-assisted editing for models, budgets and analysis.',
-    examples: ['Budget', 'Financial model', 'Tracker'],
-  },
   Database: {
-    group: 'visual',
+    group: 'data',
     tagline: 'Structured records in tables and boards',
     details:
       'Organize structured records with custom fields, then explore them in tables and boards for trackers, inventories or customer lists.',
     examples: ['CRM', 'Content calendar', 'Inventory'],
   },
+  Spreadsheet: {
+    group: 'data',
+    tagline: 'Excel-style workbook with formulas',
+    details:
+      'A collaborative spreadsheet with formulas, multiple sheets and AI-assisted editing for models, budgets and analysis.',
+    examples: ['Budget', 'Financial model', 'Tracker'],
+  },
   Form: {
-    group: 'visual',
+    group: 'data',
     tagline: 'Collect responses',
     details:
       'Build a form to collect feedback, requests or survey answers, with every response saved into a database.',
     examples: ['Survey', 'Intake form', 'Feedback'],
   },
   'Photoshop file': {
-    group: 'visual',
+    group: 'design',
     tagline: 'Layered image editing',
     details:
       'Create and edit layered images for photo edits, composites and graphics, then save your work as a Photoshop file.',
     examples: ['Photo edit', 'Composite', 'Banner'],
   },
   'Illustrator file': {
-    group: 'visual',
+    group: 'design',
     tagline: 'Vector artwork',
     details:
       'Create scalable logos, icons and illustrations on artboards, then save your vector artwork as an Illustrator file.',
     examples: ['Logo', 'Illustration', 'Icon set'],
   },
   Email: {
-    group: 'talk',
+    group: 'comms',
     tagline: 'Compose from your connected inbox',
     details:
       'Write and send an email from your connected email account, with AI help drafting.',
     examples: ['Follow-up', 'Intro', 'Update to a client'],
   },
   Message: {
-    group: 'talk',
+    group: 'comms',
     tagline: 'Quick DM to a person or group',
     details:
       'Send a direct message to one or more teammates without setting up a channel.',
     examples: ['Quick question', 'Heads-up', 'Group DM'],
   },
   Channel: {
-    group: 'talk',
+    group: 'comms',
     tagline: 'Ongoing space for a team or topic',
     details:
       'Keep a team, project or topic in one shared conversation, with threaded discussions and files everyone can find.',
     examples: ['#design', '#launch', '#support'],
   },
   Call: {
-    group: 'talk',
+    group: 'comms',
     tagline: 'Start an audio or video call',
     details:
       'Jump into a call right away and invite teammates or external guests.',
     examples: ['Quick sync', 'Pairing', 'Customer call'],
   },
   Task: {
-    group: 'plan',
+    group: 'tasks',
     tagline: 'To-do with owner, status and due date',
     details:
       'Capture a piece of work, assign it, set a due date and track it through to done.',
     examples: ['Bug', 'Follow-up', 'Review request'],
   },
   Project: {
-    group: 'plan',
+    group: 'tasks',
     tagline: 'Group tasks toward a shared goal',
     details:
       'Collect related tasks under one goal and follow their progress together.',
     examples: ['Launch', 'Quarterly goal', 'Migration'],
   },
   Reminder: {
-    group: 'plan',
+    group: 'tasks',
     tagline: 'Nudge yourself at a time you pick',
     details:
       'Ask Macro to remind you about something later — no document or task required.',
@@ -237,26 +242,21 @@ export function groupCreateMenuItems(
   const sections = CREATE_MENU_GROUPS.map((group) => ({
     group,
     items: items
-      .filter((item) => createMenuDetails(item)?.group === group.id)
+      .filter(
+        (item) => (createMenuDetails(item)?.group ?? 'other') === group.id
+      )
       .sort((a, b) => rank(a) - rank(b)),
   }));
-  const ungrouped = items.filter((item) => !createMenuDetails(item));
-  if (ungrouped.length > 0) {
-    sections.push({ group: OTHER_GROUP, items: ungrouped });
-  }
-
   return sections.filter((section) => section.items.length > 0);
 }
 
-/** Recent choices appear once, before the remaining categorized options. */
+/** Recent choices appear first and remain available in their categories. */
 export function groupRecentCreateMenuItems(
   items: CreatableBlock[],
   recentItems: CreatableBlock[]
 ): CreateMenuSection[] {
   const recent = recentItems.filter((item) => items.includes(item));
-  const categories = groupCreateMenuItems(
-    items.filter((item) => !recent.includes(item))
-  );
+  const categories = groupCreateMenuItems(items);
   return recent.length
     ? [
         {

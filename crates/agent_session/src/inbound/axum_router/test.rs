@@ -1366,6 +1366,7 @@ fn an_unnamed_control_request_omits_the_field() {
     let body = serde_json::to_value(ControlRequest {
         action_id: None,
         action: AgentAction::Stop,
+        context: None,
     })
     .expect("a control request serializes");
 

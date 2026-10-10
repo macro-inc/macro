@@ -86,6 +86,7 @@ import type {
   SsoLoginParams,
   SsoRequiredResponse,
   StripeSessionResponse,
+  SubscriptionStatus,
   Team,
   TeamInvitesResponse,
   TeamMember,
@@ -5725,14 +5726,72 @@ export const createCheckoutSessionV2 = async (
 };
 
 /**
- * On a team billed per seat this moves only the caller's seat (team admins
-and the owner may do so; teammates' seats are managed from team
-settings). Members of a free team, and solo subscribers, get the price on
-their own subscription's seat item swapped. The proration is invoiced
-immediately either way; roles and the AI allowance follow at once on a
-team and from the `customer.subscription.updated` webhook for a personal
-subscription.
- * @summary Moves the caller's own seat between paid plans.
+ * @summary Read subscription state for the authenticated user's seat.
+ */
+export type getSubscriptionStatusResponse200 = {
+  data: SubscriptionStatus;
+  status: 200;
+};
+
+export type getSubscriptionStatusResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getSubscriptionStatusResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type getSubscriptionStatusResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getSubscriptionStatusResponseSuccess =
+  getSubscriptionStatusResponse200 & {
+    headers: Headers;
+  };
+export type getSubscriptionStatusResponseError = (
+  | getSubscriptionStatusResponse401
+  | getSubscriptionStatusResponse409
+  | getSubscriptionStatusResponse500
+) & {
+  headers: Headers;
+};
+
+export type getSubscriptionStatusResponse =
+  | getSubscriptionStatusResponseSuccess
+  | getSubscriptionStatusResponseError;
+
+export const getGetSubscriptionStatusUrl = () => {
+  return `/user/stripe/plan`;
+};
+
+export const getSubscriptionStatus = async (
+  options?: RequestInit
+): Promise<getSubscriptionStatusResponse> => {
+  const res = await fetch(getGetSubscriptionStatusUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSubscriptionStatusResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSubscriptionStatusResponse;
+};
+
+/**
+ * @summary Changes the caller's paid plan. Upgrades are prorated immediately;
+downgrades retain the active plan until renewal. Selecting the active plan
+cancels a pending downgrade without charging or resetting usage.
  */
 export type changePlanResponse200 = {
   data: ChangePlanResponse;

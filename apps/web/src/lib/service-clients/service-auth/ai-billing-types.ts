@@ -31,6 +31,12 @@ export interface AiAutoReloadSnapshot {
   target_balance_cents: number;
   /** Most reloaded per UTC calendar month; `null` when there is no limit. */
   monthly_spend_limit_cents: number | null;
+  /** Authoritative UTC-month cap commitments; absent on older backends. */
+  monthly_budget?: {
+    committed_cents: number;
+    resets_at: string;
+    limit_reached: boolean;
+  } | null;
   /** Reloads are paused after a failed reload charge. */
   suspended: boolean;
   /** Overage is on and reloads are not suspended. */
@@ -49,6 +55,8 @@ export interface AiUsageSnapshot {
   used_cents: number;
   credits_consumed_cents: number;
   credit_balance_cents: number;
+  /** Team billing scope, independent of seat count; absent on older backends. */
+  credits_shared_with_team?: boolean;
   overage_enabled: boolean;
   overage_limit_cents: number;
   overage_charged_cents: number;
@@ -85,6 +93,9 @@ export interface AiPlanCatalog {
 }
 
 export type PaidPlan = 'premium' | 'max';
+
+/** Authoritative renewal and pending change from GET /user/stripe/plan. */
+export type { SubscriptionStatus } from './generated/schemas/subscriptionStatus';
 
 /**
  * A team member with the plan their seat is billed at. Mirrors the auth

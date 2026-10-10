@@ -1,6 +1,5 @@
 /* Calls page: frozen call record, channel call states, and CallOverlay. */
 .call-flow-frame { position: relative; }
-.call-flow-pointer { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 9; transition: transform 600ms cubic-bezier(.2, .8, .2, 1); }
 
 /* Top bars: labels drop to icons when the split header runs out of room. */
 .call-bar { container-type: inline-size; }
@@ -123,11 +122,7 @@
 
 /* CallOverlay in the channel's Call tab. */
 .call-tab-body { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.call-camera { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 28%; }
-.call-camera-mirror { transform: scaleX(-1); }
-.call-tile[data-speaking='true']::after { content: ''; position: absolute; inset: 0; z-index: 5; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--color-accent); pointer-events: none; }
 .call-tile > [role='status'], .call-tile > div:last-child { z-index: 6; }
-.call-pip .call-tile { min-height: 0; }
 .call-controls-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; padding-inline: 8px; }
 .call-controls-center { display: flex; justify-content: center; min-width: 0; }
 .call-control { border-radius: 999px; }
@@ -142,17 +137,6 @@
   .call-controls-center { grid-column-start: 2; }
   .call-chat-panel { position: static; width: 360px; flex-shrink: 0; }
 }
-.call-team-share { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border: 1px solid color-mix(in oklch, var(--color-ink-muted) 8%, transparent); border-radius: 6px; background: color-mix(in oklch, var(--color-ink-muted) 2.5%, transparent); color: color-mix(in oklch, var(--color-ink-muted) 70%, transparent); font-size: 12px; user-select: none; }
-.call-team-share:hover { color: var(--color-ink); background: color-mix(in oklch, var(--color-ink-muted) 6%, transparent); }
-.call-team-share[aria-checked='true'] { color: var(--color-ink); }
-.call-checkbox { display: grid; place-items: center; width: 14px; height: 14px; border: 1px solid var(--color-edge); border-radius: 4px; }
-.call-checkbox > svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
-.call-checkbox[data-checked='true'] { border-color: var(--color-ink); background: var(--color-ink); color: var(--color-panel); }
-.call-checkbox[data-checked='true'] > svg { opacity: 1; }
-.call-screen-share { display: grid; gap: 10px; width: 52%; padding: 20px; border-radius: 6px; background: var(--color-panel); }
-.call-screen-share > span { height: 8px; border-radius: 4px; background: var(--color-edge-muted); }
-.call-screen-share > span:first-child { width: 40%; height: 12px; background: var(--color-edge); }
-.call-screen-share > span:last-child { width: 70%; }
 
 /* Agent session split beside the task it edits. */
 .call-split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); height: 100%; min-height: 0; }
@@ -167,7 +151,6 @@
 .call-tool-group:hover { color: var(--color-ink-muted); }
 .call-tool-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 0; font-size: 14px; line-height: 24px; color: var(--color-ink-extra-muted); animation: call-tool-in 260ms ease both; }
 .call-tool-text { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.call-item-chip { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; vertical-align: middle; color: var(--color-ink); }
 .call-shimmer { background: linear-gradient(90deg, var(--color-ink-extra-muted) 30%, var(--color-ink) 50%, var(--color-ink-extra-muted) 70%) 0 0 / 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: call-shimmer 1.6s linear infinite; }
 .call-task-pane[data-updated='true'] [aria-label='Task description'], .call-task-pane[data-updated='true'] .md-check { animation: call-updated 2s ease both; border-radius: 4px; }
 @keyframes call-shimmer { to { background-position: -200% 0; } }
@@ -189,13 +172,44 @@
   .call-task-pane .px-6 { padding-inline: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .call-flow-pointer { display: none; }
   .call-list-row[data-fresh='true'], .call-tool-row, .call-task-pane[data-updated='true'] [aria-label='Task description'], .call-task-pane[data-updated='true'] .md-check { animation: none; }
   .call-shimmer { animation: none; color: var(--color-ink-extra-muted); background: none; }
   .call-player-fill, .call-player-thumb { transition: none; }
 }
 
-/* The hero's first description line is longer than Email's; keep it on one line. */
-@media (min-width: 700px) {
-  .product-page:has(#call-default) .email-page-hero > .email-page-hero-description { max-width: 640px; }
+/* A three-person call uses the same tile size, with the third tile centered. */
+.call-grid[data-count='3'] > :last-child { grid-column: 1 / -1; width: calc((100% - 8px) / 2); justify-self: center; }
+
+/* Let visitors read the conversation and see the Call action before joining. */
+.call-start-story [data-channel-call] { transition: background-color 400ms ease, box-shadow 400ms ease; }
+.call-start-story:is([data-phase='1'], [data-phase='2']) [data-channel-call] { background-color: color-mix(in oklch, var(--color-accent) 14%, transparent); box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-accent) 40%, transparent); }
+.call-start-story .call-channel-body { transition: opacity 400ms ease, transform 400ms ease; }
+.call-start-story[data-phase='2'] .call-channel-body { opacity: 0; transform: translateY(-4px); }
+.call-start-story .call-tab-body { animation: call-join-enter 600ms ease both; }
+.call-start-story .call-grid > .call-tile { animation: call-participant-enter 450ms ease both; }
+@keyframes call-join-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes call-participant-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .call-start-story [data-channel-call], .call-start-story .call-channel-body { transition: none; }
+  .call-start-story .call-tab-body, .call-start-story .call-grid > .call-tile { animation: none; }
 }
+
+/* The pointer is a short action cue, not a named collaborator. */
+.call-start-pointer-anchor { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; }
+.call-start-pointer { font-size: 28px; animation: call-pointer-approach 900ms cubic-bezier(.2, .8, .2, 1) both; }
+.call-start-pointer > span { display: none; }
+.call-start-pointer[data-clicking='true'] > svg { animation-duration: 300ms; }
+@keyframes call-pointer-approach { from { opacity: 0; transform: translate(-80px, 100px); } 15% { opacity: 1; } to { opacity: 1; transform: translate(0, 0); } }
+@media (prefers-reduced-motion: reduce) { .call-start-pointer-anchor { display: none; } }
+
+/* ItemPreview in ReadContent/EditDocument tool rows: a bordered chip, not a link underline. */
+.call-item-preview { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 24px; min-width: 0; max-width: 100%; padding: 0 8px; border: 1px solid color-mix(in oklch, var(--color-edge-muted) 50%, transparent); border-radius: 6px; color: var(--color-ink); font-size: 14px; line-height: 20px; vertical-align: middle; text-decoration: none; }
+.call-item-preview:hover { background: var(--color-hover); }
+
+.call-memory-sharing { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; gap:12px; border-bottom:1px solid var(--color-edge-muted); }
+.call-memory-sharing label { display:flex; align-items:center; gap:8px; font-size:12px; }
+.call-memory-sharing input { accent-color:var(--color-accent); }
+
+.call-team-memory { position:relative; }
+.call-memory-pointer { position:absolute; top:0; left:0; z-index:12; pointer-events:none; transition:transform 480ms ease; }
+@media(prefers-reduced-motion:reduce) { .call-memory-pointer { display:none; } }

@@ -1,7 +1,9 @@
 //! Postgres adapter for channel reference share-permission side effects.
 
 use crate::domain::{
-    models::{ReferencedShareItem, ReferencedShareItemType},
+    models::{
+        ReferenceShareOutcome, ReferenceShareResult, ReferencedShareItem, ReferencedShareItemType,
+    },
     ports::ChannelReferenceSharePermissions,
     reference_sharing::grant_level,
 };
@@ -49,7 +51,8 @@ where
         actor: MacroUserIdStr<'static>,
         channel_id: Uuid,
         items: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<ReferenceShareResult>, Self::Err> {
+        let mut results = Vec::with_capacity(items.len());
         for item in items {
             let access = self
                 .entity_access_service
@@ -60,9 +63,15 @@ where
                 )
                 .await
                 .context("failed to get user access level")?;
-            share_referenced_item_with_channel(&self.pool, channel_id, &item, access).await?;
+            let outcome =
+                share_referenced_item_with_channel(&self.pool, channel_id, &item, access).await?;
+            results.push(ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome,
+            });
         }
-        Ok(())
+        Ok(results)
     }
 }
 
@@ -71,15 +80,16 @@ async fn share_referenced_item_with_channel(
     channel_id: Uuid,
     item: &ReferencedShareItem,
     sharer_access: Option<AccessLevel>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<ReferenceShareOutcome> {
     let file_type = match item.entity_type() {
         ReferencedShareItemType::Document => get_document_file_type(db, item.entity_id()).await?,
         _ => None,
     };
-    if let Some(level) = grant_level(item.entity_type(), file_type, sharer_access) {
-        ensure_referenced_item_visible_to_channel(db, channel_id, item, level).await?;
-    }
-    Ok(())
+    let Some(level) = grant_level(item.entity_type(), file_type, sharer_access) else {
+        return Ok(ReferenceShareOutcome::NotPermitted);
+    };
+    ensure_referenced_item_visible_to_channel(db, channel_id, item, level).await?;
+    Ok(ReferenceShareOutcome::Shared)
 }
 
 async fn get_document_file_type(

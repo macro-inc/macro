@@ -36,6 +36,25 @@ export type AutoReloadDefaults = {
 };
 
 /**
+ * Calendar-month commitments that consume the payer's automatic reload cap.
+ */
+export type AutoReloadMonthlyBudget = {
+    /**
+     * Reloads paid, pending, or failed with an invoice that can still collect.
+     * Customer cents; manual credit purchases do not count.
+     */
+    committed_cents: number;
+    /**
+     * Remaining cap cannot fund the minimum automatic reload charge.
+     */
+    limit_reached: boolean;
+    /**
+     * Start of the next UTC calendar month, independently of subscription renewal.
+     */
+    resets_at: string;
+};
+
+/**
  * The payer's automatic reload settings, as shown in Billing settings.
  */
 export type AutoReloadSnapshot = {
@@ -47,6 +66,7 @@ export type AutoReloadSnapshot = {
      * Reload once the effective balance drops below this, in customer cents.
      */
     minimum_balance_cents: number;
+    monthly_budget?: null | AutoReloadMonthlyBudget;
     /**
      * Most reloaded per UTC calendar month, in customer cents. `null` when
      * there is no limit.
@@ -1416,6 +1436,20 @@ export type ResendFusionauthVerifyUserEmailRequest = {
 };
 
 /**
+ * A seat's future plan in the subscription's currently attached schedule.
+ */
+export type ScheduledSeatPlan = {
+    /**
+     * Provider-confirmed time when the future phase starts.
+     */
+    effectiveAt: string;
+    /**
+     * Plan that takes effect at renewal.
+     */
+    plan: SeatPlan;
+};
+
+/**
  * The paid plan a seat is billed at. Every member of a paying team has one;
  * a team may mix them, and its Stripe subscription carries one seat item per
  * plan in use.
@@ -1495,6 +1529,17 @@ export type StripeSessionResponse = {
      * The URL to redirect the user to
      */
     url: string;
+};
+
+/**
+ * Current renewal and scheduled change; empty for accounts without a subscription.
+ */
+export type SubscriptionStatus = {
+    /**
+     * Provider-confirmed subscription renewal date.
+     */
+    renewalDate?: string | null;
+    scheduledChange?: null | ScheduledSeatPlan;
 };
 
 /**
@@ -1615,6 +1660,13 @@ export type TeamWithMembers = {
      */
     members: Array<TeamMember>;
     /**
+     * Provider-confirmed pending seat changes, keyed by member user ID.
+     * Only available to paid-team admins and owners; empty means no pending changes.
+     */
+    scheduled_seat_plans?: {
+        [key: string]: ScheduledSeatPlan;
+    } | null;
+    /**
      * The team
      */
     team: Team;
@@ -1703,6 +1755,10 @@ export type UsageSnapshot = {
      * Shared payer credits already applied to this period, in customer cents.
      */
     credits_consumed_cents: number;
+    /**
+     * Whether prepaid credits belong to the team, including a team with one seat.
+     */
+    credits_shared_with_team: boolean;
     /**
      * Included AI for this user's seat this period, in cents at provider cost.
      */
@@ -3872,6 +3928,30 @@ export type CreateCheckoutSessionV2Responses = {
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];
 
+export type GetSubscriptionStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/stripe/plan';
+};
+
+export type GetSubscriptionStatusErrors = {
+    401: ErrorResponse;
+    /**
+     * More than one active subscription
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSubscriptionStatusError = GetSubscriptionStatusErrors[keyof GetSubscriptionStatusErrors];
+
+export type GetSubscriptionStatusResponses = {
+    200: SubscriptionStatus;
+};
+
+export type GetSubscriptionStatusResponse = GetSubscriptionStatusResponses[keyof GetSubscriptionStatusResponses];
+
 export type ChangePlanData = {
     body: ChangePlanRequest;
     path?: never;
@@ -3897,7 +3977,7 @@ export type ChangePlanErrors = {
      */
     404: ErrorResponse;
     /**
-     * Already on this plan, or more than one active subscription
+     * More than one active subscription
      */
     409: ErrorResponse;
     500: ErrorResponse;

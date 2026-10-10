@@ -6,10 +6,11 @@ mod test;
 
 use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
-    AiUsageBilling, AllowanceDecision, AllowanceStore, AutoReloadThresholds, BillingError,
-    BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS, CreditReloadStatus, Entitlement,
-    OVERAGE_CHARGE_THRESHOLD_CENTS, OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger,
-    Result, SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
+    AiUsageBilling, AllowanceDecision, AllowanceStore, AutoReloadMonthlyBudget,
+    AutoReloadThresholds, BillingError, BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS,
+    CreditReloadStatus, Entitlement, MIN_STRIPE_CHARGE_CENTS, OVERAGE_CHARGE_THRESHOLD_CENTS,
+    OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
+    SeatUsage, SubscriptionScope, UsageSnapshot,
 };
 use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
@@ -138,7 +139,13 @@ fn usage_for(user: &MacroUserIdStr<'_>, usage: &[SeatUsage]) -> i64 {
 fn chargeable_cost_cents(seats: &[SeatAllowance], usage: &[SeatUsage]) -> i64 {
     seats
         .iter()
-        .map(|seat| (usage_for(&seat.user, usage) - seat.included_cents).max(0))
+        .map(|seat| {
+            usage
+                .iter()
+                .find(|usage| usage.user == seat.user)
+                .and_then(|usage| usage.chargeable_cost_cents)
+                .unwrap_or_else(|| (usage_for(&seat.user, usage) - seat.included_cents).max(0))
+        })
         .sum()
 }
 
@@ -720,6 +727,40 @@ where
 {
     type Err = BillingError;
 
+    async fn change_plan(
+        &self,
+        member: &MacroUserIdStr<'_>,
+        change: teams::domain::open_seat_release::SeatPlanChange,
+    ) -> Result<()> {
+        let from = change
+            .from
+            .map(Into::into)
+            .unwrap_or(super::models::PlanTier::Free);
+        let to = change.to.into();
+        if from == to {
+            return Ok(());
+        }
+        let period = if let Some((start, end)) = change.period {
+            BillingPeriod { start, end }
+        } else {
+            let entitlement = self.entitlements.entitlement(member).await?;
+            let settings = self.repo.settings(&entitlement.payer).await?;
+            self.usage_period(&entitlement, settings.period_anchor, change.at)
+                .await
+        };
+        BillingService::change_plan(
+            self,
+            member,
+            super::plan_change::PlanChange {
+                from,
+                to,
+                at: change.at,
+                period,
+            },
+        )
+        .await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn release(&self, team_id: Uuid, member: &MacroUserIdStr<'_>) -> Result<()> {
         self.release_at(team_id, member, Utc::now()).await
@@ -733,6 +774,33 @@ where
     R: BillingRepo,
     P: PaymentGateway,
 {
+    #[tracing::instrument(skip(self), err)]
+    async fn change_plan(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        change: super::plan_change::PlanChange,
+    ) -> Result<()> {
+        if change.is_valid() {
+            self.repo
+                .record_plan_change(
+                    user,
+                    super::plan_change::RecordedPlanChange {
+                        change,
+                        previous_included_cents: change
+                            .from
+                            .is_paid()
+                            .then(|| change.from.included_ai_cents_per_seat(self.pricing)),
+                        new_included_cents: change
+                            .to
+                            .is_paid()
+                            .then(|| change.to.included_ai_cents_per_seat(self.pricing)),
+                    },
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn check_allowance(&self, user: &MacroUserIdStr<'_>) -> Result<AllowanceDecision> {
         if !self.enforcement.is_enabled() {
@@ -748,8 +816,24 @@ where
 
     #[tracing::instrument(skip(self), err)]
     async fn snapshot(&self, user: &MacroUserIdStr<'_>) -> Result<UsageSnapshot> {
-        let position = self.position(user, Utc::now()).await?;
+        let now = Utc::now();
+        let position = self.position(user, now).await?;
         let mut snapshot = self.snapshot_at(user, &position).await?;
+        // Summary-only read; allowance enforcement does not need monthly reload facts.
+        if position.entitlement.is_metered()
+            && let Some(limit) = position.settings.auto_reload.monthly_limit_cents
+        {
+            let month = BillingPeriod::calendar_month(now);
+            let committed_cents = self
+                .repo
+                .credit_reload_committed_cents(&position.entitlement.payer, month)
+                .await?;
+            snapshot.auto_reload.monthly_budget = Some(AutoReloadMonthlyBudget {
+                committed_cents,
+                resets_at: month.end,
+                limit_reached: limit.saturating_sub(committed_cents) < MIN_STRIPE_CHARGE_CENTS,
+            });
+        }
         // Keep the summary consistent with the configured allowance gate.
         if !self.enforcement.is_enabled() {
             snapshot.blocked_reason = None;

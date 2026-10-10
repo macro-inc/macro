@@ -11,6 +11,7 @@ import type {
   FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
+import workerUrl from './fold.worker.ts?worker&url';
 import type { FoldInput, FoldRequest, FoldResponse } from './protocol';
 
 export type { FoldInput } from './protocol';
@@ -29,24 +30,12 @@ interface Pending {
 /**
  * The worker's script never ran.
  *
- * A dedicated worker reports a script it could not load as an `error` event
- * carrying no message at all; one that loaded and then threw reports what it
- * threw, and anything failing *inside* the worker comes back as an ordinary
- * `{ok: false}` reply. So an empty message is a precise signal, and it has
- * one overwhelmingly likely cause: this tab is running a build whose assets
- * are no longer served. Deploys replace the content-hashed bundle and the
- * worker chunk is fetched lazily, on the first fold, which is often after
- * the build that owns it has been superseded.
- *
- * Named rather than folded into a generic failure so it groups on its own in
- * error tracking: the fix for it is a deploy/retention question, not a bug
- * in the fold.
+ * Browsers can omit the error message for missing scripts, blocked scripts,
+ * or invalid packaging. Keep the URL for diagnosis without assuming a cause.
  */
 export class AgentFoldWorkerUnavailable extends Error {
   constructor(readonly workerUrl: string) {
-    super(
-      `agent fold worker script could not be loaded (${workerUrl}) - this tab is running a build that is no longer served; reloading will pick up the current one`
-    );
+    super(`agent fold worker script could not be loaded (${workerUrl})`);
     this.name = 'AgentFoldWorkerUnavailable';
   }
 }
@@ -74,10 +63,10 @@ let nextId = 0;
 function ensureWorker(): Worker {
   if (worker) return worker;
 
-  // Held so a failure can name the file that did not load: its content hash
-  // identifies the build this tab is running, which is the whole diagnosis.
-  const url = new URL('./fold.worker.ts', import.meta.url);
-  const started = new Worker(url, { type: 'module' });
+  // Explicitly bundle the worker while retaining its URL for diagnostics.
+  // A standalone new URL('./fold.worker.ts', import.meta.url) makes Vite
+  // emit raw TypeScript as an asset instead of compiling a worker entry.
+  const started = new Worker(workerUrl, { type: 'module' });
 
   started.addEventListener('message', (event: MessageEvent<FoldResponse>) => {
     const response = event.data;
@@ -95,7 +84,7 @@ function ensureWorker(): Worker {
     // The worker itself failed, so nothing in flight will ever be answered.
     // One error event takes down every fold in flight, which is why a single
     // failure reports as many: the count is concurrent folds, not causes.
-    const error = workerStartupFailure(url.href, event.message ?? '');
+    const error = workerStartupFailure(workerUrl, event.message ?? '');
     for (const waiting of pending.values()) waiting.reject(error);
     pending.clear();
     // Dropped so the next call starts a fresh one rather than waiting on a

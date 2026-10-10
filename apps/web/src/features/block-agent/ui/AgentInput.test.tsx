@@ -17,6 +17,18 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_INPUT_TEXT_AREA_ID, AgentInput } from './AgentInput';
 
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+
 vi.mock('@core/agent-fold/client', () => ({
   preloadAgentFold: vi.fn(async () => {}),
 }));
@@ -403,4 +415,21 @@ it('expands for a short quote and collapses when replaced with a paragraph', () 
     { discrete: true }
   );
   expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+});
+
+it('keeps an attached image and text unsent while the selected model is text-only', () => {
+  const send = vi.fn();
+  render(() => (
+    <AgentInput
+      onSend={send}
+      supportsImages={false}
+      attachments={[{ id: 'image', name: 'test.png', kind: 'image' }]}
+    />
+  ));
+  expect(screen.getByRole('status').textContent).toContain(
+    'does not support images'
+  );
+  editor.enter?.();
+  expect(send).not.toHaveBeenCalled();
+  expect(editor.clear).not.toHaveBeenCalled();
 });

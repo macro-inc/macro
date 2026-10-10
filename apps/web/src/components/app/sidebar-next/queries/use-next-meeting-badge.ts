@@ -10,7 +10,7 @@ import { createMemo } from 'solid-js';
  * The Calendar button's badge: `Now` during a meeting, minutes until the next
  * one when it is under an hour away. Reads the same visible calendars and
  * upcoming-events source as the calendar view's agenda, so a calendar hidden
- * there never counts here. Mount it only where Calendar is on the rail — it
+ * there never counts here; only meetings count, not every agenda entry. Mount it only where Calendar is on the rail — it
  * starts fetching on mount.
  */
 export function useNextMeetingBadge() {

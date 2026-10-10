@@ -4,6 +4,7 @@ use pollster::block_on;
 use serde_json::json;
 
 mod embedded;
+mod generated;
 
 const PAGE: &str = "query Page($input: SoupInput!) { user { id soup(input: $input) { items { __typename id ... on GraphqlSoupEmailThread { isRead } } nextCursor } } }";
 const DETAIL: &str = "query Detail($id: ID!, $show: Boolean! = true) { user { alias: emailThread(input: {threadId: $id}) { ...Fields @include(if: $show) } } } fragment Fields on GraphqlSoupEmailThread { seen: isRead }";
@@ -54,6 +55,53 @@ fn patches(update: QueryUpdate) -> Json {
     serde_json::to_value(patches).unwrap()
 }
 
+/// Applies an update under the JS document applier's rules: every patch
+/// targets an existing non-root path and changes it. Identical duplicates are
+/// applied once; any other pair of patches must not overlap.
+fn apply(snapshot: &mut Json, update: QueryUpdate) -> CacheRevision {
+    let cursor = revision(&update);
+    match update {
+        QueryUpdate::Hit { data, .. } => *snapshot = Json::clone(&data),
+        QueryUpdate::Patch { mut patches, .. } => {
+            let encoded = |patch: &live_query::LiveFieldPatch| serde_json::to_value(patch).unwrap();
+            let mut seen = Vec::new();
+            patches.retain(|patch| {
+                let patch = encoded(patch);
+                let distinct = !seen.contains(&patch);
+                seen.push(patch);
+                distinct
+            });
+            let paths: Vec<Json> = patches
+                .iter()
+                .map(|patch| serde_json::to_value(&patch.path).unwrap())
+                .collect();
+            for (index, path) in paths.iter().enumerate() {
+                let path = path.as_array().unwrap();
+                assert!(!path.is_empty(), "a patch cannot replace the root");
+                for other in &paths[index + 1..] {
+                    let other = other.as_array().unwrap();
+                    let shared = path.len().min(other.len());
+                    assert_ne!(path[..shared], other[..shared], "patches overlap");
+                }
+            }
+            for patch in patches {
+                let mut slot = &mut *snapshot;
+                for part in patch.path {
+                    slot = match part {
+                        live_query::ResponsePathSegment::Field(name) => slot.get_mut(name.as_str()),
+                        live_query::ResponsePathSegment::Index(index) => slot.get_mut(index),
+                    }
+                    .expect("patch targets an existing path");
+                }
+                assert_ne!(*slot, patch.value, "unchanged values are not published");
+                *slot = patch.value;
+            }
+        }
+        QueryUpdate::Miss { .. } => panic!("unexpected miss"),
+    }
+    cursor
+}
+
 #[test]
 fn targets_one_field_in_a_thousand_rows_for_every_subscriber() {
     block_on(async {
@@ -67,7 +115,7 @@ fn targets_one_field_in_a_thousand_rows_for_every_subscriber() {
             .watch_query(2, PAGE, None, &vars(), &[], None)
             .await
             .unwrap();
-        assert!(matches!(&first, QueryUpdate::Hit { data: result, .. } if *result == data(1000)));
+        assert!(matches!(&first, QueryUpdate::Hit { data: result, .. } if **result == data(1000)));
         change(&mut engine, "17", "isRead", CacheValue::Bool(true)).await;
         let before = engine.storage().record_get_count();
         for (op, previous) in [(1, first), (2, second)] {
@@ -83,6 +131,105 @@ fn targets_one_field_in_a_thousand_rows_for_every_subscriber() {
         assert!(
             engine.storage().record_get_count() - before <= 2,
             "must not hydrate the other 999 records"
+        );
+    });
+}
+
+#[test]
+fn unrelated_changes_and_leaf_edits_never_reread_but_structural_edits_do() {
+    block_on(async {
+        // A one-record hot tier makes any re-read visible as storage reads.
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        seed(&mut engine, 2).await;
+        let first = engine
+            .watch_query(1, PAGE, None, &vars(), &[], None)
+            .await
+            .unwrap();
+        let mut cursor = revision(&first);
+        let edits = [
+            (
+                "unrelated",
+                "isRead",
+                CacheValue::Bool(true),
+                json!([]),
+                false,
+            ),
+            (
+                "1",
+                "isRead",
+                CacheValue::Bool(true),
+                json!([{"path": ["user", "soup", "items", 1, "isRead"], "value": true}]),
+                false,
+            ),
+            (
+                "1",
+                "__typename",
+                CacheValue::String("GraphqlSoupDocument".into()),
+                // A changed item identity replaces its list.
+                json!([{"path": ["user", "soup", "items"], "value": [
+                    {"__typename": "GraphqlSoupEmailThread", "id": "0", "isRead": false},
+                    {"__typename": "GraphqlSoupDocument", "id": "1"},
+                ]}]),
+                true,
+            ),
+        ];
+        for (id, field, value, expected, rereads) in edits {
+            change(&mut engine, id, field, value).await;
+            let before = engine.storage().record_get_count();
+            let next = engine
+                .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
+                .await
+                .unwrap();
+            assert_eq!(
+                engine.storage().record_get_count() - before > 1,
+                rereads,
+                "{field} on {id}"
+            );
+            cursor = revision(&next);
+            assert_eq!(patches(next), expected, "{field} on {id}");
+        }
+    });
+}
+
+#[test]
+fn journal_barriers_and_gaps_diff_against_the_subscriber_base() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, 2).await;
+        let first = engine
+            .watch_query(1, PAGE, None, &vars(), &[], None)
+            .await
+            .unwrap();
+        change(&mut engine, "1", "isRead", CacheValue::Bool(true)).await;
+        let key = EntityKey::entity("GraphqlSoupEmailThread", &["1"]);
+        engine.invalidate_keys([&key]).unwrap();
+        let barrier = engine
+            .watch_query(1, PAGE, None, &vars(), &[], Some(revision(&first)))
+            .await
+            .unwrap();
+        let cursor = revision(&barrier);
+        assert_eq!(
+            patches(barrier),
+            json!([{"path": ["user", "soup", "items", 1, "isRead"], "value": true}])
+        );
+        // Overflow the bounded journal with unrelated revisions.
+        for index in 0..200 {
+            change(
+                &mut engine,
+                "unrelated",
+                "isRead",
+                CacheValue::Bool(index % 2 == 0),
+            )
+            .await;
+        }
+        change(&mut engine, "0", "isRead", CacheValue::Bool(true)).await;
+        let gap = engine
+            .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
+            .await
+            .unwrap();
+        assert_eq!(
+            patches(gap),
+            json!([{"path": ["user", "soup", "items", 0, "isRead"], "value": true}])
         );
     });
 }
@@ -104,7 +251,7 @@ fn aliases_fragments_defaults_and_synthetic_relations_need_no_selected_identity(
             .await
             .unwrap();
         assert!(
-            matches!(&first, QueryUpdate::Hit { data, .. } if *data == json!({"user":{"alias":{"seen":false}}}))
+            matches!(&first, QueryUpdate::Hit { data, .. } if **data == json!({"user":{"alias":{"seen":false}}}))
         );
         change(&mut engine, "0", "isRead", CacheValue::Bool(true)).await;
         let update = engine
@@ -136,13 +283,13 @@ fn aliases_fragments_defaults_and_synthetic_relations_need_no_selected_identity(
             .await
             .unwrap();
         assert!(
-            matches!(update, QueryUpdate::Hit { data, .. } if data == json!({"user":{"alias":{}}}))
+            matches!(update, QueryUpdate::Hit { data, .. } if *data == json!({"user":{"alias":{}}}))
         );
     });
 }
 
 #[test]
-fn structural_edits_rebuild_paths_and_tombstones_cannot_patch_stale_indices() {
+fn reorders_and_tombstones_replace_the_list_instead_of_patching_stale_indices() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         seed(&mut engine, 2).await;
@@ -163,10 +310,14 @@ fn structural_edits_rebuild_paths_and_tombstones_cannot_patch_stale_indices() {
             .watch_query(1, PAGE, None, &vars(), &[], Some(revision(&initial)))
             .await
             .unwrap();
-        assert!(matches!(&replacement, QueryUpdate::Hit { data, .. } if *data == reordered));
+        let cursor = revision(&replacement);
+        assert_eq!(
+            patches(replacement),
+            json!([{"path":["user","soup","items"],"value":reordered["user"]["soup"]["items"]}])
+        );
         change(&mut engine, "0", "isRead", CacheValue::Bool(true)).await;
         let next = engine
-            .watch_query(1, PAGE, None, &vars(), &[], Some(revision(&replacement)))
+            .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
             .await
             .unwrap();
         let cursor = revision(&next);
@@ -185,17 +336,80 @@ fn structural_edits_rebuild_paths_and_tombstones_cannot_patch_stale_indices() {
             .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
             .await
             .unwrap();
-        assert!(
-            matches!(&deleted, QueryUpdate::Hit { data, .. } if data["user"]["soup"]["items"].as_array().unwrap().len() == 1)
+        let cursor = revision(&deleted);
+        assert_eq!(
+            patches(deleted),
+            json!([{"path":["user","soup","items"],"value":[
+                {"__typename": "GraphqlSoupEmailThread", "id": "0", "isRead": true}
+            ]}])
         );
         change(&mut engine, "0", "isRead", CacheValue::Bool(false)).await;
         let after = engine
-            .watch_query(1, PAGE, None, &vars(), &[], Some(revision(&deleted)))
+            .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
             .await
             .unwrap();
-        assert!(
-            matches!(after, QueryUpdate::Hit { data, .. } if data["user"]["soup"]["items"][0]["isRead"] == false)
+        assert_eq!(
+            patches(after),
+            json!([{"path":["user","soup","items",0,"isRead"],"value":false}]),
+            "compacted indices are diffed against the published list"
         );
+    });
+}
+
+#[test]
+fn bindings_follow_list_compaction_without_rereading() {
+    block_on(async {
+        // A one-record hot tier makes any re-read visible as storage reads.
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        seed(&mut engine, 3).await;
+        let first = engine
+            .watch_query(1, PAGE, None, &vars(), &[], None)
+            .await
+            .unwrap();
+        let mut cursor = revision(&first);
+        let edits = [
+            ("0", identity::DELETED_FIELD, true, None),
+            (
+                "2",
+                "isRead",
+                true,
+                Some(json!([{"path":["user","soup","items",1,"isRead"],"value":true}])),
+            ),
+            ("0", identity::DELETED_FIELD, false, None),
+            (
+                "2",
+                "isRead",
+                false,
+                Some(json!([{"path":["user","soup","items",2,"isRead"],"value":false}])),
+            ),
+        ];
+        for (id, field, value, leaf) in edits {
+            change(&mut engine, id, field, CacheValue::Bool(value)).await;
+            let before = engine.storage().record_get_count();
+            let update = engine
+                .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
+                .await
+                .unwrap();
+            cursor = revision(&update);
+            let reads = engine.storage().record_get_count() - before;
+            match leaf {
+                Some(expected) => {
+                    assert!(reads <= 1, "{field} on {id} used the bindings");
+                    assert_eq!(patches(update), expected);
+                }
+                None => {
+                    assert!(reads > 1, "{field} on {id} re-read");
+                    let full = engine.read_query(None, PAGE, None, &vars()).await.unwrap();
+                    let ReadResult::Hit { data } = full else {
+                        panic!("seeded page must hit");
+                    };
+                    assert_eq!(
+                        patches(update),
+                        json!([{"path":["user","soup","items"],"value":data["user"]["soup"]["items"]}])
+                    );
+                }
+            }
+        }
     });
 }
 
@@ -276,7 +490,7 @@ fn skipped_fields_do_not_resurface_and_repeated_fragment_selections_merge() {
         let merged =
             "query { user { id } user { soup(input:{initial:{limit:1000}}) { nextCursor } } }";
         assert!(
-            matches!(engine.watch_query(2, merged, None, &serde_json::Map::new(), &[], None).await.unwrap(), QueryUpdate::Hit { data, .. } if data == json!({"user":{"id":"viewer","soup":{"nextCursor":null}}}))
+            matches!(engine.watch_query(2, merged, None, &serde_json::Map::new(), &[], None).await.unwrap(), QueryUpdate::Hit { data, .. } if *data == json!({"user":{"id":"viewer","soup":{"nextCursor":null}}}))
         );
     });
 }
@@ -358,7 +572,7 @@ fn network_identity_aliases_and_default_arguments_round_trip() {
             .watch_query(1, query, None, &variables, &[], None)
             .await
             .unwrap();
-        assert!(matches!(&first, QueryUpdate::Hit { data: actual, .. } if *actual == data));
+        assert!(matches!(&first, QueryUpdate::Hit { data: actual, .. } if **actual == data));
         change(&mut engine, "0", "isRead", CacheValue::Bool(true)).await;
         let next = engine
             .watch_query(1, query, None, &variables, &[], Some(revision(&first)))
@@ -372,7 +586,7 @@ fn network_identity_aliases_and_default_arguments_round_trip() {
 }
 
 #[test]
-fn account_changes_discard_query_bindings_and_old_entities() {
+fn account_changes_discard_query_watches_and_old_entities() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         engine
@@ -394,6 +608,6 @@ fn account_changes_discard_query_bindings_and_old_entities() {
             .watch_query(1, PAGE, None, &vars(), &[], Some(revision(&first)))
             .await
             .unwrap();
-        assert!(matches!(result, QueryUpdate::Hit { data, .. } if data == next));
+        assert!(matches!(result, QueryUpdate::Hit { data, .. } if *data == next));
     });
 }

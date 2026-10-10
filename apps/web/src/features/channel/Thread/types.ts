@@ -9,6 +9,7 @@ import type {
   MessageData,
 } from '../Message';
 import type { FocusRequest } from './focus-request';
+import type { MessageElementMount } from './message-element-lifecycle';
 
 export type ThreadActions = {
   onDismissNewMessages?: () => void;
@@ -66,6 +67,10 @@ export type ThreadProps = {
   isFindBarOpen: Accessor<boolean>;
   /** The unified input's reply binding */
   unifiedReplyTarget?: { threadId: string; replyId?: string };
+  /** Exact unread notification targets, including replies not yet loaded. */
+  unreadMessageIds?: readonly string[];
+  onMessageMount?: MessageElementMount;
+  onDisclosureMount?: MessageElementMount;
   isNewMessage?: (reply: NewMessageCheckable) => boolean;
   selectedMessageId?: Accessor<string | undefined>;
   onSelectMessage?: (messageId: string) => void;

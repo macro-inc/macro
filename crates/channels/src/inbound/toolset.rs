@@ -7,6 +7,7 @@ mod read_channel_messages;
 mod read_channel_thread;
 mod rename_channel;
 mod send_channel_message;
+mod share_with_channel;
 mod types;
 
 #[cfg(test)]
@@ -17,6 +18,7 @@ use crate::{
     inbound::toolset::{
         create_channel::CreateChannel, manage_channel_participants::ManageChannelParticipants,
         rename_channel::RenameChannel, send_channel_message::SendChannelMessage,
+        share_with_channel::ShareWithChannel,
     },
 };
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
@@ -328,6 +330,7 @@ where
         .add_tool::<ReadChannelMessageContext, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<ReadChannelThread, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<SendChannelMessage, ChannelToolContext<Svc, AccessSvc>>()
+        .add_tool::<ShareWithChannel, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<CreateChannel, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<RenameChannel, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<ManageChannelParticipants, ChannelToolContext<Svc, AccessSvc>>()

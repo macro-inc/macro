@@ -68,6 +68,8 @@ export type GridCellProps = GridCellEditorOptions & {
   renderMentionPicker?: (props: DatabaseMentionPickerProps) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   onMention?: (mention: DatabaseMention) => Promise<boolean>;
+  /** Click and Enter open the cell's mention instead of editing it; F2 and typing still edit. */
+  onOpenMention?: (id: string, type: DatabaseEntityType) => void;
   onWrite: (value: DatabaseCellValue) => Promise<boolean>;
   onAddOption: (label: string, value?: DatabaseCellValue) => Promise<boolean>;
 };
@@ -130,6 +132,14 @@ export function GridCell(props: GridCellProps) {
   };
   const hasResolvedMentionLabel = () =>
     isEntity() && props.value !== null && !mentionPreview();
+  const openMention = () => {
+    const open = props.onOpenMention;
+    const id = props.value;
+    const type = props.column.specificEntityType;
+    return open && isEntity() && typeof id === 'string' && type
+      ? () => open(id, type)
+      : undefined;
+  };
   let cell: HTMLDivElement | undefined;
   const isBoolean = () =>
     props.column.dataType === 'BOOLEAN' && !props.column.isMultiSelect;
@@ -387,6 +397,7 @@ export function GridCell(props: GridCellProps) {
                   trigger = element;
                 }}
                 onNavigate={props.onNavigate}
+                onOpen={openMention()}
                 onBeginEdit={beginEdit}
                 onClearEntity={() => {
                   setSelectedMention(undefined);
@@ -494,12 +505,15 @@ function TextCell(props: {
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   ref: (element: HTMLButtonElement) => void;
   onNavigate?: (direction: 1 | -1) => boolean;
+  onOpen?: () => void;
   onBeginEdit: (seed?: string, event?: Event) => void;
   onClearEntity: () => void;
 }) {
   // Refreshes rebuild row objects; only a changed value may rerun renderers and remount previews.
   const value = createMemo(() => props.value);
   const formatted = () => formatCellValue(props.column, value());
+  const hint = () =>
+    props.onOpen ? 'Click to open' : props.editable ? 'Click to edit' : '';
   return (
     <button
       ref={props.ref}
@@ -513,12 +527,10 @@ function TextCell(props: {
       aria-label={
         props.hasResolvedMentionLabel
           ? undefined
-          : `${props.column.name}: ${props.mentionPreview?.mention.label || formatted() || props.emptyLabel || 'Empty'}${props.editable ? '. Click to edit' : ''}`
+          : `${props.column.name}: ${props.mentionPreview?.mention.label || formatted() || props.emptyLabel || 'Empty'}${hint() ? `. ${hint()}` : ''}`
       }
       aria-description={
-        props.hasResolvedMentionLabel && props.editable
-          ? 'Click to edit'
-          : undefined
+        props.hasResolvedMentionLabel && hint() ? hint() : undefined
       }
       aria-readonly={!props.editable}
       title={
@@ -526,8 +538,24 @@ function TextCell(props: {
         (!props.isEntity && formatted()) ||
         undefined
       }
-      onClick={(event) => props.editable && props.onBeginEdit(undefined, event)}
+      onClick={(event) => {
+        if (props.onOpen) props.onOpen();
+        else if (props.editable) props.onBeginEdit(undefined, event);
+      }}
       onKeyDown={(event) => {
+        if (
+          props.onOpen &&
+          event.key === 'Enter' &&
+          !isComposingKey(event) &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          props.onOpen();
+          return;
+        }
         if (!props.editable) return;
         if (isComposingKey(event)) {
           props.onBeginEdit('', event);

@@ -90,7 +90,7 @@ fn watch_patches_reject_unsafe_integers_like_hits() {
     use cache_core::engine::watch_query::QueryUpdate;
     let value = serde_json::json!({"nested": [{"value": 9_007_199_254_740_992_u64}]});
     let hit = QueryUpdate::Hit {
-        data: value.clone(),
+        data: std::sync::Arc::new(value.clone()),
         revision: "1".into(),
     };
     let patch = QueryUpdate::Patch {

@@ -7,6 +7,7 @@
 
 import type { Team } from './team';
 import type { TeamMember } from './teamMember';
+import type { TeamWithMembersScheduledSeatPlans } from './teamWithMembersScheduledSeatPlans';
 
 /**
  * A team with its members
@@ -14,6 +15,9 @@ import type { TeamMember } from './teamMember';
 export interface TeamWithMembers {
   /** The members of the team */
   members: TeamMember[];
+  /** Provider-confirmed pending seat changes, keyed by member user ID.
+Only available to paid-team admins and owners; empty means no pending changes. */
+  scheduled_seat_plans?: TeamWithMembersScheduledSeatPlans;
   /** The team */
   team: Team;
 }

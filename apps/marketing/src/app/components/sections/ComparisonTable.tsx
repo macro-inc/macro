@@ -31,6 +31,7 @@ export type ComparisonTableProps = {
   mobileMinWidth?: number;
   sortRows?: boolean;
   valueWrap?: 'normal' | 'nowrap';
+  scrollLabel?: string;
 };
 
 function isPriceRow(row: ComparisonRow) {
@@ -293,6 +294,9 @@ export function ComparisonTable(props: ComparisonTableProps) {
   return (
     <div
       class="comparison-table-scroll"
+      tabIndex={props.scrollLabel ? 0 : undefined}
+      role={props.scrollLabel ? 'region' : undefined}
+      aria-label={props.scrollLabel}
       style={{
         '-webkit-overflow-scrolling': 'touch',
         'max-width': '100%',

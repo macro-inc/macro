@@ -23,7 +23,7 @@ import { createSharedMailBackfillFetcher } from '@service-storage/shared-mail-ba
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
 // Bump when a default backfill input or completion guarantee changes so
 // persisted cursors cannot retain an older hydration contract.
@@ -686,7 +686,8 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
  * inter-page sleeps. Engine handoffs resume durable checkpoints; only loss of
  * stored cache data resets cursors so they cannot point past wiped records.
  */
-export function useSoupBackfills(userId: string): void {
+/** Runs the signed-in user's soup backfills; waits while `userId` is unknown. */
+export function useSoupBackfills(userId: Accessor<string | undefined>): void {
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
@@ -723,11 +724,12 @@ export function useSoupBackfills(userId: string): void {
 
   createEffect(() => {
     const host = cacheHost();
-    if (!host) return;
+    const id = userId();
+    if (!host || !id) return;
     cacheGeneration();
 
     const fiber = Effect.runFork(
-      runSoupBackfills(userId, host).pipe(Effect.ignore)
+      runSoupBackfills(id, host).pipe(Effect.ignore)
     );
     onCleanup(() => {
       Effect.runFork(Fiber.interrupt(fiber));

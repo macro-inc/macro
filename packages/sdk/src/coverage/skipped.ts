@@ -76,6 +76,8 @@ export const authExcluded = [
   'getLegacyUserPermissions',
   'getPermissions',
   'getReferralCode',
+  // Renewal and scheduled-plan details are part of the app's billing settings.
+  'getSubscriptionStatus',
   'getTeamInvites',
   'getUserInvites',
   'getUserLinkExists',

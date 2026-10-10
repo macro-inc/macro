@@ -14,6 +14,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessagePostedMetadata;
 use messages::domain::models::MessageParent;
+use trigger_context::{
+    AddressedBy, ContextPerson, DiscussionContext, DiscussionSurface, FollowUpContext, ReplyTarget,
+    TaskAssignedContext, TaskSnapshot, TriggerContext,
+};
 
 use super::*;
 use crate::domain::model::{
@@ -97,6 +101,7 @@ fn mentioned(bot: BotId, sender: ChannelSender<'static>) -> AgentTriggerTopicEve
         AgentBotMentionedEvent {
             bot_id: bot,
             message: message(sender),
+            context: None,
         },
     ))
 }
@@ -107,6 +112,7 @@ fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
         session_id: AgentSessionId::TEST_A,
         kind: ThreadMessageKind::MentionThread,
         message: message(ChannelSender::new_from_user(user())),
+        context: None,
     }))
 }
 
@@ -142,6 +148,7 @@ fn a_threaded_mention_answers_into_its_thread() {
         AgentBotMentionedEvent {
             bot_id: BotId::TEST_A,
             message: event,
+            context: None,
         },
     ));
 
@@ -265,6 +272,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
             session_id: AgentSessionId::TEST_A,
             kind: ThreadMessageKind::MentionThread,
             message: message(ChannelSender::new_from_bot(BotId::TEST_B)),
+            context: None,
         },
     ));
     assert_eq!(
@@ -279,6 +287,7 @@ fn channel_message_from(bot: BotId, sender: ChannelSender<'static>) -> AgentTrig
         session_id: AgentSessionId::TEST_A,
         kind: ThreadMessageKind::MentionThread,
         message: message(sender),
+        context: None,
     }))
 }
 
@@ -290,6 +299,7 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
             bot_id: BotId::TEST_A,
             message: document_message(ChannelSender::new_from_user(user())),
+            context: None,
         }));
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
         route_agent_trigger(opened, runtime(AgentKind::InMemory), &links())
@@ -306,6 +316,7 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
             session_id: AgentSessionId::TEST_A,
             kind: ThreadMessageKind::MentionThread,
             message: document_message(ChannelSender::new_from_user(user())),
+            context: None,
         }));
     let RoutedTrigger::Announce(session_id, prompt) =
         route_agent_trigger(followed, None, &links()).expect("an external follow-up announces")
@@ -324,6 +335,7 @@ fn assigned_to_task() -> AgentTriggerTopicEvent {
             discussion_id: Uuid::from_u128(2),
             actor: user(),
             prompt: "Complete the assigned task".to_owned(),
+            context: None,
         },
     ))
 }
@@ -346,6 +358,95 @@ fn assigning_a_managed_agent_opens_on_the_task_discussion() {
     assert_eq!(origin.discussion_id, Uuid::from_u128(2));
     assert_eq!(origin.actor, user());
     assert_eq!(origin.prompt, "Complete the assigned task");
+}
+
+/// With the task in the context, the prompt is only what to do with it, so
+/// the task body is not sent to the agent twice.
+#[test]
+fn an_assignment_with_context_prompts_with_instructions_and_carries_the_task() {
+    let context = TriggerContext::TaskAssigned(TaskAssignedContext {
+        task: TaskSnapshot {
+            id: "doc".to_owned(),
+            title: "Fix the scroll".to_owned(),
+            markdown: "The popover scrolls the page.".to_owned(),
+            status: None,
+            priority: None,
+            due: None,
+            assignees: Vec::new(),
+            project: None,
+        },
+        assigned_by: ContextPerson {
+            id: "macro|user@example.com".to_owned(),
+            name: "user@example.com".to_owned(),
+            email: Some("user@example.com".to_owned()),
+        },
+        assigned_at: chrono::DateTime::UNIX_EPOCH,
+        discussion_id: Uuid::from_u128(2),
+    });
+    let AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(mut assigned)) =
+        assigned_to_task()
+    else {
+        unreachable!();
+    };
+    assigned.context = Some(context.clone());
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned));
+
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
+        route_agent_trigger(event, runtime(AgentKind::InMemory), &links())
+            .expect("a managed assignment opens a session")
+    else {
+        panic!("an assignment should open a session");
+    };
+    let SessionOrigin::TaskAssignment(origin) = open.origin else {
+        panic!("an assignment must retain its own origin");
+    };
+    assert_eq!(
+        origin.prompt,
+        agent_trigger::domain::task_assignment::assignment_instructions(&document())
+    );
+    assert_eq!(origin.context, Some(context));
+}
+
+/// A follow-up's context rides on the delivery, to be composed at dispatch.
+#[test]
+fn a_managed_follow_up_carries_its_context_to_delivery() {
+    let context = TriggerContext::FollowUp(FollowUpContext {
+        addressed_by: AddressedBy::Inferred,
+        discussion: DiscussionContext {
+            surface: DiscussionSurface::DocumentComment {
+                id: "doc".to_owned(),
+                name: "Spec".to_owned(),
+                anchor: None,
+            },
+            prompt_message_id: Uuid::from_u128(2),
+            sender: ContextPerson {
+                id: "macro|user@example.com".to_owned(),
+                name: "user@example.com".to_owned(),
+                email: Some("user@example.com".to_owned()),
+            },
+            reply_target: ReplyTarget::Thread {
+                root_id: Uuid::from_u128(2),
+            },
+            thread: None,
+            channel: Vec::new(),
+        },
+    });
+    let followed =
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+            bot_id: BotId::TEST_A,
+            session_id: AgentSessionId::TEST_A,
+            kind: ThreadMessageKind::Inferred,
+            message: document_message(ChannelSender::new_from_user(user())),
+            context: Some(context.clone()),
+        }));
+
+    let RoutedTrigger::Command(_, HarnessCommand::Deliver(deliver)) =
+        route_agent_trigger(followed, runtime(AgentKind::InMemory), &links())
+            .expect("a managed follow-up delivers")
+    else {
+        panic!("a managed follow-up should deliver");
+    };
+    assert_eq!(deliver.context, Some(context));
 }
 
 #[test]
@@ -373,6 +474,7 @@ fn task_discussion_followups_keep_the_managed_and_external_session_origin() {
                 content: "Include a regression test".to_owned(),
                 ..document_message(ChannelSender::new_from_user(user()))
             },
+            context: None,
         }));
     let RoutedTrigger::Command(session_id, HarnessCommand::Deliver(deliver)) =
         route_agent_trigger(followed.clone(), runtime(AgentKind::InMemory), &links())
@@ -478,6 +580,7 @@ fn a_mention_with_attached_files_opens_with_them_as_prompt_attachments() {
         AgentBotMentionedEvent {
             bot_id: BotId::TEST_A,
             message: message_with_files(ChannelSender::new_from_user(user())),
+            context: None,
         },
     ));
     let routed = route_agent_trigger(event, runtime(AgentKind::InMemory), &links()).unwrap();
@@ -509,6 +612,7 @@ fn a_managed_channel_message_with_files_delivers_them_as_prompt_attachments() {
             session_id: AgentSessionId::TEST_A,
             kind: ThreadMessageKind::MentionThread,
             message: message_with_files(ChannelSender::new_from_user(user())),
+            context: None,
         },
     ));
     let routed = route_agent_trigger(event, runtime(AgentKind::SandboxedCoder), &links()).unwrap();

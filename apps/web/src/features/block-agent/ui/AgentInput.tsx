@@ -1,4 +1,7 @@
+import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
+import { toast } from '@core/component/Toast/Toast';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { IMAGE_INPUT_WARNING } from '../state/image-input';
 /**
  * The agent block's composer: the chat input's look and its markdown editing
  * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), including `@`
@@ -50,6 +53,8 @@ export const AGENT_INPUT_TEXT_AREA_ID = 'agent-input-text-area';
 export type QuoteInsert = (text: string) => void;
 
 export interface AgentInputProps {
+  /** Image capability of the selected model; unknown runtimes omit it. */
+  supportsImages?: boolean | null;
   placeholder?: string;
   /** Context to seed in the composer without sending it. */
   initialInput?: string;
@@ -156,7 +161,12 @@ export function AgentInput(props: AgentInputProps) {
     attachments().some((attachment) => attachment.pending);
   const attachFiles = (files: File[]) => {
     if (!canAttach() || files.length === 0) return;
-    props.onAttachFiles?.(files);
+    const accepted =
+      props.supportsImages === false
+        ? files.filter((file) => getAttachmentKindFromFile(file) !== 'image')
+        : files;
+    if (accepted.length !== files.length) toast.failure(IMAGE_INPUT_WARNING);
+    if (accepted.length) props.onAttachFiles?.(accepted);
   };
 
   // Sending while busy is allowed — the service queues prompts behind the
@@ -165,6 +175,10 @@ export function AgentInput(props: AgentInputProps) {
   const canSend = () =>
     (markdown().trim().length > 0 || attachments().length > 0) &&
     !hasPendingAttachments() &&
+    !(
+      props.supportsImages === false &&
+      attachments().some((file) => file.kind === 'image')
+    ) &&
     !props.disabled &&
     !props.readOnly &&
     !dictation.active();
@@ -330,6 +344,11 @@ export function AgentInput(props: AgentInputProps) {
         classList={{ 'opacity-50': props.readOnly }}
       >
         {/* Desktop: the model pill sits above the box, as it always has. */}
+        <Show when={props.supportsImages === false}>
+          <p role="status" class="px-3 py-1 text-xs text-ink-muted">
+            {IMAGE_INPUT_WARNING}
+          </p>
+        </Show>
         <Show when={!isTouchDevice() && props.modelControl}>
           <div class="flex items-center px-0.5">{props.modelControl}</div>
         </Show>

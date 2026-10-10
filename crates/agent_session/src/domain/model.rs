@@ -409,6 +409,9 @@ pub struct StoredQueuedAction {
     /// Chip message id, once posted, so a retry does not announce twice.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub announced_message_id: Option<Uuid>,
+    /// Why the agent is being asked, composed into the prompt at dispatch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<trigger_context::TriggerContext>,
 }
 
 impl From<&StoredQueuedAction> for super::ports::QueuedControl {

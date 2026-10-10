@@ -13,6 +13,7 @@ import { HomeAgentComposer } from './home-agent-composer';
 const mocks = vi.hoisted(() => ({
   start: vi.fn(() => 'pending-session'),
   replace: vi.fn(),
+  openPreview: vi.fn(() => true),
   buildPrompt: vi.fn(),
   failure: vi.fn(),
   pendingDraft: () => null as string | null,
@@ -21,6 +22,9 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: mocks.start,
+}));
+vi.mock('./home-view-context', () => ({
+  useHomeView: () => ({ openPreview: mocks.openPreview }),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'viewer-1',
@@ -78,7 +82,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-it('forwards the shared composer selection into the common session flow', () => {
+it('opens the new session inside Home', () => {
   render(() => <HomeAgentComposer />);
   const start = {
     prompt: 'Build it',
@@ -94,9 +98,12 @@ it('forwards the shared composer selection into the common session flow', () => 
     userId: 'viewer-1',
     submitSurface: 'home',
   });
-  expect(mocks.replace).toHaveBeenCalledWith({
-    next: { type: 'component', id: 'agents-session~agents~pending-session' },
+  // The session opens in Home's detail pane instead of replacing Home.
+  expect(mocks.openPreview).toHaveBeenCalledWith({
+    type: 'agent_session',
+    id: 'pending-session',
   });
+  expect(mocks.replace).not.toHaveBeenCalled();
 });
 
 it('puts suggested context into the shared draft', async () => {

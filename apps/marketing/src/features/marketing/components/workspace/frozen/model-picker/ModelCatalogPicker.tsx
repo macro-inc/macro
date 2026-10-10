@@ -23,6 +23,7 @@ type ModelCatalogPickerProps = {
   pending?: boolean;
   triggerLabel?: JSX.Element;
   children?: JSX.Element;
+  childrenAfter?: boolean;
   emptyMessage?: string;
   triggerClass?: string;
   contentClass?: string;
@@ -117,6 +118,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           onSelect={props.onSelect}
           emptyMessage={props.emptyMessage}
           searchPlaceholder={props.searchPlaceholder}
+          childrenAfter={props.childrenAfter}
           searchRef={(element) => {
             searchRef = element;
           }}
@@ -138,6 +140,7 @@ export function ModelCatalogMenu(
     | 'emptyMessage'
     | 'searchPlaceholder'
     | 'children'
+    | 'childrenAfter'
   > & {
     searchRef?: (element: HTMLInputElement) => void;
   }
@@ -188,7 +191,7 @@ export function ModelCatalogMenu(
         </div>
       </div>
 
-      {props.children}
+      <Show when={!props.childrenAfter}>{props.children}</Show>
       <Show when={props.options.length === 0}>
         <div class="bg-menu px-3 py-2 text-xs text-ink-muted" role="status">
           {props.emptyMessage ?? 'No models available.'}
@@ -284,6 +287,7 @@ export function ModelCatalogMenu(
           </Show>
         </Dropdown.Group>
       </Show>
+      <Show when={props.childrenAfter}>{props.children}</Show>
     </>
   );
 }

@@ -94,7 +94,7 @@ export function RouteEmail() {
   });
 
   return (
-    <FeaturePage>
+    <FeaturePage productSpacing>
       <header class="feature-page-hero email-page-hero">
         <p class="email-page-hero-label">
           <MacroLogo aria-hidden="true" />
@@ -213,6 +213,7 @@ export function RouteEmail() {
           </p>
         </div>
       </FeaturePageSection>
+      <EmailComparison />
       <FeaturePageFaq
         id="email-faq-title"
         title="Gmail accounts and agent permissions"
@@ -227,7 +228,6 @@ export function RouteEmail() {
         }
         items={faqItems}
       />
-      <EmailComparison />
       <HomepageClosing />
     </FeaturePage>
   );

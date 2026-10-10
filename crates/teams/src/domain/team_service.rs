@@ -3,10 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::{Arc, LazyLock, Mutex, Weak},
-};
+use std::{collections::HashSet, sync::Arc};
 
 use channels::domain::{
     models::{ChannelType, CreateChannelRequest, Sender},
@@ -50,7 +47,7 @@ use crate::domain::{
         TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
         TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
     },
-    open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease},
+    open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{OwnedEntityCleanup, UnwiredOwnedEntityCleanup, clear_team},
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -71,27 +68,11 @@ fn team_member_roles_to_remove() -> Vec<RoleId> {
         .collect()
 }
 
-/// Per-team locks serializing seat moves within this process (see
-/// [`TeamService::set_team_member_plan`]). Entries are weak so a team whose
-/// move finished costs nothing; a concurrent move on the same team picks up
-/// the live lock instead. Replicas of the service do not share this, so two
-/// admins on different replicas moving seats in the same instant can still
-/// race; the seat picker disables itself while a move is in flight, which
-/// covers the realistic case of one admin double-clicking.
-fn seat_move_lock(team_id: &uuid::Uuid) -> Arc<tokio::sync::Mutex<()>> {
-    static LOCKS: LazyLock<Mutex<HashMap<uuid::Uuid, Weak<tokio::sync::Mutex<()>>>>> =
-        LazyLock::new(Default::default);
-    let mut locks = LOCKS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(live) = locks.get(team_id).and_then(Weak::upgrade) {
-        return live;
-    }
-    // Drop entries whose lock nobody holds any more while we are here.
-    locks.retain(|_, weak| weak.strong_count() > 0);
-    let lock = Arc::new(tokio::sync::Mutex::new(()));
-    locks.insert(*team_id, Arc::downgrade(&lock));
-    lock
+/// Renewed seat plans may be reconciled without restoring revoked paid access.
+#[derive(Clone, Copy)]
+enum TeamBillingRoleUpdate {
+    RestorePermissions,
+    PreservePermissions,
 }
 
 /// Implementation of the TeamService using a TeamRepository
@@ -311,6 +292,113 @@ where
     OSR: OpenSeatRelease,
     OEC: OwnedEntityCleanup,
 {
+    /// Reconcile while the caller holds the owning team billing guard.
+    async fn reconcile_team_billing_locked(
+        &self,
+        team_id: &uuid::Uuid,
+        started: Option<SubscriptionStart>,
+        role_update: TeamBillingRoleUpdate,
+    ) -> Result<(), RestorePermissionsForTeamMembersError> {
+        let subscription = self
+            .team_repository
+            .get_team_subscription_id(team_id)
+            .await?;
+        let renewed = if let Some(id) = subscription.as_ref() {
+            self.customer_repository.renewed_seat_plans(id).await?
+        } else {
+            Vec::new()
+        };
+        let mut members = self.team_repository.get_team_members(team_id).await?;
+        for member in &mut members {
+            if let Some((_, plan)) = renewed
+                .iter()
+                .find(|(user, _)| user == member.user_id.as_ref())
+            {
+                self.team_repository
+                    .patch_team_member_plan(team_id, &member.user_id, *plan)
+                    .await?;
+                member.plan = *plan;
+            }
+        }
+
+        if members.is_empty() {
+            return Ok(());
+        }
+
+        for member in members {
+            if matches!(role_update, TeamBillingRoleUpdate::PreservePermissions) {
+                if !renewed
+                    .iter()
+                    .any(|(user, _)| user == member.user_id.as_ref())
+                {
+                    continue;
+                }
+                let roles = self
+                    .user_roles_and_permissions_service
+                    .get_user_roles(&member.user_id)
+                    .await?;
+                if !roles.contains(&RoleId::TeamSubscriber) {
+                    continue;
+                }
+            }
+            if let Some(started) = started {
+                let previous_roles = self
+                    .user_roles_and_permissions_service
+                    .get_user_roles(&member.user_id)
+                    .await?;
+                let from = previous_roles
+                    .iter()
+                    .any(RoleId::is_paid_subscription)
+                    .then(|| SeatPlan::from_roles(&previous_roles));
+                // Reset before stamping roles so a storage failure retains the
+                // source tier and the same upgrade can be retried safely.
+                self.open_seat_release
+                    .change_plan(
+                        &member.user_id,
+                        SeatPlanChange {
+                            from,
+                            to: member.plan,
+                            at: started.at,
+                            period: Some((started.period_start, started.period_end)),
+                        },
+                    )
+                    .await
+                    .map_err(|error| {
+                        RestorePermissionsForTeamMembersError::UsageReset(Box::new(error))
+                    })?;
+            }
+            let roles = match role_update {
+                TeamBillingRoleUpdate::RestorePermissions => team_member_roles_to_add(member.plan),
+                TeamBillingRoleUpdate::PreservePermissions => vec![member.plan.role()],
+            };
+            let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
+
+            self.user_roles_and_permissions_service
+                .dangerous_upsert_roles_for_user(&member.user_id, roles)
+                .await
+                .map_err(RestorePermissionsForTeamMembersError::AddRolesToUserError)?;
+
+            // Exactly one tier role per member: the one their seat's plan says.
+            let stale_tier_roles = member.plan.other_tier_roles();
+            if let Ok(stale_tier_roles) = non_empty::NonEmpty::new(stale_tier_roles.as_slice()) {
+                self.user_roles_and_permissions_service
+                    .dangerous_remove_roles_from_user(&member.user_id, &stale_tier_roles)
+                    .await
+                    .map_err(RestorePermissionsForTeamMembersError::AddRolesToUserError)?;
+            }
+        }
+
+        if !renewed.is_empty()
+            && let Some(id) = subscription.as_ref()
+        {
+            self.customer_repository
+                .acknowledge_renewed_seat_plans(id)
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Replaces the contacts enqueuer while preserving every other service dependency.
     pub fn with_contacts_enqueuer<CNE2>(
         self,
@@ -453,6 +541,28 @@ where
             .ok();
     }
 
+    /// Restore a removed seat's pending downgrade after membership and seat rollback.
+    async fn restore_pending_seat_change(
+        &self,
+        subscription_id: Option<&stripe::SubscriptionId>,
+        user_id: &MacroUserIdStr<'_>,
+        pending_plan: Option<SeatPlan>,
+    ) {
+        if let (Some(subscription), Some(plan)) = (subscription_id, pending_plan) {
+            self.customer_repository
+                .schedule_seat_plan(subscription, user_id, Some(plan))
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        user_id = %user_id,
+                        "unable to restore pending seat downgrade after member removal failed"
+                    );
+                })
+                .ok();
+        }
+    }
+
     /// Deletes `team_id` on behalf of `actor_user_id`. Purges everything the
     /// team and its bots own, cancels the team subscription, deletes the team
     /// with its memberships, bots, and grants, publishes `team.deleted`, and
@@ -537,6 +647,32 @@ where
             .get_team_enterprise_status(&team_id)
             .await?;
 
+        let _billing = self.customer_repository.lock_team_billing(&team_id).await?;
+        let subscription_id = if enterprise {
+            None
+        } else {
+            self.team_repository
+                .get_team_subscription_id(&team_id)
+                .await?
+        };
+        // Stripe may have entered the downgrade phase before its webhook arrives.
+        // Remove the effective seat plan, rather than decrementing its old price.
+        if let Some(subscription) = subscription_id.as_ref()
+            && !self
+                .customer_repository
+                .renewed_seat_plans(subscription)
+                .await?
+                .is_empty()
+        {
+            self.reconcile_team_billing_locked(
+                &team_id,
+                None,
+                TeamBillingRoleUpdate::PreservePermissions,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+        }
+
         let roles_to_remove = team_member_roles_to_remove();
         let current_roles = self
             .user_roles_and_permissions_service
@@ -549,6 +685,14 @@ where
             .cloned()
             .collect();
 
+        let pending_plan = if let Some(subscription) = subscription_id.as_ref() {
+            self.customer_repository
+                .pending_seat_plan(subscription, user_id)
+                .await?
+                .map(|change| change.plan)
+        } else {
+            None
+        };
         let removed_member = match self
             .team_repository
             .remove_user_from_team(&team_id, user_id)
@@ -564,37 +708,16 @@ where
             Err(error) => return Err(error),
         };
 
-        let subscription_id = if enterprise {
-            None
-        } else {
-            // Free teams have no linked subscription - nothing to decrement.
-            match self
-                .team_repository
-                .get_team_subscription_id(&team_id)
-                .await
-            {
-                Ok(subscription_id) => subscription_id,
-                Err(e) => {
-                    self.team_repository
-                        .rollback_remove_user_from_team(&removed_member)
-                        .await
-                        .inspect_err(|rollback_err| {
-                            tracing::error!(
-                                error=?rollback_err,
-                                "unable to rollback removed team member after getting team subscription failed"
-                            );
-                        })
-                        .ok();
-                    return Err(RemoveUserFromTeamError::TeamError(e));
-                }
-            }
-        };
-
         if let Some(subscription_id) = subscription_id.as_ref()
-            && let Err(e) = self
-                .customer_repository
-                .decrement_seat_count(subscription_id, removed_member.plan, 1)
-                .await
+            && let Err(e) = async {
+                self.customer_repository
+                    .schedule_seat_plan(subscription_id, user_id, None)
+                    .await?;
+                self.customer_repository
+                    .decrement_seat_count(subscription_id, removed_member.plan, 1)
+                    .await
+            }
+            .await
         {
             self.team_repository
                 .rollback_remove_user_from_team(&removed_member)
@@ -606,6 +729,8 @@ where
                     );
                 })
                 .ok();
+            self.restore_pending_seat_change(Some(subscription_id), user_id, pending_plan)
+                .await;
             return Err(RemoveUserFromTeamError::CustomerError(e));
         }
 
@@ -638,6 +763,8 @@ where
                         );
                     })
                     .ok();
+                self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_plan)
+                    .await;
                 return Err(RemoveUserFromTeamError::TeamError(
                     channel_error_to_team_error(error),
                 ));
@@ -659,6 +786,8 @@ where
                 "removing team member roles",
             )
             .await;
+            self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_plan)
+                .await;
             return Err(RemoveUserFromTeamError::RemoveRolesFromUserError(e));
         }
 
@@ -683,6 +812,8 @@ where
                 "releasing the open seat",
             )
             .await;
+            self.restore_pending_seat_change(subscription_id.as_ref(), user_id, pending_plan)
+                .await;
             return Err(RemoveUserFromTeamError::OpenSeatRelease(Box::new(error)));
         }
 
@@ -1672,6 +1803,17 @@ where
         &self,
         team_id: &uuid::Uuid,
     ) -> Result<(), RevokePermissionsForTeamMembersError> {
+        // Revocation must not race a renewed seat's tier-role update.
+        let _billing = self
+            .customer_repository
+            .lock_team_billing(team_id)
+            .await
+            .map_err(|error| TeamError::StorageLayerError(error.into()))?;
+        // Plan changes must see the failed payment before revoked roles can
+        // become observable, including while the webhook finishes other work.
+        self.team_repository
+            .update_team_payment_status(team_id, false)
+            .await?;
         let members = self.team_repository.get_team_members(team_id).await?;
 
         if members.is_empty() {
@@ -1697,33 +1839,15 @@ where
     async fn restore_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
+        started: Option<SubscriptionStart>,
     ) -> Result<(), RestorePermissionsForTeamMembersError> {
-        let members = self.team_repository.get_team_members(team_id).await?;
-
-        if members.is_empty() {
-            return Ok(());
-        }
-
-        for member in members {
-            let roles = team_member_roles_to_add(member.plan);
-            let roles = non_empty::NonEmpty::new(roles.as_slice()).unwrap();
-
-            self.user_roles_and_permissions_service
-                .dangerous_upsert_roles_for_user(&member.user_id, roles)
-                .await
-                .map_err(RestorePermissionsForTeamMembersError::AddRolesToUserError)?;
-
-            // Exactly one tier role per member: the one their seat's plan says.
-            let stale_tier_roles = member.plan.other_tier_roles();
-            if let Ok(stale_tier_roles) = non_empty::NonEmpty::new(stale_tier_roles.as_slice()) {
-                self.user_roles_and_permissions_service
-                    .dangerous_remove_roles_from_user(&member.user_id, &stale_tier_roles)
-                    .await
-                    .map_err(RestorePermissionsForTeamMembersError::AddRolesToUserError)?;
-            }
-        }
-
-        Ok(())
+        let _billing = self.customer_repository.lock_team_billing(team_id).await?;
+        self.reconcile_team_billing_locked(
+            team_id,
+            started,
+            TeamBillingRoleUpdate::RestorePermissions,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1756,26 +1880,19 @@ where
     ) -> Result<TeamMember<'static>, SetTeamMemberPlanError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
-        // Moving a seat reads the subscription's per-plan quantities and
-        // writes them back, so two moves on one team must not interleave:
-        // both would apply the same pre-image and Stripe would under-count a
-        // plan. Serialize per team for the whole move.
-        let lock = seat_move_lock(&team_id);
-        let _moving = lock.lock().await;
+        // Serialize the whole use case with renewal reconciliation across replicas.
+        let _billing = self.customer_repository.lock_team_billing(&team_id).await?;
         let changed_by = entity_access_receipt
             .get_authenticated_user()
             .map_err(|e| SetTeamMemberPlanError::TeamError(TeamError::AccessError(e)))?
             .clone()
             .into_owned();
 
-        let member = self
+        let mut member = self
             .team_repository
             .get_team_member(&team_id, user_id)
             .await?
             .into_owned();
-        if member.plan == plan {
-            return Ok(member);
-        }
         if !SeatPlan::PURCHASABLE.contains(&plan) {
             return Err(CustomerError::PlanUnavailable(plan).into());
         }
@@ -1804,6 +1921,50 @@ where
             }
         };
 
+        // A request can race renewal's webhook. Reconcile the provider's
+        // effective phase before comparing against the stored member plan.
+        if let Some(subscription) = subscription_id.as_ref() {
+            let renewed = self
+                .customer_repository
+                .renewed_seat_plans(subscription)
+                .await?;
+            if !renewed.is_empty() {
+                self.reconcile_team_billing_locked(
+                    &team_id,
+                    None,
+                    TeamBillingRoleUpdate::PreservePermissions,
+                )
+                .await
+                .map_err(|error| SetTeamMemberPlanError::UsageReset(Box::new(error)))?;
+                member = self
+                    .team_repository
+                    .get_team_member(&team_id, user_id)
+                    .await?
+                    .into_owned();
+            }
+        }
+
+        if let Some(subscription) = subscription_id.as_ref() {
+            if member.plan == plan {
+                self.customer_repository
+                    .schedule_seat_plan(subscription, user_id, None)
+                    .await?;
+                return Ok(member);
+            }
+            if member.plan == SeatPlan::Max && plan == SeatPlan::Premium {
+                self.customer_repository
+                    .schedule_seat_plan(subscription, user_id, Some(plan))
+                    .await?;
+                return Ok(member);
+            }
+            self.customer_repository
+                .schedule_seat_plan(subscription, user_id, None)
+                .await?;
+        } else if member.plan == plan {
+            return Ok(member);
+        }
+
+        let changed_at = chrono::Utc::now();
         if let Some(subscription_id) = subscription_id.as_ref() {
             self.customer_repository
                 .move_seat(subscription_id, member.plan, plan)
@@ -1834,7 +1995,7 @@ where
         // allowance follow the seat.
         let roles_to_add = team_member_roles_to_add(plan);
         let stale_tier_roles = plan.other_tier_roles();
-        let role_result = async {
+        let plan_result = async {
             self.user_roles_and_permissions_service
                 .dangerous_upsert_roles_for_user(
                     user_id,
@@ -1846,10 +2007,47 @@ where
                     .dangerous_remove_roles_from_user(user_id, &stale_tier_roles)
                     .await?;
             }
-            Ok::<(), roles_and_permissions::domain::model::UserRolesAndPermissionsError>(())
+            if !enterprise {
+                self.open_seat_release
+                    .change_plan(
+                        user_id,
+                        SeatPlanChange {
+                            from: Some(member.plan),
+                            to: plan,
+                            at: changed_at,
+                            period: None,
+                        },
+                    )
+                    .await
+                    .map_err(|error| SetTeamMemberPlanError::UsageReset(Box::new(error)))?;
+            }
+            Ok::<(), SetTeamMemberPlanError>(())
         }
         .await;
-        if let Err(e) = role_result {
+        if let Err(e) = plan_result {
+            // The plan and billing update are one use case. Restore permissions
+            // as well as the recorded/Stripe plan if any step fails.
+            let original_roles = team_member_roles_to_add(member.plan);
+            self.user_roles_and_permissions_service
+                .dangerous_upsert_roles_for_user(
+                    user_id,
+                    non_empty::NonEmpty::new(original_roles.as_slice()).unwrap(),
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(?error, "unable to restore original seat roles")
+                })
+                .ok();
+            let stale_roles = member.plan.other_tier_roles();
+            if let Ok(stale_roles) = non_empty::NonEmpty::new(stale_roles.as_slice()) {
+                self.user_roles_and_permissions_service
+                    .dangerous_remove_roles_from_user(user_id, &stale_roles)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(?error, "unable to remove rolled-back seat roles")
+                    })
+                    .ok();
+            }
             self.team_repository
                 .patch_team_member_plan(&team_id, user_id, member.plan)
                 .await
@@ -1872,7 +2070,7 @@ where
                     })
                     .ok();
             }
-            return Err(e.into());
+            return Err(e);
         }
 
         tracing::info!(
@@ -1920,7 +2118,51 @@ where
     ) -> Result<TeamWithMembers, TeamError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
-        self.team_repository.get_team_by_id(&team_id).await
+        let mut team = self.team_repository.get_team_by_id(&team_id).await?;
+        team.scheduled_seat_plans = None;
+        if !entity_access_receipt
+            .entity_permission()
+            .satisfies::<AdminTeamRole>()
+            || team.team.enterprise()
+        {
+            return Ok(team);
+        }
+
+        // Billing-provider availability must not prevent viewing team membership.
+        let pending: anyhow::Result<_> = async {
+            if !self
+                .team_repository
+                .get_team_payment_status(&team_id)
+                .await?
+            {
+                return Ok(None);
+            }
+            let Some(subscription) = self
+                .team_repository
+                .get_team_subscription_id(&team_id)
+                .await?
+            else {
+                return Ok(None);
+            };
+            let mut changes = self
+                .customer_repository
+                .pending_seat_plans(&subscription)
+                .await?;
+            changes.retain(|user, _| {
+                team.members
+                    .iter()
+                    .any(|member| member.user_id.as_ref() == user)
+            });
+            Ok(Some(changes))
+        }
+        .await;
+        match pending {
+            Ok(changes) => team.scheduled_seat_plans = changes,
+            Err(error) => {
+                tracing::warn!(?error, %team_id, "unable to read pending team seat changes")
+            }
+        }
+        Ok(team)
     }
 
     #[tracing::instrument(skip(self), err)]

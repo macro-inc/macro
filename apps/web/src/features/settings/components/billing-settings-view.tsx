@@ -1,5 +1,6 @@
 import { type PaidPlanTier, PLAN_BY_TIER } from '@app/features/paywall/plans';
 import { plural } from '@core/util/string';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import { Button, Layer } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
@@ -10,10 +11,31 @@ import { BillingPlanCard, PlanFeatures } from './billing-plan-card';
 export function BillingSettingsView(props: {
   state: BillingState;
   controls?: JSX.Element;
+  renewalDate?: string;
+  scheduledChange?: { plan: 'free' | 'premium' | 'max'; effectiveAt: string };
+  subscriptionStatusFailed?: boolean;
+  onRefreshStatus?: () => void;
+  onKeepPlan?: (plan: PaidPlanTier) => void;
+  teamSeatDescription?: string;
   onManage: () => void;
   onSelectPlan: (plan: PaidPlanTier) => void;
   onTeamSettings?: JSX.EventHandler<HTMLAnchorElement, MouseEvent>;
 }) {
+  const formatDate = (value: string | undefined) => {
+    if (!value) return;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return;
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+  const scheduledChange = () => {
+    const change = props.scheduledChange;
+    const date = formatDate(change?.effectiveAt);
+    return change && date ? { ...change, date } : undefined;
+  };
   return (
     <SettingsPage
       title="Billing"
@@ -76,24 +98,35 @@ export function BillingSettingsView(props: {
                     when={
                       props.state.hasPaid &&
                       props.state.teamRole === 'owner' &&
-                      props.state.teamPlans
+                      (props.teamSeatDescription || props.state.teamPlans)
                     }
                   >
-                    {(plans) => (
-                      <p class="text-ink-extra-muted text-xs">
-                        {plans().length} {plural('user', plans().length)} •{' '}
-                        {describeSeatPlans(plans())} • set each seat's plan in{' '}
-                        <a
-                          class="text-link hover:text-link-hover"
-                          href="/app/settings/team"
-                          onClick={props.onTeamSettings}
-                        >
-                          Team settings
-                        </a>
-                      </p>
-                    )}
+                    <p class="text-ink-extra-muted text-xs">
+                      {props.teamSeatDescription ||
+                        `${props.state.teamPlans?.length} ${plural('user', props.state.teamPlans?.length ?? 0)} • ${describeSeatPlans(props.state.teamPlans ?? [])}`}{' '}
+                      • set each seat's plan in{' '}
+                      <a
+                        class="text-link hover:text-link-hover"
+                        href="/app/settings/team"
+                        onClick={props.onTeamSettings}
+                      >
+                        Team settings
+                      </a>
+                    </p>
                   </Match>
                 </Switch>
+                <Show
+                  when={props.state.hasPaid && formatDate(props.renewalDate)}
+                >
+                  {(date) => (
+                    <p class="text-xs text-ink-extra-muted">
+                      {scheduledChange()?.plan === 'free'
+                        ? 'Your subscription ends on '
+                        : 'Your current billing period ends on '}
+                      {date()}.
+                    </p>
+                  )}
+                </Show>
               </div>
 
               <Show when={props.state.canChangePlan && props.state.hasPaid}>
@@ -116,20 +149,62 @@ export function BillingSettingsView(props: {
             </ul>
           </section>
         </SettingsCard>
+        <Show when={props.subscriptionStatusFailed}>
+          <div
+            class="flex flex-wrap items-center gap-3 px-4 text-xs text-ink-muted"
+            role="status"
+          >
+            <p>Couldn't load your renewal details.</p>
+            <Button variant="ghost" size="sm" onClick={props.onRefreshStatus}>
+              Try again
+            </Button>
+          </div>
+        </Show>
+        <Show when={scheduledChange()}>
+          {(change) => (
+            <SettingsCard>
+              <div class="flex flex-wrap items-center gap-3 p-4" role="status">
+                <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
+                <p class="min-w-0 flex-1 text-sm text-ink">
+                  {change().plan === 'free'
+                    ? 'Your subscription cancellation'
+                    : `Your downgrade to ${PLAN_BY_TIER[change().plan].name}`}{' '}
+                  is scheduled for {change().date}.
+                </p>
+                <Show
+                  when={
+                    props.state.canChangePlan && props.state.tier !== 'free'
+                  }
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    depth={2}
+                    disabled={props.state.pending}
+                    onClick={() => {
+                      const tier = props.state.tier;
+                      if (tier !== 'free') props.onKeepPlan?.(tier);
+                    }}
+                  >
+                    Keep {PLAN_BY_TIER[props.state.tier].name} plan
+                  </Button>
+                </Show>
+              </div>
+            </SettingsCard>
+          )}
+        </Show>
       </section>
 
-      <Show when={props.state.canChangePlan}>
+      <Show when={props.state.canChangePlan && props.state.tier !== 'max'}>
         <section
           data-settings-target="upgrade"
           tabIndex={-1}
           class="@container/plan-options flex scroll-mt-4 flex-col gap-4 outline-none"
         >
           <h2 class="text-base font-medium text-ink">
-            {props.state.tier === 'max'
-              ? 'Change plan'
-              : props.state.hasPaid && props.state.aiUsageEnabled
-                ? 'Need more AI?'
-                : 'Upgrade'}
+            {props.state.hasPaid && props.state.aiUsageEnabled
+              ? 'Need more AI?'
+              : 'Upgrade'}
           </h2>
           <div
             class="grid grid-cols-1 gap-6"

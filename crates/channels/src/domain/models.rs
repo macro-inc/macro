@@ -754,6 +754,26 @@ impl ReferencedShareItem {
     }
 }
 
+/// Whether a referenced item was granted to a channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReferenceShareOutcome {
+    /// A channel grant exists. An existing direct grant is left as it was.
+    Shared,
+    /// The actor's access is below what sharing this kind of item requires.
+    NotPermitted,
+}
+
+/// One referenced item and whether it was shared with the channel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceShareResult {
+    /// Referenced entity id.
+    pub entity_id: String,
+    /// Referenced entity type.
+    pub entity_type: ReferencedShareItemType,
+    /// Grant outcome.
+    pub outcome: ReferenceShareOutcome,
+}
+
 /// Request to add participants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

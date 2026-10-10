@@ -156,6 +156,12 @@ editing: only moved or removed rows should be added or removed. Rename a row and
 then drag it: its drag label/payload must use the new fields without another
 registration/layout measurement.
 
+Desktop multi-select filter menus in Home, Tasks, Drive, Email, Reviews, Search,
+CRM, Calendar, and database option-value filters close after an ordinary click or
+Enter. Hold Shift while clicking or pressing Enter to toggle individual options
+and keep the menu open for further selections. Shift does not select a range.
+Single-select controls and mobile filter drawers retain their existing behavior.
+
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
 filters operate over synchronized channel metadata. The default channel scope
@@ -1162,6 +1168,12 @@ and **Created by** submenus alongside **Files** for Default, All files, and Emai
 attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
+Hold Shift while selecting or deselecting Type options to keep the submenu open
+and combine several file types without reopening it. Desktop filter submenus allow a
+250 ms grace period when the mouse crosses the parent menu's padding; entering
+the submenu cancels the pending close. Hovering another category immediately
+switches to that category, including when the submenu opens to the left.
+Escape and outside clicks still dismiss immediately.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. **New → Folder**
@@ -1648,11 +1660,13 @@ that date. Coverage depends on each teammate having connected their own calendar
 Google's out-of-office event type.
 
 A calendar event mentioned in a channel message opens the calendar focused on the viewer's
-own copy of the meeting. When the sender holds the event on their own calendar, the mention
-also shares it read-only with the channel's current members: a member without a copy of their
-own sees the mention's title and time, and its hover card adds a `Shared with you · not on
+own copy of the meeting. When a person holds the event on their own calendar and posts the
+mention, it is shared read-only with the channel's current members: a member without a copy of
+their own sees the mention's title and time, and its hover card adds a `Shared with you · not on
 your calendar` line with no open action. Clicking such a mention shows that hover card
-instead of opening the calendar. Private and confidential events are never shared this way.
+instead of opening the calendar. A classic `@Macro` reply that mentions an event does not share
+it by posting the chip. It asks whether to share with the channel, and a yes in that thread
+writes the same channel grant. Private and confidential events are never shared this way.
 Every calendar mention's hover card shows the schedule, location, organizer and attendee
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.
@@ -1749,7 +1763,14 @@ separate diff and discussion requests are outside this subscription behavior.
 
 ## Calls — `/app/component/calls`
 
-Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
+On desktop a collapsible sidebar holds the search field (`Search calls`, `⌘F`),
+the views `All` / `Missed` / `Unattended`, a `Type` section (`Internal` /
+`External`; External means at least one guest without a Macro account joined),
+a `Channels` section listing channels seen in loaded calls, and `Tags`. Choosing
+a type, channel, or tag shows only that one; choosing it again clears it. These
+refinements carry across the three views. Sort, group, filter, and `New call`
+sit in the list's top bar. Phones keep pill tabs and the header search.
+`New call` offers `Call a channel or contact`
 and, with `enable-quick-calls` enabled, `Manage call links`. Create Quick Calls
 with `New Call` beside Calendar's
 `New event`, or with `Create` → `Call` (`C C`). Scheduled calls are created through
@@ -1772,6 +1793,15 @@ playing elsewhere. On phones, recorded call headers omit **Call Again**.
 A channel's `Calls` tab lists that channel's recordings with the same rows, filtered
 by the channel id. Its search field matches call names and transcripts in that
 channel.
+
+In the native iOS call drawer, the horizontal participant row excludes the person
+shown in the large video. While holding or scrolling the row (including momentum),
+the displayed primary and row membership stay fixed; speaking indicators still
+update. The latest primary and membership update together after scrolling settles,
+preserving a surviving participant's position where possible. Verify that dragging
+does not pin someone, tapping pins the displayed person, and a participant who
+leaves during a held touch cannot be selected. Exercise speaker changes and
+departures during row gestures on a physical iPhone as well as the simulator.
 
 If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
@@ -1912,8 +1942,10 @@ are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
 
 Companies lists every visible company, grouped by Stage by default, with Owner,
-Revenue and Last Interaction columns. Its toolbar holds sort, group, filter,
-display options, saved views, and **New company** at the right end.
+Revenue and Last Interaction columns. A Stage column is off by default; turn it
+on, or hide Owner or Revenue, under **Display options**. Its toolbar holds
+sort, group, filter, display options, saved views, and **New company** at the
+right end.
 
 People lists contacts across every CRM-enabled team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
@@ -2016,10 +2048,15 @@ and can change access later through the standard **Share** dialog. Under
 pipeline private. **Copy Link** copies a CRM link that opens this pipeline for
 anyone who has access. On mobile, team access is in the **Team** tab.
 
-The first column is a required company/contact reference. The same company or
-contact can occur in multiple rows in a pipeline and can also belong to other
-pipelines. Each row has its own field values; **Duplicate** copies a row into a new
-entry referencing the same company or contact. The reference column
+The first column is a required company/contact reference. Clicking a filled
+reference, or pressing Enter on it, opens that company or contact; on desktop it
+opens in place with the pipeline name in its breadcrumb (choose it to return),
+and on mobile in its own view. The same applies to the reference shown as a
+board card's or record panel's title. To change which record a row references,
+focus the cell and press F2 or start typing; an empty reference cell opens the
+picker on click. The same company or contact can occur in multiple rows in a
+pipeline and can also belong to other pipelines. Each row has its own field
+values; **Duplicate** copies a row into a new entry referencing the same company or contact. The reference column
 can be renamed but cannot be removed or changed to another type. Stage, Owner,
 and Revenue are independent pipeline fields; editing them does not modify the
 company's CRM fields. Use **Add column** or a column header's menu to customize
@@ -2317,12 +2354,23 @@ Section headings and controls share a white surface in light mode and the
 composer border in dark mode, with subtle row separators. The compact sidebar
 uses the shared workspace width.
 
+When a newer version is ready, an **Update available** button (a download icon
+in a subtle accent circle that a glowing comet periodically circles) appears in
+the sidebar rail above the mobile-app and settings icons. Its popover (a title,
+a short description, and one action) opens by itself once per update until
+dismissed (click outside or Escape); the button stays until the update is
+applied. Its wording and action depend on the update: **New version available**
+/ **Reload** for a newer web build, **Update ready** / **Update** for a
+downloaded bundle in the desktop app, and **Desktop app update ready** /
+**Restart and update** for a native desktop update. When part of the app fails
+to load because a newer web build replaced it, the same button appears and its
+popover opens again (even if dismissed) with **Reload**; there is no blocking
+alert. Touch layouts have no rail, so a newer web build shows a **Reload** toast
+there instead.
+
 On desktop release builds, **Account → Desktop app update** shows native update
-progress. When a verified update is ready, an **Update available** arrow icon
-appears in the sidebar above the mobile-app and settings icons. Click it to open
-**Update Macro**, then choose **Restart and update** or **Later**. Dismissing the
-modal leaves the sidebar notification available. While preparing to restart,
-the modal disables its actions. Restart waits for pending canvas/PDF saves and
+progress. While preparing to restart, the popover can't be dismissed and its
+action is disabled. Restart waits for pending canvas/PDF saves and
 local persistence; active calls, uploads, and imports must finish first. A ready
 update also installs on normal app quit. Closing a window only triggers
 installation if it exits the app. Browser, mobile, and development builds do not
@@ -2370,7 +2418,18 @@ editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
 **Need more usage?** with `$25` / `$50` / `$100` / `Other`. Supported amounts
 redirect to Stripe Checkout; unsupported custom amounts are disabled. Free
 accounts see `View plans` instead of purchase or reload controls; paid team
-members who are not the payer cannot manage billing.
+members who are not the payer see only “Usage credits are managed by your team.”
+Their credit balance and automatic reload row are hidden, with no
+credit-purchase action.
+Team owners who pay for their team's seats manage the shared credit balance and
+automatic reload here in Usage, including purchases, balance thresholds, the
+monthly reload cap, and payment methods. Team payers see **Team Usage
+Credits**, “Credits are shared by your entire team.” and **Shared team balance**.
+The purchase and auto-reload dialogs also identify the team-wide credit balance.
+Team settings manages seats. Included
+usage remains per seat: the owner's Monthly limit meter describes their own
+usage, not the sum of the team's allowances. Team payers with a finite
+allowance see “This is your personal monthly usage limit.” beneath the meter.
 Unlimited enterprise plans show `Unlimited` and do not offer credit purchases
 or automatic reload. The development paid-plan preview can still display
 those controls, with purchases disabled.
@@ -2382,9 +2441,11 @@ and the automatic-charge warning. The dialog saves for paid payers:
 `Turn on auto-reload` enables automatic credit purchases with those thresholds,
 `Save` updates them while on, and `Turn off` disables automatic reload. The monthly
 limit caps reload purchases per UTC calendar month. The **Automatic reload**
-switch reflects the saved state. Paid team members who are not the payer see
+switch reflects the saved state and is the billing opt-in indicator. Paid team
+members who are not the payer see
 `Only the account that pays for this plan can change automatic reload.` and
-cannot save. After a failed automatic reload the dialog shows `Your last
+cannot save. After a failed automatic reload the Usage row shows
+`Paused — payment failed` while preserving the enabled setting. The dialog shows `Your last
 automatic reload could not be charged. Update your payment method, then save to
 try again.`; saving retries. Extra usage is funded entirely by prepaid credits.
 If the reload budget runs out or payment fails, uncovered usage cannot trigger a
@@ -2404,6 +2465,34 @@ Usage controls, including usage-limit dialogs. Dev tools remain interactive:
 Free and paid previews can be combined with this state, and `Reset preview`
 restores the normal dev view.
 
+Local **Developer tools → Open Billing Lab** opens `/billing-lab.html`, a
+standalone simulator with no login or billing API calls. Its 20 presets include
+Max with a pending Pro downgrade, exhausted allowances, credits, payment
+failures, team roles, loading, and errors. Select **Max → Pro at renewal**
+to start with a scheduled downgrade, and choose **Advance to
+renewal**: Max stays active until renewal, then Pro becomes active and included
+usage resets. Billing displays the scheduled downgrade and effective date;
+**Keep Max plan** cancels it and preserves the active plan and usage. The
+timeline also offers **Cancel scheduled change**. Purchases open a simulated checkout with explicit completion;
+**Fail the next billing request** enables error and retry checks. Scenario links
+restore the preset, not edits. **Monthly reload limit reached** opens Usage with
+a notice banner: **Monthly auto-reload $50 limit reached**, with **resets Nov 1**
+on the right. **Adjust limit** opens Auto-Reload; **Add credits** opens credit purchase.
+Manual credits do not count toward the monthly reload cap, which resets at the
+UTC month boundary. Live Usage shows this same banner from the API's monthly
+reload commitments and reset date, including when remaining cap room is below
+the minimum reload charge. Paid/pending reloads and failed invoices that can
+still collect count toward the cap. Older backends without these facts show no notice.
+The **Teams** scenario group opens Usage directly. **Mixed-plan team owner**
+previews shared credits and enabled reload for one Max and three Pro seats;
+**Team credits exhausted**, **Team reload paused**, and **Team monthly reload
+limit** exercise the owner's purchase, payment-recovery, and cap controls through
+the same Usage dialogs. Credit purchases add to the shared balance, while the
+included-usage meter remains scoped to the viewer's own seat. **Team-paid Max
+member** previews the notice-only member view. The simulator does not meter
+other members' activity or perform automatic charges.
+See [Billing Lab setup and boundaries](../../apps/web/src/features/billing-lab/README.md).
+
 `Billing` shows the current plan and `Manage`. Free users see separate Pro
 (`Get Pro`) and Max (`Get Max`) cards, side by side when the panel is wide enough
 and stacked on narrow panels. The Pro card shows `Free for one month!` for Free
@@ -2414,7 +2503,7 @@ Ineligible accounts see the rejection reason and are not silently charged.
 `per seat / month` for team accounts. Each card puts its button beside the price when wide enough and below
 the price when narrow. Free lists 2 connected email accounts; Pro and Max list
 unlimited connected email accounts. Pro users see a Max card (`Upgrade to Max`); Max
-users see a Pro card (`Switch to Pro`). Cards appear only for users who can
+users keep their current plan. Cards appear only for users who can
 manage their subscription. Team-paid members see no plan options, including
 on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
@@ -2442,9 +2531,16 @@ with the selection preserved. `Manage plan` returns to the selected Billing prev
 the signed-in account. State is not persisted and resets on leaving Billing.
 These controls are excluded from deployed builds, including dev.macro.com.
 
+Billing shows the current billing period end and any scheduled downgrade date.
+Max stays active until renewal; **Keep Max plan** cancels a pending downgrade
+without resetting usage. Failed renewal-detail reads offer **Try again**.
+Team members who cannot manage billing see the notice without its action.
+
 `Team` (members list; on a paid team each row shows the seat's plan,
-and admins/owners can move a seat between Premium and Max with the `Seat plan`
-menu; moves are prorated at once). CRM (enable/disable; once enabled, a `Deal stages` section
+and admins/owners can move a seat between Pro and Max with the `Seat plan`
+menu; Max upgrades are immediate and prorated, Pro downgrades start at renewal.
+**Keep Max** appears only for a confirmed pending downgrade and cancels it;
+failed scheduled-plan reads offer **Try again**). CRM (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`)

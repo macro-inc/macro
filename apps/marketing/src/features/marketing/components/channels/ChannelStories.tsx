@@ -1,28 +1,26 @@
-import Reply from '@phosphor/arrow-bend-up-left.svg';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import Envelope from '@phosphor/envelope.svg';
-import Hash from '@phosphor/hash.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Plus from '@phosphor/plus.svg';
-import {
-  type Component,
-  createEffect,
-  createSignal,
-  For,
-  type JSX,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import type { WorkspaceView } from '../../core/dummy-workspace';
-import { homepagePeople } from '../../core/homepage-demo-people';
-import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { unwrap } from 'solid-js/store';
+import type { WorkspaceComment } from '../../core/dummy-workspace';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
+import {
+  DocumentShareSheet,
+  LAUNCH_MEMBERS,
+} from '../documents/DocumentShareSheet';
+import { WorkspaceDocuments } from '../workspace/WorkspaceDocuments';
+import '../documents/document-stories.css';
+import { DemoAgentChip } from '../DemoAgentChip';
 import { DemoCursor } from '../DemoCursor';
-import { ViewSidebar } from '../DemoViewSidebar';
 import { ProductDemo } from '../product/ProductPage';
 import { ProductWorkspace } from '../product/ProductWorkspace';
+import { WorkspaceDesktopDemo } from '../WorkspaceDesktopDemo';
+import { ChannelWorkSurface } from './ChannelWorkSurface';
+import {
+  channelHistory,
+  createChannelChecklist,
+  createChannelHeroProject,
+  createChannelProject,
+  FOLLOW_UP_TASK,
+} from './channelProject';
 import '../workspace/dummy-workspace.css';
 import './channel-stories.css';
 
@@ -54,377 +52,208 @@ function createCursorTarget(
     });
     const observer = new ResizeObserver(measure);
     const root = frame();
-    if (root) observer.observe(root);
-    onCleanup(() => observer.disconnect());
+    if (root) {
+      observer.observe(root);
+      const conversation = root.querySelector('.channel-work-conversation');
+      if (conversation) observer.observe(conversation);
+      root.addEventListener('scroll', measure, true);
+    }
+    onCleanup(() => {
+      observer.disconnect();
+      root?.removeEventListener('scroll', measure, true);
+    });
   });
   return point;
 }
 
-/** @mention a doc in a channel; a new member opens it with no access request. */
+/** Full chat navigation makes the hero recognizable as a channel. */
+export function ChannelHero() {
+  const w = createChannelHeroProject();
+  return (
+    <div class="channel-hero-demo">
+      <WorkspaceDesktopDemo
+        heroFrame
+        view="messages"
+        label="Explore Macro Chat"
+        initialData={unwrap(w.data)}
+        initialChannelThread="start"
+        chatSplits
+      />
+    </div>
+  );
+}
+
+/** Open the actual email and plan from the conversation, then keep exploring. */
 export function ChannelSharedWorkDemo() {
   let root!: HTMLDivElement;
   let frame: HTMLDivElement | undefined;
-  const w = createDummyWorkspace('messages');
-  w.setData('channels', (c) => c.id === 'launch', 'messages', [
-    {
-      id: 'staging',
-      person: 'gabriel',
-      body: 'Staging is green. Invite flow and email replies both pass.',
-      time: '9:02 AM',
-    },
-    {
-      id: 'plan-request',
-      person: 'julia',
-      body: 'Here’s the plan for Thursday. Everyone check your part before we share it with the team.',
-      time: '9:15 AM',
-      documentId: 'plan',
-    },
-    {
-      id: 'welcome',
-      person: 'jacob',
-      body: 'Welcome to #launch @[Teo](demo-mention:teo). Everything we’ve linked here is yours to open.',
-      time: '9:21 AM',
-    },
-  ]);
-  w.open('messages', 'launch');
-  const [step, setStep] = createSignal(0);
-  const [automatic, setAutomatic] = createSignal(true);
-  const open = () => {
-    setStep(2);
-    setAutomatic(false);
-    w.open('documents', 'plan');
+  const w = createChannelChecklist();
+  const [aim, setAim] = createSignal<string>();
+  const [clicking, setClicking] = createSignal(false);
+  const [cursorVisible, setCursorVisible] = createSignal(false);
+  const [cursorOrigin, setCursorOrigin] = createSignal({ x: 0, y: 200 });
+  const scrollToMessage = (id: string, smooth = true) => {
+    const log = root?.querySelector<HTMLElement>(
+      '.channel-work-conversation [role="log"]'
+    );
+    const target = log?.querySelector<HTMLElement>(`[data-thread-id="${id}"]`);
+    if (!log || !target) return;
+    const top =
+      log.scrollTop +
+      target.getBoundingClientRect().top -
+      log.getBoundingClientRect().top -
+      100;
+    if (log.scrollTo)
+      log.scrollTo({
+        top: Math.max(0, top),
+        behavior: smooth ? 'smooth' : 'instant',
+      });
+    else log.scrollTop = Math.max(0, top);
+  };
+  const clickMention = (id: string) => {
+    root
+      .querySelector<HTMLButtonElement>(
+        `[data-thread-id="${id}"] .sample-inline-reference`
+      )
+      ?.click();
+    setClicking(false);
+    setCursorVisible(false);
+    setAim(undefined);
   };
   const playback = createProductWalkthrough({
     root: () => root,
-    steps: 2,
+    visibilityThreshold: 0.5,
+    steps: 9,
     reset: () => {},
-    reduced: open,
-    delay: (next) => (next === 1 ? 1200 : 1500),
-    advance: (next) => {
-      if (next === 2) open();
-      else setStep(next);
+    reduced: () => {
+      clickMention('shared-plan');
+      clickMention('welcome');
+      scrollToMessage('welcome', false);
+    },
+    delay: (step) =>
+      [0, 1800, 800, 1000, 350, 3800, 800, 350, 1000, 350][step] ?? 1400,
+    advance: (step) => {
+      if (step === 1) {
+        scrollToMessage('shared-plan');
+        setCursorOrigin({ x: root.clientWidth * 0.68, y: 260 });
+        setCursorVisible(true);
+      }
+      if (step === 2) setAim('shared-plan');
+      if (step === 3 || step === 8) setClicking(true);
+      if (step === 4) clickMention('shared-plan');
+      if (step === 5) {
+        const narrow =
+          root
+            .querySelector('.channel-work-split')
+            ?.getAttribute('data-narrow') === 'true';
+        if (narrow) setAim('close');
+        else scrollToMessage('welcome');
+        setCursorOrigin({ x: Math.min(root.clientWidth * 0.7, 360), y: 180 });
+        setCursorVisible(true);
+      }
+      if (step === 6) {
+        if (aim() === 'close') setClicking(true);
+        else setAim('welcome');
+      }
+      if (step === 7 && aim() === 'close') {
+        root.querySelector<HTMLButtonElement>('.channel-work-back')?.click();
+        setClicking(false);
+        scrollToMessage('welcome');
+        setAim('welcome');
+      }
+      if (step === 9) clickMention('welcome');
     },
   });
   const pointer = createCursorTarget(
     () => frame,
     () =>
-      automatic() && step() === 1
-        ? '[data-thread-id="plan-request"] .dummy-entity-link'
-        : undefined
+      aim() === 'close'
+        ? '.channel-work-back'
+        : aim()
+          ? `[data-thread-id="${aim()}"] .sample-inline-reference`
+          : undefined
   );
   return (
     <div ref={frame} class="channel-demo-frame">
       <ProductDemo
         ref={(el) => (root = el)}
-        label="Open a document someone mentioned in the channel"
+        label="Open docs, tasks, and email alongside the channel"
         onInteract={() => {
-          setAutomatic(false);
+          setAim(undefined);
+          setClicking(false);
+          setCursorVisible(false);
           playback.pause();
         }}
-        height={500}
+        height={620}
         mobileHeight={600}
       >
-        <ProductWorkspace workspace={w} />
+        <ChannelWorkSurface workspace={w} />
       </ProductDemo>
-      <Show when={pointer()}>
-        {(p) => (
-          <DemoCursor
-            label="Teo"
-            class="channel-demo-cursor"
-            style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
-          />
-        )}
+      <Show when={cursorVisible()}>
+        <DemoCursor
+          label="Jacob"
+          clicking={clicking()}
+          class="channel-demo-cursor"
+          style={{
+            transform: `translate(${(pointer() ?? cursorOrigin()).x}px, ${(pointer() ?? cursorOrigin()).y}px)`,
+          }}
+        />
       </Show>
     </div>
   );
 }
 
-type InboxRow = {
-  id: string;
-  group: 'Today' | 'Yesterday';
-  icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  person?: keyof typeof homepagePeople;
-  title: JSX.Element;
-  time: string;
-  unread?: boolean;
-  view: WorkspaceView;
-  item: string;
-  thread?: string;
-};
-
-const inboxRows: InboxRow[] = [
-  {
-    id: 'launch-thread',
-    group: 'Today',
-    icon: Reply,
-    title: (
-      <>
-        <span class="shrink-0">Julia</span>
-        <span class="shrink-0 whitespace-pre"> in </span>
-        <span class="truncate">#launch</span>
-      </>
-    ),
-    time: '9:41 AM',
-    unread: true,
-    view: 'messages',
-    item: 'launch',
-    thread: 'm1',
-  },
-  {
-    id: 'dm-teo',
-    group: 'Today',
-    person: 'teo',
-    title: 'Teo',
-    time: '9:32 AM',
-    unread: true,
-    view: 'messages',
-    item: 'dm-teo',
-  },
-  {
-    id: 'dana',
-    group: 'Today',
-    icon: Envelope,
-    title: 'Next steps for our team',
-    time: '9:20 AM',
-    unread: true,
-    view: 'email',
-    item: 'dana',
-  },
-  {
-    id: 'invite-task',
-    group: 'Today',
-    icon: ListChecks,
-    title: 'Fix the team invite handoff',
-    time: '9:05 AM',
-    view: 'tasks',
-    item: 'invite',
-  },
-  {
-    id: 'engineers',
-    group: 'Yesterday',
-    icon: Hash,
-    title: 'engineers',
-    time: 'Sep 28',
-    view: 'messages',
-    item: 'engineers',
-  },
-  {
-    id: 'plan-comment',
-    group: 'Yesterday',
-    icon: ChatTeardrop,
-    title: (
-      <>
-        <span class="shrink-0">Gabriel</span>
-        <span class="shrink-0 whitespace-pre"> commented on </span>
-        <span class="truncate">Q3 launch plan</span>
-      </>
-    ),
-    time: 'Sep 28',
-    view: 'documents',
-    item: 'plan',
-  },
-  {
-    id: 'design',
-    group: 'Yesterday',
-    icon: Hash,
-    title: 'design',
-    time: 'Sep 28',
-    view: 'messages',
-    item: 'design',
-  },
-];
-
-/** features/home on desktop: Home header, New chat, date groups, E = Mark done. */
-export function ChatInboxDemo() {
+/** Show the actual channel grant in Share, with the document behind it. */
+export function ChannelPermissionsDemo() {
   let root!: HTMLDivElement;
-  const w = createDummyWorkspace('messages');
-  const [rows, setRows] = createSignal(inboxRows);
-  const [selected, setSelected] = createSignal<string>();
-  const [key, setKey] = createSignal<string>();
-  const select = (id: string | undefined) => {
-    setSelected(id);
-    const row = rows().find((r) => r.id === id);
-    if (!row) return;
-    w.open(row.view, row.item);
-    if (row.view === 'messages') {
-      w.setChannel(row.item);
-      w.setChannelThread(row.thread);
-    }
-    setRows((list) =>
-      list.map((r) => (r.id === id ? { ...r, unread: false } : r))
-    );
-  };
-  const done = () => {
-    const list = rows();
-    const index = list.findIndex((r) => r.id === selected());
-    if (index < 0) return;
-    const next = list[index + 1] ?? list[index - 1];
-    setRows(list.filter((r) => r.id !== selected()));
-    select(next?.id);
-  };
-  const press = (next: string) => {
-    setKey(next);
-    if (next === 'e') done();
-    if (next === 'u')
-      setRows((list) =>
-        list.map((r) => (r.id === selected() ? { ...r, unread: true } : r))
-      );
-    if (next === 'j' || next === 'k') {
-      const list = rows();
-      const index = list.findIndex((r) => r.id === selected());
-      const target = list[index + (next === 'j' ? 1 : -1)] ?? list[index];
-      select(target?.id);
-    }
-  };
+  let shareTrigger: HTMLButtonElement | undefined;
+  const w = createChannelChecklist();
+  w.open('documents', 'plan');
+  const [sharing, setSharing] = createSignal(false);
+  const [manual, setManual] = createSignal(false);
   const playback = createProductWalkthrough({
     root: () => root,
-    steps: 4,
+    steps: 1,
     reset: () => {},
-    reduced: () => {
-      setRows(inboxRows.slice(2));
-      select('dana');
-    },
-    delay: (step) => [0, 900, 1600, 1500, 1500][step] ?? 1400,
-    advance: (step) => {
-      if (step === 1) {
-        setKey(undefined);
-        select('launch-thread');
-      }
-      if (step === 2 || step === 3) press('e');
-      if (step === 4) setKey(undefined);
-    },
+    reduced: () => setSharing(true),
+    delay: () => 1200,
+    advance: () => setSharing(true),
   });
-  const pause = () => playback.pause();
   return (
-    <div class="chat-inbox-demo">
+    <div class="channel-permissions-demo">
       <ProductDemo
         ref={(el) => (root = el)}
-        label="Messages wait in Home until you mark them done"
-        onInteract={pause}
-        height={520}
-        mobileHeight={600}
+        label="The document is shared with the channel"
+        height={610}
+        mobileHeight={660}
+        onInteract={() => {
+          setManual(true);
+          playback.pause();
+        }}
       >
-        <div
-          class="product-sidebared-scene chat-inbox-scene"
-          tabIndex={0}
-          role="group"
-          aria-label="Home"
-          onKeyDown={(event) => {
-            const next = event.key.toLowerCase();
-            if (['e', 'u', 'j', 'k'].includes(next)) {
-              event.preventDefault();
-              pause();
-              press(next);
-            }
+        <WorkspaceDocuments
+          sharingDescription="Shared with #launch"
+          workspace={w}
+          onShare={() => {
+            shareTrigger = [
+              ...root.querySelectorAll<HTMLButtonElement>(
+                '[data-view-shell-top-bar] button'
+              ),
+            ].find((button) => button.textContent?.trim() === 'Share');
+            setSharing(true);
           }}
-        >
-          <ViewSidebar.Root aria-label="Home" class="chat-inbox-list">
-            <ViewSidebar.Header>
-              <ViewSidebar.Title>Home</ViewSidebar.Title>
-            </ViewSidebar.Header>
-            <ViewSidebar.Primary>
-              <ViewSidebar.Action onClick={() => pause()}>
-                <ViewSidebar.Icon>
-                  <Plus />
-                </ViewSidebar.Icon>
-                New chat
-              </ViewSidebar.Action>
-            </ViewSidebar.Primary>
-            <ViewSidebar.Content>
-              <For each={['Today', 'Yesterday'] as const}>
-                {(group) => (
-                  <Show when={rows().some((r) => r.group === group)}>
-                    <p class="chat-inbox-group">{group}</p>
-                    <ViewSidebar.Nav>
-                      <For each={rows().filter((r) => r.group === group)}>
-                        {(row) => (
-                          <ViewSidebar.Item
-                            class="group/home-item chat-inbox-row"
-                            active={selected() === row.id}
-                            data-home-item={row.id}
-                            onClick={() => {
-                              pause();
-                              select(row.id);
-                            }}
-                          >
-                            <Show
-                              when={row.person}
-                              fallback={
-                                <ViewSidebar.Icon>
-                                  <Dynamic component={row.icon} />
-                                </ViewSidebar.Icon>
-                              }
-                            >
-                              {(person) => (
-                                <img
-                                  class="size-5 shrink-0 rounded-full"
-                                  src={homepagePeople[person()].photo}
-                                  alt=""
-                                />
-                              )}
-                            </Show>
-                            <span
-                              class="flex min-w-0 flex-1 items-center truncate"
-                              classList={{ 'text-ink': row.unread }}
-                            >
-                              {row.title}
-                            </span>
-                            <span class="chat-inbox-time">{row.time}</span>
-                            <Show when={row.unread}>
-                              <span
-                                aria-label="Unread"
-                                class="size-1.5 shrink-0 rounded-full bg-accent"
-                              />
-                            </Show>
-                          </ViewSidebar.Item>
-                        )}
-                      </For>
-                    </ViewSidebar.Nav>
-                  </Show>
-                )}
-              </For>
-            </ViewSidebar.Content>
-          </ViewSidebar.Root>
-          <div class="dummy-main chat-inbox-preview">
-            <Show
-              when={selected()}
-              fallback={
-                <p class="chat-inbox-empty">Select something to read it.</p>
-              }
-            >
-              <ProductWorkspace workspace={w} />
-            </Show>
-          </div>
-        </div>
+        />
+        <DocumentShareSheet
+          open={sharing()}
+          autoFocus={manual()}
+          title={w.data.documents.find((doc) => doc.id === 'plan')?.title ?? ''}
+          channel={{ members: LAUNCH_MEMBERS, level: 'view' }}
+          onClose={() => {
+            setSharing(false);
+            shareTrigger?.focus({ preventScroll: true });
+          }}
+        />
       </ProductDemo>
-      <div class="chat-shortcut-dock" aria-label="Home shortcuts">
-        <For
-          each={
-            [
-              { key: 'j', label: 'Next' },
-              { key: 'k', label: 'Previous' },
-              { key: 'e', label: 'Mark done' },
-              { key: 'u', label: 'Mark unread' },
-            ] as const
-          }
-        >
-          {(shortcut) => (
-            <button
-              type="button"
-              data-active={key() === shortcut.key}
-              onClick={() => {
-                pause();
-                if (!selected()) select(rows()[0]?.id);
-                else press(shortcut.key);
-              }}
-              aria-label={`${shortcut.label} (${shortcut.key.toUpperCase()})`}
-            >
-              <kbd>{shortcut.key.toUpperCase()}</kbd>
-              {shortcut.label}
-            </button>
-          )}
-        </For>
-      </div>
     </div>
   );
 }
@@ -433,168 +262,260 @@ const threadReplies = [
   {
     id: 'reply-1',
     person: 'teo' as const,
-    body: 'Yes. Lead with the invite flow, that’s what changes for existing teams.',
+    body: 'yep, 2pm',
     time: '9:32 AM',
   },
   {
     id: 'reply-2',
     person: 'jacob' as const,
-    body: 'Agreed. And link the rollout doc for anyone moving a whole team over.',
+    body: 'works for me',
     time: '9:34 AM',
   },
   {
     id: 'reply-3',
     person: 'gabriel' as const,
-    body: 'I’ll grab screenshots of the new invite screen this afternoon.',
+    body: 'same. i’ll bring the mockups',
     time: '9:36 AM',
   },
   {
     id: 'reply-4',
     person: 'teo' as const,
-    body: 'Screenshot of the existing-account path is in the doc now.',
+    body: 'meeting room or call?',
     time: '9:51 AM',
   },
   {
     id: 'reply-5',
     person: 'julia' as const,
-    body: 'Perfect, publishing at 9 on Thursday.',
+    body: 'call, i’m working from home',
     time: '9:55 AM',
   },
 ];
 
 /** Inline replies with the curved rail and the "N more replies" pill. */
 export function ChannelThreadDemo() {
-  let root!: HTMLDivElement;
   let frame: HTMLDivElement | undefined;
-  const w = createDummyWorkspace('messages');
+  const w = createChannelProject();
   w.setData('channels', (c) => c.id === 'launch', 'messages', [
     {
       id: 'root',
       person: 'julia',
-      body: 'Can we confirm the announcement wording before Thursday?',
+      body: 'still on for the design review today?',
       time: '9:30 AM',
-      documentId: 'plan',
     },
     ...threadReplies.map((reply) => ({ ...reply, replyTo: 'root' })),
     {
       id: 'next',
       person: 'valentina',
-      body: 'Northwind wants a demo of the team workspace next week. Who can take it?',
+      body: 'new icons are in the folder btw',
       time: '10:02 AM',
+    },
+    {
+      id: 'icons-reply',
+      person: 'jacob',
+      body: 'much sharper. let’s use these',
+      time: '10:04 AM',
+      replyTo: 'next',
+    },
+    {
+      id: 'signup',
+      person: 'teo',
+      body: 'signup button is fixed on mobile now',
+      time: '10:12 AM',
+    },
+    {
+      id: 'signup-reply',
+      person: 'julia',
+      body: 'just tried it. looks good on my phone too',
+      time: '10:14 AM',
+      replyTo: 'signup',
     },
   ]);
   w.open('messages', 'launch');
-  const [aim, setAim] = createSignal(false);
-  const expand = () => {
-    setAim(false);
-    frame
-      ?.querySelector<HTMLButtonElement>(
-        '[data-thread-id="root"] .sample-thread-expand'
-      )
-      ?.click();
-  };
-  const playback = createProductWalkthrough({
-    root: () => root,
-    steps: 2,
-    reset: () => {},
-    reduced: () => {},
-    delay: (step) => (step === 1 ? 1000 : 1500),
-    advance: (step) => {
-      if (step === 1) setAim(true);
-      if (step === 2) expand();
-    },
+  onMount(() => {
+    const firstFrame = requestAnimationFrame(() => {
+      const log = frame?.querySelector<HTMLElement>('.sample-chat-log');
+      if (log) log.scrollTop = 0;
+    });
+    onCleanup(() => cancelAnimationFrame(firstFrame));
   });
-  const pointer = createCursorTarget(
-    () => frame,
-    () => (aim() ? '[data-thread-id="root"] .sample-thread-expand' : undefined)
-  );
   return (
-    <div ref={frame} class="channel-demo-frame">
+    <div ref={frame} class="channel-demo-frame channel-thread-demo">
       <ProductDemo
-        ref={(el) => (root = el)}
         label="Read a thread inline and expand the rest"
-        onInteract={() => {
-          setAim(false);
-          playback.pause();
-        }}
-        height={600}
-        mobileHeight={700}
+        height={580}
+        mobileHeight={620}
       >
         <ProductWorkspace workspace={w} />
       </ProductDemo>
-      <Show when={pointer()}>
-        {(p) => (
-          <DemoCursor
-            label="Jacob"
-            class="channel-demo-cursor"
-            style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
-          />
-        )}
-      </Show>
     </div>
   );
 }
 
-/** @Macro answers in the channel from what the team has said and linked. */
+/** Macro creates the task; Julia brings Cursor into the same thread to investigate. */
 export function ChannelAgentDemo() {
+  const [sessionOpen, setSessionOpen] = createSignal(false);
   let root!: HTMLDivElement;
-  const w = createDummyWorkspace('messages');
+  const w = createChannelProject();
   const initial = [
+    ...structuredClone(channelHistory.slice(10)),
     {
-      id: 'invite',
+      id: 'bug',
       person: 'teo' as const,
-      body: 'Invite fix is up for review. New and existing accounts both land in the right team now.',
-      time: '9:20 AM',
+      time: '9:26 AM',
+      body: 'signup button is tiny on my phone. can someone fix it?',
     },
     {
-      id: 'announcement',
+      id: 'offer',
       person: 'julia' as const,
-      body: 'Announcement is drafted. I’ll send it as soon as the invite fix merges.',
-      time: '9:24 AM',
+      time: '9:27 AM',
+      body: 'i can take it',
     },
     {
-      id: 'catchup',
+      id: 'follow-up-request',
       person: 'jacob' as const,
-      body: '@[Macro](demo-mention:macro) I was out yesterday. Catch me up on the launch: who owns what, and is anything blocked?',
       time: '9:28 AM',
+      body: '@[Macro](demo-mention:macro) make that a task for Julia',
     },
   ];
   w.setData('channels', (c) => c.id === 'launch', 'messages', initial);
-  w.open('messages', 'launch');
-  const finish = () => {
+  const createFollowUp = () => {
+    w.setData('tasks', (tasks) => [
+      ...tasks.filter((task) => task.id !== 'training-invitations'),
+      {
+        id: 'training-invitations',
+        title: FOLLOW_UP_TASK,
+        description: 'Make the signup button easier to tap on a phone.',
+        owner: 'julia',
+        creator: 'jacob',
+        channel: 'launch',
+        status: 'Not Started',
+        priority: 'Medium',
+        tags: ['Launch'],
+        relatedDocumentIds: [],
+        steps: [],
+        comments: [],
+      },
+    ]);
     w.setData('channels', (c) => c.id === 'launch', 'messages', [
       ...initial,
       {
-        id: 'agent-summary',
+        id: 'agent-task',
         person: 'macro',
-        body: 'Launch is Thursday at 9. Teo’s invite fix is in review, Julia’s announcement is ready and waiting on that fix, and the launch checklist is yours. Nothing else is blocked.',
         time: '9:28 AM',
-        taskIds: ['invite', 'announcement', 'checklist'],
+        replyTo: 'follow-up-request',
+        body: 'Made @[Fix the signup button](demo-mention:training-invitations) and assigned it to @[Julia](demo-mention:julia).',
+        taskId: 'training-invitations',
       },
     ]);
-    // Like a new message arriving, keep the latest reply in view.
     requestAnimationFrame(() => {
       const log = root?.querySelector<HTMLElement>('[role="log"]');
       if (log) log.scrollTop = log.scrollHeight;
     });
   };
+  const appendReply = (message: WorkspaceComment) => {
+    w.setData(
+      'channels',
+      (channel) => channel.id === 'launch',
+      'messages',
+      (messages) => [
+        ...messages.filter((item) => item.id !== message.id),
+        message,
+      ]
+    );
+    w.setChannelThread('follow-up-request');
+    requestAnimationFrame(() => {
+      const log = root?.querySelector<HTMLElement>(
+        '.channel-work-conversation [role="log"]'
+      );
+      if (log) log.scrollTop = log.scrollHeight;
+    });
+  };
+  const bringCursor = () =>
+    appendReply({
+      id: 'julia-cursor',
+      person: 'julia',
+      time: '9:29 AM',
+      replyTo: 'follow-up-request',
+      body: 'thanks. @[Cursor](demo-mention:cursor) can you look into this? check the mobile styles first',
+    });
+  const cursorResponds = () => {
+    w.updateTask('training-invitations', { status: 'In Progress' });
+    appendReply({
+      id: 'cursor-finding',
+      person: 'cursor',
+      time: '9:30 AM',
+      replyTo: 'follow-up-request',
+      body: '',
+    });
+  };
   const playback = createProductWalkthrough({
     root: () => root,
-    steps: 1,
+    visibilityThreshold: 0.5,
+    steps: 3,
     reset: () => {},
-    reduced: finish,
-    delay: () => 1300,
-    advance: finish,
+    reduced: () => {
+      createFollowUp();
+      bringCursor();
+      cursorResponds();
+    },
+    delay: (step) => [0, 1600, 4000, 3200][step] ?? 1600,
+    advance: (step) => {
+      if (step === 1) createFollowUp();
+      if (step === 2) bringCursor();
+      if (step === 3) cursorResponds();
+    },
   });
   return (
     <ProductDemo
       ref={(el) => (root = el)}
-      label="Ask the Macro agent to catch you up in the channel"
+      label="Turn a message into an assigned task"
       onInteract={playback.pause}
-      height={600}
-      mobileHeight={720}
+      height={560}
+      mobileHeight={620}
     >
-      <ProductWorkspace workspace={w} />
+      <Show
+        when={sessionOpen()}
+        fallback={
+          <ChannelWorkSurface
+            workspace={w}
+            renderMessageDetails={(message) =>
+              message.id === 'cursor-finding' ? (
+                <DemoAgentChip
+                  agentSessionId="signup-investigation"
+                  requester="Julia"
+                  request="@Cursor can you look into this? check the mobile styles first"
+                  markdown="Found a mobile style shrinking the tap target."
+                  pullRequest={null}
+                  headerActions={null}
+                  onOpen={() => {
+                    playback.pause();
+                    setSessionOpen(true);
+                  }}
+                />
+              ) : undefined
+            }
+          />
+        }
+      >
+        <div class="flex h-full flex-col p-4 text-left">
+          <button
+            class="self-start text-sm text-ink-muted mb-6"
+            onClick={() => setSessionOpen(false)}
+          >
+            Back to conversation
+          </button>
+          <h3 class="text-sm font-semibold mb-6">
+            Cursor · Check the signup button
+          </h3>
+          <p class="text-sm text-ink-muted mb-4">
+            Julia: can you look into this? check the mobile styles first
+          </p>
+          <p class="text-base">
+            Found a mobile style shrinking the tap target. The mobile button
+            needs the same minimum height as the other signup buttons.
+          </p>
+        </div>
+      </Show>
     </ProductDemo>
   );
 }

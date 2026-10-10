@@ -393,6 +393,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "trigger_context",
  "url",
  "utoipa",
  "uuid",
@@ -426,6 +427,7 @@ dependencies = [
  "axum-extra",
  "bot_id",
  "bots",
+ "call",
  "channels",
  "claude_cloud_agents",
  "codex_cloud_agents",
@@ -667,6 +669,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "trigger_context",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -704,6 +707,7 @@ dependencies = [
  "async-trait",
  "bot_id",
  "bots",
+ "call",
  "channel_sender",
  "channels",
  "chrono",
@@ -712,6 +716,7 @@ dependencies = [
  "entity_access",
  "initiative",
  "lexical_client",
+ "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -733,6 +738,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "trigger_context",
  "workspace-hack",
 ]
 
@@ -746,6 +752,7 @@ dependencies = [
  "ai_usage",
  "anyhow",
  "bots",
+ "call",
  "channels",
  "connection_gateway_client",
  "crm",
@@ -3460,7 +3467,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.45"
+version = "0.6.47"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4356,6 +4363,7 @@ dependencies = [
  "toml_edit 0.22.27",
  "tracing",
  "tracing-subscriber",
+ "trigger_context",
  "tui-input",
  "uuid",
  "webbrowser",
@@ -10872,6 +10880,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "trigger_context",
  "workspace-hack",
 ]
 
@@ -16640,6 +16649,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "trigger_context",
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
@@ -19128,6 +19138,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -19823,6 +19834,18 @@ dependencies = [
  "memchr",
  "nom 8.0.0",
  "petgraph 0.8.3",
+]
+
+[[package]]
+name = "trigger_context"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]

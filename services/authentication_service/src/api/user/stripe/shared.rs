@@ -29,20 +29,6 @@ pub struct StripePrices {
 }
 
 impl StripePrices {
-    /// The price to sell `plan` at.
-    pub fn price_id(&self, plan: PaidPlan) -> Result<&str, StripeOperationError> {
-        if !PaidPlan::PURCHASABLE.contains(&plan) {
-            return Err(StripeOperationError::PlanUnavailable);
-        }
-        match plan {
-            PaidPlan::Premium => Ok(&self.premium),
-            PaidPlan::Max => self
-                .max
-                .as_deref()
-                .ok_or(StripeOperationError::PlanUnavailable),
-        }
-    }
-
     /// Which plan a subscription item's price belongs to, if any.
     pub fn plan_for_price(&self, price_id: &str) -> Option<PaidPlan> {
         if price_id == self.premium {
@@ -52,11 +38,6 @@ impl StripePrices {
         } else {
             None
         }
-    }
-
-    /// Every price that carries a seat item.
-    pub fn seat_price_ids(&self) -> Vec<String> {
-        self.seat_prices().all()
     }
 
     /// The same prices, for the teams crate's per-plan seat items.
@@ -101,8 +82,8 @@ pub enum StripeOperationError {
     NoSubscription,
     #[error("More than one active subscription; contact support to change plans")]
     AmbiguousSubscription,
-    #[error("Already on this plan")]
-    AlreadyOnPlan,
+    #[error("Plan change gateway failed")]
+    PlanChangeGateway(anyhow::Error),
     #[error("Only team admins can change plans on a team")]
     NotTeamAdmin,
     #[error("Team plan change failed")]
@@ -116,6 +97,7 @@ impl IntoResponse for StripeOperationError {
             // user id, DB-stored Stripe customer id) — a parse failure is a server/auth
             // misconfiguration, not bad client input. Map to 500 so metrics don't blame callers.
             StripeOperationError::ParseId(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            StripeOperationError::PlanChangeGateway(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::DbErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::MissingStripeId => StatusCode::BAD_REQUEST,
             StripeOperationError::StripeIdParse(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -130,7 +112,6 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::PlanUnavailable => StatusCode::BAD_REQUEST,
             StripeOperationError::NoSubscription => StatusCode::NOT_FOUND,
             StripeOperationError::AmbiguousSubscription => StatusCode::CONFLICT,
-            StripeOperationError::AlreadyOnPlan => StatusCode::CONFLICT,
             StripeOperationError::NotTeamAdmin => StatusCode::FORBIDDEN,
             StripeOperationError::TeamPlanErr(e) => match e {
                 SetTeamMemberPlanError::TeamNotPaying => StatusCode::PAYMENT_REQUIRED,
@@ -139,7 +120,8 @@ impl IntoResponse for StripeOperationError {
                 }
                 SetTeamMemberPlanError::TeamError(_)
                 | SetTeamMemberPlanError::CustomerError(_)
-                | SetTeamMemberPlanError::RolesError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                | SetTeamMemberPlanError::RolesError(_)
+                | SetTeamMemberPlanError::UsageReset(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
         };
         (
@@ -172,6 +154,19 @@ impl From<CheckoutError<StripeCheckoutError>> for StripeOperationError {
             CheckoutError::PlanUnavailable => Self::PlanUnavailable,
             CheckoutError::PromoCodeNotFound => Self::PromoCodeNotFound,
             CheckoutError::Gateway(error) => Self::CheckoutGateway(error),
+        }
+    }
+}
+
+impl From<crate::service::subscription_plan::PlanChangeError> for StripeOperationError {
+    fn from(error: crate::service::subscription_plan::PlanChangeError) -> Self {
+        use crate::service::subscription_plan::PlanChangeError as E;
+        match error {
+            E::MissingCustomer => Self::MissingStripeId,
+            E::NoSubscription => Self::NoSubscription,
+            E::AmbiguousSubscription => Self::AmbiguousSubscription,
+            E::PlanUnavailable => Self::PlanUnavailable,
+            E::Gateway(error) => Self::PlanChangeGateway(error),
         }
     }
 }

@@ -8,11 +8,13 @@ import { createComposerDictation } from '@app/features/dictation/composer-dictat
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
+import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { preloadAgentFold } from '@core/agent-fold/client';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
+import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
@@ -29,6 +31,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { IMAGE_INPUT_WARNING } from '../../block-agent/state/image-input';
 import { createChatComposerTip } from '../primitives/chat-composer-tip';
 
 /** Shared input that starts on one line and grows with the draft. */
@@ -41,6 +44,7 @@ export function ChatComposer(props: {
   draft: string;
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
+  supportsImages?: boolean | null;
   selector: JSX.Element;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
   session?: AgentInputProps;
@@ -59,9 +63,18 @@ export function ChatComposer(props: {
   const hasContent = () => !!props.draft.trim() || attachments().length > 0;
   const hasPendingAttachments = () =>
     attachments().some((file) => file.pending);
+  const hasUnsupportedImages = () =>
+    props.supportsImages === false &&
+    attachments().some((file) => file.kind === 'image');
   const canAttach = () => !!props.onAttachFiles && !disabled();
   const attachFiles = (files: File[]) => {
-    if (canAttach() && files.length > 0) props.onAttachFiles?.(files);
+    if (!canAttach() || files.length === 0) return;
+    const accepted =
+      props.supportsImages === false
+        ? files.filter((file) => getAttachmentKindFromFile(file) !== 'image')
+        : files;
+    if (accepted.length !== files.length) toast.failure(IMAGE_INPUT_WARNING);
+    if (accepted.length) props.onAttachFiles?.(accepted);
   };
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
   const inputCommands: InputCommands = {
@@ -182,6 +195,7 @@ export function ChatComposer(props: {
     if (
       (!prompt && attachments().length === 0) ||
       hasPendingAttachments() ||
+      hasUnsupportedImages() ||
       dictation.active() ||
       disabled()
     )
@@ -342,6 +356,7 @@ export function ChatComposer(props: {
                           disabled={
                             !hasContent() ||
                             hasPendingAttachments() ||
+                            hasUnsupportedImages() ||
                             disabled()
                           }
                           onClick={() => send()}
@@ -379,6 +394,11 @@ export function ChatComposer(props: {
           </Input.DropZone>
           <DictationPanel dictation={dictation} />
         </ComposerSurface>
+        <Show when={props.supportsImages === false}>
+          <p role="status" class="px-3 py-1 text-xs text-ink-muted">
+            {IMAGE_INPUT_WARNING}
+          </p>
+        </Show>
         <DictationFeedback dictation={dictation} />
         <Show when={props.drawer}>
           <div
@@ -419,6 +439,7 @@ export function ChatSessionInput(props: AgentInputProps) {
       selector={props.modelControl}
       onSend={props.onSend}
       session={props}
+      supportsImages={props.supportsImages}
       attachments={props.attachments}
       onAttachFiles={props.onAttachFiles}
       onRemoveAttachment={props.onRemoveAttachment}

@@ -16,6 +16,7 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
+use trigger_context::TriggerContext;
 mod session_origin;
 pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
 mod coding_preferences;
@@ -359,109 +360,6 @@ pub struct AnnounceOrigin {
     pub message_id: Uuid,
 }
 
-/// One message supplied as untrusted prompt context.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextMessage {
-    /// Message id.
-    pub id: Uuid,
-    /// Sender identifier as the message service represents it.
-    pub sender_id: String,
-    /// Readable name of the sender.
-    pub author: String,
-    /// Message body.
-    pub content: String,
-    /// When the message was posted.
-    pub posted_at: chrono::DateTime<chrono::Utc>,
-}
-
-/// Messages of one discussion, oldest first.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextThread {
-    /// Root message of the discussion.
-    pub root_id: Uuid,
-    /// Live messages, the root first when it is included.
-    pub messages: Vec<ContextMessage>,
-    /// Whether some messages of the discussion were left out.
-    pub messages_omitted: bool,
-}
-
-/// What a prompt answers. Without this the agent has to guess which of the
-/// surrounding messages "fix this" means.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReplyTarget {
-    /// The author quote-replied to one message.
-    Quote {
-        /// The quoted message.
-        message_id: Uuid,
-        /// The discussion holding the quoted message.
-        thread_id: Uuid,
-        /// The one-line preview the quote renders.
-        preview: String,
-        /// The quoted message in full. Absent when it lives in another
-        /// conversation or could not be read.
-        message: Option<ContextMessage>,
-    },
-    /// The prompt was posted as a reply in a discussion.
-    Thread {
-        /// Root of that discussion.
-        root_id: Uuid,
-    },
-    /// The prompt was posted at the top level of a channel and replies to
-    /// no particular message.
-    None,
-}
-
-/// Where in a document a comment thread sits. An annotation id alone names a
-/// location the agent has no way to resolve: the document body it can read
-/// carries no marks or highlights, so the text the comment covers travels
-/// with the id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CommentAnchor {
-    /// A cell or rectangular range in a native spreadsheet.
-    Spreadsheet {
-        /// Stable sheet identity within the workbook.
-        sheet_id: String,
-        /// Sheet name when the discussion was created.
-        sheet_name: String,
-        /// A1 cell or range, such as B4 or B4:C9.
-        range: String,
-    },
-
-    /// A comment mark in a markdown document.
-    Mark {
-        /// Lexical mark the thread is attached to.
-        mark_id: String,
-        /// The marked text as it read when the comment was posted. Absent on
-        /// threads anchored before snapshots were captured.
-        marked_text: Option<String>,
-        /// The mark as the document reads now. Absent when the document no longer
-        /// carries it or the lookup failed, leaving the snapshot as the fallback.
-        current: Option<MarkedPassage>,
-    },
-    /// A highlight on a PDF.
-    PdfHighlight {
-        /// Highlight annotation the thread is attached to.
-        anchor_id: String,
-        /// The text the highlight covers, read from the highlight. Absent when
-        /// the highlight carries none.
-        marked_text: Option<String>,
-    },
-    /// A point pinned on a PDF page, which covers no text.
-    PdfPin {
-        /// Pin annotation the thread is attached to.
-        anchor_id: String,
-    },
-}
-
-/// A comment mark resolved against the live document, both fields bounded.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MarkedPassage {
-    /// The text the mark covers.
-    pub marked_text: String,
-    /// The block or blocks containing the mark, windowed around it.
-    pub surrounding_text: String,
-}
-
 /// Whose access a session runs with, and who sent the prompt being composed.
 ///
 /// Named to the agent on every prompt so it can tell the session's owner
@@ -472,24 +370,6 @@ pub struct PromptPeople {
     pub owner: MacroUserIdStr<'static>,
     /// The prompt's sender; absent when a bot sent it on nobody's behalf.
     pub sender: Option<MacroUserIdStr<'static>>,
-}
-
-/// What the conversation an agent was summoned from contributes to its prompt.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ConversationContext {
-    /// The document location, when the prompt came from an anchored comment.
-    pub anchor: Option<CommentAnchor>,
-    /// What the prompt answers.
-    pub reply_target: Option<ReplyTarget>,
-    /// The prompting message, marked where it appears in the context.
-    pub prompt_message_id: Option<Uuid>,
-    /// The discussion the prompt was posted in, through the prompt itself.
-    /// Absent for a top-level channel message.
-    pub thread: Option<ContextThread>,
-    /// Other recent channel activity, grouped by discussion, oldest first.
-    /// For a top-level channel prompt this is the primary context and ends
-    /// with the prompt.
-    pub channel: Vec<ContextThread>,
 }
 
 /// Do something in a session that already exists.
@@ -510,6 +390,10 @@ pub struct DeliverAction {
     /// channel passes `Some`, and is still suppressed - the harness only
     /// learns the session's channel when it runs.
     pub announce: Option<AnnounceOrigin>,
+    /// Why the agent is being asked, rendered ahead of a prompt. Absent for
+    /// prompts driven from the session itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
 }
 
 /// One operation executed by the harness for an agent session.
@@ -600,6 +484,7 @@ impl DeliverAction {
             action,
             actor,
             announce,
+            context: None,
         }
     }
 
@@ -615,6 +500,7 @@ impl DeliverAction {
             action: event.action,
             actor: event.actor,
             announce: None,
+            context: event.context,
         }
     }
 }

@@ -427,6 +427,7 @@ where
             session_id,
             DeliverAction {
                 id: AgentActionId::mint(),
+                context: origin.context().cloned(),
                 action: origin.into_action(),
                 actor: Some(actor),
                 announce: Some(announcement),

@@ -55,6 +55,7 @@ export function AutoReloadView(props: {
   };
   return (
     <AutoReloadDialog
+      sharedWithTeam={props.context.summary()?.creditScope === 'team'}
       enabled={props.context.autoReload.settings().enabled}
       minimum={form.minimum()}
       target={form.target()}

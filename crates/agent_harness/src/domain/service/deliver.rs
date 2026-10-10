@@ -56,6 +56,7 @@ where
             action,
             actor,
             announce: _,
+            context: _,
         } = command;
 
         if action.occupies_turn() {
@@ -155,18 +156,18 @@ where
 
     /// Compose a prompt in place. Compact and other actions are left as-is.
     ///
-    /// Message context is loaded when the prompt named an origin. The actor's
-    /// current access to that origin gates composition; a failed history read
-    /// still composes, with empty history, so a transient context outage
-    /// cannot eat the prompt. The prompt that opens a session's first turn
-    /// also carries the session's instructions, unless its runtime already
-    /// reads them as a system prompt.
+    /// A prompt that names an origin is only composed while the actor may
+    /// still write there. Why the agent was called arrives with the prompt,
+    /// read by whatever triggered it; nothing here reads the conversation. The
+    /// prompt that opens a session's first turn also carries the session's
+    /// instructions, unless its runtime already reads them as a system prompt.
     pub(super) async fn compose_action(
         &self,
         session_id: AgentSessionId,
         action: &mut AgentAction,
         actor: Option<&MacroUserIdStr<'static>>,
         announce: Option<&AnnounceOrigin>,
+        context: Option<&TriggerContext>,
         first_turn: bool,
     ) -> Result<()> {
         let AgentAction::Prompt(prompt) = action else {
@@ -188,61 +189,31 @@ where
             })
             .and_then(|session| session.instructions.as_deref())
             .filter(|instructions| !instructions.trim().is_empty());
-        let context = if let Some(origin) = announce {
-            Some(self.load_prompt_context(origin, actor).await?)
-        } else {
-            None
-        };
+        if let Some(origin) = announce {
+            self.authorize_prompt_origin(origin, actor).await?;
+        }
         prompt.prompt = self
             .prompt_composer
-            .compose(
-                &raw_prompt,
-                instructions,
-                announce
-                    .filter(|origin| !origin.reuse_origin_message)
-                    .map(|origin| &origin.parent),
-                people.as_ref(),
-                context.as_ref(),
-            )
+            .compose(&raw_prompt, instructions, people.as_ref(), context)
             .await?;
         prompt.set_name_source(raw_prompt);
         Ok(())
     }
 
-    /// Recheck the actor's access to the origin, then read the conversation
-    /// around it. Authorization is not optional: a prompt that names an origin
-    /// was posted by a user, and one who may no longer write there sends nothing.
-    pub(super) async fn load_prompt_context(
+    /// Recheck the actor's access to the origin. Authorization is not
+    /// optional: a prompt that names an origin was posted by a user, and one
+    /// who may no longer write there sends nothing.
+    pub(super) async fn authorize_prompt_origin(
         &self,
         origin: &AnnounceOrigin,
         actor: Option<&MacroUserIdStr<'static>>,
-    ) -> Result<crate::domain::model::ConversationContext> {
+    ) -> Result<()> {
         let actor = actor.ok_or_else(|| {
             HarnessError::PromptContext(rootcause::report!(
                 "message prompts require an acting user"
             ))
         })?;
-        self.prompt_context.authorize_origin(actor, origin).await?;
-        // Assignment context is supplied privately. It was not a user message
-        // in the discussion, so do not add history or thread-reply instructions.
-        if origin.reuse_origin_message {
-            return Ok(Default::default());
-        }
-        Ok(self
-            .prompt_context
-            .conversation_context(actor, origin)
-            .await
-            .inspect_err(|error| {
-                // Trigger events are admitted at-most-once. Context is useful,
-                // but a transient lookup failure must not discard the prompt.
-                tracing::warn!(
-                    error = ?error,
-                    parent = ?origin.parent,
-                    message_id = %origin.message_id,
-                    "sending agent prompt without conversation history"
-                );
-            })
-            .unwrap_or_default())
+        self.prompt_context.authorize_origin(actor, origin).await
     }
 
     /// Who, if anyone, should be told that this landed.

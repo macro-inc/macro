@@ -356,3 +356,311 @@ search mode, revealing direct creation keys. Escape or clicking outside dismisse
 it. `C` is ignored while editing text or while a dialog is open. Section-specific
 New task/New email buttons retain their direct creation actions. The dialog portal
 mounts inside the workspace so the scoped UI styles and theme remain available.
+
+## Migration page
+
+`/migrate` explains what to bring over, how connected agents find relevant work,
+and how to review the imported result and bring the team over. `MigrationPaths`
+owns source-specific instructions; `MigrationPathSelector` owns responsive
+selection and keyboard focus. Individual comparisons belong at the end of
+product FAQs. The compact all-tools overview stays visible on migration.
+
+The Notion page importer copies supported page content into native docs and
+excludes databases. Linear imports stage issue metadata and create native tasks;
+the CSV route has a preview and assignee mapping. Pipedream supplies connected
+app tools to agents. Connecting, importing a copy, and ongoing Gmail sync are
+different behaviors; do not promise a complete workspace clone or ongoing sync
+for imported Notion pages and Linear tasks. Check implementation before changing
+these claims. Verify paths, dropdown dismissal, keyboard navigation, practical
+FAQs, and the overview's horizontal scrolling.
+
+## Product comparisons
+
+`core/feature-comparisons.ts` owns the fact-checked boolean rows and maintainer
+source URLs. `FeatureComparisons` renders one always-visible table above each FAQ, without a heading or dropdown:
+Superhuman/Gmail on Email; Notion on Docs; Linear/Jira on Tasks; Slack on Chat. ClickUp
+stays in the migration overview. Overview links scroll to the matching product
+comparison; verify both initial-load and client-side navigation hashes. Keep
+cells to Yes/No and labels precise about
+built-in tools. Retain detailed article links when an article exists. Source URLs
+are not shown in the UI. Icon-only comparison tables are not exported as prose
+FAQ answers. Verify table columns, keyboard focus, scrolling, and existing
+functional FAQs after moving or adding a comparison.
+
+
+## Agents page and shared agent sample
+
+`/agents` shows three fictional workflows based on observed product use:
+- A channel mention consolidates customer support, testing notes, and existing
+  work into an editable client file upload brief.
+- A personal agent progressively checks the calendar, reads the email and call,
+  then presents its findings and creates the brief. Visitors can inspect those
+  sources. Reduced motion shows the finished brief; interaction stops playback.
+- Macro produces a mockup from the client brief; the person then says only
+  “@Cursor, build this.” The attachment uses FolderComposerMockup, a static copy
+  of the app’s FolderComposer/EntityComposer presentation, not a hand-drawn SVG.
+  The agent identity in that follow-up is a user mention, without a sparkle icon.
+
+`AgentWorkflowStories.tsx` owns these scenes and `workflowData.ts` their local
+records. The hero uses `DummyWorkspace` with `agentShowcase`; its open-workspace
+link uses `/demo?scene=agents` to show the same conversation and records. Plain
+`/demo` keeps its usual starting view. Existing Northwind samples remain available
+in the general workspace but are no longer the Agents page’s story.
+
+All scenes start in one pane. Record buttons open native document, email, task,
+channel, or calendar viewers. Back and Escape return to the conversation and
+restore focus. Edited documents persist when reopened. Agent-authored prose uses no inline bold emphasis. Generated files are inline document
+mentions, opening the existing editor; do not replace them with custom summary
+cards or source strips. The fourth navigation item, Tools to act, continues the hero: Julia mentions the agent in the document’s own discussion. The agent replies
+to Julia, types three test checks into the existing editor with a named remote
+caret, then confirms the edit in that thread. The cursor follows the insertion
+point while the discussion is kept in view on every update. Scroll anchoring is
+disabled in these two scenes; extra scroll room keeps output above the site’s
+viewport fade. Pointer, keyboard, or wheel input stops playback.
+The compact document keeps the edits and discussion visible together. Input
+stops the update and preserves the visitor’s edits. Channel scenes reuse WorkspaceChannel, including its tabs,
+thread layout, composer, and message controls. Scene input
+stops autoplay; reduced motion shows the complete collaboration immediately.
+The approval message precedes the coding result. The PR stays open for review;
+no real agents, messages, repositories, or services are invoked.
+
+Browser checks: follow the hero’s sources and brief, edit and reopen the brief,
+inspect both meeting sources and the calendar, then open the mockup, coding
+session, and PR. Test keyboard return, composer input, sidebar navigation,
+phone widths, and the standalone demo link. Keep source and output records in
+agreement; never use private customer records or internal screenshots as assets.
+
+Presentation and behavior were reviewed against app commit `9d06e08e`. The source
+map lives in `scripts/agent-ui-sources.json`. After fetching a new app reference,
+run `./marketing check:agent-ui` from the repository root (or pass a Git ref).
+This reads Git objects, so it works in sparse checkouts. Changed or missing source
+fails the check and identifies the demo to review. It does not assert pixel parity
+or that the app commit has shipped. Review changed source and desktop/mobile
+screens before updating individual baseline hashes. No app modules are imported
+into the website at runtime.
+
+Agent conversation rows follow AgentSessionRow: 32px normally, 48px minimum with
+code metadata, a timestamp on the right, and an empty leading status slot for
+completed/read sessions. The transcript's turns must not flex-shrink; overflow
+scrolls above the composer. At less than 720px of available app-view width, the
+sidebar collapses. Measure the embedded container, not the browser viewport.
+Check the hero around 895px browser width and source panes after resizing.
+
+
+The Agents hero keeps a 1000×640 desktop canvas at browser widths of 700px and
+above, scaled proportionally inside its frame. Its sidebar must remain visible
+at 768px and 895px; the canvas must not trigger a narrow app layout. Phones use
+the responsive workspace and navigation drawer. Verify menu anchoring as well as
+sidebar visibility after resizing. BYOA presents macrod and external MCP as two
+connection paths, side by side on desktop and stacked on phones. Both setup links
+remain visible. MCP commands reuse `AgentMcpSetup` inside an optional disclosure
+without a fixed-height demo window. Verify each client expands and copies its
+command. The closing FAQ answers model, access, review, and background-work questions.
+
+## Docs page walkthrough
+
+`/documents` introduces collaborative writing, then agent edits, source splits,
+and folders and tags. Offline editing and CRDT merging are explained in the FAQ. All examples use a page-owned Website brief,
+Pricing changes email, Update pricing page task, and #website conversation.
+`DocumentOrganizationDemo` adapts the app folder list and tag-filtered search:
+one folder location, several tags, and one persistent document when reopened.
+The source demo uses the same wide frame as Chat and opens email and task panes
+beside the persistent editor. Each source closes independently. Narrow screens
+show the active pane and return through the remaining panes on close. References link back to #website.
+An unboxed prompt and progressive tool calls lead into the shared editor. Search
+results stay mounted and can be opened. Agent and human insertions overlap within
+one paragraph; manual interaction freezes playback before input. Tool calls finish
+before the pricing rewrite starts and compact on completion. The prompt has no
+entrance movement, and the transcript plus final paragraph reserve their layout
+space while edits run. Completion folds the tools and their reserved space away
+with the same transition; text and headings inside the doc retain their positions.
+
+Verified against `block-project/component/Block.tsx`,
+`property/tags/tagNavigation.ts`, `block-md/component/MarkdownDocument.tsx`, and
+`crates/projects/src/inbound/toolset/move_to_project.rs` at e2bd582d.
+Folders and tags are separate organization mechanisms, not multiple physical
+copies or nested docs. Notion supports subpages, backlinks, and database views;
+the FAQ compares the organization model without claiming it lacks flexibility.
+
+Verify folder and tag navigation, search, source open/close with Escape and focus
+restoration, edits surviving navigation, local sharing, tool inspection,
+offscreen pause, and reduced motion. Compare desktop and mobile without a fade
+covering the editor. Tests: `DocumentStories.test.tsx`. The checkmark comparison covers document capabilities. Notion uploads live in
+page blocks or database properties; imports can convert supported files to pages.
+Both tools support file uploads and Markdown import/export. The comparison makes
+the folder and cross-workspace differences explicit without claiming file formats
+are unsupported or comparing plan-specific upload limits.
+
+## Calls page walkthrough
+
+Three sections follow the navigation: start a call, act on decisions, and find
+past calls. Recording playback and clickable transcripts stay in the hero’s
+After the call view and the records opened from call history. Calls omits the hero CTA; the header and closing CTA remain.
+Participant tiles are equal-sized in the marketing call grid, including You.
+The start-call story replays on returning to view until the visitor interacts;
+it never loops while visible or replays for reduced motion. The sequence briefly holds
+the chat, then an unnamed pointer moves to Call and clicks. Connecting and
+participants follow, completing in about eight and a half seconds. Interaction cancels the
+staged transition and hides the pointer. Other Calls demos have no animated cursor.
+
+`/calls` follows a simple Thursday training handoff across a live call, saved record,
+and agent-assisted task update. Calls-only fixtures live in `calls/call-fixtures.ts`
+and `calls/call-project.ts`; shared workspace data stays unchanged. The hero's
+In the call / After the call controls sit outside the product frame. The hero
+stays in the call until the visitor switches scenes or leaves. Other walkthroughs
+run once while visible and stop permanently on visitor interaction. Participants are illustrative; playback is
+local and has no call audio or network effects.
+
+The hero shows camera-off participants and call controls, with no screen-share
+scene. Never stretch profile photos into video feeds or animate them as
+speakers. The marketing call controls omit team sharing and disable camera and
+background and screen-sharing settings that need real media. Call history stops on its list;
+opening a record is a visitor action.
+
+The follow-up changes training ownership from Teo to Julia and adds three
+unchecked next steps. Replies reuse the agent answer renderer with named call
+and task mentions, subtle name underlines, call timestamps, and task properties.
+Tool rows use plain Read call transcript text and bordered ItemPreview chips;
+the group collapses when the run finishes. It starts and finishes in one pane, including with reduced
+motion. Only clicking a linked call or task opens a detail pane. Phones show
+one pane at a time. Close and Escape return focus and preserve task edits. Arbitrary messages stay
+local and do not trigger the scripted task update. Check call controls, channel
+tabs, transcript seeking, source links, task ownership/checklists, and FAQs on
+desktop, tablet, and phones. Confirm all controls stay above the visual fade.
+
+Copy distinguishes automatic recording/transcription and agent access from
+requested task/document edits. Team sharing for channel calls is separate from
+channel membership; standalone calls do not automatically enter team memory.
+Guests can join instant or scheduled meetings through a link without an account.
+Guest participation does not grant access to the channel or saved recording. Keep plan details in the FAQ; the Calls hero and demos have
+no pricing footnote or explanatory captions.
+
+## Tasks page walkthrough
+
+`/tasks` follows a customer proposal: draft the scope and delivery timeline,
+then review pricing. Examples use substantive work without fictional customer
+backstory. The context section opens a task with native inline mentions of its
+Customer brief, Proposal request email, and sales conversation. Sources open beside
+the task on wide frames and replace it on phones; Close and Escape restore focus
+and preserve task and linked-document edits. Renaming the brief also updates its
+inline mention. The checklist-conversion section is no longer on the page. Tasks-only fixtures
+live in `components/tasks/taskProject.ts`; each demo has independent local state.
+The hero uses the native Tasks and Projects presentation in `TasksWorkspace*`,
+with three project records and twelve tasks seeded by `tasksWorkspaceData.ts`.
+`createTasksWorkspace.ts` owns local navigation, project membership, filters, and
+per-project layout settings. The sidebar has Task views, My projects, and Tags;
+project detail has Overview and Tasks tabs, with native breadcrumbs back from tasks.
+The toolbar has separate layout/sort/group/filter menus. Project task search expands
+from its icon and clears on Escape; Add existing tasks is an anchored selector.
+New tasks inherit their current project. Edits and project moves remain visible
+across the main list, project lists, and board. `WorkspaceDesktopDemo` opts this
+hero into the Tasks presentation; other feature demos keep their own fixtures.
+Keep the frozen presentation aligned with `apps/web/src/features/tasks-view`,
+`features/projects`, and `components/view-shell`, without importing application
+providers or service clients into the website.
+Source navigation shares task state; Close and Escape return to the task and
+restore focus. The channel agent creates proposal and pricing tasks, then reassigns the proposal
+only after the illustrated request. Both responses are threaded replies to
+Jacob. The first request types into the channel composer. The follow-up is a
+plain-text reply in that same thread, without another @Macro mention. Playback
+waits 1.4 seconds before each agent reply and holds the first result for 2.2
+seconds before the follow-up. It starts when the main composer is fully visible.
+Composer handles and explicit reply state drive playback; no synthetic input or
+Reply/Cancel button clicks are used. Keep composer geometry stable during typing. Visitor input stops typing and preserves the draft.
+The context demo types its final sharing instruction, opens the mention picker
+at @, selects #sales, and stops with the link inserted. It starts only when the
+line is visible; the picker opens above the line to stay inside the demo.
+Visitor input stops playback permanently;
+reduced motion shows the result. Inline task mentions open their linked documents, emails, and conversations. PR playback updates status, never the task’s checklist. Focused task-detail
+frames grow to fit the discussion and composer above the decorative fade; verify
+no inner scrolling or horizontal clipping at desktop and phone widths. The full
+workspace list keeps its normal scrolling. Jacob’s quote links to his Linear article.
+
+Verify task edits, source navigation, owner/status menus, inline source links and
+return navigation, the agent’s reassignment, and comparison FAQs on desktop and mobile.
+Comparisons live in individual FAQ answers for Jira, Linear, Notion, and ClickUp;
+keep them specific to workflows. Notion supports task databases, subtasks, and
+dependencies. Do not describe it as lacking granular tasks or imply that all
+Macro tasks complete automatically. Keep migration, pricing, and comparison links.
+
+## Chat page
+
+`/channels` leads with opening referenced work, then channel-based access, agents,
+and a combined catch-up section. Keep docs, tasks, and email references inline
+in messages. Chat fixtures include original, scrollable history. The opening
+walkthrough starts full-width, scrolls back, then moves and clicks the shared
+cursor to open a doc and an email in the split. Manual input stops it.
+The document stays mounted when email opens in a third split. The hero uses the
+same split surface through its opt-in `chatSplits` prop, retaining native sidebar
+navigation and the page-owned channel/DM fixtures. Wide layouts divide the
+available content width equally among all open panes; widths below 240px per
+pane switch to one active pane. Each pane keeps its own selection and edits.
+Smaller frames show one active pane at a time;
+Back to channel retains open items, while Close removes only that pane. Email
+uses the full workspace email view and an original two-message thread. Share uses the document Share UI and
+shows the channel's grant, separately from public-link access. The agent story
+continues from Macro creating Julia’s task to Julia mentioning Cursor and Cursor
+investigating in the same thread with one response. Keep Julia as owner while work starts.
+The final catch-up demo focuses on inline replies in a full-width channel,
+without the Home sidebar or inbox shortcuts. Three original conversations show
+visible reply previews. Threads expand when the visitor selects more replies;
+there is no automatic scroll or expansion. The initial scroll position starts at the first conversation, while the
+composer and remaining history stay available. Verify thread expansion, a reply
+staying in its original thread, reactions, keyboard dismissal, and mobile wrapping. Keep examples
+short and conversational; omit under-demo captions. All interactions are local.
+
+## GitHub page walkthrough
+
+`/github` follows one mobile sign-in fix through its channel, task, pull request,
+and coding-agent session. The hero opens the PR beside its Changes pane. Channel
+playback begins unsplit, opens the inline PR, then opens Changes; interaction
+stops playback. Narrow panes show the active view, and Back/Escape return to the
+channel without discarding its conversation. The task demo links the PR before
+moving to In Review, illustrates a confirmed merge, and updates Completed without
+changing checklist items. Inbox playback holds the opened request until the
+visitor marks it done. Cursor contributes one result with a session and PR link.
+
+GitHub presentation follows `block-pr/PrDetail` and `features/changes` at
+`e2bd582d5f991896bbc69921ee2447def7360636`. Diffs are frozen Pierre renderer output,
+regenerated by `bun scripts/generate-github-diff.ts`. No GitHub service is called;
+merging and all edits are local. Verify file selection, split/expanded changes,
+merge cancel/confirm, task source links, reduced motion, manual takeover, and
+390px/768px/desktop layouts. Keep captions and repeated explanatory paragraphs
+off this page. Source fixtures are isolated from the Tasks and Agents pages.
+
+
+Product heroes opt into `WorkspaceDesktopDemo`'s `heroFrame`: a 1200px maximum
+outer width, graphite Monterey background, 50px desktop inset, and 640px content
+height. Mobile heroes use 16px insets and 580px content height. The shared frame
+preserves each demo's own state and the Tasks/Agents desktop canvas scaling.
+
+Lower product demos use the standard 872px feature window, including Chat,
+Docs, and GitHub. The earlier GitHub desktop-surround prototype is no longer
+mounted. Chat and Docs retain equal-width source panes; when a pane would be
+narrower than 240px, they use the existing single-pane navigation. Verify opening
+and closing sources at desktop and phone widths, without remounting the original
+conversation or document. Display names use first names. All product pages use
+`HomepageClosing` for the bottom Open app CTA and the shared feature heading styles.
+
+Chat sidebar parity: `workspace/ChatSidebar.tsx` adapts the app's
+`channels-view/components/rail/ExpandedChannelsRail.tsx` with local fixtures.
+It uses the shared Tabs and ViewSidebar controls, 32px section headers and a 4px
+header-to-list gap. Channels and DMs scroll independently. Verify search,
+section collapse, Threads navigation, and opening a mentioned source after
+switching channels. Message text uses the app's 15px/24px reading size; dark
+surface and edge tokens are frozen from `apps/web/src/index.css`.
+
+Cursor replies in the Agents, Channels, and GitHub walkthroughs share
+`DemoAgentChip`, adapted from the current `MagicChipView` in the app. It uses
+the settled 88px rounded session card, Open session action, and an output/PR
+row. Cursor mentions are participant mentions (`@Cursor`), not agent-session
+links. The surrounding conversations use local fictional fixtures; verify
+the session link and returning to the same conversation after playback.
+
+The third Calls section uses `CallTeamMemoryDemo`: Julia's channel call starts
+with Share with team enabled, ends into Gabriel's missed-call list, opens the
+summary, then seeks the recording to Julia's decision at 1:02. Gabriel is not
+an attendee. Turning sharing off leaves his list empty. Manual input pauses
+automation; reduced motion opens the saved summary. Verify the checkbox,
+recording navigation, transcript seeking, and phone layout. CRM linking remains
+on the CRM page; this scene demonstrates channel-call team sharing only.

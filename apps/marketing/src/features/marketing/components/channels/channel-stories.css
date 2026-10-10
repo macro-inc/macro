@@ -31,3 +31,110 @@
   .channel-demo-cursor, .chat-shortcut-dock > button, .chat-shortcut-dock kbd { transition: none; }
 }
 .chat-inbox-group:not(:first-child) { margin-top: 16px; }
+
+.channel-hero-workspace { height: 100%; border: 0; border-radius: 0; }
+.channel-work-split { display: grid; grid-template-columns:repeat(var(--channel-pane-count, 1), minmax(0, 1fr)); grid-template-rows:minmax(0, 1fr); position: relative; flex: 1; min-width: 0; min-height: 0; height: 100%; width: 100%; }
+.channel-work-conversation, .channel-work-item { display: flex; flex: 1 1 0; position: relative; flex-direction: column; min-width: 0; min-height: 0; }
+.channel-work-item { border-left: 1px solid var(--color-edge-muted); background: var(--color-panel); overflow: hidden; }
+.channel-work-item > [data-view-shell-top-bar] { padding-right: 44px; }
+.channel-work-close { position: absolute; top: 12px; right: 8px; z-index: 6; }
+.channel-work-split[data-narrow=true][data-active-pane] > .channel-work-conversation { visibility: hidden; }
+.channel-work-split[data-narrow=true] > .channel-work-item { position: absolute; inset: 0; border-left: 0; z-index: 8; }
+.chat-inbox-scene:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.chat-shortcut-dock > button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; border-radius: 6px; }
+
+/* Use the compact conversation header whenever a split is phone-width. */
+@container sample-main (max-width: 620px) {
+  .channel-work-conversation > [data-view-shell-top-bar] .sample-tabs-inset { display: none; }
+}
+.chat-inbox-back { display: none; }
+@media (max-width: 699px) {
+  .chat-inbox-scene { position: relative; }
+  .chat-inbox-scene[data-mobile-preview=true] .chat-inbox-list { visibility: hidden; }
+  .chat-inbox-scene[data-mobile-preview=true] .chat-inbox-preview { display: flex; position: absolute; inset: 0; background: var(--color-panel); z-index: 2; }
+  .chat-inbox-back { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid var(--color-edge-muted); font-size: 13px; }
+}
+.channel-work-item [aria-label='Back to files'] { display: none; }
+
+/* Keep split-pane typography readable inside the standard feature window. */
+.channel-wide-demo .channel-work-item { flex: 1; }
+.channel-wide-demo .channel-work-item[data-pane-view="documents"] .sample-detail-content > .dummy-scroll { padding-inline: 24px; }
+.channel-wide-demo .channel-work-item [aria-label='Document title'] { font-size: 24px; line-height: 1.3; margin-bottom: 16px; }
+.channel-wide-demo .channel-work-item [aria-label='Document body'] { font-size: 14px; line-height: 1.6; }
+.channel-wide-demo .channel-work-item .website-demo-markdown h2 { margin-top: 24px; margin-bottom: 12px; font-size: 18px; }
+.channel-work-item .doc-share-scrim { overflow-y: auto; z-index: 10; }
+.channel-permissions-demo .product-demo > .dummy-main { position: relative; }
+.channel-permissions-demo .doc-share-scrim { overflow-y: auto; padding-top: 24px; }
+.channel-permissions-demo [aria-label='Back to files'] { display: none; }
+@media(max-width: 699px) {
+  .channel-wide-demo .channel-work-conversation { flex: 1; }
+  .channel-wide-demo .channel-work-item[data-pane-view="documents"] .sample-detail-content > .dummy-scroll { padding-inline: 24px; }
+  .channel-wide-demo .channel-work-item [aria-label='Document title'] { font-size: 24px; }
+}
+
+.channel-work-split[data-narrow=true] > .channel-work-item[data-active=false] { visibility: hidden; pointer-events: none; }
+.channel-work-back { display: none; }
+.channel-work-split[data-narrow=true] .channel-work-back { display: flex; position: absolute; top: 12px; left: 8px; z-index: 6; }
+.channel-work-split[data-narrow=true] .channel-work-item > [data-view-shell-top-bar] { padding-left: 42px; }
+.channel-work-item .sample-email-thread .mail-thread-body { padding: 32px 20px; }
+.channel-work-item .sample-email-thread .mail-message-text { line-height: 1.6; padding-right: 0; }
+@container sample-main (max-width: 440px) {
+  .channel-work-item [aria-label='Mark as unread'],
+  .channel-work-item [aria-label='Mark done'],
+  .channel-work-item [aria-label='Copy email link'],
+  .channel-work-item [aria-label='Link copied'] { display: none; }
+}
+
+@container sample-main (max-width: 440px) {
+  .channel-work-item .sample-email-thread .mail-thread-body { padding: 24px 12px; }
+  .channel-work-item .sample-email-thread .macro-message-padding { padding-inline: 0; }
+}
+
+.channel-work-split[data-narrow=true] { display:flex; }
+.channel-work-conversation, .channel-work-item { container:sample-main / inline-size; }
+@media(min-width:700px) {
+  .channel-hero-demo .email-desktop-demo { --desktop-stage-width:min(1600px, calc(100vw - 48px)); }
+  .channel-hero-demo .email-desktop-wallpaper { padding:24px; }
+  .channel-hero-demo .email-desktop-content { height:640px; }
+}
+
+@container sample-main (max-width: 360px) {
+  .channel-wide-demo .sample-chat-log { padding-inline: 16px; }
+}
+
+/* Catch-up is the conversation itself: use the full frame for inline replies. */
+.channel-thread-demo .sample-chat-log { padding: 22px 28px; }
+.channel-thread-demo .sample-message-row { margin-bottom: 0; }
+@media (max-width: 699px) {
+  .channel-thread-demo .sample-chat-log { padding: 18px 14px; }
+}
+@container sample-main (max-width: 620px) {
+  .channel-thread-demo [data-view-shell-top-bar] .sample-tabs-inset { display: none; }
+}
+
+/* ShareButton / Panel geometry, contained within this demonstration window. */
+.channel-permissions-demo .doc-share-scrim {
+  inset: 0;
+  padding: 32px 24px;
+  background: rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(4px);
+}
+.channel-permissions-demo .doc-share-card {
+  width: min(800px, 100%);
+  border-color: var(--color-edge);
+  box-shadow: none;
+}
+.channel-permissions-demo .doc-share-card > header {
+  min-height: 40px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--color-edge-divider);
+  line-height: 20px;
+}
+.channel-permissions-demo .doc-share-people { padding: 16px; }
+.channel-permissions-demo .doc-share-person { min-height: 28px; }
+.channel-permissions-demo .doc-share-link > p { line-height: 20px; }
+@media (max-width: 699px) {
+  .channel-permissions-demo .doc-share-scrim { padding: 16px 8px; }
+  .channel-permissions-demo .doc-share-card > header { padding-inline: 12px; }
+  .channel-permissions-demo .doc-share-people { padding: 12px; }
+}

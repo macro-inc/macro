@@ -508,6 +508,11 @@ pub struct ControlRequest {
     /// fields, which are tagged under `type`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action_id: Option<AgentActionId>,
+    /// Why the agent is being asked. Only a runtime forwarding a triggered
+    /// prompt may send it; a user's request carrying it is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub context: Option<trigger_context::TriggerContext>,
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
@@ -1065,6 +1070,7 @@ pub async fn control_agent_session_handler<
             ControlEvent::authorized(
                 req.action,
                 req.action_id,
+                req.context,
                 principal,
                 access.entity_access_receipt,
             )?,

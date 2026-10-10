@@ -4798,10 +4798,56 @@
       }
     },
     "/user/stripe/plan": {
+      "get": {
+        "tags": ["user::stripe::subscription_status"],
+        "summary": "Read subscription state for the authenticated user's seat.",
+        "operationId": "get_subscription_status",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "More than one active subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["user::stripe::change_plan"],
-        "summary": "Moves the caller's own seat between paid plans.",
-        "description": "On a team billed per seat this moves only the caller's seat (team admins\nand the owner may do so; teammates' seats are managed from team\nsettings). Members of a free team, and solo subscribers, get the price on\ntheir own subscription's seat item swapped. The proration is invoiced\nimmediately either way; roles and the AI allowance follow at once on a\nteam and from the `customer.subscription.updated` webhook for a personal\nsubscription.",
+        "summary": "Changes the caller's paid plan. Upgrades are prorated immediately;\ndowngrades retain the active plan until renewal. Selecting the active plan\ncancels a pending downgrade without charging or resetting usage.",
         "operationId": "change_plan",
         "requestBody": {
           "content": {
@@ -4865,7 +4911,7 @@
             }
           },
           "409": {
-            "description": "Already on this plan, or more than one active subscription",
+            "description": "More than one active subscription",
             "content": {
               "application/json": {
                 "schema": {
@@ -5042,6 +5088,27 @@
           }
         }
       },
+      "AutoReloadMonthlyBudget": {
+        "type": "object",
+        "description": "Calendar-month commitments that consume the payer's automatic reload cap.",
+        "required": ["committed_cents", "resets_at", "limit_reached"],
+        "properties": {
+          "committed_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Reloads paid, pending, or failed with an invoice that can still collect.\nCustomer cents; manual credit purchases do not count."
+          },
+          "limit_reached": {
+            "type": "boolean",
+            "description": "Remaining cap cannot fund the minimum automatic reload charge."
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the next UTC calendar month, independently of subscription renewal."
+          }
+        }
+      },
       "AutoReloadSnapshot": {
         "type": "object",
         "description": "The payer's automatic reload settings, as shown in Billing settings.",
@@ -5060,6 +5127,17 @@
             "type": "integer",
             "format": "int64",
             "description": "Reload once the effective balance drops below this, in customer cents."
+          },
+          "monthly_budget": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AutoReloadMonthlyBudget",
+                "description": "Present for paid finite accounts with a configured monthly cap."
+              }
+            ]
           },
           "monthly_spend_limit_cents": {
             "type": ["integer", "null"],
@@ -6808,6 +6886,22 @@
           }
         }
       },
+      "ScheduledSeatPlan": {
+        "type": "object",
+        "description": "A seat's future plan in the subscription's currently attached schedule.",
+        "required": ["plan", "effectiveAt"],
+        "properties": {
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Provider-confirmed time when the future phase starts."
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SeatPlan",
+            "description": "Plan that takes effect at renewal."
+          }
+        }
+      },
       "SeatPlan": {
         "type": "string",
         "description": "The paid plan a seat is billed at. Every member of a paying team has one;\na team may mix them, and its Stripe subscription carries one seat item per\nplan in use.",
@@ -6909,6 +7003,28 @@
           "url": {
             "type": "string",
             "description": "The URL to redirect the user to"
+          }
+        }
+      },
+      "SubscriptionStatus": {
+        "type": "object",
+        "description": "Current renewal and scheduled change; empty for accounts without a subscription.",
+        "properties": {
+          "renewalDate": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Provider-confirmed subscription renewal date."
+          },
+          "scheduledChange": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScheduledSeatPlan",
+                "description": "Future downgrade for the caller's seat, if still pending."
+              }
+            ]
           }
         }
       },
@@ -7074,6 +7190,16 @@
             },
             "description": "The members of the team"
           },
+          "scheduled_seat_plans": {
+            "type": ["object", "null"],
+            "description": "Provider-confirmed pending seat changes, keyed by member user ID.\nOnly available to paid-team admins and owners; empty means no pending changes.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ScheduledSeatPlan"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "team": {
             "$ref": "#/components/schemas/Team",
             "description": "The team"
@@ -7158,6 +7284,7 @@
           "used_cents",
           "credits_consumed_cents",
           "credit_balance_cents",
+          "credits_shared_with_team",
           "overage_enabled",
           "overage_limit_cents",
           "overage_charged_cents",
@@ -7195,6 +7322,10 @@
             "type": "integer",
             "format": "int64",
             "description": "Shared payer credits already applied to this period, in customer cents."
+          },
+          "credits_shared_with_team": {
+            "type": "boolean",
+            "description": "Whether prepaid credits belong to the team, including a team with one seat."
           },
           "included_cents": {
             "type": "integer",

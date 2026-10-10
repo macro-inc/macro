@@ -23,6 +23,34 @@ fn routed_options_use_house_names() {
 }
 
 #[test]
+fn model_image_capability_survives_acp_projection() {
+    let options = model_config_options(
+        "fireworks/glm-5p3",
+        &[
+            "fireworks/glm-5p3",
+            "fireworks/kimi-k3",
+            "cerebras/gpt-oss-120b",
+            "custom/model",
+        ],
+    );
+    let models = model_selection(&options).unwrap().options;
+    assert_eq!(
+        models
+            .iter()
+            .map(|model| model.supports_images)
+            .collect::<Vec<_>>(),
+        vec![Some(false), Some(true), Some(false), None]
+    );
+    assert!(
+        models[0]
+            .description
+            .as_deref()
+            .unwrap()
+            .contains("Text only")
+    );
+}
+
+#[test]
 fn speed_is_advertised_only_for_supported_models_with_current_value() {
     use agent::{ModelSpeed, ReasoningEffort};
     use agent_client_protocol::schema::v1::SessionConfigKind;

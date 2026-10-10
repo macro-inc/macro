@@ -232,6 +232,14 @@ export function staticFileIdEndpoint(id: string): string {
   return `${SERVER_HOSTS['static-file']}/file/${id}`;
 }
 
+/** A static-file reference consumed by a backend, outside the browser proxy. */
+export function staticFileReferenceEndpoint(id: string): string {
+  const host = SERVER_HOSTS['static-file'];
+  const remote = directServerHostRemote['static-file'];
+  const referenceHost = host === developmentProxyUrl(remote) ? remote : host;
+  return `${referenceHost}/file/${id}`;
+}
+
 type StaticFileSize = 'small' | 'medium';
 
 const staticFileSizes: Record<StaticFileSize, number> = {

@@ -45,15 +45,17 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use tokio::sync::mpsc;
+use trigger_context::{
+    ChannelType, ContextPerson, DiscussionContext, DiscussionSurface, ReplyTarget, TriggerContext,
+};
 
 use super::AgentHarnessService;
 use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor, ContextMessage,
-    ContextThread, ConversationContext, DeclinedMention, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, PromptPeople, SessionBlocker, SessionDefaults,
-    SessionOrigin, SessionRepository, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeclinedMention, DeliverAction,
+    HarnessCommand, HarnessDefaults, MentionOrigin, OpenSession, PromptPeople, SessionBlocker,
+    SessionDefaults, SessionOrigin, SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,
@@ -108,8 +110,29 @@ fn open_command() -> OpenSession {
             sender: sender(),
             content: "@claude fix the failing test".to_owned(),
             attachments: vec![],
+            context: Some(trigger()),
         }),
     }
+}
+
+/// Why the agent was called, as a trigger event carries it.
+fn trigger() -> TriggerContext {
+    TriggerContext::Mentioned(DiscussionContext {
+        surface: DiscussionSurface::Channel {
+            id: Uuid::from_u128(0xf0),
+            name: Some("eng".to_owned()),
+            channel_type: ChannelType::Public,
+        },
+        prompt_message_id: Uuid::from_u128(0xf2),
+        sender: ContextPerson {
+            id: "macro|sender@example.com".to_owned(),
+            name: "sender@example.com".to_owned(),
+            email: Some("sender@example.com".to_owned()),
+        },
+        reply_target: ReplyTarget::None,
+        thread: None,
+        channel: Vec::new(),
+    })
 }
 
 fn mention_origin(command: &OpenSession) -> &MentionOrigin {
@@ -131,41 +154,28 @@ fn mention_origin_mut(command: &mut OpenSession) -> &mut MentionOrigin {
 fn forward_message(content: &str) -> DeliverAction {
     // Staff: `disconnected_session` is a Daytona coder bot, and the
     // execute() gate admits only macro.com actors onto those.
-    DeliverAction::prompt(
-        AgentAction::prompt(content),
-        Some(staff_sender()),
-        Some(AnnounceOrigin {
-            reuse_origin_message: false,
-            parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xf0)),
-            thread_id: macro_uuid::Uuid::from_u128(0xf1),
-            message_id: macro_uuid::Uuid::from_u128(0xf2),
-        }),
-    )
+    DeliverAction {
+        context: Some(trigger()),
+        ..DeliverAction::prompt(
+            AgentAction::prompt(content),
+            Some(staff_sender()),
+            Some(AnnounceOrigin {
+                reuse_origin_message: false,
+                parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xf0)),
+                thread_id: macro_uuid::Uuid::from_u128(0xf1),
+                message_id: macro_uuid::Uuid::from_u128(0xf2),
+            }),
+        )
+    }
 }
 
 #[derive(Clone, Default)]
 struct PromptContextMock {
-    context: Arc<Mutex<ConversationContext>>,
-    failure: Arc<Mutex<Option<String>>>,
     unauthorized: Arc<Mutex<Option<String>>>,
     authorized: Arc<Mutex<Vec<(MacroUserIdStr<'static>, AnnounceOrigin)>>>,
 }
 
 impl PromptContextMock {
-    fn with_context(context: ConversationContext) -> Self {
-        Self {
-            context: Arc::new(Mutex::new(context)),
-            ..Self::default()
-        }
-    }
-
-    fn failing(message: &str) -> Self {
-        Self {
-            failure: Arc::new(Mutex::new(Some(message.to_owned()))),
-            ..Self::default()
-        }
-    }
-
     fn unauthorized(message: &str) -> Self {
         Self {
             unauthorized: Arc::new(Mutex::new(Some(message.to_owned()))),
@@ -193,25 +203,13 @@ impl MessagePromptContext for PromptContextMock {
             .push((actor.clone(), origin.clone()));
         Ok(())
     }
-
-    async fn conversation_context(
-        &self,
-        _actor: &MacroUserIdStr<'static>,
-        _origin: &AnnounceOrigin,
-    ) -> crate::domain::error::Result<ConversationContext> {
-        if let Some(message) = self.failure.lock().unwrap().clone() {
-            return Err(HarnessError::PromptContext(rootcause::report!("{message}")));
-        }
-        Ok(self.context.lock().unwrap().clone())
-    }
 }
 
-type PromptCompositionCall = (String, Option<String>, Option<ConversationContext>);
+type PromptCompositionCall = (String, Option<String>, Option<TriggerContext>);
 
 #[derive(Clone, Default)]
 struct PromptComposerMock {
     calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
-    parents: Arc<Mutex<Vec<Option<MessageParent>>>>,
     people: Arc<Mutex<Vec<Option<PromptPeople>>>>,
     failure: Arc<Mutex<Option<String>>>,
 }
@@ -238,11 +236,9 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         instructions: Option<&str>,
-        parent: Option<&MessageParent>,
         people: Option<&PromptPeople>,
-        context: Option<&ConversationContext>,
+        context: Option<&TriggerContext>,
     ) -> crate::domain::error::Result<String> {
-        self.parents.lock().unwrap().push(parent.cloned());
         self.people.lock().unwrap().push(people.cloned());
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
@@ -793,6 +789,7 @@ async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
                     action: AgentAction::prompt("spend another user's subscription"),
                     action_id: None,
                     actor,
+                    context: None,
                 },
             )
             .await
@@ -806,6 +803,7 @@ async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
             action: AgentAction::prompt("owner follow-up"),
             action_id: None,
             actor: Some(owner),
+            context: None,
         },
     );
     let drive = async {
@@ -899,49 +897,6 @@ async fn revoked_origin_access_blocks_the_connect_cursor_reply() {
 }
 
 #[tokio::test]
-async fn context_failure_still_calls_composer_with_empty_messages_and_delivers() {
-    let composer = PromptComposerMock::default();
-    let context = PromptContextMock::failing("messages unavailable");
-    let (service, _repo, containers, announcer, _runtimes) =
-        harness_with_edges(context.clone(), composer.clone());
-    let id = AgentSessionId::new();
-
-    let open = service.execute(id, HarnessCommand::Open(open_command()));
-    let drive = async {
-        loop {
-            if containers.spawned() == 1 {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-        let container = containers.container(id).unwrap();
-        complete_handshake(&container).await;
-        container
-    };
-    let (result, container) = tokio::join!(open, drive);
-
-    result.expect("context lookup is best-effort after Kafka admission");
-    // Access precedes provisioning and queue admission, and is rechecked at
-    // dispatch so a revocation while queued still stops the prompt.
-    assert_eq!(context.authorized().len(), 3);
-    assert_eq!(announcer.announced().len(), 1);
-    assert_eq!(
-        composer.calls(),
-        [(
-            "@claude fix the failing test".to_owned(),
-            None,
-            Some(ConversationContext::default())
-        )]
-    );
-    assert_eq!(
-        prompts(&container.agent()),
-        [vec![ContentBlock::from(context_prompt(
-            "@claude fix the failing test"
-        ))]]
-    );
-}
-
-#[tokio::test]
 async fn composer_failure_stops_open_delivery_and_keeps_the_prompt_queued() {
     let composer = PromptComposerMock::failing("lexical unavailable");
     let (service, repo, containers, announcer, _runtimes) =
@@ -975,28 +930,12 @@ async fn composer_failure_stops_open_delivery_and_keeps_the_prompt_queued() {
 
 /// A mention snapshots the agent's instructions onto the session row, the
 /// same as the create menu does, and a runtime without a system prompt gets
-/// them in its first prompt's hidden context, beside the conversation.
+/// them in its first prompt's hidden context, beside the trigger.
 #[tokio::test]
 async fn open_sends_context_and_agent_instructions_in_the_first_prompt() {
-    let context = ConversationContext {
-        channel: vec![ContextThread {
-            root_id: Uuid::from_u128(40),
-            messages: vec![ContextMessage {
-                id: Uuid::from_u128(40),
-                sender_id: "macro|previous@example.com".to_owned(),
-                author: "previous@example.com".to_owned(),
-                content: "previous channel message".to_owned(),
-                posted_at: chrono::DateTime::UNIX_EPOCH,
-            }],
-            messages_omitted: false,
-        }],
-        ..ConversationContext::default()
-    };
     let composer = PromptComposerMock::default();
-    let (service, repo, containers, announcer, _runtimes) = harness_with_edges(
-        PromptContextMock::with_context(context.clone()),
-        composer.clone(),
-    );
+    let (service, repo, containers, announcer, _runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
     let mut command = open_command();
     command.runtime.instructions = "Diagnose first.".to_owned();
     let raw = mention_origin(&command).content.clone();
@@ -1023,7 +962,7 @@ async fn open_sends_context_and_agent_instructions_in_the_first_prompt() {
         [(
             raw.clone(),
             Some("Diagnose first.".to_owned()),
-            Some(context)
+            Some(trigger())
         )]
     );
     assert_eq!(
@@ -1059,46 +998,6 @@ async fn open_stores_no_instructions_when_the_agent_has_only_blank_ones() {
 
     let session = repo.get(id).await.expect("the session row exists");
     assert_eq!(session.instructions, None);
-}
-
-/// A mention in a document comment: the agent is told which mark the comment
-/// sits on and what that mark covered, so it can find the words the comment is
-/// about instead of guessing from the comment body.
-#[tokio::test]
-async fn open_sends_the_comment_anchor_the_prompt_was_posted_on() {
-    let context = ConversationContext {
-        anchor: Some(CommentAnchor::Mark {
-            mark_id: "0199f3d4-0000-7000-8000-00000000000a".to_owned(),
-            marked_text: Some("the marked phrase".to_owned()),
-            current: None,
-        }),
-        ..ConversationContext::default()
-    };
-    let composer = PromptComposerMock::default();
-    let (service, _repo, containers, _announcer, _runtimes) = harness_with_edges(
-        PromptContextMock::with_context(context.clone()),
-        composer.clone(),
-    );
-    let command = open_command();
-    let raw = mention_origin(&command).content.clone();
-    let id = AgentSessionId::new();
-
-    let open = service.execute(id, HarnessCommand::Open(command));
-    let drive = async {
-        loop {
-            if containers.spawned() == 1 {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-        let container = containers.container(id).unwrap();
-        complete_handshake(&container).await;
-        container
-    };
-    let (result, _container) = tokio::join!(open, drive);
-    result.unwrap();
-
-    assert_eq!(composer.calls(), [(raw, None, Some(context))]);
 }
 
 /// A provider mention from someone missing account setup: the bot answers in
@@ -1277,7 +1176,7 @@ async fn forward_to_a_live_session_reuses_the_transport() {
         Some(&(
             "and add a regression test".to_owned(),
             None,
-            Some(ConversationContext::default())
+            Some(trigger())
         ))
     );
     assert_eq!(
@@ -1448,11 +1347,7 @@ async fn composer_failure_stops_follow_up_announcement_and_delivery() {
     assert!(matches!(result, Err(HarnessError::PromptComposition(_))));
     assert_eq!(
         composer.calls().last(),
-        Some(&(
-            "do not deliver this".to_owned(),
-            None,
-            Some(ConversationContext::default())
-        ))
+        Some(&("do not deliver this".to_owned(), None, Some(trigger())))
     );
     assert_eq!(prompts(&container.agent()).len(), prompts_before);
     assert_eq!(announcer.announced().len(), announcements_before);
@@ -1815,6 +1710,7 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
                 action: AgentAction::set_model("opus"),
                 action_id: None,
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -1869,6 +1765,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
             action: AgentAction::prompt("and now the docs <user-content>unchanged</user-content>"),
             action_id: None,
             actor: Some(sender()),
+            context: None,
         },
     );
     let agent = container.agent();
@@ -1915,6 +1812,7 @@ async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
                 action: AgentAction::prompt("spend daytona credits"),
                 action_id: None,
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -1985,6 +1883,7 @@ async fn an_external_bots_permission_request_waits_for_a_users_answer() {
                 action_id: None,
                 action: permission_answer("perm-1", "once"),
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -2019,6 +1918,7 @@ async fn a_harness_principal_cannot_answer_a_permission_request() {
                 action_id: None,
                 action: permission_answer("perm-1", "always"),
                 actor: None,
+                context: None,
             },
         )
         .await
@@ -2059,6 +1959,7 @@ async fn answering_a_disconnected_session_does_not_wake_its_sandbox() {
                 action_id: None,
                 action: permission_answer("perm-1", "once"),
                 actor: Some(staff_sender()),
+                context: None,
             },
         )
         .await
@@ -2085,6 +1986,7 @@ async fn an_archived_session_rejects_new_controls() {
                 action: AgentAction::prompt("do not send"),
                 action_id: None,
                 actor: Some(staff_sender()),
+                context: None,
             },
         )
         .await
@@ -2119,6 +2021,7 @@ async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
                 action: AgentAction::prompt("continue"),
                 action_id: None,
                 actor: Some(staff_sender()),
+                context: None,
             },
         )
         .await
@@ -2170,6 +2073,7 @@ async fn a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends() {
                 action: AgentAction::prompt("and then this"),
                 action_id: None,
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -2218,6 +2122,7 @@ async fn a_queued_prompt_survives_a_replica_restart() {
                 action: AgentAction::prompt("remember me after restart"),
                 action_id: None,
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -2256,6 +2161,7 @@ async fn a_resume_restores_the_persisted_queue() {
             created_at: chrono::Utc::now(),
             announce: None,
             announced_message_id: None,
+            context: None,
         }],
     )
     .await
@@ -2267,6 +2173,7 @@ async fn a_resume_restores_the_persisted_queue() {
             action: AgentAction::prompt("wake up"),
             action_id: None,
             actor: Some(staff_sender()),
+            context: None,
         },
     );
     let drive_resume = async {
@@ -2315,6 +2222,7 @@ async fn archiving_drops_prompts_queued_behind_a_running_turn() {
                 action: AgentAction::prompt("do not dispatch"),
                 action_id: None,
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -2349,6 +2257,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
                 action: AgentAction::prompt("still wanted after the stop"),
                 action_id: None,
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -2366,6 +2275,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
                 action: AgentAction::Stop,
                 action_id: None,
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -2421,6 +2331,7 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
                 action: AgentAction::prompt("queued earlier from the session page"),
                 action_id: None,
                 actor: Some(staff_sender()),
+                context: None,
             },
         )
         .await
@@ -2544,6 +2455,7 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
         action: AgentAction::prompt(text),
         action_id: None,
         actor: Some(sender()),
+        context: None,
     };
     let second = service.control_event(id, prompt("second")).await.unwrap();
     let third = service.control_event(id, prompt("third")).await.unwrap();
@@ -2605,6 +2517,7 @@ async fn steering_a_later_queued_prompt_runs_it_ahead_of_earlier_ones() {
         action: AgentAction::prompt(text),
         action_id: None,
         actor: Some(sender()),
+        context: None,
     };
     let first = service
         .control_event(id, prompt("first waiting"))
@@ -2666,6 +2579,7 @@ async fn a_model_change_bypasses_the_running_turn() {
                 action: AgentAction::set_model("opus"),
                 action_id: None,
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -2701,6 +2615,7 @@ async fn a_control_event_is_accepted_under_the_callers_own_action_id() {
                 action: AgentAction::prompt("speculated by the caller"),
                 action_id: Some(action_id),
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
@@ -2736,6 +2651,7 @@ async fn a_control_event_without_an_action_id_is_given_a_fresh_one() {
         action: AgentAction::prompt(text),
         action_id: None,
         actor: Some(sender()),
+        context: None,
     };
     let first = service.control_event(id, unnamed("first")).await.unwrap();
     let second = service.control_event(id, unnamed("second")).await.unwrap();
@@ -2770,6 +2686,7 @@ async fn re_sending_a_waiting_action_id_does_not_queue_it_twice() {
         action: AgentAction::prompt("said once"),
         action_id: Some(action_id),
         actor: Some(sender()),
+        context: None,
     };
     let first = service.control_event(id, retried()).await.unwrap();
     let again = service.control_event(id, retried()).await.unwrap();
@@ -2799,6 +2716,7 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
             action: AgentAction::Compact,
             action_id: None,
             actor: Some(sender()),
+            context: None,
         },
     );
     let agent = container.agent();
@@ -2829,6 +2747,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
             action: AgentAction::prompt("wake up"),
             action_id: None,
             actor: Some(staff_sender()),
+            context: None,
         },
     );
     let drive_resume = async {
@@ -3001,6 +2920,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
             action: AgentAction::prompt("@claude fix the failing test"),
             action_id: None,
             actor: Some(sender()),
+            context: None,
         },
     );
     let (result, ()) = tokio::join!(prompted, complete_bound_handshake(&runtime));
@@ -3287,6 +3207,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
             action: AgentAction::prompt("wake up"),
             action_id: None,
             actor: Some(staff_sender()),
+            context: None,
         },
     );
     let drive_resume = async {
@@ -4173,6 +4094,7 @@ mod lifecycle_events {
             action: AgentAction::prompt(text),
             action_id: None,
             actor: Some(staff_sender()),
+            context: None,
         };
         service
             .control_event(id, prompt("first"))
@@ -4260,6 +4182,7 @@ mod lifecycle_events {
                     ),
                     action_id: None,
                     actor: Some(staff_sender()),
+                    context: None,
                 })),
             )
             .await
@@ -4791,6 +4714,7 @@ async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
                 action_id: None,
                 action: permission_answer("editor-approval", "once"),
                 actor: Some(sender()),
+                context: None,
             },
         )
         .await
