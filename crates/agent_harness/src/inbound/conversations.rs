@@ -74,6 +74,9 @@ pub struct AgentConversationTurnDto {
     pub reply_message_id: Option<Uuid>,
     /// Durable execution state.
     pub state: crate::domain::conversation_turns::ConversationTurnState,
+    /// Whether Retry would be accepted now. A failed attempt is not retryable
+    /// until its reply says how it ended.
+    pub retryable: bool,
     /// When the source message was first accepted.
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -96,6 +99,7 @@ impl From<ConversationOverview> for AgentConversationDto {
                     session_id: turn.session_id.as_uuid(),
                     reply_message_id: turn.reply_message_id,
                     state: turn.state,
+                    retryable: turn.retryable,
                     created_at: turn.created_at,
                 })
                 .collect(),

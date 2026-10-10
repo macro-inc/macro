@@ -47,7 +47,7 @@ export function AgentConversationControls(props: {
     <ConversationActivity
       queued={queued()}
       failed={context || running() ? undefined : failure()}
-      canRetry={props.conversation.available}
+      canRetry={props.conversation.available && !!failed()?.retryable}
       pending={mutation.isPending}
       onRetry={() => {
         const turn = failed();

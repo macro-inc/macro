@@ -72,6 +72,14 @@ async fn share_referenced_item_with_channel(
     item: &ReferencedShareItem,
     sharer_access: Option<AccessLevel>,
 ) -> anyhow::Result<()> {
+    // A direct agent conversation's sessions are private to their owner, and
+    // their sharing settings refuse to share them; posting one's link
+    // elsewhere does not either.
+    if item.entity_type() == ReferencedShareItemType::AgentSession
+        && is_direct_conversation_session(db, item.entity_id()).await?
+    {
+        return Ok(());
+    }
     let file_type = match item.entity_type() {
         ReferencedShareItemType::Document => get_document_file_type(db, item.entity_id()).await?,
         _ => None,
@@ -80,6 +88,25 @@ async fn share_referenced_item_with_channel(
         ensure_referenced_item_visible_to_channel(db, channel_id, item, level).await?;
     }
     Ok(())
+}
+
+async fn is_direct_conversation_session(db: &PgPool, session_id: &str) -> anyhow::Result<bool> {
+    let session_id = macro_uuid::string_to_uuid(session_id)?;
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+               SELECT 1
+               FROM agent_conversation_sessions session
+               JOIN comms_channel_agents agent
+                 ON agent.channel_id = session.channel_id
+                AND agent.bot_id = session.bot_id
+               WHERE session.session_id = $1
+                 AND agent.kind = 'direct'
+           ) AS "private!""#,
+        session_id,
+    )
+    .fetch_one(db)
+    .await
+    .context("failed to read whether a session belongs to a direct agent conversation")
 }
 
 async fn get_document_file_type(

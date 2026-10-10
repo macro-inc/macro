@@ -29,6 +29,7 @@ import { TabsInset } from '@core/component/TabsInset';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
+  useChannelCanCall,
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
@@ -254,8 +255,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const orchestrator = useGlobalBlockOrchestrator();
   const channelId = props.channelId;
   const conversationChannel = useChannel(channelId);
-  const canCall = () =>
-    conversationChannel() ? !conversationChannel()?.agent_dm : undefined;
+  const canCall = useChannelCanCall(channelId);
   const channelName = useChannelName(channelId, props.fallbackName);
   useSplitDisplayName(() => channelName() ?? 'New Channel');
 

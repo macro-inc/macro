@@ -351,6 +351,7 @@ where
         } else {
             None
         };
+        let mut saved_reply = Vec::new();
         if terminal && let Some(store) = conversation_store {
             match store.by_action(turn.action_id).await {
                 Ok(Some(record)) if record.reply_finalized => return,
@@ -358,6 +359,7 @@ where
                     if let Some(saved) = record.outcome {
                         outcome = saved;
                     }
+                    saved_reply = record.reply_segments.unwrap_or_default();
                 }
                 Err(error) => {
                     tracing::error!(?error, %session_id, "could not read the durable conversation reply state");
@@ -367,7 +369,8 @@ where
             }
         }
         let resolved = if in_segments {
-            self.present_final(session_id, turn, outcome.clone()).await
+            self.present_final(session_id, turn, outcome.clone(), saved_reply)
+                .await
         } else {
             let segments = if turn.speaks_as_chip {
                 Vec::new()

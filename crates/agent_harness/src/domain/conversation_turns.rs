@@ -54,6 +54,10 @@ pub struct ConversationTurn {
     pub outcome: Option<ReplyOutcome>,
     /// Whether the channel reply has been reconciled with the saved outcome.
     pub reply_finalized: bool,
+    /// What the finished reply shows, saved before its outcome by the replica
+    /// that watched the turn.
+    #[serde(default)]
+    pub reply_segments: Option<Vec<agent_fold::domain::model::ProjectedSegment>>,
     /// Stable admission order within the transcript.
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -73,6 +77,9 @@ pub struct ConversationTurnStatus {
     pub reply_message_id: Option<Uuid>,
     /// Current execution state.
     pub state: ConversationTurnState,
+    /// Whether an explicit retry would be accepted now: the attempt failed,
+    /// stopped or was interrupted, and its reply already says so.
+    pub retryable: bool,
     /// Stable admission ordering.
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -95,11 +102,15 @@ pub struct ConversationSettings {
 #[async_trait::async_trait]
 pub trait ConversationTurnStore: Send + Sync + 'static {
     /// Serialize bootstrap and local queue admission before a session manager exists.
+    /// Waits briefly for capacity; `None` means another holder has the session,
+    /// or this replica had no connection to spare.
     async fn claim_delivery(
         &self,
         session: AgentSessionId,
     ) -> Result<Option<Box<dyn ConversationLease>>>;
     /// Serialize context changes with runtime dispatch across replicas.
+    /// Waits briefly for capacity; `None` means another holder has the session,
+    /// or this replica had no connection to spare.
     async fn claim_context(
         &self,
         session: AgentSessionId,
@@ -133,6 +144,13 @@ pub trait ConversationTurnStore: Send + Sync + 'static {
     async fn claim(&self, action: AgentActionId, turn: &InFlightTurn) -> Result<bool>;
     /// Save the posted reply before the model can begin producing output.
     async fn record_flight(&self, action: AgentActionId, turn: &InFlightTurn) -> Result<()>;
+    /// Save what a finished turn's reply shows, before its outcome, so that
+    /// whichever replica reconciles the reply posts the same messages.
+    async fn save_reply(
+        &self,
+        action: AgentActionId,
+        segments: &[agent_fold::domain::model::ProjectedSegment],
+    ) -> Result<()>;
     /// Save a terminal outcome before resolving the channel message.
     async fn finish(
         &self,
@@ -140,14 +158,21 @@ pub trait ConversationTurnStore: Send + Sync + 'static {
         state: ConversationTurnState,
         outcome: ReplyOutcome,
     ) -> Result<()>;
+    /// Fail an attempt that never dispatched. An attempt some replica has
+    /// claimed meanwhile is left to that replica.
+    async fn fail_queued(&self, action: AgentActionId) -> Result<()>;
     /// Mark the saved outcome as visible in the channel.
     async fn finalize_reply(&self, action: AgentActionId, outcome: &ReplyOutcome) -> Result<()>;
     /// Serialize reply reconciliation across replicas, with release on process loss.
+    /// Waits briefly for capacity; `None` means another holder is reconciling
+    /// the reply, or this replica had no connection to spare.
     async fn claim_reply(
         &self,
         action: AgentActionId,
     ) -> Result<Option<Box<dyn ConversationLease>>>;
-    /// Durable queued work for recovery, in admission order.
+    /// Durable queued work for recovery, in admission order: the oldest
+    /// queued turn of each session that nothing runs or blocks, which is
+    /// exactly what a claim could take.
     async fn pending(&self, limit: u16) -> Result<Vec<ConversationTurn>>;
     /// Claims whose session manager must still be alive; used only for recovery checks.
     async fn running(&self, limit: u16) -> Result<Vec<ConversationTurn>>;

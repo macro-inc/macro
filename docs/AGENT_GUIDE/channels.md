@@ -43,7 +43,9 @@ see that snapshot. Only the turn's last message notifies. Previews and search
 quote the passages, not the steps. Typing refreshes every 3 seconds and clears
 on its own if the agent's replica dies. Follow-up messages queue in order, and
 the bar above the composer counts them (`1 queued`). Editing a sent message
-does not invoke the agent again.
+does not invoke the agent again. A reply inside a thread is not part of the
+conversation: the agent answers it only when mentioned there, in the thread,
+as in any channel.
 
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt
@@ -69,7 +71,7 @@ turn whose steps tick from running to done, attachments, an inline question,
 an approval, and Stop/Retry.
 Check both desktop and a narrow viewport. Search the Channels view by persona
 name to reopen older DMs, including ones outside the currently loaded page.
-Harness traces use `macro.event.type=agent_trigger.direct_message` and
+Harness traces use `macro.event.type=agent_trigger.conversation_message` and
 `agent.session.id`; the durable turn journal distinguishes queued, running,
 succeeded, failed, stopped, and interrupted attempts. Check completion latency,
 failed/interrupted turns, queue age, and duplicate source admissions during

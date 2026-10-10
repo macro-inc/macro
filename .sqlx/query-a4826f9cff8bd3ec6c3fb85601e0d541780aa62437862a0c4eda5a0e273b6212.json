@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                bt.id AS token_id,\n                bt.bot_id,\n                bt.token_prefix,\n                bt.label,\n                bt.last_used_at,\n                bt.expires_at,\n                bt.revoked_at,\n                bt.created_at,\n                b.kind\n            FROM bot_tokens bt\n            JOIN bots b ON b.id = bt.bot_id\n            JOIN comms_channel_participants cp\n              ON cp.channel_id = $1\n             AND cp.user_id = ('bot|' || b.id::text)\n             AND cp.left_at IS NULL\n            WHERE bt.token_hash = $2\n              AND b.deleted_at IS NULL\n            ",
+  "query": "\n            SELECT\n                bt.id AS token_id,\n                bt.bot_id,\n                bt.token_prefix,\n                bt.label,\n                bt.last_used_at,\n                bt.expires_at,\n                bt.revoked_at,\n                bt.created_at,\n                b.kind\n            FROM bot_tokens bt\n            JOIN bots b ON b.id = bt.bot_id\n            JOIN comms_channel_participants cp\n              ON cp.channel_id = $1\n             AND cp.user_id = ('bot|' || b.id::text)\n             AND cp.left_at IS NULL\n            WHERE bt.token_hash = $2\n              AND b.deleted_at IS NULL\n              -- Its owner or any member of its team can mint a persona's\n              -- token, not just the person a direct conversation is with, so\n              -- no token posts into one.\n              AND NOT EXISTS (\n                  SELECT 1\n                  FROM comms_channel_agents ca\n                  WHERE ca.channel_id = $1\n                    AND ca.kind = 'direct'\n              )\n            ",
   "describe": {
     "columns": [
       {
@@ -67,5 +67,5 @@
       false
     ]
   },
-  "hash": "731fe962bc2376292a2c6ab2dbbb6ea1500ea4a8e3222fb8a60c47fb8e88a89e"
+  "hash": "a4826f9cff8bd3ec6c3fb85601e0d541780aa62437862a0c4eda5a0e273b6212"
 }

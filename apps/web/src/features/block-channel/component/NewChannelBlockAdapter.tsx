@@ -65,6 +65,7 @@ import { useBlockId } from '@core/block';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
+  useChannelCanCall,
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
@@ -322,8 +323,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const conversationChannel = useChannel(channelId);
-  const canCall = () =>
-    conversationChannel() ? !conversationChannel()?.agent_dm : undefined;
+  const canCall = useChannelCanCall(channelId);
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
   const [routeSearch] = createSearchParams(channelsSearch);

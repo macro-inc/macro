@@ -1546,7 +1546,13 @@ async fn run() -> anyhow::Result<()> {
                     let pending = match routed {
                         RoutedTrigger::Command(session_id, command) => {
                             let (session_id, command) = if let HarnessCommand::ConversationMessage(open) = command {
-                                let (session_id, open) = harness.admit_conversation_message(session_id, open).await?;
+                                let Some((session_id, open)) = harness.admit_conversation_message(session_id, open).await? else {
+                                    // Its conversation is gone, or its sender may not
+                                    // prompt it: every redelivery would be refused too.
+                                    tracing::warn!(%session_id, "dropping a conversation message that can no longer be admitted");
+                                    commit_message(&consumer, kafka_message)?;
+                                    return Ok(None);
+                                };
                                 (session_id, HarnessCommand::ConversationMessage(open))
                             } else { (session_id, command) };
                             tracing::Span::current()

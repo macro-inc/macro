@@ -65,6 +65,22 @@ export function useChannel(channelId: string) {
   return createMemo(() => ctx.channelsById()[channelId]);
 }
 
+/**
+ * Whether a channel can host a call: unknown while the channel list first
+ * loads, and never in an agent DM. A channel the loaded list lacks is not
+ * one of the user's agent DMs, so it can, as before agent DMs existed.
+ */
+export function useChannelCanCall(
+  channelId: string
+): Accessor<boolean | undefined> {
+  const ctx = useChannelsContext();
+  return createMemo(() => {
+    const channel = ctx.channelsById()[channelId];
+    if (channel) return !channel.agent_dm;
+    return ctx.isLoading() ? undefined : true;
+  });
+}
+
 export function useChannelName(channelId: string, fallback?: string) {
   const ctx = useChannelsContext();
   return createMemo(() => ctx.channelsById()[channelId]?.name ?? fallback);

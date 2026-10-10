@@ -22,7 +22,26 @@ use crate::domain::{
 #[derive(Clone)]
 pub struct PgConversationTurnStore {
     pool: PgPool,
-    reply_slots: std::sync::Arc<tokio::sync::Semaphore>,
+    /// Pooled connections a session bootstrap may hold for its whole open.
+    delivery_slots: std::sync::Arc<tokio::sync::Semaphore>,
+    /// Pooled connections held by admission and reply reconciliation, which
+    /// last a few queries. Kept apart so a slow bootstrap never starves them.
+    lease_slots: std::sync::Arc<tokio::sync::Semaphore>,
+}
+
+/// How long a lease waits for a pooled connection before reporting itself
+/// unavailable. Holders release theirs within a few queries, or once a
+/// bootstrap has opened its session.
+const SLOT_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Wait for one of `slots`, leaving the rest of the pool to everything else.
+async fn take_slot(
+    slots: &std::sync::Arc<tokio::sync::Semaphore>,
+) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    tokio::time::timeout(SLOT_WAIT, slots.clone().acquire_owned())
+        .await
+        .ok()?
+        .ok()
 }
 
 struct PgReplyLease {
@@ -37,7 +56,8 @@ impl PgConversationTurnStore {
         let slots = (pool.options().get_max_connections() as usize / 4).clamp(1, 16);
         Self {
             pool,
-            reply_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(slots)),
+            delivery_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(slots)),
+            lease_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(slots)),
         }
     }
 }
@@ -54,7 +74,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         &self,
         session: AgentSessionId,
     ) -> Result<Option<Box<dyn ConversationLease>>> {
-        let Ok(slot) = self.reply_slots.clone().try_acquire_owned() else {
+        let Some(slot) = take_slot(&self.delivery_slots).await else {
             return Ok(None);
         };
         let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
@@ -76,7 +96,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         &self,
         session: AgentSessionId,
     ) -> Result<Option<Box<dyn ConversationLease>>> {
-        let Ok(slot) = self.reply_slots.clone().try_acquire_owned() else {
+        let Some(slot) = take_slot(&self.lease_slots).await else {
             return Ok(None);
         };
         let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
@@ -172,9 +192,10 @@ impl ConversationTurnStore for PgConversationTurnStore {
         Ok(claimed)
     }
 
+    // Retryable exactly when `for_conversation` reports the turn retryable.
     async fn retry(&self, source: Uuid, bot: BotId, expected: AgentActionId) -> Result<bool> {
         let action = AgentActionId::mint();
-        Ok(sqlx::query!("UPDATE agent_conversation_turns SET action_id = $4, state = 'queued', in_flight = NULL, outcome = NULL, reply_finalized = FALSE, updated_at = now() WHERE source_message_id = $1 AND bot_id = $2 AND action_id = $3 AND state IN ('failed', 'stopped', 'interrupted') AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL)", source, bot.as_uuid(), expected.as_uuid(), action.as_uuid())
+        Ok(sqlx::query!("UPDATE agent_conversation_turns SET action_id = $4, state = 'queued', in_flight = NULL, outcome = NULL, reply_segments = NULL, reply_finalized = FALSE, updated_at = now() WHERE source_message_id = $1 AND bot_id = $2 AND action_id = $3 AND state IN ('failed', 'stopped', 'interrupted') AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL)", source, bot.as_uuid(), expected.as_uuid(), action.as_uuid())
             .execute(&self.pool).await.map_err(anyhow::Error::from)?.rows_affected() == 1)
     }
 
@@ -197,6 +218,23 @@ impl ConversationTurnStore for PgConversationTurnStore {
         Ok(())
     }
 
+    async fn save_reply(
+        &self,
+        action: AgentActionId,
+        segments: &[agent_fold::domain::model::ProjectedSegment],
+    ) -> Result<()> {
+        let segments = serde_json::to_value(segments).map_err(anyhow::Error::from)?;
+        sqlx::query!(
+            "UPDATE agent_conversation_turns SET reply_segments = $2 WHERE action_id = $1",
+            action.as_uuid(),
+            segments
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(anyhow::Error::from)?;
+        Ok(())
+    }
+
     async fn finish(
         &self,
         action: AgentActionId,
@@ -213,6 +251,19 @@ impl ConversationTurnStore for PgConversationTurnStore {
         Ok(())
     }
 
+    async fn fail_queued(&self, action: AgentActionId) -> Result<()> {
+        let outcome = serde_json::to_value(ReplyOutcome::Failed).map_err(anyhow::Error::from)?;
+        sqlx::query!(
+            "UPDATE agent_conversation_turns SET state = 'failed', outcome = $2, reply_finalized = FALSE, updated_at = now() WHERE action_id = $1 AND state = 'queued'",
+            action.as_uuid(),
+            outcome
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(anyhow::Error::from)?;
+        Ok(())
+    }
+
     async fn finalize_reply(&self, action: AgentActionId, outcome: &ReplyOutcome) -> Result<()> {
         let outcome = serde_json::to_value(outcome).map_err(anyhow::Error::from)?;
         sqlx::query!("UPDATE agent_conversation_turns SET reply_finalized = TRUE, updated_at = now() WHERE action_id = $1 AND outcome = $2", action.as_uuid(), outcome)
@@ -225,7 +276,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         action: AgentActionId,
     ) -> Result<Option<Box<dyn ConversationLease>>> {
         // Leave pool capacity for the message service while a reply lock is held.
-        let Ok(slot) = self.reply_slots.clone().try_acquire_owned() else {
+        let Some(slot) = take_slot(&self.lease_slots).await else {
             return Ok(None);
         };
         let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
@@ -246,7 +297,9 @@ impl ConversationTurnStore for PgConversationTurnStore {
     }
 
     async fn pending(&self, limit: u16) -> Result<Vec<ConversationTurn>> {
-        sqlx::query_scalar!(r#"SELECT to_jsonb(j) AS "value!" FROM agent_conversation_turns j WHERE state = 'queued' AND NOT EXISTS (SELECT 1 FROM agent_conversation_turns blocked WHERE blocked.session_id = j.session_id AND blocked.state = 'interrupted') ORDER BY created_at, source_message_id LIMIT $1"#, i64::from(limit))
+        // The same condition a claim checks, so turns waiting behind a running
+        // one are left to the replica running it.
+        sqlx::query_scalar!(r#"SELECT to_jsonb(j) AS "value!" FROM agent_conversation_turns j WHERE state = 'queued' AND NOT EXISTS (SELECT 1 FROM agent_conversation_turns other WHERE other.session_id = j.session_id AND (other.state IN ('running', 'interrupted') OR (other.state = 'queued' AND (other.created_at, other.source_message_id) < (j.created_at, j.source_message_id)))) ORDER BY created_at, source_message_id LIMIT $1"#, i64::from(limit))
             .fetch_all(&self.pool).await.map_err(anyhow::Error::from)?.into_iter().map(decode).collect()
     }
 
@@ -260,7 +313,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         channel: Uuid,
         bot: BotId,
     ) -> Result<Vec<ConversationTurnStatus>> {
-        sqlx::query_scalar!(r#"SELECT jsonb_build_object('source_message_id', source_message_id, 'bot_id', bot_id, 'session_id', session_id, 'action_id', action_id, 'reply_message_id', in_flight->'announcement_message_id', 'state', state, 'created_at', created_at) AS "value!" FROM agent_conversation_turns WHERE channel_id = $1 AND bot_id = $2 ORDER BY created_at, source_message_id"#, channel, bot.as_uuid())
+        sqlx::query_scalar!(r#"SELECT jsonb_build_object('source_message_id', source_message_id, 'bot_id', bot_id, 'session_id', session_id, 'action_id', action_id, 'reply_message_id', in_flight->'announcement_message_id', 'state', state, 'retryable', state IN ('failed', 'stopped', 'interrupted') AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL), 'created_at', created_at) AS "value!" FROM agent_conversation_turns WHERE channel_id = $1 AND bot_id = $2 ORDER BY created_at, source_message_id"#, channel, bot.as_uuid())
             .fetch_all(&self.pool).await.map_err(anyhow::Error::from)?.into_iter()
             .map(|value| serde_json::from_value(value).map_err(anyhow::Error::from).map_err(Into::into)).collect()
     }

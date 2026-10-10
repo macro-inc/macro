@@ -182,3 +182,18 @@ async fn channels_without_a_conversing_agent_keep_the_existing_trigger_path() {
     }
     assert_eq!(sessions.0.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+async fn a_thread_reply_is_not_a_turn_of_the_direct_conversation() {
+    let sessions = Sessions::default();
+    let router =
+        ConversationRouter::new(Channels(vec![direct()]), Personas(true), sessions.clone());
+    let mut reply = message();
+    reply.message_id = Uuid::from_u128(3);
+    reply.thread_id = Some(Uuid::from_u128(2));
+    assert!(matches!(
+        router.evaluate(&reply).await.unwrap(),
+        ConversationDecision::NotConversation
+    ));
+    assert_eq!(sessions.0.load(Ordering::SeqCst), 0);
+}

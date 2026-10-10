@@ -236,10 +236,22 @@ async fn an_explicit_retry_waits_for_reply_reconciliation_and_mints_only_one_new
             .unwrap()
     );
     assert!(store.pending(10).await.unwrap().is_empty());
+    let retryable = async || {
+        store
+            .for_conversation(channel, bot_id::MACRO_NEW_BOT_ID)
+            .await
+            .unwrap()[0]
+            .retryable
+    };
+    assert!(
+        !retryable().await,
+        "the status says what retry would answer"
+    );
     store
         .finalize_reply(first.action_id, &ReplyOutcome::Failed)
         .await
         .unwrap();
+    assert!(retryable().await);
     let (a, b) = tokio::join!(
         store.retry(
             first.source_message_id,
@@ -533,4 +545,136 @@ fn mention_origin_mut(command: &mut OpenSession) -> &mut MentionOrigin {
         panic!("expected a mention");
     };
     origin
+}
+
+/// A store over a pool the size of the harness service's, where every kind
+/// of lease has a single connection to spare.
+async fn production_sized(pool: &PgPool) -> PgConversationTurnStore {
+    let small = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    PgConversationTurnStore::new(small)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_bootstrapping_session_does_not_starve_admission_or_replies(pool: PgPool) {
+    let (_, session, channel, command) = setup(pool.clone()).await;
+    let store = production_sized(&pool).await;
+    let record = store.admit(session, channel, command).await.unwrap();
+    store
+        .claim(record.action_id, &flight(&record))
+        .await
+        .unwrap();
+    // Another conversation's open holds its delivery lease for seconds.
+    let _bootstrap = store
+        .claim_delivery(AgentSessionId::new())
+        .await
+        .unwrap()
+        .expect("an idle replica leases a bootstrap");
+    assert!(
+        store.claim_context(session).await.unwrap().is_some(),
+        "admission still gets a context lease"
+    );
+    assert!(
+        store.claim_reply(record.action_id).await.unwrap().is_some(),
+        "the turn's end still gets its reply lease"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_lease_waits_for_a_busy_slot_instead_of_refusing(pool: PgPool) {
+    let (_, session, channel, command) = setup(pool.clone()).await;
+    let store = production_sized(&pool).await;
+    let record = store.admit(session, channel, command).await.unwrap();
+    let held = store
+        .claim_reply(record.action_id)
+        .await
+        .unwrap()
+        .expect("an idle replica leases a reply");
+    let waiting = tokio::spawn({
+        let store = store.clone();
+        async move { store.claim_context(AgentSessionId::new()).await }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(
+        !waiting.is_finished(),
+        "the only slot is busy, so the lease waits"
+    );
+    drop(held);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(2), waiting)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .is_some(),
+        "the lease is granted once the slot frees"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recovery_offers_only_turns_a_claim_could_take(pool: PgPool) {
+    let (store, session, channel, command) = setup(pool.clone()).await;
+    let running = store
+        .admit(session, channel, command.clone())
+        .await
+        .unwrap();
+    let mut waiting = command.clone();
+    if let crate::domain::model::SessionOrigin::Mention(origin) = &mut waiting.origin {
+        origin.message_id = macro_uuid::generate_uuid_v7();
+    }
+    let waiting = store.admit(session, channel, waiting).await.unwrap();
+    assert_eq!(
+        pending_sources(&store).await,
+        [running.source_message_id],
+        "only the oldest queued turn of a session is due"
+    );
+    assert!(
+        store
+            .claim(running.action_id, &flight(&running))
+            .await
+            .unwrap()
+    );
+    assert!(
+        pending_sources(&store).await.is_empty(),
+        "a turn waiting behind a running one is the running replica's to dispatch"
+    );
+    store
+        .finish(
+            running.action_id,
+            ConversationTurnState::Succeeded,
+            ReplyOutcome::Answered("Done".to_owned()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(pending_sources(&store).await, [waiting.source_message_id]);
+}
+
+async fn pending_sources(store: &PgConversationTurnStore) -> Vec<Uuid> {
+    store
+        .pending(50)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|turn| turn.source_message_id)
+        .collect()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_delivery_attempt_never_fails_a_turn_another_replica_claimed(pool: PgPool) {
+    let (store, session, channel, command) = setup(pool.clone()).await;
+    let record = store.admit(session, channel, command).await.unwrap();
+    let other_replica = PgConversationTurnStore::new(pool);
+    assert!(
+        other_replica
+            .claim(record.action_id, &flight(&record))
+            .await
+            .unwrap()
+    );
+    store.fail_queued(record.action_id).await.unwrap();
+    let after = store.by_action(record.action_id).await.unwrap().unwrap();
+    assert_eq!(after.state, ConversationTurnState::Running);
+    assert!(after.outcome.is_none());
 }

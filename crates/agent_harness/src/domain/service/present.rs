@@ -15,7 +15,7 @@ use agent_fold::domain::model::{ProjectedSegment, TurnId, TurnPhase};
 
 use super::*;
 use crate::domain::model::{AgentTypingUpdate, ReplyPresentation, VoiceStyle};
-use crate::domain::presenter::{plan_messages, shape, turn_segments};
+use crate::domain::presenter::{closed, plan_messages, shape, turn_segments};
 use crate::domain::queue::InFlightTurn;
 
 /// Where a running turn speaks, when it speaks anywhere: the origin it
@@ -210,7 +210,9 @@ where
     }
 
     /// Show a reply in segments once its turn has ended: every message it
-    /// takes, the last one with how the turn ended and as news.
+    /// takes, the last one with how the turn ended and as news. `saved` is
+    /// what the replica that watched the turn saved of the reply, for a
+    /// replica that did not watch it, or no longer remembers it.
     ///
     /// Returns whether everything was shown, for the durable reply record.
     pub(super) async fn present_final(
@@ -218,20 +220,22 @@ where
         session_id: AgentSessionId,
         flight: &InFlightTurn,
         outcome: ReplyOutcome,
+        saved: Vec<ProjectedSegment>,
     ) -> bool {
         let Some(voice) = Voice::of(flight) else {
             return true;
         };
-        let planned = plan_messages(&self.reported_segments(session_id, flight.turn));
+        let mut segments = self.reported_segments(session_id, flight.turn);
+        if segments.is_empty() {
+            segments = saved;
+        }
+        let planned = plan_messages(&closed(segments));
         if planned.is_empty() {
             // Nothing the reply said or did can be shown, so say how the
-            // turn ended. Without the reply's segments - this replica did
-            // not watch it run - an answer may already be showing in
-            // messages posted before, and is not repeated; a notice that
-            // the turn failed or stopped is.
-            if !flight.presented.is_empty() && matches!(outcome, ReplyOutcome::Answered(_)) {
-                return true;
-            }
+            // turn ended. A replica that watches a turn end saves its
+            // segments before posting the last message, so without them the
+            // answer was never posted: it is posted on its own, after any
+            // passages shown while the turn ran.
             let mut presentation = voice.presentation(
                 session_id,
                 flight.turn,

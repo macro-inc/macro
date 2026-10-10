@@ -529,6 +529,8 @@ impl BotRepo for PgBotsRepo {
         .context("failed to clear the agent's previous MCP servers")?;
         insert_mcp_servers(&mut tx, bot_id, req.mcp.servers()).await?;
 
+        // A direct conversation the persona is in belongs to the person it
+        // is with, not to the persona's channel selection.
         let bot_principal = principal_id(bot_id);
         sqlx::query!(
             r#"
@@ -536,6 +538,12 @@ impl BotRepo for PgBotsRepo {
             SET left_at = now()
             WHERE user_id = $1
               AND left_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = comms_channel_participants.channel_id
+                    AND ca.kind = 'direct'
+              )
             "#,
             &bot_principal,
         )
@@ -613,6 +621,12 @@ impl BotRepo for PgBotsRepo {
                     FROM comms_channel_participants p
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM comms_channel_agents ca
+                          WHERE ca.channel_id = p.channel_id
+                            AND ca.kind = 'direct'
+                      )
                     ORDER BY p.channel_id
                 ) AS "channel_ids!",
                 a.mcp_scope,
@@ -648,6 +662,14 @@ impl BotRepo for PgBotsRepo {
                          AND user_p.left_at IS NULL
                         WHERE bot_p.user_id = 'bot|' || b.id::text
                           AND bot_p.left_at IS NULL
+                          -- A conversation with the persona shares nothing:
+                          -- only the people it already serves have one.
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM comms_channel_agents ca
+                              WHERE ca.channel_id = bot_p.channel_id
+                                AND ca.kind = 'direct'
+                          )
                     )
                 )
               )
@@ -674,6 +696,12 @@ impl BotRepo for PgBotsRepo {
             WHERE user_id = $1
               AND channel_id = ANY($2::uuid[])
               AND left_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = comms_channel_participants.channel_id
+                    AND ca.kind = 'direct'
+              )
             "#,
             caller.as_ref(),
             channel_ids,
@@ -1036,6 +1064,12 @@ impl BotRepo for PgBotsRepo {
                     FROM comms_channel_participants p
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM comms_channel_agents ca
+                          WHERE ca.channel_id = p.channel_id
+                            AND ca.kind = 'direct'
+                      )
                     ORDER BY p.channel_id
                 ) AS "channel_ids!",
                 a.mcp_scope,
@@ -1160,6 +1194,14 @@ impl BotRepo for PgBotsRepo {
                  AND user_p.left_at IS NULL
                 WHERE bot_p.user_id = $1
                   AND bot_p.left_at IS NULL
+                  -- Only the persona's owner or team has a conversation with
+                  -- it, so one never makes it available to anyone.
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM comms_channel_agents ca
+                      WHERE ca.channel_id = bot_p.channel_id
+                        AND ca.kind = 'direct'
+                  )
             ) AS "shares!"
             "#,
             principal_id(bot_id),
@@ -1330,6 +1372,12 @@ impl BotRepo for PgBotsRepo {
             WHERE channel_id = $1
               AND user_id = $2
               AND left_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = $1
+                    AND ca.kind = 'direct'
+              )
             "#,
             channel_id,
             principal_id(bot_id),
@@ -1353,6 +1401,12 @@ impl BotRepo for PgBotsRepo {
             JOIN comms_channels c ON c.id = cp.channel_id
             WHERE cp.user_id = $1
               AND cp.left_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = cp.channel_id
+                    AND ca.kind = 'direct'
+              )
             ORDER BY cp.joined_at ASC, c.id ASC
             "#,
             principal_id(bot_id),
@@ -1518,6 +1572,15 @@ impl BotRepo for PgBotsRepo {
              AND cp.left_at IS NULL
             WHERE bt.token_hash = $2
               AND b.deleted_at IS NULL
+              -- Its owner or any member of its team can mint a persona's
+              -- token, not just the person a direct conversation is with, so
+              -- no token posts into one.
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = $1
+                    AND ca.kind = 'direct'
+              )
             "#,
             channel_id,
             &token_hash[..],

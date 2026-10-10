@@ -495,17 +495,41 @@ where
                     tracing::warn!(%session_id, %action, "ignoring a stale turn end");
                     return Ok(CommandOutcome::Completed);
                 }
+                // The journal is told before the turn's mark is released, but
+                // a failure to tell it is logged, not returned: the session
+                // must still drain, and recovery marks a turn left running as
+                // interrupted.
                 if let Some(store) = &self.conversation_turns {
                     if ended.is_none()
                         && let Some(action) = fold_action_id
                     {
-                        ended = store
-                            .by_action(action)
-                            .await?
-                            .filter(|record| record.session_id == session_id)
-                            .and_then(|record| record.in_flight);
+                        match store.by_action(action).await {
+                            Ok(record) => {
+                                ended = record
+                                    .filter(|record| record.session_id == session_id)
+                                    .and_then(|record| record.in_flight);
+                            }
+                            Err(error) => tracing::error!(
+                                ?error,
+                                %session_id,
+                                %action,
+                                "could not read the conversation turn that ended"
+                            ),
+                        }
                     }
                     if let Some(turn) = &ended {
+                        // Saved before the outcome makes the reply due, so any
+                        // replica that reconciles it shows what this one watched.
+                        let reply = self.reported_segments(session_id, turn.turn);
+                        if !reply.is_empty()
+                            && turn.announce.as_ref().is_some_and(|origin| {
+                                origin.reply_placement
+                                    == crate::domain::model::ReplyPlacement::Timeline
+                            })
+                            && let Err(error) = store.save_reply(turn.action_id, &reply).await
+                        {
+                            tracing::error!(?error, %session_id, "could not save a finished conversation reply");
+                        }
                         let state = match &stop {
                             StopReason::Cancelled => {
                                 crate::domain::conversation_turns::ConversationTurnState::Stopped
@@ -517,13 +541,21 @@ where
                                 crate::domain::conversation_turns::ConversationTurnState::Succeeded
                             }
                         };
-                        store
+                        if let Err(error) = store
                             .finish(
                                 turn.action_id,
                                 state,
                                 ReplyOutcome::of_turn(&stop, last_text.clone()),
                             )
-                            .await?;
+                            .await
+                        {
+                            tracing::error!(
+                                ?error,
+                                %session_id,
+                                action_id = %turn.action_id,
+                                "could not record how a conversation turn ended"
+                            );
+                        }
                     }
                 }
                 self.busy.take(session_id);
@@ -601,7 +633,29 @@ where
             HarnessCommand::SessionStopped { reason } => {
                 let in_flight = self.busy.take(session_id);
                 // No `TurnEnded` follows a death, so this is the turn's last
-                // chance to stop its pending reply spinning.
+                // chance to stop its pending reply spinning, and to tell the
+                // journal it failed before recovery takes it for interrupted.
+                if let (Some(store), Some(turn)) = (&self.conversation_turns, &in_flight) {
+                    let reply = self.reported_segments(session_id, turn.turn);
+                    if !reply.is_empty()
+                        && turn.announce.as_ref().is_some_and(|origin| {
+                            origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+                        })
+                        && let Err(error) = store.save_reply(turn.action_id, &reply).await
+                    {
+                        tracing::error!(?error, %session_id, "could not save a stopped conversation reply");
+                    }
+                    if let Err(error) = store
+                        .finish(
+                            turn.action_id,
+                            crate::domain::conversation_turns::ConversationTurnState::Failed,
+                            ReplyOutcome::Failed,
+                        )
+                        .await
+                    {
+                        tracing::error!(?error, %session_id, "could not record a conversation turn its session stopped under");
+                    }
+                }
                 self.resolve_reply(session_id, in_flight.as_ref(), ReplyOutcome::Failed)
                     .await;
                 self.end_presentation(session_id, in_flight.as_ref()).await;
@@ -1327,8 +1381,24 @@ where
                 announce: entry.announce.clone(),
             };
             flight.announcement_message_id = entry.announced;
-            if let Some(store) = conversation_store {
-                store.record_flight(entry.action_id, &flight).await?;
+            if let Some(store) = conversation_store
+                && let Err(error) = store.record_flight(entry.action_id, &flight).await
+            {
+                // Claimed but never delivered: it fails like an undelivered turn.
+                if let Err(error) = store
+                    .finish(
+                        entry.action_id,
+                        crate::domain::conversation_turns::ConversationTurnState::Failed,
+                        ReplyOutcome::Failed,
+                    )
+                    .await
+                {
+                    tracing::error!(?error, %session_id, "failed to persist an undelivered conversation turn");
+                }
+                self.resolve_reply(session_id, Some(&flight), ReplyOutcome::Failed)
+                    .await;
+                self.requeue_claimed(session_id, entry).await?;
+                return Err(error.into());
             }
             return match self.deliver(session_id, command).await {
                 Ok(()) => {
@@ -1408,6 +1478,20 @@ pub(super) fn queue_result<T>(
     })
 }
 
+/// Whether a conversation message that failed to execute stays queued for
+/// recovery, because the failure means another replica will run it.
+fn leaves_turn_queued(error: &HarnessError) -> bool {
+    matches!(
+        error,
+        HarnessError::Forward(_)
+            | HarnessError::Session(
+                AgentSessionError::Draining(_)
+                    | AgentSessionError::ManagedElsewhere(_)
+                    | AgentSessionError::FencedOut(_)
+            )
+    )
+}
+
 pub(super) async fn run_session_worker<
     Sessions,
     Containers,
@@ -1476,15 +1560,10 @@ pub(super) async fn run_session_worker<
         } else {
             inner.execute(session_id, command).instrument(span).await
         };
-        if result.is_err()
+        if let Err(error) = &result
+            && !leaves_turn_queued(error)
             && let (Some(action), Some(store)) = (conversation_action, &inner.conversation_turns)
-            && let Err(error) = store
-                .finish(
-                    action,
-                    crate::domain::conversation_turns::ConversationTurnState::Failed,
-                    ReplyOutcome::Failed,
-                )
-                .await
+            && let Err(error) = store.fail_queued(action).await
         {
             tracing::error!(?error, %session_id, "failed to persist conversation command failure");
         }

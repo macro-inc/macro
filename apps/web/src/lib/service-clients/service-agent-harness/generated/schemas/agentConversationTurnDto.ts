@@ -17,6 +17,9 @@ export interface AgentConversationTurnDto {
   createdAt: string;
   /** The associated agent reply, if it has been posted. */
   replyMessageId?: AgentConversationTurnDtoReplyMessageId;
+  /** Whether Retry would be accepted now. A failed attempt is not retryable
+until its reply says how it ended. */
+  retryable: boolean;
   /** Session carrying this turn. */
   sessionId: string;
   /** The user's message in the channel timeline. */

@@ -181,7 +181,7 @@ struct AgentHarnessInner<
     typing_phases: DashMap<AgentSessionId, agent_fold::domain::model::TurnPhase>,
     /// The shape each reply message was last shown with, so a report that
     /// changes nothing it shows does not rewrite it.
-    presented_shapes: DashMap<macro_uuid::Uuid, Vec<(u32, bool)>>,
+    presented_shapes: DashMap<macro_uuid::Uuid, Vec<crate::domain::presenter::SegmentShape>>,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones
@@ -391,7 +391,24 @@ where
 
     /// Save a conversation message before acknowledging its broker event. Returns its
     /// original segment and payload when the source message was already seen.
+    ///
+    /// `None` is a message no attempt can ever admit: its conversation was
+    /// deleted, or its sender may not prompt it. The caller acknowledges it
+    /// instead of having the broker redeliver it forever. A context that
+    /// another replica is changing is waited out; only one that stays busy is
+    /// an error.
     pub async fn admit_conversation_message(
+        &self,
+        session: AgentSessionId,
+        command: OpenSession,
+    ) -> Result<Option<(AgentSessionId, OpenSession)>> {
+        match self.journal_conversation_message(session, command).await {
+            Err(HarnessError::Session(AgentSessionError::Forbidden)) => Ok(None),
+            admitted => admitted.map(Some),
+        }
+    }
+
+    async fn journal_conversation_message(
         &self,
         session: AgentSessionId,
         command: OpenSession,
@@ -422,16 +439,18 @@ where
         // An event can have reserved its segment before the user pressed Start
         // fresh. Serialize first admission with reset and select the current
         // segment again; replays above always retain their original identity.
-        for _ in 0..3 {
+        // The context lease is also taken by every claim and retry of the
+        // session, each a few queries long, so a busy lease is waited out.
+        let mut backoff = std::time::Duration::from_millis(50);
+        for _ in 0..8 {
             let current = match &self.inner.conversations {
                 Some(policy) => policy.current_context(session).await?,
                 None => session,
             };
             let Some(_lease) = store.claim_context(current).await? else {
-                return Err(AgentSessionError::RuntimeUnavailable(
-                    "conversation context is changing; retry admission",
-                )
-                .into());
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(std::time::Duration::from_secs(1));
+                continue;
             };
             if let Some(policy) = &self.inner.conversations
                 && policy.current_context(session).await? != current
@@ -441,10 +460,10 @@ where
             let record = store.admit(current, channel, command).await?;
             return Ok((record.session_id, record.command));
         }
-        Err(
-            AgentSessionError::RuntimeUnavailable("conversation context changed; retry admission")
-                .into(),
+        Err(AgentSessionError::RuntimeUnavailable(
+            "conversation context stayed busy; retry admission",
         )
+        .into())
     }
 
     /// Reconcile journaled work after process loss. Only undispatched prompts

@@ -81,6 +81,7 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({}));
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({}));
 vi.mock('@core/context/channels', () => ({
   useChannel: () => () => undefined,
+  useChannelCanCall: () => () => true,
 }));
 vi.mock('@core/context/user', () => ({}));
 vi.mock('@queries/call/call', () => ({}));

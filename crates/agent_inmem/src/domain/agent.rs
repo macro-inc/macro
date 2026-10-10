@@ -992,10 +992,12 @@ async fn run_turn(
     }
     state.push_turn(prompt, turn_parts);
 
-    if was_cancelled || cancel.is_cancelled() {
-        Ok(StopReason::Cancelled)
-    } else if let Some(failure) = failure {
+    // A failure first: the idle timeout cancels the stream itself, and a turn
+    // it stopped failed rather than being stopped by the user.
+    if let Some(failure) = failure {
         Err(AcpError::internal_error().data(failure))
+    } else if was_cancelled || cancel.is_cancelled() {
+        Ok(StopReason::Cancelled)
     } else {
         Ok(StopReason::EndTurn)
     }
