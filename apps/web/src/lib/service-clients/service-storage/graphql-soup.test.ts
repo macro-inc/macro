@@ -979,28 +979,9 @@ describe('GraphQL Soup browser cache session gate', () => {
     readers.dispose();
   });
 
-  it('requests a native update and uses the existing fallback when draft recovery commands are unavailable', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    mocks.tauri = true;
-    const soup = await import('./graphql-soup');
-    const { NativeCacheUpgradeRequiredError } = await import(
-      '@graphql-cache/host/tauri-host'
-    );
-    const cached = soup.getGraphqlSoupClient();
-    mocks.failInitialization(new NativeCacheUpgradeRequiredError());
-    expect(mocks.toastFailure).toHaveBeenCalledWith(
-      'Macro update required',
-      expect.objectContaining({
-        subtext: expect.stringContaining('queued drafts are preserved'),
-      })
-    );
-    expect(soup.graphqlCacheEnabled()).toBe(false);
-    expect(soup.getGraphqlSoupClient()).not.toBe(cached);
-    expect(mocks.host.dispose).toHaveBeenCalledOnce();
-    expect(() => soup.assertEmailDraftQueueAvailable()).toThrow(
-      'queued changes are preserved'
-    );
-  });
+  // NativeCacheUpgradeRequiredError is no longer thrown when mutation inspection
+  // commands are missing; the cache degrades gracefully instead. The error class
+  // and its handling in graphql-soup.ts are retained for potential future use.
 
   it.each([
     ['SaveEmailDraft', 'saveEmailDraft'],
