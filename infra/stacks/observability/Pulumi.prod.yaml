@@ -1,5 +1,5 @@
 config:
   aws:region: us-east-2
   observability:alarmTopicArn: arn:aws:sns:us-east-2:569036502058:observability-prod-alerts
-  observability:amiId: ami-0a714f7bc630c0e2d
+  observability:amiId: ami-082c5befa76bfc246
   observability:secretArn: arn:aws:secretsmanager:us-east-2:569036502058:secret:observability/prod-TwQpBJ
