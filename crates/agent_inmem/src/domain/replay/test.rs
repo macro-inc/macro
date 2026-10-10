@@ -381,3 +381,27 @@ fn a_saved_summary_keeps_the_live_window_around_a_prompt_that_never_ran() {
         ]
     );
 }
+
+/// A `/compact` from before compaction summarized cleared the model's
+/// context; its log still replays that way.
+#[test]
+fn a_compact_that_cleared_the_context_still_clears_it_on_replay() {
+    let history = replay_history(vec![
+        prompt_frame("remember this"),
+        update_frame(message_chunk("noted")),
+        prompt_frame("/compact"),
+        update_frame(message_chunk(
+            "Compacted: the earlier conversation is no longer in the model's context.",
+        )),
+        prompt_frame("after"),
+        update_frame(message_chunk("fresh")),
+    ]);
+    let messages =
+        crate::domain::session::messages_for_turn(&history, &UserPrompt::text("continue"));
+    let texts: Vec<_> = messages
+        .iter()
+        .map(|message| message.content.message_text())
+        .collect();
+    assert_eq!(&texts[texts.len() - 3..], ["after", "fresh", "continue"]);
+    assert!(!texts.iter().any(|text| text == "remember this"));
+}

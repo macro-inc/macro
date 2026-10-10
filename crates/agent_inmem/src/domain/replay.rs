@@ -103,9 +103,13 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                     continue;
                 }
                 // An update outside any turn (the compact acknowledgement,
-                // status chatter) is presentation, not conversation.
-                if let Some((_, parts)) = open.as_mut() {
-                    apply_update(parts, notification.update);
+                // status chatter) is presentation, not conversation - except
+                // the acknowledgement of a `/compact` from before compaction
+                // summarized, which had cleared the model's context there.
+                match open.as_mut() {
+                    Some((_, parts)) => apply_update(parts, notification.update),
+                    None if cleared_context(&notification.update) => history.clear(),
+                    None => {}
                 }
             }
             _ => {}
@@ -271,6 +275,19 @@ fn unanswered_call_name(parts: &[AssistantMessagePart], id: &str) -> Option<Stri
         }
         _ => None,
     })
+}
+
+/// What a `/compact` answered when it cleared the model's context instead of
+/// summarizing it. Logs from then still carry it.
+const CLEARED_CONTEXT: &str =
+    "Compacted: the earlier conversation is no longer in the model's context.";
+
+fn cleared_context(update: &SessionUpdate) -> bool {
+    matches!(
+        update,
+        SessionUpdate::AgentMessageChunk(chunk)
+            if matches!(&chunk.content, ContentBlock::Text(text) if text.text == CLEARED_CONTEXT)
+    )
 }
 
 /// Push the open turn into the history, closing whatever it left dangling.
