@@ -1,5 +1,6 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as logger from './logger';
 import type { RawUpdate } from './shared';
 import { disposeTelemetryFor } from './telemetry';
 import { MockLiveSyncSource, MockWALStore, makeTestWAL } from './testing';
@@ -35,6 +36,119 @@ async function undeliveredCount(
 // pruneDelivered() is called by the snapshot tick after a durable snapshot save.
 
 describe('WALSyncer', () => {
+  it('retries failed initialization on demand and shares the retry across callers', async () => {
+    vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
+    const store = new MockWALStore<RawUpdate>();
+    const error = new DOMException('Temporarily unavailable', 'UnknownError');
+    const retry = Promise.withResolvers<number>();
+    const prune = vi
+      .spyOn(store, 'pruneExpired')
+      .mockRejectedValueOnce(error)
+      .mockReturnValueOnce(retry.promise);
+    const push = vi.fn(async () => true);
+    const wal = new WALSyncer(store, push);
+
+    await expect(wal.ready()).rejects.toBe(error);
+    expect(prune).toHaveBeenCalledOnce();
+    const ready = wal.ready();
+    expect(wal.ready()).toBe(ready);
+    const append = wal.append(new Uint8Array([1]));
+    expect(prune).toHaveBeenCalledTimes(2);
+    expect(await store.count()).toBe(0);
+
+    retry.resolve(0);
+    await append;
+    await wal.pendingFlush;
+    await wal.ready();
+    expect(prune).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenCalledExactlyOnceWith([new Uint8Array([1])]);
+  });
+
+  it('handles constructor setup failure even when no caller immediately awaits ready', async () => {
+    const log = vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
+    const store = new MockWALStore<RawUpdate>();
+    const error = new Error('Initial prune failed');
+    const prune = vi.spyOn(store, 'pruneExpired').mockRejectedValueOnce(error);
+    const wal = new WALSyncer(store, async () => true);
+
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: {
+            misc: expect.objectContaining({
+              errStack: error.stack,
+              'wal.stage': 'initialization',
+            }),
+          },
+        })
+      )
+    );
+    expect(prune).toHaveBeenCalledOnce();
+    await wal.ready();
+    expect(prune).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports distinct flush failures with their stacks during the same outage', async () => {
+    const log = vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
+    const store = new MockWALStore<RawUpdate>();
+    const wal = new WALSyncer(store, async () => true, 'wal-telemetry-test');
+    await wal.ready();
+    const first = new Error('Storage failed');
+    const second = new Error('Storage failed');
+    first.stack = 'Error: Storage failed\n at firstOperation';
+    second.stack = 'Error: Storage failed\n at secondOperation';
+    const getAll = vi.spyOn(store, 'getAll').mockRejectedValue(first);
+    await expect(wal.flush()).rejects.toBe(first);
+    await expect(wal.flush()).rejects.toBe(first);
+    getAll.mockRejectedValue(second);
+    await expect(wal.flush()).rejects.toBe(second);
+    await expect(wal.flush()).rejects.toBe(second);
+
+    const errors = log.mock.calls.filter(([entry]) => entry.level === 'error');
+    expect(errors.map(([entry]) => entry.context.misc?.errStack)).toEqual([
+      first.stack,
+      second.stack,
+    ]);
+  });
+
+  it('handles background storage failures once per outage and retries on the next trigger', async () => {
+    const log = vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
+    const store = new MockWALStore<RawUpdate>();
+    const push = vi.fn(async () => true);
+    const wal = new WALSyncer(store, push, 'wal-telemetry-test');
+    await wal.ready();
+    await store.append(new Uint8Array([1]));
+    const getAll = vi
+      .spyOn(store, 'getAll')
+      .mockRejectedValue(
+        new DOMException('Storage unavailable', 'UnknownError')
+      );
+
+    void wal.flush();
+    await vi.waitFor(() =>
+      expect(
+        log.mock.calls.filter(([entry]) => entry.level === 'error')
+      ).toHaveLength(1)
+    );
+    await expect(wal.flush()).rejects.toMatchObject({ name: 'UnknownError' });
+    expect(
+      log.mock.calls.filter(([entry]) => entry.level === 'error')
+    ).toHaveLength(1);
+    expect(push).not.toHaveBeenCalled();
+
+    getAll.mockRestore();
+    await wal.flush();
+    expect(push).toHaveBeenCalledExactlyOnceWith([new Uint8Array([1])]);
+
+    vi.spyOn(store, 'getAll').mockRejectedValue(
+      new DOMException('Storage unavailable', 'UnknownError')
+    );
+    await expect(wal.flush()).rejects.toMatchObject({ name: 'UnknownError' });
+    expect(
+      log.mock.calls.filter(([entry]) => entry.level === 'error')
+    ).toHaveLength(2);
+  });
+
   it('persists before delivering, marks delivered on ack', async () => {
     const live = new MockLiveSyncSource();
     const { wal, walStore } = makeWAL(live);
