@@ -326,6 +326,37 @@ still receives the authoritative copy.
 
 ## Dashboards and alert migration
 
+### Service exploration
+
+Nix installs the signed Logs, Metrics, and Traces Drilldown apps through
+`services.grafana.declarativePlugins`. Their versions and download hashes come
+from the pinned `flake.lock`; no plugin download or update happens at boot.
+Use **Drilldown → Logs** to choose a service and inspect its log volume, fields,
+and patterns, or **Drilldown → Traces** to filter services, errors, and latency.
+The dev telemetry dashboard also has a service selector and links to all three
+Drilldown apps. The service selector discovers names from dev logs; a service
+that emits only traces or metrics can be found in the corresponding Drilldown.
+
+Loki enables pattern ingestion, log-level detection, and volume queries. Tempo's
+metrics generator enables TraceQL metrics, span metrics, and service graphs.
+Generator WAL and local blocks use the retained data volume; metrics blocks flush
+to the existing trace bucket, and generated metrics go to local Prometheus.
+These metrics start accumulating after this image is deployed. They describe
+received spans, so sampling and missing instrumentation can prevent parity with
+Datadog request counts. Span names remain in Tempo rather than becoming unbounded
+Prometheus labels. Generated series are capped at 50,000; monitor
+`tempo_metrics_generator_registry_series_limited_total` and local-block discards
+before expanding ingestion. The existing Tempo memory limit remains in force.
+
+Tempo spans link to the service's logs in a time window and its generated metrics;
+logs carrying an OTLP trace ID link back to the trace. FireLens logs do not always
+carry trace IDs, so service/time correlation is not a claim of exact trace-to-log
+matching. Service graph edges require correctly related client/server spans.
+Profiles, database query monitoring, RUM/session replay, and complete Datadog
+dashboard/monitor migration remain separate coverage work.
+
+### Provisioned dashboards and alerts
+
 Nix provisions the `Macro` dashboard folder, a dev telemetry dashboard, and a
 CloudWatch database/Lambda dashboard. CloudWatch reads native metrics in Virginia;
 it does not replicate their history to Ohio, so these panels depend on Virginia
