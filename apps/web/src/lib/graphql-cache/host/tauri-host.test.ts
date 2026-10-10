@@ -15,10 +15,7 @@ import {
   type EntityFilterCacheResult,
   INITIAL_CACHE_REVISION,
 } from '../protocol';
-import {
-  createTauriCacheHost,
-  NativeCacheUpgradeRequiredError,
-} from './tauri-host';
+import { createTauriCacheHost } from './tauri-host';
 
 type EventCallback = (event: { payload: Record<string, unknown> }) => void;
 
@@ -144,7 +141,7 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
-  it('preserves the old queue and refuses writes when an OTA outpaces the native runtime', async () => {
+  it('degrades gracefully when mutation inspection is unavailable on older binaries', async () => {
     const onInitializationError = vi.fn();
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'graphql_cache_inspect_mutations')
@@ -155,24 +152,10 @@ describe('createTauriCacheHost', () => {
       scope: 'old-native',
       onInitializationError,
     });
-    await expect(
-      host.claimNextMutation('runner', 10, 100)
-    ).rejects.toBeInstanceOf(NativeCacheUpgradeRequiredError);
-    await expect(
-      host.enqueueOptimisticMutation(
-        {
-          uuid: '00000000-0000-4000-8000-000000000001',
-          query: 'mutation Save { save { id } }',
-          data: {},
-        },
-        { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 100 }
-      )
-    ).rejects.toBeInstanceOf(NativeCacheUpgradeRequiredError);
-    expect(onInitializationError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('Update Macro'),
-      })
-    );
+    // Initialization succeeds; inspectMutations returns empty instead of failing.
+    const mutations = await host.inspectMutations();
+    expect(mutations).toEqual([]);
+    expect(onInitializationError).not.toHaveBeenCalled();
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
       'graphql_cache_init_with_schema',
       'graphql_cache_inspect_mutations',

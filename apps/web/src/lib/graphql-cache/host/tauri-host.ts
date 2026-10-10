@@ -137,6 +137,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   // Native binaries before the calendar range index answer `unsupported`, so
   // the calendar keeps reading from the network until the app updates.
   let calendarUnavailable = false;
+  // Binaries before mutation inspection still work; draft recovery is unavailable.
+  let mutationInspectionUnavailable = false;
   const isMissingCommand = (error: unknown, command: string): boolean =>
     error instanceof Error && error.message === `Command ${command} not found`;
 
@@ -265,16 +267,15 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     });
     // Probe before any enqueue/claim. Older binaries silently ignore new
     // metadata arguments, so waiting until a draft fails would lose correlation.
+    // Missing command is non-fatal: the cache works, draft recovery is unavailable.
     try {
       await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message === `Command ${INSPECT_MUTATIONS_COMMAND} not found`
-      ) {
-        throw new NativeCacheUpgradeRequiredError();
+      if (isMissingCommand(error, INSPECT_MUTATIONS_COMMAND)) {
+        mutationInspectionUnavailable = true;
+      } else {
+        throw error;
       }
-      throw error;
     }
   }
   const ready = initialize();
@@ -536,6 +537,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async inspectMutations() {
       await ready;
+      if (mutationInspectionUnavailable) return [];
       return await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
     },
     async claimNextMutation(
