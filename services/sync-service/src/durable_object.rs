@@ -50,6 +50,7 @@ pub mod status_codes {
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
 mod document_api;
+mod document_delete;
 mod document_effects;
 mod surface_api;
 pub(crate) mod surface_migration;
@@ -59,6 +60,7 @@ use surface_api::{SurfaceLifecycle, session_kind_from_storage_key};
 
 mod path {
     pub const CONNECT: &str = "connect";
+    pub const DELETE: &str = "delete";
     pub const EXISTS: &str = "exists";
     pub const INITIALIZE: &str = "initialize";
     pub const RAW: &str = "raw";
@@ -426,8 +428,9 @@ impl DocumentSyncSession {
                     .await;
             }
 
-            // EXIST, PEER, and WAKEUP don't require auth
+            // EXIST, PEER, and WAKEUP don't require auth; DELETE requires the internal key
             (path_needs_claims, Some(document_id)) => match path_needs_claims {
+                path::DELETE => return self.delete_handler(&req, document_id).await,
                 path::EXISTS => return self.exists_handler(document_id).await,
                 path::PEER => {
                     return self
@@ -946,6 +949,9 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
         .insert("/document/{document_id}/connect", path::CONNECT)
         .unwrap();
     router
+        .insert("/document/{document_id}/delete", path::DELETE)
+        .unwrap();
+    router
         .insert("/document/{document_id}/exists", path::EXISTS)
         .unwrap();
     router
@@ -1248,6 +1254,11 @@ impl DurableObject for DocumentSyncSession {
             return Ok(());
         }
         worker_rs_otel::scope(&self.env, &self.state, async {
+            // Sockets closed by `delete_handler` report back after the session is gone.
+            if self.try_document_id().await?.is_none() {
+                self.forget_websocket_metadata(&ws).await;
+                return Ok(());
+            }
             self.validate_surface_sockets(None).await?;
             let peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
             for peer_id in peer_ids {
