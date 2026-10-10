@@ -6,16 +6,16 @@ use tracing::Level;
 use uuid::Uuid;
 
 use super::log_non_retryable_error;
-use crate::pubsub::log_capture::LevelLog;
+use crate::pubsub::log_capture::LevelCapture;
 
 fn most_severe_level_logged(reason: FailureReason) -> Option<Level> {
-    let (levels, _guard) = LevelLog::capture();
     let data = GmailOpsPubsubMessage {
         link_id: Uuid::nil(),
         operation: GmailOpsOperation::DeleteLabel(DeleteLabelPayload {
             provider_label_id: "label".to_string(),
         }),
     };
+    let capture = LevelCapture::start();
 
     log_non_retryable_error(
         &data,
@@ -25,7 +25,7 @@ fn most_severe_level_logged(reason: FailureReason) -> Option<Level> {
         },
     );
 
-    levels.most_severe()
+    capture.most_severe()
 }
 
 #[test]

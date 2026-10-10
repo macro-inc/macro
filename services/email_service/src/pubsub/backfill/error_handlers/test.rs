@@ -6,10 +6,9 @@ use tracing::Level;
 use uuid::Uuid;
 
 use super::handle_retryable_error;
-use crate::pubsub::log_capture::LevelLog;
+use crate::pubsub::log_capture::LevelCapture;
 
 async fn most_severe_level_logged(reason: FailureReason) -> Option<Level> {
-    let (levels, _guard) = LevelLog::capture();
     let data = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::BackfillThread(JobScopedPayload {
             link_id: Uuid::nil(),
@@ -20,6 +19,7 @@ async fn most_severe_level_logged(reason: FailureReason) -> Option<Level> {
             },
         }),
     };
+    let capture = LevelCapture::start();
 
     handle_retryable_error(
         &data,
@@ -31,7 +31,7 @@ async fn most_severe_level_logged(reason: FailureReason) -> Option<Level> {
     .await
     .unwrap();
 
-    levels.most_severe()
+    capture.most_severe()
 }
 
 #[tokio::test]

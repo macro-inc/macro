@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::sync::Once;
 use std::time::Duration;
 
 use tracing::{Event, Level, Subscriber};
@@ -13,12 +14,50 @@ use super::super::models::{
 use super::EmailApiClientServiceImpl;
 use super::test_support::{Call, FakeRateLimiter, FakeRepository, FakeTokenSource, call_log};
 
-#[derive(Clone, Default)]
-struct LevelLog(Arc<Mutex<Vec<Level>>>);
+thread_local! {
+    static CAPTURED_LEVELS: RefCell<Option<Vec<Level>>> = const { RefCell::new(None) };
+}
 
-impl<S: Subscriber> Layer<S> for LevelLog {
+/// Records event levels on threads with an active [`LevelCapture`].
+///
+/// It is installed as the process-wide default because a thread-scoped
+/// default races with other test threads: a callsite they register first can
+/// cache "never" and drop this thread's events.
+struct CapturedLevelsLayer;
+
+impl<S: Subscriber> Layer<S> for CapturedLevelsLayer {
     fn on_event(&self, event: &Event<'_>, _: Context<'_, S>) {
-        self.0.lock().unwrap().push(*event.metadata().level());
+        CAPTURED_LEVELS.with_borrow_mut(|levels| {
+            if let Some(levels) = levels {
+                levels.push(*event.metadata().level());
+            }
+        });
+    }
+}
+
+/// Records the levels of events logged on this thread until dropped.
+struct LevelCapture;
+
+impl LevelCapture {
+    fn start() -> Self {
+        static INSTALL: Once = Once::new();
+        INSTALL.call_once(|| {
+            tracing::subscriber::set_global_default(Registry::default().with(CapturedLevelsLayer))
+                .expect("no other test installs a global subscriber");
+        });
+        CAPTURED_LEVELS.set(Some(Vec::new()));
+        Self
+    }
+
+    fn most_severe(&self) -> Option<Level> {
+        // `tracing` orders levels by verbosity, so the most severe is the minimum.
+        CAPTURED_LEVELS.with_borrow(|levels| levels.iter().flatten().min().copied())
+    }
+}
+
+impl Drop for LevelCapture {
+    fn drop(&mut self) {
+        CAPTURED_LEVELS.set(None);
     }
 }
 
@@ -28,14 +67,13 @@ async fn most_severe_level_logged(
     token: Result<AccessToken, TokenError>,
     provider_error: EmailApiError,
 ) -> Option<Level> {
-    let levels = LevelLog::default();
-    let _guard = tracing::subscriber::set_default(Registry::default().with(levels.clone()));
     let calls = call_log();
     let service = EmailApiClientServiceImpl::new(
         FakeRepository::failing_with(calls.clone(), provider_error),
         FakeTokenSource::new(calls.clone(), token),
         FakeRateLimiter::new(calls, rate_limit),
     );
+    let capture = LevelCapture::start();
 
     assert!(
         service
@@ -44,8 +82,7 @@ async fn most_severe_level_logged(
             .is_err()
     );
 
-    // `tracing` orders levels by verbosity, so the most severe is the minimum.
-    levels.0.lock().unwrap().iter().min().copied()
+    capture.most_severe()
 }
 
 #[tokio::test]
