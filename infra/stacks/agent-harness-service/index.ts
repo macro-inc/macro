@@ -147,6 +147,12 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
       name: 'GITHUB_PULL_REQUEST_PATCH_BUCKET',
       value: githubPullRequestPatchBucketName,
     },
+    // Required at startup: the harness rewrites static-file attachment links
+    // against this base before any model sees them.
+    {
+      name: 'STATIC_FILE_SERVICE_URL',
+      value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
+    },
     // Datadog
     {
       name: 'DD_SERVICE',
