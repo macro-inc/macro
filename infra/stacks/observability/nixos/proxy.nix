@@ -83,6 +83,15 @@ in
         "~ ^/prometheus/api/v1/(metadata|status/buildinfo|status/config|rules|alerts|targets|targets/metadata)$" =
           queryLocation "127.0.0.1:9090" "GET";
         "~ ^/loki/loki/api/v1/(query|query_range)$" = queryLocation "127.0.0.1:3100" "GET POST";
+        "= /loki/loki/api/v1/drilldown-limits" =
+          let
+            location = queryLocation "127.0.0.1:3100" "GET";
+          in
+          location
+          // {
+            # Loki's limits handler requires the single-tenant ID even with auth disabled.
+            extraConfig = location.extraConfig + "proxy_set_header X-Scope-OrgID fake;";
+          };
         "~ ^/loki/loki/api/v1/(labels|label/[^/]+/values|series|index/stats|index/volume|index/volume_range|patterns|tail|status/buildinfo|format_query|detected_fields|detected_labels|detected_field/[^/]+/values)$" =
           let
             location = queryLocation "127.0.0.1:3100" "GET";

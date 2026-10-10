@@ -39,6 +39,7 @@
       enabled = true;
       dir = "/srv/observability/loki/wal";
     };
+    pattern_ingester.enabled = true;
     compactor = {
       working_directory = "/srv/observability/loki/compactor";
       retention_enabled = true;
@@ -47,6 +48,8 @@
     limits_config = {
       retention_period = "720h";
       allow_structured_metadata = true;
+      volume_enabled = true;
+      discover_log_levels = true;
       ingestion_rate_mb = 8;
       ingestion_burst_size_mb = 16;
       max_query_parallelism = 4;
@@ -68,6 +71,43 @@
       lifecycler.address = "127.0.0.1";
     };
     compactor.compaction.block_retention = "168h";
+    metrics_generator = {
+      ring.instance_addr = "127.0.0.1";
+      processor = {
+        service_graphs.dimensions = [ "deployment.environment" ];
+        local_blocks = {
+          filter_server_spans = false;
+          flush_to_storage = true;
+          max_live_traces = 10000;
+          max_block_bytes = 50000000;
+          concurrent_blocks = 2;
+        };
+        span_metrics = {
+          # Keep unbounded span names out of Prometheus; they remain searchable in Tempo.
+          intrinsic_dimensions.span_name = false;
+          dimensions = [ "deployment.environment" ];
+        };
+      };
+      traces_storage.path = "/srv/observability/tempo/generator/traces";
+      storage = {
+        path = "/srv/observability/tempo/generator/wal";
+        remote_write = [
+          {
+            url = "http://127.0.0.1:9090/api/v1/write";
+            send_exemplars = true;
+          }
+        ];
+      };
+    };
+    overrides.defaults.metrics_generator = {
+      processors = [
+        "local-blocks"
+        "span-metrics"
+        "service-graphs"
+      ];
+      max_active_series = 50000;
+    };
+    query_frontend.metrics.concurrent_jobs = 4;
     storage.trace = {
       backend = "s3";
       wal.path = "/srv/observability/tempo/wal";
