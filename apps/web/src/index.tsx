@@ -22,13 +22,18 @@ import { Root } from './routes/Root';
 if (isTauri()) {
   const originalFetch = window.fetch;
   window.fetch = new Proxy(originalFetch, {
-    async apply(target, thisArg, args) {
+    apply: (target, thisArg, args) => {
       const url = args[0];
       // Resolve bundled asset paths before checking the existing localhost bypass.
-      const urlString = new URL(
-        url instanceof Request ? url.url : String(url),
-        document.baseURI
-      ).href;
+      let urlString: string;
+      try {
+        urlString = new URL(
+          url instanceof Request ? url.url : String(url),
+          document.baseURI
+        ).href;
+      } catch (error) {
+        return Promise.reject(error);
+      }
       if (urlString.includes('localhost')) {
         return target.apply(thisArg, args as Parameters<typeof fetch>);
       }
