@@ -1,4 +1,5 @@
 import { DatabaseQueryNode } from '@macro-inc/lexical-core/nodes/DatabaseQueryNode';
+import { DocumentCardNode } from '@macro-inc/lexical-core/nodes/DocumentCardNode';
 import { describe, expect, it } from 'vitest';
 import { availableActions } from './available-actions';
 import type { Action } from './types';
@@ -9,11 +10,20 @@ const run = () => {};
 const actions: Action[] = [
   {
     id: 'database-query',
+    name: 'Query',
+    keywords: ['query'],
+    category: 'Media',
+    icon,
+    dependencies: [DatabaseQueryNode],
+    action: run,
+  },
+  {
+    id: 'database',
     name: 'Database',
     keywords: ['database'],
     category: 'Media',
     icon,
-    dependencies: [DatabaseQueryNode],
+    dependencies: [DocumentCardNode],
     action: run,
   },
   {
@@ -33,7 +43,7 @@ describe('slash menu actions', () => {
         databasesEnabled: true,
         hasNodes: () => true,
       }).map((action) => action.id)
-    ).toEqual(['database-query', 'paragraph']);
+    ).toEqual(['database-query', 'database', 'paragraph']);
   });
 
   it('leaves the database answer out while databases are off', () => {
@@ -58,6 +68,6 @@ describe('slash menu actions', () => {
         ignoreActionIds: ['paragraph'],
         hasNodes: () => true,
       }).map((action) => action.id)
-    ).toEqual(['database-query']);
+    ).toEqual(['database-query', 'database']);
   });
 });

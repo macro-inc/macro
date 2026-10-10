@@ -253,7 +253,11 @@ export function ActionMenu(props: {
 
   onMount(() => {
     const focusOut = () => {
-      closeMenu();
+      // A newly inserted decorator can focus a control during reconciliation.
+      // Dispatch after that commit so closing the menu gets a writable state.
+      queueMicrotask(() => {
+        if (isOpen()) closeMenu();
+      });
     };
     document.addEventListener('focusout', focusOut);
     onCleanup(() => {

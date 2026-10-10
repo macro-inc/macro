@@ -97,7 +97,15 @@ function documentMentionEntityType(blockName: string): string {
   return (
     match(blockName)
       .with(
-        P.union('channel', 'project', 'chat', 'call', 'automation', 'form'),
+        P.union(
+          'channel',
+          'project',
+          'chat',
+          'call',
+          'automation',
+          'form',
+          'database'
+        ),
         (kind) => kind
       )
       // A routine is still referenced under its old item type.
@@ -137,7 +145,8 @@ export function $extractChannelMentions(): ChannelMention[] {
   for (const { node } of $dfsIterator($getRoot())) {
     if (
       $isDocumentMentionNode(node) ||
-      ($isDocumentCardNode(node) && node.getBlockName() === 'form')
+      ($isDocumentCardNode(node) &&
+        (node.getBlockName() === 'form' || node.getBlockName() === 'database'))
     ) {
       push({
         entityType: documentMentionEntityType(node.getBlockName()),

@@ -6,6 +6,7 @@ export type MessageReferenceKind =
   | 'bot'
   | 'document'
   | 'form'
+  | 'database'
   | 'channel'
   | 'thread'
   | 'call'
@@ -38,6 +39,7 @@ export function messageReference(
         'bot',
         'document',
         'form',
+        'database',
         'channel',
         'thread',
         'call',

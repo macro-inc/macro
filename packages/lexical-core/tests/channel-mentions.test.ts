@@ -6,6 +6,15 @@ function documentMention(id: string, blockName: string): string {
 }
 
 describe('extractChannelMentionsFromMarkdown', () => {
+  it('keeps an expanded database referenced and deduplicates its compact mention', () => {
+    const card =
+      '<m-document-card>{"documentId":"db-1","documentName":"Tasks","blockName":"database"}</m-document-card>';
+    expect(
+      extractChannelMentionsFromMarkdown(
+        `${card}\n\n${documentMention('db-1', 'database')}`
+      )
+    ).toEqual([{ entityType: 'database', entityId: 'db-1' }]);
+  });
   it('returns no mentions for plain text', () => {
     expect(extractChannelMentionsFromMarkdown('just some text')).toEqual([]);
   });
