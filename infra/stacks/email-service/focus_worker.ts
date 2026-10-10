@@ -119,7 +119,11 @@ export class EmailFocusWorker extends pulumi.ComponentResource {
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: 512,
               memory: 718, // 1024 - 256 for datadog - 50 for log_router
-              environment: [...containerEnvVars],
+              // Trace as its own service so worker errors stay out of email-service's APM.
+              environment: [
+                ...containerEnvVars.filter((env) => env.name !== 'DD_SERVICE'),
+                { name: 'DD_SERVICE', value: BASE_NAME },
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
