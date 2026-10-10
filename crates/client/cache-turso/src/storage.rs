@@ -997,6 +997,13 @@ impl Storage for TursoStorage {
             reconciliation
                 .validate()
                 .map_err(|_| TursoStorageError::InvalidInput)?;
+            let metadata =
+                cache_core::durable_intent::source_metadata(&entry.optimistic.optimistic_data_json);
+            let replacing = metadata
+                .as_ref()
+                .and_then(|v| v.get("replace"))
+                .and_then(|value| value.as_bool())
+                == Some(true);
             let mutation_values = mutation_values(&entry)?;
             let updates = encode_record_updates(&entry.optimistic.normalized_updates);
             let connection = self.connection();
@@ -1011,16 +1018,78 @@ impl Storage for TursoStorage {
                     "SELECT m.id, m.lease_expires_at_ms, m.attempt_count, o.optimistic_data_json FROM mutation_queue m JOIN optimistic_layers o ON o.mutation_id = m.id WHERE m.uuid = ?1 AND m.superseded = 0",
                     vec![text(&entry.uuid.to_string())],
                 )?;
+                let replacement_id = if replacing {
+                    collision
+                        .first()
+                        .map(|row| required_i64(row, 0))
+                        .transpose()?
+                } else {
+                    None
+                };
+                let rows = driver::query(
+                    &connection,
+                    RECORD_GET,
+                    vec![text(cache_core::durable_intent::TYPENAME), text("catalog")],
+                )?;
+                let mut catalog = match rows.first() {
+                    Some(row) => decode_record(&required_blob(row, 0)?).map_err(|_| invariant())?,
+                    None => Record::default(),
+                };
+                if let Some(metadata) = &metadata {
+                    cache_core::durable_intent::check_exclusivity(
+                        &catalog,
+                        entry.uuid,
+                        metadata,
+                        |key| {
+                            let key = RecordKey::from_entity(key)?;
+                            let rows = driver::query(
+                                &connection,
+                                RECORD_GET,
+                                vec![text(&key.typename), text(&key.id)],
+                            )?;
+                            rows.first()
+                                .map(|row| {
+                                    decode_record(&required_blob(row, 0)?).map_err(|_| invariant())
+                                })
+                                .transpose()
+                        },
+                    )?;
+                }
+                let previous = catalog
+                    .fields
+                    .get(&entry.uuid.to_string())
+                    .and_then(|value| {
+                        if let cache_core::value::CacheValue::String(value) = value {
+                            Some(value.as_str())
+                        } else {
+                            None
+                        }
+                    });
+                let locally_cancelled = replacing
+                    && collision.first().is_some_and(|row| {
+                        required_text(row, 3)
+                            .ok()
+                            .zip(required_i64(row, 2).ok())
+                            .is_some_and(|(source, count)| {
+                                cache_core::durable_intent::locally_cancelled(
+                                    previous,
+                                    &source,
+                                    count as u32,
+                                )
+                            })
+                    });
                 let kind = match collision.as_slice() {
                     [] => MutationUpsertKind::Inserted,
                     [row] if row.len() == 4 => {
                         let existing = mutation_id_from_row(required_i64(row, 0)?)?;
-                        if cache_core::queue::collision_stays_active(
-                            nullable_i64(row, 1)?,
-                            now_ms,
-                            required_i64(row, 2)? > 0,
-                            &required_text(row, 3)?,
-                        ) {
+                        if !replacing
+                            && cache_core::queue::collision_stays_active(
+                                nullable_i64(row, 1)?,
+                                now_ms,
+                                required_i64(row, 2)? > 0,
+                                &required_text(row, 3)?,
+                            )
+                        {
                             require_changed(
                                 driver::execute(
                                     &connection,
@@ -1054,7 +1123,39 @@ impl Storage for TursoStorage {
                     driver::execute(&connection, QUEUE_INSERT, mutation_values)?,
                     1,
                 )?;
-                let id = mutation_id_from_row(connection.last_insert_rowid())?;
+                let inserted = connection.last_insert_rowid();
+                let sql_id = replacement_id.unwrap_or(inserted);
+                if replacement_id.is_some() {
+                    require_changed(
+                        driver::execute(
+                            &connection,
+                            "UPDATE mutation_queue SET id = ?1 WHERE id = ?2",
+                            vec![Value::from_i64(sql_id), Value::from_i64(inserted)],
+                        )?,
+                        1,
+                    )?;
+                }
+                let id = mutation_id_from_row(sql_id)?;
+                if let Some(metadata) = &metadata {
+                    let key = cache_core::durable_intent::key();
+                    cache_core::durable_intent::update(
+                        &mut catalog,
+                        entry.uuid,
+                        metadata,
+                        "pending",
+                        None,
+                        locally_cancelled,
+                    );
+                    driver::execute(
+                        &connection,
+                        RECORD_UPSERT,
+                        vec![
+                            text(key.typename().expect("catalog type")),
+                            text("catalog"),
+                            Value::from_blob(encode_record(&catalog)),
+                        ],
+                    )?;
+                }
                 mutation_retry::save(
                     &connection,
                     mutation_id_to_sql(id)?,
@@ -1102,6 +1203,45 @@ impl Storage for TursoStorage {
         let connection = self.connection();
         let result = driver::read_transaction(&connection, || {
             load_optimistic_projections(&connection, keys)
+        });
+        self.latch_result(result)
+    }
+
+    async fn retire_mutation_intent(&mut self, uuid: uuid::Uuid) -> Result<bool, Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::write_transaction(&connection, || {
+            if !driver::query(
+                &connection,
+                "SELECT id FROM mutation_queue WHERE uuid = ?1 LIMIT 1",
+                vec![text(&uuid.to_string())],
+            )?
+            .is_empty()
+            {
+                return Ok(false);
+            }
+            let rows = driver::query(
+                &connection,
+                RECORD_GET,
+                vec![text(cache_core::durable_intent::TYPENAME), text("catalog")],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(false);
+            };
+            let mut record = decode_record(&required_blob(row, 0)?).map_err(|_| invariant())?;
+            if record.fields.remove(&uuid.to_string()).is_none() {
+                return Ok(false);
+            }
+            driver::execute(
+                &connection,
+                RECORD_UPSERT,
+                vec![
+                    text(cache_core::durable_intent::TYPENAME),
+                    text("catalog"),
+                    Value::from_blob(encode_record(&record)),
+                ],
+            )?;
+            Ok(true)
         });
         self.latch_result(result)
     }
@@ -1342,6 +1482,10 @@ impl Storage for TursoStorage {
             driver::write_transaction(&connection, || {
                 if !claim_is_current(&connection, sql_id, &claim)?
                     || !queue_identity_matches(&connection, &reconciliation.expected_queue)?
+                    || !queue_tail_generations_match(
+                        &connection,
+                        &reconciliation.expected_tail_generations,
+                    )?
                 {
                     return Ok(false);
                 }
@@ -1349,13 +1493,31 @@ impl Storage for TursoStorage {
                 {
                     let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
                     for (index, entry) in entries.iter().enumerate() {
+                        let value = if entry.key.typename == cache_core::durable_intent::TYPENAME {
+                            let rows = driver::query(
+                                &connection,
+                                RECORD_GET,
+                                vec![text(&entry.key.typename), text(&entry.key.id)],
+                            )?;
+                            let mut record = match rows.first() {
+                                Some(row) => decode_record(&required_blob(row, 0)?)
+                                    .map_err(|_| invariant())?,
+                                None => Record::default(),
+                            };
+                            record.fields.extend(
+                                decode_record(&entry.value).map_err(|_| invariant())?.fields,
+                            );
+                            encode_record(&record)
+                        } else {
+                            entry.value.clone()
+                        };
                         require_changed(
                             driver::execute_prepared(
                                 &mut statement,
                                 vec![
                                     text(&entry.key.typename),
                                     text(&entry.key.id),
-                                    Value::from_blob(entry.value.clone()),
+                                    Value::from_blob(value),
                                 ],
                             )?,
                             1,
@@ -1430,6 +1592,10 @@ impl Storage for TursoStorage {
             driver::write_transaction(&connection, || {
                 if !claim_is_current(&connection, sql_id, &claim)?
                     || !queue_identity_matches(&connection, &reconciliation.expected_queue)?
+                    || !queue_tail_generations_match(
+                        &connection,
+                        &reconciliation.expected_tail_generations,
+                    )?
                 {
                     return Ok(false);
                 }
@@ -1675,6 +1841,28 @@ fn queue_snapshot_matches(
                 != expected.lease_generation
             || nullable_i64(row, 5)? != expected.lease_expires_at_ms
             || nullable_i64(row, 6)? != expected.next_attempt_at_ms
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn queue_tail_generations_match(
+    connection: &Arc<Connection>,
+    expected: &[(u64, u64)],
+) -> Result<bool, TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT id, lease_generation FROM mutation_queue ORDER BY id ASC LIMIT -1 OFFSET 1",
+        Vec::new(),
+    )?;
+    if rows.len() != expected.len() {
+        return Ok(false);
+    }
+    for (row, (id, generation)) in rows.iter().zip(expected) {
+        if mutation_id_from_row(required_i64(row, 0)?)? != *id
+            || required_i64(row, 1)? != generation_to_sql(*generation)?
         {
             return Ok(false);
         }

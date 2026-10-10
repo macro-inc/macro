@@ -19,13 +19,13 @@ const input: SendEmailDraft = {
     to: [{ email: 'recipient@example.com' }],
   },
 };
-const identity: PersistedEmailIdentity = {
+const identity = {
   draftId: 'draft',
   threadId: 'thread',
   inboxId: 'inbox',
-};
+} satisfies PersistedEmailIdentity;
 
-function setup() {
+function setup(queueActive = false) {
   return createRoot((dispose) => {
     const draft = message('draft', {
       is_draft: true,
@@ -46,6 +46,7 @@ function setup() {
       thread([message('received'), draft])
     );
     const compose = createComposeContext();
+    compose.delivery.queueActive = () => queueActive;
     const request = Promise.withResolvers<PersistedEmailIdentity>();
     vi.mocked(compose.delivery.sendMessage).mockReturnValue(request.promise);
     const optimistic = createOptimisticThreadSend(
@@ -55,6 +56,62 @@ function setup() {
     return { ...optimistic, compose, request, snapshot, setSnapshot, dispose };
   });
 }
+
+it('leaves durable queued sends in the draft projection until the authoritative source changes', async () => {
+  const state = setup(true);
+  try {
+    const send = state.delivery.sendMessage(input);
+    expect(state.compose.delivery.sendMessage).toHaveBeenCalledWith(input);
+    expect(state.source.thread()).toBe(state.snapshot());
+    expect(state.source.thread()?.messages[1]).toMatchObject({
+      is_draft: true,
+      body_text: 'Older body',
+      labels: [{ provider_label_id: 'DRAFT' }],
+    });
+    const queued = {
+      ...identity,
+      sendAttemptId: 'send-attempt',
+      persistence: 'queued' as const,
+    };
+    state.request.resolve(queued);
+    await expect(send).resolves.toEqual(queued);
+    expect(state.source.thread()).toBe(state.snapshot());
+    state.setSnapshot(thread([message('received')]));
+    expect(state.source.thread()?.messages.map((value) => value.db_id)).toEqual(
+      ['received']
+    );
+  } finally {
+    state.dispose();
+  }
+});
+
+it.each([true, false])(
+  'propagates Undo restoration ownership (draftRestored=%s)',
+  async (draftRestored) => {
+    const state = setup(true);
+    try {
+      const result = { draftRestored };
+      vi.mocked(state.compose.delivery.undoSend).mockImplementation(
+        async ({ onUndone }) => {
+          await onUndone(result);
+        }
+      );
+      const onUndone = vi.fn();
+      await state.delivery.undoSend({
+        ...identity,
+        sendAttemptId: 'send-attempt',
+        onUndone,
+      });
+      expect(onUndone).toHaveBeenCalledExactlyOnceWith(result);
+      expect(state.compose.delivery.undoSend).toHaveBeenCalledWith(
+        expect.objectContaining({ sendAttemptId: 'send-attempt' })
+      );
+      expect(state.source.thread()).toBe(state.snapshot());
+    } finally {
+      state.dispose();
+    }
+  }
+);
 
 it.each(['reply', 'standalone'] as const)(
   'shows a %s before send settles and retains it until the thread refreshes',

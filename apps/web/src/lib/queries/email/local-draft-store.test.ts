@@ -326,3 +326,133 @@ describe('notification failures do not affect durable commits', () => {
     expect(listener).toHaveBeenCalledOnce();
   });
 });
+
+const sendIntent = (
+  uuid = 'attempt'
+): import('./send-queue').EmailSendIntent => ({
+  uuid,
+  phase: 'pending',
+  locallyCancelled: false,
+  metadata: {
+    kind: 'email-send-v1',
+    payload: {
+      input: {
+        attempt: { attemptId: uuid, linkId: 'inbox' },
+        message: {
+          draftId: 'local',
+          subject: 'Approved',
+          linkId: 'inbox',
+          bodyText: 'Approved body',
+        },
+        attachmentIds: [],
+        forwardedAttachmentIds: [],
+      },
+      draft: {
+        draftId: 'local',
+        threadDbId: 'thread',
+        senderEmail: 'owner@example.com',
+        optimisticBodyHtml: null,
+        senderLinkId: 'inbox',
+        subject: 'Approved',
+        bodyText: 'Approved body',
+      },
+      workingCopy: {
+        key: 'local',
+        generation: 'generation',
+        revision: 1,
+        attachments: [],
+      },
+    },
+  },
+});
+
+describe('independent send recovery records', () => {
+  it('retains the frozen snapshot and attempt identity independently of the cache', async () => {
+    const name = crypto.randomUUID();
+    const first = open(name);
+    const owner = await first.activate('owner');
+    await first.save(owner, snapshot());
+    await first.putSend(owner, sendIntent(), true);
+    await first.close();
+    const second = open(name);
+    const restoredOwner = await second.activate('owner');
+    expect(await second.sends(restoredOwner)).toEqual([sendIntent()]);
+    await expect(
+      second.save(restoredOwner, snapshot('Late edit', 1))
+    ).rejects.toThrow('Cancel and restore');
+    expect((await second.read(restoredOwner, 'local'))?.content.subject).toBe(
+      'Keep this draft'
+    );
+  });
+  it('atomically admits only one send across tabs and rejects a stale snapshot', async () => {
+    const name = crypto.randomUUID();
+    const first = open(name),
+      second = open(name);
+    const owner = await first.activate('owner');
+    await second.activate('owner', owner.epoch);
+    await first.save(owner, snapshot());
+    const results = await Promise.allSettled([
+      first.putSend(owner, sendIntent('one'), true),
+      second.putSend(owner, sendIntent('two'), true),
+    ]);
+    expect(
+      results.filter((result) => result.status === 'fulfilled')
+    ).toHaveLength(1);
+    expect(await first.sends(owner)).toHaveLength(1);
+    await first.removeSend(owner, (await first.sends(owner))[0].uuid);
+    await first.save(owner, snapshot('New edit', 1));
+    await expect(first.putSend(owner, sendIntent(), true)).rejects.toThrow(
+      'changed'
+    );
+  });
+  it('keeps cancellation and restoration when a late original send settles', async () => {
+    const store = open(),
+      owner = await store.activate('owner');
+    await store.save(owner, snapshot());
+    await store.putSend(
+      owner,
+      { ...sendIntent(), cancellationRequested: true },
+      true
+    );
+    await store.putSend(owner, sendIntent());
+    expect((await store.sends(owner))[0].cancellationRequested).toBe(true);
+    const restored = sendIntent();
+    restored.metadata.payload.restoring = true;
+    await store.putSend(owner, restored);
+    await store.putSend(owner, sendIntent());
+    expect((await store.sends(owner))[0].metadata.payload.restoring).toBe(true);
+    await expect(
+      store.save(owner, snapshot('Restored edit', 1))
+    ).resolves.toMatchObject({ revision: 2 });
+  });
+  it('clears send content and fences old sessions on account changes and logout', async () => {
+    const store = open(),
+      owner = await store.activate('owner');
+    await store.save(owner, snapshot());
+    await store.putSend(owner, sendIntent(), true);
+    const next = await store.activate('next', 'next-epoch');
+    expect(await store.sends(next)).toEqual([]);
+    await expect(store.putSend(owner, sendIntent())).rejects.toThrow(
+      'no longer active'
+    );
+    await store.clear(true, next.epoch);
+    expect(await store.sends(next)).toEqual([]);
+  });
+});
+
+it('a late old restoration cannot release a newer send reservation', async () => {
+  const store = open(),
+    owner = await store.activate('owner');
+  await store.save(owner, snapshot());
+  const old = sendIntent('old');
+  old.metadata.payload.restoring = true;
+  await store.putSend(owner, old);
+  await store.putSend(owner, sendIntent('new'), true);
+  await store.putSend(owner, { ...old, phase: 'committed' });
+  await expect(store.save(owner, snapshot('Late edit', 1))).rejects.toThrow(
+    'Cancel and restore'
+  );
+  expect(
+    (await store.sends(owner)).find((row) => row.uuid === 'new')
+  ).toBeDefined();
+});

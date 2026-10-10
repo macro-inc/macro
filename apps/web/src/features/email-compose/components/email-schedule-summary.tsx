@@ -10,6 +10,7 @@ interface EmailScheduleSummaryProps {
   operation: 'idle' | 'committing' | 'updating' | 'cancelling';
   onSelectTime: (date: Date | null) => void | boolean;
   onCancelSchedule: () => Promise<boolean>;
+  onCheckStatus?: () => Promise<void>;
 }
 
 type ScheduleSummary = {
@@ -17,7 +18,7 @@ type ScheduleSummary = {
   detail: string | undefined;
   actionLabel: string;
   accessibleActionLabel: string;
-  action: () => void;
+  action: (() => void) | undefined;
 };
 
 /** A send time with its zone, since the viewer's zone may not be the recipient's. */
@@ -39,6 +40,36 @@ function describeSchedule(
       actionLabel: 'Cancel',
       accessibleActionLabel: 'Clear send time',
       action: () => props.onSelectTime(null),
+    };
+  }
+  if (
+    state.deliveryStatus === 'unconfirmed' ||
+    state.deliveryStatus === 'sending'
+  ) {
+    return {
+      label:
+        state.deliveryStatus === 'unconfirmed'
+          ? 'Delivery unconfirmed'
+          : 'Sending',
+      detail:
+        state.deliveryStatus === 'unconfirmed'
+          ? 'This email may already have been sent. Check Sent. We will not resend automatically.'
+          : 'Delivery has started. Cancellation is no longer available.',
+      actionLabel: 'Check status',
+      accessibleActionLabel: 'Check delivery status',
+      action: props.onCheckStatus
+        ? () => void props.onCheckStatus?.()
+        : undefined,
+    };
+  }
+  if (state.deliveryStatus === 'failed') {
+    return {
+      label: 'Send failed before delivery',
+      detail:
+        'Cancel to restore this draft and review it before sending again.',
+      actionLabel: 'Restore draft',
+      accessibleActionLabel: 'Restore failed scheduled draft',
+      action: () => void props.onCancelSchedule(),
     };
   }
   if (state.proposedTime) {
@@ -89,17 +120,19 @@ function ScheduleSummaryAction(props: {
   operation: EmailScheduleSummaryProps['operation'];
 }) {
   return (
-    <Button
-      size="sm"
-      aria-label={props.summary.accessibleActionLabel}
-      tooltip={props.summary.accessibleActionLabel}
-      disabled={props.operation !== 'idle'}
-      onClick={props.summary.action}
-    >
-      {props.operation === 'cancelling'
-        ? 'Cancelling…'
-        : props.summary.actionLabel}
-    </Button>
+    <Show when={props.summary.action}>
+      <Button
+        size="sm"
+        aria-label={props.summary.accessibleActionLabel}
+        tooltip={props.summary.accessibleActionLabel}
+        disabled={props.operation !== 'idle'}
+        onClick={props.summary.action}
+      >
+        {props.operation === 'cancelling'
+          ? 'Cancelling…'
+          : props.summary.actionLabel}
+      </Button>
+    </Show>
   );
 }
 

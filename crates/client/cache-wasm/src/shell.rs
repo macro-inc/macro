@@ -1290,6 +1290,28 @@ impl CacheEngine {
         })
     }
 
+    /// Retire terminal recovery content only after its queue entry has settled.
+    #[wasm_bindgen(js_name = retireDurableMutationIntent)]
+    pub fn retire_durable_mutation_intent(&self, uuid: String) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.retire_mutation_intent(&uuid).await;
+            to_js(&state.engine_result(result)?)
+        })
+    }
+
+    /// Recover durable user intents independently of optimistic queue layers.
+    #[wasm_bindgen(js_name = durableMutationIntents)]
+    pub fn durable_mutation_intents(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.durable_mutation_intents().await;
+            to_js(&state.engine_result(result)?)
+        })
+    }
+
     /// Returns the durable cache generation, initializing it when absent.
     #[wasm_bindgen(js_name = currentStorageGeneration)]
     pub fn current_storage_generation(&self) -> js_sys::Promise {

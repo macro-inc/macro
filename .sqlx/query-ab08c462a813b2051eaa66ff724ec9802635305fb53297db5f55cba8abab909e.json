@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET provider_id = 'confirmed-message', provider_thread_id = 'confirmed-thread', is_sent = TRUE WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ab08c462a813b2051eaa66ff724ec9802635305fb53297db5f55cba8abab909e"
+}

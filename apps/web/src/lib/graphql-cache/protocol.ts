@@ -744,6 +744,8 @@ export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
   | { kind: 'current-storage-generation' }
+  | { kind: 'durable-mutation-intents' }
+  | { kind: 'retire-durable-mutation-intent'; uuid: string }
   | { kind: 'inspect-mutations' }
   | {
       kind: 'read';

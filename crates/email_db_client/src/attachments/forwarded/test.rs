@@ -245,3 +245,133 @@ async fn fetch_forwarded_attachments_in_bulk_excludes_drafts_without_attachments
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("forwarded_attachments"))
+)]
+async fn scheduled_draft_blocks_all_attachment_mutations_and_preserves_manifest(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    use crate::attachments::draft::{delete_draft_attachment, insert_draft_attachment};
+    let link = Uuid::parse_str("00000000-0000-0000-0000-000000000f01")?;
+    let draft = Uuid::parse_str("00000000-0000-0000-0000-00000000f501")?;
+    let original = Uuid::parse_str("00000000-0000-0000-0000-0000000fa001")?;
+    let extra = Uuid::parse_str("00000000-0000-0000-0000-0000000fa003")?;
+    let upload = Uuid::new_v4();
+    let attachment = |id| models_email::service::attachment::AttachmentDraft {
+        id,
+        draft_id: draft,
+        file_name: "approved.txt".into(),
+        content_type: "text/plain".into(),
+        sha: "sha".into(),
+        size: 4,
+        s3_key: "approved".into(),
+    };
+    insert_draft_attachment(&pool, link, attachment(upload)).await?;
+    sqlx::query("INSERT INTO email_scheduled_messages(link_id, message_id, send_time, sent) VALUES ($1, $2, NOW() + INTERVAL '1 hour', false)")
+        .bind(link).bind(draft).execute(&pool).await?;
+    assert!(
+        insert_draft_attachment(&pool, link, attachment(Uuid::new_v4()))
+            .await
+            .is_err()
+    );
+    assert!(
+        delete_draft_attachment(&pool, link, draft, upload)
+            .await
+            .is_err()
+    );
+    assert!(
+        insert_forwarded_attachment(&pool, link, draft, extra)
+            .await
+            .is_err()
+    );
+    assert!(
+        delete_forwarded_attachment(&pool, link, draft, original)
+            .await
+            .is_err()
+    );
+    let manifest: serde_json::Value = sqlx::query_scalar(
+        "SELECT approved_attachments FROM email_scheduled_messages WHERE message_id = $1",
+    )
+    .bind(draft)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(manifest["uploaded"], serde_json::json!([upload]));
+    assert_eq!(manifest["forwarded"].as_array().unwrap().len(), 2);
+    // Cascading source deletion cannot erase the record of what the sender approved.
+    sqlx::query("DELETE FROM email_attachments WHERE id = $1")
+        .bind(original)
+        .execute(&pool)
+        .await?;
+    let retained: serde_json::Value = sqlx::query_scalar(
+        "SELECT approved_attachments FROM email_scheduled_messages WHERE message_id = $1",
+    )
+    .bind(draft)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(retained, manifest);
+    assert_eq!(
+        fetch_forwarded_attachments_by_draft_id(&pool, link, draft)
+            .await?
+            .len(),
+        1
+    );
+    sqlx::query("DELETE FROM email_scheduled_messages WHERE message_id = $1")
+        .bind(draft)
+        .execute(&pool)
+        .await?;
+    assert_eq!(
+        delete_draft_attachment(&pool, link, draft, upload).await?,
+        1
+    );
+    insert_forwarded_attachment(&pool, link, draft, extra).await?;
+    assert_eq!(
+        delete_forwarded_attachment(&pool, link, draft, extra).await?,
+        1
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("forwarded_attachments"))
+)]
+async fn attachment_request_waiting_for_admission_observes_the_committed_schedule(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let link = Uuid::parse_str("00000000-0000-0000-0000-000000000f01")?;
+    let draft = Uuid::parse_str("00000000-0000-0000-0000-00000000f501")?;
+    let original = Uuid::parse_str("00000000-0000-0000-0000-0000000fa001")?;
+    let mut admission = pool.begin().await?;
+    sqlx::query("SELECT id FROM email_messages WHERE id = $1 FOR UPDATE")
+        .bind(draft)
+        .execute(&mut *admission)
+        .await?;
+    let blocker: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
+        .fetch_one(&mut *admission)
+        .await?;
+    let worker_pool = pool.clone();
+    let remove = tokio::spawn(async move {
+        delete_forwarded_attachment(&worker_pool, link, draft, original).await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let waiting: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid)))")
+                .bind(blocker).fetch_one(&pool).await?;
+            if waiting { return Ok::<_, sqlx::Error>(()); }
+            tokio::task::yield_now().await;
+        }
+    }).await??;
+    sqlx::query("INSERT INTO email_scheduled_messages(link_id, message_id, send_time, sent) VALUES ($1, $2, NOW() + INTERVAL '1 hour', false)")
+        .bind(link).bind(draft).execute(&mut *admission).await?;
+    admission.commit().await?;
+    assert!(remove.await?.is_err());
+    assert_eq!(
+        fetch_forwarded_attachments_by_draft_id(&pool, link, draft)
+            .await?
+            .len(),
+        2
+    );
+    Ok(())
+}

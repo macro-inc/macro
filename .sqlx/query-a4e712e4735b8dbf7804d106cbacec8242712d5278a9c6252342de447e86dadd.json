@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_message_calendar_invites (message_id, component_id, snapshot)\n           SELECT $1, component_id, snapshot FROM email_message_calendar_invites WHERE message_id = $2\n           ON CONFLICT (message_id, component_id) DO UPDATE SET snapshot = EXCLUDED.snapshot",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4e712e4735b8dbf7804d106cbacec8242712d5278a9c6252342de447e86dadd"
+}

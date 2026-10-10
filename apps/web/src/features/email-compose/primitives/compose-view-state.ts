@@ -55,6 +55,7 @@ export interface ComposeState {
     operation: Accessor<'idle' | 'committing' | 'updating' | 'cancelling'>;
     onSelect(date: Date | null): boolean;
     onCancel(): Promise<boolean>;
+    onCheckStatus?(): Promise<void>;
     pickerDisabled: Accessor<boolean>;
   };
 

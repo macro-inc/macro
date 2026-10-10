@@ -126,6 +126,25 @@ pub async fn graphql_cache_current_revision(
     Ok(engine_handle(&state)?.current_revision().await.to_string())
 }
 
+/// Retire terminal recovery content without removing queued mutations.
+#[tauri::command]
+pub async fn graphql_cache_retire_durable_mutation_intent(
+    state: State<'_, CacheState>,
+    uuid: String,
+) -> Result<bool, String> {
+    engine_handle(&state)?
+        .retire_durable_mutation_intent(&uuid)
+        .await
+}
+
+/// Read persisted mutation recovery records.
+#[tauri::command]
+pub async fn graphql_cache_durable_mutation_intents(
+    state: State<'_, CacheState>,
+) -> Result<Vec<serde_json::Value>, String> {
+    engine_handle(&state)?.durable_mutation_intents().await
+}
+
 /// Returns the durable cache generation, initializing it when absent.
 #[tauri::command]
 pub async fn graphql_cache_current_storage_generation(

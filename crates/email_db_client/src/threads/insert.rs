@@ -106,6 +106,9 @@ pub async fn insert_thread(
     service_thread: &thread::Thread,
     link_id: Uuid,
 ) -> anyhow::Result<Uuid> {
+    if let Some(provider_id) = service_thread.provider_id.as_deref() {
+        super::provider_identity::lock_provider_thread(conn, link_id, provider_id).await?;
+    }
     let db_thread = parse::service_to_db::map_service_thread_to_db(service_thread, link_id);
 
     let result = sqlx::query_scalar!(
@@ -174,6 +177,8 @@ pub async fn insert_blank_thread(
         messages: vec![],
     };
 
-    let mut conn = pool.acquire().await?;
-    insert_thread(&mut conn, &thread, link_id).await
+    let mut tx = pool.begin().await?;
+    let id = insert_thread(&mut tx, &thread, link_id).await?;
+    tx.commit().await?;
+    Ok(id)
 }

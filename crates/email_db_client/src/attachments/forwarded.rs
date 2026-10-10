@@ -1,6 +1,6 @@
 use models_email::{db, service};
+use sqlx::PgPool;
 use sqlx::types::Uuid;
-use sqlx::{Executor, PgPool, Postgres};
 
 #[cfg(test)]
 mod test;
@@ -8,59 +8,73 @@ mod test;
 /// Inserts a forwarded attachment link between a draft and an original message's attachment.
 /// Uses a subquery to verify the draft belongs to the given link_id.
 /// ON CONFLICT DO NOTHING makes this idempotent.
-#[tracing::instrument(skip(executor), err)]
-pub async fn insert_forwarded_attachment<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool), err)]
+pub async fn insert_forwarded_attachment(
+    pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
     attachment_id: Uuid,
-) -> anyhow::Result<()>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<()> {
+    let mut tx = pool.begin().await?;
+    if !super::mutation::lock_editable_attachment_message(&mut tx, link_id, draft_id, false).await?
+    {
+        return Ok(());
+    }
     sqlx::query!(
         r#"
+        WITH editable AS (
+            SELECT id FROM email_messages
+            WHERE id = $1 AND link_id = $3 AND is_draft AND NOT is_sent
+            FOR UPDATE
+        )
         INSERT INTO email_attachments_fwd (message_id, attachment_id)
             SELECT $1, $2
-            FROM email_messages m
-            WHERE m.id = $1 AND m.link_id = $3
+            FROM editable
         ON CONFLICT DO NOTHING
         "#,
         draft_id,
         attachment_id,
         link_id,
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     Ok(())
 }
 
 /// Deletes a forwarded attachment link. Verifies draft ownership via link_id.
-#[tracing::instrument(skip(executor), err)]
-pub async fn delete_forwarded_attachment<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(pool), err)]
+pub async fn delete_forwarded_attachment(
+    pool: &PgPool,
     link_id: Uuid,
     draft_id: Uuid,
     attachment_id: Uuid,
-) -> anyhow::Result<u64>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+) -> anyhow::Result<u64> {
+    let mut tx = pool.begin().await?;
+    if !super::mutation::lock_editable_attachment_message(&mut tx, link_id, draft_id, false).await?
+    {
+        return Ok(0);
+    }
     let result = sqlx::query!(
         r#"
+        WITH editable AS (
+            SELECT id FROM email_messages
+            WHERE id = $1 AND link_id = $3 AND is_draft AND NOT is_sent
+            FOR UPDATE
+        )
         DELETE FROM email_attachments_fwd eaf
-        USING email_messages m
-        WHERE eaf.message_id = m.id
-        AND eaf.message_id = $1 AND eaf.attachment_id = $2 AND m.link_id = $3
+        USING editable m
+        WHERE eaf.message_id = m.id AND eaf.attachment_id = $2
         "#,
         draft_id,
         attachment_id,
         link_id,
     )
-    .execute(executor)
+    .execute(&mut *tx)
     .await?;
 
+    tx.commit().await?;
     Ok(result.rows_affected())
 }
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_settings SET signature = '<p>Changed</p>' WHERE link_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1d7f66dcafd017e02ab21025309ebbf918209c857b1ff7621832ddb7ca33b382"
+}

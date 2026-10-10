@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT is_sent, is_draft, subject FROM email_messages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "subject",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "0b7bcfe72aa7dc8e53033e457ade701bd6593c9cd48b501b32b568e0d738388d"
+}

@@ -9,7 +9,6 @@ use crate::domain::{
     },
     ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
 };
-use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -29,6 +28,7 @@ mod preview;
 mod preview_views;
 mod project;
 mod scheduled;
+mod send_attempt;
 mod settings;
 mod thread;
 
@@ -93,6 +93,14 @@ impl EmailUserRepo for EmailPgRepo {
 }
 
 impl EmailRepo for EmailPgRepo {
+    async fn redirected_thread_id(
+        &self,
+        thread_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, Self::Err> {
+        client_id_mapping::redirected_thread_id(&self.pool, thread_id, link_ids).await
+    }
+
     type Err = sqlx::Error;
 
     async fn fetch_email_settings(&self, link_id: Uuid) -> Result<LinkEmailSettings, EmailErr> {
@@ -261,11 +269,11 @@ impl EmailRepo for EmailPgRepo {
         message::forwarded_attachments_by_message_ids(&self.pool, message_ids).await
     }
 
-    async fn scheduled_send_times_by_message_ids(
+    async fn scheduled_sends_by_message_ids(
         &self,
         message_ids: &[Uuid],
-    ) -> Result<HashMap<Uuid, DateTime<Utc>>, Self::Err> {
-        message::scheduled_send_times_by_message_ids(&self.pool, message_ids).await
+    ) -> Result<HashMap<Uuid, crate::domain::models::ScheduledSend>, Self::Err> {
+        message::scheduled_sends_by_message_ids(&self.pool, message_ids).await
     }
 
     async fn get_simple_message(

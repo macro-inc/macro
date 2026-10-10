@@ -219,9 +219,10 @@ function rejection(
 const SNAPSHOT_READ_ATTEMPTS = 3;
 
 /** The draft and thread records a queued write rebases onto, when cached. */
-async function readCachedDraftAndThread(
+export async function readCachedDraftAndThread(
   draftId: string,
-  threadId: string
+  threadId: string,
+  durableIntents?: unknown[]
 ): Promise<
   Pick<
     GraphqlSaveEmailDraftArgs,
@@ -237,7 +238,7 @@ async function readCachedDraftAndThread(
   // Settlement can land between these reads. Compose from one revision so a
   // local draft is never combined with a thread already using its server ID.
   for (let attempt = 0; attempt < SNAPSHOT_READ_ATTEMPTS; attempt++) {
-    const [draft, thread] = await Promise.all([
+    const [draft, thread, intents] = await Promise.all([
       readRecordsByKeys(
         host,
         selectRecords(EmailThreadMessageFieldsFragmentDoc),
@@ -248,14 +249,23 @@ async function readCachedDraftAndThread(
         selectRecords(EmailDraftThreadFieldsFragmentDoc),
         [`GraphqlSoupEmailThread:${threadId}`]
       ),
+      durableIntents ?? host.durableMutationIntents(),
     ]);
     if (draft.revision !== thread.revision) continue;
+    const mutationUuid = draft.records[0]?.identity?.mutationUuid;
+    const ownsRecovery = intents.some(
+      (intent) =>
+        typeof intent === 'object' &&
+        intent !== null &&
+        'uuid' in intent &&
+        intent.uuid === mutationUuid
+    );
     return {
       draftId: draft.records[0]?.record.id ?? draftId,
       threadDbId: thread.records[0]?.record.id ?? threadId,
       existingDraft: draft.records[0]?.record,
       existingThread: thread.records[0]?.record,
-      mutationUuid: draft.records[0]?.identity?.mutationUuid ?? undefined,
+      mutationUuid: ownsRecovery ? undefined : (mutationUuid ?? undefined),
     };
   }
   throw new Error('Email draft cache kept changing; retry the draft write');
@@ -289,8 +299,8 @@ export async function saveEmailDraftQueued(input: {
     ...cached,
     ...(local ? { draftId: local.draftId, clientMetadata: attempt } : {}),
     mutationUuid:
-      cached.mutationUuid ??
       input.args.mutationUuid ??
+      cached.mutationUuid ??
       String(input.args.draftId),
   });
   if (outcome.kind === 'failed') {

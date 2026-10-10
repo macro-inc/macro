@@ -9,6 +9,26 @@ use crate::domain::models::SettledDraftIds;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+/// Retained source threads redirect only while globally empty. Pagination can
+/// return an empty page for a live thread and must never trigger a redirect.
+pub(super) async fn redirected_thread_id(
+    pool: &PgPool,
+    thread_id: Uuid,
+    link_ids: &[Uuid],
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT target.id FROM email_thread_client_ids alias
+           JOIN email_threads source ON source.id = alias.client_id AND source.link_id = alias.link_id
+           JOIN email_threads target ON target.id = alias.thread_id AND target.link_id = source.link_id
+           WHERE source.id = $1 AND source.link_id = ANY($2) AND target.id <> source.id
+             AND NOT EXISTS(SELECT 1 FROM email_messages WHERE thread_id = source.id)"#,
+        thread_id,
+        link_ids,
+    )
+    .fetch_optional(pool)
+    .await
+}
+
 /// Resolve a client draft handle to its message ID within the given inboxes.
 /// Newest binding wins if a handle ever appears under more than one link
 /// (a moved draft re-binds under its new inbox).

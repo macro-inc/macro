@@ -2,6 +2,7 @@ mod draft;
 mod followup;
 mod previews;
 mod send;
+mod send_attempt;
 pub(crate) mod signature;
 mod thread;
 mod thread_labels;
@@ -202,6 +203,14 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
+    async fn resolve_thread_read_id(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        self.resolve_thread_read_id_impl(macro_id, thread_id).await
+    }
+
     async fn get_email_thread_previews(
         &self,
         req: GetEmailsRequest,

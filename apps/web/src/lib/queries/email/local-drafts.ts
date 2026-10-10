@@ -7,6 +7,7 @@ import type {
 import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { getNativeStagedUpload } from '@core/mobile/nativeStagedUpload';
+import { isTauri } from '@core/util/platform';
 import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
@@ -19,9 +20,12 @@ import type { UserInfoData } from '../auth/user-info';
 import { queryClient } from '../client';
 import { createLocalDraftStore } from './local-draft-store';
 
+import type { EmailSendIntent } from './send-queue';
+
 export const localDraftStore = createLocalDraftStore();
 const fileIds = new WeakMap<File, string>();
 const fileCopies = new WeakMap<File, Promise<Blob>>();
+const nativeUploadLocks = new Map<string, Promise<void>>();
 const pendingWrites = new Set<Promise<LocalDraft>>();
 const EPOCH_KEY = 'email-working-copies:epoch';
 let documentSession: { accountId: string; epoch: string } | undefined;
@@ -336,12 +340,21 @@ export function draftSyncPaused(local: LocalDraft): boolean {
   );
 }
 
-export async function resumeLocalDraft(id: string): Promise<void> {
+export async function resumeLocalDraft(
+  id: string,
+  retireGeneration?: string
+): Promise<void> {
   const owner = await session();
   const draft = await localDraftStore.read(owner, id);
   if (!draft) return;
   await localDraftStore.update(owner, draft.key, (current) => ({
     ...current,
+    // Explicit send recovery keeps newer edits and their blobs while fencing
+    // callbacks from the send's old lifetime. Concurrent restores rotate once.
+    generation:
+      current.generation === retireGeneration
+        ? crypto.randomUUID()
+        : current.generation,
     status: 'dirty',
     errorCode: undefined,
     latestAttemptId: undefined,
@@ -349,10 +362,20 @@ export async function resumeLocalDraft(id: string): Promise<void> {
   }));
 }
 
-export async function forgetLocalDraft(id: string): Promise<void> {
+export async function forgetLocalDraft(
+  id: string,
+  expected?: Pick<LocalDraft, 'generation' | 'revision'>
+): Promise<void> {
   const owner = await session();
   const draft = await localDraftStore.read(owner, id);
-  if (draft) await localDraftStore.update(owner, draft.key, () => undefined);
+  if (draft)
+    await localDraftStore.update(owner, draft.key, (current) =>
+      expected &&
+      (current.generation !== expected.generation ||
+        current.revision !== expected.revision)
+        ? current
+        : undefined
+    );
 }
 
 /** Only an explicit server Undo may start a fresh lifetime for a retired handle. */
@@ -383,12 +406,18 @@ export async function recordLocalAttachment(
   draftId: string,
   file: File,
   attachmentId: string | undefined,
-  uploaded: boolean
+  uploaded: boolean,
+  expectedGeneration?: string
 ): Promise<void> {
   const owner = await session();
   const draft = await localDraftStore.read(owner, draftId);
   const id = fileIds.get(file);
-  if (!draft || !id) return;
+  if (
+    !draft ||
+    !id ||
+    (expectedGeneration && draft.generation !== expectedGeneration)
+  )
+    return;
   await localDraftStore.update(owner, draft.key, (current) => {
     if (current.generation !== draft.generation) return current;
     const attachments = current.attachments.map((attachment) =>
@@ -510,6 +539,44 @@ export function localDraftQueueLifecycle(
   let initialized: Promise<void> | undefined;
   const legacy = new Map<string, DraftAttempt>();
   const migrated = new Map<string, number>();
+  async function ownedBySend(mutation: ClaimedMutation | MutationInspection) {
+    if (
+      mutation.operationName !== 'SaveEmailDraft' &&
+      mutation.operationName !== 'DeleteEmailDraft'
+    )
+      return false;
+    const id = text(object(mutation.variables.input).draftId);
+    if (!id) return false;
+    const intents = [
+      ...(await host.durableMutationIntents()),
+      ...(await readLocalEmailSends()),
+    ];
+    return intents.some((value) => {
+      const intent = object(value);
+      if (intent.uuid === mutation.uuid) return false; // Explicit restore replaces its send.
+      const metadata = object(intent.metadata);
+      if (metadata.kind !== 'email-send-v1') return false;
+      const payload = object(metadata.payload);
+      const response = object(intent.response);
+      const attempt = object(
+        object(response.cancelEmailSend ?? response.sendEmailMessage).attempt
+      );
+      const restoredAttempt = attemptOf(mutation);
+      if (
+        (payload.restoring ||
+          intent.locallyCancelled ||
+          attempt.status === 'CANCELLED') &&
+        restoredAttempt &&
+        restoredAttempt.generation !== object(payload.workingCopy).generation
+      )
+        return false;
+      return [
+        object(payload.draft).draftId,
+        object(payload.workingCopy).key,
+        object(attempt.message).id,
+      ].includes(id);
+    });
+  }
   async function preserveLegacy(
     mutation: MutationInspection
   ): Promise<DraftAttempt | undefined> {
@@ -518,6 +585,7 @@ export function localDraftQueueLifecycle(
       mutation.operationName !== 'DeleteEmailDraft'
     )
       return;
+    if (await ownedBySend(mutation)) return;
     const known = legacy.get(mutation.transactionId);
     if (known) return known;
     const owner = await session();
@@ -712,6 +780,14 @@ export function localDraftQueueLifecycle(
       }
     },
     async beforeMutationAttempt(mutation) {
+      if (mutation.operationName === 'SendEmailMessage') {
+        const send = (await readLocalEmailSends()).find(
+          (row) => row.uuid === mutation.uuid
+        );
+        if (send?.cancellationRequested || send?.metadata.payload.restoring)
+          return false;
+      }
+      if (await ownedBySend(mutation)) return false;
       const attempt = await resolveAttempt(mutation);
       if (!attempt) return true;
       const owner = await session();
@@ -792,4 +868,62 @@ async function settleDraftAttempt(
           : draft.status,
     };
   });
+}
+
+export async function readLocalEmailSends(): Promise<EmailSendIntent[]> {
+  return await localDraftStore.sends(await session());
+}
+export async function persistLocalEmailSend(
+  intent: EmailSendIntent,
+  reserve = false
+): Promise<EmailSendIntent> {
+  return await localDraftStore.putSend(await session(), intent, reserve);
+}
+export async function removeLocalEmailSend(uuid: string): Promise<void> {
+  await localDraftStore.removeSend(await session(), uuid);
+}
+export function watchLocalEmailSends(changed: () => void): () => void {
+  return localDraftStore.subscribe(changed);
+}
+
+/** Web Locks serialize one durable file's upload across composers and tabs. */
+export async function withLocalAttachmentUpload(
+  draftId: string,
+  file: File,
+  upload: (
+    receipt: Extract<LocalDraftAttachment, { type: 'local' }>,
+    generation: string
+  ) => Promise<void>
+): Promise<void> {
+  const owner = await session();
+  const draft = await localDraftStore.read(owner, draftId);
+  const id = fileIds.get(file);
+  if (!draft || !id)
+    throw new Error('Save the attachment on this device before uploading');
+  const name = `macro-email-upload:${owner.accountId}:${draft.key}:${draft.generation}:${id}`;
+  const run = async () => {
+    await session();
+    const current = await localDraftStore.read(owner, draft.key);
+    const receipt = current?.attachments.find(
+      (attachment) => attachment.type === 'local' && attachment.id === id
+    );
+    if (current?.generation !== draft.generation || receipt?.type !== 'local')
+      throw new Error('This attachment belongs to an obsolete draft');
+    await upload(receipt, current.generation);
+  };
+  if (navigator.locks) {
+    await navigator.locks.request(name, run);
+    return;
+  }
+  if (!isTauri())
+    throw new Error('This browser cannot safely upload queued attachments');
+  // The native app has one main webview; serialize its composers even on older WebKit.
+  const previous = nativeUploadLocks.get(name) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(run);
+  nativeUploadLocks.set(name, next);
+  try {
+    await next;
+  } finally {
+    if (nativeUploadLocks.get(name) === next) nativeUploadLocks.delete(name);
+  }
 }

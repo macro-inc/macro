@@ -57,11 +57,11 @@ fn filters() -> Value {
     let nil = id(0);
     json!({
         "documentFilter": {"literal": {"id": nil}},
-        "projectFilter": {"literal": {"projectId": nil}},
+        "projectFilter": {"literal": {"projectIdSelf": nil}},
         "chatFilter": {"literal": {"chatId": nil}},
         "calendarEventFilter": {"literal": {"id": nil}},
         "channelFilter": {"literal": {"channelId": nil}},
-        "channelThreadFilter": {"literal": {"channelId": nil}},
+        "channelThreadFilter": {"literal": {"threadId": nil}},
         "crmContactFilter": {"literal": {"id": nil}},
         "agentSessionFilter": {"literal": {"id": nil}},
         "callFilter": {"literal": {"callId": nil}},
@@ -463,7 +463,7 @@ fn native_mail_confinement_never_admits_nonempty_deferred_partitions() {
     for (partition, id_field) in [
         ("crmContactFilter", "id"),
         ("agentSessionFilter", "id"),
-        ("channelThreadFilter", "channelId"),
+        ("channelThreadFilter", "threadId"),
     ] {
         for tree in [
             json!({"literal": {id_field: id(999)}}),

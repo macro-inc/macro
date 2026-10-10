@@ -8,6 +8,7 @@ use crate::realtime::AgentSessionLogSubscriptions;
 use agent_session::domain::model::AgentSessionId;
 use async_graphql::{Context, ID, MergedObject, MergedSubscription, Object, Schema, Subscription};
 use axum::extract::FromRef;
+use email::domain::send_attempt::EmailSendService;
 use email::{
     domain::ports::{EmailService, EmailUserService, NoOpEmailService},
     inbound::axum::previews_router::EmailRouterState,
@@ -91,7 +92,7 @@ pub struct CompleteMutationRoot<
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
-    ES: EmailService,
+    ES: EmailService + EmailSendService,
 >(
     PropertiesMutationRoot<W>,
     EntityMutationRoot<M, E>,
@@ -99,6 +100,7 @@ pub struct CompleteMutationRoot<
     ChannelMutationRoot<C, A>,
     NotificationMutationRoot<N>,
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
+    graphql_email::GraphqlEmailSendMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
@@ -112,7 +114,7 @@ impl<
     C: ChannelActivityMutationService,
     N: NotificationMutationService,
     A: ChannelActivityAuthorizer,
-    ES: EmailService,
+    ES: EmailService + EmailSendService,
 > CompleteMutationRoot<W, M, F, E, C, N, A, ES>
 {
     /// Construct the composed mutation root.
@@ -124,6 +126,7 @@ impl<
             ChannelMutationRoot::<C, A>::new(),
             NotificationMutationRoot::<N>::new(),
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
+            graphql_email::GraphqlEmailSendMutation::<ES, SoupEmailThreadMutationOutput<E>>::default(),
             InitiativeMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
@@ -356,7 +359,7 @@ pub fn build_schema_with_service<S, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER
 >
 where
     S: SoupService + Clone,
-    E: EmailService + EmailUserService,
+    E: EmailService + EmailUserService + EmailSendService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -417,7 +420,7 @@ where
     NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>
         + Clone,
     AS: ActivitySubscriptionService,
-    E: EmailService + EmailUserService,
+    E: EmailService + EmailUserService + EmailSendService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -476,7 +479,7 @@ pub fn build_schema_from_arc<S, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR
 >
 where
     S: SoupService,
-    E: EmailService + EmailUserService,
+    E: EmailService + EmailUserService + EmailSendService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -531,7 +534,7 @@ where
     R: SoupRealtimeSubscriptionService,
     NS: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
     AS: ActivitySubscriptionService,
-    E: EmailService + EmailUserService,
+    E: EmailService + EmailUserService + EmailSendService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -564,7 +567,7 @@ impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
     SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
 where
     S: SoupService + Clone,
-    E: EmailService + EmailUserService,
+    E: EmailService + EmailUserService + EmailSendService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -671,7 +674,7 @@ impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
     GraphqlUser<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>
 where
     S: SoupService,
-    E: EmailService + EmailUserService,
+    E: EmailService + EmailUserService + EmailSendService,
     EAS: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Clone + Send + Sync + 'static,
@@ -830,6 +833,17 @@ where
         Ok(GraphqlEmailQuery::new(service, self.user_id.clone()))
     }
 
+    /// Inspect a queued send after reconnect or restart without resending it.
+    async fn email_send_attempt(
+        &self,
+        ctx: &Context<'_>,
+        input: graphql_email::EmailSendAttemptInput,
+    ) -> async_graphql::Result<Option<graphql_email::EmailSendAttemptPayload>> {
+        let state = ctx.data::<St>()?;
+        let service = EmailRouterState::<E>::from_ref(state).service();
+        graphql_email::load_send_attempt(service.as_ref(), self.user_id.clone(), input).await
+    }
+
     /// Fetch one accessible email thread by its canonical identifier.
     async fn email_thread(
         &self,
@@ -838,6 +852,12 @@ where
     ) -> async_graphql::Result<Option<GraphqlSoupEmailThread<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
     {
         let thread_id = parse_id(input.thread_id, "threadId")?;
+        let state = ctx.data::<St>()?;
+        let service = EmailRouterState::<E>::from_ref(state).service();
+        let thread_id = service
+            .resolve_thread_read_id(self.user_id.clone(), thread_id)
+            .await
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
         resolve_soup_email_thread::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
             ctx,
             self.user_id.clone(),

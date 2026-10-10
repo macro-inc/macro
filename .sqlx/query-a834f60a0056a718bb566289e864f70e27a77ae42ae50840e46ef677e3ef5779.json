@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET subject = 'Changed subject', body_text = 'Changed body', body_html_sanitized = '<p>Changed</p>', provider_thread_id = 'changed-thread' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a834f60a0056a718bb566289e864f70e27a77ae42ae50840e46ef677e3ef5779"
+}

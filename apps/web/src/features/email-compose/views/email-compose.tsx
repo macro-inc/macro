@@ -244,6 +244,7 @@ function LoadedEmailComposeView(
                   operation={ctxValue.schedule.operation()}
                   onSelectTime={ctxValue.schedule.onSelect}
                   onCancelSchedule={ctxValue.schedule.onCancel}
+                  onCheckStatus={ctxValue.schedule.onCheckStatus}
                   class="-mt-6 rounded-b-[20px] border border-t-0 border-edge-muted px-4 pt-8 pb-2"
                 />
               </div>

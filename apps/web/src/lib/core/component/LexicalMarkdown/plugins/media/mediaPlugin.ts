@@ -110,7 +110,9 @@ export async function addMediaFromFile(
   mediaType: MediaType,
   constrainedMediaDimensions?: { width: number; height: number }
 ) {
+  if (!editor.isEditable()) return { success: false };
   const processedFile = await processFile(createUploadFile(file));
+  if (!editor.isEditable()) return { success: false };
   if (!validateMediaFile(processedFile, mediaType)) return { success: false };
   editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
     type: 'local',

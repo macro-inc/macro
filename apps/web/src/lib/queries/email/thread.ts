@@ -205,6 +205,14 @@ export type ThreadQueryResult<TData> = {
 
 type ThreadQuerySelector<TData> = (data: InfiniteData<Thread, number>) => TData;
 
+/** Preserve the server's canonical identity independently of consumer selection. */
+function selectThreadWithIdentity<TData>(select: ThreadQuerySelector<TData>) {
+  return (data: InfiniteData<Thread, number>) => ({
+    canonicalThreadId: data.pages[0]?.db_id,
+    value: select(data),
+  });
+}
+
 type UseThreadQueryOptions<TData> = {
   enabled?: boolean;
   select?: ThreadQuerySelector<TData>;
@@ -253,18 +261,21 @@ export function useThreadQuery<TData = ThreadQueryData>(
   const restQuery = useInfiniteQuery(() => ({
     ...threadQueryOptions(threadId()),
     ...options?.(),
-    select: select(),
+    select: selectThreadWithIdentity(select()),
     enabled: queryEnabled() && !usesGraphql() && threadId().length > 0,
   }));
 
   return {
     get resolvedThreadId() {
-      return usesGraphql() ? resolvedThreadId() : threadId();
+      if (usesGraphql()) return resolvedThreadId();
+      return restQuery.isSuccess
+        ? (restQuery.data?.canonicalThreadId ?? threadId())
+        : threadId();
     },
     get data() {
       return usesGraphql()
         ? graphqlQuery.data
-        : (restQuery.data as TData | undefined);
+        : (restQuery.data?.value as TData | undefined);
     },
     get error() {
       if (!usesGraphql()) return (restQuery.error as Error | null) ?? null;

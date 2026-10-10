@@ -50,6 +50,7 @@ async function processInlineMediaFiles(
   const IMAGE_EXTENSIONS_HEIC = getImageExtensionsHeic();
   const VIDEO_EXTENSIONS = getVideoExtensions();
   for (const file of files) {
+    if (!editor.isEditable()) return;
     const ext = fileExtension(file.name);
     if (ext != null && IMAGE_EXTENSIONS_HEIC.includes(ext)) {
       const res = await addMediaFromFile(
@@ -58,7 +59,7 @@ async function processInlineMediaFiles(
         'image',
         constrainedMediaDimensions
       );
-      if (!res.success) {
+      if (!res.success && editor.isEditable()) {
         toast.failure('Invalid media attachment file(s)');
       }
     } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
@@ -68,7 +69,7 @@ async function processInlineMediaFiles(
         'video',
         constrainedMediaDimensions
       );
-      if (!res.success) {
+      if (!res.success && editor.isEditable()) {
         toast.failure('Invalid media attachment file(s)');
       }
     }
@@ -98,6 +99,7 @@ async function onFilesReady(
   afterFileUpload?: (uploadedItemIds: string[]) => void,
   constrainedMediaDimensions?: { width: number; height: number }
 ): Promise<void> {
+  if (!editor.isEditable()) return;
   const mediaFiles: File[] = [];
   const filesToUpload: UploadInput[] = [];
 
@@ -123,9 +125,10 @@ async function onFilesReady(
 
   await processInlineMediaFiles(editor, mediaFiles, constrainedMediaDimensions);
 
-  if (filesToUpload.length === 0) return;
+  if (!editor.isEditable() || filesToUpload.length === 0) return;
 
   const results = await uploadFiles(filesToUpload, forceDssRuleset);
+  if (!editor.isEditable()) return;
 
   let uploadedItemIds: string[] = [];
 
@@ -138,6 +141,7 @@ async function onFilesReady(
       const blockName = fileTypeToBlockName(result.fileType, true);
       if (blockName) {
         const item = await documentUploadToItem(result);
+        if (!editor.isEditable()) return;
         if (!item) {
           toast.failure('Document upload failed or timed out');
           Telemetry.error(new Error('Document upload failed or timed out'));
@@ -154,6 +158,7 @@ async function onFilesReady(
       }
     } else if (result.type === 'folder') {
       const item = await documentUploadToItem(result);
+      if (!editor.isEditable()) return;
       if (!item) {
         toast.failure('Folder upload failed or timed out');
         Telemetry.error(new Error('Folder upload failed or timed out'));

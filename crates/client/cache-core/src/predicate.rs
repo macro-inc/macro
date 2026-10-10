@@ -172,6 +172,8 @@ impl OptimisticUpsertReconciliation {
 pub struct OptimisticShadowReconciliation {
     /// Ordered mutation IDs observed while composing replacements.
     pub expected_queue: Vec<u64>,
+    /// Tail lease generations fence in-place cancellation replacements.
+    pub expected_tail_generations: Vec<(u64, u64)>,
     /// Keys to remove or replace, in deterministic key order.
     pub affected_keys: Vec<RecordKey>,
     /// Effective replacements for keys still touched by active layers.
@@ -189,6 +191,20 @@ impl OptimisticShadowReconciliation {
                 .any(|owners| owners[0] >= owners[1])
         {
             return Err(ProjectionCompositionError::LayerOrder);
+        }
+        if self
+            .expected_tail_generations
+            .iter()
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>()
+            != self
+                .expected_queue
+                .iter()
+                .skip(1)
+                .copied()
+                .collect::<Vec<_>>()
+        {
+            return Err(ProjectionCompositionError::InvalidReconciliation);
         }
         if self.affected_keys.windows(2).any(|keys| keys[0] >= keys[1]) {
             return Err(ProjectionCompositionError::InvalidReconciliation);

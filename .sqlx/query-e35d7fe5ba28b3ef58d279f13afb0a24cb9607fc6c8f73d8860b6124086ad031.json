@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT body_html_sanitized, body_text FROM email_messages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "body_html_sanitized",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "body_text",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "e35d7fe5ba28b3ef58d279f13afb0a24cb9607fc6c8f73d8860b6124086ad031"
+}

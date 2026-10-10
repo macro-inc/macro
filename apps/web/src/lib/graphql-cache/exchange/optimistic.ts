@@ -116,7 +116,22 @@ export type QueryRevalidation = {
   onlyOnLinkFailure?: boolean;
 };
 
+export type DurableMutationIntent = {
+  kind: string;
+  payload: Record<string, unknown>;
+  /** Fence and replace the same UUID's current request, including a live lease. */
+  replace?: boolean;
+  /** Atomically reserve one active intent for a normalized entity across tabs. */
+  exclusive?: {
+    entityKey: string;
+    /** A successful response releases ownership only when this value matches. */
+    releaseOn: { responsePath: string[]; value: string };
+  };
+};
+
 export type OptimisticMutationOptions = {
+  /** Preserve recovery data through rollback and forbid a non-durable network fallback. */
+  durableIntent?: DurableMutationIntent;
   /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -148,6 +163,7 @@ export type OptimisticPatch<T> = T extends readonly (infer Item)[]
       : T;
 
 export type OptimisticMutationContext<TData = unknown> = {
+  durableIntent?: DurableMutationIntent;
   uuid: string;
   optimisticResponse: TData;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -517,6 +533,7 @@ export function optimisticMutationContext<TData>(
     uuid,
     clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
+    durableIntent: options.durableIntent,
     identityBindings: options.identityBindings
       ? [...options.identityBindings]
       : undefined,
@@ -567,6 +584,7 @@ export function optimisticContextOf(
       uuid: context.uuid,
       clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
+      durableIntent: context.durableIntent,
       identityBindings: context.identityBindings,
       linkPatches: Array.isArray(context.linkPatches)
         ? context.linkPatches

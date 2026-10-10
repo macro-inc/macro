@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages\n               SET delivery_status = $2, processing = $3, delivery_claim_id = $4,\n                   delivery_started_at = CASE WHEN $5 THEN now() ELSE NULL END\n               WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8bdf2aa37136afb75fb57d43737c95c493c707003c199d7b8310477026892ce1"
+}

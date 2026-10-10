@@ -321,6 +321,7 @@ export type ApiMessage = {
     provider_id?: string | null;
     provider_thread_id?: string | null;
     replying_to_id?: string | null;
+    scheduled_send_status?: null | ScheduledSendStatus;
     scheduled_send_time?: string | null;
     sent_at?: string | null;
     size_estimate?: number | null;
@@ -1442,6 +1443,11 @@ export type ResyncResponse = {
      */
     backfill_job_id: string;
 };
+
+/**
+ * The user-visible delivery state of an unsent scheduled message.
+ */
+export type ScheduledSendStatus = 'pending' | 'sending' | 'failed' | 'unconfirmed';
 
 /**
  * Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).

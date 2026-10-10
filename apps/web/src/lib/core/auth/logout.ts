@@ -14,6 +14,11 @@ import {
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
+import {
+  emailSendQueueSelected,
+  readEmailSendIntents,
+  settledSendAttempt,
+} from '@queries/email/send-queue';
 import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
@@ -77,9 +82,13 @@ export function useLogout() {
     try {
       const inspectDrafts = async () => {
         await flushLocalDrafts();
-        return await listLocalDrafts();
+        const [drafts, sends] = await Promise.all([
+          listLocalDrafts(),
+          emailSendQueueSelected() ? readEmailSendIntents() : [],
+        ]);
+        return { drafts, sends };
       };
-      const drafts = await Promise.race([
+      const { drafts, sends } = await Promise.race([
         inspectDrafts(),
         new Promise<never>((_, reject) => {
           timer = setTimeout(
@@ -91,9 +100,16 @@ export function useLogout() {
       const unsynced = drafts.filter((draft) => draft.status !== 'synced');
       if (unsynced.length)
         warning = `${unsynced.length} draft(s) have changes saved only on this device. Signing out removes those changes and their pending attachments.`;
+      if (sends.some((send) => settledSendAttempt(send)?.status !== 'SENT'))
+        warning = [
+          warning,
+          'Signing out removes queued sends and their recovery copies from this device. Sends already accepted by the server may still be delivered; signing out does not cancel them.',
+        ]
+          .filter(Boolean)
+          .join(' ');
     } catch {
       warning =
-        'Draft storage could not be checked. Signing out removes drafts and attachments saved only on this device, including any changes that have not synced.';
+        'Draft storage could not be checked. Signing out removes drafts, queued sends, and attachments saved only on this device. Sends already accepted by the server may still be delivered.';
     } finally {
       clearTimeout(timer);
     }

@@ -4,6 +4,10 @@
 
 mod loaders;
 mod mutation;
+mod send;
+pub use send::{
+    EmailSendAttemptInput, EmailSendAttemptPayload, GraphqlEmailSendMutation, load_send_attempt,
+};
 mod objects;
 mod user_objects;
 mod user_query;

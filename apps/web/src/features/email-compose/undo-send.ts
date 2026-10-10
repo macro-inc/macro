@@ -6,6 +6,14 @@ import {
   unscheduleEmailMessage,
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
+import {
+  cancelEmailSendQueued,
+  EmailSendCancellationTooLate,
+  EmailSendDeliveryUnconfirmed,
+  emailSendLocked,
+  readEmailSendIntents,
+  restoreCancelledEmailSend,
+} from '@queries/email/send-queue';
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import type { ApiDraftInput } from '@service-email/generated/schemas';
 import { prepareEmailBodyFromHtml } from './primitives/prepare-email-body';
@@ -43,13 +51,44 @@ async function unscheduleWithRetry(
   return unscheduleEmailMessage({ draftID: draftId }, linkId);
 }
 
-/**
- * The shared undo-send flow: claims the guard, unschedules with retry,
- * surfaces failures (including the definitive "already sent" 400), and on
- * success invalidates the previews then runs the surface-specific `onUndone`
- * work — cache edits, snapshot restore, navigation — before announcing the
- * cancellation. Callers keep only what genuinely differs per surface.
- */
+/** Durable undo survives navigation and restores only confirmed cancellations. */
+export async function runQueuedUndoSend(options: {
+  draftId: string;
+  attemptId: string;
+  onUndone: () => Promise<void> | void;
+}): Promise<void> {
+  const { draftId, attemptId } = options;
+  if (!tryBeginUndoSend(draftId)) return;
+  try {
+    const intent = (await readEmailSendIntents()).find(
+      (row) => row.uuid === attemptId
+    );
+    if (!intent) throw new Error('This send is no longer available to undo');
+    const updated = await cancelEmailSendQueued(intent);
+    if (emailSendLocked(updated)) {
+      endUndoSend(draftId);
+      toast.alert('Cancellation pending — waiting for confirmation');
+      return;
+    }
+    await restoreCancelledEmailSend(updated);
+    await options.onUndone();
+    toast.success('Send cancelled');
+  } catch (error) {
+    endUndoSend(draftId);
+    Telemetry.error(
+      error instanceof Error ? error : new Error('Failed to undo send')
+    );
+    toast.failure(
+      error instanceof EmailSendDeliveryUnconfirmed
+        ? error.message
+        : error instanceof EmailSendCancellationTooLate
+          ? 'Too late to undo — delivery has already started'
+          : 'Failed to undo send'
+    );
+  }
+}
+
+/** Unschedules legacy sends, then restores the composing surface with feedback. */
 export async function runUndoSend(options: {
   draftId: string;
   /** The X-Email-Link-Id header value the send itself used. */

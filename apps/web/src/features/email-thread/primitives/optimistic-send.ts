@@ -124,6 +124,8 @@ export function createOptimisticThreadSend(
   const delivery: EmailComposeContext['delivery'] = {
     ...compose.delivery,
     async sendMessage(input) {
+      if (compose.delivery.queueActive?.())
+        return await compose.delivery.sendMessage(input);
       const entry = prepare(input);
       if (!entry) return await compose.delivery.sendMessage(input);
       const acknowledged = confirmed();
@@ -158,7 +160,7 @@ export function createOptimisticThreadSend(
     async undoSend(input) {
       await compose.delivery.undoSend({
         ...input,
-        onUndone: async () => {
+        onUndone: async (result) => {
           setPending((entries) =>
             entries.filter(
               (entry) =>
@@ -166,7 +168,7 @@ export function createOptimisticThreadSend(
                 entry.message.db_id !== input.draftId
             )
           );
-          await input.onUndone();
+          await input.onUndone(result);
         },
       });
     },

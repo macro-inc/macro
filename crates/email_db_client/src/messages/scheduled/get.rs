@@ -57,6 +57,7 @@ pub async fn get_and_start_processing_scheduled_message(
         SET processing = true, updated_at = NOW()
         WHERE link_id = $1 AND message_id = $2
           AND NOT sent AND NOT processing AND send_time <= NOW()
+          AND delivery_claim_id IS NULL AND delivery_started_at IS NULL AND delivery_status = 'ready'
         RETURNING link_id, message_id, send_time, sent, processing, actor_id
         "#,
         link_id,

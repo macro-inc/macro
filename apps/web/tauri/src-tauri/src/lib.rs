@@ -283,6 +283,8 @@ pub fn run() {
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_init_with_schema,
             graphql_cache_plugin::commands::graphql_cache_current_revision,
+            graphql_cache_plugin::commands::graphql_cache_durable_mutation_intents,
+            graphql_cache_plugin::commands::graphql_cache_retire_durable_mutation_intent,
             graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_watch,

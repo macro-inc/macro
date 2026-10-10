@@ -1,6 +1,7 @@
 import type { DraftAttempt } from '@app/features/email-compose/core/local-draft';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import {
+  type DurableMutationIntent,
   executeOptimisticMutation,
   type OptimisticResponse,
   optimisticMutationDispositionOf,
@@ -72,6 +73,7 @@ export type GraphqlSaveEmailDraftArgs = Omit<
   senderIsSignal?: boolean;
   /** Original queue coalescing key survives adoption of server IDs. */
   mutationUuid?: string;
+  durableIntent?: DurableMutationIntent;
   clientMetadata?: DraftAttempt;
   localRevision?: number;
 };
@@ -187,7 +189,7 @@ function optimisticContact(
  * The cache binds the handle to the server identity atomically at settlement,
  * rebasing later queued edits and preserving reads through the old handle.
  */
-function optimisticDraftEntity(
+export function optimisticDraftEntity(
   args: GraphqlSaveEmailDraftArgs
 ): OptimisticDraftEntity {
   const now = new Date().toISOString();
@@ -209,6 +211,7 @@ function optimisticDraftEntity(
     isDraft: true,
     hasAttachments: existing?.hasAttachments ?? false,
     scheduledSendTime: args.sendTime ?? existing?.scheduledSendTime ?? null,
+    scheduledSendStatus: existing?.scheduledSendStatus ?? null,
     bodyText: args.bodyText ?? null,
     bodyHtmlSanitized: args.optimisticBodyHtml,
     bodyMacro: args.bodyMacro ?? null,
@@ -251,6 +254,7 @@ export async function executeGraphqlSaveEmailDraft(
     newThreadOwnerId: _newThreadOwnerId,
     senderIsSignal: _senderIsSignal,
     mutationUuid: _mutationUuid,
+    durableIntent: _durableIntent,
     clientMetadata: _clientMetadata,
     localRevision: _localRevision,
     ...input
@@ -300,6 +304,7 @@ export async function executeGraphqlSaveEmailDraft(
       // draft instead of one per debounce tick. The delete reuses the key —
       // a discard supersedes any still-queued save.
       uuid: args.mutationUuid ?? String(args.draftId),
+      durableIntent: args.durableIntent,
       clientMetadata: args.clientMetadata,
       identityBindings: [
         {

@@ -554,17 +554,35 @@ impl crate::domain::scheduled_delivery::ScheduledDeliveryRepo for ClaimRepo {
     type Claim = (Uuid, Uuid);
     type Sent = ();
 
-    async fn try_claim(&self, link: Uuid, message: Uuid) -> anyhow::Result<Option<Self::Claim>> {
+    async fn try_claim(
+        &self,
+        link: Uuid,
+        message: Uuid,
+    ) -> anyhow::Result<Option<crate::domain::scheduled_delivery::ClaimedDelivery<Self::Claim>>>
+    {
         Ok(
             get_and_start_processing_scheduled_message(&self.0, link, message)
                 .await?
-                .map(|_| (link, message)),
+                .map(|_| crate::domain::scheduled_delivery::ClaimedDelivery {
+                    claim: (link, message),
+                    mode: crate::domain::scheduled_delivery::DeliveryMode::Send,
+                }),
         )
     }
     async fn complete(&self, _: &Self::Claim, _: ()) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn release(&self, claim: Self::Claim) -> anyhow::Result<()> {
+    async fn begin_send(&self, _: &Self::Claim) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+    async fn pause(
+        &self,
+        _: &Self::Claim,
+        _: crate::domain::scheduled_delivery::DeliveryPause,
+    ) -> anyhow::Result<()> {
+        panic!("unexpected pause")
+    }
+    async fn release(&self, claim: &Self::Claim) -> anyhow::Result<()> {
         email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
             &self.0, claim.0, claim.1,
         )
@@ -582,7 +600,21 @@ struct PendingProvider {
 impl crate::domain::scheduled_delivery::ScheduledMessageSender<(Uuid, Uuid), ()>
     for PendingProvider
 {
-    async fn send_claimed(&self, _: &(Uuid, Uuid)) -> anyhow::Result<()> {
+    type Prepared = ();
+    async fn prepare(
+        &self,
+        _: &(Uuid, Uuid),
+    ) -> Result<(), crate::domain::scheduled_delivery::PreparationError> {
+        Ok(())
+    }
+    async fn reconcile(&self, _: &(Uuid, Uuid)) -> anyhow::Result<Option<()>> {
+        panic!("unexpected reconciliation")
+    }
+    async fn send_prepared(
+        &self,
+        _: &(Uuid, Uuid),
+        _: (),
+    ) -> Result<(), crate::domain::scheduled_delivery::SubmissionError> {
         self.entered.notify_one();
         self.finish.notified().await;
         Ok(())

@@ -486,6 +486,12 @@ export class CacheWorkerCore {
       .with({ kind: 'current-revision' }, async () => {
         return parseCacheRevision(await this.requireEngine().currentRevision());
       })
+      .with({ kind: 'retire-durable-mutation-intent' }, async (request) =>
+        this.requireEngine().retireDurableMutationIntent(request.uuid)
+      )
+      .with({ kind: 'durable-mutation-intents' }, async () =>
+        this.requireEngine().durableMutationIntents()
+      )
       .with({ kind: 'current-storage-generation' }, async () => {
         return parseStorageGeneration(
           await this.requireEngine().currentStorageGeneration()

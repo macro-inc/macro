@@ -25,6 +25,56 @@ function hoursFromNow(hours: number): Date {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
 }
 
+it.each(['standalone', 'reply'] as const)(
+  '%s refreshes lifecycle after a queued cancellation before accepting an old sent observation',
+  async (kind) => {
+    vi.useFakeTimers();
+    const context = createComposeContext();
+    const [locked, setLocked] = createSignal(false);
+    context.delivery.sendLocked = locked;
+    const state = composer(kind, context);
+    try {
+      state.edit('Keep this draft');
+      await vi.advanceTimersByTimeAsync(600);
+      const lifecycle = vi.mocked(context.draftLifecycle.observe).mock
+        .results[0].value;
+      const refreshed = Promise.withResolvers<undefined>();
+      vi.mocked(lifecycle.refresh).mockImplementationOnce(() => {
+        context.setDraftLifecycle(undefined);
+        return refreshed.promise;
+      });
+      setLocked(true);
+      context.setDraftLifecycle({
+        type: 'sent',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.disabled()).toBe(true);
+      setLocked(false);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lifecycle.refresh).toHaveBeenCalledOnce();
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+      context.setDraftLifecycle({
+        type: 'editing',
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
+        observedAt: Date.now(),
+      });
+      refreshed.resolve(undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.disabled()).toBe(false);
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+      vi.useRealTimers();
+    }
+  }
+);
+
 function composer(
   kind: 'standalone' | 'reply',
   composeContext: EmailComposeContext,

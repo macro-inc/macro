@@ -87,7 +87,7 @@ async fn write_group(
 struct OwnerOnlyStorage(InMemoryStorage);
 
 impl Storage for OwnerOnlyStorage {
-    type Error = std::convert::Infallible;
+    type Error = cache_core::durable_intent::DurableIntentError;
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         assert!(

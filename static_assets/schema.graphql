@@ -297,6 +297,14 @@ type CompleteMutationRoot {
 	"""
 	deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!
 	"""
+	Durably accept an immutable send snapshot; safe to replay after response loss.
+	"""
+	sendEmailMessage(input: SendEmailMessageInput!): SendEmailMessagePayload!
+	"""
+	Revoke delivery authority even if the original send request has not arrived.
+	"""
+	cancelEmailSend(input: EmailSendAttemptInput!): SendEmailMessagePayload!
+	"""
 	Create an initiative owned by the authenticated user.
 	"""
 	createInitiative(input: CreateInitiativeInput!): GraphqlSoupInitiative!
@@ -548,6 +556,76 @@ input DuplicateEntityInput {
 	Optional display name for the new entity.
 	"""
 	displayName: String
+}
+
+"""
+Identifies one send action independently of its server message identity.
+"""
+input EmailSendAttemptInput {
+	"""
+	Stable UUID generated for the explicit Send action.
+	"""
+	attemptId: ID!
+	"""
+	Sending inbox captured at Send, never inferred during replay.
+	"""
+	linkId: ID!
+}
+
+"""
+Current result of one replay-safe send action.
+"""
+type EmailSendAttemptPayload {
+	"""
+	Stable send-action identity.
+	"""
+	attemptId: ID!
+	"""
+	Current delivery state.
+	"""
+	status: EmailSendStatus!
+	"""
+	First acceptance's delivery deadline, preserved across retries.
+	"""
+	sendTime: String
+	"""
+	Current message, absent if cancelled before admission or subsequently deleted.
+	"""
+	message: GraphqlSoupEmailMessage
+	"""
+	Server conversation identity, when admitted.
+	"""
+	threadId: ID
+}
+
+"""
+Authoritative delivery state; acceptance is not proof of provider delivery.
+"""
+enum EmailSendStatus {
+	"""
+	Durably accepted; preparation may be retried and cancellation remains safe.
+	"""
+	ACCEPTED
+	"""
+	Submission began, or a legacy claim has an unknown outcome; cancellation is unsafe.
+	"""
+	SENDING
+	"""
+	Delivery failed before acceptance; cancellation can restore the draft.
+	"""
+	FAILED
+	"""
+	Delivery may have occurred and is being reconciled without resending.
+	"""
+	DELIVERY_UNCONFIRMED
+	"""
+	Provider delivery was recorded.
+	"""
+	SENT
+	"""
+	This attempt cannot deliver.
+	"""
+	CANCELLED
 }
 
 """
@@ -5840,6 +5918,28 @@ The way a routine starts.
 union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger
 
 """
+The persisted state of a scheduled delivery.
+"""
+enum GraphqlScheduledSendStatus {
+	"""
+	Waiting for its send time or safely retrying preparation.
+	"""
+	PENDING
+	"""
+	Provider submission has started.
+	"""
+	SENDING
+	"""
+	Delivery was definitely rejected; the draft can be restored.
+	"""
+	FAILED
+	"""
+	Delivery may have succeeded; reconciliation is required.
+	"""
+	UNCONFIRMED
+}
+
+"""
 A select-option property value.
 """
 type GraphqlSelectOptionPropertyValue {
@@ -7365,6 +7465,10 @@ type GraphqlSoupEmailMessage {
 	"""
 	scheduledSendTime: String
 	"""
+	Whether the scheduled delivery is pending, sending, failed, or unconfirmed.
+	"""
+	scheduledSendStatus: GraphqlScheduledSendStatus
+	"""
 	The sender of the message.
 	"""
 	from: GraphqlSoupEmailContact
@@ -8225,6 +8329,10 @@ type GraphqlUser {
 	"""
 	emailLinks: [GraphqlEmailLink!]!
 	"""
+	Inspect a queued send after reconnect or restart without resending it.
+	"""
+	emailSendAttempt(input: EmailSendAttemptInput!): EmailSendAttemptPayload
+	"""
 	Fetch one accessible email thread by its canonical identifier.
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
@@ -8770,6 +8878,58 @@ type SaveEmailDraftPayload {
 	The draft's thread, reloaded as its authoritative cache record.
 	"""
 	thread: GraphqlSoupEmailThread!
+}
+
+"""
+Immutable content approved by the user.
+"""
+input SendEmailMessageInput {
+	"""
+	Stable attempt and sending inbox.
+	"""
+	attempt: EmailSendAttemptInput!
+	"""
+	Full message snapshot; scheduled time is ignored for immediate Send.
+	"""
+	message: SaveEmailDraftInput!
+	"""
+	Per-message signature preference.
+	"""
+	includeSignature: Boolean
+	"""
+	Completed draft attachment IDs.
+	"""
+	attachmentIds: [ID!]!
+	"""
+	Original attachment IDs for forwarded attachments.
+	"""
+	forwardedAttachmentIds: [ID!]!
+	"""
+	Editor HTML before the watermark, encoded like message HTML.
+	"""
+	restoreBodyHtml: String
+	"""
+	Editor plain text before the watermark.
+	"""
+	restoreBodyText: String
+	"""
+	Editor document before the watermark.
+	"""
+	restoreBodyMacro: String
+}
+
+"""
+Send admission or cancellation and the updated conversation.
+"""
+type SendEmailMessagePayload {
+	"""
+	Admission/cancellation result and hydrated message.
+	"""
+	attempt: EmailSendAttemptPayload!
+	"""
+	Updated thread, absent for cancellation before admission.
+	"""
+	thread: GraphqlSoupEmailThread
 }
 
 """

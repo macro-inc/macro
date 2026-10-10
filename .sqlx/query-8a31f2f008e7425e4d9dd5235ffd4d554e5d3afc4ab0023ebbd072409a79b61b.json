@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.body_text, m.is_draft, s.send_time FROM email_messages m JOIN email_scheduled_messages s ON s.message_id = m.id WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "send_time",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8a31f2f008e7425e4d9dd5235ffd4d554e5d3afc4ab0023ebbd072409a79b61b"
+}

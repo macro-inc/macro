@@ -138,6 +138,10 @@ impl Storage for BrowserStorage {
         self.inner.load_optimistic_projections(keys).await
     }
 
+    async fn retire_mutation_intent(&mut self, uuid: uuid::Uuid) -> Result<bool, Self::Error> {
+        self.inner.retire_mutation_intent(uuid).await
+    }
+
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
         self.inner.load_mutation_queue().await
     }

@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.request, a.message_id, a.thread_id, a.send_time, a.cancelled,\n                  (a.sent OR COALESCE(m.is_sent, false)) AS \"sent!\",\n                  COALESCE(s.processing, false) AS \"processing!\",\n                  s.delivery_status AS \"delivery_status?\", s.delivery_started_at,\n                  s.delivery_claim_id,\n                  a.delivery_unconfirmed\n           FROM email_send_attempts a\n           LEFT JOIN email_messages m ON m.id = a.message_id AND m.link_id = a.link_id\n           LEFT JOIN email_scheduled_messages s ON s.message_id = a.message_id AND s.link_id = a.link_id\n           WHERE a.user_id = $1 AND a.link_id = $2 AND a.attempt_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "request",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "send_time",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "cancelled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "sent!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "processing!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "delivery_status?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "delivery_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "delivery_claim_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "delivery_unconfirmed",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "02ec9595e06a978644d0c66b1e7df88d98e569ebcd7a73b2951b2f4f9f0bd338"
+}

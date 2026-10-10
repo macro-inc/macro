@@ -208,3 +208,100 @@ async fn malformed_message_json_is_a_decode_error() {
         .expect_err("malformed JSON should fail");
     assert!(matches!(error, GmailApiHttpError::Decode(_)));
 }
+
+#[tokio::test]
+async fn sent_lookup_encodes_message_id_and_includes_sent_trash() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .and(query_param("q", "rfc822msgid:<attempt+123@macro.com>"))
+        .and(query_param("labelIds", "SENT"))
+        .and(query_param("includeSpamTrash", "true"))
+        .and(query_param("maxResults", "2"))
+        .and(header("authorization", "Bearer token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "messages": [{ "id": "sent-1", "threadId": "thread-1" }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let found = find_sent_message(&client(&server), "token", "attempt+123@macro.com")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(found.id, "sent-1");
+    assert_eq!(found.thread_id, "thread-1");
+}
+
+#[tokio::test]
+async fn sent_lookup_rejects_multiple_matches_and_incomplete_pages() {
+    for body in [
+        serde_json::json!({"messages":[{"id":"one","threadId":"thread"},{"id":"two","threadId":"thread"}]}),
+        serde_json::json!({"messages":[{"id":"one","threadId":"thread"}],"nextPageToken":"more"}),
+        serde_json::json!({"messages":[{"id":"one","threadId":""}]}),
+    ] {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/users/me/messages"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body))
+            .mount(&server)
+            .await;
+        assert!(
+            find_sent_message(&client(&server), "token", "attempt@macro.com")
+                .await
+                .is_err()
+        );
+    }
+}
+
+#[tokio::test]
+async fn sent_lookup_distinguishes_no_match_from_search_failure() {
+    let empty = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .mount(&empty)
+        .await;
+    assert!(
+        find_sent_message(&client(&empty), "token", "attempt@macro.com")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    for status in [401, 404, 429, 500] {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/users/me/messages"))
+            .respond_with(ResponseTemplate::new(status))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let error = find_sent_message(&client(&server), "token", "attempt@macro.com")
+            .await
+            .unwrap_err();
+        assert_eq!(error.status().unwrap().as_u16(), status);
+    }
+}
+
+#[tokio::test]
+async fn send_does_not_follow_a_redirect_and_repeat_submission() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/users/me/messages/send"))
+        .respond_with(ResponseTemplate::new(307).insert_header("location", "/second-send"))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/second-send"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "unexpected", "threadId": "unexpected"
+        })))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let error = send_message(&client(&server), "token", b"mime", None)
+        .await
+        .unwrap_err();
+    assert_eq!(error.status().unwrap().as_u16(), 307);
+}

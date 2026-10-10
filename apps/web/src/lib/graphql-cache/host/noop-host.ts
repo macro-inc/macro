@@ -28,6 +28,12 @@ export function createNoopCacheHost(): CacheHost {
     async currentRevision() {
       return INITIAL_CACHE_REVISION;
     },
+    async retireDurableMutationIntent() {
+      return false;
+    },
+    async durableMutationIntents() {
+      return [];
+    },
     async currentStorageGeneration() {
       throw new Error('normalized GraphQL cache is unavailable');
     },

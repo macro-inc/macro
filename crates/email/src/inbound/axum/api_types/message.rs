@@ -189,6 +189,9 @@ pub struct ApiMessage {
     pub has_attachments: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scheduled_send_time: Option<DateTime<Utc>>,
+    /// Delivery state, including failures and unresolved provider outcomes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheduled_send_status: Option<crate::domain::models::ScheduledSendStatus>,
     pub from: Option<ApiContactInfo>,
     pub to: Vec<ApiContactInfo>,
     pub cc: Vec<ApiContactInfo>,
@@ -229,6 +232,7 @@ impl From<Message> for ApiMessage {
             is_draft: m.is_draft,
             has_attachments: m.has_attachments,
             scheduled_send_time: m.scheduled_send_time,
+            scheduled_send_status: m.scheduled_send_status,
             from: m.from.map(ApiContactInfo::from),
             to: m.to.into_iter().map(ApiContactInfo::from).collect(),
             cc: m.cc.into_iter().map(ApiContactInfo::from).collect(),

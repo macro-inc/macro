@@ -19,6 +19,7 @@ import {
 import type { EmailScheduleState } from '../primitives/email-send-schedule';
 import { DraftOwnerFixture } from './draft-owner-fixture';
 import { DraftRecoveryFixture } from './draft-recovery-fixture';
+import { ScheduleRecoveryFixture } from './schedule-recovery-fixture';
 
 type ScheduledItem = {
   id: string;
@@ -338,6 +339,8 @@ render(
       <DraftOwnerFixture />
     ) : new URLSearchParams(location.search).has('recovery') ? (
       <DraftRecoveryFixture />
+    ) : new URLSearchParams(location.search).has('scheduled-recovery') ? (
+      <ScheduleRecoveryFixture />
     ) : (
       <Fixture />
     ),

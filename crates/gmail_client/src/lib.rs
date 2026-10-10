@@ -58,6 +58,9 @@ use models_email::gmail::{
 pub struct GmailClient {
     /// The inner client used to make requests
     inner: reqwest::Client,
+    /// Sending crosses a durable submission boundary and must never be retried
+    /// or redirected automatically by the transport.
+    send_client: reqwest::Client,
     /// The base url for Gmail API
     base_url: String,
     /// The url for fetching google certs
@@ -95,6 +98,11 @@ impl GmailClient {
     ) -> Self {
         Self {
             inner: reqwest::Client::new(),
+            send_client: reqwest::Client::builder()
+                .retry(reqwest::retry::never())
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .expect("Gmail send HTTP client should initialize"),
             base_url: gmail_url.trim_end_matches('/').to_string(),
             certs_url: jwks_url,
             contacts_url: people_url.trim_end_matches('/').to_string(),
@@ -256,6 +264,16 @@ impl GmailClient {
         thread_id: Option<&str>,
     ) -> Result<models_email::gmail::SentMessageResource, GmailApiHttpError> {
         messages::send_message(self, access_token, mime, thread_id).await
+    }
+
+    /// Looks for a unique sent message by its RFC 5322 Message-ID, including trash.
+    #[tracing::instrument(skip(self, access_token, message_id), err)]
+    pub async fn find_sent_message(
+        &self,
+        access_token: &str,
+        message_id: &str,
+    ) -> Result<Option<models_email::gmail::SentMessageResource>, GmailApiHttpError> {
+        messages::find_sent_message(self, access_token, message_id).await
     }
 
     /// Fetches an attachment from Gmail by its provider ID

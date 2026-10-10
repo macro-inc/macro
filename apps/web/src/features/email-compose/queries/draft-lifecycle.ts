@@ -53,6 +53,7 @@ export function deriveEmailDraftLifecycle(input: {
       type: 'scheduled',
       ...identity,
       sendTime: message.scheduled_send_time,
+      deliveryStatus: message.scheduled_send_status ?? undefined,
     };
   }
   return { type: 'editing', ...identity };

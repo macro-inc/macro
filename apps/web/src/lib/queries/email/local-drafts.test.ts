@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import { File as NodeFile } from 'node:buffer';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   ClaimedMutation,
@@ -8,6 +9,8 @@ import type { OperationResult } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({ user: { authenticated: true, id: 'owner' } }));
+const native = vi.hoisted(() => ({ active: false }));
+vi.mock('@core/util/platform', () => ({ isTauri: () => native.active }));
 const stagedUpload = vi.hoisted(() =>
   vi.fn<() => { previewSrc: string; size: number } | undefined>()
 );
@@ -24,17 +27,27 @@ const input = (subject = 'Draft') => ({
   attachments: [],
 });
 const queue: MutationInspection[] = [];
+const sends: unknown[] = [];
 const host = {
+  durableMutationIntents: async () => sends,
   inspectMutations: async () => queue,
   currentStorageGeneration: async () => 'storage',
 } as unknown as CacheHost;
-const claimed = (metadata: unknown) =>
-  ({
-    transactionId: 'tx',
-    clientMetadata: metadata,
-    operationName: 'SaveEmailDraft',
-    superseded: false,
-  }) as ClaimedMutation;
+const claimed = (
+  metadata: ClaimedMutation['clientMetadata']
+): ClaimedMutation => ({
+  transactionId: 'tx',
+  uuid: 'local',
+  requiresConfirmation: false,
+  leaseGeneration: 'lease',
+  query: '',
+  attemptCount: 0,
+  serverFailureCount: 0,
+  clientMetadata: metadata,
+  operationName: 'SaveEmailDraft',
+  superseded: false,
+  variables: { input: { draftId: 'local' } },
+});
 const success = {
   data: {
     saveEmailDraft: { draftId: 'server', thread: { id: 'server-thread' } },
@@ -48,8 +61,10 @@ beforeEach(async () => {
   vi.resetModules();
   localStorage.clear();
   queue.length = 0;
+  sends.length = 0;
   auth.user = { authenticated: true, id: 'owner' };
   stagedUpload.mockReset();
+  native.active = false;
   runtime = await import('./local-drafts');
   await runtime.localDraftStore.clear();
 });
@@ -59,6 +74,176 @@ afterEach(async () => {
 });
 
 describe('draft queue recovery', () => {
+  it('suppresses intermediate offline inbox moves once send owns the final snapshot', async () => {
+    let local = await runtime.saveLocalDraft({
+      ...input('Switch sender offline'),
+      inboxId: 'inbox-a',
+    });
+    const moves: ClaimedMutation[] = [];
+    for (const inboxId of ['inbox-b', 'inbox-c']) {
+      local = await runtime.saveLocalDraft({
+        ...input('Switch sender offline'),
+        inboxId,
+        expectedGeneration: local.generation,
+        expectedRevision: local.revision,
+      });
+      moves.push({
+        ...claimed(await runtime.beginDraftAttempt(local, 'save')),
+        variables: { input: { draftId: 'local', linkId: inboxId } },
+      });
+    }
+    sends.push({
+      uuid: 'send',
+      metadata: {
+        kind: 'email-send-v1',
+        payload: {
+          draft: { draftId: 'local', senderLinkId: 'inbox-c' },
+          workingCopy: local,
+        },
+      },
+    });
+    await runtime.forgetLocalDraft(local.key, local);
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    for (const move of moves)
+      expect(await lifecycle.beforeMutationAttempt!(move)).toBe(false);
+    expect(await runtime.readLocalDraft('local')).toBeUndefined();
+  });
+
+  it('resumes newer send-time edits in a fresh generation without losing files or server aliases', async () => {
+    vi.stubGlobal('File', NodeFile);
+    const original = await runtime.saveLocalDraft(input('Approved send'));
+    const stale = await runtime.beginDraftAttempt(original, 'save');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.onMutationAttemptResult!(claimed(stale), success, false);
+    const file = new File(['Retain these bytes'], 'newer.txt', {
+      type: 'text/plain',
+    });
+    const newer = await runtime.saveLocalDraft({
+      draft: { db_id: 'server', subject: 'Newer edits' },
+      attachments: [{ type: 'local', file }],
+    });
+
+    await runtime.resumeLocalDraft('server', original.generation);
+    const resumed = (await runtime.readLocalDraft('local'))!;
+    expect(resumed.generation).not.toBe(original.generation);
+    expect(resumed).toMatchObject({
+      revision: newer.revision,
+      serverDraftId: 'server',
+      content: { subject: 'Newer edits' },
+    });
+    await runtime.resumeLocalDraft('local', original.generation);
+    expect((await runtime.readLocalDraft('server'))?.generation).toBe(
+      resumed.generation
+    );
+
+    // An expired RPC can return this verdict after cancellation. Its old
+    // generation must not delete the newer recovered content.
+    await lifecycle.onMutationAttemptResult!(
+      claimed(stale),
+      {
+        error: {
+          graphQLErrors: [{ extensions: { code: 'DRAFT_ALREADY_SENT' } }],
+        },
+      } as unknown as OperationResult,
+      false
+    );
+    expect(await runtime.readLocalDraft('server')).toEqual(resumed);
+    const attachments = await runtime.restoreLocalAttachments(resumed);
+    const recovered = attachments[0];
+    expect(recovered.type).toBe('local');
+    if (recovered.type !== 'local') throw new Error('Missing recovered file');
+    expect(await recovered.file.text()).toBe('Retain these bytes');
+
+    const saved = await runtime.saveLocalDraft({
+      draft: { db_id: 'server', subject: 'Edited after cancellation' },
+      attachments,
+      expectedGeneration: resumed.generation,
+      expectedRevision: resumed.revision,
+    });
+    expect(saved.generation).toBe(resumed.generation);
+    expect(saved.revision).toBe(resumed.revision + 1);
+    await expect(
+      runtime.saveLocalDraft({
+        ...input('Obsolete editor'),
+        expectedGeneration: original.generation,
+        expectedRevision: original.revision,
+      })
+    ).rejects.toThrow();
+    expect((await runtime.readLocalDraft('server'))?.content.subject).toBe(
+      'Edited after cancellation'
+    );
+  });
+  it.each(['restoring', 'locally-cancelled', 'cancelled'])(
+    'syncs newer restored edits before the %s send journal is retired',
+    async (state) => {
+      const original = await runtime.saveLocalDraft(input('Original'));
+      const stale = await runtime.beginDraftAttempt(original, 'save');
+      await runtime.forgetLocalDraft('local');
+      await runtime.reviveLocalDraft('local');
+      const restored = await runtime.saveLocalDraft(input('Restored'));
+      await runtime.beginDraftAttempt(restored, 'save');
+      const edited = await runtime.saveLocalDraft(input('Newer edit'));
+      const saving = await runtime.beginDraftAttempt(edited, 'save');
+      sends.push({
+        uuid: 'send',
+        locallyCancelled: state === 'locally-cancelled',
+        metadata: {
+          kind: 'email-send-v1',
+          payload: {
+            draft: { draftId: 'local' },
+            workingCopy: original,
+            restoring: state === 'restoring',
+          },
+        },
+        response:
+          state === 'cancelled'
+            ? { cancelEmailSend: { attempt: { status: 'CANCELLED' } } }
+            : undefined,
+      });
+      const lifecycle = runtime.localDraftQueueLifecycle(host);
+      expect(await lifecycle.beforeMutationAttempt!(claimed(stale))).toBe(
+        false
+      );
+      expect(await lifecycle.beforeMutationAttempt!(claimed(saving))).toBe(
+        true
+      );
+      await lifecycle.onMutationAttemptResult!(claimed(saving), success, false);
+      expect(await runtime.readLocalDraft('local')).toMatchObject({
+        generation: restored.generation,
+        acknowledgedRevision: edited.revision,
+        content: { subject: 'Newer edit' },
+      });
+    }
+  );
+  it('does not resurrect or replay an obsolete draft save owned by a send', async () => {
+    sends.push({
+      uuid: 'send',
+      metadata: {
+        kind: 'email-send-v1',
+        payload: { draft: { draftId: 'local' } },
+      },
+    });
+    const old: MutationInspection = {
+      transactionId: 'old-save',
+      uuid: 'local',
+      operationName: 'SaveEmailDraft',
+      query: 'mutation SaveEmailDraft { saveEmailDraft { draftId } }',
+      superseded: false,
+      variables: { input: { draftId: 'local', subject: 'Old' } },
+      optimisticData: {},
+    };
+    queue.push(old);
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.prepareMutationQueue!();
+    expect(await runtime.readLocalDraft('local')).toBeUndefined();
+    expect(
+      await lifecycle.beforeMutationAttempt!({
+        ...claimed(undefined),
+        uuid: 'local',
+      })
+    ).toBe(false);
+    expect(await runtime.readLocalDraft('local')).toBeUndefined();
+  });
   it('rejects an old editor generation after discard and Undo reuse the server identity', async () => {
     const serverInput = (subject: string) => ({
       draft: { db_id: 'server', subject },
@@ -326,3 +511,68 @@ describe('draft queue recovery', () => {
     });
   });
 });
+
+it.each(['web', 'native'] as const)(
+  'serializes restored copies of one file and adopts an existing upload receipt: %s',
+  async (platform) => {
+    native.active = platform === 'native';
+    const locks = new Map<string, Promise<unknown>>();
+    const original = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: async (name: string, run: () => Promise<void>) => {
+          const previous = locks.get(name) ?? Promise.resolve();
+          const next = previous.then(run);
+          locks.set(
+            name,
+            next.catch(() => {})
+          );
+          return await next;
+        },
+      },
+    });
+    if (native.active) Reflect.deleteProperty(navigator, 'locks');
+    try {
+      const file = new File(['upload'], 'audit.txt');
+      const local = await runtime.saveLocalDraft({
+        ...input(),
+        attachments: [{ type: 'local', file }],
+      });
+      const restored = (await runtime.restoreLocalAttachments(local))[0];
+      if (restored.type !== 'local') throw new Error('Expected local file');
+      const pending = Promise.withResolvers<void>(),
+        started = Promise.withResolvers<void>();
+      const upload = vi.fn(async () => {
+        started.resolve();
+        await pending.promise;
+        await runtime.recordLocalAttachment(
+          'local',
+          file,
+          'uploaded',
+          true,
+          local.generation
+        );
+      });
+      const first = runtime.withLocalAttachmentUpload('local', file, upload);
+      await started.promise;
+      const adopt = vi.fn(async (receipt) => {
+        expect(receipt.uploaded).toBe(true);
+        expect(receipt.attachmentId).toBe('uploaded');
+      });
+      const second = runtime.withLocalAttachmentUpload(
+        'local',
+        restored.file,
+        adopt
+      );
+      expect(adopt).not.toHaveBeenCalled();
+      pending.resolve();
+      await Promise.all([first, second]);
+      expect(upload).toHaveBeenCalledOnce();
+      expect(adopt).toHaveBeenCalledOnce();
+    } finally {
+      if (original) Object.defineProperty(navigator, 'locks', original);
+      else Reflect.deleteProperty(navigator, 'locks');
+    }
+  }
+);

@@ -23,6 +23,7 @@ const message: EmailThreadMessageFieldsFragment = {
   isDraft: true,
   hasAttachments: true,
   scheduledSendTime: '2026-08-07T12:00:00Z',
+  scheduledSendStatus: 'FAILED',
   from: { email: 'from@example.com', name: 'From', photoUrl: 'from-photo' },
   to: [{ email: 'to@example.com', name: 'To', photoUrl: null }],
   cc: [],
@@ -151,6 +152,7 @@ describe('mapGraphqlEmailThreadPage', () => {
       provider_id: 'provider-message-1',
       replying_to_id: 'message-0',
       scheduled_send_time: '2026-08-07T12:00:00Z',
+      scheduled_send_status: 'failed',
       from: { email: 'from@example.com', photo_url: 'from-photo' },
       labels: [
         {

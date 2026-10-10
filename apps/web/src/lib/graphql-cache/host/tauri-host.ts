@@ -301,6 +301,22 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
     },
 
+    async retireDurableMutationIntent(uuid) {
+      await ready;
+      return await request<boolean>(
+        'graphql_cache_retire_durable_mutation_intent',
+        { uuid }
+      );
+    },
+
+    async durableMutationIntents(): Promise<unknown[]> {
+      await ready;
+      return await request<unknown[]>(
+        'graphql_cache_durable_mutation_intents',
+        {}
+      );
+    },
+
     async currentStorageGeneration(): Promise<string> {
       await ready;
       return parseStorageGeneration(

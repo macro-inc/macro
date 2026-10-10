@@ -28,6 +28,11 @@ vi.mock('@queries/email/local-drafts', () => ({
   flushLocalDrafts: vi.fn(async () => {}),
   listLocalDrafts: vi.fn(async () => []),
 }));
+vi.mock('@queries/email/send-queue', () => ({
+  emailSendQueueSelected: () => true,
+  readEmailSendIntents: vi.fn(async () => []),
+  settledSendAttempt: () => ({ status: 'ACCEPTED' }),
+}));
 vi.mock('@core/constant/servers', () => ({ SERVER_HOSTS: {} }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: vi.fn(() => false),
@@ -58,6 +63,7 @@ import {
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
+import { readEmailSendIntents } from '@queries/email/send-queue';
 import { authServiceClient } from '@service-auth/client';
 import { confirmDialog } from '@ui';
 import { clearLocalAuthSession, useLogout } from './logout';
@@ -178,6 +184,28 @@ describe('local draft logout warning', () => {
       expect(confirmDialog).toHaveBeenLastCalledWith(
         expect.objectContaining({
           body: expect.stringContaining('1 draft(s)'),
+        }),
+        expect.anything()
+      );
+      expect(authServiceClient.logout).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('warns about queued sends after their working copies have been retired', async () => {
+    vi.mocked(readEmailSendIntents).mockResolvedValueOnce([
+      { uuid: 'send' },
+    ] as Awaited<ReturnType<typeof readEmailSendIntents>>);
+    const { logout, dispose } = createRoot((dispose) => ({
+      logout: useLogout(),
+      dispose,
+    }));
+    try {
+      await logout();
+      expect(confirmDialog).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('signing out does not cancel them'),
         }),
         expect.anything()
       );

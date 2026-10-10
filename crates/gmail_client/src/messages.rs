@@ -60,6 +60,55 @@ pub(crate) async fn list_messages(
         .collect())
 }
 
+/// Finds a unique sent message, including messages moved into spam or trash.
+/// Ambiguous or incomplete search responses must never count as proof of absence.
+#[tracing::instrument(skip(client, access_token, message_id), err)]
+pub(crate) async fn find_sent_message(
+    client: &GmailClient,
+    access_token: &str,
+    message_id: &str,
+) -> Result<Option<SentMessageResource>, GmailApiHttpError> {
+    let response = client
+        .inner
+        .get(format!("{}/users/me/messages", client.base_url))
+        .bearer_auth(access_token)
+        .query(&[
+            ("q", format!("rfc822msgid:<{message_id}>")),
+            ("labelIds", "SENT".to_string()),
+            ("includeSpamTrash", "true".to_string()),
+            ("maxResults", "2".to_string()),
+        ])
+        .send()
+        .await
+        .map_err(GmailApiHttpError::transport)?;
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
+    }
+    let matches: SentMessageMatches = decode_json_response(response).await?;
+    let mut messages = matches.messages.unwrap_or_default();
+    if messages.len() > 1 || matches.next_page_token.is_some() {
+        return Err(GmailApiHttpError::InvalidResponse(
+            "multiple sent messages match the delivery identifier".to_string(),
+        ));
+    }
+    if messages
+        .iter()
+        .any(|message| message.id.is_empty() || message.thread_id.is_empty())
+    {
+        return Err(GmailApiHttpError::InvalidResponse(
+            "sent message match omitted provider identifiers".to_string(),
+        ));
+    }
+    Ok(messages.pop())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SentMessageMatches {
+    messages: Option<Vec<SentMessageResource>>,
+    next_page_token: Option<String>,
+}
+
 #[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_message(
     client: &GmailClient,
@@ -134,7 +183,7 @@ pub(crate) async fn send_message(
     };
 
     let response = client
-        .inner
+        .send_client
         .post(url)
         .bearer_auth(access_token)
         .json(&payload)

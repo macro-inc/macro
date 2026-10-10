@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_send_attempts SET cancelled = true WHERE message_id = $1 AND link_id = $2 AND NOT cancelled",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "87c4a8c8a3ef8b4df680af09ef3b59fdc6d865b8d3bccef9bce02f00bd392df9"
+}

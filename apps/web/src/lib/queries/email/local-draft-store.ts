@@ -3,6 +3,8 @@ import type {
   LocalDraft,
 } from '@app/features/email-compose/core/local-draft';
 
+import type { EmailSendIntent } from './send-queue';
+
 /** Only pre-metadata queue entries need a separate durable association. */
 type AttemptRecord = DraftAttempt & {
   transactionId: string;
@@ -10,7 +12,7 @@ type AttemptRecord = DraftAttempt & {
 };
 type Session = { accountId: string; epoch: string };
 type StoredDraft = LocalDraft & { epoch: string };
-const STORES = ['drafts', 'files', 'attempts', 'meta'] as const;
+const STORES = ['drafts', 'files', 'attempts', 'sends', 'meta'] as const;
 
 /** Transactional working-copy storage. Unlike a query cache, it never evicts edits. */
 export function createLocalDraftStore(
@@ -38,9 +40,11 @@ export function createLocalDraftStore(
   };
   const open = () =>
     (connection ??= new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(dbName, 1);
+      const request = indexedDB.open(dbName, 2);
       request.onupgradeneeded = () => {
-        for (const name of STORES) request.result.createObjectStore(name);
+        for (const name of STORES)
+          if (!request.result.objectStoreNames.contains(name))
+            request.result.createObjectStore(name);
       };
       request.onerror = () => {
         connection = undefined;
@@ -251,97 +255,108 @@ export function createLocalDraftStore(
             session,
             () => {
               const drafts = tx.objectStore('drafts');
-              const retired = tx
-                .objectStore('meta')
-                .get(['retired', input.key, input.generation]);
-              retired.onsuccess = () => {
-                if (retired.result) {
-                  finish(undefined);
-                  return;
-                }
-                const request = drafts.get(input.key);
-                request.onsuccess = () => {
-                  const previous = request.result as StoredDraft | undefined;
-                  if (previous && previous.generation !== input.generation) {
-                    finish(undefined);
-                    return;
-                  }
-                  const paused =
-                    previous?.status === 'failed' ||
-                    previous?.status === 'unconfirmed' ||
-                    previous?.status === 'delete-failed';
-                  if (previous?.status === 'deleting') {
-                    finish(undefined);
-                    return;
-                  }
-                  if ((previous?.revision ?? 0) !== input.expectedRevision) {
-                    finish(
-                      new Error(
-                        'This draft changed while saving. Reopen it to use the latest version.'
-                      )
-                    );
-                    return;
-                  }
-                  const { expectedRevision: _expectedRevision, ...snapshot } =
-                    input;
-                  const draft: StoredDraft = {
-                    ...snapshot,
-                    epoch: session.epoch,
-                    latestAttemptId: previous?.latestAttemptId,
-                    queuedAttemptId: previous?.queuedAttemptId,
-                    attachments: input.attachments.map((attachment) => {
-                      if (attachment.type !== 'local') return attachment;
-                      const receipt = previous?.attachments.find(
-                        (saved) =>
-                          saved.type === 'local' && saved.id === attachment.id
-                      );
-                      // Upload callbacks can commit while file bytes are being copied.
-                      // The working-copy snapshot must not erase a newer receipt.
-                      return receipt?.type === 'local'
-                        ? {
-                            ...attachment,
-                            attachmentId:
-                              receipt.attachmentId ??
-                              (attachment.uploaded
-                                ? attachment.attachmentId
-                                : undefined),
-                            uploaded:
-                              receipt.uploaded ||
-                              (attachment.uploaded &&
-                                (!receipt.attachmentId ||
-                                  receipt.attachmentId ===
-                                    attachment.attachmentId)),
-                          }
-                        : attachment;
-                    }),
-                    serverDraftId:
-                      previous?.serverDraftId ?? input.serverDraftId,
-                    serverThreadId:
-                      previous?.serverThreadId ?? input.serverThreadId,
-                    revision: (previous?.revision ?? 0) + 1,
-                    acknowledgedRevision: previous?.acknowledgedRevision ?? 0,
-                    status: paused ? previous.status : 'dirty',
-                    errorCode: paused ? previous.errorCode : undefined,
-                    updatedAt: Date.now(),
-                  };
-                  for (const [id, blob] of files)
-                    tx.objectStore('files').put(blob, [input.key, id]);
-                  const retained = new Set(
-                    input.attachments.flatMap((a) =>
-                      a.type === 'local' ? [a.id] : []
+              const lock = tx.objectStore('meta').get(['send-lock', input.key]);
+              lock.onsuccess = () => {
+                if (lock.result) {
+                  finish(
+                    new Error(
+                      'Cancel and restore the queued send before editing'
                     )
                   );
-                  for (const attachment of previous?.attachments ?? [])
-                    if (
-                      attachment.type === 'local' &&
-                      !retained.has(attachment.id)
-                    )
-                      tx.objectStore('files').delete([
-                        input.key,
-                        attachment.id,
-                      ]);
-                  drafts.put(draft, input.key);
-                  finish(draft);
+                  return;
+                }
+                const retired = tx
+                  .objectStore('meta')
+                  .get(['retired', input.key, input.generation]);
+                retired.onsuccess = () => {
+                  if (retired.result) {
+                    finish(undefined);
+                    return;
+                  }
+                  const request = drafts.get(input.key);
+                  request.onsuccess = () => {
+                    const previous = request.result as StoredDraft | undefined;
+                    if (previous && previous.generation !== input.generation) {
+                      finish(undefined);
+                      return;
+                    }
+                    const paused =
+                      previous?.status === 'failed' ||
+                      previous?.status === 'unconfirmed' ||
+                      previous?.status === 'delete-failed';
+                    if (previous?.status === 'deleting') {
+                      finish(undefined);
+                      return;
+                    }
+                    if ((previous?.revision ?? 0) !== input.expectedRevision) {
+                      finish(
+                        new Error(
+                          'This draft changed while saving. Reopen it to use the latest version.'
+                        )
+                      );
+                      return;
+                    }
+                    const { expectedRevision: _expectedRevision, ...snapshot } =
+                      input;
+                    const draft: StoredDraft = {
+                      ...snapshot,
+                      epoch: session.epoch,
+                      latestAttemptId: previous?.latestAttemptId,
+                      queuedAttemptId: previous?.queuedAttemptId,
+                      attachments: input.attachments.map((attachment) => {
+                        if (attachment.type !== 'local') return attachment;
+                        const receipt = previous?.attachments.find(
+                          (saved) =>
+                            saved.type === 'local' && saved.id === attachment.id
+                        );
+                        // Upload callbacks can commit while file bytes are being copied.
+                        // The working-copy snapshot must not erase a newer receipt.
+                        return receipt?.type === 'local'
+                          ? {
+                              ...attachment,
+                              attachmentId:
+                                receipt.attachmentId ??
+                                (attachment.uploaded
+                                  ? attachment.attachmentId
+                                  : undefined),
+                              uploaded:
+                                receipt.uploaded ||
+                                (attachment.uploaded &&
+                                  (!receipt.attachmentId ||
+                                    receipt.attachmentId ===
+                                      attachment.attachmentId)),
+                            }
+                          : attachment;
+                      }),
+                      serverDraftId:
+                        previous?.serverDraftId ?? input.serverDraftId,
+                      serverThreadId:
+                        previous?.serverThreadId ?? input.serverThreadId,
+                      revision: (previous?.revision ?? 0) + 1,
+                      acknowledgedRevision: previous?.acknowledgedRevision ?? 0,
+                      status: paused ? previous.status : 'dirty',
+                      errorCode: paused ? previous.errorCode : undefined,
+                      updatedAt: Date.now(),
+                    };
+                    for (const [id, blob] of files)
+                      tx.objectStore('files').put(blob, [input.key, id]);
+                    const retained = new Set(
+                      input.attachments.flatMap((a) =>
+                        a.type === 'local' ? [a.id] : []
+                      )
+                    );
+                    for (const attachment of previous?.attachments ?? [])
+                      if (
+                        attachment.type === 'local' &&
+                        !retained.has(attachment.id)
+                      )
+                        tx.objectStore('files').delete([
+                          input.key,
+                          attachment.id,
+                        ]);
+                    drafts.put(draft, input.key);
+                    finish(draft);
+                  };
                 };
               };
             },
@@ -416,6 +431,149 @@ export function createLocalDraftStore(
                     tx.objectStore('files').delete([key, attachment.id]);
               }
               finish(next);
+            };
+          },
+          finish,
+          undefined
+        )
+      );
+    },
+    /** Backup and reservation commit before any send can leave this device. */
+    async putSend(
+      session: Session,
+      intent: EmailSendIntent,
+      reserve = false
+    ): Promise<EmailSendIntent> {
+      const result = await transaction<EmailSendIntent | Error | undefined>(
+        'readwrite',
+        (tx, finish) =>
+          withSession(
+            tx,
+            session,
+            () => {
+              const sends = tx.objectStore('sends');
+              const request = sends.getAll();
+              request.onsuccess = () => {
+                const rows = request.result as EmailSendIntent[];
+                const previous = rows.find((row) => row.uuid === intent.uuid);
+                const ids = (row: EmailSendIntent) => [
+                  row.resolvedDraftId,
+                  String(row.metadata.payload.input.message.draftId),
+                  row.metadata.payload.workingCopy?.key,
+                ];
+                if (
+                  reserve &&
+                  rows.some(
+                    (row) =>
+                      row.uuid !== intent.uuid &&
+                      !row.metadata.payload.restoring &&
+                      ids(row).some((id) => id && ids(intent).includes(id))
+                  )
+                ) {
+                  finish(new Error('This draft is already queued for sending'));
+                  return;
+                }
+                const persist = () => {
+                  // A late send settlement must not erase a cancellation or restoration.
+                  const next =
+                    previous?.metadata.payload.restoring &&
+                    !intent.metadata.payload.restoring
+                      ? previous
+                      : {
+                          ...intent,
+                          cancellationRequested:
+                            previous?.cancellationRequested ||
+                            intent.cancellationRequested,
+                          cacheMissing: undefined,
+                        };
+                  sends.put(next, intent.uuid);
+                  for (const id of ids(next))
+                    if (id) {
+                      if (next.metadata.payload.restoring) {
+                        const lock = tx
+                          .objectStore('meta')
+                          .get(['send-lock', id]);
+                        lock.onsuccess = () => {
+                          if (lock.result === intent.uuid)
+                            tx.objectStore('meta').delete(['send-lock', id]);
+                        };
+                      } else
+                        tx.objectStore('meta').put(intent.uuid, [
+                          'send-lock',
+                          id,
+                        ]);
+                    }
+                  finish(next);
+                };
+                const copy = intent.metadata.payload.workingCopy;
+                if (!reserve || !copy) {
+                  persist();
+                  return;
+                }
+                const draft = tx.objectStore('drafts').get(copy.key);
+                draft.onsuccess = () => {
+                  const current = draft.result as LocalDraft | undefined;
+                  if (
+                    !current ||
+                    current.generation !== copy.generation ||
+                    current.revision !== copy.revision
+                  ) {
+                    finish(
+                      new Error('This draft changed while preparing the send')
+                    );
+                    return;
+                  }
+                  persist();
+                };
+              };
+            },
+            finish,
+            new Error('This draft session is no longer active')
+          )
+      );
+      if (result instanceof Error) throw result;
+      if (!result) throw new Error('This draft session is no longer active');
+      return result;
+    },
+    async sends(session: Session): Promise<EmailSendIntent[]> {
+      return await transaction('readonly', (tx, finish) =>
+        withSession(
+          tx,
+          session,
+          () => {
+            const request = tx.objectStore('sends').getAll();
+            request.onsuccess = () =>
+              finish(request.result as EmailSendIntent[]);
+          },
+          finish,
+          []
+        )
+      );
+    },
+    async removeSend(session: Session, uuid: string): Promise<void> {
+      await transaction<void>('readwrite', (tx, finish) =>
+        withSession(
+          tx,
+          session,
+          () => {
+            const request = tx.objectStore('sends').get(uuid);
+            request.onsuccess = () => {
+              const row = request.result as EmailSendIntent | undefined;
+              if (row)
+                for (const id of [
+                  row.resolvedDraftId,
+                  String(row.metadata.payload.input.message.draftId),
+                  row.metadata.payload.workingCopy?.key,
+                ]) {
+                  if (!id) continue;
+                  const lock = tx.objectStore('meta').get(['send-lock', id]);
+                  lock.onsuccess = () => {
+                    if (lock.result === uuid)
+                      tx.objectStore('meta').delete(['send-lock', id]);
+                  };
+                }
+              tx.objectStore('sends').delete(uuid);
+              finish();
             };
           },
           finish,

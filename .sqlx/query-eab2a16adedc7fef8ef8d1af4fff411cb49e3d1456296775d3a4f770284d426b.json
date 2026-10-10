@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_scheduled_messages (link_id, message_id, send_time) VALUES ($1, $2, NOW() - INTERVAL '1 second')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eab2a16adedc7fef8ef8d1af4fff411cb49e3d1456296775d3a4f770284d426b"
+}

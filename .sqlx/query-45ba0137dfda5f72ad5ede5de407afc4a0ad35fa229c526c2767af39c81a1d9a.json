@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_send_attempts SET prepared_content = NULL WHERE attempt_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "45ba0137dfda5f72ad5ede5de407afc4a0ad35fa229c526c2767af39c81a1d9a"
+}

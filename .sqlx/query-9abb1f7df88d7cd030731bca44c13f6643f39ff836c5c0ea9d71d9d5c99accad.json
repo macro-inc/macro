@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Document\" (id, name, owner, \"fileType\", uploaded)\n           VALUES ($1, 'attached.pdf', 'macro|sent-cache@example.com', 'pdf', TRUE)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9abb1f7df88d7cd030731bca44c13f6643f39ff836c5c0ea9d71d9d5c99accad"
+}

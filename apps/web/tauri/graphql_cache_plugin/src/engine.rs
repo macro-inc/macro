@@ -482,6 +482,28 @@ impl EngineHandle {
         self.inner.lock().await.engine.current_revision()
     }
 
+    /// Removes a recovered intent only when its mutation is no longer queued.
+    pub async fn retire_durable_mutation_intent(&self, uuid: &str) -> Result<bool, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .retire_mutation_intent(uuid)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    /// Reads intent snapshots that survive optimistic rollback and process restarts.
+    pub async fn durable_mutation_intents(&self) -> Result<Vec<serde_json::Value>, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .durable_mutation_intents()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Returns the durable cache generation, initializing it when absent.
     pub async fn current_storage_generation(&self) -> Result<String, String> {
         self.inner

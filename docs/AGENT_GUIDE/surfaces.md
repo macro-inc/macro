@@ -821,18 +821,93 @@ final sent update, then switching offline and opening Sent. Existing provider
 timestamps and timestamps from repeated finalization remain unchanged; an unsent
 or cancelled draft must not acquire Sent membership.
 
-Send and schedule are refused with a notice while the device is offline, while a
-draft is still syncing (its save was accepted locally but not yet confirmed by the
-server; retry after a moment), or while an attachment has no completed upload. The
-composer keeps its content in each case. Attachments cannot be added while
-offline: a blocking notice explains and nothing is attached.
+With the durable GraphQL transport enabled, **Send** accepts an immediate new
+message, reply, or forward while offline. The approved recipients, selected
+inbox, subject, body, and uploaded attachment references are frozen in the local
+queue. Only one active send can be queued for a draft, including across tabs.
+A queued draft is read-only; Reply and Forward actions cannot replace its content.
+Replay resumes while the app is running or
+when it is reopened with service; closing the app does not guarantee delivery.
+**Send Later** and the legacy REST transport still require an online, confirmed
+draft. All sends require completed attachment uploads. Attachments cannot be
+added while offline.
+
+Queued sends remain visible in **Drafts** and their conversation with a persistent
+status and **Cancel** action. A never-attempted send can be cancelled offline.
+If admission may have reached the server, **Cancellation pending** keeps it locked
+until the server confirms cancellation. Once delivery starts, cancellation may
+be too late. **Restore draft** immediately resets the mounted editor to its
+pre-send content, without the send watermark, and preserves its attachment
+associations. A failed queue attempt retains recovery content;
+cancel it before restoring and sending again. The server starts the undo delay
+at first admission, so reconnecting does not consume that delay while offline.
+The send toast's **Undo** works after navigation closes the composer. It restores
+the draft only after cancellation is confirmed. Pending cancellation, an expired
+undo window, and failed cancellation each display a notice. Delivered attempts
+remain complete even if the sent message is later deleted from the provider.
+
+If an approved attachment is no longer available before delivery, the send stops
+with a failure so the draft can be restored and reviewed. It must never silently
+send a smaller attachment set. An interrupted worker can retry preparation, but
+after submission may have begun it only checks Gmail for the original Message-ID.
+An unresolved outcome shows **Delivery unconfirmed** with **Check status**; it
+remains locked and is never automatically resent. A confirmed Gmail match marks
+the original attempt delivered. A definite preparation failure or provider
+rejection allows cancellation and draft restoration.
+
+When Gmail sync imports a delivered message before recovery completes, recovery
+keeps the Gmail-synced conversation and the original local message ID. Links to
+the now-empty draft conversation redirect for users with access to that inbox.
+Sharing only the old conversation must not grant access to the destination.
+Existing properties and reminders on the old conversation stay attached to it.
+
+Switching an existing draft's sending inbox while offline must send from the
+selected inbox after reconnect, even when the intermediate draft save is still
+queued. Uploaded files remain attached. Forwarded provider attachments cannot
+currently move across inboxes: the send is rejected and the source draft stays
+intact. Restore it and use its original inbox or upload the files to the new inbox.
+
+Verify: queue a new message and a reply offline, close and reopen the app, and
+check their persistent status and read-only content. Cancel one before reconnect
+and confirm its send mutation is never issued. Reconnect the other and check
+that one stable attempt is replayed even after a lost response. Also test a
+cancel racing admission, unavailable local storage, and a pending upload. Queue
+admission means **Email queued to send** or **Email sending**, not provider delivery.
+Send a standalone message, let it open its thread, then use the toast's Undo and
+confirm the original draft reopens. Repeat after delivery starts and check the
+visible failure notice. Cancel a draft-only thread and check it returns to Drafts
+without requiring another save.
+Restore both a standalone draft and a reply, then edit and save without reloading;
+confirm the original content is visible and no send watermark returns. While a
+standalone send is queued, verify sender, recipients, subject, body, attachments,
+signature, formatting, schedule picker, delete, and Send remain disabled. Only
+Cancel may change the queued send. Open the formatting ribbon before queueing
+and verify it disappears while locked. Repeat after reload and restore in the
+same mounted composer; no schedule proposal should survive the queued state.
+Drop an inline image while queued and confirm no upload or insertion occurs.
+Queue the same draft from another composer while its link editor is open;
+the link editor must close. Repeat while image conversion or file upload is
+pending and verify completion does not insert content into the locked body.
+While a
+reply is queued, click Forward on another message and confirm the queued content
+and recipients stay unchanged. Race Send from two tabs and confirm only one
+active intent exists; cancellation must not leave a second send queued.
+With local draft recovery enabled, queue Send before the latest edit reaches the
+server. The send journal takes ownership of that exact local revision. After
+cancelling, edit the restored draft before reconnecting and verify those later
+edits still sync. Repeat across tabs: a newer local edit racing Send must block
+the stale submission, and old send cleanup must preserve a restored draft and
+its attachments. Logout should warn about queued sends even after their original
+local working copies have been retired; it must not claim to cancel server sends.
+
 For a new standalone email, a failed REST draft save is best-effort: Send can
 still proceed without a draft ID when no save was queued and no attachment is
 waiting to upload. A server rejection blocks sending even an existing draft.
 GraphQL draft saves automatically retry only network failures. GraphQL errors,
 including internal, invalid, and unauthorized errors, fail the mutation and
-release the queue. The local working copy offers explicit Retry; Send stays
-blocked until a save is confirmed.
+release the queue. The local working copy offers explicit Retry. Legacy Send
+and Send Later wait for server acknowledgement; durable Send captures the latest
+local revision and completed attachments for offline delivery.
 A successful save response with an invalid cache identity binding still commits
 its normalizable server data and reports a cache diagnostic without replaying
 the mutation or asking the user to save again. If that response also cannot be
@@ -906,6 +981,20 @@ and reconnect. Opening through an older local thread link must reach the same
 server thread after synchronization. Repeat with an existing reply and confirm
 that other messages, attachments, and the Sent preview remain intact.
 
+Attachments require connectivity: adding files offline is refused in both composers.
+Existing attachments stay visible and preserved while offline, but Send and Schedule
+send require reconnection for any draft with attachments. Online, clicking Send before
+a save debounce finishes must start or continue uploads; a queued save's confirmation
+must also resume pending uploads after reload. Pending or failed inline image/video
+uploads block Send and Schedule send until they have durable URLs or are removed.
+
+Queued sends survive query-cache recovery in independent account-scoped storage,
+retaining their original attempt IDs, frozen bodies, attachments and cancellation
+requests. After cache loss, status reconciliation must reuse that attempt identity;
+it must not create a second delivery. Cancel and Restore must win over a delayed Send
+completion in both composers. Resizing media must stop immediately when an editor
+locks, including an active drag and a pending debounced resize.
+
 With GraphQL Mail enabled, discarding the last draft in a thread must remove the
 thread from every local Mail view, including after queued replay. Discarding a
 standalone draft from its composer returns to the previous list after deletion
@@ -949,6 +1038,19 @@ time, and never fall through to immediate Send. At narrow split widths the bar's
 label truncates while Cancel stays at its far edge; the bar never covers discard,
 attachment, formatting, the clock, or the primary action. Reply recipients
 cannot be edited or dragged during a confirmed schedule or active delivery mutation.
+
+Scheduled delivery failures replace the time summary with **Send failed before
+delivery** and **Restore draft**. Restoration cancels delivery before unlocking the
+message. **Delivery unconfirmed** explains that the email may already have been
+sent and offers **Check status**; it never offers restoration or automatic resend.
+The time picker stays disabled for failed, sending, and unconfirmed deliveries.
+Preparation that has not reached provider submission remains cancellable, including
+after its due time or a retry delay. Verify both standalone and reply composers,
+including a status refresh whose scheduled time is unchanged and a failure arriving
+while a replacement time is selected.
+Block the REST lifecycle read while GraphQL loads a failed scheduled draft. It
+must still show failure recovery and keep the time picker disabled; GraphQL
+provides both the scheduled time and delivery status.
 
 When verifying, use an intercepted or isolated delivery fixture: choose a time,
 confirm that the editable **Scheduled send** preview makes zero delivery calls, then use

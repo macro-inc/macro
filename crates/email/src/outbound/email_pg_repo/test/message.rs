@@ -395,22 +395,24 @@ async fn test_forwarded_attachments_by_message_ids_empty_input(
     Ok(())
 }
 
-// ── scheduled_send_times_by_message_ids ─────────────────────────────
+// ── scheduled_sends_by_message_ids ─────────────────────────────
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
-async fn test_scheduled_send_times_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn test_scheduled_sends_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool);
 
     let msg3 = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
-    let times = repo.scheduled_send_times_by_message_ids(&[msg3]).await?;
+    let times = repo.scheduled_sends_by_message_ids(&[msg3]).await?;
 
     assert_eq!(times.len(), 1, "msg3 has a pending scheduled send");
     let send_time = times.get(&msg3).expect("msg3 should have a send time");
     assert_eq!(
-        send_time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        send_time
+            .send_time
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         "2025-03-01T09:00:00Z"
     );
 
@@ -428,7 +430,7 @@ async fn test_scheduled_send_times_excludes_already_sent(
 
     // msg2 has a scheduled send but sent=true
     let msg2 = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
-    let times = repo.scheduled_send_times_by_message_ids(&[msg2]).await?;
+    let times = repo.scheduled_sends_by_message_ids(&[msg2]).await?;
 
     assert!(
         times.is_empty(),
@@ -442,18 +444,82 @@ async fn test_scheduled_send_times_excludes_already_sent(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
-async fn test_scheduled_send_times_by_message_ids_empty_input(
+async fn test_scheduled_sends_by_message_ids_empty_input(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool);
 
-    let times = repo.scheduled_send_times_by_message_ids(&[]).await?;
+    let times = repo.scheduled_sends_by_message_ids(&[]).await?;
     assert!(times.is_empty());
 
     Ok(())
 }
 
 // ── process_scheduled_message ──────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn scheduled_send_status_distinguishes_preparation_from_submission(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::models::ScheduledSendStatus;
+
+    let repo = EmailPgRepo::new(pool.clone());
+    let message_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let claim_id = Uuid::new_v4();
+    let cases = [
+        ("ready", false, None, false, ScheduledSendStatus::Pending),
+        (
+            "ready",
+            true,
+            Some(claim_id),
+            false,
+            ScheduledSendStatus::Pending,
+        ),
+        (
+            "ready",
+            true,
+            Some(claim_id),
+            true,
+            ScheduledSendStatus::Sending,
+        ),
+        ("ready", true, None, false, ScheduledSendStatus::Sending),
+        (
+            "failed",
+            true,
+            Some(claim_id),
+            false,
+            ScheduledSendStatus::Failed,
+        ),
+        (
+            "unconfirmed",
+            true,
+            Some(claim_id),
+            true,
+            ScheduledSendStatus::Unconfirmed,
+        ),
+    ];
+    for (status, processing, claim, started, expected) in cases {
+        sqlx::query!(
+            r#"UPDATE email_scheduled_messages
+               SET delivery_status = $2, processing = $3, delivery_claim_id = $4,
+                   delivery_started_at = CASE WHEN $5 THEN now() ELSE NULL END
+               WHERE message_id = $1"#,
+            message_id,
+            status,
+            processing,
+            claim,
+            started,
+        )
+        .execute(&pool)
+        .await?;
+        let schedules = repo.scheduled_sends_by_message_ids(&[message_id]).await?;
+        assert_eq!(schedules[&message_id].status, expected);
+    }
+    Ok(())
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

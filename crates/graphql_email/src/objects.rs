@@ -4,6 +4,7 @@ use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
 use email::domain::models::{
     AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMailProjection,
     EmailThreadMetadata, Message, MessageAttachment, ParsedLabel, ParsedMessage,
+    ScheduledSendStatus,
 };
 
 use crate::loaders::{
@@ -17,6 +18,7 @@ const FULL_MESSAGE_FIELDS: &[&str] = &[
     "providerId",
     "replyingToId",
     "scheduledSendTime",
+    "scheduledSendStatus",
     "attachments",
     "attachmentsDraft",
     "attachmentsForwarded",
@@ -67,6 +69,30 @@ impl From<email::domain::models::EmailPreview> for GraphqlMailPreviewMessage {
 
 /// An adaptively hydrated email content projection for Soup queries.
 pub struct GraphqlSoupEmailMessage(EmailContentMessage);
+
+/// The persisted state of a scheduled delivery.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlScheduledSendStatus {
+    /// Waiting for its send time or safely retrying preparation.
+    Pending,
+    /// Provider submission has started.
+    Sending,
+    /// Delivery was definitely rejected; the draft can be restored.
+    Failed,
+    /// Delivery may have succeeded; reconciliation is required.
+    Unconfirmed,
+}
+
+impl From<ScheduledSendStatus> for GraphqlScheduledSendStatus {
+    fn from(status: ScheduledSendStatus) -> Self {
+        match status {
+            ScheduledSendStatus::Pending => Self::Pending,
+            ScheduledSendStatus::Sending => Self::Sending,
+            ScheduledSendStatus::Failed => Self::Failed,
+            ScheduledSendStatus::Unconfirmed => Self::Unconfirmed,
+        }
+    }
+}
 
 impl GraphqlSoupEmailMessage {
     /// Wraps a message produced outside the DataLoader path (e.g. a
@@ -180,6 +206,13 @@ impl GraphqlSoupEmailMessage {
             .full()?
             .scheduled_send_time
             .map(|value| value.to_rfc3339()))
+    }
+
+    /// Whether the scheduled delivery is pending, sending, failed, or unconfirmed.
+    async fn scheduled_send_status(
+        &self,
+    ) -> async_graphql::Result<Option<GraphqlScheduledSendStatus>> {
+        Ok(self.full()?.scheduled_send_status.map(Into::into))
     }
 
     /// The sender of the message.

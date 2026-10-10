@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages SET processing = true,\n           delivery_lease_expires_at = NOW() + make_interval(secs => $4), updated_at = NOW()\n           WHERE message_id = $1 AND link_id = $2 AND delivery_claim_id = $3\n             AND processing AND NOT sent AND delivery_started_at IS NULL AND delivery_status = 'ready'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "989393947d0bce21e1cd8b1e6ebfa98014f85d8de4b1da214a029cd96a72a063"
+}

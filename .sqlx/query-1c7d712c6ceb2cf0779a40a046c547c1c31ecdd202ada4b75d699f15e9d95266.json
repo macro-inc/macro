@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_threads SET provider_id = 'sent-provider-thread' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1c7d712c6ceb2cf0779a40a046c547c1c31ecdd202ada4b75d699f15e9d95266"
+}

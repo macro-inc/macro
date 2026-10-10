@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH editable AS (\n            SELECT id FROM email_messages\n            WHERE id = $1 AND link_id = $3 AND is_draft AND NOT is_sent\n            FOR UPDATE\n        )\n        INSERT INTO email_attachments_fwd (message_id, attachment_id)\n            SELECT $1, $2\n            FROM editable\n        ON CONFLICT DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ebc750455d2e0ed762f338314132d16d06b46c1417adff666448143afb522fa9"
+}

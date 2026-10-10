@@ -1,0 +1,28 @@
+fragment EmailSendAttemptFields on EmailSendAttemptPayload {
+  attemptId
+  status
+  sendTime
+  threadId
+  message { ...EmailThreadMessageFields }
+}
+
+mutation SendEmailMessage($input: SendEmailMessageInput!) {
+  sendEmailMessage(input: $input) {
+    attempt { ...EmailSendAttemptFields }
+    thread { ...EmailDraftThreadFields }
+  }
+}
+
+mutation CancelEmailSend($input: EmailSendAttemptInput!) {
+  cancelEmailSend(input: $input) {
+    attempt { ...EmailSendAttemptFields }
+    thread { ...EmailDraftThreadFields }
+  }
+}
+
+query EmailSendAttempt($input: EmailSendAttemptInput!) {
+  user {
+    id
+    emailSendAttempt(input: $input) { ...EmailSendAttemptFields }
+  }
+}

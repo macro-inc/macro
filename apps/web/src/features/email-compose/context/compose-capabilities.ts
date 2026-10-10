@@ -19,6 +19,9 @@ export interface EmailInbox {
 
 /** Identity returned by a successful save or send. Transport envelopes stay in adapters. */
 export interface PersistedEmailIdentity {
+  /** Present when durable send admission owns this message. */
+  sendAttemptId?: string;
+  persistence?: 'committed' | 'queued';
   draftId?: string;
   threadId?: string;
   inboxId: string;
@@ -81,6 +84,14 @@ export interface DeleteEmailDraft {
 }
 export interface SendEmailDraft {
   message: EmailDraft;
+  clientHandles?: DraftClientHandles;
+  /** The exact working-copy version persisted for this submission. */
+  expectedLocalVersion?: Pick<LocalDraft, 'generation' | 'revision'>;
+  attachmentIds?: string[];
+  forwardedAttachmentIds?: string[];
+  restoreBodyHtml?: string | null;
+  restoreBodyText?: string | null;
+  restoreBodyMacro?: string | null;
   inboxId?: string;
   completingThread?: boolean;
 }
@@ -99,6 +110,10 @@ export interface EmailAttachmentChange {
 }
 
 export interface EmailDraftStorage {
+  /** Explicit restoration may replace editor content; ordinary cache updates never do. */
+  watchRestorations?(
+    changed: (restoration: EmailDraftRestoration) => void
+  ): () => void;
   /** Local acceptance is separate from remote autosave and continues after rejection. */
   saveLocalDraft?(
     input: SaveEmailDraft & {
@@ -142,6 +157,15 @@ export interface EmailDraftStorage {
   }): Promise<void>;
 }
 
+export interface EmailDraftRestoration {
+  draftId: string;
+  originalDraftId: string;
+  threadId: string;
+  inboxId?: string;
+  replyingToId?: string | null;
+  includeSignature?: boolean | null;
+}
+
 export interface EmailAttachmentStorage {
   uploadAttachments(input: UploadEmailAttachments): Promise<void>;
   addForwardedAttachments(input: {
@@ -154,6 +178,10 @@ export interface EmailAttachmentStorage {
 }
 
 export interface EmailDelivery {
+  /** Whether sends can be persisted and replayed without connectivity. */
+  queueActive?: Accessor<boolean>;
+  /** Persisted locks, scoped to the composing surface's owner. */
+  sendLocked?: (draftId: string | undefined) => boolean;
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: {
     draftId: string;
@@ -174,10 +202,11 @@ export interface EmailDelivery {
     inboxId?: string
   ): Promise<void>;
   undoSend(input: {
+    sendAttemptId?: string;
     threadId?: string;
     draftId: string;
     inboxId: string | undefined;
-    onUndone: () => Promise<void> | void;
+    onUndone: (result?: { draftRestored: boolean }) => Promise<void> | void;
   }): Promise<void>;
 }
 
@@ -195,6 +224,7 @@ export type EmailDraftLifecycleState =
       threadId: string;
       inboxId: string;
       sendTime: string;
+      deliveryStatus?: 'pending' | 'sending' | 'failed' | 'unconfirmed';
       observedAt: number;
     }
   | {

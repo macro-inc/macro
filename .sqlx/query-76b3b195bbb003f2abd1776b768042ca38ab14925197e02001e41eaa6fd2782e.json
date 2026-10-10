@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET provider_id = 'sent-provider-message',\n           provider_thread_id = 'sent-provider-thread', is_sent = TRUE,\n           global_id = $2, headers_jsonb = '{\"received\":\"headers\"}', is_starred = TRUE,\n           has_attachments = TRUE WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76b3b195bbb003f2abd1776b768042ca38ab14925197e02001e41eaa6fd2782e"
+}

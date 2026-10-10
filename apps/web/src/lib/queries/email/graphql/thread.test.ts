@@ -105,6 +105,70 @@ const cachedPage: EmailThreadPageQuery = {
   },
 };
 
+it('uses a returned canonical thread identity without applying stale route responses', async () => {
+  cacheEnabledMock.mockReturnValue(false);
+  hostMock.mockReturnValue(undefined);
+  const reads: Array<{
+    requested: string;
+    emit(canonical: string): void;
+  }> = [];
+  executeQueryMock.mockImplementation(
+    (
+      request: GraphQLRequest<
+        EmailThreadPageQuery,
+        EmailThreadPageQueryVariables
+      >,
+      context: Partial<OperationContext>
+    ) => {
+      const stream = makeSubject<OperationResult<EmailThreadPageQuery>>();
+      const operation = makeOperation('query', request, {
+        url: '/graphql',
+        ...context,
+        requestPolicy: context.requestPolicy ?? 'network-only',
+      });
+      reads.push({
+        requested: String(request.variables?.threadId),
+        emit: (canonical) =>
+          stream.next({
+            operation,
+            stale: false,
+            hasNext: false,
+            data: {
+              user: {
+                ...cachedPage.user,
+                emailThread: { ...cachedPage.user.emailThread!, id: canonical },
+              },
+            },
+          }),
+      });
+      return stream.source;
+    }
+  );
+  const [route, setRoute] = createSignal('retained-source');
+  const root = createRoot((dispose) => ({
+    dispose,
+    ...createGraphqlEmailThreadQuery(route, () => ({ enabled: true })),
+  }));
+  try {
+    await vi.waitFor(() => expect(reads).toHaveLength(1));
+    reads[0].emit('canonical-thread');
+    expect(root.resolvedThreadId()).toBe('canonical-thread');
+    expect(root.query.data?.pages[0].db_id).toBe('canonical-thread');
+    // Redirects do not reset pagination or start another query while the old
+    // route remains mounted. Actions observe the verified response identity.
+    expect(reads).toHaveLength(1);
+    setRoute('other-thread');
+    await vi.waitFor(() => expect(reads).toHaveLength(2));
+    reads[0].emit('late-canonical-thread');
+    expect(root.resolvedThreadId()).toBe('other-thread');
+    expect(root.query.data).toBeUndefined();
+    reads[1].emit('other-thread');
+    expect(root.query.data?.pages[0].db_id).toBe('other-thread');
+  } finally {
+    root.dispose();
+  }
+});
+
 function threadMessages(offset: number, count: number) {
   return Array.from({ length: count }, (_, i) => ({
     __typename: 'GraphqlSoupEmailMessage' as const,
@@ -123,6 +187,7 @@ function threadMessages(offset: number, count: number) {
     isDraft: false,
     hasAttachments: false,
     scheduledSendTime: null,
+    scheduledSendStatus: null,
     from: null,
     to: [],
     cc: [],
