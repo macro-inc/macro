@@ -8,8 +8,15 @@ export function useListNavigationHotkeys(options: {
   enabled: Accessor<boolean>;
   navigation: ListDetailNavigationTarget;
   arrowKeys?: boolean;
+  /** Called with the keydown that stepped the list, before navigating. */
+  onKeyStep?: (event: KeyboardEvent) => void;
 }) {
   const group = createHotkeyGroup();
+  const step = (move: () => void, event?: KeyboardEvent) => {
+    if (event?.type === 'keydown') options.onKeyStep?.(event);
+    move();
+    return true;
+  };
 
   registerHotkey({
     hotkey: options.arrowKeys ? ['j', 'arrowright'] : 'j',
@@ -17,10 +24,7 @@ export function useListNavigationHotkeys(options: {
     scopeId: options.scopeId,
     description: 'Next item',
     condition: () => options.enabled() && options.navigation.canNext(),
-    keyDownHandler: () => {
-      options.navigation.next();
-      return true;
-    },
+    keyDownHandler: (event) => step(options.navigation.next, event),
     hide: true,
   }).withGroup(group);
 
@@ -30,10 +34,7 @@ export function useListNavigationHotkeys(options: {
     scopeId: options.scopeId,
     description: 'Previous item',
     condition: () => options.enabled() && options.navigation.canPrevious(),
-    keyDownHandler: () => {
-      options.navigation.previous();
-      return true;
-    },
+    keyDownHandler: (event) => step(options.navigation.previous, event),
     hide: true,
   }).withGroup(group);
 

@@ -52,6 +52,10 @@ import {
 } from './email-route';
 import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
+import {
+  createThreadNavigationHold,
+  type ThreadNavigationHold,
+} from './primitives/held-thread-source';
 import { createInboxSelectionReconciliation } from './primitives/inbox-selection-reconciliation';
 import {
   type EmailDataSource,
@@ -112,6 +116,7 @@ export type EmailViewContext = {
     options?: EntityDetailNavigationOptions
   ) => boolean;
   closeThread: () => void;
+  threadNavigationHold: ThreadNavigationHold;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
 };
@@ -415,6 +420,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     selectedThread,
     openThread,
     closeThread,
+    threadNavigationHold: createThreadNavigationHold(),
     isSidebarSectionOpen,
     setSidebarSectionOpen,
   };
