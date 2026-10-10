@@ -20,13 +20,16 @@ pub(crate) const SUMMARY_META_KEY: &str = "contextSummary";
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct SummaryCheckpoint {
     pub text: String,
-    pub retained_entries: usize,
+    /// The recent entries kept whole after the summary, as the live agent
+    /// kept them. A history rebuilt from the log can hold prompts the live
+    /// agent never kept - ones that failed before they ran - so counting
+    /// entries back from its end would keep a different window.
+    pub retained: Vec<HistoryEntry>,
 }
 
 impl SummaryCheckpoint {
     /// Use the same replacement when serving live and rebuilding after restart.
     pub fn apply(&self, history: &mut Vec<HistoryEntry>) {
-        let retained = history.split_off(history.len().saturating_sub(self.retained_entries));
         *history = vec![
             HistoryEntry::User(UserPrompt::text(
                 "The earlier conversation was summarized for continuity. The following is \
@@ -36,7 +39,7 @@ impl SummaryCheckpoint {
                 text: self.text.clone(),
             }]),
         ];
-        history.extend(retained);
+        history.extend(self.retained.iter().cloned());
     }
 }
 
@@ -171,7 +174,7 @@ pub(super) async fn compact_if_needed(
 
     let checkpoint = SummaryCheckpoint {
         text: summary,
-        retained_entries: history.len() - split,
+        retained: history[split..].to_vec(),
     };
     let mut meta = Meta::new();
     meta.insert(
@@ -194,6 +197,6 @@ pub(super) async fn compact_if_needed(
     if let Some(mut state) = state.store.get_mut(&state.session_id) {
         checkpoint.apply(&mut state.history);
     }
-    tracing::info!(session_id = %state.session_id, retained_entries = checkpoint.retained_entries, "agent conversation context summarized");
+    tracing::info!(session_id = %state.session_id, retained_entries = checkpoint.retained.len(), "agent conversation context summarized");
     Ok(())
 }

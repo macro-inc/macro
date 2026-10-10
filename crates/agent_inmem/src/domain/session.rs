@@ -26,7 +26,7 @@ mod test;
 /// anything else is described to the model by name and URL, since there is
 /// no way to show it the bytes and the URL is still something its tools can
 /// fetch.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct UserPrompt {
     /// The prompt's text blocks, joined.
     pub text: String,
@@ -195,7 +195,8 @@ use super::engine::AgentIdentity;
 
 /// One entry of the conversation, in the shape
 /// [`agent::to_rig_messages`] round-trips.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum HistoryEntry {
     /// A prompt from a user.
     User(UserPrompt),
