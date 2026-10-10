@@ -17,9 +17,24 @@ import { FatalError } from './components/app/FatalError';
 import { registerServiceWorker } from './lib/service-worker/register';
 import { Root } from './routes/Root';
 
-// Keep bundled assets and the local dev server in the webview's fetch path.
+// Override global fetch with platformFetch for Tauri compatibility
+// Skip localhost requests (dev server) to avoid breaking HMR
 if (isTauri()) {
-  window.fetch = platformFetch;
+  const originalFetch = window.fetch;
+  window.fetch = new Proxy(originalFetch, {
+    async apply(target, thisArg, args) {
+      const url = args[0];
+      // Resolve bundled asset paths before checking the existing localhost bypass.
+      const urlString = new URL(
+        url instanceof Request ? url.url : String(url),
+        document.baseURI
+      ).href;
+      if (urlString.includes('localhost')) {
+        return target.apply(thisArg, args as Parameters<typeof fetch>);
+      }
+      return platformFetch.apply(thisArg, args as Parameters<typeof fetch>);
+    },
+  });
 }
 
 initializeLexical();

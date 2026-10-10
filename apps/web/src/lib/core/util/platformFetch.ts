@@ -1,25 +1,26 @@
 import { isTauri } from './platform';
 
-// Capture before index.tsx installs platformFetch as the global fetch.
-const webviewFetch = window.fetch.bind(window);
+async function acquireFetch() {
+  // @ts-ignore: tauri adds this on the window instance
+  if (isTauri()) {
+    const { fetch } = await import('@tauri-apps/plugin-http');
+    return fetch;
+  }
+  return window.fetch;
+}
 
-/** Use native HTTP for remote requests in Tauri and webview fetch for assets. */
-export const platformFetch: typeof window.fetch = async (...args) => {
-  if (!isTauri()) return window.fetch(...args);
+// async function acquireWebsocket() {
+//   if (isTauri()) {
+//     const ws = await import("@tauri-apps/plugin-websocket");
+//     return ws
+//   }
+//   return WebSocket
+// }
 
-  const input = args[0];
-  const url = new URL(
-    input instanceof Request ? input.url : String(input),
-    document.baseURI
-  );
-  const useWebview =
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.hostname === 'localhost' ||
-    url.hostname.endsWith('.localhost') ||
-    url.hostname === '127.0.0.1' ||
-    url.hostname === '[::1]';
-  if (useWebview) return webviewFetch(...args);
+// export const connectPlatformWebsocket: ReturnType<typeof WebSocket["conne"]
 
-  const { fetch } = await import('@tauri-apps/plugin-http');
-  return fetch(...args);
+// wrapper around window.fetch which just forwards args to fetch on the web.
+// In tauri environments this forwards requests into the tauri http client
+export const platformFetch: typeof window.fetch = (url, opts) => {
+  return acquireFetch().then((f) => f(url, opts));
 };
