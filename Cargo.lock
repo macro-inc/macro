@@ -4642,7 +4642,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-opentelemetry",
- "tungstenite 0.28.0",
  "url",
  "utoipa",
  "utoipa-swagger-ui",
