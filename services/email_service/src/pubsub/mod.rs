@@ -8,6 +8,8 @@ pub mod crm_cleanup;
 pub mod gmail_ops;
 pub mod inbox_sync;
 pub mod link_manager;
+#[cfg(test)]
+mod log_capture;
 pub mod scheduled;
 #[cfg(feature = "sfs_delete")]
 pub mod sfs_deleter;

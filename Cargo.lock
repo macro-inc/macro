@@ -7170,6 +7170,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-subscriber",
  "unfurl",
  "url",
  "urlencoding",

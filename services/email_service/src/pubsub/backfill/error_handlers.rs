@@ -7,9 +7,12 @@ use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::email::service::backfill::{
     BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
-use models_email::email::service::pubsub::DetailedError;
+use models_email::email::service::pubsub::{DetailedError, FailureReason};
 use sqs_worker::cleanup_message;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Handles non-retryable errors by updating the appropriate status in the database and cleaning up the SQS message
 #[tracing::instrument(skip(ctx, message))]
@@ -118,6 +121,13 @@ pub async fn handle_retryable_error(
 ) -> anyhow::Result<()> {
     let error_chain = format!("{:#}", _e.source);
     tracing::Span::current().record("error", &error_chain);
+
+    // Rate limits are expected backpressure, redelivered after the visibility
+    // timeout; the email API client logs provider throttling at ERROR.
+    if _e.reason == FailureReason::GmailApiRateLimited {
+        tracing::debug!("Rate-limited backfill operation will be redelivered");
+        return Ok(());
+    }
 
     match &data.backfill_operation {
         BackfillOperation::Init(_) => {
