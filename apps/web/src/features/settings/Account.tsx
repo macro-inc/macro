@@ -46,7 +46,15 @@ import {
 } from '@queries/auth/user-name-self';
 import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
-import { Button, Dialog, Dropdown, Panel, ToggleSwitch, Tooltip } from '@ui';
+import {
+  Button,
+  Dialog,
+  Dropdown,
+  HoldToConfirmButton,
+  Panel,
+  ToggleSwitch,
+  Tooltip,
+} from '@ui';
 import {
   createEffect,
   createMemo,
@@ -618,6 +626,9 @@ export function Account() {
               This will permanently delete your account and all associated data.
               This cannot be undone.
             </Dialog.Description>
+            <p class="text-ink-muted text-sm/tight font-normal">
+              Hold the button below for 5 seconds to confirm deletion.
+            </p>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
@@ -630,17 +641,21 @@ export function Account() {
               >
                 Cancel
               </Button>
-              <Button
-                variant="strong"
+              <HoldToConfirmButton
+                variant="danger"
                 depth={3}
                 disabled={isDeleting()}
-                onClick={deleteAccountHandler}
+                pending={isDeleting()}
+                onConfirm={deleteAccountHandler}
+                pendingContent={
+                  <>
+                    <SpinnerIcon class="size-4 animate-spin" />
+                    Deleting…
+                  </>
+                }
               >
-                <Show when={isDeleting()} fallback="Delete My Account">
-                  <SpinnerIcon class="size-4 animate-spin" />
-                  Deleting…
-                </Show>
-              </Button>
+                Hold to Delete
+              </HoldToConfirmButton>
             </div>
           </Panel.Body>
         </Panel>
