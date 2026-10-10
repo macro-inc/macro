@@ -237,6 +237,28 @@ async fn update_search_with_unreadable_design(
     update_search_with_parent_only_document(opensearch_client, db, search_extractor_message).await
 }
 
+/// The S3 key of the content to index, or `None` when the message names a
+/// superseded version. Content is stored under the document's owner; sync
+/// messages carry no `user_id`.
+fn raw_document_key(
+    owner: &Owner,
+    search_extractor_message: &SearchExtractorMessage,
+    document_version_id: &str,
+) -> Option<String> {
+    let document_id = &search_extractor_message.document_id;
+    if document_version_id == CONVERTED_DOCUMENT_FILE_NAME {
+        return Some(build_docx_to_pdf_converted_document_key(owner, document_id));
+    }
+    match search_extractor_message.document_version_id.as_deref() {
+        Some(msg_version_id) if msg_version_id != document_version_id => None,
+        _ => Some(build_cloud_storage_bucket_document_key(
+            owner,
+            document_id,
+            document_version_id,
+        )),
+    }
+}
+
 /// Processes a message for a standard document and reads the updated contents from s3 and updates
 /// the document in opensearch.
 #[tracing::instrument(skip(opensearch_client, db, s3_client, document_storage_bucket, search_extractor_message), fields(document_id=search_extractor_message.document_id, file_type=?search_extractor_message.file_type))]
@@ -309,25 +331,17 @@ pub async fn update_search_with_raw_document(
             .as_str(),
     )?;
 
-    let key_owner = Owner::from_principal_str(&search_extractor_message.user_id)
-        .context("search extractor message user_id is not an owner principal")?;
-    let key = if document_version_id == CONVERTED_DOCUMENT_FILE_NAME {
-        build_docx_to_pdf_converted_document_key(&key_owner, &search_extractor_message.document_id)
-    } else if let Some(msg_version_id) = search_extractor_message.document_version_id.as_ref()
-        && msg_version_id != &document_version_id
-    {
+    let Some(key) = raw_document_key(
+        &document_info.owner,
+        search_extractor_message,
+        &document_version_id,
+    ) else {
         tracing::debug!(
-            msg_version_id,
+            msg_version_id = ?search_extractor_message.document_version_id,
             document_version_id,
             "document version is not latest, skipping"
         );
         return Ok(());
-    } else {
-        build_cloud_storage_bucket_document_key(
-            &key_owner,
-            &search_extractor_message.document_id,
-            &document_version_id,
-        )
     };
 
     let content = s3_client
