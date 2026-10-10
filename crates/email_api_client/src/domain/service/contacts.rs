@@ -25,7 +25,7 @@ where
     }
 
     /// Lists primary contacts, optionally continuing an incremental synchronization.
-    #[tracing::instrument(skip(self, sync_token))]
+    #[tracing::instrument(skip(self, sync_token), err)]
     pub async fn list_contacts(
         &self,
         link_id: Uuid,
@@ -38,11 +38,10 @@ where
         self.repository
             .list_contacts(&access_token, link_id, sync_token)
             .await
-            .inspect_err(log_operation_error)
     }
 
     /// Lists automatically collected contacts, optionally continuing a synchronization.
-    #[tracing::instrument(skip(self, sync_token))]
+    #[tracing::instrument(skip(self, sync_token), err)]
     pub async fn list_other_contacts(
         &self,
         link_id: Uuid,
@@ -55,7 +54,6 @@ where
         self.repository
             .list_other_contacts(&access_token, link_id, sync_token)
             .await
-            .inspect_err(log_operation_error)
     }
 }
 

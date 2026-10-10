@@ -97,11 +97,10 @@ where
 
 /// Logs a failed operation in the current span.
 ///
-/// Operations call this instead of using `#[instrument(err)]`, whose level is
-/// fixed. A local rate-limit refusal is expected backpressure: no provider
-/// request was made, and the caller decides whether to retry or drop. It is
-/// logged at DEBUG; every other failure, including provider throttling, stays
-/// at ERROR.
+/// Unlike `#[instrument(err)]`, whose level is fixed, this distinguishes a
+/// local rate-limit refusal: expected backpressure where no provider request
+/// was made and the caller decides whether to retry or drop. It is logged at
+/// DEBUG; every other failure, including provider throttling, stays at ERROR.
 fn log_operation_error(error: &EmailApiError) {
     match error {
         EmailApiError::RateLimited {
