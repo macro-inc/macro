@@ -1,5 +1,46 @@
 # Channels and Messaging
 
+## Native iPhone client
+
+`apps/ios/MacroNative.xcodeproj` is the standalone SwiftUI/UIKit client. The
+**Channels** dock view opens native conversations, history, and multiline input.
+Sending appears immediately and keeps keyboard focus; failed messages retry with
+the same ID. Channel and inline thread drafts survive navigation. Swipe a message
+left to reply within the channel timeline. Long-press opens the native bottom
+drawer with quick reactions, searchable emoji, Reply, copy text/link, Create task,
+and eligible Edit/Delete actions. Collapsed threads show the first three replies;
+expanding or replying reveals the rest and remembers the expanded state for this
+account. Live updates retain the newest reply beyond that initial preview.
+Notifications and search also open native channels outside the recent Channels
+page. Attachments and channel membership actions use the existing Macro APIs.
+
+Type `@` for the native picker: cached people/channels appear immediately, with
+recent entities, dates, and workspace search filling the supported document,
+task, email, folder, agent, call, and calendar references. Selection preserves
+keyboard focus and creates a styled Macro token. Test draft restoration and send
+reconciliation without raw mention syntax appearing in the timeline.
+
+Use Debug `--demo`, or the fixture UI test scheme, for verification that must not
+send to real users. A signed-in launch writes to the selected environment's real
+data; do not send test messages to existing conversations without authorization.
+Check repeated open/back and edge swipes, consecutive sends, retry, thread drafts,
+incoming messages while reading history, and the composer's clearance above the
+keyboard and floating dock. Foreground reconnect recovers missed history;
+background push and native audio/video calling are not implemented.
+
+New Message is a full native page: choose recipients, write with native mentions
+and attachments, then Send. Back preserves the unfinished draft. Sending reuses
+existing direct/private group conversations. New Channel uses a separate glass
+drawer for a private or team channel and optional invitees. The channel title
+menu switches to Participants within the existing channel header; Add people
+opens its own glass invitation drawer. Members can be searched, opened as a DM,
+or removed when eligible; owner/self removal is unavailable.
+
+
+See [the native iPhone operating guide](native-ios.md) for the complete native
+workspace, web editor boundaries, sign-in, settings, and screenshot checks. The
+sections below describe the web/Tauri app.
+
 ## Create a channel
 
 1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.
