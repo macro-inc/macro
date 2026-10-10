@@ -269,3 +269,60 @@ async fn editing_a_team_persona_leaves_its_direct_conversations_alone(
     ));
     Ok(())
 }
+
+/// A conversation with a persona is not a channel shared with it: only the
+/// people the persona already serves have one, so once someone leaves its
+/// team, their conversation keeps nothing of a selected-channel persona.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_direct_conversation_does_not_share_a_selected_persona(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = macro_uuid::generate_uuid_v7();
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let channel_id = Uuid::new_v4();
+    insert_channel_member(&pool, channel_id, TEAM_ADMIN).await?;
+    let service = service(&pool);
+    let mut request = create_agent_req("dm-selected", AgentChannelScope::Selected);
+    request.team_id = Some(team_id);
+    request.channel_ids = vec![channel_id];
+    let agent = service.create_agent(user_id(TEAM_ADMIN), request).await?;
+    let conversation_id = Uuid::new_v4();
+    insert_direct_conversation(&pool, conversation_id, TEAM_MEMBER, agent.bot.id).await?;
+    sqlx::query!(
+        "DELETE FROM team_user WHERE user_id = $1 AND team_id = $2",
+        TEAM_MEMBER,
+        team_id
+    )
+    .execute(&pool)
+    .await?;
+    let repo = PgBotsRepo::new(pool.clone());
+    let lists_persona =
+        |agents: Vec<Agent>| agents.iter().any(|listed| listed.bot.id == agent.bot.id);
+
+    assert!(
+        !repo
+            .user_shares_channel_with_bot(user_id(TEAM_MEMBER), agent.bot.id)
+            .await?
+    );
+    assert!(!lists_persona(
+        service.list_agents(user_id(TEAM_MEMBER)).await?
+    ));
+
+    // A channel they really share with it still makes it available.
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+        channel_id,
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await?;
+    assert!(
+        repo.user_shares_channel_with_bot(user_id(TEAM_MEMBER), agent.bot.id)
+            .await?
+    );
+    assert!(lists_persona(
+        service.list_agents(user_id(TEAM_MEMBER)).await?
+    ));
+    Ok(())
+}

@@ -42,7 +42,8 @@ pub trait BotRepo: Send + Sync + 'static {
     ///
     /// Own and team-owned agents are included, plus selected-channel agents
     /// installed in a channel the caller belongs to — the same personas they
-    /// can `@` mention there.
+    /// can `@` mention there. A direct agent conversation is not such a
+    /// channel.
     fn list_manageable_agents(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -125,7 +126,9 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Whether the user and bot share at least one active channel.
+    /// Whether the user and bot share at least one active channel, other than a
+    /// direct agent conversation: only the people a persona already serves
+    /// have one, so it never makes the persona available.
     fn user_shares_channel_with_bot(
         &self,
         caller: MacroUserIdStr<'static>,

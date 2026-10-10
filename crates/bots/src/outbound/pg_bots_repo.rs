@@ -662,6 +662,14 @@ impl BotRepo for PgBotsRepo {
                          AND user_p.left_at IS NULL
                         WHERE bot_p.user_id = 'bot|' || b.id::text
                           AND bot_p.left_at IS NULL
+                          -- A conversation with the persona shares nothing:
+                          -- only the people it already serves have one.
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM comms_channel_agents ca
+                              WHERE ca.channel_id = bot_p.channel_id
+                                AND ca.kind = 'direct'
+                          )
                     )
                 )
               )
@@ -1186,6 +1194,14 @@ impl BotRepo for PgBotsRepo {
                  AND user_p.left_at IS NULL
                 WHERE bot_p.user_id = $1
                   AND bot_p.left_at IS NULL
+                  -- Only the persona's owner or team has a conversation with
+                  -- it, so one never makes it available to anyone.
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM comms_channel_agents ca
+                      WHERE ca.channel_id = bot_p.channel_id
+                        AND ca.kind = 'direct'
+                  )
             ) AS "shares!"
             "#,
             principal_id(bot_id),
