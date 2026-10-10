@@ -79,6 +79,28 @@ async fn test_deletes_queue_message_on_success() {
 }
 
 #[tokio::test]
+async fn test_handles_endpoint_deleted_event_without_message_id() {
+    let handler = MockHandler { should_fail: false };
+    let queue = MockQueue::new();
+    let worker = PushNotificationEventWorker::new(handler, queue);
+
+    let body = serde_json::json!({
+        "EndpointArn": "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1",
+        "EventType": "EndpointDeleted",
+        "Resource": "arn:aws:sns:us-east-1:123:app/APNS/app",
+        "Service": "SNS",
+        "Time": "2026-10-10T00:00:00.000Z"
+    });
+    let messages = vec![RawPushNotificationEventMessage {
+        body: Some(body.to_string()),
+        receipt_handle: Some("receipt-1".to_string()),
+    }];
+    worker.process_messages(&messages).await;
+
+    assert_eq!(worker.queue.get_deleted_receipts(), vec!["receipt-1"]);
+}
+
+#[tokio::test]
 async fn test_does_not_delete_queue_message_on_handler_error() {
     let handler = MockHandler { should_fail: true };
     let queue = MockQueue::new();
