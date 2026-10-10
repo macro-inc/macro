@@ -180,6 +180,7 @@ async fn handle_refresh(ctx: &LinkManagerContext, link: &Link) -> anyhow::Result
         &ctx.email_api,
         &ctx.sqs_client,
         &ctx.macro_event_broker,
+        &*ctx.contacts_ingress,
     )
     .await
     {
