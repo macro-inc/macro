@@ -506,6 +506,18 @@ where
                             .and_then(|record| record.in_flight);
                     }
                     if let Some(turn) = &ended {
+                        // Saved before the outcome makes the reply due, so any
+                        // replica that reconciles it shows what this one watched.
+                        let reply = self.reported_segments(session_id, turn.turn);
+                        if !reply.is_empty()
+                            && turn.announce.as_ref().is_some_and(|origin| {
+                                origin.reply_placement
+                                    == crate::domain::model::ReplyPlacement::Timeline
+                            })
+                            && let Err(error) = store.save_reply(turn.action_id, &reply).await
+                        {
+                            tracing::error!(?error, %session_id, "could not save a finished conversation reply");
+                        }
                         let state = match &stop {
                             StopReason::Cancelled => {
                                 crate::domain::conversation_turns::ConversationTurnState::Stopped

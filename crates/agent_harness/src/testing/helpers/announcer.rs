@@ -38,6 +38,14 @@ impl AnnouncerMock {
             Some(message.to_owned());
     }
 
+    /// Stop failing: the next announce, resolve or presentation succeeds.
+    pub fn recovers(&self) {
+        *self
+            .failure
+            .lock()
+            .expect("announcer mock failure lock should not be poisoned") = None;
+    }
+
     /// Every announcement recorded, in order.
     #[must_use]
     pub fn announced(&self) -> Vec<SessionAnnouncement> {

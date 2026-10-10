@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_conversation_turns SET reply_segments = $2 WHERE action_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e372ef00447be11a370d30b8bc1511e9a37ca11cbbd414acaed16dc6bd81f22"
+}

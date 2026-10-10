@@ -194,7 +194,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
 
     async fn retry(&self, source: Uuid, bot: BotId, expected: AgentActionId) -> Result<bool> {
         let action = AgentActionId::mint();
-        Ok(sqlx::query!("UPDATE agent_conversation_turns SET action_id = $4, state = 'queued', in_flight = NULL, outcome = NULL, reply_finalized = FALSE, updated_at = now() WHERE source_message_id = $1 AND bot_id = $2 AND action_id = $3 AND state IN ('failed', 'stopped', 'interrupted') AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL)", source, bot.as_uuid(), expected.as_uuid(), action.as_uuid())
+        Ok(sqlx::query!("UPDATE agent_conversation_turns SET action_id = $4, state = 'queued', in_flight = NULL, outcome = NULL, reply_segments = NULL, reply_finalized = FALSE, updated_at = now() WHERE source_message_id = $1 AND bot_id = $2 AND action_id = $3 AND state IN ('failed', 'stopped', 'interrupted') AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL)", source, bot.as_uuid(), expected.as_uuid(), action.as_uuid())
             .execute(&self.pool).await.map_err(anyhow::Error::from)?.rows_affected() == 1)
     }
 
@@ -214,6 +214,23 @@ impl ConversationTurnStore for PgConversationTurnStore {
         let flight = serde_json::to_value(turn).map_err(anyhow::Error::from)?;
         sqlx::query!("UPDATE agent_conversation_turns SET in_flight = $2, updated_at = now() WHERE action_id = $1 AND state = 'running'", action.as_uuid(), flight)
             .execute(&self.pool).await.map_err(anyhow::Error::from)?;
+        Ok(())
+    }
+
+    async fn save_reply(
+        &self,
+        action: AgentActionId,
+        segments: &[agent_fold::domain::model::ProjectedSegment],
+    ) -> Result<()> {
+        let segments = serde_json::to_value(segments).map_err(anyhow::Error::from)?;
+        sqlx::query!(
+            "UPDATE agent_conversation_turns SET reply_segments = $2 WHERE action_id = $1",
+            action.as_uuid(),
+            segments
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(anyhow::Error::from)?;
         Ok(())
     }
 

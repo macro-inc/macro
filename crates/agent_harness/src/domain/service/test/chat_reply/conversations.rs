@@ -533,3 +533,128 @@ async fn recovered_messages_dispatch_in_durable_order_even_when_delivered_in_rev
 fn prompt_text(agent: &FakeAgent, index: usize) -> String {
     serde_json::to_string(&prompts(agent)[index]).unwrap()
 }
+
+/// A direct conversation over a durable journal, with its first message
+/// delivered to a running agent.
+async fn journaled_conversation(
+    pool: sqlx::PgPool,
+) -> (
+    TestHarness,
+    AnnouncerMock,
+    TurnSignals,
+    Arc<crate::outbound::conversation_turns::PgConversationTurnStore>,
+    ContainerMock,
+    OpenSession,
+) {
+    use agent_session::domain::agent_conversation::AgentConversationRepo;
+    use channels::domain::agent_dm::AgentDmRepo;
+    let journal =
+        Arc::new(crate::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()));
+    let ((service, _, containers, announcer, _), signals) = harness_with_ports_and_journal(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
+        PromptMentionsMock::new(),
+        Some(journal.clone()),
+    );
+    let mut command = direct_command();
+    let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
+        .ensure(mention_origin(&command).sender.clone(), command.bot_id)
+        .await
+        .unwrap()
+        .dm
+        .channel_id;
+    let session = crate::testing::postgres_sessions(pool)
+        .current_or_create(conversation(channel, &command))
+        .await
+        .unwrap();
+    mention_origin_mut(&mut command).parent = MessageParent::Channel(channel);
+    let container = open_direct(&service, &containers, session, command.clone()).await;
+    (service, announcer, signals, journal, container, command)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_answer_that_could_not_be_posted_is_posted_by_recovery(pool: sqlx::PgPool) {
+    use crate::domain::conversation_turns::ConversationTurnStore;
+    let (service, announcer, signals, journal, container, command) =
+        journaled_conversation(pool).await;
+    let source = mention_origin(&command).message_id;
+    says(&container.agent(), "The only passage.");
+    announcer.fails("messages unavailable");
+    container.agent().completes_prompt().await;
+    signals.lifecycle_published(4).await;
+    let unposted = journal.get(source, command.bot_id).await.unwrap().unwrap();
+    assert!(!unposted.reply_finalized);
+    assert!(answers(&announcer).is_empty());
+
+    // The replica that watched the turn has forgotten its reply by now.
+    announcer.recovers();
+    service.recover_conversations().await.unwrap();
+    assert_eq!(answers(&announcer), ["The only passage."]);
+    let reserved = unposted.in_flight.unwrap().presented;
+    assert!(
+        announcer
+            .presented()
+            .iter()
+            .all(|reply| reserved.contains(&reply.message_id)),
+        "the answer is posted under the id its turn reserved"
+    );
+    assert!(
+        journal
+            .get(source, command.bot_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .reply_finalized
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_answer_whose_turn_ended_unwatched_is_still_posted(pool: sqlx::PgPool) {
+    use crate::domain::conversation_turns::{ConversationTurnState, ConversationTurnStore};
+    let (service, announcer, _signals, journal, container, command) =
+        journaled_conversation(pool).await;
+    let source = mention_origin(&command).message_id;
+    let session = journal
+        .get(source, command.bot_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .session_id;
+    says(&container.agent(), "Answered after a restart.");
+    eventually("the reply reserves its message", || {
+        service
+            .inner
+            .busy
+            .turn(session)
+            .is_some_and(|turn| !turn.presented.is_empty())
+    })
+    .await;
+    // As after a restart: nothing in memory says which turn runs here.
+    service.inner.busy.take(session);
+    service.inner.projections.clear();
+    container.agent().completes_prompt().await;
+    let finished = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let record = journal.get(source, command.bot_id).await.unwrap().unwrap();
+            if record.reply_finalized {
+                break record;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("the turn's end reconciles its reply");
+    assert_eq!(finished.state, ConversationTurnState::Succeeded);
+    let presented = announcer.presented();
+    assert!(
+        matches!(
+            presented.as_slice(),
+            [reply] if reply.notify
+                && reply.outcome
+                    == Some(ReplyOutcome::Answered("Answered after a restart.".to_owned()))
+        ),
+        "the answer is posted, as news, though nobody saw its passages: {presented:#?}"
+    );
+}
