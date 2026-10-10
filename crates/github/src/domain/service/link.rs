@@ -9,8 +9,8 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubMergeMethod,
-        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestRef,
+        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubLinkStatus,
+        GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestRef,
         MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
@@ -61,32 +61,32 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
         }
     }
 
-    fn link_lookup_error(error: R::Err) -> GithubError {
-        let error: anyhow::Error = error.into();
-
-        if error.to_string().contains("no rows returned") {
-            return GithubError::NoLinkFound;
-        }
-
-        GithubError::Internal(error)
-    }
-
-    async fn get_user_link_for_validation(
+    async fn find_user_link(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
-    ) -> Result<GithubLink, GithubError> {
+    ) -> Result<Option<GithubLink>, GithubError> {
         self.repo
             .get_github_link_by_user_id(macro_user_id)
             .await
-            .map_err(Self::link_lookup_error)
+            .map_err(|e| GithubError::Internal(e.into()))
     }
 
     async fn validated_access_token(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> Result<GithubAccessToken, GithubError> {
-        let link = self.get_user_link_for_validation(macro_user_id).await?;
+        let link = self
+            .find_user_link(macro_user_id)
+            .await?
+            .ok_or(GithubError::NoLinkFound)?;
 
+        self.validated_link_access_token(&link).await
+    }
+
+    async fn validated_link_access_token(
+        &self,
+        link: &GithubLink,
+    ) -> Result<GithubAccessToken, GithubError> {
         let access_token = self
             .auth
             .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
@@ -202,23 +202,21 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_user_link(
+    async fn get_user_link_status(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
-    ) -> Result<GithubLink, GithubError> {
-        self.repo
-            .get_github_link_by_user_id(macro_user_id)
-            .await
-            .map_err(Self::link_lookup_error)
-    }
+    ) -> Result<GithubLinkStatus, GithubError> {
+        let Some(link) = self.find_user_link(macro_user_id).await? else {
+            return Ok(GithubLinkStatus::NotLinked);
+        };
 
-    #[tracing::instrument(skip(self), err)]
-    async fn check_user_link_token(
-        &self,
-        macro_user_id: &MacroUserId<Lowercase<'static>>,
-    ) -> Result<(), GithubError> {
-        self.validated_access_token(macro_user_id).await?;
-        Ok(())
+        match self.validated_link_access_token(&link).await {
+            Ok(_) => Ok(GithubLinkStatus::Linked(link)),
+            Err(GithubError::ReauthenticationRequired) => {
+                Ok(GithubLinkStatus::ReauthenticationRequired)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     #[tracing::instrument(skip(self, pull_requests), err)]
@@ -317,18 +315,9 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> Result<(), GithubError> {
-        // Get link
-        let link = match self.repo.get_github_link_by_user_id(macro_user_id).await {
-            Ok(link) => link,
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    tracing::trace!("no github link found for user");
-                    return Ok(());
-                }
-
-                return Err(GithubError::Internal(e));
-            }
+        let Some(link) = self.find_user_link(macro_user_id).await? else {
+            tracing::trace!("no github link found for user");
+            return Ok(());
         };
 
         // Count how many Macro users share this GitHub account. The FusionAuth
@@ -398,17 +387,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         let gh_id = user_info.id.to_string();
 
         // 1. Does THIS user already have a link, and to which account?
-        let this_user_link = match self.repo.get_github_link_by_user_id(user_id).await {
-            Ok(l) => Some(l),
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    None
-                } else {
-                    return Err(GithubError::Internal(e));
-                }
-            }
-        };
+        let this_user_link = self.find_user_link(user_id).await?;
 
         if let Some(existing) = &this_user_link
             && existing.github_user_id == gh_id
@@ -428,17 +407,11 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         // behavior).
 
         // 2. Does anyone already OWN this github account? (owner row = earliest row)
-        let account_owner = match self.repo.get_github_link_by_github_user_id(&gh_id).await {
-            Ok(l) => Some(l),
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    None
-                } else {
-                    return Err(GithubError::Internal(e));
-                }
-            }
-        };
+        let account_owner = self
+            .repo
+            .get_github_link_by_github_user_id(&gh_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
 
         let row_fusionauth_user_id = match &account_owner {
             Some(owner) => {

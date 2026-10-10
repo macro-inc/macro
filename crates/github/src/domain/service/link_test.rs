@@ -38,9 +38,9 @@ struct StubGithubRepo {
 }
 
 struct StubGithubRepoState {
-    /// Link returned by `get_github_link_by_user_id` (None → "no rows returned").
+    /// Link returned by `get_github_link_by_user_id`.
     link_by_user_id: Option<GithubLink>,
-    /// Link returned by `get_github_link_by_github_user_id` (None → "no rows returned").
+    /// Link returned by `get_github_link_by_github_user_id`.
     link_by_github_user_id: Option<GithubLink>,
     /// Value returned by `count_github_links_by_github_user_id`.
     link_count: i64,
@@ -114,25 +114,15 @@ impl GithubRepo for StubGithubRepo {
     async fn get_github_link_by_user_id<'a>(
         &self,
         _macro_user_id: &MacroUserId<Lowercase<'a>>,
-    ) -> Result<GithubLink, Self::Err> {
-        self.state
-            .lock()
-            .unwrap()
-            .link_by_user_id
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("no rows returned"))
+    ) -> Result<Option<GithubLink>, Self::Err> {
+        Ok(self.state.lock().unwrap().link_by_user_id.clone())
     }
 
     async fn get_github_link_by_github_user_id(
         &self,
         _github_user_id: &str,
-    ) -> Result<GithubLink, Self::Err> {
-        self.state
-            .lock()
-            .unwrap()
-            .link_by_github_user_id
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("no rows returned"))
+    ) -> Result<Option<GithubLink>, Self::Err> {
+        Ok(self.state.lock().unwrap().link_by_github_user_id.clone())
     }
 
     async fn count_github_links_by_github_user_id(
@@ -418,6 +408,7 @@ struct StubAuth {
 struct StubAuthState {
     link_user_calls: u32,
     delete_user_link_calls: u32,
+    access_token_error: Option<String>,
 }
 
 impl StubAuth {
@@ -426,6 +417,11 @@ impl StubAuth {
             access_token: access_token.to_string(),
             state: Arc::new(Mutex::new(StubAuthState::default())),
         }
+    }
+
+    fn fail_access_token(self, error: &str) -> Self {
+        self.state.lock().unwrap().access_token_error = Some(error.to_string());
+        self
     }
 
     fn link_user_calls(&self) -> u32 {
@@ -466,6 +462,9 @@ impl Auth for StubAuth {
         _fusionauth_user_id: &uuid::Uuid,
         _github_idp_id: &str,
     ) -> Result<GithubAccessToken, Self::Err> {
+        if let Some(error) = &self.state.lock().unwrap().access_token_error {
+            return Err(anyhow::anyhow!(error.clone()));
+        }
         Ok(GithubAccessToken::new(self.access_token.clone()))
     }
 }
@@ -769,55 +768,7 @@ fn service_with_foreign_entities(
 }
 
 #[tokio::test]
-async fn check_user_link_token_accepts_valid_token() {
-    let user_id = test_user_id();
-    let oauth = StubGithubOauth::new(false);
-    let service = service(
-        StubGithubRepo::linked(test_link(&user_id)),
-        oauth.clone(),
-        StubAuth::new("valid-token"),
-    );
-
-    let result = service.check_user_link_token(&user_id).await;
-
-    assert!(result.is_ok());
-    assert_eq!(oauth.validated_tokens(), vec!["valid-token".to_string()]);
-}
-
-#[tokio::test]
-async fn check_user_link_token_returns_reauthentication_required_for_expired_token() {
-    let user_id = test_user_id();
-    let oauth = StubGithubOauth::new(true);
-    let service = service(
-        StubGithubRepo::linked(test_link(&user_id)),
-        oauth.clone(),
-        StubAuth::new("expired-token"),
-    );
-
-    let result = service.check_user_link_token(&user_id).await;
-
-    assert!(matches!(result, Err(GithubError::ReauthenticationRequired)));
-    assert_eq!(oauth.validated_tokens(), vec!["expired-token".to_string()]);
-}
-
-#[tokio::test]
-async fn check_user_link_token_returns_no_link_found_without_db_link() {
-    let user_id = test_user_id();
-    let oauth = StubGithubOauth::new(false);
-    let service = service(
-        StubGithubRepo::unlinked(),
-        oauth.clone(),
-        StubAuth::new("valid-token"),
-    );
-
-    let result = service.check_user_link_token(&user_id).await;
-
-    assert!(matches!(result, Err(GithubError::NoLinkFound)));
-    assert!(oauth.validated_tokens().is_empty());
-}
-
-#[tokio::test]
-async fn check_user_link_token_enrich_pull_requests_reauthenticates_before_details() {
+async fn enrich_pull_requests_reauthenticates_before_details() {
     let user_id = test_user_id();
     let oauth = StubGithubOauth::new(true);
     let service = service(
