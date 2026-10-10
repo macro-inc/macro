@@ -534,29 +534,27 @@ fn prompt_text(agent: &FakeAgent, index: usize) -> String {
     serde_json::to_string(&prompts(agent)[index]).unwrap()
 }
 
-/// A direct conversation over a durable journal, with its first message
-/// delivered to a running agent.
+/// A direct conversation over `journal`, with its first message delivered
+/// to a running agent.
 async fn journaled_conversation(
     pool: sqlx::PgPool,
+    journal: Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>,
 ) -> (
     TestHarness,
     AnnouncerMock,
     TurnSignals,
-    Arc<crate::outbound::conversation_turns::PgConversationTurnStore>,
     ContainerMock,
     OpenSession,
 ) {
     use agent_session::domain::agent_conversation::AgentConversationRepo;
     use channels::domain::agent_dm::AgentDmRepo;
-    let journal =
-        Arc::new(crate::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()));
     let ((service, _, containers, announcer, _), signals) = harness_with_ports_and_journal(
         PromptContextMock::default(),
         PromptComposerMock::default(),
         KindDefaultPolicies,
         HarnessDefaultCodingAgents,
         PromptMentionsMock::new(),
-        Some(journal.clone()),
+        Some(journal),
     );
     let mut command = direct_command();
     let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
@@ -571,14 +569,21 @@ async fn journaled_conversation(
         .unwrap();
     mention_origin_mut(&mut command).parent = MessageParent::Channel(channel);
     let container = open_direct(&service, &containers, session, command.clone()).await;
-    (service, announcer, signals, journal, container, command)
+    (service, announcer, signals, container, command)
+}
+
+fn pg_journal(
+    pool: &sqlx::PgPool,
+) -> Arc<crate::outbound::conversation_turns::PgConversationTurnStore> {
+    Arc::new(crate::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()))
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_answer_that_could_not_be_posted_is_posted_by_recovery(pool: sqlx::PgPool) {
     use crate::domain::conversation_turns::ConversationTurnStore;
-    let (service, announcer, signals, journal, container, command) =
-        journaled_conversation(pool).await;
+    let journal = pg_journal(&pool);
+    let (service, announcer, signals, container, command) =
+        journaled_conversation(pool, journal.clone()).await;
     let source = mention_origin(&command).message_id;
     says(&container.agent(), "The only passage.");
     announcer.fails("messages unavailable");
@@ -613,8 +618,9 @@ async fn an_answer_that_could_not_be_posted_is_posted_by_recovery(pool: sqlx::Pg
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_answer_whose_turn_ended_unwatched_is_still_posted(pool: sqlx::PgPool) {
     use crate::domain::conversation_turns::{ConversationTurnState, ConversationTurnStore};
-    let (service, announcer, _signals, journal, container, command) =
-        journaled_conversation(pool).await;
+    let journal = pg_journal(&pool);
+    let (service, announcer, _signals, container, command) =
+        journaled_conversation(pool, journal.clone()).await;
     let source = mention_origin(&command).message_id;
     let session = journal
         .get(source, command.bot_id)
@@ -656,5 +662,193 @@ async fn an_answer_whose_turn_ended_unwatched_is_still_posted(pool: sqlx::PgPool
                     == Some(ReplyOutcome::Answered("Answered after a restart.".to_owned()))
         ),
         "the answer is posted, as news, though nobody saw its passages: {presented:#?}"
+    );
+}
+
+/// A journal whose writes of a turn's end fail while `fail_finish` is set.
+struct FlakyJournal {
+    inner: crate::outbound::conversation_turns::PgConversationTurnStore,
+    fail_finish: std::sync::atomic::AtomicBool,
+}
+
+#[async_trait::async_trait]
+impl crate::domain::conversation_turns::ConversationTurnStore for FlakyJournal {
+    async fn claim_delivery(
+        &self,
+        session: AgentSessionId,
+    ) -> agent_session::domain::error::Result<
+        Option<Box<dyn crate::domain::conversation_turns::ConversationLease>>,
+    > {
+        self.inner.claim_delivery(session).await
+    }
+    async fn claim_context(
+        &self,
+        session: AgentSessionId,
+    ) -> agent_session::domain::error::Result<
+        Option<Box<dyn crate::domain::conversation_turns::ConversationLease>>,
+    > {
+        self.inner.claim_context(session).await
+    }
+    async fn cancel_queued(
+        &self,
+        session: AgentSessionId,
+    ) -> agent_session::domain::error::Result<()> {
+        self.inner.cancel_queued(session).await
+    }
+    async fn settings(
+        &self,
+        session: AgentSessionId,
+    ) -> agent_session::domain::error::Result<
+        Option<crate::domain::conversation_turns::ConversationSettings>,
+    > {
+        self.inner.settings(session).await
+    }
+    async fn pin_settings(
+        &self,
+        session: AgentSessionId,
+        settings: crate::domain::conversation_turns::ConversationSettings,
+    ) -> agent_session::domain::error::Result<crate::domain::conversation_turns::ConversationSettings>
+    {
+        self.inner.pin_settings(session, settings).await
+    }
+    async fn admit(
+        &self,
+        session: AgentSessionId,
+        channel: macro_uuid::Uuid,
+        command: OpenSession,
+    ) -> agent_session::domain::error::Result<crate::domain::conversation_turns::ConversationTurn>
+    {
+        self.inner.admit(session, channel, command).await
+    }
+    async fn get(
+        &self,
+        source: macro_uuid::Uuid,
+        bot: BotId,
+    ) -> agent_session::domain::error::Result<
+        Option<crate::domain::conversation_turns::ConversationTurn>,
+    > {
+        self.inner.get(source, bot).await
+    }
+    async fn by_action(
+        &self,
+        action: AgentActionId,
+    ) -> agent_session::domain::error::Result<
+        Option<crate::domain::conversation_turns::ConversationTurn>,
+    > {
+        self.inner.by_action(action).await
+    }
+    async fn retry(
+        &self,
+        source: macro_uuid::Uuid,
+        bot: BotId,
+        expected: AgentActionId,
+    ) -> agent_session::domain::error::Result<bool> {
+        self.inner.retry(source, bot, expected).await
+    }
+    async fn claim(
+        &self,
+        action: AgentActionId,
+        turn: &crate::domain::queue::InFlightTurn,
+    ) -> agent_session::domain::error::Result<bool> {
+        self.inner.claim(action, turn).await
+    }
+    async fn record_flight(
+        &self,
+        action: AgentActionId,
+        turn: &crate::domain::queue::InFlightTurn,
+    ) -> agent_session::domain::error::Result<()> {
+        self.inner.record_flight(action, turn).await
+    }
+    async fn save_reply(
+        &self,
+        action: AgentActionId,
+        segments: &[agent_fold::domain::model::ProjectedSegment],
+    ) -> agent_session::domain::error::Result<()> {
+        self.inner.save_reply(action, segments).await
+    }
+    async fn finish(
+        &self,
+        action: AgentActionId,
+        state: crate::domain::conversation_turns::ConversationTurnState,
+        outcome: ReplyOutcome,
+    ) -> agent_session::domain::error::Result<()> {
+        if self.fail_finish.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(anyhow::anyhow!("the journal is unreachable").into());
+        }
+        self.inner.finish(action, state, outcome).await
+    }
+    async fn finalize_reply(
+        &self,
+        action: AgentActionId,
+        outcome: &ReplyOutcome,
+    ) -> agent_session::domain::error::Result<()> {
+        self.inner.finalize_reply(action, outcome).await
+    }
+    async fn claim_reply(
+        &self,
+        action: AgentActionId,
+    ) -> agent_session::domain::error::Result<
+        Option<Box<dyn crate::domain::conversation_turns::ConversationLease>>,
+    > {
+        self.inner.claim_reply(action).await
+    }
+    async fn pending(
+        &self,
+        limit: u16,
+    ) -> agent_session::domain::error::Result<
+        Vec<crate::domain::conversation_turns::ConversationTurn>,
+    > {
+        self.inner.pending(limit).await
+    }
+    async fn running(
+        &self,
+        limit: u16,
+    ) -> agent_session::domain::error::Result<
+        Vec<crate::domain::conversation_turns::ConversationTurn>,
+    > {
+        self.inner.running(limit).await
+    }
+    async fn for_conversation(
+        &self,
+        channel: macro_uuid::Uuid,
+        bot: BotId,
+    ) -> agent_session::domain::error::Result<
+        Vec<crate::domain::conversation_turns::ConversationTurnStatus>,
+    > {
+        self.inner.for_conversation(channel, bot).await
+    }
+    async fn pending_replies(
+        &self,
+        limit: u16,
+    ) -> agent_session::domain::error::Result<
+        Vec<crate::domain::conversation_turns::ConversationTurn>,
+    > {
+        self.inner.pending_replies(limit).await
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_turn_end_the_journal_cannot_record_still_frees_the_session(pool: sqlx::PgPool) {
+    let journal = Arc::new(FlakyJournal {
+        inner: crate::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()),
+        fail_finish: std::sync::atomic::AtomicBool::new(false),
+    });
+    let (service, announcer, _signals, container, _) =
+        journaled_conversation(pool, journal.clone()).await;
+    let agent = container.agent();
+    let session = service.inner.busy.running()[0].0;
+    journal
+        .fail_finish
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    says(&agent, "First answer.");
+    agent.completes_prompt().await;
+    eventually("the session is free for its next command", || {
+        service.inner.busy.turn(session).is_none() && !service.inner.busy.is_pending(session)
+    })
+    .await;
+    assert_eq!(
+        answers(&announcer),
+        ["First answer."],
+        "the reply still shows how the turn ended"
     );
 }

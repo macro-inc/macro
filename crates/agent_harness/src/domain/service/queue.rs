@@ -495,15 +495,27 @@ where
                     tracing::warn!(%session_id, %action, "ignoring a stale turn end");
                     return Ok(CommandOutcome::Completed);
                 }
+                // The journal is told before the turn's mark is released, but
+                // a failure to tell it is logged, not returned: the session
+                // must still drain, and recovery marks a turn left running as
+                // interrupted.
                 if let Some(store) = &self.conversation_turns {
                     if ended.is_none()
                         && let Some(action) = fold_action_id
                     {
-                        ended = store
-                            .by_action(action)
-                            .await?
-                            .filter(|record| record.session_id == session_id)
-                            .and_then(|record| record.in_flight);
+                        match store.by_action(action).await {
+                            Ok(record) => {
+                                ended = record
+                                    .filter(|record| record.session_id == session_id)
+                                    .and_then(|record| record.in_flight);
+                            }
+                            Err(error) => tracing::error!(
+                                ?error,
+                                %session_id,
+                                %action,
+                                "could not read the conversation turn that ended"
+                            ),
+                        }
                     }
                     if let Some(turn) = &ended {
                         // Saved before the outcome makes the reply due, so any
@@ -529,13 +541,21 @@ where
                                 crate::domain::conversation_turns::ConversationTurnState::Succeeded
                             }
                         };
-                        store
+                        if let Err(error) = store
                             .finish(
                                 turn.action_id,
                                 state,
                                 ReplyOutcome::of_turn(&stop, last_text.clone()),
                             )
-                            .await?;
+                            .await
+                        {
+                            tracing::error!(
+                                ?error,
+                                %session_id,
+                                action_id = %turn.action_id,
+                                "could not record how a conversation turn ended"
+                            );
+                        }
                     }
                 }
                 self.busy.take(session_id);
