@@ -1756,7 +1756,8 @@ async fn a_user_tool_review_is_a_tool_scoped_form_elicitation_naming_the_tool() 
     );
 }
 
-/// The timeout still guards a turn that is silent with nothing asked.
+/// The timeout still guards a turn that is silent with nothing asked, and
+/// the turn it stops failed: nobody pressed Stop.
 #[tokio::test(start_paused = true)]
 async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
     let (notifications, _config_options, response) =
@@ -1765,11 +1766,15 @@ async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
                 .send_request(text_prompt(&session, "hang"))
                 .block_task()
                 .await
-                .expect("the turn should complete")
         })
         .await;
 
-    assert_eq!(response.stop_reason, StopReason::Cancelled);
+    let error = response.expect_err("a timed-out turn fails");
+    assert!(
+        error.to_string().contains("produced nothing")
+            || format!("{error:?}").contains("produced nothing"),
+        "got {error:?}"
+    );
     assert!(
         spoken(&notifications).contains("produced nothing"),
         "got {:?}",
