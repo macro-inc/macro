@@ -92,7 +92,10 @@ The HTTP requests can have separate trace IDs across asynchronous mutation
 boundaries. Capture each request's `traceparent` as described above and inspect
 the backend trace as well. For the join request, compare `create_room`,
 `prepare_meeting_call`, and `join_invitation`; `start_meeting_media` runs in the
-background and must not be added to the time spent waiting for credentials.
+background and must not be added to the time spent waiting for credentials. Channel
+calls similarly launch `start_channel_call` for recording, transcription, and
+recipient notifications; these run concurrently outside the token response path.
+A slow recorder or push provider should not hold the creator on Connecting.
 
 ## Agent sessions
 

@@ -22,7 +22,9 @@ use notification::domain::service::NotificationIngress;
 use serde_json::json;
 use uuid::Uuid;
 
+mod access;
 mod active_meetings;
+mod channel_startup;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
@@ -437,11 +439,7 @@ fn started_event_call(created_by: &str) -> Call {
     }
 }
 
-fn mock_get_or_create_repo(
-    scenario: GetOrCreateScenario,
-    call: Call,
-    recording_enabled: bool,
-) -> MockCallRepository {
+fn mock_get_or_create_repo(scenario: GetOrCreateScenario, call: Call) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
 
     match scenario {
@@ -479,12 +477,6 @@ fn mock_get_or_create_repo(
         }
     }
 
-    if recording_enabled {
-        repo.expect_set_egress_id()
-            .times(1)
-            .returning(|_, _| Box::pin(async { Ok(()) }));
-    }
-
     repo.expect_find_active_call_for_user()
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
@@ -502,7 +494,7 @@ fn mock_get_or_create_repo(
     repo
 }
 
-type BaseGetOrCreateCallService<Cn> = CallServiceImpl<
+type BaseGetOrCreateCallService<Cn, B = macro_event_broker::NoopMacroEventBroker> = CallServiceImpl<
     MockCallRepository,
     MockRtcClient,
     Cn,
@@ -510,6 +502,9 @@ type BaseGetOrCreateCallService<Cn> = CallServiceImpl<
     StubNotificationIngress,
     StubRecordingStorage,
     NoopCallSummarizer,
+    (),
+    NoOpVoiceRepository,
+    B,
 >;
 
 fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionService>(
@@ -517,7 +512,7 @@ fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionServic
     connection_service: Cn,
     event_broker: B,
     recording_enabled: bool,
-) -> impl CallService {
+) -> BaseGetOrCreateCallService<Cn, B> {
     let service: BaseGetOrCreateCallService<Cn> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
@@ -548,13 +543,40 @@ async fn get_or_create_call(
     recording_enabled: bool,
 ) -> Result<crate::domain::models::CallTokenResponse, CallError> {
     let call = started_event_call(created_by);
-    let repo = mock_get_or_create_repo(scenario, call, recording_enabled);
+    let repo = mock_get_or_create_repo(scenario, call);
     let service =
         build_get_or_create_service(repo, StubConnectionService, broker, recording_enabled);
 
-    service
+    let mut completed = None;
+    if matches!(scenario, GetOrCreateScenario::CreatorWins) && recording_enabled {
+        let (sent, received) = tokio::sync::oneshot::channel();
+        let mut background_repo = MockCallRepository::new();
+        background_repo
+            .expect_attach_meeting_recording()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(true) }));
+        background_repo
+            .expect_get_call_by_id()
+            .times(1)
+            .return_once(move |_| {
+                Box::pin(async move {
+                    sent.send(()).unwrap();
+                    Ok(Some(started_event_call(STARTED_EVENT_CREATOR)))
+                })
+            });
+        configure_repository_clone(&service.repo, background_repo);
+        completed = Some(received);
+    }
+    let result = service
         .get_or_create_call(&STARTED_EVENT_CHANNEL_ID, user("requester@example.com"))
-        .await
+        .await;
+    if let Some(completed) = completed {
+        tokio::time::timeout(Duration::from_secs(2), completed)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+    result
 }
 
 #[tokio::test]
@@ -674,7 +696,7 @@ async fn malformed_stored_creator_skips_only_started_event() {
 #[tokio::test]
 async fn get_or_create_call_sends_call_answered_to_joining_user() {
     let call = started_event_call(STARTED_EVENT_CREATOR);
-    let repo = mock_get_or_create_repo(GetOrCreateScenario::ExistingCall, call, false);
+    let repo = mock_get_or_create_repo(GetOrCreateScenario::ExistingCall, call);
     let connection_service = RecordingConnectionService::default();
     let service = build_get_or_create_service(
         repo,

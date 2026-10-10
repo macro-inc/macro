@@ -1775,7 +1775,10 @@ and, with `enable-quick-calls` enabled, `Manage call links`. Create Quick Calls
 with `New Call` beside Calendar's
 `New event`, or with `Create` → `Call` (`C C`). Scheduled calls are created through
 Calendar and can be shared with people who do not have a Macro account.
-The channel/contact option opens the recipient picker.
+The channel/contact option opens the recipient picker. Starting a channel call
+connects the creator without waiting for recording, transcription, or recipient
+notification delivery. Verify that a second participant still receives the ring
+and can join, and that leaving immediately does not leave a recording running.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 

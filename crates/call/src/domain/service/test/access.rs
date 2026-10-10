@@ -15,6 +15,7 @@ use uuid::Uuid;
 pub(super) struct TeamAccessService {
     pub(super) teams: HashMap<String, Uuid>,
     pub(super) fail_lookup: bool,
+    pub(super) channel_users: Vec<MacroUserIdStr<'static>>,
 }
 
 impl EntityAccessService for TeamAccessService {
@@ -104,9 +105,7 @@ impl EntityAccessService for TeamAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        Err(AccessError::internal(
-            "entity access service not configured",
-        ))
+        Ok(self.channel_users.clone())
     }
 
     async fn get_call_channel(
