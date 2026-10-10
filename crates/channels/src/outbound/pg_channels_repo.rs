@@ -822,6 +822,80 @@ fn push_channel_thread_notification_filter_expr(
     builder.push(")");
 }
 
+/// Newest thread per channel from `comms_message_threads.activity_at`, then one
+/// merged page. `activity_at` is the same GREATEST the scan used to compute.
+#[cfg(feature = "list")]
+fn build_channel_thread_activity_query(
+    params: &GetThreadReplyRowsParams,
+) -> QueryBuilder<'static, Postgres> {
+    let cursor = params.query();
+    let query_limit = params.limit().map(i64::from);
+    let (cursor_id, cursor_timestamp) = cursor.vals();
+    let cursor_id_str = cursor_id.map(|id| id.to_string());
+    let cursor_timestamp = cursor_timestamp.cloned();
+
+    let mut builder = QueryBuilder::new(
+        r#"
+        SELECT
+            m.id AS id,
+            m.parent_entity_id::uuid AS channel_id,
+            m.sender_id AS sender_id,
+            m.triggered_by_user_id AS triggered_by_user_id,
+            m.content AS content,
+            m.created_at AS created_at,
+            m.updated_at AS updated_at,
+            m.edited_at::timestamptz AS edited_at,
+            m.deleted_at::timestamptz AS deleted_at
+        FROM (
+            SELECT per.root_id, per.activity_at
+            FROM (
+                SELECT DISTINCT cp.channel_id
+                FROM comms_channel_participants cp
+                WHERE cp.user_id = "#,
+    );
+    builder.push_bind(params.user().as_ref().to_string());
+    builder.push(
+        r#" AND cp.left_at IS NULL
+            ) channels
+            CROSS JOIN LATERAL (
+                SELECT t.root_id, t.activity_at
+                FROM comms_message_threads t
+                WHERE t.parent_entity_type = 'channel'
+                  AND t.parent_entity_id = channels.channel_id::text
+                  AND t.deleted_at IS NULL
+                  AND t.activity_at IS NOT NULL
+        "#,
+    );
+    if cursor_timestamp.is_some() {
+        builder.push(" AND (t.activity_at, t.root_id::text) < (");
+        builder.push_bind(cursor_timestamp);
+        builder.push(", ");
+        builder.push_bind(cursor_id_str);
+        builder.push(")");
+    }
+    builder.push(
+        r#"
+                ORDER BY t.activity_at DESC, t.root_id::text DESC
+                LIMIT "#,
+    );
+    builder.push_bind(query_limit);
+    builder.push(
+        r#"
+            ) per
+            ORDER BY per.activity_at DESC, per.root_id::text DESC
+            LIMIT "#,
+    );
+    builder.push_bind(query_limit);
+    builder.push(
+        r#"
+        ) top
+        JOIN comms_messages m ON m.id = top.root_id
+        ORDER BY top.activity_at DESC, m.id::text DESC
+        "#,
+    );
+    builder
+}
+
 #[cfg(feature = "list")]
 fn build_channel_thread_rows_query(
     params: &GetThreadReplyRowsParams,
@@ -829,6 +903,11 @@ fn build_channel_thread_rows_query(
     // Dynamic QueryBuilder is required because the channel-thread filter is an AST with
     // arbitrary AND/OR/NOT shape. All runtime values are still passed as bind parameters.
     let cursor = params.query();
+    // created_at is the only sort the CASE does not turn into thread activity.
+    // A filter still has to see every root, so it stays on that scan.
+    if cursor.sort_method().to_string() != "created_at" && cursor.filter().is_none() {
+        return build_channel_thread_activity_query(params);
+    }
     let sort_method_str = cursor.sort_method().to_string();
     let query_limit = params.limit().map(i64::from);
     let (cursor_id, cursor_timestamp) = cursor.vals();
