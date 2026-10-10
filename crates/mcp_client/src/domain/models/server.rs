@@ -1,6 +1,7 @@
 use super::consts::MCP_CLIENT_NAME;
 use crate::domain::ports::{McpConnector, McpServerStore};
 use crate::domain::service::PersistingCredentialStore;
+use http::{HeaderName, HeaderValue};
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::RoleClient;
 use rmcp::model::{ClientInfo, Implementation};
@@ -9,6 +10,7 @@ use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::auth::{AuthClient, AuthorizationManager, StoredCredentials};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// A connected MCP server session.
@@ -47,11 +49,38 @@ pub struct McpServerRecord {
     pub credentials: Option<StoredCredentials>,
     /// Whether the user has this toolset enabled.
     pub enabled: bool,
+    /// Custom request headers to send with every request to this server.
+    /// Stored as key-value pairs (e.g. `{"Authorization": "Bearer token123"}`).
+    pub headers: HashMap<String, String>,
+}
+
+impl McpServerRecord {
+    /// Build the transport config for this server, including any custom headers.
+    fn transport_config(&self) -> StreamableHttpClientTransportConfig {
+        let mut config = StreamableHttpClientTransportConfig::with_uri(&*self.url);
+        if !self.headers.is_empty() {
+            let custom_headers: HashMap<HeaderName, HeaderValue> = self
+                .headers
+                .iter()
+                .filter_map(|(k, v)| {
+                    let name = HeaderName::from_bytes(k.as_bytes()).ok()?;
+                    let value = HeaderValue::from_str(v).ok()?;
+                    Some((name, value))
+                })
+                .collect();
+            if !custom_headers.is_empty() {
+                config = config.custom_headers(custom_headers);
+            }
+        }
+        config
+    }
 }
 
 impl McpConnector for McpServerRecord {
     #[tracing::instrument(skip_all, err)]
     async fn connect<S: McpServerStore>(&self, server_store: Arc<S>) -> anyhow::Result<McpServer> {
+        let config = self.transport_config();
+
         match &self.credentials {
             Some(credentials) => {
                 let mut auth_manager = AuthorizationManager::new(&self.url).await?;
@@ -61,13 +90,14 @@ impl McpConnector for McpServerRecord {
                 auth_manager.initialize_from_store().await?;
 
                 let auth_client = AuthClient::new(reqwest::Client::new(), auth_manager);
-                let config = StreamableHttpClientTransportConfig::with_uri(&*self.url);
                 let transport = StreamableHttpClientTransport::with_client(auth_client, config);
 
                 Ok(client_info().serve(transport).await?)
             }
             None => {
-                let transport = StreamableHttpClientTransport::from_uri(&*self.url);
+                // When there are no credentials, use the reqwest-based
+                // transport with config (which includes custom headers).
+                let transport = StreamableHttpClientTransport::from_config(config);
                 Ok(client_info().serve(transport).await?)
             }
         }

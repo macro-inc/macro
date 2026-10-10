@@ -234,6 +234,7 @@ fn record(url: &str, authenticated: bool) -> McpServerRecord {
         credentials: authenticated
             .then(|| StoredCredentials::new("client".into(), None, Vec::new(), None)),
         enabled: true,
+        headers: std::collections::HashMap::new(),
     }
 }
 
