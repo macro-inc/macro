@@ -43,6 +43,14 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupAgentSession'],
       argumentPaths: [['sessionId']],
     },
+    crmCompany: {
+      targets: ['GraphqlSoupCrmCompany'],
+      argumentPaths: [['companyId']],
+    },
+    crmContact: {
+      targets: ['GraphqlSoupCrmContact'],
+      argumentPaths: [['contactId']],
+    },
     emailThread: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
@@ -59,9 +67,13 @@ export type GeneratedEntityResolverTarget =
   | 'GraphqlChannelActivity'
   | 'GraphqlProperty'
   | 'GraphqlSoupAgentSession'
+  | 'GraphqlSoupCrmCompany'
+  | 'GraphqlSoupCrmContact'
   | 'GraphqlSoupEmailThread'
   | 'GraphqlSoupInitiative';
 export type GeneratedEntityResolverArgumentPath =
+  | readonly ['companyId']
+  | readonly ['contactId']
   | readonly ['initiativeId']
   | readonly ['input', 'channelId']
   | readonly ['input', 'labelId']

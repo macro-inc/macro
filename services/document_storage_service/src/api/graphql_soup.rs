@@ -185,6 +185,10 @@ fn insert_graphql_context_data(
         state.graphql_initiative_context.clone(),
         macro_user_id.clone(),
     ));
+    data.insert(graphql_crm::pipeline_entries_loader(
+        state.graphql_crm_context.clone(),
+        macro_user_id.clone(),
+    ));
     data.insert(state.graphql_notification_reader.clone());
     data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());

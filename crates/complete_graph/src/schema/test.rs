@@ -45,6 +45,7 @@ use uuid::Uuid;
 use super::*;
 
 mod calendar;
+mod crm_record;
 mod database_activity;
 mod database_row;
 mod email_archive;

@@ -28,6 +28,7 @@ graphql_activity = { path = "../graphql_activity" }
 graphql_calendar = { path = "../graphql_calendar" }
 graphql_channel = { path = "../graphql_channel" }
 graphql_common = { path = "../graphql_common" }
+graphql_crm = { path = "../graphql_crm" }
 graphql_email = { path = "../graphql_email" }
 graphql_entity_mutation = { path = "../graphql_entity_mutation" }
 graphql_favorite = { path = "../graphql_favorite" }
@@ -57,6 +58,8 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+crm = { path = "../crm", default-features = false, features = ["ports"] }
+databases = { path = "../databases", default-features = false, features = ["ports"] }
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
 work_feed = { path = "../work_feed" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }

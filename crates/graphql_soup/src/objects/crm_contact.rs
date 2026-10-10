@@ -105,6 +105,13 @@ impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
     pub(super) async fn edges(&self) -> E {
         self.1.clone()
     }
+    /// CRM-record fields, such as the pipeline rows referencing the contact.
+    #[graphql(flatten)]
+    pub(super) async fn crm_record_edges(&self) -> E::CrmRecordEdges {
+        E::crm_record_edges(
+            model_entity::EntityType::CrmContact.with_entity_string(self.0.id.to_string()),
+        )
+    }
     /// Optional viewer frecency score.
     pub(super) async fn frecency_score(&self) -> Option<f64> {
         self.2

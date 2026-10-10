@@ -513,6 +513,51 @@ fn database_rows_are_an_opt_in_soup_entity_named_by_table() {
 }
 
 #[test]
+fn crm_records_load_from_the_user_with_their_pipeline_entries() {
+    let sdl = crate::build_schema().sdl();
+    let block = |declaration: &str| {
+        sdl.split_once(declaration)
+            .unwrap_or_else(|| panic!("schema has no `{declaration}`"))
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0
+            .to_owned()
+    };
+    let user = block("type GraphqlUser {");
+    assert_sdl_line(&user, "crmCompany(companyId: ID!): GraphqlSoupCrmCompany");
+    assert_sdl_line(&user, "crmContact(contactId: ID!): GraphqlSoupCrmContact");
+    for record in [
+        "type GraphqlSoupCrmCompany implements GraphqlSoupEntity {",
+        "type GraphqlSoupCrmContact implements GraphqlSoupEntity {",
+    ] {
+        assert_sdl_line(
+            &block(record),
+            "pipelineEntries: [GraphqlCrmPipelineEntry!]!",
+        );
+    }
+    let entry = block("type GraphqlCrmPipelineEntry {");
+    for field in [
+        "id: ID!",
+        "pipeline: GraphqlCrmPipeline!",
+        "cells: [GraphqlCrmPipelineCell!]!",
+    ] {
+        assert_sdl_line(&entry, field);
+    }
+    // A cell is a fact about its row, so it stays embedded in the entry.
+    let cell = block("type GraphqlCrmPipelineCell {");
+    assert!(!cell.lines().any(|line| line.trim() == "id: ID!"));
+    assert_sdl_line(&cell, "column: GraphqlCrmPipelineColumn!");
+    assert_sdl_line(&cell, "value: GraphqlPropertyValue");
+    let column = block("type GraphqlCrmPipelineColumn {");
+    assert_sdl_line(&column, "id: ID!");
+    assert_sdl_line(&column, "options: [GraphqlPropertyOption!]!");
+    let pipeline = block("type GraphqlCrmPipeline {");
+    assert_sdl_line(&pipeline, "id: ID!");
+    assert_sdl_line(&pipeline, "canEdit: Boolean!");
+}
+
+#[test]
 fn scheduled_actions_hang_off_the_authenticated_user() {
     use apollo_compiler::schema::ExtendedType;
 

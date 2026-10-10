@@ -4485,6 +4485,8 @@ dependencies = [
  "bots",
  "calendar_events",
  "chrono",
+ "crm",
+ "databases",
  "email",
  "entity_access",
  "entity_mutation",
@@ -4493,6 +4495,7 @@ dependencies = [
  "graphql_calendar",
  "graphql_channel",
  "graphql_common",
+ "graphql_crm",
  "graphql_email",
  "graphql_entity_mutation",
  "graphql_favorite",
@@ -6275,6 +6278,7 @@ dependencies = [
  "github",
  "github_pull_requests",
  "graphql_calendar",
+ "graphql_crm",
  "graphql_initiative",
  "graphql_scheduled_action",
  "graphql_soup",
@@ -8612,6 +8616,27 @@ dependencies = [
  "models_properties",
  "rootcause",
  "serde",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_crm"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "crm",
+ "databases",
+ "entity_access",
+ "graphql_common",
+ "graphql_properties",
+ "macro_user_id",
+ "models_databases",
+ "models_properties",
+ "serde_json",
  "tokio",
  "tracing",
  "uuid",

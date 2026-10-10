@@ -211,6 +211,50 @@ where
         })
     }
 
+    async fn storage_row_cells(
+        &self,
+        id: DatabaseId,
+        table: TableId,
+        rows: &[RowId],
+    ) -> Result<Vec<StorageRow>, DatabaseError> {
+        let entry = self
+            .storage_entries(id)
+            .await?
+            .into_iter()
+            .find(|entry| entry.table.id == table)
+            .ok_or(DatabaseError::NotFound)?;
+        let rows: HashSet<_> = rows.iter().collect();
+        let wanted: Vec<_> = self
+            .repository
+            .row_refs(table)
+            .await
+            .map_err(repository_error)?
+            .into_iter()
+            .map(|row| row.id)
+            .filter(|row| rows.contains(row))
+            .collect();
+        let mut cells = self.cells.cells(&wanted).await.map_err(repository_error)?;
+        Ok(wanted
+            .into_iter()
+            .map(|row_id| {
+                let cells = cells.remove(&row_id).unwrap_or_default();
+                StorageRow {
+                    row_id,
+                    cells: entry
+                        .columns
+                        .iter()
+                        .filter_map(|column| {
+                            cells
+                                .get(&column.column.property_definition_id)
+                                .cloned()
+                                .map(|value| (column.column.id, value))
+                        })
+                        .collect(),
+                }
+            })
+            .collect())
+    }
+
     async fn apply_storage_ops(
         &self,
         id: DatabaseId,

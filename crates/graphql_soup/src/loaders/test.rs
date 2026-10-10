@@ -615,3 +615,38 @@ async fn pr_and_session_hydration_recheck_team_on_each_batch() {
     loader.load(&keys).await.unwrap();
     assert_eq!(soup.calls.lock().unwrap()[1].team_id, None);
 }
+
+#[tokio::test]
+async fn crm_record_hydration_carries_the_viewer_team() {
+    use entity_access::domain::models::{EntityPermission, TeamRole};
+    let viewer = user("macro|viewer@example.com");
+    let team_id = Uuid::now_v7();
+    let team = Arc::new(CurrentTeam(Mutex::new(Some(
+        EntityAccessReceipt::try_new_authenticated_user(
+            viewer.clone(),
+            entity_access::domain::models::Entity {
+                entity_type: EntityType::Team,
+                entity_id: team_id.to_string(),
+            },
+            EntityPermission::TeamRole {
+                role: TeamRole::Member,
+            },
+        )
+        .unwrap(),
+    ))));
+    let soup = RecordingSoupService::default();
+    let mut loader = SoupItemLoader::new(soup.clone(), RecordingInboxReader::default());
+    loader.team_reader = Some(team);
+    for entity_type in [EntityType::CrmCompany, EntityType::CrmContact] {
+        let keys = vec![(
+            viewer.clone(),
+            entity_type.with_entity_string(Uuid::now_v7().to_string()),
+        )];
+        loader.load(&keys).await.unwrap();
+        assert_eq!(
+            soup.calls.lock().unwrap().last().unwrap().team_id,
+            Some(team_id.to_string()),
+            "{entity_type} hydration needs the viewer's team"
+        );
+    }
+}

@@ -1,11 +1,12 @@
 //! Pipeline metadata and grants, composed with the database domain's writer.
 
 use crate::domain::pipelines::{
-    Pipeline, PipelineBlueprint, PipelineRecordType, PipelineRepo, PipelineSharing,
+    Pipeline, PipelineBlueprint, PipelineRecordType, PipelineReference, PipelineRepo,
+    PipelineSharing,
 };
 use databases::domain::provisioning::DatabaseStorageProvisioner;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
-use models_databases::{ColumnId, DatabaseId, TableId};
+use models_databases::{ColumnId, DatabaseId, RowId, TableId};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -130,6 +131,46 @@ where
                     } else {
                         PipelineSharing::Private
                     },
+                })
+            })
+            .collect()
+    }
+
+    async fn referencing_rows(
+        &self,
+        pipelines: &[Uuid],
+        records: &[Uuid],
+    ) -> Result<Vec<PipelineReference>, Self::Error> {
+        let records: Vec<String> = records.iter().map(Uuid::to_string).collect();
+        // Starts from each pipeline's primary column: entity_properties has no
+        // index on referenced ids, so this reads those pipelines' primary cells.
+        let rows = sqlx::query!(
+            r#"SELECT p.id AS "pipeline_id!", r.id AS "row_id!",
+                      reference.value ->> 'entity_id' AS "record_id!"
+               FROM crm_pipeline_entities p
+               JOIN database_columns c ON c.id = p.primary_column_id
+               JOIN entity_properties ep
+                 ON ep.property_definition_id = c.property_definition_id
+                AND ep.entity_type = 'DATABASE_ROW'
+               JOIN database_rows r ON r.id::text = ep.entity_id AND r.table_id = p.table_id
+               CROSS JOIN LATERAL jsonb_array_elements(ep.values -> 'value') AS reference(value)
+               WHERE p.id = ANY($1) AND p.trashed_at IS NULL
+                 AND reference.value ->> 'entity_id' = ANY($2)
+               ORDER BY p.id, r.position, r.id"#,
+            pipelines,
+            &records,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(PipelineReference {
+                    pipeline_id: row.pipeline_id,
+                    row_id: RowId::from_uuid(row.row_id),
+                    record_id: row
+                        .record_id
+                        .parse()
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
                 })
             })
             .collect()

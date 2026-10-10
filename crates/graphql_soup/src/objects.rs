@@ -113,6 +113,12 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     /// Construct the agent-session-specific edge object.
     fn agent_session_edges(session_id: Uuid, bot_id: Uuid) -> Self::AgentSessionEdges;
 
+    /// Additional fields attached only to CRM company and contact entities.
+    type CrmRecordEdges: ObjectType + Clone + Send + Sync + 'static;
+
+    /// Construct the CRM-record edge object for a company or contact.
+    fn crm_record_edges(record: model_entity::Entity<'static>) -> Self::CrmRecordEdges;
+
     /// Resolve properties assigned to this entity.
     fn resolve_properties(
         &self,
@@ -2379,6 +2385,14 @@ where
     /// The edges.
     async fn edges(&self) -> E {
         self.1.clone()
+    }
+
+    /// CRM-record fields, such as the pipeline rows referencing the company.
+    #[graphql(flatten)]
+    async fn crm_record_edges(&self) -> E::CrmRecordEdges {
+        E::crm_record_edges(
+            model_entity::EntityType::CrmCompany.with_entity_string(self.0.id.to_string()),
+        )
     }
 
     /// The viewer's frecency score for this entity, when loaded.

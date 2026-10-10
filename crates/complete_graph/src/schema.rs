@@ -53,9 +53,10 @@ use graphql_properties::{
 };
 use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
 use graphql_soup::{
-    GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupInitiative, GroupedSoup,
-    GroupedSoupInput, SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage,
-    SoupPatch, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,
+    GraphqlSoupAgentSession, GraphqlSoupCrmCompany, GraphqlSoupCrmContact, GraphqlSoupEmailThread,
+    GraphqlSoupInitiative, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
+    SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_grouped_soup, resolve_soup,
+    resolve_soup_agent_session, resolve_soup_crm_company, resolve_soup_crm_contact,
     resolve_soup_email_thread, resolve_soup_updates,
 };
 use graphql_work_feed::{
@@ -842,6 +843,40 @@ where
             ctx,
             self.user_id.clone(),
             thread_id,
+        )
+        .await
+    }
+
+    /// Fetch one CRM company the viewer can see, with the pipeline rows
+    /// that reference it reachable through `pipelineEntries`.
+    async fn crm_company(
+        &self,
+        ctx: &Context<'_>,
+        company_id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSoupCrmCompany<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        let company_id = parse_id(company_id, "companyId")?;
+        resolve_soup_crm_company::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            company_id,
+        )
+        .await
+    }
+
+    /// Fetch one CRM contact the viewer can see, with the pipeline rows
+    /// that reference it reachable through `pipelineEntries`.
+    async fn crm_contact(
+        &self,
+        ctx: &Context<'_>,
+        contact_id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSoupCrmContact<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        let contact_id = parse_id(contact_id, "contactId")?;
+        resolve_soup_crm_contact::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            contact_id,
         )
         .await
     }
