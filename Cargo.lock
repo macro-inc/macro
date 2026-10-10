@@ -6423,6 +6423,7 @@ dependencies = [
  "chrono",
  "lambda_runtime",
  "macro_aws_config",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env_var",
  "mockall",
