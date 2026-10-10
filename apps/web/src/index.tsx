@@ -8,7 +8,6 @@ import '@fontsource-variable/playfair-display';
 // import 'solid-devtools';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createTauriFetch } from '@core/util/createTauriFetch';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import { promptReloadForFailedLoad } from '@core/util/reloadForNewerBuild';
@@ -20,11 +19,7 @@ import { Root } from './routes/Root';
 
 // Keep bundled assets and the local dev server in the webview's fetch path.
 if (isTauri()) {
-  window.fetch = createTauriFetch(
-    window.fetch,
-    platformFetch,
-    () => document.baseURI
-  );
+  window.fetch = platformFetch;
 }
 
 initializeLexical();
