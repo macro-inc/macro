@@ -366,3 +366,44 @@ mod conversion_table {
         assert!(resolve_file_type(None, "macro|first.last@macro.com/doc/12").is_err());
     }
 }
+
+mod job_cleanup {
+    use std::path::Path;
+
+    use crate::utils::cleanup_folder;
+
+    /// Cleans up a job folder prepared by `setup` and checks the outcome.
+    fn check(setup: fn(&Path), expect_ok: bool) {
+        let root = tempfile::tempdir().unwrap();
+        let job = root.path().join("job");
+        setup(&job);
+
+        let result = cleanup_folder(job.to_str().unwrap());
+
+        assert_eq!(result.is_ok(), expect_ok, "{result:?}");
+        if expect_ok {
+            assert!(!job.exists());
+        }
+    }
+
+    #[test]
+    fn removes_the_job_folder() {
+        check(
+            |job| {
+                std::fs::create_dir(job).unwrap();
+                std::fs::write(job.join("IN.docx"), b"input").unwrap();
+            },
+            true,
+        );
+    }
+
+    #[test]
+    fn a_job_that_failed_before_creating_its_folder_cleans_up() {
+        check(|_| {}, true);
+    }
+
+    #[test]
+    fn other_failures_still_surface() {
+        check(|job| std::fs::write(job, b"not a folder").unwrap(), false);
+    }
+}

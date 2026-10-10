@@ -294,9 +294,6 @@ pub(crate) fn run_lok_conversion(
 
     if status_code != 0 {
         tracing::error!(job_id=%job_id, status=status_code, "conversion failed with non-zero status code");
-        if let Err(e) = cleanup_folder(job_id) {
-            tracing::error!(error=?e, job_id=%job_id, "unable to cleanup folder");
-        }
         anyhow::bail!("conversion failed");
     }
 

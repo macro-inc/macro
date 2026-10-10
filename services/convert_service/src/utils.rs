@@ -5,14 +5,20 @@ use anyhow::Context;
 use model::document::FileType;
 
 /// Cleanup the folder of the job
+///
+/// A job that failed before creating its folder has nothing to remove.
 pub fn cleanup_folder(job_id: &str) -> anyhow::Result<()> {
     if cfg!(feature = "disable_cleanup") {
         tracing::info!("cleanup disabled");
         return Ok(());
     }
     tracing::trace!(job_id=%job_id, "cleaning up job");
-    std::fs::remove_dir_all(job_id).context("unable to remove directory")?;
-    Ok(())
+    match std::fs::remove_dir_all(job_id) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(e).context("unable to remove directory")
+        }
+        _ => Ok(()),
+    }
 }
 
 /// LibreOfficeKit filter options for a supported conversion.
