@@ -53,9 +53,10 @@ pub struct LocalEnv {
     frontend_origin: String,
     /// Browser-facing route to document cognition's MCP OAuth callback.
     mcp_public_url: String,
-    /// Browser-facing base the static file service stamps into permalinks.
-    /// Only the service itself reads `STATIC_FILE_SERVICE_URL`; callers
-    /// reach it in-network through the `OVERRIDE_` form below. Without this
+    /// Browser-facing base the static file service stamps into permalinks
+    /// and the agent harness recognizes in them, as
+    /// `OVERRIDE_STATIC_FILE_PUBLIC_URL`. Callers reach the service itself
+    /// in-network through `OVERRIDE_STATIC_FILE_SERVICE_URL`. Without this
     /// a named instance mints `http://localhost:8100/file/...`, the
     /// single-instance CDN port, which nothing on a named instance serves;
     /// the proxy's `/static-file/*` block is what does.
@@ -140,7 +141,7 @@ impl LocalEnv {
         env.insert("FRONTEND_ORIGIN".into(), self.frontend_origin.clone());
         env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
         env.insert(
-            "STATIC_FILE_SERVICE_URL".into(),
+            "OVERRIDE_STATIC_FILE_PUBLIC_URL".into(),
             self.static_file_public_url.clone(),
         );
         // Pipedream's hosted Connect UI refuses to be opened from an origin
