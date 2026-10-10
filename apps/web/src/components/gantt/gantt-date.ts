@@ -179,27 +179,38 @@ export function ganttTicks(
   const last = Math.min(range.end, Math.ceil(visible.end));
   if (last <= first) return [];
 
-  let cursor = match(scale)
-    .with('day', () => first)
-    .with(
-      'week',
-      () => first - ((new Date(first * DAY_MS).getUTCDay() + 6) % 7)
-    )
-    .with('month', () => monthStart(first))
-    .exhaustive();
+  // Roughly weekly marks divide each real month evenly instead of drifting with weekdays.
+  if (scale === 'week') {
+    return ganttTicks(range, 'month', visible)
+      .flatMap((month) => {
+        const start = monthStart(month.start);
+        const length = nextMonth(start) - start;
+        return [0, 1, 2, 3].flatMap((section) => {
+          const sectionStart = start + Math.round((length * section) / 4);
+          const sectionEnd = start + Math.round((length * (section + 1)) / 4);
+          if (sectionEnd <= first || sectionStart >= last) return [];
+          const tickStart = Math.max(sectionStart, range.start);
+          return [
+            {
+              start: tickStart,
+              end: Math.min(sectionEnd, range.end),
+              label: String(new Date(tickStart * DAY_MS).getUTCDate()),
+            },
+          ];
+        });
+      })
+      .slice(0, 1_000);
+  }
+
+  let cursor = scale === 'month' ? monthStart(first) : first;
   const ticks: GanttTick[] = [];
   // A malformed or enormous visible range must not block the main thread.
   while (cursor < last && ticks.length < 1_000) {
-    const next =
-      scale === 'month'
-        ? nextMonth(cursor)
-        : cursor + (scale === 'week' ? 7 : 1);
+    const next = scale === 'month' ? nextMonth(cursor) : cursor + 1;
     const label =
       scale === 'month'
         ? formatGanttMonth(cursor)
-        : scale === 'day'
-          ? String(new Date(cursor * DAY_MS).getUTCDate())
-          : formatGanttDay(cursor, false);
+        : String(new Date(cursor * DAY_MS).getUTCDate());
     ticks.push({
       start: Math.max(cursor, range.start),
       end: Math.min(next, range.end),

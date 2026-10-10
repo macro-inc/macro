@@ -141,6 +141,9 @@ months show the year after January only, when a new year starts. Short,
 higher-contrast date marks sit beneath their centered labels
 instead of full-height header lines. Month/year labels fade as the next month
 pushes them toward the left edge, before reaching the expand/collapse button.
+Week-scale date marks divide each month into four near-even calendar-day sections,
+not Monday-based weeks. Weekly grid lines use the same sections. Day spacing and
+month widths still follow the real calendar, including leap-year February.
 Labels remain visible during horizontal scrolling,
 and the date header remains visible during vertical scrolling. The calendar
 extends as you approach either horizontal edge, even during continuous scrolling.

@@ -133,6 +133,39 @@ describe('Gantt calendar geometry', () => {
     });
     expect(weeks).toHaveLength(1);
     expect(weeks[0].start).toBe(day('2026-03-09'));
+    expect(weeks[0].end).toBe(day('2026-03-17'));
+    expect(weeks[0].label).toBe('9');
+  });
+
+  it.each([
+    ['2023-02-01', '2023-03-01', [7, 7, 7, 7], ['1', '8', '15', '22']],
+    ['2024-02-01', '2024-03-01', [7, 8, 7, 7], ['1', '8', '16', '23']],
+    ['2026-04-01', '2026-05-01', [8, 7, 8, 7], ['1', '9', '16', '24']],
+    ['2026-03-01', '2026-04-01', [8, 8, 7, 8], ['1', '9', '17', '24']],
+  ] as const)(
+    'balances week-scale sections in %s without changing calendar dates',
+    (start, end, lengths, labels) => {
+      const ticks = ganttTicks({ start: day(start), end: day(end) }, 'week');
+      expect(ticks.map((tick) => tick.end - tick.start)).toEqual(lengths);
+      expect(ticks.map((tick) => tick.label)).toEqual(labels);
+      expect(ticks.at(-1)?.end).toBe(day(end));
+    }
+  );
+
+  it('keeps month-aligned sections stable across clipped ranges and year boundaries', () => {
+    const bounds = { start: day('2026-12-30'), end: day('2027-01-10') };
+    expect(
+      ganttTicks(bounds, 'week', {
+        start: day('2026-12-31'),
+        end: day('2027-01-05'),
+      })
+    ).toEqual([
+      { start: day('2026-12-30'), end: day('2027-01-01'), label: '30' },
+      { start: day('2027-01-01'), end: day('2027-01-09'), label: '1' },
+    ]);
+    expect(
+      ganttTicks(bounds, 'week', { start: day('2027-01-09'), end: bounds.end })
+    ).toEqual([{ start: day('2027-01-09'), end: bounds.end, label: '9' }]);
   });
 
   it('separates year markers across December and January without enumerating offscreen years', () => {
@@ -174,6 +207,7 @@ describe('Gantt calendar geometry', () => {
     const visible = { start: day('2026-03-01'), end: day('2026-03-11') };
     expect(ganttTicks(long, 'day', visible)).toHaveLength(10);
     expect(ganttTicks(long, 'day')).toHaveLength(1_000);
+    expect(ganttTicks(long, 'week')).toHaveLength(1_000);
     expect(
       ganttTicks(range, 'week', { start: range.end, end: range.end + 7 })
     ).toEqual([]);
