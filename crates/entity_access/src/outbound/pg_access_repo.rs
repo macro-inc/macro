@@ -234,6 +234,7 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
+    #[tracing::instrument(err, skip(self))]
     async fn get_agent_session_parent(
         &self,
         agent_session_id: &str,
@@ -265,6 +266,7 @@ impl AccessRepository for PgAccessRepository {
         .transpose()
     }
 
+    #[tracing::instrument(err, skip(self))]
     async fn agent_session_exists(&self, agent_session_id: &str) -> Result<bool, AccessError> {
         let session = agent_session_id
             .parse::<Uuid>()
@@ -277,6 +279,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_agent_session_access(
         &self,
         agent_session_id: &str,
@@ -296,6 +299,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_initiative_access(
         &self,
         initiative_id: &str,
@@ -315,6 +319,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_pipeline_access(
         &self,
         id: &str,
@@ -329,6 +334,7 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::pipeline_access::get_pipeline_access(&self.pool, id, &sources).await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn list_pipeline_access(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -436,6 +442,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_scheduled_action_access(
         &self,
         scheduled_action_id: &str,
@@ -457,6 +464,7 @@ impl AccessRepository for PgAccessRepository {
         )
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn accessible_scheduled_action_ids(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
