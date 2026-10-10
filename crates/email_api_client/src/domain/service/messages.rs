@@ -5,7 +5,7 @@ use super::super::models::{CalendarPart, EmailApiError, MessageWithCalendarParts
 use super::super::ports::{
     MailboxCalendarClient, MailboxMessageClient, ProviderRateLimiter, ProviderTokenSource,
 };
-use super::{ApiOperationKind, EmailApiClientServiceImpl};
+use super::{ApiOperationKind, EmailApiClientServiceImpl, log_operation_error};
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
@@ -15,7 +15,7 @@ where
 {
     /// Fetches and normalizes one provider message, including any calendar
     /// invitation parts, in a single provider read.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn get_message(
         &self,
         link_id: Uuid,
@@ -26,10 +26,11 @@ where
         self.repository
             .get_message(&access_token, link_id, provider_message_id)
             .await
+            .inspect_err(log_operation_error)
     }
 
     /// Fetches the provider label identifiers attached to one message.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn get_message_label_ids(
         &self,
         link_id: Uuid,
@@ -40,10 +41,11 @@ where
         self.repository
             .get_message_label_ids(&access_token, provider_message_id)
             .await
+            .inspect_err(log_operation_error)
     }
 
     /// Lists message identifiers carrying all requested provider labels.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn list_messages(
         &self,
         link_id: Uuid,
@@ -57,10 +59,11 @@ where
         self.repository
             .list_messages(&access_token, limit, label_ids)
             .await
+            .inspect_err(log_operation_error)
     }
 
     /// Lists message identifiers belonging to one provider thread.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn get_message_ids_for_thread(
         &self,
         link_id: Uuid,
@@ -71,10 +74,11 @@ where
         self.repository
             .get_message_ids_for_thread(&access_token, provider_thread_id)
             .await
+            .inspect_err(log_operation_error)
     }
 
     /// Fetches and normalizes every message in one provider thread.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn get_thread(
         &self,
         link_id: Uuid,
@@ -85,10 +89,11 @@ where
         self.repository
             .get_thread(&access_token, link_id, provider_thread_id)
             .await
+            .inspect_err(log_operation_error)
     }
 
     /// Lists one page of provider threads.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn list_threads(
         &self,
         link_id: Uuid,
@@ -101,10 +106,11 @@ where
         self.repository
             .list_threads(&access_token, limit, next_page_token, label_ids)
             .await
+            .inspect_err(log_operation_error)
     }
 
     /// Applies provider label additions and removals to one message.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn modify_message_labels(
         &self,
         link_id: Uuid,
@@ -124,6 +130,7 @@ where
                 labels_to_remove,
             )
             .await
+            .inspect_err(log_operation_error)
     }
 }
 
@@ -139,7 +146,7 @@ where
     /// This charges a full message read; ingest paths that already fetched the
     /// message should consume [`MessageWithCalendarParts::calendar_parts`]
     /// instead. This lookup exists for durable re-extraction jobs.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn get_calendar_parts(
         &self,
         link_id: Uuid,
@@ -149,6 +156,7 @@ where
         self.repository
             .get_calendar_parts(&access_token, provider_message_id)
             .await
+            .inspect_err(log_operation_error)
     }
 }
 

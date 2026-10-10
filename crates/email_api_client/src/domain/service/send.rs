@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use super::super::models::{EmailApiError, SendRequest, SentIds};
 use super::super::ports::{MailboxSendClient, ProviderRateLimiter, ProviderTokenSource};
-use super::{ApiOperationKind, EmailApiClientServiceImpl};
+use super::{ApiOperationKind, EmailApiClientServiceImpl, log_operation_error};
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
@@ -11,7 +11,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Sends a message through the linked mailbox.
-    #[tracing::instrument(skip(self, request), err)]
+    #[tracing::instrument(skip(self, request))]
     pub async fn send_message(
         &self,
         link_id: Uuid,
@@ -23,6 +23,7 @@ where
         self.repository
             .send_message(&access_token, request, provider_thread_id)
             .await
+            .inspect_err(log_operation_error)
     }
 }
 
