@@ -15,10 +15,15 @@ use crate::domain::service::TaskDedupService;
 use crate::outbound::judge::LocalDuplicateJudge;
 
 const OWNER: &str = "macro|user@user.com";
+const TEAMMATE: &str = "macro|teammate1@user.com";
+const NO_TEAM_USER: &str = "macro|no-team@user.com";
 const TEAM_ID: Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
 const TASK_ONE: &str = "d1000000-0000-0000-0000-000000000001";
 const TASK_TWO: &str = "d1000000-0000-0000-0000-000000000002";
 const TASK_THREE: &str = "d1000000-0000-0000-0000-000000000003";
+const TEAMMATE_TASK: &str = "d1000000-0000-0000-0000-000000000004";
+const PRIVATE_TASK: &str = "d1000000-0000-0000-0000-000000000005";
+const OUTSIDER_TASK: &str = "d1000000-0000-0000-0000-000000000006";
 
 type TestService = TaskDedupService<DIMS, LocalEmbedder, PgTaskVectorDb, NoOpReranker>;
 
@@ -247,6 +252,31 @@ async fn setup_tasks(pool: &PgPool) {
     insert_team_task(pool, TASK_THREE, 3).await;
 }
 
+/// Sorted ids of the tasks a title-only cosine search for `text` returns.
+async fn search_ids(pool: &PgPool, owner: &str, team_id: Option<Uuid>, text: &str) -> Vec<String> {
+    let mut ids: Vec<String> = PgTaskVectorDb::new(pool.clone())
+        .cosine_search(
+            vec![KeyedEmbedding {
+                search_key: "title",
+                embedding: local_embedding(text),
+            }],
+            TaskSearchParameters {
+                owner: owner.to_string(),
+                team_id,
+                limit: 10,
+                exclude_document_id: None,
+                exclude_dismissed: false,
+            },
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|result| result.metadata)
+        .collect();
+    ids.sort();
+    ids
+}
+
 const DETECTION_TITLE: &str = "Add duplicate task detection";
 const DETECTION_BODY: &str =
     "Use pgvector embeddings to find duplicate task descriptions and show a duplicates pill.";
@@ -332,6 +362,113 @@ async fn upsert_embeddings_inserts_and_updates(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(content, "first title updated");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../documents/fixtures",
+        scripts("documents_test_data")
+    )
+)]
+async fn embedding_rows_copy_task_owner_and_team(pool: PgPool) {
+    setup_tasks(&pool).await;
+    insert_task(&pool, PRIVATE_TASK, "Private task", TEAMMATE).await;
+    let vector_db = PgTaskVectorDb::new(pool.clone());
+    for document_id in [TASK_ONE, PRIVATE_TASK] {
+        vector_db
+            .upsert_embeddings(
+                document_id.to_string(),
+                vec![LabeledEmbedding {
+                    search_key: "title",
+                    content: Content::Owned("title".to_string()),
+                    embedding: local_embedding("title"),
+                }],
+            )
+            .await
+            .unwrap();
+    }
+
+    let scopes: Vec<(String, String, Option<Uuid>)> = sqlx::query!(
+        r#"SELECT document_id, owner, team_id FROM task_duplicate_embedding ORDER BY document_id"#
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.document_id, row.owner, row.team_id))
+    .collect();
+    assert_eq!(
+        scopes,
+        vec![
+            (TASK_ONE.to_string(), OWNER.to_string(), Some(TEAM_ID)),
+            (PRIVATE_TASK.to_string(), TEAMMATE.to_string(), None),
+        ]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../documents/fixtures",
+        scripts("documents_test_data")
+    )
+)]
+async fn cosine_search_scope_is_own_tasks_and_team_tasks(pool: PgPool) {
+    insert_task(&pool, TASK_ONE, "Shared task", OWNER).await;
+    insert_team_task(&pool, TASK_ONE, 1).await;
+    insert_task(&pool, TEAMMATE_TASK, "Teammate task", TEAMMATE).await;
+    insert_team_task(&pool, TEAMMATE_TASK, 2).await;
+    insert_task(&pool, PRIVATE_TASK, "Private task", OWNER).await;
+    insert_task(&pool, OUTSIDER_TASK, "Outsider task", NO_TEAM_USER).await;
+    for document_id in [TASK_ONE, TEAMMATE_TASK, PRIVATE_TASK, OUTSIDER_TASK] {
+        insert_task_embedding(&pool, document_id, DETECTION_TITLE, DETECTION_BODY).await;
+    }
+
+    assert_eq!(
+        search_ids(&pool, OWNER, Some(TEAM_ID), DETECTION_TITLE).await,
+        vec![TASK_ONE, TEAMMATE_TASK, PRIVATE_TASK]
+    );
+    assert_eq!(
+        search_ids(&pool, OWNER, None, DETECTION_TITLE).await,
+        vec![TASK_ONE, PRIVATE_TASK]
+    );
+    assert_eq!(
+        search_ids(&pool, TEAMMATE, Some(TEAM_ID), DETECTION_TITLE).await,
+        vec![TASK_ONE, TEAMMATE_TASK]
+    );
+    assert_eq!(
+        search_ids(&pool, NO_TEAM_USER, None, DETECTION_TITLE).await,
+        vec![OUTSIDER_TASK]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../documents/fixtures",
+        scripts("documents_test_data")
+    )
+)]
+async fn stale_scope_copy_does_not_widen_cosine_search(pool: PgPool) {
+    insert_task(&pool, OUTSIDER_TASK, "Outsider task", NO_TEAM_USER).await;
+    insert_task_embedding(&pool, OUTSIDER_TASK, DETECTION_TITLE, DETECTION_BODY).await;
+    sqlx::query!(
+        "UPDATE task_duplicate_embedding SET owner = $1, team_id = $2 WHERE document_id = $3",
+        OWNER,
+        TEAM_ID,
+        OUTSIDER_TASK,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        search_ids(&pool, OWNER, Some(TEAM_ID), DETECTION_TITLE)
+            .await
+            .is_empty(),
+        "the Document and team_task joins decide the scope, not the copies"
+    );
 }
 
 #[sqlx::test(

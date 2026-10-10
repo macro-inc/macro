@@ -120,34 +120,27 @@ impl VectorStore<DIMS> for PgTaskVectorDb {
         // field score and capped at `limit`; all of a kept entity's field rows
         // are returned so the service can reconstruct its text.
         //
-        // Iterative index scan keeps recall high despite the owner/team, self-,
-        // dismissed-pair, and closed-status filters dropping rows after the
-        // HNSW scan.
-        // SET LOCAL binds to the transaction's connection, so the search must run
-        // in the same transaction to see it.
-        let mut tx = self.pool.begin().await?;
-        sqlx::query!("SET LOCAL hnsw.iterative_scan = relaxed_order")
-            .execute(&mut *tx)
-            .await?;
+        // Scores are exact over every embedding in scope. `e.owner` and
+        // `e.team_id` are insert-time copies that find the scope through an
+        // index; the "Document" and team_task joins stay the access check.
+        // Content and the embedding text are read only for the returned rows.
         let rows = sqlx::query!(
             r#"
             WITH query AS (
-                SELECT key, vec::vector AS vec
-                FROM unnest($1::text[], $2::text[]) AS t(key, vec)
+                SELECT key, vec
+                FROM unnest($1::text[], $2::text[]::vector[]) AS t(key, vec)
             ),
             scored AS (
                 SELECT
                     e.document_id,
                     e.search_key,
-                    e.content,
-                    e.embedding::text AS embedding_text,
-                    MAX(1 - (e.embedding <=> q.vec))::real AS score
+                    (SELECT MAX(1 - (e.embedding <=> q.vec)) FROM query q)::real AS score
                 FROM task_duplicate_embedding e
                 JOIN "Document" d ON d.id = e.document_id
                 JOIN document_sub_type dst ON dst.document_id = d.id AND dst.sub_type = 'task'
                 LEFT JOIN team_task tt ON tt.document_id = d.id
-                CROSS JOIN query q
                 WHERE d."deletedAt" IS NULL
+                  AND (e.owner = $3 OR e.team_id = $4)
                   AND (
                     d.owner = $3
                     OR ($4::uuid IS NOT NULL AND tt.team_id = $4)
@@ -171,7 +164,6 @@ impl VectorStore<DIMS> for PgTaskVectorDb {
                       AND ep.property_definition_id = $8
                       AND ep.values->'value' ?| $9::text[]
                   )
-                GROUP BY e.document_id, e.search_key, e.content, e.embedding
             ),
             ranked AS (
                 SELECT document_id, MAX(score) AS best
@@ -183,8 +175,10 @@ impl VectorStore<DIMS> for PgTaskVectorDb {
             SELECT
                 s.document_id AS "document_id!",
                 s.search_key AS "search_key!",
-                s.content AS "content!",
-                s.embedding_text AS "embedding_text!",
+                (SELECT e.content FROM task_duplicate_embedding e
+                 WHERE e.document_id = s.document_id AND e.search_key = s.search_key) AS "content!",
+                (SELECT e.embedding::text FROM task_duplicate_embedding e
+                 WHERE e.document_id = s.document_id AND e.search_key = s.search_key) AS "embedding_text!",
                 s.score AS "score!"
             FROM scored s
             JOIN ranked r ON r.document_id = s.document_id
@@ -200,9 +194,8 @@ impl VectorStore<DIMS> for PgTaskVectorDb {
             SystemPropertyKey::STATUS_UUID,
             &closed_status_option_ids(),
         )
-        .fetch_all(&mut *tx)
+        .fetch_all(&self.pool)
         .await?;
-        tx.commit().await?;
 
         // Group the flat (document_id, field) rows into one SearchResults per
         // entity, preserving the best-first order established by the query.
