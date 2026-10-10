@@ -1,5 +1,6 @@
 import { AgentConversationControls } from '@app/features/agent-conversations/agent-conversation-controls';
 import { useAgentConversations } from '@app/features/agent-conversations/queries/conversations';
+import { queryReadyGate } from '@queries/gate';
 import { type ParentProps, Show } from 'solid-js';
 import { ConversationNotice } from './components/conversation-notice';
 
@@ -25,18 +26,20 @@ function AgentDmComposerContent(
   props: ParentProps<{ channelId: string; botId: string }>
 ) {
   const conversations = useAgentConversations(() => props.channelId);
+  // A failed poll keeps the last answer, so the composer stays mounted; only
+  // a conversation that never loaded shows the error.
   const conversation = () =>
-    conversations.isSuccess
-      ? conversations.data?.find(
+    queryReadyGate(conversations)
+      ? conversations.data.find(
           (conversation) => conversation.botId === props.botId
         )
       : undefined;
   const available = () => conversation()?.available === true;
   const notice = () =>
-    conversations.isError
-      ? 'error'
-      : conversations.isSuccess
-        ? 'unavailable'
+    queryReadyGate(conversations)
+      ? 'unavailable'
+      : conversations.isError
+        ? 'error'
         : 'loading';
   // Centered in the message column, like the channel input it wraps: the
   // input sizes itself to that column, and the controls and notices share

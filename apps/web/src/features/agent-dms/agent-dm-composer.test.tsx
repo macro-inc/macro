@@ -43,6 +43,9 @@ describe('agent DM composer availability', () => {
       available: true,
     });
     mocks.query.mockReturnValue({
+      get isPending() {
+        return state.status === 'pending';
+      },
       get isSuccess() {
         return state.status === 'success';
       },
@@ -76,7 +79,12 @@ describe('agent DM composer availability', () => {
 
   it('offers a retry for metadata failures without treating them as lost access', async () => {
     const refetch = vi.fn();
-    mocks.query.mockReturnValue({ isSuccess: false, isError: true, refetch });
+    mocks.query.mockReturnValue({
+      isPending: false,
+      isSuccess: false,
+      isError: true,
+      refetch,
+    });
     const view = render(() => (
       <AgentDmComposer channelId="dm" botId="persona">
         <textarea />
@@ -85,5 +93,36 @@ describe('agent DM composer availability', () => {
     await fireEvent.click(view.getByRole('button', { name: 'Try again' }));
     expect(refetch).toHaveBeenCalledOnce();
     expect(view.queryByText(/no longer available/)).toBeNull();
+  });
+
+  it('keeps the composer through a failed poll', () => {
+    const [state, setState] = createStore({ status: 'success' });
+    mocks.query.mockReturnValue({
+      isPending: false,
+      get isSuccess() {
+        return state.status === 'success';
+      },
+      get isError() {
+        return state.status === 'error';
+      },
+      // A failed refetch keeps the last data it loaded.
+      data: [{ botId: 'persona', available: true }],
+      refetch: vi.fn(),
+    });
+    let mounts = 0;
+    const Input = () => {
+      mounts += 1;
+      return <textarea aria-label="Message" />;
+    };
+    const view = render(() => (
+      <AgentDmComposer channelId="dm" botId="persona">
+        <Input />
+      </AgentDmComposer>
+    ));
+    expect(view.getByRole('textbox')).toBeTruthy();
+    setState('status', 'error');
+    expect(view.getByRole('textbox')).toBeTruthy();
+    expect(view.queryByText('Could not load this conversation.')).toBeNull();
+    expect(mounts).toBe(1);
   });
 });

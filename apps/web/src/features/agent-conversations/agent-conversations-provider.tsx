@@ -1,3 +1,4 @@
+import { queryReadyGate } from '@queries/gate';
 import { type ParentProps, Show } from 'solid-js';
 import { AgentConversationsContext } from './context';
 import { useAgentConversations } from './queries/conversations';
@@ -20,7 +21,9 @@ function ConversationsProvider(props: ParentProps<{ channelId: string }>) {
   return (
     <AgentConversationsContext.Provider
       value={{
-        conversations: () => (query.isSuccess ? query.data : undefined),
+        // A failed poll keeps the last answer: statuses and Retry stay put
+        // until the next poll succeeds.
+        conversations: () => (queryReadyGate(query) ? query.data : undefined),
         refresh: () => void query.refetch(),
       }}
     >
