@@ -61,6 +61,7 @@ where
 
         if action.occupies_turn() {
             self.admit_session_id(session_id).await?;
+            self.refresh_mcp_servers(session_id).await;
         }
 
         match self

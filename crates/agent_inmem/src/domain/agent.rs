@@ -138,8 +138,6 @@ pub struct AgentState {
     /// The tools of those servers, once dialed; `None` until then or when
     /// there were none.
     pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
-    /// Attached entries retain the credential used to resolve live connections.
-    pub mcp_servers: Mutex<Vec<AcpMcpServer>>,
     /// In-flight `connect_mcp` from `session/new` / `session/resume`. The
     /// handshake does not join it; the first turn does, so SearchTools still
     /// sees the catalog.
@@ -154,9 +152,10 @@ pub struct AgentState {
 
 impl AgentState {
     /// Dial the servers a session request carried and keep their tools for
-    /// the next turn. Started at `session/new`/`session/resume` so
-    /// the handshake is not held by `tools/list`; the first turn joins the
-    /// same work so SearchTools still has the catalog.
+    /// every turn until another `session/resume` hands over a new list.
+    /// Started at `session/new`/`session/resume` so the handshake is not held
+    /// by `tools/list`; the first turn joins the same work so SearchTools
+    /// still has the catalog.
     async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
         let servers = dialable_servers(servers);
         let requested = servers.len();
@@ -177,23 +176,25 @@ impl AgentState {
     /// Start [`Self::connect_mcp`] without joining it. `session/new` and
     /// `session/resume` call this so create can return while listing runs.
     fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
-        *self
-            .mcp_servers
-            .lock()
-            .expect("mcp servers lock should not be poisoned") = servers.clone();
         let state = Arc::clone(self);
         let handle = tokio::spawn(async move {
             state.connect_mcp(servers).await;
         });
-        *self
+        // A resume that hands over new servers supersedes a connect still in
+        // flight; left running, the older list could land last.
+        if let Some(superseded) = self
             .mcp_connect
             .lock()
-            .expect("mcp connect lock should not be poisoned") = Some(handle);
+            .expect("mcp connect lock should not be poisoned")
+            .replace(handle)
+        {
+            superseded.abort();
+        }
     }
 
-    /// Wait for the initial listing, then refresh permitted connections so
-    /// authorization or disconnection takes effect without a new session.
-    async fn mcp_tools_for_turn(&self) -> anyhow::Result<Option<RemoteMcpToolSet>> {
+    /// The tools the next turn should compose, waiting out an in-flight
+    /// connect so the searchable catalog is not empty on turn one.
+    async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
         let handle = self
             .mcp_connect
             .lock()
@@ -202,19 +203,10 @@ impl AgentState {
         if let Some(handle) = handle {
             let _ = handle.await;
         }
-        let advertised = self
-            .mcp_servers
-            .lock()
-            .expect("mcp servers lock should not be poisoned")
-            .clone();
-        if let Some(servers) = self.mcp.refresh_dyn(self.session_id, advertised).await? {
-            self.connect_mcp(servers).await;
-        }
-        Ok(self
-            .mcp_tools
+        self.mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned")
-            .clone())
+            .clone()
     }
 
     fn expect_session(&self, requested: &SessionId) -> Result<(), AcpError> {
@@ -872,7 +864,7 @@ async fn run_turn(
     let mcp_tools = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        tools = state.mcp_tools_for_turn() => tools.map_err(|error| AcpError::new(-32603, format!("Could not refresh connector tools: {error}")))?,
+        tools = state.mcp_tools_for_turn() => tools,
     };
     let TurnInput {
         messages,

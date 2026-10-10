@@ -2,10 +2,11 @@
 //! tokio, no mocks, no waiting - `Token` is a plain integer.
 
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, InitializeResponse, NewSessionResponse, PermissionOption,
-    PermissionOptionKind, RequestId, RequestPermissionOutcome, RequestPermissionRequest,
-    RequestPermissionResponse, Response, ResumeSessionResponse, SelectedPermissionOutcome,
-    SessionCapabilities, SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
+    AgentCapabilities, InitializeResponse, McpServer, McpServerHttp, NewSessionResponse,
+    PermissionOption, PermissionOptionKind, RequestId, RequestPermissionOutcome,
+    RequestPermissionRequest, RequestPermissionResponse, Response, ResumeSessionResponse,
+    SelectedPermissionOutcome, SessionCapabilities, SessionResumeCapabilities, ToolCallUpdate,
+    ToolCallUpdateFields,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::{
@@ -1915,4 +1916,228 @@ mod elicitation {
         assert_eq!(machine.pending_elicitation(), None);
         assert_eq!(machine.status(), RuntimeStatus::Dead);
     }
+
+    #[test]
+    fn new_mcp_servers_held_behind_an_elicitation_go_out_once_it_is_answered() {
+        let mut machine = live_resumable_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let replaced = machine.handle(Input::ReplaceMcpServers(vec![connected_app("linear")]));
+        assert!(replaced.is_empty(), "the agent is waiting on its question");
+
+        let answered = machine.handle(answer(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Decline,
+            1,
+        ));
+
+        assert_eq!(
+            sent_responses(&answered)
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect::<Vec<_>>(),
+            [RequestId::Number(0)]
+        );
+        assert_eq!(sent_methods(&answered), ["session/resume"]);
+        assert!(matches!(
+            answered[..],
+            [
+                Effect::Send { .. },
+                Effect::Complete {
+                    token: 1,
+                    result: Ok(())
+                },
+                Effect::Send { .. },
+            ]
+        ));
+    }
+}
+
+/// A live session on an agent that offers `session/resume`; its `session/new`
+/// was request 1.
+fn live_resumable_machine() -> SessionMachine<u32> {
+    let mut machine = machine();
+    machine.handle(acp_ready());
+    machine.handle(initialized_with(
+        InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+            ),
+        ),
+    ));
+    machine.handle(session_opened("acp-42"));
+    machine
+}
+
+fn connected_app(name: &str) -> McpServer {
+    McpServer::Http(McpServerHttp::new(
+        name,
+        format!("https://egress.example.com/mcp/{name}"),
+    ))
+}
+
+#[test]
+fn new_mcp_servers_resume_a_live_session_before_its_next_prompt() {
+    let mut machine = live_resumable_machine();
+
+    let replaced = machine.handle(Input::ReplaceMcpServers(vec![connected_app("linear")]));
+
+    let [
+        Effect::Send {
+            from: None,
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(resume))),
+        },
+    ] = &replaced[..]
+    else {
+        panic!("expected exactly the resume, got {replaced:?}");
+    };
+    assert_eq!(&*resume.method, "session/resume");
+    assert_eq!(resume.id, request_id(2));
+    assert_eq!(
+        resume.params.clone().map(|params| params.into_value()),
+        Some(serde_json::json!({
+            "sessionId": "acp-42",
+            "cwd": "/workspace",
+            "mcpServers": [{
+                "type": "http",
+                "name": "linear",
+                "url": "https://egress.example.com/mcp/linear",
+                "headers": [],
+            }],
+            "_meta": { "macro.com/agentSessionId": AgentSessionId::TEST_A.to_string() },
+        }))
+    );
+    assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+
+    let queued = machine.handle(command("use linear", 1));
+    assert!(queued.is_empty(), "the prompt waits for the resume");
+
+    let resumed = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(2),
+        Ok(serde_json::to_value(ResumeSessionResponse::new()).unwrap()),
+    )));
+    assert_eq!(sent_methods(&resumed), ["session/prompt"]);
+    assert!(matches!(
+        resumed[..],
+        [
+            Effect::Log { .. },
+            Effect::Send { .. },
+            Effect::Complete {
+                token: 1,
+                result: Ok(())
+            }
+        ]
+    ));
+    assert_eq!(machine.status().session_id().unwrap().to_string(), "acp-42");
+}
+
+#[test]
+fn new_mcp_servers_wait_for_the_running_turn_to_end() {
+    let mut machine = live_resumable_machine();
+    let prompt = sent_request_ids(&machine.handle(command("working", 1)))[0].clone();
+
+    let replaced = machine.handle(Input::ReplaceMcpServers(vec![connected_app("linear")]));
+    assert!(replaced.is_empty(), "nothing interrupts the turn");
+
+    let ended = machine.handle(frame(RawJsonRpcMessage::response(
+        prompt,
+        Ok(serde_json::json!({ "stopReason": "end_turn" })),
+    )));
+    assert_eq!(sent_methods(&ended), ["session/resume"]);
+}
+
+#[test]
+fn the_same_mcp_servers_send_nothing() {
+    let mut machine = live_resumable_machine();
+
+    let replaced = machine.handle(Input::ReplaceMcpServers(Vec::new()));
+
+    assert!(replaced.is_empty());
+    assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+}
+
+#[test]
+fn a_refused_mcp_refresh_keeps_the_session_live_and_sends_what_waited() {
+    let mut machine = live_resumable_machine();
+    machine.handle(Input::ReplaceMcpServers(vec![connected_app("linear")]));
+    machine.handle(command("use linear", 1));
+
+    let refused = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(2),
+        Err(agent_client_protocol::Error::internal_error()),
+    )));
+
+    assert_eq!(sent_methods(&refused), ["session/prompt"]);
+    assert!(
+        !refused
+            .iter()
+            .any(|effect| matches!(effect, Effect::Stop { .. }))
+    );
+    assert_eq!(machine.status().session_id().unwrap().to_string(), "acp-42");
+}
+
+#[test]
+fn an_agent_that_cannot_resume_keeps_its_mcp_servers_until_the_next_attach() {
+    let mut machine = machine();
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-42"));
+
+    let replaced = machine.handle(Input::ReplaceMcpServers(vec![connected_app("linear")]));
+
+    assert!(replaced.is_empty());
+    assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+}
+
+#[test]
+fn mcp_servers_replaced_while_opening_resume_once_live() {
+    let mut machine = machine();
+    machine.handle(acp_ready());
+    machine.handle(initialized_with(
+        InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new().session_capabilities(
+                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+            ),
+        ),
+    ));
+    machine.handle(command("use linear", 1));
+
+    let replaced = machine.handle(Input::ReplaceMcpServers(vec![connected_app("linear")]));
+    assert!(replaced.is_empty(), "session/new is already on the wire");
+
+    let opened = machine.handle(session_opened("acp-42"));
+    assert_eq!(sent_methods(&opened), ["session/resume"]);
+    let resumed = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(2),
+        Ok(serde_json::to_value(ResumeSessionResponse::new()).unwrap()),
+    )));
+    assert_eq!(sent_methods(&resumed), ["session/prompt"]);
+}
+
+#[test]
+fn mcp_servers_replaced_before_the_handshake_ride_on_session_new() {
+    let mut machine = machine();
+    machine.handle(acp_ready());
+    machine.handle(Input::ReplaceMcpServers(vec![connected_app("linear")]));
+
+    let opening = machine.handle(initialized());
+
+    let [
+        Effect::Log { .. },
+        Effect::Initialized { .. },
+        Effect::Send {
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(new))),
+            ..
+        },
+    ] = &opening[..]
+    else {
+        panic!("expected session/new, got {opening:?}");
+    };
+    assert_eq!(
+        new.params
+            .clone()
+            .map(|params| params.into_value()["mcpServers"][0]["name"].clone()),
+        Some(serde_json::json!("linear"))
+    );
+    let opened = machine.handle(session_opened("acp-42"));
+    assert!(!sent_methods(&opened).contains(&"session/resume".to_owned()));
 }

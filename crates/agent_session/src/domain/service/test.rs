@@ -1179,14 +1179,14 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
 
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt("keep dispatching"),
             action_id: AgentActionId::mint(),
             completed,
             span: tracing::info_span!("test.command"),
             enqueued_at: tokio::time::Instant::now(),
-        })
+        }))
         .await
         .unwrap();
     entered.notified().await;
@@ -1263,14 +1263,14 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
     release.notify_one();
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt("keep working"),
             action_id: AgentActionId::mint(),
             completed,
             span: tracing::info_span!("test.command"),
             enqueued_at: tokio::time::Instant::now(),
-        })
+        }))
         .await
         .unwrap();
     entered.notified().await;
@@ -1923,14 +1923,14 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
     );
     let (completed, completion) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt("must remain unsent"),
             action_id: AgentActionId::mint(),
             completed,
             span: tracing::Span::none(),
             enqueued_at: tokio::time::Instant::now(),
-        })
+        }))
         .await
         .unwrap();
     let queued = actor.next_input().await;
@@ -2102,14 +2102,14 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
     let action_id = AgentActionId::mint();
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt("what time is it?"),
             action_id,
             completed,
             span: command_span,
             enqueued_at: tokio::time::Instant::now(),
-        })
+        }))
         .await
         .unwrap();
     let prompt = outbound_rx.recv().await.expect("prompt is dispatched");
@@ -2244,7 +2244,7 @@ async fn a_command_span_records_its_wait_for_the_handshake() {
     );
     let send_prompt = |name: &'static str| {
         let (completed, result) = oneshot::channel();
-        let command = SessionCommand {
+        let command = SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt(name),
             action_id: AgentActionId::mint(),
@@ -2257,7 +2257,7 @@ async fn a_command_span_records_its_wait_for_the_handshake() {
                 agent.command.handshake_wait_ms = tracing::field::Empty,
             ),
             enqueued_at: tokio::time::Instant::now(),
-        };
+        });
         (command, result)
     };
 

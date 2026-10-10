@@ -59,6 +59,15 @@ pub(crate) struct SessionCommand {
     pub(crate) enqueued_at: Instant,
 }
 
+/// What reaches a session's actor through its command channel. One channel,
+/// so a server change and the prompt behind it arrive in the order sent.
+pub(crate) enum SessionMessage {
+    /// Deliver an action.
+    Action(SessionCommand),
+    /// Hand the agent these MCP servers from now on.
+    ReplaceMcpServers(Vec<McpServer>),
+}
+
 pub(crate) struct SessionCompletion {
     completed: oneshot::Sender<Result<()>>,
     span: tracing::Span,
@@ -87,7 +96,7 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     outbound: Connector::Sender,
     inbound: Connector::Receiver,
     logs: Logs,
-    commands: mpsc::Receiver<SessionCommand>,
+    commands: mpsc::Receiver<SessionMessage>,
     /// This connection's handshake gate: published to when this session runs
     /// the handshake, watched for when another session runs it.
     handshake: watch::Sender<HandshakeStatus>,
@@ -127,7 +136,7 @@ where
         permission_policy: PermissionPolicy,
         connector: Connector,
         logs: Logs,
-        commands: mpsc::Receiver<SessionCommand>,
+        commands: mpsc::Receiver<SessionMessage>,
         handshake: watch::Sender<HandshakeStatus>,
         turn_observer: Arc<dyn SessionTurnObserver>,
         tool_catalog: Arc<dyn SessionToolCatalog>,
@@ -237,7 +246,8 @@ where
                 }
             },
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
+                Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
+                Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
                         "agent.command.queue_wait_ms",
                         elapsed_ms(enqueued_at),

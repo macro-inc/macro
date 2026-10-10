@@ -15,8 +15,11 @@ not establish that the requested action is supported.
 For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
 it opens the hosted authorization flow over the agent transcript. After the
 backend verifies and registers the connection, the agent session sends a visible
-continuation message in the same conversation. The native Macro runtime refreshes
-the session’s permitted connector tools before the next turn. The unsent draft
+continuation message in the same conversation. Before that message reaches the
+agent, the harness hands the live session its permitted connector servers again
+(a `session/resume`), so the next turn can use the new app. The native Macro
+runtime and sandboxed coding sessions support this; a runtime that cannot resume
+a session picks the app up when it next attaches. The unsent draft
 is preserved. Closing authorization or a failed registration sends no message.
 If the conversation changed or was closed during auth, there is no automatic
 continuation; the connected app remains available for the next request.
