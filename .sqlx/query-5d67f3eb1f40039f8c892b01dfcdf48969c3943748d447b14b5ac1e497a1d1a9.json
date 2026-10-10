@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id,\n                   GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)\n                       AS \"latest_at!\"\n            FROM email_links el\n            JOIN email_threads t ON t.link_id = el.id\n            LEFT JOIN email_thread_focus f ON f.thread_id = t.id\n            WHERE LOWER(SPLIT_PART(el.email_address, '@', 2)) = ANY($2)\n              AND t.inbox_visible\n              AND t.is_signal\n              AND t.latest_inbound_message_ts IS NOT NULL\n              AND t.latest_inbound_message_ts >= $1\n              AND (\n                  f.thread_id IS NULL\n                  OR f.classified_message_ts\n                     < GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts)\n              )\n            ORDER BY t.latest_inbound_message_ts DESC\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "latest_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "5d67f3eb1f40039f8c892b01dfcdf48969c3943748d447b14b5ac1e497a1d1a9"
+}

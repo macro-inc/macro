@@ -431,7 +431,7 @@ and switch the mailbox to All. Parent selection does not include descendant tags
 Unlike Tasks and Drive, it lists only personal tags; team-shared tags are hidden,
 and its `New tag` action creates a personal tag with no Team sharing option.
 
-Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
+Full email client. Tabs: `Focus` (flagged) / `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
 `Archived` / `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
@@ -444,6 +444,21 @@ the paginated GraphQL Soup query uses `favoritesOnly: true`. With the flag off,
 REST Soup uses `favorites_only: true`. Starring changes membership without
 changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
+
+With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab sits first
+in the sidebar and the mobile pills. It lists signal threads from the last 30
+days that the email focus worker (`services/email_focus_worker`) classified as
+worth attention, most important first, including inboxes linked to the account.
+On desktop each row shows a 0-100 importance score before the subject and
+`reply needed`, `follow up`, or category badges in its metadata, and a sort
+dropdown switches between **Importance** and **Most recent**; phones show the
+same rows in that order without the score, badges or sort. The filter menu adds
+a Focus group (Reply needed, Follow up, Customers, Security, Team, People you
+know) on this tab only and has no Status or Done group there. The list is one
+`user.emailFocus` GraphQL read filtered on the client; it refreshes on open, not
+live. Mark Done hides the row at once and archives the thread; Undo brings it
+back. The worker classifies only inboxes on its `FOCUS_ENABLED_EMAIL_DOMAINS`
+allowlist, so other accounts see the empty state `Nothing needs you`.
 
 `Archived`, directly before All, lists your own archived (Mail Done) threads: the
 All mailbox with Done applied, excluding threads teammates shared with you. It

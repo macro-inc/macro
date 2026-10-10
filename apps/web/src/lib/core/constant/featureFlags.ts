@@ -505,6 +505,15 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// The Focus tab in Mail: signal threads the email focus worker classified as
+// worth the owner's attention. Only allowlisted inboxes are classified, so the
+// tab is empty for everyone else.
+export const enableEmailFocus = defineFlag({
+  key: 'enable-email-focus',
+  env: 'ENABLE_EMAIL_FOCUS',
+  default: onInDev,
+});
+
 export const enableHistoryComponent = defineFlag({
   key: 'enable-history-component',
   env: 'ENABLE_HISTORY_COMPONENT',

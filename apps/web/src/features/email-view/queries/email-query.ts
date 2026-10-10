@@ -42,6 +42,8 @@ export const emailViewForTab = (tab: EmailTab): string =>
       'all',
       'reminders',
       'archived',
+      // Focus has a dedicated GraphQL list; the dormant Soup source stays valid.
+      'focus',
       () => 'all'
     )
     .exhaustive();
@@ -98,6 +100,7 @@ function tabClause(context: EmailQueryContext): TargetExpr {
         'favorites',
         'all',
         'reminders',
+        'focus',
         anyThread
       )
       .exhaustive()

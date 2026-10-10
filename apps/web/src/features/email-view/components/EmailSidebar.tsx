@@ -1,9 +1,7 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArchiveIcon from '@phosphor/archive.svg';
 import BellIcon from '@phosphor/bell-simple.svg';
@@ -13,6 +11,7 @@ import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
 import StarIcon from '@phosphor/star.svg';
+import FocusIcon from '@phosphor/target.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import SignalIcon from '@phosphor/wave-sine.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
@@ -23,10 +22,16 @@ import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
-import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
+import {
+  EMAIL_FOCUS_TAB,
+  EMAIL_TAB_IDS,
+  EMAIL_TABS,
+  type EmailTabItem,
+} from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
+import { useVisibleEmailTab } from '../use-visible-email-tab';
 import { EmailInboxList } from './EmailInboxSelector';
 
 // Email is personal, so the sidebar lists only the user's own tags.
@@ -44,6 +49,7 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   shared: UsersThreeIcon,
   archived: ArchiveIcon,
   all: EnvelopeIcon,
+  focus: FocusIcon,
 };
 
 function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
@@ -66,10 +72,12 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
-  const { state } = useEmailView();
-  const reminders = useFeatureFlag(enableReminders);
+  const isVisible = useVisibleEmailTab();
   return (
     <ViewSidebar.Nav aria-label="Email tabs">
+      <Show when={isVisible('focus')}>
+        <Tab item={EMAIL_FOCUS_TAB} onNavigate={props.onNavigate} />
+      </Show>
       <div
         ref={tourTarget(EMAIL_TOUR.signalNoise)}
         class="flex flex-col gap-(--sidebar-row-gap)"
@@ -80,10 +88,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
       </div>
       <For
         each={EMAIL_TABS.slice(2).filter(
-          (tab) =>
-            tab.id !== 'reminders' ||
-            reminders().enabled ||
-            (reminders().loading && state.tab === 'reminders')
+          (tab) => tab.id !== 'focus' && isVisible(tab.id)
         )}
       >
         {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
@@ -93,7 +98,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
 }
 
 export function EmailSidebar() {
-  const reminders = useFeatureFlag(enableReminders);
+  const isVisible = useVisibleEmailTab();
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
   const {
@@ -107,13 +112,7 @@ export function EmailSidebar() {
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () =>
-      EMAIL_TAB_IDS.filter(
-        (id) =>
-          id !== 'reminders' ||
-          reminders().enabled ||
-          (reminders().loading && state.tab === 'reminders')
-      ),
+    ids: () => EMAIL_TAB_IDS.filter(isVisible),
     activeId: () => state.tab,
     setActiveId: setTab,
     shouldHandleSequentialKeyEvent: (event) =>

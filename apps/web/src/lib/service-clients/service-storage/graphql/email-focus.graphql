@@ -1,0 +1,14 @@
+query EmailFocus($days: Int) {
+	user {
+		id
+		emailFocus(days: $days) {
+			...SoupItemFields
+			focus {
+				category
+				importance
+				needsReply
+				needsFollowUp
+			}
+		}
+	}
+}

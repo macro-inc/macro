@@ -17,6 +17,7 @@ import {
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { EmailAttachmentsBucket } from './attachments-bucket';
+import { EmailFocusWorker } from './focus_worker';
 import { EmailPubSubWorkers } from './pubsub_workers';
 import { EmailRefreshHandler } from './refresh_lambda';
 import {
@@ -426,6 +427,18 @@ new EmailPubSubWorkers('email-pubsub-workers', {
   tags,
   ecsClusterArn: cloudStorageClusterArn,
   clusterName: cloudStorageClusterName,
+  role: emailServiceRole,
+  platform: { family: 'linux', architecture: 'amd64' },
+  containerEnvVars,
+  dopplerEcsEnvironment,
+});
+
+// Classifies signal threads for the Focus view. It reads mail only for
+// inboxes on FOCUS_ENABLED_EMAIL_DOMAINS (Doppler) and idles when that is empty.
+new EmailFocusWorker('email-focus-worker', {
+  vpc: coparse_api_vpc,
+  tags,
+  ecsClusterArn: cloudStorageClusterArn,
   role: emailServiceRole,
   platform: { family: 'linux', architecture: 'amd64' },
   containerEnvVars,

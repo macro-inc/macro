@@ -171,12 +171,14 @@
       "source_paths": [
         "services/email_service/**",
         "services/email_refresh_handler/**",
-        "services/email_scheduled_handler/**"
+        "services/email_scheduled_handler/**",
+        "services/email_focus_worker/**"
       ],
       "stack_path": "infra/stacks/email-service/**",
       "deploy_binaries": [
         "email_service",
-        "pubsub_workers"
+        "pubsub_workers",
+        "email_focus_worker"
       ],
       "deploy_lambdas": [
         "email_refresh_handler",

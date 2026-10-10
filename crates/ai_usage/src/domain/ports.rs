@@ -75,6 +75,8 @@ pub enum AiFeature {
     Dictation,
     /// Image generation and editing.
     ImageGeneration,
+    /// Classifying signal email threads for the Focus view.
+    EmailFocus,
 }
 
 /// Strip a provider prefix from a routing id, yielding the bare model api id

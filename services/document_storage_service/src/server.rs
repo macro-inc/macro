@@ -2024,6 +2024,9 @@ pub async fn run() -> anyhow::Result<()> {
         graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
             graphql_soup::soup_item_loader(primary_entity_soup, Arc::new(email_service.clone())),
         ),
+        email_focus_reader: Arc::new(email::domain::focus::FocusQueries::new(
+            email::outbound::FocusPgRepository(readonly_db.clone()),
+        )),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),
             entity_access_service.clone(),

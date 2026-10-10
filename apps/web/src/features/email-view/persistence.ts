@@ -12,7 +12,12 @@ import {
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
-import { DEFAULT_EMAIL_TAB, EMAIL_TAB_IDS } from './constants';
+import {
+  DEFAULT_EMAIL_FOCUS_SORT,
+  DEFAULT_EMAIL_TAB,
+  EMAIL_FOCUS_SORT_IDS,
+  EMAIL_TAB_IDS,
+} from './constants';
 import { normalizeInboxSelection } from './inbox-selection';
 import type { EmailViewState } from './types';
 
@@ -25,6 +30,10 @@ const emailLocalStateStorage = createUserScopedStorage(
 const emailTabSchema = z.enum(EMAIL_TAB_IDS).catch(DEFAULT_EMAIL_TAB);
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
+
+const emailFocusSortSchema = z
+  .enum(EMAIL_FOCUS_SORT_IDS)
+  .catch(DEFAULT_EMAIL_FOCUS_SORT);
 
 const emailEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -108,6 +117,7 @@ const emailLocalStateSchemaWithDefaults = z.object({
   tab: emailTabSchema.default(DEFAULT_EMAIL_TAB),
   inboxIds: inboxIdsEntrySchema,
   facets: emailFacetsSchema.default({}),
+  focusSort: emailFocusSortSchema.default(DEFAULT_EMAIL_FOCUS_SORT),
 });
 
 type EmailLocalState = z.infer<typeof emailLocalStateSchemaWithDefaults>;
@@ -124,6 +134,7 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
     tab: state.tab,
     inboxIds: normalizeInboxSelection(state.inboxIds),
     facets: normalizeFacetSelection(state.facets),
+    focusSort: state.focusSort,
   };
 }
 
@@ -152,6 +163,7 @@ function createEmailLocalStateStorage(options: {
           tab: restored.tab,
           inboxIds: restored.inboxIds,
           facets: normalizeFacetSelection(restored.facets),
+          focusSort: restored.focusSort,
         };
       } catch {
         return undefined;

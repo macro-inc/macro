@@ -417,6 +417,11 @@
           ];
         }
         {
+          serviceName = "email-focus-worker";
+          packageName = "email_focus_worker";
+          binaries = [ "email_focus_worker" ];
+        }
+        {
           serviceName = "image-proxy-service";
           packageName = "image_proxy_service";
           binaries = [ "image_proxy_service" ];
@@ -555,6 +560,24 @@
           mkdir -p $out/bin
           cp ${deployServiceBinaryPackages.deploy-service-binaries-document-storage-service}/bin/* $out/bin/
           cp ${deployServiceBinaryPackages.deploy-service-binaries-slack-import-worker}/bin/* $out/bin/
+          ${checkBinaries}
+        '';
+
+      # Same for the email service and its Focus worker.
+      emailServiceDeployBinaries =
+        let
+          cfg = builtins.fromJSON (builtins.readFile ../.github/services-config.json);
+          checkBinaries = pkgs.lib.concatMapStringsSep "\n" (binary: ''
+            test -x "$out/bin/${binary}" || {
+              echo "Missing deploy binary: ${binary}" >&2
+              exit 1
+            }
+          '') cfg.services.email-service.deploy_binaries;
+        in
+        pkgs.runCommand "cloud-storage-email-service-deploy-binaries" { } ''
+          mkdir -p $out/bin
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-email-service}/bin/* $out/bin/
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-email-focus-worker}/bin/* $out/bin/
           ${checkBinaries}
         '';
 
@@ -1039,6 +1062,7 @@
       // deployServiceBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
+        deploy-service-binaries-email-service = emailServiceDeployBinaries;
       }
       // deployLambdaPackages
       // pkgs.lib.optionalAttrs isLinux {
