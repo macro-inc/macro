@@ -56,12 +56,14 @@ export class EcrImage extends pulumi.ComponentResource {
           rules: [
             {
               rulePriority: 1,
-              description: 'remove untagged images older than 1 day',
+              // Count, not age: once `latest` moves, the image the previous task
+              // definition pins is untagged, and ECS rollbacks and task
+              // replacements still need to pull it.
+              description: 'keep the 20 most recent untagged images',
               selection: {
                 tagStatus: 'untagged',
-                countType: 'sinceImagePushed',
-                countUnit: 'days',
-                countNumber: 1,
+                countType: 'imageCountMoreThan',
+                countNumber: 20,
               },
               action: {
                 type: 'expire',

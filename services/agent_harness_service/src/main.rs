@@ -145,7 +145,7 @@ use macro_event_broker::{
 };
 use macro_service_urls::{
     AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
-    StaticFileServiceUrl,
+    StaticFilePublicUrl, StaticFileServiceUrl,
 };
 use mcp_client::domain::models::AesKey;
 use mcp_client::outbound::pg_server_repo::PgServerRepo;
@@ -557,7 +557,7 @@ async fn run() -> anyhow::Result<()> {
     // Normalize uploaded images before any provider sees them. In addition to
     // making local URLs reachable, this supplies the MIME type Gemini requires
     // and decodes formats that providers cannot consume directly.
-    let public_base = url::Url::parse(config::StaticFileServiceUrl::new()?.as_ref())?;
+    let public_base = StaticFilePublicUrl::new()?.parse_url()?;
     let cdn_base = match (&config.environment, macro_aws_config::LocalAwsUrl::new()) {
         (Environment::Local, Some(local_aws)) => format!(
             "{}/{}",

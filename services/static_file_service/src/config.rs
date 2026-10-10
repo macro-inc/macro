@@ -2,7 +2,6 @@ use anyhow::Context;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
-use macro_service_urls::StaticFileServiceUrl;
 
 env_vars! {
     pub struct StaticFileServiceDynamodbTableName;
@@ -22,9 +21,6 @@ pub struct Config {
     pub static_file_service_dynamodb_table_name: StaticFileServiceDynamodbTableName,
     /// s3 storage bucket
     pub static_storage_bucket: StaticStorageBucket,
-    /// service url
-    #[macro_config_default(StaticFileServiceUrl::unwrap_new().to_string())]
-    pub static_file_service_url: String,
     /// Internal API key
     pub internal_api_key: InternalApiKey,
 }
