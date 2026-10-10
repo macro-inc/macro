@@ -1,4 +1,5 @@
 import { useListInteractions } from '@app/components/list';
+import { SearchResultsSkeleton } from '@app/components/view-shell/SearchResultsSkeleton';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -289,6 +290,18 @@ export function DriveList() {
               <Match
                 when={
                   !forceEmptyState() &&
+                  isSearching() &&
+                  source.isFetching() &&
+                  source.items().length === 0
+                }
+              >
+                <div class="min-h-0 flex-1 overflow-hidden pt-1">
+                  <SearchResultsSkeleton />
+                </div>
+              </Match>
+              <Match
+                when={
+                  !forceEmptyState() &&
                   source.isLoading() &&
                   source.items().length === 0
                 }
@@ -496,7 +509,10 @@ export function DriveList() {
             </Switch>
             <Show
               when={
-                isSearching() && source.isFetching() && !source.isLoadingMore()
+                isSearching() &&
+                source.isFetching() &&
+                !source.isLoadingMore() &&
+                source.items().length > 0
               }
             >
               <div

@@ -1,3 +1,4 @@
+import { SearchResultsSkeleton } from '@app/components/view-shell/SearchResultsSkeleton';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
@@ -1154,26 +1155,27 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 </Match>
                 <Match
                   when={
-                    source.isFetching() && !rows().length && !isPullRefreshing()
+                    (isSearchServiceLoading() ||
+                      isLocalSearchSettling() ||
+                      (!!searchText() && source.isFetching())) &&
+                    !rows().length &&
+                    !isPullRefreshing()
                   }
                 >
                   {/* Non-list states pad the chrome top themselves — the
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
-                  <div class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-                    <LoadingBlock />
+                  <div class="flex-1 min-h-0 flex flex-col overflow-hidden pt-1 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                    <SearchResultsSkeleton />
                   </div>
                 </Match>
                 <Match
                   when={
-                    (isSearchServiceLoading() || isLocalSearchSettling()) &&
-                    !rows().length &&
-                    !isPullRefreshing()
+                    source.isFetching() && !rows().length && !isPullRefreshing()
                   }
                 >
-                  <div class="flex items-center gap-2 p-3 text-xs text-ink-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
-                    <Spinner class="size-3 animate-spin" />
-                    Searching...
+                  <div class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                    <LoadingBlock />
                   </div>
                 </Match>
                 <Match when={showEmptyState()}>
@@ -1453,19 +1455,18 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                   </SoupEntityContextMenu>
                                 </Match>
                               </Switch>
-                              <Show
-                                when={
-                                  i() === rows().length - 1 &&
-                                  (isSearchServiceLoading() ||
-                                    source.isFetchingNextPage())
-                                }
-                              >
-                                <div class="flex items-center gap-2 p-3 text-xs text-ink-muted">
-                                  <Spinner class="size-3 animate-spin" />
-                                  {source.isFetchingNextPage()
-                                    ? 'Loading more...'
-                                    : 'Searching...'}
-                                </div>
+                              <Show when={i() === rows().length - 1}>
+                                <Switch>
+                                  <Match when={source.isFetchingNextPage()}>
+                                    <div class="flex items-center gap-2 p-3 text-xs text-ink-muted">
+                                      <Spinner class="size-3 animate-spin" />
+                                      Loading more...
+                                    </div>
+                                  </Match>
+                                  <Match when={isSearchServiceLoading()}>
+                                    <SearchResultsSkeleton searchingMore />
+                                  </Match>
+                                </Switch>
                               </Show>
                               <Show when={i() === rows().length - 1}>
                                 {/* Desktop-only: mobile clearance comes
