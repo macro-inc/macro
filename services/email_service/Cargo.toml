@@ -177,6 +177,7 @@ tower-http = { workspace = true, features = [
   "compression-gzip",
 ] }
 tracing = { workspace = true }
+unicode-segmentation = { workspace = true }
 url = { workspace = true }
 urlencoding = { workspace = true }
 utoipa = { workspace = true }
