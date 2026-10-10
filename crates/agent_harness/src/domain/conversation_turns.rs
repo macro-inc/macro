@@ -155,6 +155,9 @@ pub trait ConversationTurnStore: Send + Sync + 'static {
         state: ConversationTurnState,
         outcome: ReplyOutcome,
     ) -> Result<()>;
+    /// Fail an attempt that never dispatched. An attempt some replica has
+    /// claimed meanwhile is left to that replica.
+    async fn fail_queued(&self, action: AgentActionId) -> Result<()>;
     /// Mark the saved outcome as visible in the channel.
     async fn finalize_reply(&self, action: AgentActionId, outcome: &ReplyOutcome) -> Result<()>;
     /// Serialize reply reconciliation across replicas, with release on process loss.
@@ -164,7 +167,9 @@ pub trait ConversationTurnStore: Send + Sync + 'static {
         &self,
         action: AgentActionId,
     ) -> Result<Option<Box<dyn ConversationLease>>>;
-    /// Durable queued work for recovery, in admission order.
+    /// Durable queued work for recovery, in admission order: the oldest
+    /// queued turn of each session that nothing runs or blocks, which is
+    /// exactly what a claim could take.
     async fn pending(&self, limit: u16) -> Result<Vec<ConversationTurn>>;
     /// Claims whose session manager must still be alive; used only for recovery checks.
     async fn running(&self, limit: u16) -> Result<Vec<ConversationTurn>>;

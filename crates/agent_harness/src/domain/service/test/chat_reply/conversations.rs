@@ -777,6 +777,9 @@ impl crate::domain::conversation_turns::ConversationTurnStore for FlakyJournal {
         }
         self.inner.finish(action, state, outcome).await
     }
+    async fn fail_queued(&self, action: AgentActionId) -> agent_session::domain::error::Result<()> {
+        self.inner.fail_queued(action).await
+    }
     async fn finalize_reply(
         &self,
         action: AgentActionId,

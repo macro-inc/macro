@@ -250,6 +250,19 @@ impl ConversationTurnStore for PgConversationTurnStore {
         Ok(())
     }
 
+    async fn fail_queued(&self, action: AgentActionId) -> Result<()> {
+        let outcome = serde_json::to_value(ReplyOutcome::Failed).map_err(anyhow::Error::from)?;
+        sqlx::query!(
+            "UPDATE agent_conversation_turns SET state = 'failed', outcome = $2, reply_finalized = FALSE, updated_at = now() WHERE action_id = $1 AND state = 'queued'",
+            action.as_uuid(),
+            outcome
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(anyhow::Error::from)?;
+        Ok(())
+    }
+
     async fn finalize_reply(&self, action: AgentActionId, outcome: &ReplyOutcome) -> Result<()> {
         let outcome = serde_json::to_value(outcome).map_err(anyhow::Error::from)?;
         sqlx::query!("UPDATE agent_conversation_turns SET reply_finalized = TRUE, updated_at = now() WHERE action_id = $1 AND outcome = $2", action.as_uuid(), outcome)
@@ -283,7 +296,9 @@ impl ConversationTurnStore for PgConversationTurnStore {
     }
 
     async fn pending(&self, limit: u16) -> Result<Vec<ConversationTurn>> {
-        sqlx::query_scalar!(r#"SELECT to_jsonb(j) AS "value!" FROM agent_conversation_turns j WHERE state = 'queued' AND NOT EXISTS (SELECT 1 FROM agent_conversation_turns blocked WHERE blocked.session_id = j.session_id AND blocked.state = 'interrupted') ORDER BY created_at, source_message_id LIMIT $1"#, i64::from(limit))
+        // The same condition a claim checks, so turns waiting behind a running
+        // one are left to the replica running it.
+        sqlx::query_scalar!(r#"SELECT to_jsonb(j) AS "value!" FROM agent_conversation_turns j WHERE state = 'queued' AND NOT EXISTS (SELECT 1 FROM agent_conversation_turns other WHERE other.session_id = j.session_id AND (other.state IN ('running', 'interrupted') OR (other.state = 'queued' AND (other.created_at, other.source_message_id) < (j.created_at, j.source_message_id)))) ORDER BY created_at, source_message_id LIMIT $1"#, i64::from(limit))
             .fetch_all(&self.pool).await.map_err(anyhow::Error::from)?.into_iter().map(decode).collect()
     }
 

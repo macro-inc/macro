@@ -1359,8 +1359,24 @@ where
                 announce: entry.announce.clone(),
             };
             flight.announcement_message_id = entry.announced;
-            if let Some(store) = conversation_store {
-                store.record_flight(entry.action_id, &flight).await?;
+            if let Some(store) = conversation_store
+                && let Err(error) = store.record_flight(entry.action_id, &flight).await
+            {
+                // Claimed but never delivered: it fails like an undelivered turn.
+                if let Err(error) = store
+                    .finish(
+                        entry.action_id,
+                        crate::domain::conversation_turns::ConversationTurnState::Failed,
+                        ReplyOutcome::Failed,
+                    )
+                    .await
+                {
+                    tracing::error!(?error, %session_id, "failed to persist an undelivered conversation turn");
+                }
+                self.resolve_reply(session_id, Some(&flight), ReplyOutcome::Failed)
+                    .await;
+                self.requeue_claimed(session_id, entry).await?;
+                return Err(error.into());
             }
             return match self.deliver(session_id, command).await {
                 Ok(()) => {
@@ -1440,6 +1456,20 @@ pub(super) fn queue_result<T>(
     })
 }
 
+/// Whether a conversation message that failed to execute stays queued for
+/// recovery, because the failure means another replica will run it.
+fn leaves_turn_queued(error: &HarnessError) -> bool {
+    matches!(
+        error,
+        HarnessError::Forward(_)
+            | HarnessError::Session(
+                AgentSessionError::Draining(_)
+                    | AgentSessionError::ManagedElsewhere(_)
+                    | AgentSessionError::FencedOut(_)
+            )
+    )
+}
+
 pub(super) async fn run_session_worker<
     Sessions,
     Containers,
@@ -1508,15 +1538,10 @@ pub(super) async fn run_session_worker<
         } else {
             inner.execute(session_id, command).instrument(span).await
         };
-        if result.is_err()
+        if let Err(error) = &result
+            && !leaves_turn_queued(error)
             && let (Some(action), Some(store)) = (conversation_action, &inner.conversation_turns)
-            && let Err(error) = store
-                .finish(
-                    action,
-                    crate::domain::conversation_turns::ConversationTurnState::Failed,
-                    ReplyOutcome::Failed,
-                )
-                .await
+            && let Err(error) = store.fail_queued(action).await
         {
             tracing::error!(?error, %session_id, "failed to persist conversation command failure");
         }

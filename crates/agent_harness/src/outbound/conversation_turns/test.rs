@@ -601,3 +601,68 @@ async fn a_lease_waits_for_a_busy_slot_instead_of_refusing(pool: PgPool) {
         "the lease is granted once the slot frees"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recovery_offers_only_turns_a_claim_could_take(pool: PgPool) {
+    let (store, session, channel, command) = setup(pool.clone()).await;
+    let running = store
+        .admit(session, channel, command.clone())
+        .await
+        .unwrap();
+    let mut waiting = command.clone();
+    if let crate::domain::model::SessionOrigin::Mention(origin) = &mut waiting.origin {
+        origin.message_id = macro_uuid::generate_uuid_v7();
+    }
+    let waiting = store.admit(session, channel, waiting).await.unwrap();
+    assert_eq!(
+        pending_sources(&store).await,
+        [running.source_message_id],
+        "only the oldest queued turn of a session is due"
+    );
+    assert!(
+        store
+            .claim(running.action_id, &flight(&running))
+            .await
+            .unwrap()
+    );
+    assert!(
+        pending_sources(&store).await.is_empty(),
+        "a turn waiting behind a running one is the running replica's to dispatch"
+    );
+    store
+        .finish(
+            running.action_id,
+            ConversationTurnState::Succeeded,
+            ReplyOutcome::Answered("Done".to_owned()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(pending_sources(&store).await, [waiting.source_message_id]);
+}
+
+async fn pending_sources(store: &PgConversationTurnStore) -> Vec<Uuid> {
+    store
+        .pending(50)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|turn| turn.source_message_id)
+        .collect()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_delivery_attempt_never_fails_a_turn_another_replica_claimed(pool: PgPool) {
+    let (store, session, channel, command) = setup(pool.clone()).await;
+    let record = store.admit(session, channel, command).await.unwrap();
+    let other_replica = PgConversationTurnStore::new(pool);
+    assert!(
+        other_replica
+            .claim(record.action_id, &flight(&record))
+            .await
+            .unwrap()
+    );
+    store.fail_queued(record.action_id).await.unwrap();
+    let after = store.by_action(record.action_id).await.unwrap().unwrap();
+    assert_eq!(after.state, ConversationTurnState::Running);
+    assert!(after.outcome.is_none());
+}
