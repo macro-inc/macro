@@ -1,29 +1,27 @@
 import { queryReadyGate } from '@queries/gate';
-import { type ParentProps, Show } from 'solid-js';
+import type { ParentProps } from 'solid-js';
 import { AgentConversationsContext } from './context';
 import { useAgentConversations } from './queries/conversations';
 
-/** Channels without a conversing agent never load conversation state. */
+/**
+ * Channels without a conversing agent never load conversation state. The
+ * provider is the same either way, so a channel whose metadata names its
+ * agent only after the channel first rendered is not mounted again.
+ */
 export function AgentConversationsProvider(
   props: ParentProps<{ channelId: string; hasAgents: boolean }>
 ) {
-  return (
-    <Show when={props.hasAgents} fallback={props.children}>
-      <ConversationsProvider channelId={props.channelId}>
-        {props.children}
-      </ConversationsProvider>
-    </Show>
+  const query = useAgentConversations(
+    () => props.channelId,
+    () => props.hasAgents
   );
-}
-
-function ConversationsProvider(props: ParentProps<{ channelId: string }>) {
-  const query = useAgentConversations(() => props.channelId);
   return (
     <AgentConversationsContext.Provider
       value={{
         // A failed poll keeps the last answer: statuses and Retry stay put
         // until the next poll succeeds.
-        conversations: () => (queryReadyGate(query) ? query.data : undefined),
+        conversations: () =>
+          props.hasAgents && queryReadyGate(query) ? query.data : undefined,
         refresh: () => void query.refetch(),
       }}
     >
