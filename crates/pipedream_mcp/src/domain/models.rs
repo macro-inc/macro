@@ -70,3 +70,96 @@ pub struct CatalogPage {
 
 /// Errors from Pipedream MCP tool dispatch.
 pub use mcp_toolset::Error;
+
+/// HTTP methods the Connect API proxy forwards upstream.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProxyMethod {
+    /// `GET`
+    Get,
+    /// `POST`
+    Post,
+}
+
+/// A request to a connected app's own API, sent through Pipedream Connect's
+/// API proxy with the connected account's credentials attached upstream.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProxyRequest {
+    /// The HTTP method to use upstream.
+    pub method: ProxyMethod,
+    /// The absolute upstream URL, e.g. `https://api.notion.com/v1/search`.
+    pub url: String,
+    /// Upstream headers, by their upstream names (e.g. `Notion-Version`).
+    /// The proxy adapter forwards them under its own header prefix.
+    pub headers: Vec<(String, String)>,
+    /// JSON body, when the upstream call takes one.
+    pub body: Option<serde_json::Value>,
+}
+
+impl ProxyRequest {
+    /// A `GET` of `url` with no headers.
+    pub fn get(url: impl Into<String>) -> Self {
+        Self {
+            method: ProxyMethod::Get,
+            url: url.into(),
+            headers: Vec::new(),
+            body: None,
+        }
+    }
+
+    /// A `POST` of `body` as JSON to `url`.
+    pub fn post_json(url: impl Into<String>, body: serde_json::Value) -> Self {
+        Self {
+            method: ProxyMethod::Post,
+            url: url.into(),
+            headers: Vec::new(),
+            body: Some(body),
+        }
+    }
+
+    /// Add an upstream header.
+    pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.push((name.into(), value.into()));
+        self
+    }
+}
+
+/// The upstream response relayed by the proxy. Non-2xx statuses are
+/// responses, not errors: the caller owns the upstream API's semantics.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProxyResponse {
+    /// HTTP status code.
+    pub status: u16,
+    /// Delay requested by a `Retry-After` header, when present.
+    pub retry_after: Option<std::time::Duration>,
+    /// Raw response body.
+    pub body: Vec<u8>,
+}
+
+impl ProxyResponse {
+    /// Whether the status is 2xx.
+    pub fn is_success(&self) -> bool {
+        (200..300).contains(&self.status)
+    }
+
+    /// Decode the body as JSON.
+    pub fn json<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+        serde_json::from_slice(&self.body)
+    }
+}
+
+/// Errors sending a request through the Connect API proxy.
+#[derive(Debug, thiserror::Error)]
+pub enum ConnectProxyError {
+    /// The user has no Pipedream connection for the app.
+    #[error("{app_slug} is not connected through Pipedream")]
+    NotConnected {
+        /// The app slug that was requested.
+        app_slug: String,
+    },
+    /// This deployment has no Pipedream credentials.
+    #[error("Pipedream is not configured")]
+    NotConfigured,
+    /// Any other transport or Pipedream failure.
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}

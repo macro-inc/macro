@@ -2,8 +2,12 @@
 
 use super::models::{
     ImportEntity, ImportRun, ImportSource, ImportSourceBinding, ImportStatus, ImportTargetKey,
-    ImportTargetKind, ImportTargetReservation, Initiator, RunStatus, SlackConversationId,
-    SlackConversationPage, SlackMemberPage, SlackUserPage, SlackWorkspaceId,
+    ImportTargetKind, ImportTargetReservation, Initiator, LinearIssue, NotionBlockPage,
+    NotionContainer, NotionId, NotionOwner, NotionPage, NotionParent, NotionSearchPage, RunStatus,
+    SlackConversationId, SlackConversationPage, SlackMemberPage, SlackUserPage, SlackWorkspaceId,
+};
+pub use super::models::{
+    ImportedDocumentProperties, ImportedDocumentProperty, ImportedDocumentPropertyValue,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::time::Duration;
@@ -106,6 +110,160 @@ pub trait SlackWorkspaceSession: Send + Sync {
     ) -> impl Future<Output = std::result::Result<SlackUserPage, SlackSourceError>> + Send;
 }
 
+/// Errors reading a source app's own API through the user's connection.
+#[derive(Debug, Error)]
+pub enum ApiSourceError {
+    /// The user has no connection this importer can read through (the API
+    /// path requires a Pipedream connection for the app).
+    #[error("{} is not connected through Pipedream", .0.as_ref())]
+    NotConnected(ImportSource),
+    /// The source kept refusing reads due to rate limiting.
+    #[error("{} rate limit exceeded", .app.as_ref())]
+    RateLimited {
+        /// The rate-limited source.
+        app: ImportSource,
+        /// Provider-supplied delay before retrying, when available.
+        retry_after: Option<Duration>,
+    },
+    /// The object does not exist, or the connection cannot read it.
+    #[error("not found or not shared with the connection")]
+    NotFound,
+    /// The connection's credentials were refused.
+    #[error("{} refused the connection's credentials", .0.as_ref())]
+    Unauthorized(ImportSource),
+    /// Any other source failure.
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+/// Reads the connected user's Linear issues.
+pub trait LinearSource: Send + Sync + 'static {
+    /// The connected user's assigned issues that are not completed or
+    /// canceled. Implementations may return more than `at_least` so the
+    /// domain can order and cap them itself.
+    fn assigned_open_issues(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        at_least: usize,
+    ) -> impl Future<Output = std::result::Result<Vec<LinearIssue>, ApiSourceError>> + Send;
+}
+
+/// Opens Notion API sessions over the user's connection.
+pub trait NotionSource: Send + Sync + 'static {
+    /// Reader scoped to one user (and one discovery or import batch).
+    type Session: NotionSession;
+
+    /// Open a session for `user`. Cheap: a missing connection surfaces as
+    /// [`ApiSourceError::NotConnected`] on the first read.
+    fn open(&self, user: &MacroUserIdStr<'static>) -> Self::Session;
+}
+
+/// Notion reads for one user. A throttled read is
+/// [`ApiSourceError::RateLimited`] with Notion's `Retry-After`; an object the
+/// connection cannot read is [`ApiSourceError::NotFound`].
+pub trait NotionSession: Send + Sync {
+    /// Who the connection acts for.
+    fn owner(
+        &self,
+    ) -> impl Future<Output = std::result::Result<NotionOwner, ApiSourceError>> + Send;
+
+    /// One page of the pages shared with the connection, most recently
+    /// edited first. Pass `None` for the first page.
+    fn search_pages(
+        &self,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<NotionSearchPage, ApiSourceError>> + Send;
+
+    /// A page's metadata.
+    fn page(
+        &self,
+        id: &NotionId,
+    ) -> impl Future<Output = std::result::Result<NotionPage, ApiSourceError>> + Send;
+
+    /// A database's title and parent.
+    fn database(
+        &self,
+        id: &NotionId,
+    ) -> impl Future<Output = std::result::Result<NotionContainer, ApiSourceError>> + Send;
+
+    /// The database a data source belongs to.
+    fn data_source_database(
+        &self,
+        id: &NotionId,
+    ) -> impl Future<Output = std::result::Result<NotionId, ApiSourceError>> + Send;
+
+    /// The parent of a block.
+    fn block_parent(
+        &self,
+        id: &NotionId,
+    ) -> impl Future<Output = std::result::Result<NotionParent, ApiSourceError>> + Send;
+
+    /// One page of a block's (or page's) children, without their children.
+    fn children(
+        &self,
+        id: &NotionId,
+        cursor: Option<&str>,
+    ) -> impl Future<Output = std::result::Result<NotionBlockPage, ApiSourceError>> + Send;
+}
+
+/// An image copied into Macro's static file storage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RehostedImage {
+    /// Static file id.
+    pub id: String,
+    /// Static file permalink.
+    pub url: String,
+    /// Natural width in pixels (0 when unknown).
+    pub width: u32,
+    /// Natural height in pixels (0 when unknown).
+    pub height: u32,
+}
+
+/// Why an image could not be re-hosted.
+#[derive(Debug, Error)]
+pub enum RehostError {
+    /// The image exceeds the size limit.
+    #[error("image is larger than {limit_bytes} bytes")]
+    TooLarge {
+        /// The limit that was exceeded.
+        limit_bytes: usize,
+    },
+    /// The URL did not serve an image.
+    #[error("not an image")]
+    NotAnImage,
+    /// Download or upload failed.
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+/// Copies an image from a (possibly expiring) URL into Macro's storage.
+pub trait ImageRehoster: Send + Sync + 'static {
+    /// Download `url` (refusing more than `limit_bytes`) and store it.
+    fn rehost(
+        &self,
+        url: &str,
+        limit_bytes: usize,
+    ) -> impl Future<Output = std::result::Result<RehostedImage, RehostError>> + Send;
+}
+
+/// The typed readers for sources imported through their own APIs, bundled
+/// so the import service takes one composition parameter for all of them.
+pub trait ImportApis: Send + Sync + 'static {
+    /// Linear reader.
+    type Linear: LinearSource;
+    /// Notion reader.
+    type Notion: NotionSource;
+    /// Image re-hosting for imported pages.
+    type Images: ImageRehoster;
+
+    /// The Linear reader.
+    fn linear(&self) -> &Self::Linear;
+    /// The Notion reader.
+    fn notion(&self) -> &Self::Notion;
+    /// The image re-hoster.
+    fn images(&self) -> &Self::Images;
+}
+
 /// Persistence for the import ledger and gather runs.
 ///
 /// Status writes are compare-and-swaps that report whether they happened, so
@@ -202,6 +360,15 @@ pub trait ImportRepo: Send + Sync + 'static {
         error: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 
+    /// DELETE one of the user's `importing` rows: the item turned out to be
+    /// excluded by rule (e.g. a Notion page with no body), which is not a
+    /// failure and must stay re-discoverable. Returns whether it happened.
+    fn remove_importing(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
     /// Bump `updated_at` on the user's still-`importing` rows in `ids` — the
     /// running batch's heartbeat, proving a live process still owns them.
     fn touch_importing(
@@ -247,6 +414,24 @@ pub trait ImportRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         initiator: Initiator,
     ) -> impl Future<Output = Result<u64>> + Send;
+
+    /// The folder (project) an import created to stand for the source
+    /// object `key` (`""` is the source's root folder), if any.
+    fn import_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        key: &str,
+    ) -> impl Future<Output = Result<Option<Uuid>>> + Send;
+
+    /// Record (or replace) the folder that stands for `key`.
+    fn save_import_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        key: &str,
+        folder: Uuid,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// The user's team, when they are on one.
     fn user_team_id(
@@ -416,72 +601,6 @@ pub struct ImportedTaskProperties {
     pub assignee_email: Option<String>,
 }
 
-/// Properties recovered from a Notion page and attached to the imported
-/// Macro document. The creator applies these best-effort after the document
-/// exists, so unsupported or invalid values never prevent the body import.
-#[derive(
-    Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct ImportedDocumentProperties {
-    /// Ordinary Notion database properties.
-    #[serde(default)]
-    pub values: Vec<ImportedDocumentProperty>,
-    /// Notion tag/label values, mapped onto Macro's personal tag set.
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-
-/// One named property recovered from a Notion database page.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ImportedDocumentProperty {
-    /// Property display name.
-    pub name: String,
-    /// Typed property value.
-    pub value: ImportedDocumentPropertyValue,
-}
-
-/// Portable property values that have direct Macro property equivalents.
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum ImportedDocumentPropertyValue {
-    /// Boolean value.
-    Boolean {
-        /// Imported value.
-        value: bool,
-    },
-    /// Date or date-time value, encoded as ISO-8601.
-    Date {
-        /// Imported value.
-        value: String,
-    },
-    /// Numeric value.
-    Number {
-        /// Imported value.
-        value: f64,
-    },
-    /// Plain text value.
-    String {
-        /// Imported value.
-        value: String,
-    },
-    /// One or more select labels.
-    Select {
-        /// Imported option labels.
-        values: Vec<String>,
-        /// Whether the source property accepts multiple options.
-        multi: bool,
-    },
-    /// One or more URLs.
-    Link {
-        /// Imported URLs.
-        urls: Vec<String>,
-        /// Whether the source property accepts multiple links.
-        multi: bool,
-    },
-}
-
 /// Creates the Macro entities imports become. Implemented by the host
 /// service against its real document/channel services; the fixed
 /// source → entity-type mapping is enforced by the import service, which
@@ -497,14 +616,33 @@ pub trait EntityCreator: Send + Sync + 'static {
         properties: &ImportedTaskProperties,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
-    /// Create a markdown document. Returns the new entity id.
+    /// Create a markdown document, inside `folder` when given. Returns the
+    /// new entity id.
     fn create_markdown_doc(
         &self,
         user: &MacroUserIdStr<'static>,
         name: &str,
         markdown: &str,
         properties: &ImportedDocumentProperties,
+        folder: Option<Uuid>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
+    /// Create a folder (project) private to the user, inside `parent` when
+    /// given. Returns the folder's id.
+    fn create_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        parent: Option<Uuid>,
+    ) -> impl Future<Output = anyhow::Result<Uuid>> + Send;
+
+    /// Whether `folder` still exists (not deleted) and the user can file
+    /// documents into it. An error means it could not be checked.
+    fn folder_usable(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: Uuid,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
 
     /// Ensure the reserved Slack Team channel, using its canonical UUID and
     /// normalized source identity. Reuse must preserve existing settings and

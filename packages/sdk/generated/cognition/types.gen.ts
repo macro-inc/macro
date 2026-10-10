@@ -811,6 +811,10 @@ export type JwtPayload = {
 
 /**
  * Metadata for one staged Linear issue.
+ *
+ * Discovery fills every field from Linear's API; chat agents staging an
+ * issue by hand may fill only the original label fields, so everything
+ * beyond `title` is optional and older rows keep deserializing.
  */
 export type LinearIssueMeta = {
     /**
@@ -822,7 +826,7 @@ export type LinearIssueMeta = {
      */
     assignee_email?: string | null;
     /**
-     * Short markdown description.
+     * The issue's Markdown description, verbatim.
      */
     description?: string | null;
     /**
@@ -838,7 +842,7 @@ export type LinearIssueMeta = {
      */
     priority?: string | null;
     /**
-     * Workflow status name (e.g. `In Progress`).
+     * Workflow state name (e.g. `In Progress`).
      */
     status?: string | null;
     /**
@@ -925,6 +929,10 @@ export type NewMessageAttachment = {
 /**
  * Metadata for one staged Notion page. Deliberately has NO content field:
  * page bodies are fetched at import time, for accepted pages only.
+ *
+ * Discovery records the page facts the import needs (so it never re-reads
+ * the page object); chat staging may record only `title`/`url`, so every
+ * field beyond `title` is optional and older rows keep deserializing.
  */
 export type NotionDocMeta = {
     /**

@@ -121,9 +121,11 @@ export async function maybeHandlePlatformNotification(
 ) {
   // Ignore notification types that should not show as browser notifications.
   // GitHub PR notifications should remain visible in-app, but should not
-  // render as browser/system popups.
+  // render as browser/system popups. Imports put the user's own work on Home
+  // in bulk, so they never pop up either.
   if (
     notification.notification_metadata.tag === 'document_mention' ||
+    notification.notification_metadata.tag === 'item_imported' ||
     (GITHUB_EVENT_TYPES as readonly string[]).includes(
       notification.notification_metadata.tag
     )

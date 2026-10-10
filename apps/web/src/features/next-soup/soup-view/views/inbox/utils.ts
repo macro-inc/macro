@@ -3,6 +3,7 @@ import {
   getSortedKeyProperties,
   soupPropertyToProperty,
 } from '@entity/extractors-property/property-helpers';
+import { importedFromLabel } from '@notifications/imported-item-notification';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { match } from 'ts-pattern';
 
@@ -104,6 +105,10 @@ export function itemContent(
 
   if (meta?.tag === 'call_started') {
     return;
+  }
+
+  if (meta?.tag === 'item_imported') {
+    return importedFromLabel(meta.content.source);
   }
 
   const channel = channelMessageContent(entity);

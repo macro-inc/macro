@@ -269,6 +269,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
     .with('inbox_reauth_required', () => 'needs reconnection')
+    .with('item_imported', () => 'imported')
     .with('agent_session_settled', () => 'finished')
     .with('agent_session_waiting_for_input', () => 'asked')
     .with('agent_session_mentioned', () => 'mentioned')
@@ -341,6 +342,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
+    .with({ tag: 'item_imported' }, (m) => m.content.itemName)
     .with(
       { tag: 'agent_session_settled' },
       (m) => m.content.excerpt || m.content.sessionName

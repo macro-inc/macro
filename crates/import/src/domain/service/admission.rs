@@ -7,7 +7,7 @@ use ai_usage::AiFeature;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
-impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W> {
+impl<R, S, C, W: SlackWorkspaceSource, A> ImportServiceImpl<R, S, C, W, A> {
     /// Attach configured shared admission. Production hosts must supply this;
     /// the source-compatible constructor defaults to disabled enforcement.
     pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
@@ -21,22 +21,11 @@ impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W> {
     ) -> std::result::Result<(), AiAdmissionError> {
         self.admission.admit(user, AiFeature::Import).await
     }
-
-    pub(super) async fn admit_gather(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        source: ImportSource,
-    ) -> std::result::Result<(), AiAdmissionError> {
-        match source {
-            ImportSource::Slack => Ok(()),
-            ImportSource::Linear | ImportSource::Notion => self.admit_ai(user).await,
-        }
-    }
 }
 
-impl<R: ImportRepo, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W> {
-    /// Preserve no-op retries and settings before checking new AI spending.
-    /// Slack discovery is deterministic until its fallback actually starts.
+impl<R: ImportRepo, S, C, W: SlackWorkspaceSource, A> ImportServiceImpl<R, S, C, W, A> {
+    /// Preserve no-op retries and settings. Discovery spends no AI; an
+    /// agent fallback admits itself when it actually starts.
     pub(super) async fn prepare_gather(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -53,7 +42,6 @@ impl<R: ImportRepo, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W>
         {
             return Ok(false);
         }
-        self.admit_gather(user, source).await?;
         Ok(true)
     }
 }

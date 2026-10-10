@@ -17,30 +17,39 @@ chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 dateparser = { workspace = true }
 futures = { workspace = true }
+image = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ] }
 macro_user_id = { path = "../macro_user_id" }
+mention_utils = { path = "../mention_utils" }
 mcp_select = { path = "../mcp_select" }
 model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
 models_properties = { path = "../models_properties" }
+notification = { path = "../notification" }
+pipedream_mcp = { path = "../pipedream_mcp" }
 properties = { path = "../properties", default-features = false, features = [
   "ports",
 ] }
 regex = { workspace = true }
+reqwest = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
+static_file_service_client = { path = "../static_file_service_client" }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+urlencoding = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+macro_env_var = { path = "../macro_env_var" }
 model_user = { path = "../model_user" }
 tower = { workspace = true, features = ["util"] }

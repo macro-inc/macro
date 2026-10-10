@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { isEntityDiscussionEvent } from './entity-discussion';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
+import { importedFromLabel } from './imported-item-notification';
 import type { UnifiedNotification } from './types';
 
 // Helper functions for derived notification data
@@ -70,6 +71,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('github_pr_mention', () => 'mentioned you in')
       .with('github_pr_review', () => 'reviewed')
       .with('inbox_reauth_required', () => 'needs reconnection')
+      .with('item_imported', () => 'imported')
       // The bot is the actor: "<bot> finished <session>".
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
@@ -118,6 +120,7 @@ export function getNotificationTargetName(
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
+      .with({ tag: 'item_imported' }, (m) => m.content.itemName)
       .with(
         {
           tag: P.union(
@@ -188,6 +191,9 @@ export function getNotificationContent(
         formatCalendarReminderTime(m.content)
       )
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
+      .with({ tag: 'item_imported' }, (m) =>
+        importedFromLabel(m.content.source)
+      )
       .with(
         { tag: 'agent_session_settled' },
         (m) => m.content.excerpt ?? undefined
@@ -257,6 +263,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
+      .with({ tag: 'item_imported' }, () => true)
       .with(
         {
           tag: P.union(

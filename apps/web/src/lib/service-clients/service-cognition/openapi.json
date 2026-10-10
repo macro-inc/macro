@@ -3918,7 +3918,7 @@
       },
       "LinearIssueMeta": {
         "type": "object",
-        "description": "Metadata for one staged Linear issue.",
+        "description": "Metadata for one staged Linear issue.\n\nDiscovery fills every field from Linear's API; chat agents staging an\nissue by hand may fill only the original label fields, so everything\nbeyond `title` is optional and older rows keep deserializing.",
         "required": ["title"],
         "properties": {
           "assignee": {
@@ -3931,7 +3931,7 @@
           },
           "description": {
             "type": ["string", "null"],
-            "description": "Short markdown description."
+            "description": "The issue's Markdown description, verbatim."
           },
           "due_date": {
             "type": ["string", "null"],
@@ -3947,7 +3947,7 @@
           },
           "status": {
             "type": ["string", "null"],
-            "description": "Workflow status name (e.g. `In Progress`)."
+            "description": "Workflow state name (e.g. `In Progress`)."
           },
           "title": {
             "type": "string",
@@ -4078,7 +4078,7 @@
       },
       "NotionDocMeta": {
         "type": "object",
-        "description": "Metadata for one staged Notion page. Deliberately has NO content field:\npage bodies are fetched at import time, for accepted pages only.",
+        "description": "Metadata for one staged Notion page. Deliberately has NO content field:\npage bodies are fetched at import time, for accepted pages only.\n\nDiscovery records the page facts the import needs (so it never re-reads\nthe page object); chat staging may record only `title`/`url`, so every\nfield beyond `title` is optional and older rows keep deserializing.",
         "required": ["title"],
         "properties": {
           "summary": {

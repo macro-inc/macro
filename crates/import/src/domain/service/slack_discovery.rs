@@ -1,6 +1,7 @@
 //! Bounded Slack discovery and roster policy over typed workspace reads.
 
-use super::{GatherMode, ImportServiceImpl, StageOutcome, gather_timeout};
+use super::rate_limit::retry_rate_limited;
+use super::{GatherMode, ImportApis, ImportServiceImpl, StageOutcome, gather_timeout};
 use crate::domain::models::{
     ImportSource, Initiator, SlackChannelMeta, SlackConversation, SlackConversationId,
     SlackConversationKind, SlackConversationPage, SlackMemberPage, SlackParticipant, SlackUser,
@@ -25,7 +26,6 @@ const MAX_USER_PAGES: usize = 10;
 const MAX_MEMBER_PAGES: usize = 5;
 const MANUAL_MEMBER_BUDGET: usize = 100;
 const NOTIFY_EVERY: usize = 10;
-const RATE_LIMIT_MAX_SLEEP: Duration = Duration::from_secs(30);
 // Finish best-effort work before spawn_gather's hard timeout can fail usable rows.
 const ENRICHMENT_TIMEOUT_RESERVE: Duration = Duration::from_secs(10);
 
@@ -64,25 +64,6 @@ impl SlackWorkspaceSession for NoSlackSession {
     }
 }
 
-async fn retry_rate_limited<T, F, Fut>(mut read: F) -> Result<T, SlackSourceError>
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Result<T, SlackSourceError>>,
-{
-    match read().await {
-        Err(SlackSourceError::RateLimited { retry_after }) => {
-            tokio::time::sleep(
-                retry_after
-                    .unwrap_or(Duration::from_secs(5))
-                    .min(RATE_LIMIT_MAX_SLEEP),
-            )
-            .await;
-            read().await
-        }
-        result => result,
-    }
-}
-
 pub(super) struct SlackDirectory(HashMap<SlackUserId, SlackUser>);
 
 impl SlackDirectory {
@@ -115,9 +96,9 @@ impl<Sess> Default for SlackBatch<Sess> {
 }
 
 impl<Sess: SlackWorkspaceSession> SlackBatch<Sess> {
-    pub(super) async fn resolve_emails<R, S, C, W>(
+    pub(super) async fn resolve_emails<R, S, C, W, A>(
         &mut self,
-        service: &ImportServiceImpl<R, S, C, W>,
+        service: &ImportServiceImpl<R, S, C, W, A>,
         user: &MacroUserIdStr<'static>,
         team_id: Uuid,
         meta: &SlackChannelMeta,
@@ -127,6 +108,7 @@ impl<Sess: SlackWorkspaceSession> SlackBatch<Sess> {
         S: ConnectorSelect,
         C: EntityCreator,
         W: SlackWorkspaceSource<Session = Sess>,
+        A: ImportApis,
     {
         if self.state.is_none() {
             let loaded: anyhow::Result<_> = async {
@@ -234,8 +216,8 @@ fn select_slack_candidates(
     channels
 }
 
-pub(super) async fn gather_slack<R, S, C, W>(
-    service: &ImportServiceImpl<R, S, C, W>,
+pub(super) async fn gather_slack<R, S, C, W, A>(
+    service: &ImportServiceImpl<R, S, C, W, A>,
     user: &MacroUserIdStr<'static>,
     mode: GatherMode,
 ) -> Result<usize, SlackSourceError>
@@ -244,6 +226,7 @@ where
     S: ConnectorSelect,
     C: EntityCreator,
     W: SlackWorkspaceSource,
+    A: ImportApis,
 {
     // Anchor before opening/listing: discovery time consumes the enrichment budget.
     // Slack admission before this call does not perform asynchronous work.
@@ -349,8 +332,8 @@ where
     Ok(count)
 }
 
-async fn enrich_slack<R, S, C, W>(
-    service: &ImportServiceImpl<R, S, C, W>,
+async fn enrich_slack<R, S, C, W, A>(
+    service: &ImportServiceImpl<R, S, C, W, A>,
     user: &MacroUserIdStr<'static>,
     session: &W::Session,
     roster: &[MacroUserIdStr<'static>],
@@ -363,6 +346,7 @@ where
     S: ConnectorSelect,
     C: EntityCreator,
     W: SlackWorkspaceSource,
+    A: ImportApis,
 {
     let directory = match SlackDirectory::load(session).await {
         Ok(directory) => directory,

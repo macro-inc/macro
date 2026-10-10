@@ -1,0 +1,24 @@
+{
+  "1a2b0190-0000-4000-8000-000000000190": {
+    "object": "block",
+    "id": "1a2b0190-0000-4000-8000-000000000190",
+    "parent": {
+      "type": "block_id",
+      "block_id": "1a2b0191-0000-4000-8000-000000000191"
+    },
+    "has_children": true,
+    "type": "column",
+    "column": {}
+  },
+  "1a2b0191-0000-4000-8000-000000000191": {
+    "object": "block",
+    "id": "1a2b0191-0000-4000-8000-000000000191",
+    "parent": {
+      "type": "page_id",
+      "page_id": "1a2b000a-0000-4000-8000-00000000000a"
+    },
+    "has_children": true,
+    "type": "column_list",
+    "column_list": {}
+  }
+}

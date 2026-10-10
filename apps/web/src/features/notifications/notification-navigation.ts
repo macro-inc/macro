@@ -416,6 +416,18 @@ function getSupportedHandler(
           });
       })
       .with('inbox_reauth_required', () => null)
+      .with('item_imported', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'item_imported') return null;
+        // Linear issues became tasks; Notion pages became documents.
+        const blockName = meta.content.source === 'linear' ? 'task' : 'md';
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openSplitIfNotOpen(lm, blockName, notification.entity_id, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+      })
       .exhaustive()
   );
 }

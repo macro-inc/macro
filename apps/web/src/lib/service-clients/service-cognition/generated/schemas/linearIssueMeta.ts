@@ -15,13 +15,17 @@ import type { LinearIssueMetaUrl } from './linearIssueMetaUrl';
 
 /**
  * Metadata for one staged Linear issue.
+
+Discovery fills every field from Linear's API; chat agents staging an
+issue by hand may fill only the original label fields, so everything
+beyond `title` is optional and older rows keep deserializing.
  */
 export interface LinearIssueMeta {
   /** Assignee display name as Linear reports it. */
   assignee?: LinearIssueMetaAssignee;
   /** Assignee email, when Linear exposes it. */
   assignee_email?: LinearIssueMetaAssigneeEmail;
-  /** Short markdown description. */
+  /** The issue's Markdown description, verbatim. */
   description?: LinearIssueMetaDescription;
   /** Due date as an ISO date (`YYYY-MM-DD`), when set. */
   due_date?: LinearIssueMetaDueDate;
@@ -29,7 +33,7 @@ export interface LinearIssueMeta {
   identifier?: LinearIssueMetaIdentifier;
   /** Priority label (e.g. `Urgent`). */
   priority?: LinearIssueMetaPriority;
-  /** Workflow status name (e.g. `In Progress`). */
+  /** Workflow state name (e.g. `In Progress`). */
   status?: LinearIssueMetaStatus;
   /** Issue title. */
   title: string;

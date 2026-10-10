@@ -1,0 +1,21 @@
+{
+  "object": "data_source",
+  "id": "1a2b0004-0000-4000-8000-000000000004",
+  "parent": {
+    "type": "database_id",
+    "database_id": "1a2b0003-0000-4000-8000-000000000003"
+  },
+  "database_parent": {
+    "type": "page_id",
+    "page_id": "1a2b000a-0000-4000-8000-00000000000a"
+  },
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Projects"
+      },
+      "plain_text": "Projects"
+    }
+  ]
+}

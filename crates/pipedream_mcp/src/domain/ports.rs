@@ -1,6 +1,6 @@
 use super::models::{
-    CatalogEntry, CatalogPage, ConnectToken, MacroUserIdStr, McpServer, PipedreamAccount,
-    PipedreamConnection,
+    CatalogEntry, CatalogPage, ConnectProxyError, ConnectToken, MacroUserIdStr, McpServer,
+    PipedreamAccount, PipedreamConnection, ProxyRequest, ProxyResponse,
 };
 
 /// Port for persisting Pipedream-connected apps, keyed by user and app slug.
@@ -120,4 +120,45 @@ pub trait ConnectorCapabilities: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'static>,
         app_slug: &str,
     ) -> impl Future<Output = anyhow::Result<Vec<super::service::discovery::ConnectorTool>>> + Send;
+}
+
+/// Port for relaying one request through Pipedream Connect's API proxy on
+/// behalf of a specific connected account. Pipedream attaches the account's
+/// credentials upstream, so no third-party tokens ever pass through here.
+pub trait ConnectProxyTransport: Send + Sync + 'static {
+    /// Send `request` upstream as `connection`'s account.
+    fn send(
+        &self,
+        connection: &PipedreamConnection,
+        request: ProxyRequest,
+    ) -> impl Future<Output = Result<ProxyResponse, ConnectProxyError>> + Send;
+}
+
+/// An unconfigured deployment relays nothing.
+impl<P: ConnectProxyTransport> ConnectProxyTransport for Option<std::sync::Arc<P>> {
+    async fn send(
+        &self,
+        connection: &PipedreamConnection,
+        request: ProxyRequest,
+    ) -> Result<ProxyResponse, ConnectProxyError> {
+        match self {
+            Some(transport) => transport.send(connection, request).await,
+            None => Err(ConnectProxyError::NotConfigured),
+        }
+    }
+}
+
+/// Port other domains use to call a connected app's own HTTP API for a user,
+/// e.g. Notion's REST API or Linear's GraphQL API, through the user's
+/// existing Pipedream connection for that app.
+pub trait ConnectProxy: Send + Sync + 'static {
+    /// Send `request` as `user`'s connected `app_slug` account. Returns
+    /// [`ConnectProxyError::NotConnected`] when the user has no Pipedream
+    /// connection for the app.
+    fn send(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        app_slug: &str,
+        request: ProxyRequest,
+    ) -> impl Future<Output = Result<ProxyResponse, ConnectProxyError>> + Send;
 }

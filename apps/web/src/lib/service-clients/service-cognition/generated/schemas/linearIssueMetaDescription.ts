@@ -6,6 +6,6 @@
  */
 
 /**
- * Short markdown description.
+ * The issue's Markdown description, verbatim.
  */
 export type LinearIssueMetaDescription = string | null;
