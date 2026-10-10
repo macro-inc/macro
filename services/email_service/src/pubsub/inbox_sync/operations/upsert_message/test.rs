@@ -1,4 +1,5 @@
 use super::*;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn id(s: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(s.to_string()).unwrap()
@@ -314,5 +315,86 @@ fn signal_filter_requires_importance_and_unshared() {
             }
         }
         other => panic!("expected thread AND signal predicates, got {other:?}"),
+    }
+}
+
+fn received_message(link_id: Uuid, thread_db_id: Uuid) -> Message {
+    let now = chrono::Utc::now();
+    Message {
+        db_id: Uuid::now_v7(),
+        provider_id: Some("provider-message".to_string()),
+        thread_db_id,
+        provider_thread_id: Some("provider-thread".to_string()),
+        replying_to_id: None,
+        global_id: Some("<received@example.com>".to_string()),
+        link_id,
+        subject: Some("hello".to_string()),
+        snippet: None,
+        provider_history_id: None,
+        internal_date_ts: Some(now),
+        sent_at: Some(now),
+        size_estimate: None,
+        is_read: false,
+        is_starred: false,
+        is_sent: false,
+        is_draft: false,
+        scheduled_send_time: None,
+        has_attachments: false,
+        from: None,
+        to: vec![],
+        cc: vec![],
+        bcc: vec![],
+        labels: vec![],
+        body_text: Some("body".to_string()),
+        body_html_sanitized: None,
+        body_macro: None,
+        attachments: vec![],
+        attachments_draft: vec![],
+        attachments_forwarded: vec![],
+        headers_json: None,
+        created_at: now,
+        updated_at: now,
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inserting_into_a_concurrently_deleted_thread_is_retryable(pool: PgPool) {
+    let link_id = Uuid::now_v7();
+    let thread_db_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+         VALUES ($1, 'macro|deleted-thread@example.com', 'fa-user', 'deleted-thread@example.com', 'GMAIL')",
+    )
+    .bind(link_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read)
+         VALUES ($1, 'provider-thread', $2, TRUE, FALSE)",
+    )
+    .bind(thread_db_id)
+    .bind(link_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    // The thread lookup found this row; a delete of its last message then
+    // removes it before the insert runs.
+    sqlx::query("DELETE FROM email_threads WHERE id = $1")
+        .bind(thread_db_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let mut message = received_message(link_id, thread_db_id);
+    let result = process_and_insert_message(&pool, link_id, thread_db_id, &mut message).await;
+
+    match result {
+        Err(ProcessingError::Retryable(e)) => assert!(
+            format!("{:#}", e.source).contains("email_messages_thread_id_fkey"),
+            "unexpected insert error: {:#}",
+            e.source
+        ),
+        other => panic!("expected a retryable insert failure, got {other:?}"),
     }
 }
