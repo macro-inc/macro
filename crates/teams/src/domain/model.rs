@@ -289,7 +289,7 @@ pub struct TeamWithMembers {
     /// The members of the team
     pub members: Vec<TeamMember<'static>>,
     /// Provider-confirmed pending seat changes, keyed by member user ID.
-    /// Only available to paid-team admins and owners; empty means no pending changes.
+    /// Empty when no changes apply to this viewer; absent when the lookup fails.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scheduled_seat_plans: Option<HashMap<String, ScheduledSeatPlan>>,
 }

@@ -3696,17 +3696,18 @@ async fn test_get_team_reports_crm_enabled() {
 }
 
 #[tokio::test]
-async fn get_team_exposes_confirmed_pending_plans_only_to_paid_team_billing_managers() {
+async fn get_team_distinguishes_inapplicable_seat_plans_from_lookup_failures() {
     use entity_access::domain::models::{Entity, EntityPermission, TeamRole as AccessTeamRole};
 
-    for (role, paying, enterprise, provider_failure, has_pending) in [
-        (AccessTeamRole::Admin, true, false, false, true),
-        (AccessTeamRole::Owner, true, false, false, true),
-        (AccessTeamRole::Member, true, false, false, true),
-        (AccessTeamRole::Admin, false, false, false, true),
-        (AccessTeamRole::Admin, true, true, false, true),
-        (AccessTeamRole::Admin, true, false, true, true),
-        (AccessTeamRole::Admin, true, false, false, false),
+    for (role, paying, enterprise, has_subscription, provider_failure, has_pending) in [
+        (AccessTeamRole::Admin, true, false, true, false, true),
+        (AccessTeamRole::Owner, true, false, true, false, true),
+        (AccessTeamRole::Member, true, false, true, false, true),
+        (AccessTeamRole::Admin, false, false, true, false, true),
+        (AccessTeamRole::Admin, true, true, true, false, true),
+        (AccessTeamRole::Admin, true, false, false, false, true),
+        (AccessTeamRole::Admin, true, false, true, true, true),
+        (AccessTeamRole::Admin, true, false, true, false, false),
     ] {
         let team_id = uuid::Uuid::from_u128(5501);
         let owner = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
@@ -3722,7 +3723,7 @@ async fn get_team_exposes_confirmed_pending_plans_only_to_paid_team_billing_mana
         let mut repo = MockTeamRepository::new(Vec::new(), "Billing", Default::default())
             .with_team(team)
             .with_team_members(vec![member.clone()]);
-        repo.team_subscription_id = Some("sub_team".parse().unwrap());
+        repo.team_subscription_id = has_subscription.then(|| "sub_team".parse().unwrap());
         repo.team_payment_status = paying;
         repo.enterprise = enterprise;
         let pending = crate::domain::model::ScheduledSeatPlan {
@@ -3755,15 +3756,23 @@ async fn get_team_exposes_confirmed_pending_plans_only_to_paid_team_billing_mana
         let result = service.get_team(receipt).await.unwrap();
         assert_eq!(*result.team.id(), team_id);
         assert_eq!(result.members.len(), 1);
-        let may_query = role != AccessTeamRole::Member && paying && !enterprise;
+        let may_query = role != AccessTeamRole::Member && paying && !enterprise && has_subscription;
         assert_eq!(calls.lock().unwrap().len(), usize::from(may_query));
-        let expected = (may_query && !provider_failure).then(|| {
-            if has_pending {
+        let expected = (!(may_query && provider_failure)).then(|| {
+            if may_query && has_pending {
                 HashMap::from([(member.user_id.to_string(), pending)])
             } else {
                 HashMap::new()
             }
         });
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(
+            json.get("scheduled_seat_plans").is_some(),
+            expected.is_some()
+        );
+        if expected.as_ref().is_some_and(HashMap::is_empty) {
+            assert_eq!(json["scheduled_seat_plans"], serde_json::json!({}));
+        }
         assert_eq!(result.scheduled_seat_plans, expected);
     }
 }

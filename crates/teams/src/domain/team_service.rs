@@ -3,7 +3,10 @@
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use channels::domain::{
     models::{ChannelType, CreateChannelRequest, Sender},
@@ -2119,7 +2122,7 @@ where
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
         let mut team = self.team_repository.get_team_by_id(&team_id).await?;
-        team.scheduled_seat_plans = None;
+        team.scheduled_seat_plans = Some(HashMap::new());
         if !entity_access_receipt
             .entity_permission()
             .satisfies::<AdminTeamRole>()
@@ -2135,14 +2138,14 @@ where
                 .get_team_payment_status(&team_id)
                 .await?
             {
-                return Ok(None);
+                return Ok(HashMap::new());
             }
             let Some(subscription) = self
                 .team_repository
                 .get_team_subscription_id(&team_id)
                 .await?
             else {
-                return Ok(None);
+                return Ok(HashMap::new());
             };
             let mut changes = self
                 .customer_repository
@@ -2153,12 +2156,13 @@ where
                     .iter()
                     .any(|member| member.user_id.as_ref() == user)
             });
-            Ok(Some(changes))
+            Ok(changes)
         }
         .await;
         match pending {
-            Ok(changes) => team.scheduled_seat_plans = changes,
+            Ok(changes) => team.scheduled_seat_plans = Some(changes),
             Err(error) => {
+                team.scheduled_seat_plans = None;
                 tracing::warn!(?error, %team_id, "unable to read pending team seat changes")
             }
         }
