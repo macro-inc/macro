@@ -135,3 +135,30 @@ fn a_step_inside_an_open_run_does_not_change_the_shape_but_sealing_does() {
     assert_eq!(shape(&one), shape(&two));
     assert_ne!(shape(&two), shape(&sealed));
 }
+
+#[test]
+fn a_sealed_run_whose_step_finishes_late_changes_the_shape() {
+    // A call held for permission finishes after the request sealed its run.
+    let mut waiting = activity(0, true, 1);
+    waiting.segment.rows[0].status = ActivityStatus::Running;
+    let mut finished = waiting.clone();
+    finished.segment.rows[0].status = ActivityStatus::Completed;
+    assert_ne!(shape(&[waiting]), shape(&[finished]));
+}
+
+#[test]
+fn a_closed_reply_is_sealed_and_runs_nothing() {
+    let mut open = activity(1, false, 2);
+    open.segment.rows[0].status = ActivityStatus::Running;
+    let reply = closed(vec![prose(0, Some("Checking.")), open]);
+    assert!(reply.iter().all(|segment| segment.segment.sealed));
+    assert_eq!(
+        reply[1]
+            .segment
+            .rows
+            .iter()
+            .map(|row| row.status)
+            .collect::<Vec<_>>(),
+        [ActivityStatus::Interrupted, ActivityStatus::Completed]
+    );
+}

@@ -181,7 +181,7 @@ struct AgentHarnessInner<
     typing_phases: DashMap<AgentSessionId, agent_fold::domain::model::TurnPhase>,
     /// The shape each reply message was last shown with, so a report that
     /// changes nothing it shows does not rewrite it.
-    presented_shapes: DashMap<macro_uuid::Uuid, Vec<(u32, bool)>>,
+    presented_shapes: DashMap<macro_uuid::Uuid, Vec<crate::domain::presenter::SegmentShape>>,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones

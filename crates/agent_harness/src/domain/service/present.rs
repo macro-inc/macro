@@ -15,7 +15,7 @@ use agent_fold::domain::model::{ProjectedSegment, TurnId, TurnPhase};
 
 use super::*;
 use crate::domain::model::{AgentTypingUpdate, ReplyPresentation, VoiceStyle};
-use crate::domain::presenter::{plan_messages, shape, turn_segments};
+use crate::domain::presenter::{closed, plan_messages, shape, turn_segments};
 use crate::domain::queue::InFlightTurn;
 
 /// Where a running turn speaks, when it speaks anywhere: the origin it
@@ -229,7 +229,7 @@ where
         if segments.is_empty() {
             segments = saved;
         }
-        let planned = plan_messages(&segments);
+        let planned = plan_messages(&closed(segments));
         if planned.is_empty() {
             // Nothing the reply said or did can be shown, so say how the
             // turn ended. A replica that watches a turn end saves its

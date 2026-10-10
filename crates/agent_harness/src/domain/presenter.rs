@@ -6,7 +6,7 @@
 //! plan as the reply grows; the announcer chooses the words around the
 //! segments and composes their nodes.
 
-use agent_fold::domain::model::{ProjectedSegment, SegmentKind};
+use agent_fold::domain::model::{ActivityRow, ActivityStatus, ProjectedSegment, SegmentKind};
 
 #[cfg(test)]
 mod test;
@@ -70,14 +70,50 @@ pub fn turn_segments(segments: &[ProjectedSegment]) -> Vec<ProjectedSegment> {
         .collect()
 }
 
+/// What a message showing one segment must be rewritten for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SegmentShape {
+    index: u32,
+    sealed: bool,
+    /// A sealed segment's steps and passage; nothing while it is open.
+    content: Option<(Vec<ActivityRow>, Option<String>)>,
+}
+
 /// What a message showing `segments` must be rewritten for: a segment
-/// appearing, or a segment sealing. A step starting or finishing inside an
-/// open run of steps is not: viewers who can read the session see it live,
-/// and the message's snapshot of the run is rewritten once when it seals.
+/// appearing, a segment sealing, or a sealed segment changing. A step
+/// starting or finishing inside an open run of steps is not: viewers who can
+/// read the session see it live, and the message's snapshot of the run is
+/// rewritten once when it seals. A sealed run can still change - a call held
+/// for permission finishes after the request sealed its run, a plan is
+/// updated in place - and its message must not keep the old snapshot.
 #[must_use]
-pub fn shape(segments: &[ProjectedSegment]) -> Vec<(u32, bool)> {
+pub fn shape(segments: &[ProjectedSegment]) -> Vec<SegmentShape> {
     segments
         .iter()
-        .map(|segment| (segment.segment.index, segment.segment.sealed))
+        .map(|segment| SegmentShape {
+            index: segment.segment.index,
+            sealed: segment.segment.sealed,
+            content: segment
+                .segment
+                .sealed
+                .then(|| (segment.segment.rows.clone(), segment.text.clone())),
+        })
         .collect()
+}
+
+/// A reply as it reads once its turn is over: every segment sealed, and no
+/// step still running. The fold closes a turn that ended this way itself;
+/// one whose session died, or that recovery finishes, never closed, and a
+/// step it left running would spin in its message forever.
+#[must_use]
+pub fn closed(mut segments: Vec<ProjectedSegment>) -> Vec<ProjectedSegment> {
+    for segment in &mut segments {
+        segment.segment.sealed = true;
+        for row in &mut segment.segment.rows {
+            if row.status == ActivityStatus::Running {
+                row.status = ActivityStatus::Interrupted;
+            }
+        }
+    }
+    segments
 }
