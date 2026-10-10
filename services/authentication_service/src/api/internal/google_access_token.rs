@@ -116,10 +116,17 @@ async fn get_access_token(
         .refresh_google_token(link.token.as_str())
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, "error fetching access token for userid {}", fusionauth_user_id);
             let status_code = match &e {
-                FusionAuthClientError::InvalidGrant => StatusCode::FORBIDDEN,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
+                // A revoked or expired grant is an expected outcome the caller
+                // handles by asking the user to reauthorize.
+                FusionAuthClientError::InvalidGrant => {
+                    tracing::warn!(error=?e, "refresh token rejected for userid {}", fusionauth_user_id);
+                    StatusCode::FORBIDDEN
+                }
+                _ => {
+                    tracing::error!(error=?e, "error fetching access token for userid {}", fusionauth_user_id);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
             };
             let message = format!("unable to fetch {} access token", identity_provider_name);
             (status_code, Json(ErrorResponse { message: message.into() })).into_response()
