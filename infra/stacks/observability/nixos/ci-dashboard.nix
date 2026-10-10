@@ -4,7 +4,7 @@ let
     type = "loki";
     uid = "loki";
   };
-  events = ''{service_name="github-actions",deployment_environment="ci"} | json'';
+  events = ''{service_name="github-actions"} | deployment_environment="ci" | json'';
   panel = id: title: expr: unit: {
     inherit id title;
     type = "timeseries";
