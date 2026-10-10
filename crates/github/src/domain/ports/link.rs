@@ -4,7 +4,7 @@ use std::future::Future;
 
 use crate::domain::models::{
     EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubExchangeTokenResponse,
-    GithubLink, GithubMergeMethod, GithubMergeOutcome, GithubPullRequestDetails,
+    GithubLink, GithubLinkStatus, GithubMergeMethod, GithubMergeOutcome, GithubPullRequestDetails,
     GithubPullRequestRef, GithubRepositoryMergeSettings, GithubUserInfo,
     MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
 };
@@ -19,17 +19,19 @@ pub trait GithubRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
-    /// Gets the github link by the macro user id
+    /// Gets the github link by the macro user id, or `None` when the user has
+    /// not linked GitHub.
     fn get_github_link_by_user_id<'a>(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'a>>,
-    ) -> impl Future<Output = Result<GithubLink, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<GithubLink>, Self::Err>> + Send;
 
-    /// Gets the github link by the github user id
+    /// Gets the owner's github link for the github user id, or `None` when no
+    /// Macro user has linked that GitHub account.
     fn get_github_link_by_github_user_id(
         &self,
         github_user_id: &str,
-    ) -> impl Future<Output = Result<GithubLink, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<GithubLink>, Self::Err>> + Send;
 
     /// Counts the number of github links for the given github user id
     fn count_github_links_by_github_user_id(
@@ -182,23 +184,18 @@ pub trait GithubLinkService: Send + Sync + 'static {
         code: &str,
     ) -> impl Future<Output = Result<GithubLink, GithubError>> + Send;
 
-    /// Gets a users github link
-    fn get_user_link(
-        &self,
-        user_id: &MacroUserId<Lowercase<'static>>,
-    ) -> impl Future<Output = Result<GithubLink, GithubError>> + Send;
-
     /// Deletes the link for the user
     fn delete_user_link(
         &self,
         user_id: &MacroUserId<Lowercase<'static>>,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
 
-    /// Checks whether the user's Github link token is valid.
-    fn check_user_link_token(
+    /// Reports whether the user has linked GitHub and whether the link's
+    /// token still works.
+    fn get_user_link_status(
         &self,
         user_id: &MacroUserId<Lowercase<'static>>,
-    ) -> impl Future<Output = Result<(), GithubError>> + Send;
+    ) -> impl Future<Output = Result<GithubLinkStatus, GithubError>> + Send;
 
     /// Enriches GitHub pull request references with details from the GitHub API.
     fn enrich_pull_requests(

@@ -5,7 +5,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use github::domain::{models::GithubError, ports::GithubLinkService};
+use github::domain::{
+    models::{GithubError, GithubLinkStatus},
+    ports::GithubLinkService,
+};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
 use model::response::{EmptyResponse, ErrorResponse};
@@ -78,6 +81,18 @@ impl IntoResponse for InitGithubLinkError {
     }
 }
 
+const NO_GITHUB_LINK_MESSAGE: &str = "no github link found";
+
+fn error_response(status_code: StatusCode, message: &'static str) -> Response {
+    (
+        status_code,
+        Json(ErrorResponse {
+            message: message.into(),
+        }),
+    )
+        .into_response()
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum GithubLinkStatusError {
     #[error(transparent)]
@@ -86,27 +101,9 @@ pub enum GithubLinkStatusError {
 
 impl IntoResponse for GithubLinkStatusError {
     fn into_response(self) -> Response {
-        let (status_code, message) = match &self {
-            Self::Github(GithubError::NoLinkFound) => {
-                (StatusCode::NOT_FOUND, "no github link found")
-            }
-            Self::Github(GithubError::ReauthenticationRequired) => (
-                StatusCode::PRECONDITION_REQUIRED,
-                REAUTHENTICATION_REQUIRED_MESSAGE,
-            ),
-            Self::Github(error) => {
-                tracing::error!(error=?error, "failed to check GitHub link status");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-            }
-        };
-
-        (
-            status_code,
-            Json(ErrorResponse {
-                message: message.into(),
-            }),
-        )
-            .into_response()
+        let Self::Github(error) = &self;
+        tracing::error!(error=?error, "failed to check GitHub link status");
+        error_response(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
     }
 }
 
@@ -128,18 +125,31 @@ pub async fn check_github_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
-) -> Result<Json<GithubLinkStatusResponse>, GithubLinkStatusError> {
+) -> Result<Response, GithubLinkStatusError> {
     let user_id = &authorization.authorization.user.macro_user_id;
-    ctx.github_link_service
-        .check_user_link_token(user_id)
+    let status = ctx
+        .github_link_service
+        .get_user_link_status(user_id)
         .await?;
-    let link = ctx.github_link_service.get_user_link(user_id).await?;
+    // No link and an expired token are expected states: answer them here
+    // rather than as `Err`, which `instrument(err)` would log as an error.
+    let response = match status {
+        GithubLinkStatus::Linked(link) => Json(GithubLinkStatusResponse {
+            reauthentication_required: false,
+            github_username: link.github_username,
+            github_user_id: link.github_user_id,
+        })
+        .into_response(),
+        GithubLinkStatus::NotLinked => {
+            error_response(StatusCode::NOT_FOUND, NO_GITHUB_LINK_MESSAGE)
+        }
+        GithubLinkStatus::ReauthenticationRequired => error_response(
+            StatusCode::PRECONDITION_REQUIRED,
+            REAUTHENTICATION_REQUIRED_MESSAGE,
+        ),
+    };
 
-    Ok(Json(GithubLinkStatusResponse {
-        reauthentication_required: false,
-        github_username: link.github_username,
-        github_user_id: link.github_user_id,
-    }))
+    Ok(response)
 }
 
 #[derive(Debug, serde::Deserialize)]

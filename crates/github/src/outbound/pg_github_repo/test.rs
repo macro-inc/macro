@@ -16,7 +16,11 @@ async fn test_get_github_link_by_user_id(pool: Pool<Postgres>) {
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")
         .unwrap()
         .into_owned();
-    let link = repo.get_github_link_by_user_id(&user_id.0).await.unwrap();
+    let link = repo
+        .get_github_link_by_user_id(&user_id.0)
+        .await
+        .unwrap()
+        .expect("fixture user has a github link");
 
     assert_eq!(link.macro_id.as_ref(), "macro|user@user.com");
     assert_eq!(link.github_username, "testuser");
@@ -39,7 +43,7 @@ async fn test_get_github_link_by_user_id_not_found(pool: Pool<Postgres>) {
         .into_owned();
     let result = repo.get_github_link_by_user_id(&user_id.0).await;
 
-    assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
+    assert!(matches!(result, Ok(None)));
 }
 
 #[sqlx::test(
@@ -52,7 +56,8 @@ async fn test_get_github_link_by_github_user_id(pool: Pool<Postgres>) {
     let link = repo
         .get_github_link_by_github_user_id("12345")
         .await
-        .unwrap();
+        .unwrap()
+        .expect("fixture github account is linked");
 
     assert_eq!(link.macro_id.as_ref(), "macro|user@user.com");
     assert_eq!(link.github_username, "testuser");
@@ -68,7 +73,7 @@ async fn test_get_github_link_by_github_user_id_not_found(pool: Pool<Postgres>) 
 
     let result = repo.get_github_link_by_github_user_id("99999").await;
 
-    assert!(matches!(result, Err(sqlx::Error::RowNotFound)));
+    assert!(matches!(result, Ok(None)));
 }
 
 #[sqlx::test(
@@ -216,7 +221,8 @@ async fn test_get_github_link_by_github_user_id_returns_owner(pool: Pool<Postgre
     let link = repo
         .get_github_link_by_github_user_id("12345")
         .await
-        .unwrap();
+        .unwrap()
+        .expect("fixture github account is linked");
 
     assert_eq!(link.macro_id.as_ref(), "macro|user@user.com");
     assert_eq!(link.github_username, "testuser");
