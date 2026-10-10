@@ -50,6 +50,7 @@ pub mod status_codes {
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
 mod document_api;
+mod document_delete;
 mod document_effects;
 mod surface_api;
 pub(crate) mod surface_migration;
@@ -59,6 +60,7 @@ use surface_api::{SurfaceLifecycle, session_kind_from_storage_key};
 
 mod path {
     pub const CONNECT: &str = "connect";
+    pub const DELETE: &str = "delete";
     pub const EXISTS: &str = "exists";
     pub const INITIALIZE: &str = "initialize";
     pub const RAW: &str = "raw";
@@ -426,8 +428,9 @@ impl DocumentSyncSession {
                     .await;
             }
 
-            // EXIST, PEER, and WAKEUP don't require auth
+            // EXIST, PEER, and WAKEUP don't require auth; DELETE requires the internal key
             (path_needs_claims, Some(document_id)) => match path_needs_claims {
+                path::DELETE => return self.delete_handler(&req, document_id).await,
                 path::EXISTS => return self.exists_handler(document_id).await,
                 path::PEER => {
                     return self
@@ -822,15 +825,10 @@ impl DocumentSyncSession {
     }
 
     /// Check if provided document_id exists.
-    /// 1. is self.document_id set
-    /// 2. is document_id  it do::kv
-    /// 3. does snapshot exist with document_id?
+    /// 1. is self.document_id set, or is document_id in do::kv
+    /// 2. does snapshot exist with document_id?
     async fn exists(&self, document_id: &str) -> Result<bool> {
-        if self.document_id_is_some() {
-            return Ok(true);
-        }
-        // This gets document_id via dokv if it exists
-        if self.document_id().await.is_ok() {
+        if let Ok(Some(_)) = self.try_document_id().await {
             return Ok(true);
         }
         // self.session_storage would not be set because it requires self.document_id be set
@@ -864,32 +862,42 @@ impl DocumentSyncSession {
     #[instrument(skip_all, err)]
     /// Get the `document_id`. First try checking self.document_id, if not there get from DOKV.
     async fn document_id(&self) -> Result<Arc<String>> {
+        self.try_document_id()
+            .await?
+            .ok_or(Error::from("DOCUMENT_ID not found in storage"))
+    }
+
+    /// Like [`Self::document_id`], but `None` instead of an error when this
+    /// object holds no session.
+    async fn try_document_id(&self) -> Result<Option<Arc<String>>> {
         if let Some(id) = self
             .document_id
             .lock("DocumentSyncSession::document_id get within main document_id fn")
             .as_ref()
             .cloned()
         {
-            return Ok(id);
+            return Ok(Some(id));
         }
-        let id: Arc<String> = Arc::new(
-            self.state
-                .storage()
-                .get(DOCUMENT_ID_KEY)
-                .await
-                .with_context(|| {
-                    format!(
-                        "Could not get document_id via DOCUMENT_ID_KEY = [{}] from DO storage",
-                        DOCUMENT_ID_KEY
-                    )
-                })?
-                .ok_or(Error::from("DOCUMENT_ID not found in storage"))?,
-        );
+        let Some(id) = self
+            .state
+            .storage()
+            .get::<String>(DOCUMENT_ID_KEY)
+            .await
+            .with_context(|| {
+                format!(
+                    "Could not get document_id via DOCUMENT_ID_KEY = [{}] from DO storage",
+                    DOCUMENT_ID_KEY
+                )
+            })?
+        else {
+            return Ok(None);
+        };
+        let id = Arc::new(id);
         *self
             .document_id
             .lock("DocumentSyncSession::document_id set within main document_id fn") =
             Some(id.clone());
-        Ok(id)
+        Ok(Some(id))
     }
 
     async fn session_storage(&self) -> Result<Rc<SessionStorage>> {
@@ -939,6 +947,9 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
     let mut router = Router::new();
     router
         .insert("/document/{document_id}/connect", path::CONNECT)
+        .unwrap();
+    router
+        .insert("/document/{document_id}/delete", path::DELETE)
         .unwrap();
     router
         .insert("/document/{document_id}/exists", path::EXISTS)
@@ -1243,6 +1254,11 @@ impl DurableObject for DocumentSyncSession {
             return Ok(());
         }
         worker_rs_otel::scope(&self.env, &self.state, async {
+            // Sockets closed by `delete_handler` report back after the session is gone.
+            if self.try_document_id().await?.is_none() {
+                self.forget_websocket_metadata(&ws).await;
+                return Ok(());
+            }
             self.validate_surface_sockets(None).await?;
             let peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
             for peer_id in peer_ids {
