@@ -1,5 +1,6 @@
 use crate::contacts::get::{
     fetch_contacts_by_link_id, fetch_db_recipients_in_bulk, fetch_senders_by_message_ids,
+    link_has_any_message_with,
 };
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -270,6 +271,38 @@ async fn fetch_db_recipients_in_bulk_returns_empty_for_nonexistent_messages(
     let result = fetch_db_recipients_in_bulk(&pool, &[nonexistent_message_id]).await?;
 
     assert!(result.is_empty());
+
+    Ok(())
+}
+
+// ============================================================================
+// Tests for link_has_any_message_with
+// ============================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("link_has_any_message_with"))
+)]
+async fn link_has_any_message_with_matches_either_direction(pool: Pool<Postgres>) -> Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000701")?;
+
+    for (email, expected) in [
+        ("sender@example.com", true),
+        ("sent.to@example.com", true),
+        ("SENDER@Example.COM", true),
+        // Only cc'd on received mail: neither sent to nor received from.
+        ("cc@example.com", false),
+        ("quiet@example.com", false),
+        // Its only message belongs to the other link.
+        ("other-link@example.com", false),
+        ("stranger@example.com", false),
+    ] {
+        assert_eq!(
+            link_has_any_message_with(&pool, link_id, email).await?,
+            expected,
+            "{email}"
+        );
+    }
 
     Ok(())
 }

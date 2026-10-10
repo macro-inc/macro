@@ -113,6 +113,15 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn has_depopulate_target(
+        &self,
+        _team_id: &uuid::Uuid,
+        _domain: &str,
+        _email: &str,
+    ) -> Result<bool, CrmError> {
+        unimplemented!()
+    }
+
     async fn link_contact_pairs_with_sources(
         &self,
         _pairs: &[(uuid::Uuid, String)],
@@ -729,6 +738,25 @@ async fn set_company_hidden_requires_admin_role() {
             .set_company_hidden(&company_edit_receipt_with_role(role), true)
             .await
             .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn malformed_emails_have_no_depopulate_target() {
+    let team_id = uuid::Uuid::now_v7();
+    for email in [
+        "",
+        "jane",
+        "jane@",
+        "@acme.com",
+        "jane@@acme.com",
+        "a@b@c.com",
+    ] {
+        let has_target = service()
+            .has_depopulate_target(&team_id, email)
+            .await
+            .unwrap();
+        assert!(!has_target, "email {email:?}");
     }
 }
 

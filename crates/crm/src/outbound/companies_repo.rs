@@ -19,6 +19,16 @@ use sqlx::PgPool;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
+/// The contact `depopulate_contact` acts on, with the flags that decide
+/// how far its teardown cascades.
+struct DepopulateTarget {
+    contact_id: Uuid,
+    contact_manually_created: bool,
+    company_id: Uuid,
+    email_sync: bool,
+    company_manually_created: bool,
+}
+
 /// PostgreSQL-backed [`CompaniesRepository`].
 #[derive(Clone)]
 pub struct CompaniesRepositoryImpl {
@@ -77,6 +87,43 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Ok(())
+    }
+
+    /// Takes the domain lock, then finds the contact `depopulate_contact`
+    /// tears down. Locking before the lookup keeps a concurrent in-flight
+    /// populate from committing past it. `None` = nothing to tear down.
+    async fn lock_depopulate_target(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        team_id: &uuid::Uuid,
+        normalized_domain: &str,
+        normalized_email: &str,
+    ) -> Result<Option<DepopulateTarget>, CrmError> {
+        Self::lock_team_domain(tx, team_id, normalized_domain).await?;
+
+        sqlx::query_as!(
+            DepopulateTarget,
+            r#"
+            SELECT
+                ct.id AS contact_id,
+                ct.manually_created AS "contact_manually_created!",
+                co.id AS company_id,
+                co.email_sync AS "email_sync!",
+                co.manually_created AS "company_manually_created!"
+            FROM crm_contacts ct
+            JOIN crm_companies co ON co.id = ct.company_id
+            JOIN crm_domains d ON d.company_id = co.id
+            WHERE co.team_id = $1
+              AND LOWER(ct.email) = $2
+              AND LOWER(d.domain) = $3
+            LIMIT 1
+            "#,
+            team_id,
+            normalized_email,
+            normalized_domain,
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
     /// Team killswitch, read inside the tx (after the advisory lock) so
@@ -611,40 +658,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Lock BEFORE observing state: a concurrent populate could
-        // commit rows for a since-deleted sent message otherwise.
-        sqlx::query!(
-            r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
-            format!("{team_id}:{normalized_domain}"),
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        // None here = nothing to tear down.
-        let Some(row) = sqlx::query!(
-            r#"
-            SELECT
-                ct.id AS contact_id,
-                ct.manually_created AS "contact_manually_created!",
-                co.id AS company_id,
-                co.email_sync AS "email_sync!",
-                co.manually_created AS "company_manually_created!"
-            FROM crm_contacts ct
-            JOIN crm_companies co ON co.id = ct.company_id
-            JOIN crm_domains d ON d.company_id = co.id
-            WHERE co.team_id = $1
-              AND LOWER(ct.email) = $2
-              AND LOWER(d.domain) = $3
-            LIMIT 1
-            "#,
-            team_id,
-            normalized_email,
-            normalized_domain,
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        let Some(row) =
+            Self::lock_depopulate_target(&mut tx, team_id, &normalized_domain, &normalized_email)
+                .await?
         else {
             tx.commit()
                 .await
@@ -747,6 +763,34 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         Ok(outcome)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn has_depopulate_target(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+        email: &str,
+    ) -> Result<bool, CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let target = Self::lock_depopulate_target(
+            &mut tx,
+            team_id,
+            &domain.to_ascii_lowercase(),
+            &email.to_ascii_lowercase(),
+        )
+        .await?;
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(target.is_some())
     }
 
     #[tracing::instrument(skip(self, pairs), fields(pair_count = pairs.len()), err)]

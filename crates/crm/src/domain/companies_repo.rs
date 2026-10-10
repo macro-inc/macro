@@ -299,6 +299,17 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         email: &str,
     ) -> impl Future<Output = Result<DepopulateContactOutcome, CrmError>> + Send;
 
+    /// Whether [`depopulate_contact`] would find a contact to act on for
+    /// `(team_id, domain, email)`: the same lookup, under the same advisory
+    /// lock, with nothing deleted. `false` means `depopulate_contact` is a
+    /// no-op for every link in the team.
+    fn has_depopulate_target(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+        email: &str,
+    ) -> impl Future<Output = Result<bool, CrmError>> + Send;
+
     /// Filters `(link_id, email)` pairs down to those that currently have a
     /// `crm_contact_sources` row — i.e. the pairs where this link actually
     /// contributed something [`depopulate_contact`] would tear down.
