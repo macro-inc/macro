@@ -73,6 +73,14 @@ impl<C: ChannelAgentRepo, P: AgentDmEligibility, S: AgentConversationRepo> Conve
                     if posted.sender.as_user() != Some(&user_id) {
                         return Ok(ConversationDecision::Unavailable);
                     }
+                    // The conversation is the channel's timeline. A reply in a
+                    // thread is not one of its turns: the answer would land in
+                    // the timeline, away from the thread, and the turn's status
+                    // and retry would show nowhere. A thread here routes as in
+                    // any channel, so mentioning the agent there still works.
+                    if posted.thread_id.is_some() {
+                        continue;
+                    }
                     match self
                         .personas
                         .authorize_agent_dm(user_id, agent.bot_id)
