@@ -935,6 +935,41 @@ async fn a_long_conversation_is_summarized_in_bounded_calls_before_the_next_turn
 }
 
 #[tokio::test]
+async fn images_count_toward_the_context_a_summary_bounds() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        let mut blocks = vec![ContentBlock::Text(TextContent::new("compare these"))];
+        blocks.extend((0..16).map(|index| {
+            ContentBlock::ResourceLink(
+                ResourceLink::new(
+                    format!("photo-{index}.png"),
+                    format!("https://static.example/file/photo-{index}"),
+                )
+                .mime_type("image/png".to_owned()),
+            )
+        }));
+        connection
+            .send_request(PromptRequest::new(session.clone(), blocks))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+        connection
+            .send_request(text_prompt(&session, "continue"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+    assert!(
+        engine
+            .requests()
+            .iter()
+            .any(|request| request.purpose == TurnPurpose::Summary),
+        "sixteen images fill the context though their prompt is short"
+    );
+}
+
+#[tokio::test]
 async fn compact_with_a_file_attached_is_a_prompt_about_the_file() {
     // The command word alone is the control. With a file alongside, the user
     // is asking about that file, and compacting would drop it unseen.

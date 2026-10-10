@@ -15,6 +15,9 @@ const CHUNK_BYTES: usize = 48_000;
 const SUMMARY_BYTES: usize = 16_000;
 const RETAINED_BYTES: usize = 24_000;
 pub(crate) const SUMMARY_META_KEY: &str = "contextSummary";
+/// What one image costs the model's context, in transcript bytes: a typical
+/// image is about 1,600 tokens.
+const IMAGE_BYTES: usize = 6_400;
 
 /// Summary checkpoints travel in agent-generated ACP metadata and the durable log.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -71,6 +74,19 @@ fn transcript(history: &[HistoryEntry]) -> String {
     result
 }
 
+/// How much of the model's context `history` takes: its transcript, and the
+/// images its prompts show the model, which the transcript only names.
+fn context_bytes(history: &[HistoryEntry]) -> usize {
+    let images: usize = history
+        .iter()
+        .map(|entry| match entry {
+            HistoryEntry::User(prompt) => prompt.image_count(),
+            HistoryEntry::Assistant(_) => 0,
+        })
+        .sum();
+    transcript(history).len() + images * IMAGE_BYTES
+}
+
 /// Caller holds the turn lock, so summaries cannot race prompts or each other.
 pub(super) async fn compact_if_needed(
     state: &AgentState,
@@ -85,7 +101,7 @@ pub(super) async fn compact_if_needed(
         .get(&state.session_id)
         .map(|state| state.history.clone())
         .unwrap_or_default();
-    if history.is_empty() || (!explicit && transcript(&history).len() < CONTEXT_BYTES) {
+    if history.is_empty() || (!explicit && context_bytes(&history) < CONTEXT_BYTES) {
         return Ok(());
     }
 
@@ -99,7 +115,7 @@ pub(super) async fn compact_if_needed(
             .filter(|(_, entry)| matches!(entry, HistoryEntry::User(_)))
             .nth(1)
             .map_or(history.len(), |(index, _)| index);
-        if transcript(&history[split..]).len() > RETAINED_BYTES {
+        if context_bytes(&history[split..]) > RETAINED_BYTES {
             split = history.len();
         }
     }

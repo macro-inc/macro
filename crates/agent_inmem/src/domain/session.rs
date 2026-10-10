@@ -82,6 +82,15 @@ impl UserPrompt {
         self.text.trim() == COMPACT_COMMAND && self.attachments.is_empty()
     }
 
+    /// How many of the attached files reach the model as images.
+    #[must_use]
+    pub fn image_count(&self) -> usize {
+        self.attachments
+            .iter()
+            .filter(|attachment| is_image(attachment))
+            .count()
+    }
+
     /// The model-facing form of the attached files, `None` without any.
     #[must_use]
     pub fn to_attachments(&self) -> Option<Attachments<'static>> {
