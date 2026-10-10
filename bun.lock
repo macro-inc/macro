@@ -542,6 +542,7 @@
     "virtua@0.48.8": "apps/web/patches/virtua@0.48.8.patch",
     "@lexical/markdown@0.45.0": "apps/web/patches/@lexical%2Fmarkdown@0.45.0.patch",
     "@thisbeyond/solid-dnd@0.7.5": "apps/web/patches/@thisbeyond%2Fsolid-dnd@0.7.5.patch",
+    "@tauri-apps/plugin-http@2.5.9": "apps/web/patches/@tauri-apps%2Fplugin-http@2.5.9.patch",
   },
   "overrides": {
     "@kobalte/core": "0.13.11",
