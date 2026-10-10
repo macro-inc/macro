@@ -493,6 +493,26 @@ fn harness_with_ports_and_journal(
     mentions: PromptMentionsMock,
     journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
 ) -> (TestBench, TurnSignals) {
+    harness_with_journal_and_policy(
+        prompt_context,
+        prompt_composer,
+        permission_policies,
+        coding_agents,
+        mentions,
+        journal,
+        None,
+    )
+}
+
+fn harness_with_journal_and_policy(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    permission_policies: impl crate::domain::ports::PermissionPolicySource,
+    coding_agents: impl crate::domain::ports::CodingAgentSource,
+    mentions: PromptMentionsMock,
+    journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
+    policy: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
@@ -505,7 +525,7 @@ fn harness_with_ports_and_journal(
     let lifecycle = RecordingLifecyclePublisher::new();
     let notifier = NotifierMock::new();
     let service = AgentHarnessService::new(
-        None,
+        policy,
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),

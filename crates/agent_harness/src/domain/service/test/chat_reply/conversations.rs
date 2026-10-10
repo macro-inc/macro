@@ -108,6 +108,72 @@ async fn quota_denial_finishes_queued_conversation_turns_without_stopping_the_ru
     );
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_redelivered(
+    pool: sqlx::PgPool,
+) {
+    use agent_session::domain::agent_conversation::AgentConversationRepo;
+    use channels::domain::{agent_dm::AgentDmRepo, ports::ChannelRepo};
+    let journal =
+        Arc::new(crate::outbound::conversation_turns::PgConversationTurnStore::new(pool.clone()));
+    let policy = Arc::new(
+        crate::domain::conversations::AgentConversationsService::new(
+            channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone()),
+            bots::domain::service::BotServiceImpl::new(
+                bots::outbound::pg_bots_repo::PgBotsRepo::new(pool.clone()),
+                macro_event_broker::NoopMacroEventBroker,
+            ),
+            bots::outbound::pg_bots_repo::PgBotsRepo::new(pool.clone()),
+            crate::testing::postgres_sessions(pool.clone()),
+        )
+        .with_turns(journal.clone()),
+    );
+    let ((service, ..), _) = harness_with_journal_and_policy(
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        KindDefaultPolicies,
+        HarnessDefaultCodingAgents,
+        PromptMentionsMock::new(),
+        Some(journal),
+        Some(policy),
+    );
+    let mut command = direct_command();
+    let owner = mention_origin(&command).sender.clone();
+    let channels = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone());
+    let channel = channels
+        .ensure(owner.clone(), command.bot_id)
+        .await
+        .unwrap()
+        .dm
+        .channel_id;
+    let session = crate::testing::postgres_sessions(pool)
+        .current_or_create(conversation(channel, &command))
+        .await
+        .unwrap();
+    mention_origin_mut(&mut command).parent = MessageParent::Channel(channel);
+    let (admitted, _) = service
+        .admit_conversation_message(session, command.clone())
+        .await
+        .unwrap()
+        .expect("a live conversation admits its owner's message");
+    assert_eq!(admitted, session);
+
+    // Deleted after the trigger published the next message: the session row
+    // went with the channel, and every redelivery would be refused alike.
+    channels
+        .delete_channel(channel, owner.to_string())
+        .await
+        .unwrap();
+    mention_origin_mut(&mut command).message_id = macro_uuid::generate_uuid_v7();
+    assert!(
+        service
+            .admit_conversation_message(session, command)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
 async fn open_direct(
     service: &TestHarness,
     containers: &MockContainerManager,

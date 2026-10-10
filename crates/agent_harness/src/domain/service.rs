@@ -391,7 +391,24 @@ where
 
     /// Save a conversation message before acknowledging its broker event. Returns its
     /// original segment and payload when the source message was already seen.
+    ///
+    /// `None` is a message no attempt can ever admit: its conversation was
+    /// deleted, or its sender may not prompt it. The caller acknowledges it
+    /// instead of having the broker redeliver it forever. A context that
+    /// another replica is changing is waited out; only one that stays busy is
+    /// an error.
     pub async fn admit_conversation_message(
+        &self,
+        session: AgentSessionId,
+        command: OpenSession,
+    ) -> Result<Option<(AgentSessionId, OpenSession)>> {
+        match self.journal_conversation_message(session, command).await {
+            Err(HarnessError::Session(AgentSessionError::Forbidden)) => Ok(None),
+            admitted => admitted.map(Some),
+        }
+    }
+
+    async fn journal_conversation_message(
         &self,
         session: AgentSessionId,
         command: OpenSession,
