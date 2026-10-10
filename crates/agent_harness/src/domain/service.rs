@@ -422,16 +422,18 @@ where
         // An event can have reserved its segment before the user pressed Start
         // fresh. Serialize first admission with reset and select the current
         // segment again; replays above always retain their original identity.
-        for _ in 0..3 {
+        // The context lease is also taken by every claim and retry of the
+        // session, each a few queries long, so a busy lease is waited out.
+        let mut backoff = std::time::Duration::from_millis(50);
+        for _ in 0..8 {
             let current = match &self.inner.conversations {
                 Some(policy) => policy.current_context(session).await?,
                 None => session,
             };
             let Some(_lease) = store.claim_context(current).await? else {
-                return Err(AgentSessionError::RuntimeUnavailable(
-                    "conversation context is changing; retry admission",
-                )
-                .into());
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(std::time::Duration::from_secs(1));
+                continue;
             };
             if let Some(policy) = &self.inner.conversations
                 && policy.current_context(session).await? != current
@@ -441,10 +443,10 @@ where
             let record = store.admit(current, channel, command).await?;
             return Ok((record.session_id, record.command));
         }
-        Err(
-            AgentSessionError::RuntimeUnavailable("conversation context changed; retry admission")
-                .into(),
+        Err(AgentSessionError::RuntimeUnavailable(
+            "conversation context stayed busy; retry admission",
         )
+        .into())
     }
 
     /// Reconcile journaled work after process loss. Only undispatched prompts

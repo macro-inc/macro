@@ -22,7 +22,26 @@ use crate::domain::{
 #[derive(Clone)]
 pub struct PgConversationTurnStore {
     pool: PgPool,
-    reply_slots: std::sync::Arc<tokio::sync::Semaphore>,
+    /// Pooled connections a session bootstrap may hold for its whole open.
+    delivery_slots: std::sync::Arc<tokio::sync::Semaphore>,
+    /// Pooled connections held by admission and reply reconciliation, which
+    /// last a few queries. Kept apart so a slow bootstrap never starves them.
+    lease_slots: std::sync::Arc<tokio::sync::Semaphore>,
+}
+
+/// How long a lease waits for a pooled connection before reporting itself
+/// unavailable. Holders release theirs within a few queries, or once a
+/// bootstrap has opened its session.
+const SLOT_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Wait for one of `slots`, leaving the rest of the pool to everything else.
+async fn take_slot(
+    slots: &std::sync::Arc<tokio::sync::Semaphore>,
+) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    tokio::time::timeout(SLOT_WAIT, slots.clone().acquire_owned())
+        .await
+        .ok()?
+        .ok()
 }
 
 struct PgReplyLease {
@@ -37,7 +56,8 @@ impl PgConversationTurnStore {
         let slots = (pool.options().get_max_connections() as usize / 4).clamp(1, 16);
         Self {
             pool,
-            reply_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(slots)),
+            delivery_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(slots)),
+            lease_slots: std::sync::Arc::new(tokio::sync::Semaphore::new(slots)),
         }
     }
 }
@@ -54,7 +74,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         &self,
         session: AgentSessionId,
     ) -> Result<Option<Box<dyn ConversationLease>>> {
-        let Ok(slot) = self.reply_slots.clone().try_acquire_owned() else {
+        let Some(slot) = take_slot(&self.delivery_slots).await else {
             return Ok(None);
         };
         let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
@@ -76,7 +96,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         &self,
         session: AgentSessionId,
     ) -> Result<Option<Box<dyn ConversationLease>>> {
-        let Ok(slot) = self.reply_slots.clone().try_acquire_owned() else {
+        let Some(slot) = take_slot(&self.lease_slots).await else {
             return Ok(None);
         };
         let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
@@ -225,7 +245,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         action: AgentActionId,
     ) -> Result<Option<Box<dyn ConversationLease>>> {
         // Leave pool capacity for the message service while a reply lock is held.
-        let Ok(slot) = self.reply_slots.clone().try_acquire_owned() else {
+        let Some(slot) = take_slot(&self.lease_slots).await else {
             return Ok(None);
         };
         let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;

@@ -534,3 +534,70 @@ fn mention_origin_mut(command: &mut OpenSession) -> &mut MentionOrigin {
     };
     origin
 }
+
+/// A store over a pool the size of the harness service's, where every kind
+/// of lease has a single connection to spare.
+async fn production_sized(pool: &PgPool) -> PgConversationTurnStore {
+    let small = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    PgConversationTurnStore::new(small)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_bootstrapping_session_does_not_starve_admission_or_replies(pool: PgPool) {
+    let (_, session, channel, command) = setup(pool.clone()).await;
+    let store = production_sized(&pool).await;
+    let record = store.admit(session, channel, command).await.unwrap();
+    store
+        .claim(record.action_id, &flight(&record))
+        .await
+        .unwrap();
+    // Another conversation's open holds its delivery lease for seconds.
+    let _bootstrap = store
+        .claim_delivery(AgentSessionId::new())
+        .await
+        .unwrap()
+        .expect("an idle replica leases a bootstrap");
+    assert!(
+        store.claim_context(session).await.unwrap().is_some(),
+        "admission still gets a context lease"
+    );
+    assert!(
+        store.claim_reply(record.action_id).await.unwrap().is_some(),
+        "the turn's end still gets its reply lease"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_lease_waits_for_a_busy_slot_instead_of_refusing(pool: PgPool) {
+    let (_, session, channel, command) = setup(pool.clone()).await;
+    let store = production_sized(&pool).await;
+    let record = store.admit(session, channel, command).await.unwrap();
+    let held = store
+        .claim_reply(record.action_id)
+        .await
+        .unwrap()
+        .expect("an idle replica leases a reply");
+    let waiting = tokio::spawn({
+        let store = store.clone();
+        async move { store.claim_context(AgentSessionId::new()).await }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(
+        !waiting.is_finished(),
+        "the only slot is busy, so the lease waits"
+    );
+    drop(held);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(2), waiting)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .is_some(),
+        "the lease is granted once the slot frees"
+    );
+}

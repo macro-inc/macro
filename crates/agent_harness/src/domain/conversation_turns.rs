@@ -95,11 +95,15 @@ pub struct ConversationSettings {
 #[async_trait::async_trait]
 pub trait ConversationTurnStore: Send + Sync + 'static {
     /// Serialize bootstrap and local queue admission before a session manager exists.
+    /// Waits briefly for capacity; `None` means another holder has the session,
+    /// or this replica had no connection to spare.
     async fn claim_delivery(
         &self,
         session: AgentSessionId,
     ) -> Result<Option<Box<dyn ConversationLease>>>;
     /// Serialize context changes with runtime dispatch across replicas.
+    /// Waits briefly for capacity; `None` means another holder has the session,
+    /// or this replica had no connection to spare.
     async fn claim_context(
         &self,
         session: AgentSessionId,
@@ -143,6 +147,8 @@ pub trait ConversationTurnStore: Send + Sync + 'static {
     /// Mark the saved outcome as visible in the channel.
     async fn finalize_reply(&self, action: AgentActionId, outcome: &ReplyOutcome) -> Result<()>;
     /// Serialize reply reconciliation across replicas, with release on process loss.
+    /// Waits briefly for capacity; `None` means another holder is reconciling
+    /// the reply, or this replica had no connection to spare.
     async fn claim_reply(
         &self,
         action: AgentActionId,
