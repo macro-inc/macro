@@ -77,6 +77,9 @@ pub struct ConversationTurnStatus {
     pub reply_message_id: Option<Uuid>,
     /// Current execution state.
     pub state: ConversationTurnState,
+    /// Whether an explicit retry would be accepted now: the attempt failed,
+    /// stopped or was interrupted, and its reply already says so.
+    pub retryable: bool,
     /// Stable admission ordering.
     pub created_at: chrono::DateTime<chrono::Utc>,
 }

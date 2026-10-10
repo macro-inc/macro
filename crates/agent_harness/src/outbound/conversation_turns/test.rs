@@ -236,10 +236,22 @@ async fn an_explicit_retry_waits_for_reply_reconciliation_and_mints_only_one_new
             .unwrap()
     );
     assert!(store.pending(10).await.unwrap().is_empty());
+    let retryable = async || {
+        store
+            .for_conversation(channel, bot_id::MACRO_NEW_BOT_ID)
+            .await
+            .unwrap()[0]
+            .retryable
+    };
+    assert!(
+        !retryable().await,
+        "the status says what retry would answer"
+    );
     store
         .finalize_reply(first.action_id, &ReplyOutcome::Failed)
         .await
         .unwrap();
+    assert!(retryable().await);
     let (a, b) = tokio::join!(
         store.retry(
             first.source_message_id,

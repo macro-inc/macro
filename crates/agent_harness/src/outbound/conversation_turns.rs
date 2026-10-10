@@ -192,6 +192,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         Ok(claimed)
     }
 
+    // Retryable exactly when `for_conversation` reports the turn retryable.
     async fn retry(&self, source: Uuid, bot: BotId, expected: AgentActionId) -> Result<bool> {
         let action = AgentActionId::mint();
         Ok(sqlx::query!("UPDATE agent_conversation_turns SET action_id = $4, state = 'queued', in_flight = NULL, outcome = NULL, reply_segments = NULL, reply_finalized = FALSE, updated_at = now() WHERE source_message_id = $1 AND bot_id = $2 AND action_id = $3 AND state IN ('failed', 'stopped', 'interrupted') AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL)", source, bot.as_uuid(), expected.as_uuid(), action.as_uuid())
@@ -312,7 +313,7 @@ impl ConversationTurnStore for PgConversationTurnStore {
         channel: Uuid,
         bot: BotId,
     ) -> Result<Vec<ConversationTurnStatus>> {
-        sqlx::query_scalar!(r#"SELECT jsonb_build_object('source_message_id', source_message_id, 'bot_id', bot_id, 'session_id', session_id, 'action_id', action_id, 'reply_message_id', in_flight->'announcement_message_id', 'state', state, 'created_at', created_at) AS "value!" FROM agent_conversation_turns WHERE channel_id = $1 AND bot_id = $2 ORDER BY created_at, source_message_id"#, channel, bot.as_uuid())
+        sqlx::query_scalar!(r#"SELECT jsonb_build_object('source_message_id', source_message_id, 'bot_id', bot_id, 'session_id', session_id, 'action_id', action_id, 'reply_message_id', in_flight->'announcement_message_id', 'state', state, 'retryable', state IN ('failed', 'stopped', 'interrupted') AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL), 'created_at', created_at) AS "value!" FROM agent_conversation_turns WHERE channel_id = $1 AND bot_id = $2 ORDER BY created_at, source_message_id"#, channel, bot.as_uuid())
             .fetch_all(&self.pool).await.map_err(anyhow::Error::from)?.into_iter()
             .map(|value| serde_json::from_value(value).map_err(anyhow::Error::from).map_err(Into::into)).collect()
     }

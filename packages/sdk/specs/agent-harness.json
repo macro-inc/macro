@@ -2643,6 +2643,7 @@
           "actionId",
           "sessionId",
           "state",
+          "retryable",
           "createdAt"
         ],
         "properties": {
@@ -2660,6 +2661,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The associated agent reply, if it has been posted."
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether Retry would be accepted now. A failed attempt is not retryable\nuntil its reply says how it ended."
           },
           "sessionId": {
             "type": "string",

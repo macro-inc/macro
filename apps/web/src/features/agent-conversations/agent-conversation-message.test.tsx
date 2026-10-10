@@ -33,6 +33,7 @@ function conversation(): AgentConversation {
         replyMessageId: 'reply',
         actionId: 'attempt',
         state: 'running',
+        retryable: false,
         createdAt: '2026-10-01T01:00:00Z',
       },
     ],

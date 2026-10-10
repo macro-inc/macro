@@ -36,11 +36,13 @@ afterEach(() => {
 
 function turn(
   sessionId: string,
-  state: AgentConversationTurn['state']
+  state: AgentConversationTurn['state'],
+  retryable = ['failed', 'stopped', 'interrupted'].includes(state)
 ): AgentConversationTurn {
   return {
     sessionId,
     state,
+    retryable,
     sourceMessageId: `${sessionId}-message`,
     actionId: `${sessionId}-attempt`,
     replyMessageId: null,
@@ -107,6 +109,12 @@ describe('agent conversation controls', () => {
         current
       )
     );
+  });
+
+  it('offers no Retry while the failed attempt’s reply is still being settled', () => {
+    const view = mount(conversation([turn('current', 'failed', false)]));
+    expect(view.getByText(/could not finish/)).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Retry message' })).toBeNull();
   });
 
   it('keeps unavailable failed conversations readable without offering a new run', () => {

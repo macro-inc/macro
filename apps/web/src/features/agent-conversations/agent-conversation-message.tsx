@@ -73,6 +73,7 @@ function TurnStatus(props: {
   onChanged: () => void;
 }) {
   const retryable = () =>
+    props.turn.retryable &&
     props.conversation.available &&
     props.conversation.sessions.some(
       (session) =>
