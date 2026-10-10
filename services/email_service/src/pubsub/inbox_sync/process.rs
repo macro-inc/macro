@@ -6,9 +6,13 @@ use crate::pubsub::inbox_sync::operations::update_labels::update_labels;
 use crate::pubsub::inbox_sync::operations::upsert_message::upsert_message;
 use anyhow::{Context, Result, anyhow};
 use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
+use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 use std::result;
+
+#[cfg(test)]
+mod test;
 
 /// Processes a message from the gmail inbox sync queue.
 pub async fn process_message(
@@ -72,8 +76,13 @@ async fn inner_process_message(
             })
         })?;
 
-    // if sync is disabled we shouldn't update the user's inbox
-    if !link.is_sync_active {
+    if !should_process(&link, &data.operation) {
+        tracing::debug!(
+            link_id = %link.id,
+            is_sync_active = link.is_sync_active,
+            needs_reauth = link.needs_reauth,
+            "Skipping inbox sync operation for link"
+        );
         return Ok(());
     }
 
@@ -105,6 +114,22 @@ async fn inner_process_message(
     }
 
     Ok(())
+}
+
+/// Whether inbox sync should process `operation` for `link`.
+///
+/// Gmail notifications for a link that needs reauth are skipped: listing their
+/// changes needs the dead grant, and the untouched sync cursor lets the first
+/// notification after the grant recovers catch up. Operations fanned out by an
+/// earlier notification still run because the cursor has already moved past
+/// them.
+fn should_process(link: &Link, operation: &InboxSyncOperation) -> bool {
+    match operation {
+        InboxSyncOperation::GmailMessage(_) => link.is_sync_active && !link.needs_reauth,
+        InboxSyncOperation::UpsertMessage(_)
+        | InboxSyncOperation::DeleteMessage(_)
+        | InboxSyncOperation::UpdateLabels(_) => link.is_sync_active,
+    }
 }
 
 /// Extracts backfill message from the SQS message body
