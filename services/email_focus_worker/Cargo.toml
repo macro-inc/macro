@@ -1,0 +1,38 @@
+[package]
+edition = "2024"
+name = "email_focus_worker"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "email_focus_worker"
+path = "src/main.rs"
+
+[[bin]]
+name = "email_focus_worker_doppler_config"
+path = "src/doppler_config.rs"
+
+[dependencies]
+ai_usage = { path = "../../crates/ai_usage" }
+chrono = { workspace = true }
+doppler-config = { workspace = true }
+email = { path = "../../crates/email", default-features = false, features = ["outbound", "ports"] }
+jev = { path = "../../crates/jev", features = ["outbound"] }
+kafka_util = { path = "../../crates/kafka_util" }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
+macro_user_id = { path = "../../crates/macro_user_id" }
+memory = { path = "../../crates/memory" }
+rdkafka = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["signal", "time"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

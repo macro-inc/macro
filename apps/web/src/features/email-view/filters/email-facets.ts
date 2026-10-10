@@ -13,7 +13,7 @@ import {
   tagFacetOption,
 } from '@app/features/soup';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
-import type { EmailEntity, EntityData } from '@entity';
+import type { EmailEntity, EmailFocus, EntityData } from '@entity';
 import type { EmailFilterGroupId, EmailFilterOptionId } from '../types';
 
 type EmailFilterOption = {
@@ -101,11 +101,50 @@ const EMAIL_CALENDAR_OPTIONS: EmailFacetOption[] = [
   },
 ];
 
+// Focus rows carry their classification; other rows never match these.
+function focusOption(
+  id: EmailFilterOptionId,
+  label: string,
+  predicate: (focus: EmailFocus) => boolean
+): EmailFacetOption {
+  return {
+    id,
+    label,
+    predicate: (email) => email.focus !== undefined && predicate(email.focus),
+  };
+}
+
+const EMAIL_FOCUS_OPTIONS: EmailFacetOption[] = [
+  focusOption(
+    'focus-reply-needed',
+    'Reply needed',
+    (focus) => focus.needsReply
+  ),
+  focusOption('focus-follow-up', 'Follow up', (focus) => focus.needsFollowUp),
+  focusOption(
+    'focus-customer',
+    'Customers',
+    (focus) => focus.category === 'CUSTOMER'
+  ),
+  focusOption(
+    'focus-security',
+    'Security',
+    (focus) => focus.category === 'SECURITY'
+  ),
+  focusOption('focus-team', 'Team', (focus) => focus.category === 'TEAM'),
+  focusOption(
+    'focus-known',
+    'People you know',
+    (focus) => focus.category === 'KNOWN'
+  ),
+];
+
 export const EMAIL_FACETS: Facet<EmailEntity, EmailFacetContext>[] = [
   { id: 'read', mode: 'or', options: EMAIL_READ_OPTIONS },
   { id: 'done', mode: 'or', options: EMAIL_DONE_OPTIONS },
   { id: 'attachments', mode: 'or', options: EMAIL_ATTACHMENT_OPTIONS },
   { id: 'calendar', mode: 'or', options: EMAIL_CALENDAR_OPTIONS },
+  { id: 'focus', mode: 'or', options: EMAIL_FOCUS_OPTIONS },
   {
     id: TAG_FACET_ID,
     mode: 'or',
@@ -125,6 +164,18 @@ type EmailFilterGroup = {
 
 const toGroupOptions = (options: EmailFacetOption[]) =>
   options.map(({ id, label, iconType }) => ({ id, label, iconType }));
+
+/** The Focus tab's category menu; shown only there, first. */
+export const EMAIL_FOCUS_FILTER_GROUP: EmailFilterGroup = {
+  id: 'focus',
+  label: 'Focus',
+  selectionMode: 'single',
+  defaultOptionId: 'all',
+  options: [
+    ...toGroupOptions(EMAIL_FOCUS_OPTIONS),
+    { id: 'all', label: 'All' },
+  ],
+};
 
 /** Filter menu layout: the legacy mail filters, split into single-select status groups. */
 export const EMAIL_FILTER_GROUPS: EmailFilterGroup[] = [

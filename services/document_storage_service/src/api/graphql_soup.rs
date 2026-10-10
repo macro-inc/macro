@@ -222,6 +222,13 @@ fn insert_graphql_context_data(
         macro_user_id.clone(),
         email_content_reader,
     ));
+    data.insert(complete_graph::EmailFocusContext(
+        state.email_focus_reader.clone(),
+    ));
+    data.insert(complete_graph::email_thread_focus_loader(
+        macro_user_id.clone(),
+        state.email_focus_reader.clone(),
+    ));
     data.insert(complete_graph::entity_favorite_loader(
         macro_user_id.clone(),
         state.favorites_service.clone(),

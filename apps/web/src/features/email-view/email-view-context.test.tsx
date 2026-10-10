@@ -11,12 +11,15 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   useRouteParams: vi.fn(),
   useEmailLinksQuery: vi.fn(),
-  reminders: (): boolean => true,
+  /** Whether the remote flag with this PostHog key is on. */
+  flag: (_key: string): boolean => true,
   tab: (): string => 'important',
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.reminders() }),
+  useFeatureFlag:
+    ({ key }: { key: string }) =>
+    () => ({ enabled: mocks.flag(key), loading: false }),
 }));
 vi.mock('@app/components/list', () => ({
   createListController: () => ({}),
@@ -89,7 +92,7 @@ vi.mock('./email-route', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  mocks.reminders = () => true;
+  mocks.flag = () => true;
   mocks.tab = () => 'important';
 });
 
@@ -163,7 +166,7 @@ it('clears persisted text search when entering and leaving Email Reminders', () 
 
 it('normalizes restored and route-driven Reminders when the rollout is disabled', () => {
   const [flag, setFlag] = createStore({ enabled: true });
-  mocks.reminders = () => flag.enabled;
+  mocks.flag = (key) => key !== 'enable-reminders' || flag.enabled;
   mocks.tab = () => 'reminders';
   const { view } = mount();
   expect(view.state.tab).toBe('reminders');
@@ -172,4 +175,19 @@ it('normalizes restored and route-driven Reminders when the rollout is disabled'
   expect(view.state.search).toBe('');
   view.setTab('reminders');
   expect(view.state.tab).toBe('important');
+});
+
+it('leaves a restored Focus tab when Focus or GraphQL Soup turns off', () => {
+  for (const off of ['enable-email-focus', 'enable-graphql-soup']) {
+    const [flag, setFlag] = createStore({ enabled: true });
+    mocks.flag = (key) => key !== off || flag.enabled;
+    mocks.tab = () => 'focus';
+    const { view } = mount();
+    expect(view.state.tab).toBe('focus');
+    setFlag('enabled', false);
+    expect(view.state.tab).toBe('important');
+    view.setTab('focus');
+    expect(view.state.tab).toBe('important');
+    cleanup();
+  }
 });

@@ -402,15 +402,23 @@ where
     SoupItemDataLoader::new(loader)
 }
 
-/// Build an OR tree from literals, falling back to an impossible literal when empty.
+/// Build an OR tree from literals, falling back to an impossible literal when
+/// empty. Balanced, not folded: a batch of hundreds of ids folded linearly is
+/// a tree too deep for downstream walkers and serializers.
 fn literal_tree<T>(literals: Vec<T>, impossible: T) -> Arc<Expr<T>> {
-    Arc::new(
-        literals
-            .into_iter()
-            .map(Expr::val)
-            .reduce(Expr::or)
-            .unwrap_or_else(|| Expr::val(impossible)),
-    )
+    let mut nodes = literals.into_iter().map(Expr::val).collect::<Vec<_>>();
+    while nodes.len() > 1 {
+        let mut pairs = nodes.into_iter();
+        let mut next = Vec::new();
+        while let Some(left) = pairs.next() {
+            next.push(match pairs.next() {
+                Some(right) => Expr::or(left, right),
+                None => left,
+            });
+        }
+        nodes = next;
+    }
+    Arc::new(nodes.pop().unwrap_or_else(|| Expr::val(impossible)))
 }
 
 /// Encode an exact entity set into all branches of the Soup filter AST.

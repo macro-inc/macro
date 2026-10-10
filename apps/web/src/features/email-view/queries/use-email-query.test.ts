@@ -62,6 +62,21 @@ vi.mock('./use-scheduled-email-source', () => ({
     refresh: async () => {},
   }),
 }));
+const focusRows = vi.hoisted(() => ({
+  current: [] as import('./use-email-query').EmailDataSourceItem[],
+}));
+vi.mock('./use-focus-email-source', () => ({
+  useFocusEmailSource: () => ({
+    items: () => focusRows.current,
+    isLoading: () => false,
+    isFetching: () => false,
+    error: () => undefined,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+    refresh: async () => {},
+  }),
+}));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
   createWebSocketJob: vi.fn(),
@@ -102,6 +117,7 @@ function mount(search = '') {
       search,
       inboxIds: ['inbox-a'],
       facets: {},
+      focusSort: 'importance',
       collapsedSidebarSectionIds: [],
     });
     const [entities, setDiscoveryEntities] = createSignal([email('noise')]);
@@ -277,6 +293,7 @@ describe('Email list query transitions', () => {
       refetch: vi.fn(async () => {}),
     });
     scheduledRows.current = [];
+    focusRows.current = [];
   });
   afterEach(() => dispose?.());
 
@@ -339,6 +356,35 @@ describe('Email list query transitions', () => {
     setState('tab', 'scheduled');
     expect(ids(source)).toEqual(['scheduled']);
     expect(source.hasMore()).toBe(false);
+
+    setState('tab', 'noise');
+    expect(ids(source)).toEqual(['noise']);
+  });
+
+  it('lists the Focus source on the Focus tab and pauses Soup discovery', () => {
+    focusRows.current = [
+      {
+        kind: 'entity',
+        id: 'focus-row',
+        entity: {
+          ...email('focus'),
+          focus: {
+            category: 'CUSTOMER',
+            importance: 87,
+            needsReply: true,
+            needsFollowUp: false,
+          },
+        },
+      } as EmailDataSourceItem,
+    ];
+    const { source, setState } = mount();
+    expect(ids(source)).toEqual(['noise']);
+
+    setState('tab', 'focus');
+    expect(ids(source)).toEqual(['focus']);
+    expect(source.hasMore()).toBe(false);
+    const options = vi.mocked(useSoupAstItemsQuery).mock.calls[0][1];
+    expect(options?.().enabled).toBe(false);
 
     setState('tab', 'noise');
     expect(ids(source)).toEqual(['noise']);

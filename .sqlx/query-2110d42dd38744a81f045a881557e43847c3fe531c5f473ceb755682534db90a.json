@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                m.id,\n                COALESCE(m.internal_date_ts, m.created_at) AS \"at!\",\n                m.is_sent,\n                m.has_attachments,\n                m.subject,\n                m.snippet,\n                LEFT(m.body_text, $2) AS body,\n                c.email_address AS \"from_email?\",\n                COALESCE(m.from_name, c.name) AS from_name,\n                COALESCE((\n                    SELECT array_agg(rc.email_address ORDER BY rc.email_address)\n                    FROM email_message_recipients r\n                    JOIN email_contacts rc ON rc.id = r.contact_id\n                    WHERE r.message_id = m.id AND r.recipient_type = 'TO'\n                ), '{}') AS \"to_emails!\",\n                COALESCE((\n                    SELECT array_agg(rc.email_address ORDER BY rc.email_address)\n                    FROM email_message_recipients r\n                    JOIN email_contacts rc ON rc.id = r.contact_id\n                    WHERE r.message_id = m.id AND r.recipient_type = 'CC'\n                ), '{}') AS \"cc_emails!\",\n                EXISTS (\n                    SELECT 1\n                    FROM jsonb_array_elements(\n                        CASE WHEN jsonb_typeof(m.headers_jsonb) = 'array'\n                             THEN m.headers_jsonb ELSE '[]'::jsonb END\n                    ) h\n                    WHERE LOWER(h->>'name') IN (\n                            'list-unsubscribe', 'list-id', 'feedback-id', 'x-sg-eid',\n                            'x-ses-outgoing', 'x-mailgun-tag', 'x-campaign'\n                        )\n                       OR (LOWER(h->>'name') = 'precedence'\n                           AND LOWER(h->>'value') IN ('bulk', 'list', 'junk'))\n                ) AS \"bulk!\"\n            FROM email_messages m\n            LEFT JOIN email_contacts c ON c.id = m.from_contact_id\n            WHERE m.thread_id = $1\n              AND NOT m.is_draft\n              AND NOT EXISTS (\n                  SELECT 1 FROM email_message_labels ml\n                  JOIN email_labels l ON l.id = ml.label_id\n                  WHERE ml.message_id = m.id AND l.name = 'TRASH'\n              )\n            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "has_attachments",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "snippet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "body",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "from_email?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "from_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "to_emails!",
+        "type_info": "VarcharArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "cc_emails!",
+        "type_info": "VarcharArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "bulk!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false,
+      true,
+      true,
+      null,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2110d42dd38744a81f045a881557e43847c3fe531c5f473ceb755682534db90a"
+}

@@ -140,6 +140,7 @@ members = [
   "services/document_text_extractor",
   "services/document_upload_finalizer_handler",
   "services/docx_unzip_handler",
+  "services/email_focus_worker",
   "services/email_refresh_handler",
   "services/email_scheduled_handler",
   "services/email_service",

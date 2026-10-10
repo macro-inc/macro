@@ -3159,6 +3159,52 @@ input GraphqlEmailFilterAst {
 }
 
 """
+Why a thread is in or out of Focus.
+"""
+enum GraphqlEmailFocusCategory {
+	"""
+	A specific, credible vulnerability report.
+	"""
+	SECURITY
+	"""
+	A customer or user asking for help or giving feedback.
+	"""
+	CUSTOMER
+	"""
+	Mail from someone at the owner's own company.
+	"""
+	TEAM
+	"""
+	Mail from someone the owner corresponds with.
+	"""
+	KNOWN
+	"""
+	Relevant mail that fits no narrower category.
+	"""
+	OTHER
+	"""
+	A calendar invite, update or RSVP.
+	"""
+	CALENDAR
+	"""
+	An unsolicited pitch.
+	"""
+	COLD_PITCH
+	"""
+	An unsolicited job application.
+	"""
+	JOB_APPLICATION
+	"""
+	Automated, bulk or templated mail.
+	"""
+	AUTOMATED
+	"""
+	Nothing marks the thread as relevant.
+	"""
+	LOW_RELEVANCE
+}
+
+"""
 Enriched email link accessible to the authenticated user.
 """
 type GraphqlEmailLink {
@@ -3346,6 +3392,36 @@ enum GraphqlEmailSyncStatus {
 	Synchronization is disabled.
 	"""
 	INACTIVE
+}
+
+"""
+The Focus classification of one email thread.
+"""
+type GraphqlEmailThreadFocus {
+	"""
+	Whether the thread belongs in Focus.
+	"""
+	isFocus: Boolean!
+	"""
+	The Focus category, or why the thread was left out.
+	"""
+	category: GraphqlEmailFocusCategory!
+	"""
+	Sort key for the Focus list, 0 to 100.
+	"""
+	importance: Int!
+	"""
+	The latest message waits on the owner's answer.
+	"""
+	needsReply: Boolean!
+	"""
+	An open loop the owner should come back to.
+	"""
+	needsFollowUp: Boolean!
+	"""
+	When the classification was made, in RFC 3339 format.
+	"""
+	classifiedAt: String!
 }
 
 """
@@ -7653,6 +7729,12 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	reminderReturnedAt: String
 	"""
+	The thread's Focus classification: whether it belongs in Focus, why,
+	and how important it is. `null` until the thread is classified, and
+	for threads in inboxes the viewer does not own.
+	"""
+	focus: GraphqlEmailThreadFocus
+	"""
 	Complete body-free metadata for local draft edits and discards.
 	"""
 	mailDraftState: GraphqlMailDraftState
@@ -8228,6 +8310,12 @@ type GraphqlUser {
 	Fetch one accessible email thread by its canonical identifier.
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
+	"""
+	The viewer's Focus: signal threads in their own inboxes worth their
+	attention, most important first, with mail in the last `days` days
+	(default 30, at most 90). Each thread's `focus` field explains why.
+	"""
+	emailFocus(days: Int): [GraphqlSoupEmailThread!]!
 	"""
 	Fetch one accessible agent session by id, with its protocol log
 	reachable through `log`.

@@ -125,6 +125,39 @@ where
     }
 }
 
+/// Resolve email threads, in the given order, through the user-scoped Soup
+/// item loader. Missing or inaccessible threads are left out.
+pub async fn resolve_soup_email_threads<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    thread_ids: Vec<uuid::Uuid>,
+) -> async_graphql::Result<Vec<GraphqlSoupEmailThread<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = ctx.data::<SoupItemDataLoader>()?;
+    // Concurrent loads coalesce into one batched Soup request per user.
+    let items = futures::future::try_join_all(thread_ids.into_iter().map(|thread_id| {
+        loader.load_one((
+            user_id.clone(),
+            EntityType::EmailThread.with_entity_string(thread_id.to_string()),
+        ))
+    }))
+    .await?;
+    let mut threads = Vec::with_capacity(items.len());
+    for item in items.into_iter().flatten() {
+        match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
+            GraphqlSoupEntity::EmailThread(thread) => threads.push(thread),
+            _ => {
+                return Err(async_graphql::Error::new(
+                    "Soup returned a non-email entity for an email-thread request",
+                ));
+            }
+        }
+    }
+    Ok(threads)
+}
+
 /// Fetch one agent session the viewer can see, through the same access
 /// filter the Soup list uses, so a session outside their grants reads as
 /// absent rather than as an error. Reads the primary: see

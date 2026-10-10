@@ -55,6 +55,7 @@ function mount() {
       search: 'persisted text',
       inboxIds: ['selected-inbox'],
       facets: {},
+      focusSort: 'importance',
       collapsedSidebarSectionIds: [],
     });
     const [collection, setCollection] = createStore({

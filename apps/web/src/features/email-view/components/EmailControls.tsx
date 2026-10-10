@@ -1,5 +1,10 @@
-import { ListFilterDropdown } from '@app/components/view-shell';
+import {
+  ListFilterDropdown,
+  ListSortDropdown,
+} from '@app/components/view-shell';
 import { Show } from 'solid-js';
+import { EMAIL_FOCUS_SORT_OPTIONS } from '../constants';
+import { useEmailView } from '../email-view-context';
 import { useEmailFilters } from '../filters/use-email-filters';
 
 export type EmailControlsProps = {
@@ -9,10 +14,19 @@ export type EmailControlsProps = {
 };
 
 export function EmailControls(props: EmailControlsProps) {
+  const { state, setFocusSort } = useEmailView();
   const filters = useEmailFilters();
 
   return (
     <div class="flex min-w-0 shrink-0 items-center justify-end gap-2 @max-[720px]/view-shell:gap-1">
+      <Show when={state.tab === 'focus'}>
+        <ListSortDropdown
+          label="Sort Focus"
+          value={state.focusSort}
+          options={[...EMAIL_FOCUS_SORT_OPTIONS]}
+          onChange={setFocusSort}
+        />
+      </Show>
       <div class="relative shrink-0">
         <ListFilterDropdown
           label="Filter email"

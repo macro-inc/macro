@@ -2269,7 +2269,8 @@
           "agent_session",
           "agent_repository_choice",
           "dictation",
-          "image_generation"
+          "image_generation",
+          "email_focus"
         ]
       },
       "AssistantMessagePart": {
