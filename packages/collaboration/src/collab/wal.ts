@@ -1,5 +1,6 @@
 import type { Span } from '@macro-inc/observability';
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
+import { reconnectingDB } from './idb-connection';
 import { logSyncService, type WalContext } from './logger';
 import type { RawUpdate } from './shared';
 import type { LiveSyncSource } from './source';
@@ -60,39 +61,31 @@ interface WALSchema<T> extends DBSchema {
   };
 }
 
+function createWALStores<U>(db: IDBPDatabase<WALSchema<U>>): void {
+  const store = db.createObjectStore('updates', {
+    keyPath: 'id',
+    autoIncrement: true,
+  });
+  store.createIndex('scopeId', 'scopeId');
+}
+
 export class BrowserWALStore<T> implements WALStore<T> {
   /** Resolves to the open IDB database, shared across all operations. */
-  private _db: Promise<IDBPDatabase<WALSchema<T>>>;
-
-  private db(): Promise<IDBPDatabase<WALSchema<T>>> {
-    return this._db;
-  }
+  private readonly db: () => Promise<IDBPDatabase<WALSchema<T>>>;
 
   constructor(
     dbName: string,
     private readonly scopeId: string
   ) {
-    this._db = BrowserWALStore.openDb<T>(dbName);
-  }
-
-  private static openDb<U>(
-    dbName: string
-  ): Promise<IDBPDatabase<WALSchema<U>>> {
-    return idbOpen<WALSchema<U>>(dbName, DB_VERSION, {
-      upgrade(db) {
-        const store = db.createObjectStore('updates', {
-          keyPath: 'id',
-          autoIncrement: true,
-        });
-        store.createIndex('scopeId', 'scopeId');
-      },
-    });
+    this.db = reconnectingDB<WALSchema<T>>(dbName, DB_VERSION, createWALStores);
   }
 
   /** List every scopeId that currently has at least one entry. Uses a
    *  unique-key cursor on the `scopeId` index, so it doesn't load entries. */
   static async listScopeIds(dbName: string): Promise<string[]> {
-    const db = await BrowserWALStore.openDb<unknown>(dbName);
+    const db = await idbOpen<WALSchema<unknown>>(dbName, DB_VERSION, {
+      upgrade: createWALStores,
+    });
     const scopeIds: string[] = [];
     let cursor = await db
       .transaction('updates')

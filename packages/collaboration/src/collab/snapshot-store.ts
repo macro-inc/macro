@@ -1,4 +1,5 @@
-import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
+import type { DBSchema, IDBPDatabase } from 'idb';
+import { reconnectingDB } from './idb-connection';
 import { logSyncService } from './logger';
 import type { LoroManager } from './manager';
 import { LoroManagerError } from './manager-error';
@@ -25,21 +26,19 @@ interface SnapshotSchema<T> extends DBSchema {
 }
 
 export class IDBSnapshotStore<T> implements SnapshotStore<T> {
-  private db: Promise<IDBPDatabase<SnapshotSchema<T>>>;
+  private readonly db: () => Promise<IDBPDatabase<SnapshotSchema<T>>>;
 
   constructor(
     dbName: string,
     private readonly scopeId: string
   ) {
-    this.db = idbOpen<SnapshotSchema<T>>(dbName, DB_VERSION, {
-      upgrade(db) {
-        db.createObjectStore(STORE, { keyPath: 'scopeId' });
-      },
+    this.db = reconnectingDB<SnapshotSchema<T>>(dbName, DB_VERSION, (db) => {
+      db.createObjectStore(STORE, { keyPath: 'scopeId' });
     });
   }
 
   public async save(snapshot: T): Promise<void> {
-    const db = await this.db;
+    const db = await this.db();
     await db.put(STORE, { scopeId: this.scopeId, snapshot });
     logSyncService({
       documentId: this.scopeId,
@@ -50,7 +49,7 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
   }
 
   public async load(): Promise<T | null> {
-    const db = await this.db;
+    const db = await this.db();
     const row = await db.get(STORE, this.scopeId);
     const found = row?.snapshot ?? null;
     logSyncService({
@@ -65,7 +64,7 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
   }
 
   public async delete(): Promise<void> {
-    const db = await this.db;
+    const db = await this.db();
     await db.delete(STORE, this.scopeId);
   }
 }
