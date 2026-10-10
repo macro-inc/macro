@@ -727,13 +727,18 @@ fn push_channel_thread_filter_expr(
             push_channel_thread_notification_filter_expr(
                 builder,
                 user_id,
-                match state {
-                    item_filters::NotificationState::Unseen => "un.state = 'unseen'",
-                    item_filters::NotificationState::Seen => "un.state = 'seen'",
-                    item_filters::NotificationState::Done => "un.state = 'done'",
-                },
+                notification_state_predicate(*state),
             );
         }
+    }
+}
+
+#[cfg(feature = "list")]
+fn notification_state_predicate(state: item_filters::NotificationState) -> &'static str {
+    match state {
+        item_filters::NotificationState::Unseen => "un.state = 'unseen'",
+        item_filters::NotificationState::Seen => "un.state = 'seen'",
+        item_filters::NotificationState::Done => "un.state = 'done'",
     }
 }
 
@@ -823,6 +828,252 @@ fn push_channel_thread_notification_filter_expr(
 }
 
 #[cfg(feature = "list")]
+const CHANNEL_MESSAGE_ID_PATTERN: &str =
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+
+/// Positive notification states, plus predicates that were ANDed onto them.
+///
+/// `Unsafe` is a NOT, or an OR that mixes a notification with anything else.
+/// Those trees are not "the user's notified roots" and stay on the channel scan.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+enum ThreadNotifPlan<'a> {
+    Absent,
+    Ready {
+        ids_sql: String,
+        residuals: Vec<&'a Expr<ChannelThreadLiteral>>,
+    },
+    Unsafe,
+}
+
+#[cfg(feature = "list")]
+fn channel_thread_expr_mentions_notification(expr: &Expr<ChannelThreadLiteral>) -> bool {
+    match expr {
+        Expr::Literal(ChannelThreadLiteral::NotificationState(_)) => true,
+        Expr::Literal(_) => false,
+        Expr::Not(inner) => channel_thread_expr_mentions_notification(inner),
+        Expr::And(left, right) | Expr::Or(left, right) => {
+            channel_thread_expr_mentions_notification(left)
+                || channel_thread_expr_mentions_notification(right)
+        }
+    }
+}
+
+/// Root ids of channel-message notifications in `state_predicate`.
+///
+/// `$1` is the requesting user, the first bind `build_channel_thread_notification_query`
+/// pushes. Each arm fences the user's rows and the notification lookup with
+/// `OFFSET 0`. Without the inner fence Postgres hashes every `channel_message`
+/// notification in the table when that type's statistics are too low. AND is
+/// `INTERSECT` because two states can be witnessed by different notification
+/// rows. OR is `UNION`.
+#[cfg(feature = "list")]
+fn channel_message_notification_ids_sql(state_predicate: &str) -> String {
+    format!(
+        r#"SELECT DISTINCT n.secondary_event_item_id::uuid AS root_id,
+                  n.event_item_id AS channel_id
+           FROM (
+               SELECT un.notification_id
+               FROM user_notification un
+               WHERE un.user_id = $1
+                 AND un.deleted_at IS NULL
+                 AND {state_predicate}
+               OFFSET 0
+           ) un
+           JOIN LATERAL (
+               SELECT n.secondary_event_item_id, n.event_item_id
+               FROM notification n
+               WHERE n.id = un.notification_id
+                 AND n.event_item_type = 'channel'
+                 AND n.secondary_event_item_type = 'channel_message'
+                 AND n.secondary_event_item_id ~ '{CHANNEL_MESSAGE_ID_PATTERN}'
+               OFFSET 0
+           ) n ON TRUE"#
+    )
+}
+
+#[cfg(feature = "list")]
+fn classify_channel_thread_notification(expr: &Expr<ChannelThreadLiteral>) -> ThreadNotifPlan<'_> {
+    match expr {
+        Expr::Literal(ChannelThreadLiteral::NotificationState(state)) => ThreadNotifPlan::Ready {
+            ids_sql: channel_message_notification_ids_sql(notification_state_predicate(*state)),
+            residuals: Vec::new(),
+        },
+        Expr::Literal(_) => ThreadNotifPlan::Absent,
+        Expr::Not(inner) => {
+            if channel_thread_expr_mentions_notification(inner) {
+                ThreadNotifPlan::Unsafe
+            } else {
+                ThreadNotifPlan::Absent
+            }
+        }
+        Expr::Or(left, right) => {
+            match (
+                classify_channel_thread_notification(left),
+                classify_channel_thread_notification(right),
+            ) {
+                (
+                    ThreadNotifPlan::Ready {
+                        ids_sql: left_ids,
+                        residuals: left_residuals,
+                    },
+                    ThreadNotifPlan::Ready {
+                        ids_sql: right_ids,
+                        residuals: right_residuals,
+                    },
+                ) if left_residuals.is_empty() && right_residuals.is_empty() => {
+                    ThreadNotifPlan::Ready {
+                        ids_sql: format!("({left_ids}) UNION ({right_ids})"),
+                        residuals: Vec::new(),
+                    }
+                }
+                (ThreadNotifPlan::Absent, ThreadNotifPlan::Absent) => ThreadNotifPlan::Absent,
+                _ => ThreadNotifPlan::Unsafe,
+            }
+        }
+        Expr::And(left, right) => {
+            match (
+                classify_channel_thread_notification(left),
+                classify_channel_thread_notification(right),
+            ) {
+                (ThreadNotifPlan::Unsafe, _) | (_, ThreadNotifPlan::Unsafe) => {
+                    ThreadNotifPlan::Unsafe
+                }
+                (ThreadNotifPlan::Absent, ThreadNotifPlan::Absent) => ThreadNotifPlan::Absent,
+                (
+                    ThreadNotifPlan::Ready {
+                        ids_sql,
+                        mut residuals,
+                    },
+                    ThreadNotifPlan::Absent,
+                ) => {
+                    residuals.push(right);
+                    ThreadNotifPlan::Ready { ids_sql, residuals }
+                }
+                (
+                    ThreadNotifPlan::Absent,
+                    ThreadNotifPlan::Ready {
+                        ids_sql,
+                        mut residuals,
+                    },
+                ) => {
+                    residuals.push(left);
+                    ThreadNotifPlan::Ready { ids_sql, residuals }
+                }
+                (
+                    ThreadNotifPlan::Ready {
+                        ids_sql: left_ids,
+                        mut residuals,
+                    },
+                    ThreadNotifPlan::Ready {
+                        ids_sql: right_ids,
+                        residuals: right_residuals,
+                    },
+                ) => {
+                    residuals.extend(right_residuals);
+                    ThreadNotifPlan::Ready {
+                        ids_sql: format!("({left_ids}) INTERSECT ({right_ids})"),
+                        residuals,
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "list")]
+fn push_channel_thread_keyset(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    sort_method_str: String,
+    cursor_timestamp: Option<DateTime<Utc>>,
+    cursor_id_str: Option<String>,
+    query_limit: Option<i64>,
+) {
+    builder.push(" AND (");
+    builder.push_bind(cursor_timestamp);
+    builder.push("::timestamptz IS NULL OR (");
+    push_channel_thread_sort_expr(builder, sort_method_str.clone());
+    builder.push(", m.id::text) < (");
+    builder.push_bind(cursor_timestamp);
+    builder.push(", ");
+    builder.push_bind(cursor_id_str);
+    builder.push(")) ORDER BY ");
+    push_channel_thread_sort_expr(builder, sort_method_str);
+    builder.push(" DESC, m.id::text DESC LIMIT ");
+    builder.push_bind(query_limit);
+}
+
+/// Threads the user was notified about, then the same activity sort as the scan.
+/// Active channel membership is always applied: a notification does not keep a
+/// thread in a channel the user has left.
+#[cfg(feature = "list")]
+fn build_channel_thread_notification_query(
+    params: &GetThreadReplyRowsParams,
+    ids_sql: String,
+    residuals: &[&Expr<ChannelThreadLiteral>],
+    sort_method_str: String,
+    query_limit: Option<i64>,
+    cursor_timestamp: Option<DateTime<Utc>>,
+    cursor_id_str: Option<String>,
+) -> QueryBuilder<'static, Postgres> {
+    let mut builder = QueryBuilder::new(format!(
+        r#"
+        WITH notified AS MATERIALIZED (
+            {ids_sql}
+        )
+        SELECT
+            m.id AS id,
+            m.parent_entity_id::uuid AS channel_id,
+            m.sender_id AS sender_id,
+            m.triggered_by_user_id AS triggered_by_user_id,
+            m.content AS content,
+            m.created_at AS created_at,
+            m.updated_at AS updated_at,
+            m.edited_at::timestamptz AS edited_at,
+            m.deleted_at::timestamptz AS deleted_at
+        FROM comms_messages m
+        JOIN notified
+          ON notified.root_id = m.id
+         AND notified.channel_id = m.parent_entity_id
+        JOIN comms_channels c ON c.id::text = m.parent_entity_id
+        LEFT JOIN LATERAL (
+            SELECT MAX(reply.updated_at) AS latest_reply_updated_at
+            FROM comms_messages reply
+            WHERE reply.thread_id = m.id
+              AND reply.deleted_at IS NULL
+        ) thread_stats ON TRUE
+        WHERE m.thread_id IS NULL
+          AND m.deleted_at IS NULL
+          AND m.parent_entity_type = 'channel'
+          AND EXISTS (
+              SELECT 1
+              FROM comms_channel_participants cp
+              WHERE cp.channel_id::text = m.parent_entity_id
+                AND cp.user_id = "#
+    ));
+    // First bind. The `$1` literals inside `ids_sql` are this same user.
+    builder.push_bind(params.user().as_ref().to_string());
+    builder.push(
+        r#"
+                AND cp.left_at IS NULL
+          )
+        "#,
+    );
+    for residual in residuals {
+        builder.push(" AND ");
+        push_channel_thread_filter_expr(&mut builder, residual, params.user());
+    }
+    push_channel_thread_keyset(
+        &mut builder,
+        sort_method_str,
+        cursor_timestamp,
+        cursor_id_str,
+        query_limit,
+    );
+    builder
+}
+
+#[cfg(feature = "list")]
 fn build_channel_thread_rows_query(
     params: &GetThreadReplyRowsParams,
 ) -> QueryBuilder<'static, Postgres> {
@@ -834,6 +1085,22 @@ fn build_channel_thread_rows_query(
     let (cursor_id, cursor_timestamp) = cursor.vals();
     let cursor_id_str = cursor_id.map(|id| id.to_string());
     let cursor_timestamp = cursor_timestamp.cloned();
+
+    if let Some(expr) = cursor.filter().as_deref() {
+        if let ThreadNotifPlan::Ready { ids_sql, residuals } =
+            classify_channel_thread_notification(expr)
+        {
+            return build_channel_thread_notification_query(
+                params,
+                ids_sql,
+                &residuals,
+                sort_method_str,
+                query_limit,
+                cursor_timestamp,
+                cursor_id_str,
+            );
+        }
+    }
 
     let mut builder = QueryBuilder::new(
         r#"
@@ -875,18 +1142,13 @@ fn build_channel_thread_rows_query(
         push_channel_thread_filter_expr(&mut builder, expr, params.user());
     }
 
-    builder.push(" AND (");
-    builder.push_bind(cursor_timestamp);
-    builder.push("::timestamptz IS NULL OR (");
-    push_channel_thread_sort_expr(&mut builder, sort_method_str.clone());
-    builder.push(", m.id::text) < (");
-    builder.push_bind(cursor_timestamp);
-    builder.push(", ");
-    builder.push_bind(cursor_id_str);
-    builder.push(")) ORDER BY ");
-    push_channel_thread_sort_expr(&mut builder, sort_method_str);
-    builder.push(" DESC, m.id::text DESC LIMIT ");
-    builder.push_bind(query_limit);
+    push_channel_thread_keyset(
+        &mut builder,
+        sort_method_str,
+        cursor_timestamp,
+        cursor_id_str,
+        query_limit,
+    );
 
     builder
 }
