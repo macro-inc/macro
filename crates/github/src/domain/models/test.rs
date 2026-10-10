@@ -59,24 +59,60 @@ fn display_impl() {
 // MacroTaskId::extract_from_text
 // ---------------------------------------------------------------------------
 
+const SHORT_UUID_A: &str = "2BuyvtY3aeEvHx4uG8iD51";
+const SHORT_UUID_B: &str = "xoyQ8nrV6PNZFmpsWYMdyC";
+const SHORT_UUID_C: &str = "2ZbZ7wJQfEMWyBSycKYTYr";
+
 #[test]
 fn extract_case_insensitive() {
-    let text = "fixes MACRO-2BuyvtY3ae and also macro-abc123 and Macro-XYZ";
-    let ids = MacroTaskId::extract_from_text(text);
+    let text = format!(
+        "fixes MACRO-{SHORT_UUID_A} and also macro-{SHORT_UUID_B} and Macro-{SHORT_UUID_C}"
+    );
+    let ids = MacroTaskId::extract_from_text(&text);
     assert_eq!(ids.len(), 3);
-    assert_eq!(ids[0].short_uuid, "2BuyvtY3ae");
-    assert_eq!(ids[1].short_uuid, "abc123");
-    // "XYZ" is valid base58
-    assert_eq!(ids[2].short_uuid, "XYZ");
+    assert_eq!(ids[0].short_uuid, SHORT_UUID_A);
+    assert_eq!(ids[1].short_uuid, SHORT_UUID_B);
+    assert_eq!(ids[2].short_uuid, SHORT_UUID_C);
 }
 
 #[test]
 fn extract_deduplicates() {
-    let text = "MACRO-abc123 and macro-abc123 again MACRO-abc123";
-    let ids = MacroTaskId::extract_from_text(text);
+    let text = format!("MACRO-{SHORT_UUID_A} and macro-{SHORT_UUID_A} again MACRO-{SHORT_UUID_A}");
+    let ids = MacroTaskId::extract_from_text(&text);
     // Same short UUID captured, only first occurrence kept
     assert_eq!(ids.len(), 1);
-    assert_eq!(ids[0].short_uuid, "abc123");
+    assert_eq!(ids[0].short_uuid, SHORT_UUID_A);
+}
+
+#[test]
+fn extract_keeps_uuid_v7_task_ids() {
+    let uuid = uuid::Uuid::parse_str("01a121dc-e36b-7d71-b4f1-d1d55b70820c").unwrap();
+    let task_id = MacroTaskId::from_uuid(&uuid);
+    let ids = MacroTaskId::extract_from_text(&format!("closes {task_id}"));
+    assert_eq!(ids, [task_id]);
+}
+
+#[test]
+fn extract_ignores_short_ids_that_are_not_uuids() {
+    // Each decodes to a small integer such as 00000000-0000-0000-0000-000166f86534.
+    let ids = MacroTaskId::extract_from_text("fixes MACRO-abc123 and macro-2BuyvtY3ae");
+    assert!(ids.is_empty());
+}
+
+#[test]
+fn extract_ignores_macro_inc_org_in_github_urls() {
+    let text = "See https://github.com/macro-inc/macro/pull/7882 for context";
+    assert!(MacroTaskId::extract_from_text(text).is_empty());
+}
+
+#[test]
+fn extract_ignores_team_task_numbers() {
+    let text = "synoet/macro-3692-on-main";
+    assert!(MacroTaskId::extract_from_text(text).is_empty());
+    assert_eq!(
+        TeamTaskReference::extract_from_text(text),
+        vec![TeamTaskReference::new("macro", 3692).unwrap()]
+    );
 }
 
 #[test]
@@ -97,19 +133,19 @@ fn extract_ignores_invalid_base58_chars() {
 
 #[test]
 fn extract_from_branch_name() {
-    let text = "feature/macro-2BuyvtY3ae";
-    let ids = MacroTaskId::extract_from_text(text);
+    let text = format!("feature/macro-{SHORT_UUID_A}");
+    let ids = MacroTaskId::extract_from_text(&text);
     assert_eq!(ids.len(), 1);
-    assert_eq!(ids[0].short_uuid, "2BuyvtY3ae");
+    assert_eq!(ids[0].short_uuid, SHORT_UUID_A);
 }
 
 #[test]
 fn extract_multiple_in_sentence() {
-    let text = "closes MACRO-aaa111 and MACRO-bbb222";
-    let ids = MacroTaskId::extract_from_text(text);
+    let text = format!("closes MACRO-{SHORT_UUID_A} and MACRO-{SHORT_UUID_B}");
+    let ids = MacroTaskId::extract_from_text(&text);
     assert_eq!(ids.len(), 2);
-    assert_eq!(ids[0].short_uuid, "aaa111");
-    assert_eq!(ids[1].short_uuid, "bbb222");
+    assert_eq!(ids[0].short_uuid, SHORT_UUID_A);
+    assert_eq!(ids[1].short_uuid, SHORT_UUID_B);
 }
 
 // ---------------------------------------------------------------------------
@@ -583,11 +619,14 @@ fn pull_request_task_reference_prefers_the_team_reference() {
 
 #[test]
 fn pull_request_task_reference_falls_back_to_the_macro_id() {
-    let task = MacroTaskId::from_short_uuid("2BuyvtY3ae").unwrap();
-    assert_eq!(pull_request_task_reference(&task, None), "MACRO-2BuyvtY3ae");
+    let task = MacroTaskId::from_short_uuid(SHORT_UUID_A).unwrap();
+    assert_eq!(
+        pull_request_task_reference(&task, None),
+        format!("MACRO-{SHORT_UUID_A}")
+    );
     // A slug the webhook's parser would not read back cannot be the reference.
     let unreadable = TeamTaskReference::new("A_VERY_LONG_TEAM_SLUG_NAME", 7).unwrap();
     let reference = pull_request_task_reference(&task, Some(&unreadable));
-    assert_eq!(reference, "MACRO-2BuyvtY3ae");
+    assert_eq!(reference, format!("MACRO-{SHORT_UUID_A}"));
     assert_eq!(MacroTaskId::extract_from_text(&reference), [task]);
 }
