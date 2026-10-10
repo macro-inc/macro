@@ -1428,100 +1428,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let cursor_ts = cursor.map(|c| c.last_sort_ts);
         let cursor_id = cursor.map(|c| c.last_id.to_string());
 
-        // CTE limits companies before the domain/directory joins; the
-        // outer ORDER BY repeats the CTE's sort + `d.created_at ASC`
-        // so rows arrive contiguous per company with the primary
-        // domain first. Sort columns are `first_interaction` /
-        // `last_interaction` from populate_contact (both NOT NULL —
-        // see the `crm_interaction_timestamps` migration). `Viewed*`
-        // variants join `UserHistory` per-user — same shape as the
-        // soup repo's `viewed_at` / `viewed_updated` sorts for
-        // docs/chats/projects (see pg_soup_repo/expanded/by_cursor.rs).
-        //
+        // Rows arrive contiguous per company with the primary domain first.
         // `$5` (`hidden`) defaults to visible-only when `NULL`; the
         // admin/owner role check for `Some(true)` is enforced upstream
         // in soup's axum router.
-        let rows = sqlx::query!(
-            r#"
-            WITH limited_companies AS (
-                SELECT
-                    c.id,
-                    c.team_id,
-                    c.custom_name,
-                    c.email_sync,
-                    c.hidden,
-                    c.first_interaction,
-                    c.last_interaction
-                FROM crm_companies c
-                LEFT JOIN "UserHistory" uh
-                    ON uh."itemId" = c.id::text
-                   AND uh."itemType" = 'crm_company'
-                   AND uh."userId" = $8
-                WHERE c.team_id = $1
-                  AND c.hidden = COALESCE($5::bool, FALSE)
-                  AND EXISTS (
-                      SELECT 1 FROM team_crm_settings tcs
-                      WHERE tcs.team_id = $1 AND tcs.crm_enabled
-                  )
-                  AND (cardinality($2::uuid[]) = 0 OR c.id = ANY($2::uuid[]))
-                  -- Keyset seek (NULL = first page): keep only rows that
-                  -- sort strictly after the cursor.
-                  AND (
-                      $6::timestamptz IS NULL
-                      OR (
-                          CASE $4
-                              WHEN 'created_at' THEN c.first_interaction
-                              WHEN 'viewed_at' THEN uh."updatedAt"
-                              WHEN 'viewed_updated'
-                                  THEN COALESCE(uh."updatedAt", c.last_interaction)
-                              ELSE c.last_interaction
-                          END,
-                          c.id::text
-                      ) < ($6, $7)
-                  )
-                ORDER BY
-                    CASE $4
-                        WHEN 'created_at' THEN c.first_interaction
-                        WHEN 'viewed_at' THEN uh."updatedAt"
-                        WHEN 'viewed_updated'
-                            THEN COALESCE(uh."updatedAt", c.last_interaction)
-                        ELSE c.last_interaction
-                    END DESC NULLS LAST,
-                    c.id DESC
-                LIMIT $3
-            )
-            SELECT
-                lc.id                AS "company_id!",
-                lc.team_id           AS "company_team_id!",
-                lc.email_sync        AS "company_email_sync!",
-                lc.hidden            AS "company_hidden!",
-                lc.first_interaction AS "company_created_at!",
-                lc.last_interaction  AS "company_updated_at!",
-                d.id                 AS "domain_id?",
-                d.domain             AS "domain?",
-                d.created_at       AS "domain_created_at?",
-                COALESCE(lc.custom_name, dd.name) AS "display_name?",
-                dd.description     AS "dir_description?",
-                uh."updatedAt"::timestamptz AS "viewed_at?"
-            FROM limited_companies lc
-            LEFT JOIN "UserHistory" uh
-                ON uh."itemId" = lc.id::text
-               AND uh."itemType" = 'crm_company'
-               AND uh."userId" = $8
-            LEFT JOIN crm_domains d ON d.company_id = lc.id
-            LEFT JOIN crm_domain_directory dd
-                ON LOWER(dd.domain) = LOWER(d.domain)
-            ORDER BY
-                CASE $4
-                    WHEN 'created_at' THEN lc.first_interaction
-                    WHEN 'viewed_at' THEN uh."updatedAt"
-                    WHEN 'viewed_updated'
-                        THEN COALESCE(uh."updatedAt", lc.last_interaction)
-                    ELSE lc.last_interaction
-                END DESC NULLS LAST,
-                lc.id DESC,
-                d.created_at ASC NULLS LAST
-            "#,
+        let rows = sqlx::query_file!(
+            "src/outbound/companies_repo/list_companies_for_soup.sql",
             team_id,
             company_ids,
             limit,
