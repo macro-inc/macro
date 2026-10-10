@@ -153,7 +153,7 @@ describe('createTauriCacheHost', () => {
       onInitializationError,
     });
     // Initialization succeeds; inspectMutations returns empty instead of failing.
-    const mutations = await host.inspectMutations();
+    const mutations = await host.inspectMutations?.();
     expect(mutations).toEqual([]);
     expect(onInitializationError).not.toHaveBeenCalled();
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
