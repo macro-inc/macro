@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH want AS (\n            SELECT ea.source_id, ea.entity_type, i.kind, i.entity_id, i.sort_ts, count(*)::int AS grants\n            FROM entity_access ea\n            JOIN (\n                SELECT 'document' AS entity_type, d.id AS entity_id,\n                       CASE WHEN st.sub_type = 'task' THEN 'task' ELSE 'document' END AS kind,\n                       CASE WHEN d.\"deletedAt\" IS NULL THEN d.\"updatedAt\" END AS sort_ts\n                FROM \"Document\" d\n                LEFT JOIN document_sub_type st ON st.document_id = d.id\n                UNION ALL\n                SELECT 'chat', c.id, 'chat', CASE WHEN c.\"deletedAt\" IS NULL THEN c.\"updatedAt\" END\n                FROM \"Chat\" c\n                UNION ALL\n                SELECT 'project', p.id, 'project', CASE WHEN p.\"deletedAt\" IS NULL THEN p.\"updatedAt\" END\n                FROM \"Project\" p\n            ) i ON i.entity_type = ea.entity_type AND i.entity_id = ea.entity_id::text\n            GROUP BY ea.source_id, ea.entity_type, i.kind, i.entity_id, i.sort_ts\n        ), have AS (\n            SELECT source_id, entity_type, kind, entity_id, sort_ts, grants FROM source_items\n        )\n        SELECT 'missing' AS \"side!\", * FROM (SELECT * FROM want EXCEPT ALL SELECT * FROM have) missing\n        UNION ALL\n        SELECT 'extra', * FROM (SELECT * FROM have EXCEPT ALL SELECT * FROM want) extra\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "side!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "sort_ts",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "grants",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f7300bcc7fa0d2e273ccedb6bac03cb715b6e704aa962e72f79c86833e9fd740"
+}

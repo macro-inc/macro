@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_channel_participants SET left_at = now()\n        WHERE user_id = $1 AND channel_id = 'cccccccc-0000-4000-8000-000000000001'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ee5d2f35e9a5489ec487446f08b106178f8c8cd0902efef15cbf4338918b7e4"
+}

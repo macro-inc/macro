@@ -199,20 +199,35 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
 fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
     let mut filter = EntityFilterAst::default();
     assert!(
-        !build_query(&filter, false, SimpleSortMethod::UpdatedAt)
-            .sql()
-            .contains("FROM initiative")
+        !build_query(
+            &filter,
+            false,
+            SimpleSortMethod::UpdatedAt,
+            ItemSource::SourceItems
+        )
+        .sql()
+        .contains("FROM initiative")
     );
     filter.initiative_filter = Some(Arc::new(Expr::is_not(Expr::val(
         InitiativeLiteral::Include,
     ))));
     assert!(
-        !build_query(&filter, false, SimpleSortMethod::UpdatedAt)
-            .sql()
-            .contains("FROM initiative")
+        !build_query(
+            &filter,
+            false,
+            SimpleSortMethod::UpdatedAt,
+            ItemSource::SourceItems
+        )
+        .sql()
+        .contains("FROM initiative")
     );
     filter.initiative_filter = Some(Arc::new(Expr::val(InitiativeLiteral::Include)));
-    let query = build_query(&filter, false, SimpleSortMethod::UpdatedAt);
+    let query = build_query(
+        &filter,
+        false,
+        SimpleSortMethod::UpdatedAt,
+        ItemSource::SourceItems,
+    );
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
     assert!(candidates.contains("FROM initiative i"));
     assert!(candidates.contains("LIMIT $3"));

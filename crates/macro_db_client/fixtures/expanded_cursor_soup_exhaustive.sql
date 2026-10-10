@@ -232,3 +232,8 @@ VALUES
    '2024-01-01 00:00:00', '2024-03-01 10:00:00');
 
 SET session_replication_role = 'origin';
+
+-- Replica mode skipped the source_items triggers, so derive its rows here.
+SELECT source_items_resync('document', ARRAY(SELECT id FROM "Document"));
+SELECT source_items_resync('chat', ARRAY(SELECT id FROM "Chat"));
+SELECT source_items_resync('project', ARRAY(SELECT id FROM "Project"));

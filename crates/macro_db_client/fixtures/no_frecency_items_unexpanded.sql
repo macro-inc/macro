@@ -88,3 +88,8 @@ VALUES ('macro|user@user.com', '44444444-ffff-ffff-ffff-ffffffffffff', 'document
        ('macro|user@user.com', '88888888-ffff-ffff-ffff-ffffffffffff', 'project', 70.0, 5, '2024-01-17 10:00:00', '[]'::jsonb);
 
 SET session_replication_role = 'origin';
+
+-- Replica mode skipped the source_items triggers, so derive its rows here.
+SELECT source_items_resync('document', ARRAY(SELECT id FROM "Document"));
+SELECT source_items_resync('chat', ARRAY(SELECT id FROM "Chat"));
+SELECT source_items_resync('project', ARRAY(SELECT id FROM "Project"));

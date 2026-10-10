@@ -52,3 +52,8 @@ VALUES ('macro|user@user.com', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'document
        ('macro|user@user.com', 'cccccccc-1111-1111-1111-111111111111', 'chat', '2024-03-01 10:00:00'); -- Oldest viewed
 
 SET session_replication_role = 'origin';
+
+-- Replica mode skipped the source_items triggers, so derive its rows here.
+SELECT source_items_resync('document', ARRAY(SELECT id FROM "Document"));
+SELECT source_items_resync('chat', ARRAY(SELECT id FROM "Chat"));
+SELECT source_items_resync('project', ARRAY(SELECT id FROM "Project"));

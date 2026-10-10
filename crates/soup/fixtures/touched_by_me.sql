@@ -124,3 +124,8 @@ VALUES
 ('ae000000-0000-0000-0000-000000000012', 'macro|user-1@test.com', 'macro|user-1@test.com', 'opened', NULL, 'document', '11111111-5555-5555-5555-555555555555', '2024-06-01 10:12:00+00');
 
 SET session_replication_role = 'origin';
+
+-- Replica mode skipped the source_items triggers, so derive its rows here.
+SELECT source_items_resync('document', ARRAY(SELECT id FROM "Document"));
+SELECT source_items_resync('chat', ARRAY(SELECT id FROM "Chat"));
+SELECT source_items_resync('project', ARRAY(SELECT id FROM "Project"));
