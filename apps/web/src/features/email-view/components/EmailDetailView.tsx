@@ -119,7 +119,7 @@ export function EmailDetailView(props: {
   targetMessageId?: string;
   targetRequest?: string;
 }) {
-  const { closeThread, selectedThread } = useEmailView();
+  const { closeThread, selectedThread, threadNavigationHold } = useEmailView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const canAutofocus = useCanAutofocusSplitContent();
@@ -129,17 +129,18 @@ export function EmailDetailView(props: {
     enabled: !!threadId(),
   }));
   const listNavigation = useEmailDetailListNavigation(threadId);
-  const { held: navigationHeld } = useListNavigationHotkeys({
+  useListNavigationHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: () =>
       panel.isPanelActive() && selectedThread()?.id === props.thread.id,
     navigation: listNavigation,
     arrowKeys: true,
+    onKeyStep: threadNavigationHold.press,
   });
   const display = createHeldThreadSource({
     threadId,
     source: createEmailThreadSource(threadId, threadQuery),
-    holding: navigationHeld,
+    hold: threadNavigationHold,
   });
   const source = display.source;
   const threadData = source.thread;

@@ -1,20 +1,19 @@
 import type { ListDetailNavigationTarget } from '@app/components/list';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { makeEventListener } from '@solid-primitives/event-listener';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 
-/** Returns whether a navigation key that stepped the list is still held down. */
 export function useListNavigationHotkeys(options: {
   scopeId: string;
   enabled: Accessor<boolean>;
   navigation: ListDetailNavigationTarget;
   arrowKeys?: boolean;
-}): { held: Accessor<boolean> } {
+  /** Called with the keydown that stepped the list, before navigating. */
+  onKeyStep?: (event: KeyboardEvent) => void;
+}) {
   const group = createHotkeyGroup();
-  const [heldKey, setHeldKey] = createSignal<string>();
   const step = (move: () => void, event?: KeyboardEvent) => {
-    if (event?.type === 'keydown') setHeldKey(event.key.toLowerCase());
+    if (event?.type === 'keydown') options.onKeyStep?.(event);
     move();
     return true;
   };
@@ -39,18 +38,5 @@ export function useListNavigationHotkeys(options: {
     hide: true,
   }).withGroup(group);
 
-  // Capture phase: handlers that stop propagation must not strand the hold.
-  makeEventListener(
-    window,
-    'keyup',
-    (event) => {
-      if (event.key.toLowerCase() === heldKey()) setHeldKey(undefined);
-    },
-    true
-  );
-  makeEventListener(window, 'blur', () => setHeldKey(undefined));
-
   onCleanup(() => group.dispose());
-
-  return { held: () => heldKey() !== undefined };
 }
