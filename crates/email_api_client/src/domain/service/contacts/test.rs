@@ -1,11 +1,13 @@
 use std::sync::{Arc, Mutex};
 
 use models_email::service::contact::{Contact, ContactList};
+use tracing::Level;
 use uuid::Uuid;
 
 use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, TokenFreshness};
+use crate::log_capture::EventLevels;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ContactCall {
@@ -129,4 +131,28 @@ async fn contact_reads_use_correct_operation_kinds_and_forward_sync_tokens() {
         },
     )
     .await;
+}
+
+#[tokio::test]
+async fn contact_listing_failures_log_at_warn() {
+    let calls = call_log();
+    let service = EmailApiClientServiceImpl::new(
+        ContactsClient::default(),
+        FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
+        FakeRateLimiter::new(calls, Ok(())),
+    );
+    let levels = EventLevels::default();
+    let _guard = tracing::subscriber::set_default(levels.clone());
+
+    let link_id = Uuid::new_v4();
+    assert!(service.list_contacts(link_id, Some("token")).await.is_err());
+    assert!(
+        service
+            .list_other_contacts(link_id, Some("token"))
+            .await
+            .is_err()
+    );
+
+    assert_eq!(levels.count(Level::ERROR), 0);
+    assert_eq!(levels.count(Level::WARN), 2);
 }

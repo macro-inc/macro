@@ -24,7 +24,10 @@ where
     }
 
     /// Lists primary contacts, optionally continuing an incremental synchronization.
-    #[tracing::instrument(skip(self, sync_token), err)]
+    ///
+    /// Failures log at WARN: an expired sync token ([`EmailApiError::OutdatedCursor`])
+    /// or a grant without the contacts scopes is routine, and callers recover or skip.
+    #[tracing::instrument(skip(self, sync_token), err(level = "warn"))]
     pub async fn list_contacts(
         &self,
         link_id: Uuid,
@@ -40,7 +43,9 @@ where
     }
 
     /// Lists automatically collected contacts, optionally continuing a synchronization.
-    #[tracing::instrument(skip(self, sync_token), err)]
+    ///
+    /// Failures log at WARN for the same reasons as [`Self::list_contacts`].
+    #[tracing::instrument(skip(self, sync_token), err(level = "warn"))]
     pub async fn list_other_contacts(
         &self,
         link_id: Uuid,

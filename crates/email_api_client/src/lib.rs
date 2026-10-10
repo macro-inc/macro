@@ -11,3 +11,6 @@ pub mod outbound;
 
 #[cfg(feature = "outbound-gmail")]
 pub use outbound::gmail::GmailApiClientRepository;
+
+#[cfg(test)]
+mod log_capture;
