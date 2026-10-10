@@ -5,7 +5,9 @@ use entity_access::domain::models::AccessLevel;
 use model_file_type::FileType;
 
 /// Only owners may share session references, and automatic sharing grants view
-/// access. Sending a reference never grants control of an agent session.
+/// access. Sending a reference never grants control of an agent session, and a
+/// direct agent conversation's sessions, private to their owner, are never
+/// shared this way: the share adapter skips them before asking.
 ///
 /// A calendar event is shareable only by someone holding it on their own
 /// calendar: its owner or a linked account. A member who sees the event only
