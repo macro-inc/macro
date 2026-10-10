@@ -6,6 +6,7 @@ use ::macro_auth::{
     middleware::decode_jwt::{self, JwtToken, JwtValidationArgs},
 };
 use rootcause::Report;
+use tracing::Level;
 
 use crate::domain::{
     models::{MacroAuthorizationError, ValidatedIdentity},
@@ -32,7 +33,7 @@ impl MacroAuthJwtValidator {
 }
 
 impl JwtValidator for MacroAuthJwtValidator {
-    #[tracing::instrument(err, skip(self, jwt))]
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, jwt))]
     fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         decode_jwt::handler(&self.jwt_validation_args, jwt)
             .map(identity_from_token)

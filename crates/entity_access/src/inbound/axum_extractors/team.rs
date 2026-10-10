@@ -29,6 +29,7 @@ use macro_authorization::{
     MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Level;
 
 enum TeamAccessOutcome<T: RequiredPermission> {
     Qualifying(EntityAccessReceipt<T>),
@@ -201,7 +202,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(state, parts))]
+    #[tracing::instrument(err(level = Level::INFO), skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
         let authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal> = parts
@@ -243,7 +244,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(state, parts))]
+    #[tracing::instrument(err(level = Level::INFO), skip(state, parts))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
         let authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal> = parts

@@ -5,6 +5,7 @@ use axum::http::{HeaderMap, HeaderName, Request};
 use axum::response::Response;
 use axum::routing::get;
 use serde::Deserialize;
+use tracing::Level;
 use utoipa::{self, ToSchema};
 
 use crate::http_safety::{
@@ -25,7 +26,7 @@ pub struct ProxyParams {
   path="/proxy",
   params(("url" = String, Query, description = "The url to proxy from")),
 )]
-#[tracing::instrument(err(Debug), skip(http_client, request))]
+#[tracing::instrument(err(Debug, level = Level::WARN), skip(http_client, request))]
 pub async fn proxy_request_handler(
     Query(params): Query<ProxyParams>,
     State(http_client): State<SsrfSafeHttpClient>,

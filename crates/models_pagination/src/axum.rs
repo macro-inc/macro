@@ -7,6 +7,7 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
+use tracing::Level;
 
 /// Extension trait adding `into_query` to `Option<CursorWithValAndFilter<...>>`
 /// for convenient conversion from an optional extracted cursor to a pagination query.
@@ -109,7 +110,7 @@ where
 {
     type Rejection = CursorExtractErr;
 
-    #[tracing::instrument(err, skip(parts, state))]
+    #[tracing::instrument(err(level = Level::WARN), skip(parts, state))]
     async fn from_request_parts(
         parts: &mut Parts,
         state: &S,
@@ -154,7 +155,7 @@ where
 {
     type Rejection = CursorExtractErr;
 
-    #[tracing::instrument(err, skip(parts, state))]
+    #[tracing::instrument(err(level = Level::WARN), skip(parts, state))]
     async fn from_request_parts(
         parts: &mut Parts,
         state: &S,
