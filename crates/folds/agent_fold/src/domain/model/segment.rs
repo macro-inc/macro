@@ -495,12 +495,20 @@ fn macro_card(
             CardAction::Created,
             field(Some(input), "documentName"),
         )),
-        "EditDocument" => Some(document(
-            field(Some(input), "documentId")?,
-            Some("md"),
-            CardAction::Edited,
-            None,
-        )),
+        // EditDocument's arguments keep their Rust names. An edit that asked
+        // for clarification instead changed nothing.
+        "EditDocument" => output
+            .and_then(|output| output.get("clarification"))
+            .is_none_or(serde_json::Value::is_null)
+            .then(|| {
+                Some(document(
+                    field(Some(input), "document_id")?,
+                    Some("md"),
+                    CardAction::Edited,
+                    None,
+                ))
+            })
+            .flatten(),
         "EditSpreadsheet" => Some(document(
             field(Some(input), "documentId")?,
             Some("spreadsheet"),

@@ -359,7 +359,7 @@ fn edits_name_the_document_they_changed() {
         macro_tool(
             "a",
             "EditDocument",
-            serde_json::json!({"documentId": "doc-1", "instructions": "tighten it"}),
+            serde_json::json!({"document_id": "doc-1", "instructions": "tighten it"}),
             ToolStatus::Completed,
         ),
         macro_tool(
@@ -393,6 +393,20 @@ fn edits_name_the_document_they_changed() {
             }),
         ]
     );
+}
+
+#[test]
+fn an_edit_that_asked_for_clarification_changed_nothing() {
+    let parts = [macro_result(
+        "a",
+        "EditDocument",
+        serde_json::json!({"document_id": "doc-1", "instructions": "tighten it"}),
+        serde_json::json!({
+            "summary": "Paused for clarification; no edits applied.",
+            "clarification": "Which section?"
+        }),
+    )];
+    assert_eq!(segments(&parts, true)[0].rows[0].card, None);
 }
 
 #[test]
