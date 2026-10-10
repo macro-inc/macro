@@ -1,0 +1,25 @@
+{
+  "name": "@macro-inc/linkedin-crm-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension to add LinkedIn contacts to Macro CRM",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/macro-inc/macro.git",
+    "directory": "packages/linkedin-crm-extension"
+  },
+  "scripts": {
+    "icons": "node scripts/create-icons.js",
+    "dev": "vite build --watch --mode development",
+    "build": "vite build",
+    "check": "tsc --noEmit",
+    "lint": "biome check",
+    "format": "biome format --write"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@types/chrome": "^0.0.287",
+    "typescript": "^5.9.2",
+    "vite": "^6.1.0"
+  }
+}

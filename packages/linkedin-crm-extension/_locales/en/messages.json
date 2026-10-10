@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "Macro CRM for LinkedIn",
+    "description": "Extension name"
+  },
+  "extensionDescription": {
+    "message": "Add LinkedIn contacts to your Macro CRM with one click",
+    "description": "Extension description"
+  }
+}

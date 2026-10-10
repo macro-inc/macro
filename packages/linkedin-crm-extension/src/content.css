@@ -1,0 +1,81 @@
+.macro-crm-button-container {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.macro-crm-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.macro-crm-button:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+}
+
+.macro-crm-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+.macro-crm-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.macro-crm-button svg {
+  flex-shrink: 0;
+}
+
+.macro-crm-button--loading {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+}
+
+.macro-crm-button--loading svg {
+  animation: macro-spin 1s linear infinite;
+}
+
+.macro-crm-button--success {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.macro-crm-button--success svg {
+  stroke: white;
+}
+
+.macro-crm-button--error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+@keyframes macro-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

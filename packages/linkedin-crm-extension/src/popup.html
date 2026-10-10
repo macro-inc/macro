@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Macro CRM</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 320px;
+      min-height: 200px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      padding: 20px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .status-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      margin-bottom: 16px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status-icon.connected {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+
+    .status-icon.disconnected {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .status-icon.loading {
+      background: #e0e7ff;
+      color: #6366f1;
+    }
+
+    .status-text {
+      flex: 1;
+    }
+
+    .status-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #1e293b;
+    }
+
+    .status-detail {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .profile-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      margin-bottom: 16px;
+    }
+
+    .profile-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .profile-detail {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
+
+    .no-profile {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 13px;
+      padding: 20px 0;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #6366f1;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #f8fafc;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn + .btn {
+      margin-top: 8px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">M</div>
+    <div>
+      <div class="title">Macro CRM</div>
+      <div class="subtitle">LinkedIn Integration</div>
+    </div>
+  </div>
+
+  <div id="loading" class="status-card">
+    <div class="status-row">
+      <div class="status-icon loading">
+        <span class="loading-spinner"></span>
+      </div>
+      <div class="status-text">
+        <div class="status-label">Checking connection...</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="connected" class="status-card hidden">
+    <div class="status-row">
+      <div class="status-icon connected">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20,6 9,17 4,12"/>
+        </svg>
+      </div>
+      <div class="status-text">
+        <div class="status-label">Connected to Macro</div>
+        <div class="status-detail">Ready to add contacts</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="disconnected" class="status-card hidden">
+    <div class="status-row">
+      <div class="status-icon disconnected">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </div>
+      <div class="status-text">
+        <div class="status-label">Not Connected</div>
+        <div class="status-detail">Set up your API token to get started</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="profile-section" class="hidden">
+    <div id="profile-card" class="profile-card hidden">
+      <div class="profile-name" id="profile-name"></div>
+      <div class="profile-detail" id="profile-title"></div>
+      <div class="profile-detail" id="profile-company"></div>
+      <div class="profile-detail" id="profile-location"></div>
+    </div>
+
+    <div id="no-profile" class="profile-card hidden">
+      <div class="no-profile">
+        Navigate to a LinkedIn profile<br>to add them to your CRM
+      </div>
+    </div>
+
+    <button id="add-btn" class="btn btn-primary hidden">
+      Add to Macro CRM
+    </button>
+  </div>
+
+  <button id="settings-btn" class="btn btn-secondary">
+    Settings
+  </button>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
