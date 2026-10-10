@@ -1,4 +1,5 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { ScheduledBadge } from '@entity';
 import { Tooltip } from '@ui';
 import { createMemo, type JSX, Show } from 'solid-js';
 import { getSenderDisplayName } from '../core/email-user';
@@ -48,16 +49,25 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="min-w-0 text-base text-ink-extra-muted overflow-hidden text-ellipsis whitespace-nowrap @max-[480px]/message:col-span-full @max-[480px]/message:row-start-2 @max-[480px]/message:whitespace-normal @max-[480px]/message:line-clamp-2 mobile:line-clamp-1">
         {snippet()}
       </div>
-      <Show when={props.message.internal_date_ts}>
-        <span class="flex items-center min-h-6 justify-self-end @max-[480px]/message:col-start-2 @max-[480px]/message:row-start-1">
-          <Tooltip
-            as="span"
-            label={formatFullDate(props.message.internal_date_ts!)}
-          >
-            <span class="text-sm text-ink-extra-muted/60 tabular-nums">
-              {formatShortDate(props.message.internal_date_ts!)}
+      <Show
+        when={props.message.scheduled_send_time}
+        fallback={
+          <Show when={props.message.internal_date_ts}>
+            <span class="flex items-center min-h-6 justify-self-end @max-[480px]/message:col-start-2 @max-[480px]/message:row-start-1">
+              <Tooltip
+                as="span"
+                label={formatFullDate(props.message.internal_date_ts!)}
+              >
+                <span class="text-sm text-ink-extra-muted/60 tabular-nums">
+                  {formatShortDate(props.message.internal_date_ts!)}
+                </span>
+              </Tooltip>
             </span>
-          </Tooltip>
+          </Show>
+        }
+      >
+        <span class="flex items-center min-h-6 justify-self-end @max-[480px]/message:col-start-2 @max-[480px]/message:row-start-1">
+          <ScheduledBadge sendTime={props.message.scheduled_send_time!} />
         </span>
       </Show>
     </div>
