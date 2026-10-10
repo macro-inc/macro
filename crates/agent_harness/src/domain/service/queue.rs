@@ -633,7 +633,29 @@ where
             HarnessCommand::SessionStopped { reason } => {
                 let in_flight = self.busy.take(session_id);
                 // No `TurnEnded` follows a death, so this is the turn's last
-                // chance to stop its pending reply spinning.
+                // chance to stop its pending reply spinning, and to tell the
+                // journal it failed before recovery takes it for interrupted.
+                if let (Some(store), Some(turn)) = (&self.conversation_turns, &in_flight) {
+                    let reply = self.reported_segments(session_id, turn.turn);
+                    if !reply.is_empty()
+                        && turn.announce.as_ref().is_some_and(|origin| {
+                            origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+                        })
+                        && let Err(error) = store.save_reply(turn.action_id, &reply).await
+                    {
+                        tracing::error!(?error, %session_id, "could not save a stopped conversation reply");
+                    }
+                    if let Err(error) = store
+                        .finish(
+                            turn.action_id,
+                            crate::domain::conversation_turns::ConversationTurnState::Failed,
+                            ReplyOutcome::Failed,
+                        )
+                        .await
+                    {
+                        tracing::error!(?error, %session_id, "could not record a conversation turn its session stopped under");
+                    }
+                }
                 self.resolve_reply(session_id, in_flight.as_ref(), ReplyOutcome::Failed)
                     .await;
                 self.end_presentation(session_id, in_flight.as_ref()).await;

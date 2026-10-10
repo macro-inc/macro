@@ -855,3 +855,36 @@ async fn a_turn_end_the_journal_cannot_record_still_frees_the_session(pool: sqlx
         "the reply still shows how the turn ended"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_turn_whose_runtime_dies_fails_once_and_frees_the_conversation(pool: sqlx::PgPool) {
+    use crate::domain::conversation_turns::{ConversationTurnState, ConversationTurnStore};
+    let journal = pg_journal(&pool);
+    let (service, announcer, _signals, container, command) =
+        journaled_conversation(pool, journal.clone()).await;
+    let source = mention_origin(&command).message_id;
+    says(&container.agent(), "Working on it.");
+    container.disconnects();
+    let failed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let record = journal.get(source, command.bot_id).await.unwrap().unwrap();
+            if record.reply_finalized {
+                break record;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("the stopped turn's failure is shown and recorded at once");
+    assert_eq!(failed.state, ConversationTurnState::Failed);
+    service.recover_conversations().await.unwrap();
+    let notices: Vec<_> = announcer
+        .presented()
+        .into_iter()
+        .filter(|reply| reply.notify)
+        .collect();
+    assert!(
+        matches!(notices.as_slice(), [notice] if notice.outcome == Some(ReplyOutcome::Failed)),
+        "the failure is told once, not again by recovery: {notices:#?}"
+    );
+}
