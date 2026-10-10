@@ -5,6 +5,7 @@ mod test;
 
 use model_user::UserContext;
 use rootcause::Report;
+use tracing::Level;
 
 use super::{
     models::{MacroAuthorizationError, ResolvedApiKeyUser},
@@ -28,7 +29,7 @@ impl<R> UserApiKeyAuthorizer for UserApiKeyAuthorizerService<R>
 where
     R: UserApiKeyAuthorizationRepo,
 {
-    #[tracing::instrument(err, skip_all)]
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all)]
     async fn authorize_user_api_key(
         &self,
         api_key: &str,

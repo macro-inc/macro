@@ -6,6 +6,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use constant_time_eq::constant_time_eq;
 use model_user::UserContext;
 use rootcause::Report;
+use tracing::Level;
 
 use super::{
     models::{
@@ -155,7 +156,7 @@ where
     }
 
     #[tracing::instrument(
-        err,
+        err(level = Level::DEBUG),
         skip_all,
         fields(
             bot_id = tracing::field::Empty,
@@ -194,7 +195,7 @@ where
     }
 
     #[tracing::instrument(
-        err,
+        err(level = Level::DEBUG),
         skip_all,
         fields(user_id = tracing::field::Empty)
     )]
@@ -212,7 +213,7 @@ where
     }
 
     #[tracing::instrument(
-        err,
+        err(level = Level::DEBUG),
         skip_all,
         fields(
             harness_id = tracing::field::Empty,

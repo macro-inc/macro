@@ -9,7 +9,10 @@ use crate::{
     MacroAuthorizationService,
 };
 
-use super::{MacroAuthorizationRejection, MacroAuthorizationState, rejection, status_rejection};
+use super::{
+    MacroAuthorizationRejection, MacroAuthorizationState, log_authorization_failure, rejection,
+    status_rejection,
+};
 
 /// Header carrying a bot authentication token.
 pub const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
@@ -129,6 +132,6 @@ fn bot_authorization_rejection(
             status_rejection(StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
         }
     };
-    tracing::error!(error=?error, "bot authorization failed");
+    log_authorization_failure(&error, "bot authorization failed");
     rejection
 }
