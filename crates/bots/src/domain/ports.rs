@@ -29,6 +29,8 @@ pub trait BotRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Agent, Self::Err>> + Send;
 
     /// Replace an owned agent and its selected channel memberships atomically.
+    /// The direct agent conversations it takes part in are not among them and
+    /// are left as they are.
     fn update_agent(
         &self,
         bot_id: BotId,
@@ -47,6 +49,7 @@ pub trait BotRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<Agent>, Self::Err>> + Send;
 
     /// Check whether the caller is an active member of every supplied channel.
+    /// A direct agent conversation never counts: it is not a channel to select.
     fn user_has_channels(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -95,7 +98,8 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
 
-    /// Get an active persisted agent by bot id.
+    /// Get an active persisted agent by bot id. Its channels are the ones it
+    /// was put in, without the direct agent conversations it takes part in.
     fn get_agent(
         &self,
         bot_id: BotId,
@@ -159,14 +163,16 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Remove bot reach from a channel.
+    /// Remove bot reach from a channel. A direct agent conversation keeps its
+    /// persona, so removing it from one finds nothing to remove.
     fn remove_bot_from_channel(
         &self,
         channel_id: Uuid,
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// List active channels containing a bot.
+    /// List active channels containing a bot, without the direct agent
+    /// conversations it takes part in.
     fn list_bot_channels(
         &self,
         bot_id: BotId,

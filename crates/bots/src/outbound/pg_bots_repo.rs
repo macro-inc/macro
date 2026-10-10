@@ -529,6 +529,8 @@ impl BotRepo for PgBotsRepo {
         .context("failed to clear the agent's previous MCP servers")?;
         insert_mcp_servers(&mut tx, bot_id, req.mcp.servers()).await?;
 
+        // A direct conversation the persona is in belongs to the person it
+        // is with, not to the persona's channel selection.
         let bot_principal = principal_id(bot_id);
         sqlx::query!(
             r#"
@@ -536,6 +538,12 @@ impl BotRepo for PgBotsRepo {
             SET left_at = now()
             WHERE user_id = $1
               AND left_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = comms_channel_participants.channel_id
+                    AND ca.kind = 'direct'
+              )
             "#,
             &bot_principal,
         )
@@ -613,6 +621,12 @@ impl BotRepo for PgBotsRepo {
                     FROM comms_channel_participants p
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM comms_channel_agents ca
+                          WHERE ca.channel_id = p.channel_id
+                            AND ca.kind = 'direct'
+                      )
                     ORDER BY p.channel_id
                 ) AS "channel_ids!",
                 a.mcp_scope,
@@ -674,6 +688,12 @@ impl BotRepo for PgBotsRepo {
             WHERE user_id = $1
               AND channel_id = ANY($2::uuid[])
               AND left_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = comms_channel_participants.channel_id
+                    AND ca.kind = 'direct'
+              )
             "#,
             caller.as_ref(),
             channel_ids,
@@ -1036,6 +1056,12 @@ impl BotRepo for PgBotsRepo {
                     FROM comms_channel_participants p
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM comms_channel_agents ca
+                          WHERE ca.channel_id = p.channel_id
+                            AND ca.kind = 'direct'
+                      )
                     ORDER BY p.channel_id
                 ) AS "channel_ids!",
                 a.mcp_scope,
@@ -1330,6 +1356,12 @@ impl BotRepo for PgBotsRepo {
             WHERE channel_id = $1
               AND user_id = $2
               AND left_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = $1
+                    AND ca.kind = 'direct'
+              )
             "#,
             channel_id,
             principal_id(bot_id),
@@ -1353,6 +1385,12 @@ impl BotRepo for PgBotsRepo {
             JOIN comms_channels c ON c.id = cp.channel_id
             WHERE cp.user_id = $1
               AND cp.left_at IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = cp.channel_id
+                    AND ca.kind = 'direct'
+              )
             ORDER BY cp.joined_at ASC, c.id ASC
             "#,
             principal_id(bot_id),
