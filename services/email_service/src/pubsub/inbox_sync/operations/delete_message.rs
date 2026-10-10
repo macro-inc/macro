@@ -4,12 +4,12 @@ use crate::pubsub::util::{
     publish_email_event,
 };
 use email::domain::events::{EmailMacroEvent, MessageDeletedMetadata};
+use email_db_client::messages::delete::MessageDeletion;
 use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::link;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::result;
-use uuid::Uuid;
 
 // delete user's message from the db
 #[tracing::instrument(skip(ctx))]
@@ -106,11 +106,19 @@ pub async fn delete_message(
                     source: e.context("Failed to delete message with transaction".to_string()),
                 })
             })?;
-        Ok::<Option<Uuid>, ProcessingError>(result)
+        Ok::<MessageDeletion, ProcessingError>(result)
     }
     .await;
 
-    complete_transaction_with_processing_error(tx, result).await?;
+    let deletion = complete_transaction_with_processing_error(tx, result).await?;
+    if deletion == MessageDeletion::AlreadyDeleted {
+        tracing::debug!(
+            message_id = %message.db_id,
+            link_id = %link.id,
+            "Message already deleted by a concurrent operation"
+        );
+        return Ok(());
+    }
 
     publish_email_event(
         &ctx.macro_event_broker,

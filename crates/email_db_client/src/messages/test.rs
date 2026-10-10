@@ -1,3 +1,4 @@
+use crate::messages::delete::MessageDeletion;
 use crate::messages::get::{draft_exists_with_id, filter_existing_provider_message_ids};
 use crate::messages::scheduled::get::get_scheduled_db_messages_by_link_id;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -358,13 +359,45 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
     .expect("fixture message present");
 
     let mut tx = pool.begin().await?;
-    let deleted_thread = crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
+    let deletion = crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
     tx.commit().await?;
 
     // The thread survives (a second message remains) and the flag flips off
     // because its attachments cascaded away with the message.
-    assert!(deleted_thread.is_none());
+    assert_eq!(
+        deletion,
+        MessageDeletion::Deleted {
+            deleted_thread: None
+        }
+    );
     assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("sync_thread_calendar_flag"))
+)]
+async fn delete_message_reports_already_deleted_message(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let ics_message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b501")?;
+    let fusionauth_user_id = "00000000-0000-0000-0000-000000000b01";
+
+    let message = crate::messages::get_simple_messages::get_simple_message(
+        &pool,
+        &ics_message_id,
+        fusionauth_user_id,
+    )
+    .await?
+    .expect("fixture message present");
+
+    let mut conn = pool.acquire().await?;
+    let first = crate::messages::delete::delete_message_with_tx(&mut conn, &message).await?;
+    let second = crate::messages::delete::delete_message_with_tx(&mut conn, &message).await?;
+
+    assert!(matches!(first, MessageDeletion::Deleted { .. }));
+    assert_eq!(second, MessageDeletion::AlreadyDeleted);
     Ok(())
 }
 
