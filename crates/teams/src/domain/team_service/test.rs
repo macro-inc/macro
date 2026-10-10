@@ -7209,6 +7209,8 @@ async fn create_team_without_subscription_skips_convert_and_defaults_auto_join()
 
     assert_eq!(*team.id(), created_team_id);
     assert!(convert_calls.lock().unwrap().is_empty());
+    // The returned team reports the domain auto-join was just enabled for.
+    assert_eq!(team.auto_join_domain(), Some("example.com"));
     // example.com is not a generic email domain, so auto-join defaults on.
     assert_eq!(
         *auto_join_toggle_calls.lock().unwrap(),

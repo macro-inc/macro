@@ -1157,7 +1157,7 @@ where
                 .await
                 .map_err(|e| CreateTeamError::StorageLayerError(e.into()))?,
         );
-        let team = self
+        let mut team = self
             .team_repository
             .create_team(user_id, team_name, &team_slug, subscription_id, owner_plan)
             .await?;
@@ -1202,6 +1202,9 @@ where
                 .ok()
                 .flatten()
         };
+        // The repository returned the team before the toggle, so report the
+        // domain it now joins people with instead of a stale `None`.
+        team.auto_join_domain = auto_join_domain.clone();
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamCreated {
             team_id: *team.id(),
