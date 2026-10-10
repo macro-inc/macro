@@ -330,6 +330,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           variables: args.variables,
           entityResolvers: args.entityResolvers,
           since: args.since,
+          // Older native binaries ignore this argument and replace lists.
+          splices: args.splices,
         });
       } catch (error) {
         if (!isMissingCommand(error, WATCH_COMMAND)) throw error;

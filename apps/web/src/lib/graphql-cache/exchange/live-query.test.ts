@@ -351,4 +351,72 @@ describe('live query field propagation', () => {
       dispose();
     });
   });
+
+  it('splices list rows in place, keeping surviving store rows and their observers quiet', () => {
+    createRoot((dispose) => {
+      type Item = { __typename: string; id: string; label: string };
+      const item = (id: string, label = id): Item => ({
+        __typename: 'Favorite',
+        id,
+        label,
+      });
+      const view = new LiveQuery(
+        { user: { favorites: [item('a'), item('b'), item('c')] } },
+        queryShape(gql`
+          query {
+            user {
+              favorites {
+                __typename
+                id
+                label
+              }
+            }
+          }
+        `)
+      );
+      const live = view.data as { user: { favorites: Item[] } };
+      const [a, b, c] = live.user.favorites;
+      let listReads = 0;
+      createComputed(() => {
+        for (const favorite of live.user.favorites) void favorite.id;
+        listReads++;
+      });
+      const rowReads = new Map<string, number>();
+      for (const favorite of [a, b, c])
+        createComputed(() => {
+          void favorite.label;
+          rowReads.set(favorite.id, (rowReads.get(favorite.id) ?? 0) + 1);
+        });
+      view.replace(
+        applyQueryPatches(view.snapshot, [
+          {
+            path: ['user', 'favorites'],
+            splice: [
+              { remove: 1 },
+              { move: 1, to: 0 },
+              { insert: 1, value: item('d') },
+            ],
+          },
+        ])
+      );
+      expect(live.user.favorites.map(({ id }) => id)).toEqual(['c', 'd', 'a']);
+      // Moved and untouched rows are the same store objects.
+      expect(live.user.favorites[0]).toBe(c);
+      expect(live.user.favorites[2]).toBe(a);
+      expect(listReads).toBe(2);
+      expect(Object.fromEntries(rowReads)).toEqual({ a: 1, b: 1, c: 1 });
+      expect(view.data).toEqual(view.snapshot);
+      // A field patch after a splice uses the edited indices.
+      view.replace(
+        applyQueryPatches(view.snapshot, [
+          { path: ['user', 'favorites'], splice: [{ remove: 1 }] },
+          { path: ['user', 'favorites', 1, 'label'], value: 'renamed' },
+        ])
+      );
+      expect(a.label).toBe('renamed');
+      expect(Object.fromEntries(rowReads)).toEqual({ a: 2, b: 1, c: 1 });
+      expect(view.data).toEqual(view.snapshot);
+      dispose();
+    });
+  });
 });

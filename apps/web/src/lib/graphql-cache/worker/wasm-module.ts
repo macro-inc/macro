@@ -93,7 +93,8 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     entityResolvers: readonly EntityResolverWire[] | undefined,
-    since: string | undefined
+    since: string | undefined,
+    splices?: boolean
   ): Promise<import('../protocol').QueryUpdate>;
   readRecordsByKeys(
     document: string,

@@ -189,3 +189,64 @@ fn unchanged_records_still_commit_projection_only_changes() {
         assert_page(&mut engine, &data).await;
     });
 }
+
+#[test]
+fn derived_favorites_scan_stamped_children_from_storage_after_a_restart() {
+    const FAVORITES: &str = "query Favorites { user { id favorites(filter: null) { __typename id entityType sortOrder createdAt } } }";
+    const PUSH: &str = "mutation Push { setFavorite { favorite { __typename id entityType sortOrder createdAt } } }";
+    let favorite = |id: &str, sort: f64| {
+        json!({"__typename": "GraphqlFavorite", "id": id, "entityType": "DOCUMENT",
+            "sortOrder": sort, "createdAt": "2026-10-01T00:00:00Z"})
+    };
+    block_on(async {
+        let storage = TursoStorage::open_in_memory("derived-favorites").unwrap();
+        let mut engine = Engine::new(storage);
+        let variables = serde_json::Map::new();
+        engine
+            .write_query(
+                None,
+                FAVORITES,
+                None,
+                &variables,
+                &json!({"user": {"id": "viewer", "favorites": [favorite("a", 1.0)]}}),
+                None,
+            )
+            .await
+            .unwrap();
+        engine
+            .write_query(
+                None,
+                PUSH,
+                None,
+                &variables,
+                &json!({"setFavorite": {"favorite": favorite("b", 0.5)}}),
+                None,
+            )
+            .await
+            .unwrap();
+        // A new engine over the same database reloads stamps by type scan.
+        let mut engine = Engine::new(engine.into_storage());
+        let scanned = engine
+            .storage()
+            .scan_records_of_type("GraphqlFavorite")
+            .await
+            .unwrap();
+        let mut keys: Vec<_> = scanned.iter().map(|(key, _)| key.to_string()).collect();
+        keys.sort();
+        assert_eq!(keys, ["GraphqlFavorite:a", "GraphqlFavorite:b"]);
+        let ReadResult::Hit { data } = engine
+            .read_query(None, FAVORITES, None, &variables)
+            .await
+            .unwrap()
+        else {
+            panic!("expected cached favorites");
+        };
+        let ids: Vec<_> = data["user"]["favorites"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["b", "a"]);
+    });
+}

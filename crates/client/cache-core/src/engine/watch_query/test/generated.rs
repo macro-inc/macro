@@ -1,9 +1,11 @@
 //! Generated edit histories. Applying each published update to the previous
 //! result, under the JS applier's rules, must equal a fresh full read. Leaf
 //! edits take the binding path; links, tombstones, reorders, type changes and
-//! barriers take the re-read diff.
+//! barriers take the re-read diff. Two derived favorites lists change through
+//! evidence, pushed records, tombstones and optimistic layers.
 
 use super::*;
+use crate::queue::{MutationClaimRequest, MutationClaimToken};
 use proptest::prelude::*;
 
 const QUERY: &str = r#"
@@ -19,9 +21,20 @@ query Page($input: SoupInput!) {
         ... on GraphqlStringPropertyValue { text: value }
       } }
     }
-  } nextCursor } }
+  } nextCursor }
+  documents: favorites(filter: {entityTypes: [DOCUMENT]}) { __typename id entityType sortOrder createdAt }
+  all: favorites(filter: null) { __typename id sortOrder createdAt } }
 }"#;
+const FAVORITES: &str = r#"
+query Favorites {
+  user { id
+    documents: favorites(filter: {entityTypes: [DOCUMENT]}) { __typename id entityType sortOrder createdAt }
+    all: favorites(filter: null) { __typename id entityType sortOrder createdAt }
+  }
+}"#;
+const SET_FAVORITE: &str = "mutation SetFavorite { setFavorite { favorite { __typename id entityType sortOrder createdAt } } }";
 const ROWS: usize = 6;
+const FAVORITE_IDS: usize = 5;
 
 #[derive(Clone, Debug)]
 enum PropertyValue {
@@ -58,6 +71,34 @@ enum Edit {
         row: usize,
     },
     Unrelated(String),
+    /// Server evidence for both favorites lists: (id, sort order, is a chat).
+    Favorites(Vec<(usize, u8, bool)>),
+    /// A server write of one favorite outside the lists.
+    Favorite {
+        id: usize,
+        sort: u8,
+        chat: bool,
+    },
+    Unfavorite {
+        id: usize,
+    },
+    /// A pending optimistic favorite, or deletion when `sort` is `None`.
+    Pending {
+        id: usize,
+        sort: Option<u8>,
+    },
+    /// Settles the oldest pending write: commit (as predicted) or rollback.
+    Settle {
+        commit: bool,
+    },
+}
+
+fn favorite_value(id: usize, sort: u8, chat: bool) -> Json {
+    json!({
+        "__typename": "GraphqlFavorite", "id": format!("fav-{id}"),
+        "entityType": if chat { "CHAT" } else { "DOCUMENT" },
+        "sortOrder": sort, "createdAt": "2026-10-01T00:00:00Z"
+    })
 }
 
 fn property_value() -> impl Strategy<Value = PropertyValue> {
@@ -85,6 +126,21 @@ fn edit() -> impl Strategy<Value = Edit> {
             .prop_map(|(row, slots)| Edit::Assign { row, slots }),
         1 => (0..ROWS).prop_map(|row| Edit::Invalidate { row }),
         1 => "[a-b]{0,2}".prop_map(Edit::Unrelated),
+        1 => prop::collection::btree_map(0..FAVORITE_IDS, (0u8..6, prop::bool::weighted(0.2)), 0..=FAVORITE_IDS)
+            .prop_map(|favorites| {
+                let mut favorites: Vec<_> = favorites
+                    .into_iter()
+                    .map(|(id, (sort, chat))| (id, sort, chat))
+                    .collect();
+                favorites.sort_by_key(|(id, sort, _)| (*sort, *id));
+                Edit::Favorites(favorites)
+            }),
+        2 => (0..FAVORITE_IDS, 0u8..6, prop::bool::weighted(0.2))
+            .prop_map(|(id, sort, chat)| Edit::Favorite { id, sort, chat }),
+        1 => (0..FAVORITE_IDS).prop_map(|id| Edit::Unfavorite { id }),
+        2 => (0..FAVORITE_IDS, prop::option::weighted(0.7, 0u8..6))
+            .prop_map(|(id, sort)| Edit::Pending { id, sort }),
+        1 => any::<bool>().prop_map(|commit| Edit::Settle { commit }),
     ]
 }
 
@@ -152,7 +208,96 @@ fn page(rows: &[(usize, usize, PropertyValue)]) -> Json {
             }
         })
         .collect();
-    json!({"user": {"id": "viewer", "soup": {"items": items, "nextCursor": null}}})
+    json!({"user": {
+        "id": "viewer", "soup": {"items": items, "nextCursor": null},
+        "documents": [favorite_value(0, 0, false)],
+        "all": [favorite_value(0, 0, false), favorite_value(1, 1, true)],
+    }})
+}
+
+/// Pending optimistic favorites, in queue order, with their predictions.
+#[derive(Default)]
+struct Pending {
+    predictions: std::collections::VecDeque<Json>,
+    created: u64,
+}
+
+impl Pending {
+    async fn enqueue(&mut self, engine: &mut Engine<InMemoryStorage>, id: usize, sort: Option<u8>) {
+        self.created += 1;
+        let favorite = sort.map(|sort| favorite_value(id, sort, false));
+        let data = json!({"setFavorite": {"favorite": favorite}});
+        let bindings = match sort {
+            Some(_) => vec![],
+            None => vec![identity::IdentityBinding {
+                local_key: EntityKey::entity("GraphqlFavorite", &[&format!("fav-{id}")]),
+                delete_record: true,
+                response_path: vec![],
+                reference_fields: vec![],
+                revalidation_variables: vec![],
+            }],
+        };
+        engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    client_metadata: None,
+                    identity_bindings: &bindings,
+                    uuid: &format!("00000000-0000-4000-8000-{:012}", self.created),
+                    query: SET_FAVORITE,
+                    operation_name: None,
+                    variables: &serde_json::Map::new(),
+                    data: &data,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
+            )
+            .await
+            .unwrap();
+        self.predictions.push_back(data);
+    }
+
+    async fn settle(&mut self, engine: &mut Engine<InMemoryStorage>, commit: bool) {
+        let Some(claimed) = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 0,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+        else {
+            return;
+        };
+        let data = self
+            .predictions
+            .pop_front()
+            .expect("claimed a pending write");
+        let token = MutationClaimToken {
+            owner: "runner".into(),
+            generation: claimed.lease_generation,
+        };
+        let transaction = claimed.queued.id;
+        if commit {
+            engine
+                .commit_optimistic_write(
+                    transaction,
+                    token,
+                    SET_FAVORITE,
+                    None,
+                    &serde_json::Map::new(),
+                    &data,
+                )
+                .await
+                .unwrap();
+        } else {
+            engine
+                .rollback_optimistic_write(transaction, token)
+                .await
+                .unwrap();
+        }
+    }
 }
 
 async fn put(
@@ -176,8 +321,47 @@ async fn put(
         .unwrap();
 }
 
-async fn run(engine: &mut Engine<InMemoryStorage>, edit: Edit) {
+async fn run(engine: &mut Engine<InMemoryStorage>, pending: &mut Pending, edit: Edit) {
     match edit {
+        Edit::Favorites(favorites) => {
+            let value = |&(id, sort, chat): &(usize, u8, bool)| favorite_value(id, sort, chat);
+            let documents: Vec<_> = favorites
+                .iter()
+                .filter(|(_, _, chat)| !chat)
+                .map(value)
+                .collect();
+            let all: Vec<_> = favorites.iter().map(value).collect();
+            engine
+                .write_query(
+                    None,
+                    FAVORITES,
+                    None,
+                    &serde_json::Map::new(),
+                    &json!({"user": {"id": "viewer", "documents": documents, "all": all}}),
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+        Edit::Favorite { id, sort, chat } => {
+            engine
+                .write_query(
+                    None,
+                    SET_FAVORITE,
+                    None,
+                    &serde_json::Map::new(),
+                    &json!({"setFavorite": {"favorite": favorite_value(id, sort, chat)}}),
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+        Edit::Unfavorite { id } => {
+            let key = EntityKey::entity("GraphqlFavorite", &[&format!("fav-{id}")]);
+            put(engine, key, identity::DELETED_FIELD, CacheValue::Bool(true)).await;
+        }
+        Edit::Pending { id, sort } => pending.enqueue(engine, id, sort).await,
+        Edit::Settle { commit } => pending.settle(engine, commit).await,
         Edit::Page(rows) => {
             engine
                 .write_query(None, QUERY, None, &vars(), &page(&rows), None)
@@ -232,12 +416,21 @@ struct Subscriber {
     op: OpId,
     data: Json,
     cursor: Option<CacheRevision>,
+    options: WatchOptions,
 }
 
 impl Subscriber {
     async fn check(&mut self, engine: &mut Engine<InMemoryStorage>) -> Result<(), TestCaseError> {
         let update = engine
-            .watch_query(self.op, QUERY, None, &vars(), &[], self.cursor)
+            .watch_query_with_options(
+                self.op,
+                QUERY,
+                None,
+                &vars(),
+                &[],
+                self.cursor,
+                self.options,
+            )
             .await
             .unwrap();
         let full = engine.read_query(None, QUERY, None, &vars()).await.unwrap();
@@ -262,21 +455,29 @@ proptest! {
     ) {
         block_on(async {
             let mut engine = Engine::with_capacity(InMemoryStorage::new(), capacity);
+            let mut pending = Pending::default();
             // Store every assignment, then link only the first so links can be added.
             for count in [3, 1] {
                 let initial = (0..ROWS)
                     .map(|row| (row, count, PropertyValue::Options(vec!["a".into()])))
                     .collect();
-                run(&mut engine, Edit::Page(initial)).await;
+                run(&mut engine, &mut pending, Edit::Page(initial)).await;
             }
-            // The second subscriber skips reads, so its updates span several revisions.
-            let mut subscribers = [1, 2].map(|op| Subscriber { op, data: Json::Null, cursor: None });
+            // The second subscriber skips reads, so its updates span several
+            // revisions. The third receives list replacements instead of splices.
+            let mut subscribers = [(1, true), (2, true), (3, false)].map(|(op, splices)| Subscriber {
+                op,
+                data: Json::Null,
+                cursor: None,
+                options: WatchOptions { splices },
+            });
             for subscriber in &mut subscribers {
                 subscriber.check(&mut engine).await?;
             }
             for (edit, read_second) in edits {
-                run(&mut engine, edit).await;
+                run(&mut engine, &mut pending, edit).await;
                 subscribers[0].check(&mut engine).await?;
+                subscribers[2].check(&mut engine).await?;
                 if read_second {
                     subscribers[1].check(&mut engine).await?;
                 }

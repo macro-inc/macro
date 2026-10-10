@@ -2822,7 +2822,7 @@ describe('normalizedCacheExchange', () => {
     });
 
     it.each([false, true])(
-      'rolls back rejected favorites rather than committing list patches (replay=%s)',
+      'rolls back rejected favorites rather than committing their records (replay=%s)',
       async (replay) => {
         let submitted: Operation | undefined;
         const capturingClient = {
@@ -2854,7 +2854,9 @@ describe('normalizedCacheExchange', () => {
         );
         if (!submitted) throw new Error('expected favorite submission');
         const context = optimisticContextOf(submitted)!;
-        expect(context.linkPatches).toHaveLength(1);
+        // Lists derive membership from the record; no list recipe is queued.
+        expect(context.linkPatches).toHaveLength(0);
+        expect(context.identityBindings).toHaveLength(1);
         if (replay) {
           host.seedQueued({
             uuid: context.uuid,

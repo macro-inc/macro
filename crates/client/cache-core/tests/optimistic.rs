@@ -117,6 +117,13 @@ impl Storage for ClaimFailingStorage {
         Ok(())
     }
 
+    async fn scan_records_of_type(
+        &self,
+        typename: &str,
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
+        Ok(self.inner.scan_records_of_type(typename).await.unwrap())
+    }
+
     async fn upsert_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,

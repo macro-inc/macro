@@ -21,6 +21,10 @@ pub struct DepIndex {
     by_key: HashMap<EntityKey<'static>, HashSet<OpId>>,
     viewer_fields: HashMap<OpId, ViewerFields>,
     broad_ops: BTreeSet<OpId>,
+    /// Operations reading derived lists, by child type: any record of the
+    /// type may join or leave them, including records they never read.
+    by_type: HashMap<String, HashSet<OpId>>,
+    op_types: HashMap<OpId, BTreeSet<String>>,
 }
 
 impl DepIndex {
@@ -33,6 +37,7 @@ impl DepIndex {
         // A record-only registration must discard any prior field-level proof,
         // even when its record set is unchanged.
         self.viewer_fields.remove(&op);
+        self.remove_op_types(op);
         if !self.broad_ops.contains(&op) && self.by_op.get(&op) == Some(&deps) {
             return;
         }
@@ -47,6 +52,38 @@ impl DepIndex {
     pub(crate) fn set_query_deps(&mut self, op: OpId, deps: QueryDependencies) {
         self.set_op_deps(op, deps.records);
         self.viewer_fields.insert(op, deps.viewer_fields);
+        self.set_op_types(op, deps.relation_types);
+    }
+
+    fn set_op_types(&mut self, op: OpId, types: BTreeSet<String>) {
+        self.remove_op_types(op);
+        if types.is_empty() {
+            return;
+        }
+        for typename in &types {
+            self.by_type.entry(typename.clone()).or_default().insert(op);
+        }
+        self.op_types.insert(op, types);
+    }
+
+    fn remove_op_types(&mut self, op: OpId) {
+        for typename in self.op_types.remove(&op).into_iter().flatten() {
+            if let Some(ops) = self.by_type.get_mut(&typename) {
+                ops.remove(&op);
+                if ops.is_empty() {
+                    self.by_type.remove(&typename);
+                }
+            }
+        }
+    }
+
+    fn ops_for_type(&self, key: &EntityKey<'static>) -> impl Iterator<Item = OpId> + '_ {
+        key.typename()
+            .filter(|_| !self.by_type.is_empty())
+            .and_then(|typename| self.by_type.get(typename))
+            .into_iter()
+            .flatten()
+            .copied()
     }
 
     /// Registers an operation conservatively against every visible change.
@@ -60,6 +97,7 @@ impl DepIndex {
     pub fn remove_op(&mut self, op: OpId) {
         self.broad_ops.remove(&op);
         self.viewer_fields.remove(&op);
+        self.remove_op_types(op);
         if let Some(old) = self.by_op.remove(&op) {
             for key in old {
                 if let Some(set) = self.by_key.get_mut(&key) {
@@ -84,6 +122,7 @@ impl DepIndex {
             if let Some(ops) = self.by_key.get(key) {
                 out.extend(ops.iter().copied());
             }
+            out.extend(self.ops_for_type(key));
         }
         if saw_key {
             out.extend(self.broad_ops.iter().copied());
@@ -114,6 +153,7 @@ impl DepIndex {
                     out.insert(*op);
                 }
             }
+            out.extend(self.ops_for_type(key));
         }
         if !keys.is_empty() {
             out.extend(&self.broad_ops);

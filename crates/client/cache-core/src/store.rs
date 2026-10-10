@@ -85,6 +85,13 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// Every stored record of one type, in any order. The engine calls this
+    /// once per engine for each child type of a derived list.
+    fn scan_records_of_type(
+        &self,
+        typename: &str,
+    ) -> impl Future<Output = Result<Vec<(EntityKey<'static>, Record)>, Self::Error>> + MaybeSend;
+
     /// Loads one compact bucket for text search. Must use the profile/bucket
     /// index, never unrelated buckets or normalized record payloads.
     fn load_search_documents(
@@ -299,6 +306,7 @@ pub struct InMemoryStorage {
     search_catalog_load_count: Arc<AtomicUsize>,
     search_catalog_rows_loaded: Arc<AtomicUsize>,
     mutation_queue_load_count: Arc<AtomicUsize>,
+    type_scan_count: Arc<AtomicUsize>,
     calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
     calendar_coverage: Vec<CalendarSpan>,
     calendar_sync: CalendarSyncState,
@@ -392,6 +400,11 @@ impl InMemoryStorage {
         self.record_get_count.load(Ordering::Relaxed)
     }
 
+    /// Number of whole-type record scans (test diagnostics).
+    pub fn type_scan_count(&self) -> usize {
+        self.type_scan_count.load(Ordering::Relaxed)
+    }
+
     /// Number of compact catalog loads (test diagnostics).
     pub fn search_catalog_load_count(&self) -> usize {
         self.search_catalog_load_count.load(Ordering::Relaxed)
@@ -446,6 +459,19 @@ impl Storage for InMemoryStorage {
             self.remove_record(key);
         }
         Ok(())
+    }
+
+    async fn scan_records_of_type(
+        &self,
+        typename: &str,
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
+        self.type_scan_count.fetch_add(1, Ordering::Relaxed);
+        Ok(self
+            .records
+            .iter()
+            .filter(|(key, _)| key.typename() == Some(typename))
+            .map(|(key, record)| (key.clone(), record.clone()))
+            .collect())
     }
 
     async fn load_search_documents(

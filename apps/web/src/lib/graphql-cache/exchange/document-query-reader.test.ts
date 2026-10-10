@@ -223,6 +223,33 @@ describe('document query projection', () => {
     expect(readQuery).toHaveBeenCalledWith(args);
   });
 
+  it('asks hosts for keyed list splices and applies them to its snapshot', async () => {
+    const readQuery = vi.fn();
+    const rows = [
+      { __typename: 'Row', id: 'a' },
+      { __typename: 'Row', id: 'b' },
+    ];
+    const watchQuery = vi
+      .fn()
+      .mockResolvedValueOnce(hit({ rows }))
+      .mockResolvedValueOnce({
+        kind: 'patch',
+        revision: '2',
+        patches: [{ path: ['rows'], splice: [{ move: 1, to: 0 }] }],
+      });
+    const reader = createDocumentQueryReader({ watchQuery, readQuery });
+    await reader.read(args);
+    const next = await reader.read(args);
+    expect(watchQuery.mock.calls.map(([call]) => call.splices)).toEqual([
+      true,
+      true,
+    ]);
+    if (next.kind !== 'hit') throw new Error('expected a hit');
+    // Moved rows keep their snapshot objects.
+    expect((next.data as { rows: unknown[] }).rows).toEqual([rows[1], rows[0]]);
+    expect((next.data as { rows: unknown[] }).rows[0]).toBe(rows[1]);
+  });
+
   it('validates an entire patch batch before changing anything', () => {
     const base = { rows: [{ seen: false }] };
     expect(() =>

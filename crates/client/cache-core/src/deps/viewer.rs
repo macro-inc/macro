@@ -13,6 +13,8 @@ pub trait DependencyTracker {
     fn record(&mut self, key: &EntityKey<'static>);
     /// A selected storage field on its concrete owning type (aliases resolved).
     fn field(&mut self, key: &EntityKey<'static>, concrete: &str, field: &str);
+    /// A derived list whose membership depends on every record of `child_type`.
+    fn relation(&mut self, _child_type: &str) {}
 }
 
 impl DependencyTracker for BTreeSet<EntityKey<'static>> {
@@ -29,6 +31,8 @@ pub(crate) type ViewerFields = BTreeMap<EntityKey<'static>, BTreeSet<String>>;
 pub(crate) struct QueryDependencies {
     pub records: BTreeSet<EntityKey<'static>>,
     pub viewer_fields: ViewerFields,
+    /// Child types of derived lists: any record of these types may change them.
+    pub relation_types: BTreeSet<String>,
 }
 
 impl DependencyTracker for QueryDependencies {
@@ -42,6 +46,12 @@ impl DependencyTracker for QueryDependencies {
                 .entry(key.clone())
                 .or_default()
                 .insert(field.to_owned());
+        }
+    }
+
+    fn relation(&mut self, child_type: &str) {
+        if !self.relation_types.contains(child_type) {
+            self.relation_types.insert(child_type.to_owned());
         }
     }
 }

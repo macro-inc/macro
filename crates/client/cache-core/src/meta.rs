@@ -103,6 +103,9 @@ pub struct SchemaArtifact {
 pub struct Schema {
     artifact: SchemaArtifact,
     hash: String,
+    /// List fields whose membership the cache derives, validated against
+    /// this snapshot. Not part of the artifact or its hash.
+    membership: crate::membership::MembershipPolicies,
 }
 /// Invalid or unsupported schema metadata. Loading never modifies storage.
 #[derive(Debug, thiserror::Error)]
@@ -129,14 +132,17 @@ impl Schema {
             ty.fields.sort_by(|a, b| a.name.cmp(&b.name));
             ty.possible_types.sort();
         }
-        let schema = Self {
+        let mut schema = Self {
             artifact,
             hash: String::new(),
+            membership: Default::default(),
         };
         schema.validate()?;
         let bytes = serde_json::to_vec(&schema.artifact).map_err(|e| SchemaError(e.to_string()))?;
-        let hash = format!("{:x}", Sha256::digest(bytes));
-        Ok(Arc::new(Self { hash, ..schema }))
+        schema.hash = format!("{:x}", Sha256::digest(bytes));
+        schema.membership =
+            crate::membership::MembershipPolicies::compile(&schema, crate::membership::RELATIONS);
+        Ok(Arc::new(schema))
     }
     /// Combines compatible bundle versions, retaining definitions needed by queued work.
     /// Shape and identity changes require an explicit engine/storage migration.
@@ -255,6 +261,10 @@ impl Schema {
             }
         }
         Ok(())
+    }
+    /// Declared list membership; undeclared lists are opaque.
+    pub fn membership(&self) -> &crate::membership::MembershipPolicies {
+        &self.membership
     }
     /// Identity used to reject mixed bundle schemas in a shared native engine.
     pub fn hash(&self) -> &str {

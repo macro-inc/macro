@@ -367,6 +367,18 @@ describe('coordinator runtime protocol', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'current-revision' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'read', query: '{ x }' })).toBe(true);
+    const watch = (watch: unknown) =>
+      isCacheRequest({
+        id: 1,
+        kind: 'read',
+        opId: 'c:1',
+        query: '{ x }',
+        watch,
+      });
+    expect(watch({ since: '3', splices: true })).toBe(true);
+    expect(watch({ splices: false })).toBe(true);
+    expect(watch({ splices: 'yes' })).toBe(false);
+    expect(watch({ since: '3', replace: true })).toBe(false);
     expect(
       isCacheRequest({
         id: 2,

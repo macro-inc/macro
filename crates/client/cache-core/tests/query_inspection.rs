@@ -119,6 +119,13 @@ impl Storage for OwnerOnlyStorage {
         self.0.delete_batch(keys).await
     }
 
+    async fn scan_records_of_type(
+        &self,
+        typename: &str,
+    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
+        self.0.scan_records_of_type(typename).await
+    }
+
     async fn upsert_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,

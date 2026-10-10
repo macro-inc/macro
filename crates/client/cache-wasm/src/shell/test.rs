@@ -87,20 +87,34 @@ fn read_response_conversion_preserves_unsafe_integer_errors() {
 #[wasm_bindgen_test]
 fn watch_patches_reject_unsafe_integers_like_hits() {
     use cache_core::engine::live_query::{LiveFieldPatch, ResponsePathSegment};
-    use cache_core::engine::watch_query::QueryUpdate;
+    use cache_core::engine::watch_query::{ListSplice, QueryPatch, QueryUpdate, SpliceOp};
     let value = serde_json::json!({"nested": [{"value": 9_007_199_254_740_992_u64}]});
     let hit = QueryUpdate::Hit {
         data: std::sync::Arc::new(value.clone()),
         revision: "1".into(),
+        membership_unknown: false,
     };
     let patch = QueryUpdate::Patch {
-        patches: vec![LiveFieldPatch {
+        patches: vec![QueryPatch::Set(LiveFieldPatch {
             path: vec![ResponsePathSegment::Field("payload".into())],
-            value,
-        }],
+            value: value.clone(),
+        })],
         revision: "2".into(),
+        membership_unknown: false,
     };
-    for update in [&hit, &patch] {
+    // Values inserted by a list splice cross the same boundary.
+    let splice = QueryUpdate::Patch {
+        patches: vec![QueryPatch::Splice(ListSplice {
+            path: vec![ResponsePathSegment::Field("rows".into())],
+            splice: vec![
+                SpliceOp::Remove { remove: 0 },
+                SpliceOp::Insert { insert: 0, value },
+            ],
+        })],
+        revision: "3".into(),
+        membership_unknown: true,
+    };
+    for update in [&hit, &patch, &splice] {
         assert_eq!(
             read_response_to_js(update, query_update_values(update))
                 .unwrap_err()

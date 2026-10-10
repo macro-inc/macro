@@ -502,7 +502,8 @@ export class CacheWorkerCore {
             request.operationName,
             request.variables,
             request.entityResolvers,
-            request.watch.since
+            request.watch.since,
+            request.watch.splices
           );
         }
         const result: ReadResult = await engine.readQuery(

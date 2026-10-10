@@ -23,6 +23,8 @@ pub(crate) struct QueryProjection {
     names: Vec<Box<str>>,
     bytes: usize,
     compile: Option<Box<Compile>>,
+    /// Child types of derived lists: any change to their records re-reads.
+    relation_types: BTreeSet<String>,
 }
 
 /// State that only lives while the read builds the projection. Names are
@@ -91,6 +93,22 @@ impl QueryProjection {
     /// Whether any field of `key` is bound or guarded.
     pub(crate) fn binds(&self, key: &EntityKey<'static>) -> bool {
         self.index.contains_key(key)
+    }
+
+    /// Whether a change to `key` can change a derived list this read used,
+    /// including records it has never read (new members).
+    pub(crate) fn derives_from(&self, key: &EntityKey<'static>) -> bool {
+        !self.relation_types.is_empty()
+            && key
+                .typename()
+                .is_some_and(|name| self.relation_types.contains(name))
+    }
+
+    pub(super) fn relation_type(&mut self, child_type: &str) {
+        if !self.relation_types.contains(child_type) {
+            self.bytes += child_type.len() + RECORD_BYTES;
+            self.relation_types.insert(child_type.to_owned());
+        }
     }
 
     // Conservative accounting includes tree, map and list allocations.

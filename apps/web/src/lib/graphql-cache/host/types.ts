@@ -57,6 +57,9 @@ export interface CacheReadArgs {
 export type CacheWatchArgs = CacheReadArgs & {
   opKey: number;
   since?: CacheRevision;
+  /** The caller applies keyed list splices; engines that do not know this
+   * flag replace changed lists instead. */
+  splices?: boolean;
 };
 
 export interface InspectQueryArgs {

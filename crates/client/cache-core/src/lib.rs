@@ -12,6 +12,7 @@ pub mod entity_resolver;
 pub mod field_changes;
 pub mod identity;
 pub mod link_patch;
+pub mod membership;
 pub mod meta;
 pub mod normalize;
 pub mod page_retention;

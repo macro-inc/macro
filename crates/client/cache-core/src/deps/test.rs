@@ -16,6 +16,7 @@ fn unchanged_records_replace_field_proof_and_allow_record_only_registration() {
             QueryDependencies {
                 records: records.clone(),
                 viewer_fields: changes(field),
+                relation_types: BTreeSet::new(),
             },
         );
         assert_eq!(index.ops_for_changes(&records, &changes(field)), [1].into());

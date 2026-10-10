@@ -55,15 +55,16 @@ fn patches(update: QueryUpdate) -> Json {
     serde_json::to_value(patches).unwrap()
 }
 
-/// Applies an update under the JS document applier's rules: every patch
-/// targets an existing non-root path and changes it. Identical duplicates are
-/// applied once; any other pair of patches must not overlap.
+/// Applies an update under the JS document applier's rules: every value
+/// replacement targets an existing non-root path and changes it. Identical
+/// duplicates are applied once; no other pair of replacements may overlap.
+/// Splices edit a list in place, and later paths use the edited indices.
 fn apply(snapshot: &mut Json, update: QueryUpdate) -> CacheRevision {
     let cursor = revision(&update);
     match update {
         QueryUpdate::Hit { data, .. } => *snapshot = Json::clone(&data),
         QueryUpdate::Patch { mut patches, .. } => {
-            let encoded = |patch: &live_query::LiveFieldPatch| serde_json::to_value(patch).unwrap();
+            let encoded = |patch: &QueryPatch| serde_json::to_value(patch).unwrap();
             let mut seen = Vec::new();
             patches.retain(|patch| {
                 let patch = encoded(patch);
@@ -71,30 +72,42 @@ fn apply(snapshot: &mut Json, update: QueryUpdate) -> CacheRevision {
                 seen.push(patch);
                 distinct
             });
-            let paths: Vec<Json> = patches
+            let paths: Vec<(Json, bool)> = patches
                 .iter()
-                .map(|patch| serde_json::to_value(&patch.path).unwrap())
+                .map(|patch| {
+                    (
+                        serde_json::to_value(patch.path()).unwrap(),
+                        matches!(patch, QueryPatch::Splice(_)),
+                    )
+                })
                 .collect();
-            for (index, path) in paths.iter().enumerate() {
+            for (index, (path, splice)) in paths.iter().enumerate() {
                 let path = path.as_array().unwrap();
                 assert!(!path.is_empty(), "a patch cannot replace the root");
-                for other in &paths[index + 1..] {
+                for (other, _) in &paths[index + 1..] {
                     let other = other.as_array().unwrap();
                     let shared = path.len().min(other.len());
+                    // Patches inside a list may follow its splice.
+                    if *splice && other.len() > path.len() {
+                        continue;
+                    }
                     assert_ne!(path[..shared], other[..shared], "patches overlap");
                 }
             }
             for patch in patches {
-                let mut slot = &mut *snapshot;
-                for part in patch.path {
-                    slot = match part {
-                        live_query::ResponsePathSegment::Field(name) => slot.get_mut(name.as_str()),
-                        live_query::ResponsePathSegment::Index(index) => slot.get_mut(index),
+                if let QueryPatch::Set(set) = &patch {
+                    let mut slot = &*snapshot;
+                    for part in &set.path {
+                        slot = match part {
+                            live_query::ResponsePathSegment::Field(name) => slot.get(name.as_str()),
+                            live_query::ResponsePathSegment::Index(index) => slot.get(*index),
+                        }
+                        .expect("patch targets an existing path");
                     }
-                    .expect("patch targets an existing path");
+                    assert_ne!(*slot, set.value, "unchanged values are not published");
                 }
-                assert_ne!(*slot, patch.value, "unchanged values are not published");
-                *slot = patch.value;
+                diff::apply_query_patches(snapshot, std::slice::from_ref(&patch))
+                    .expect("patch targets an existing path");
             }
         }
         QueryUpdate::Miss { .. } => panic!("unexpected miss"),

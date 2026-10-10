@@ -2,7 +2,7 @@ import type { OperationResult } from '@urql/core';
 import { batch, createSignal, untrack } from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
-import { queryDelta } from './query-patches';
+import { applySpliceOp, isSplicePatch, queryDelta } from './query-patches';
 import {
   isIdentityPath,
   type QueryShape,
@@ -77,7 +77,24 @@ export class LiveQuery {
           this.setState(
             'data',
             produce((draft) => {
-              for (const { path, value } of delta.patches) {
+              for (const [index, patch] of delta.patches.entries()) {
+                const { path } = patch;
+                if (isSplicePatch(patch)) {
+                  // Edit the store list in place: moved and surviving rows keep
+                  // their store objects, so only the list itself notifies.
+                  let items: unknown = draft;
+                  for (const part of path)
+                    items = (items as Record<string | number, unknown>)[part];
+                  const rows = items as unknown[];
+                  const shape = shapeAtPath(this.shape, path);
+                  for (const op of patch.splice) {
+                    if ('insert' in op)
+                      rows.splice(op.insert, 0, storeValue(op.value, shape));
+                    else applySpliceOp(rows, op);
+                  }
+                  continue;
+                }
+                const { value } = patch;
                 let parent: unknown = draft;
                 for (const part of path.slice(0, -1))
                   parent = (parent as Record<string | number, unknown>)[part];
@@ -86,11 +103,7 @@ export class LiveQuery {
                 if (value !== null && typeof value === 'object') {
                   // The replaced value's previous snapshot lets unchanged rows
                   // keep their store objects instead of being rebuilt.
-                  let previous: unknown = delta.base;
-                  for (const part of path)
-                    previous = (previous as Record<string | number, unknown>)[
-                      part
-                    ];
+                  const previous = delta.previous[index];
                   // Reconcile just the changed subtree to retain keyed rows and
                   // unchanged field observers. A wrapper also allows its root
                   // to be replaced when the value's type or identity changes.

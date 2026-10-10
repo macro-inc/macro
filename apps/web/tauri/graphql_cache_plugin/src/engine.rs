@@ -542,6 +542,10 @@ impl EngineHandle {
     }
 
     /// Incrementally project a query; operation teardown releases its bindings.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the ordinary query request plus subscriber capabilities"
+    )]
     pub async fn watch(
         &self,
         op_id: String,
@@ -550,6 +554,7 @@ impl EngineHandle {
         variables: Variables,
         entity_resolvers: Vec<EntityResolver>,
         since: Option<String>,
+        options: cache_core::engine::watch_query::WatchOptions,
     ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
         let since = since
             .map(|value| value.parse::<CacheRevision>())
@@ -559,13 +564,14 @@ impl EngineHandle {
         let EngineState { engine, ops, .. } = &mut *state;
         let op = ops.intern(&op_id);
         engine
-            .watch_query(
+            .watch_query_with_options(
                 op,
                 &query,
                 operation_name.as_deref(),
                 &variables,
                 &entity_resolvers,
                 since,
+                options,
             )
             .await
             .map_err(|error| error.to_string())

@@ -165,6 +165,7 @@ pub async fn graphql_cache_watch(
     variables: Option<Variables>,
     entity_resolvers: Option<Vec<EntityResolver>>,
     since: Option<String>,
+    splices: Option<bool>,
 ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
     engine_handle(&state)?
         .watch(
@@ -174,6 +175,9 @@ pub async fn graphql_cache_watch(
             variables.unwrap_or_default(),
             entity_resolvers.unwrap_or_default(),
             since,
+            cache_core::engine::watch_query::WatchOptions {
+                splices: splices.unwrap_or(false),
+            },
         )
         .await
 }

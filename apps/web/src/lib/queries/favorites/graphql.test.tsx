@@ -5,9 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject } from 'wonka';
 
 const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
+const getGraphqlCacheHostMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: getGraphqlSoupClientMock,
+  getGraphqlCacheHost: getGraphqlCacheHostMock,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -90,6 +92,8 @@ describe('GraphQL favorites queries', () => {
       executeQuery,
       mutation: executeMutation,
     } as unknown as Client);
+    // The normalized cache derives list membership unless a test disables it.
+    getGraphqlCacheHostMock.mockReturnValue({});
   });
 
   afterEach(() => {
@@ -330,10 +334,11 @@ describe('GraphQL favorites queries', () => {
     expect(onSuccess).toHaveBeenCalledWith(result, input, undefined);
     expect(onSettled).toHaveBeenCalledWith(result, null, input, undefined);
     expect(executeQuery).toHaveBeenCalledOnce();
+    // Each favorite's predicted sort order reorders every derived list.
     expect(
       executeMutation.mock.calls[0]?.[2]?.normalizedCacheOptimistic
         .revalidations
-    ).toEqual([expect.objectContaining({ variablesJson: '{"filter":null}' })]);
+    ).toEqual([]);
   });
 
   it('projects the unfiltered list using an explicit null cache variable', async () => {
@@ -376,14 +381,13 @@ describe('GraphQL favorites queries', () => {
     );
   });
 
-  it('optimistically updates matching filtered GraphQL lists', async () => {
+  it('predicts an appended favorite record instead of patching mounted lists', async () => {
     const hooks = renderHook(() => ({
-      query: createGraphqlFavoritesQuery({
-        entityType: ['document'],
-      }),
+      documents: createGraphqlFavoritesQuery({ entityType: ['document'] }),
+      all: createGraphqlFavoritesQuery(),
       mutation: createGraphqlAddFavoriteMutation(),
     }));
-    await vi.waitFor(() => expect(hooks.query.isSuccess).toBe(true));
+    await vi.waitFor(() => expect(hooks.all.isSuccess).toBe(true));
 
     await hooks.mutation.mutateAsync({
       entityType: 'document',
@@ -392,66 +396,76 @@ describe('GraphQL favorites queries', () => {
 
     const optimistic =
       executeMutation.mock.calls[0]?.[2]?.normalizedCacheOptimistic;
-    expect(optimistic.linkPatches).toEqual([
+    // The server appends after the user's highest sort order.
+    expect(optimistic.optimisticResponse.setFavorite.favorite).toMatchObject({
+      id: 'document:document-3',
+      sortOrder: 2,
+    });
+    expect(optimistic.identityBindings).toEqual([
+      {
+        localKey: 'GraphqlFavorite:document:document-3',
+        responsePath: ['setFavorite', 'favorite'],
+      },
+    ]);
+    expect(optimistic.linkPatches).toEqual([]);
+    // Only the added record's display metadata is refreshed.
+    expect(optimistic.revalidations).toEqual([
       expect.objectContaining({
-        variablesJson: '{"filter":{"entityTypes":["DOCUMENT"]}}',
-        operation: expect.objectContaining({ kind: 'prependUnique' }),
+        variablesJson:
+          '{"filter":{"entityTypes":["DOCUMENT"],"entityIds":["document-3"]}}',
       }),
     ]);
-    expect(optimistic.revalidations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ variablesJson: '{"filter":null}' }),
-        expect.objectContaining({
-          variablesJson: '{"filter":{"entityTypes":["DOCUMENT"]}}',
-        }),
-      ])
-    );
   });
 
-  it.each([
-    {
-      createMutation: createGraphqlAddFavoriteMutation,
-      patchKind: 'prependUnique',
-    },
-    {
-      createMutation: createGraphqlRemoveFavoriteMutation,
-      patchKind: 'remove',
-    },
-  ])(
-    'uses the unfiltered query variables for $patchKind and revalidation',
-    async ({ createMutation, patchKind }) => {
-      const hooks = renderHook(() => ({
-        query: createGraphqlFavoritesQuery(),
-        mutation: createMutation(),
-      }));
-      await vi.waitFor(() => expect(hooks.query.isSuccess).toBe(true));
+  it('predicts a removal as a record deletion for every derived list', async () => {
+    const hooks = renderHook(() => ({
+      query: createGraphqlFavoritesQuery(),
+      mutation: createGraphqlRemoveFavoriteMutation(),
+    }));
+    await vi.waitFor(() => expect(hooks.query.isSuccess).toBe(true));
 
-      await hooks.mutation.mutateAsync({
-        entityType: 'document',
-        entityId: 'document-1',
-      });
+    await hooks.mutation.mutateAsync({
+      entityType: 'document',
+      entityId: 'document-1',
+    });
 
-      const optimistic =
-        executeMutation.mock.calls[0]?.[2]?.normalizedCacheOptimistic;
-      expect(optimistic.linkPatches).toEqual([
-        expect.objectContaining({
-          variablesJson: '{"filter":null}',
-          operation: expect.objectContaining({ kind: patchKind }),
-        }),
-      ]);
-      // The default target and mounted unfiltered query must deduplicate.
-      expect(optimistic.revalidations).toEqual([
-        expect.objectContaining({ variablesJson: '{"filter":null}' }),
-      ]);
-    }
-  );
+    const optimistic =
+      executeMutation.mock.calls[0]?.[2]?.normalizedCacheOptimistic;
+    expect(optimistic.identityBindings).toEqual([
+      {
+        localKey: 'GraphqlFavorite:document:document-1',
+        responsePath: [],
+        deleteRecord: true,
+      },
+    ]);
+    expect(optimistic.linkPatches).toEqual([]);
+    expect(optimistic.revalidations).toEqual([]);
+  });
 
-  it('refetches the urql-solid list after setting a favorite', async () => {
+  it('refetches mounted lists after a favorite only without the normalized cache', async () => {
+    getGraphqlCacheHostMock.mockReturnValue(undefined);
+    const hooks = renderHook(() => ({
+      query: createGraphqlFavoritesQuery(),
+      mutation: createGraphqlAddFavoriteMutation(),
+    }));
+    await vi.waitFor(() => expect(hooks.query.isSuccess).toBe(true));
+    await hooks.mutation.mutateAsync({
+      entityType: 'document',
+      entityId: 'document-3',
+    });
+    expect(executeQuery).toHaveBeenCalledTimes(2);
+    expect(executeQuery.mock.calls[1]?.[1]).toEqual({
+      requestPolicy: 'cache-and-network',
+    });
+  });
+
+  it('keeps an existing favorite at its own sort order and does not refetch', async () => {
     const onSuccess = vi.fn();
     const hooks = renderHook(() => ({
       query: createGraphqlFavoritesQuery(),
       mutation: createGraphqlAddFavoriteMutation({ onSuccess }),
     }));
+    await vi.waitFor(() => expect(hooks.query.isSuccess).toBe(true));
 
     await hooks.mutation.mutateAsync({
       entityType: 'document',
@@ -482,27 +496,19 @@ describe('GraphQL favorites queries', () => {
                   },
                 ],
               },
+              // Re-adding keeps the server's existing position.
               favorite: expect.objectContaining({
                 id: 'document:document-1',
-                sortOrder: 2,
+                sortOrder: 1,
               }),
             }),
           },
-          linkPatches: [
-            expect.objectContaining({
-              operation: {
-                kind: 'prependUnique',
-                entityKey: 'GraphqlFavorite:document:document-1',
-              },
-            }),
-          ],
+          linkPatches: [],
         }),
       }
     );
-    expect(executeQuery).toHaveBeenCalledTimes(2);
-    expect(executeQuery.mock.calls[1]?.[1]).toEqual({
-      requestPolicy: 'cache-and-network',
-    });
+    // Mounted lists derive the settled record; nothing is refetched.
+    expect(executeQuery).toHaveBeenCalledOnce();
     expect(onSuccess).toHaveBeenCalledWith(
       expect.objectContaining({
         entityType: 'document',
@@ -546,7 +552,7 @@ describe('GraphQL favorites queries', () => {
     expect(executeQuery).toHaveBeenCalledOnce();
   });
 
-  it('queues a cold-cache offline favorite change without an invalid link patch', async () => {
+  it('queues a cold-cache offline favorite change without any list recipe', async () => {
     executeMutation.mockReturnValue({
       toPromise: async () => ({
         data: {
@@ -577,7 +583,10 @@ describe('GraphQL favorites queries', () => {
       normalizedCacheOptimistic: expect.objectContaining({
         linkPatches: [],
         revalidations: [
-          expect.objectContaining({ variablesJson: '{"filter":null}' }),
+          expect.objectContaining({
+            variablesJson:
+              '{"filter":{"entityTypes":["DOCUMENT"],"entityIds":["document-3"]}}',
+          }),
         ],
       }),
     });

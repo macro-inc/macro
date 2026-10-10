@@ -155,6 +155,7 @@ async fn expect_every_storage_method_latched(
         expected,
     );
     expect_reset_reason(storage.delete_batch(&[key("Thing:1")]).await, expected);
+    expect_reset_reason(storage.scan_records_of_type("Thing").await, expected);
     expect_reset_reason(storage.enqueue_mutation(queued("Blocked")).await, expected);
     expect_reset_reason(storage.load_mutation_queue().await, expected);
     expect_reset_reason(storage.queue_diagnostics().await, expected);
