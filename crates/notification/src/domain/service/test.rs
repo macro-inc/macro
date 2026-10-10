@@ -122,6 +122,7 @@ struct MockRepository {
     basic_notification_calls: Mutex<Vec<Vec<Uuid>>>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
     mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
+    deleted_device_endpoints: Mutex<Vec<String>>,
 }
 
 impl MockRepository {
@@ -143,6 +144,7 @@ impl MockRepository {
             basic_notification_calls: Mutex::new(Vec::new()),
             mark_seen_calls: Mutex::new(Vec::new()),
             mark_done_calls: Mutex::new(Vec::new()),
+            deleted_device_endpoints: Mutex::new(Vec::new()),
         }
     }
 
@@ -521,7 +523,11 @@ impl NotificationRepository for MockRepository {
         Ok(Vec::new())
     }
 
-    async fn delete_device_by_endpoint(&self, _endpoint_arn: &str) -> Result<(), Report> {
+    async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {
+        self.deleted_device_endpoints
+            .lock()
+            .unwrap()
+            .push(endpoint_arn.to_string());
         Ok(())
     }
 
@@ -2175,6 +2181,8 @@ struct TrackingMobileSender {
     attempted_endpoints: Mutex<Vec<String>>,
     /// Endpoints that should fail when attempted.
     failing_endpoints: HashSet<String>,
+    /// Endpoints that should fail as disabled or deleted.
+    unavailable_endpoints: HashSet<String>,
 }
 
 impl TrackingMobileSender {
@@ -2182,7 +2190,13 @@ impl TrackingMobileSender {
         Self {
             attempted_endpoints: Mutex::new(Vec::new()),
             failing_endpoints,
+            unavailable_endpoints: HashSet::new(),
         }
+    }
+
+    fn with_unavailable_endpoints(mut self, endpoints: HashSet<String>) -> Self {
+        self.unavailable_endpoints = endpoints;
+        self
     }
 
     fn get_attempted_endpoints(&self) -> Vec<String> {
@@ -2206,6 +2220,11 @@ impl NotificationSender for TrackingMobileSender {
         // Fail if this endpoint is in the failing set
         if self.failing_endpoints.contains(endpoint_arn) {
             rootcause::bail!("Simulated APNS failure for endpoint: {}", endpoint_arn);
+        }
+        if self.unavailable_endpoints.contains(endpoint_arn) {
+            return Err(report!("Simulated disabled endpoint: {}", endpoint_arn)
+                .context(crate::domain::models::mobile::PushEndpointUnavailable)
+                .into_dynamic());
         }
 
         Ok(format!("msg-id-{endpoint_arn}"))
@@ -2316,6 +2335,75 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
     let failures = results.iter().filter(|r| r.is_err()).count();
     assert_eq!(successes, 2, "Should have 2 successful deliveries");
     assert_eq!(failures, 2, "Should have 2 failed deliveries");
+}
+
+#[tokio::test]
+async fn test_egress_removes_unavailable_push_endpoints() {
+    use crate::domain::models::apple::{APNSPushNotification, Aps};
+    use crate::domain::models::mobile::{MessageAttributes, PushType};
+    use crate::domain::models::queue_message::{APNSTargets, UserApnsEndpoints};
+
+    let healthy = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/healthy";
+    let disabled = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/disabled";
+    let flaky = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/flaky";
+
+    let mobile_sender = std::sync::Arc::new(
+        TrackingMobileSender::new([flaky.to_string()].into())
+            .with_unavailable_endpoints([disabled.to_string()].into()),
+    );
+    let repository = Arc::new(MockRepository::new());
+    let service = NotificationEgressService {
+        queue: MockQueue::new(),
+        repository: repository.clone(),
+        realtime: MockRealtimeSender,
+        mobile: mobile_sender.clone(),
+        email: MockEmailSender,
+        rate_limiter: allowing_rate_limiter(),
+        state_machine: MockEgressStateMachine,
+        digest_batcher: MockDigestBatcher,
+    };
+
+    let message = QueueMessage::new_test(
+        "test_notification".to_string(),
+        NotificationChannel::Ios(Box::new(APNSTargets {
+            notif: APNSPushNotification {
+                aps: Aps::default(),
+                push_notification_data: json!({"message": "Hello"}),
+            },
+            attributes: MessageAttributes {
+                push_type: PushType::Alert,
+                collapse_key: "test_collapse".to_string(),
+            },
+            ios_device_endpoints: HashMap::from([
+                (
+                    test_user_id("alice@example.com"),
+                    UserApnsEndpoints {
+                        android_endpoints: Vec::new(),
+                        endpoints: vec![healthy.to_string(), disabled.to_string()],
+                        digest_state: None,
+                    },
+                ),
+                (
+                    test_user_id("bob@example.com"),
+                    UserApnsEndpoints {
+                        android_endpoints: Vec::new(),
+                        endpoints: vec![flaky.to_string()],
+                        digest_state: None,
+                    },
+                ),
+            ]),
+        })),
+    );
+
+    let results = service.deliver_notification(message).await;
+
+    assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 1);
+    assert_eq!(mobile_sender.get_attempted_endpoints().len(), 3);
+    assert_eq!(
+        *repository.deleted_device_endpoints.lock().unwrap(),
+        vec![disabled.to_string()],
+        "only the disabled endpoint's registration should be removed"
+    );
 }
 
 // --- poll_email_digests tests ---

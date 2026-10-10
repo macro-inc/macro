@@ -11,7 +11,7 @@ use crate::domain::models::email_notification_digest::ports::{
 use crate::domain::models::email_notification_digest::{
     BulkDigestEgressStateMachine, ResumeMachineBRequest,
 };
-use crate::domain::models::mobile::{MessageAttributes, PushType};
+use crate::domain::models::mobile::{MessageAttributes, PushEndpointUnavailable, PushType};
 use crate::domain::models::queue_message::{
     APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailCreateBundle,
     EmailNotification, NotificationChannel, QueueMessage,
@@ -232,8 +232,11 @@ where
                         })
                 }))
                 .collect();
-            if let Some(ref entry) = user_apns.digest_state {
-                let platforms: Vec<_> = checkers.iter().map(|checker| checker.notif).collect();
+            let targets: Vec<_> = checkers
+                .iter()
+                .map(|checker| (checker.endpoint_arn, checker.notif))
+                .collect();
+            let results = if let Some(ref entry) = user_apns.digest_state {
                 let req = ResumeMachineBRequest {
                     notification_enabled: entry.inner().clone(),
                     send_notifs: checkers,
@@ -242,23 +245,43 @@ where
                 if let Either::Right(Err(ref batch_err)) = batch_decision {
                     tracing::error!(error=?batch_err, "failed to queue digest batch after all pushes failed");
                 }
-                for (result, platform) in results.into_iter().zip(platforms) {
-                    out.push(result.map(|_| platform.success()));
-                }
+                results
             } else {
+                let mut results = Vec::with_capacity(checkers.len());
                 for checker in checkers {
-                    let platform = checker.notif;
-                    out.push(
-                        checker
-                            .send_notification()
-                            .await
-                            .map(|_| platform.success()),
-                    );
+                    results.push(checker.send_notification().await);
                 }
+                results
+            };
+            for (result, (endpoint_arn, platform)) in results.into_iter().zip(targets) {
+                if let Err(e) = &result
+                    && e.downcast_current_context::<PushEndpointUnavailable>()
+                        .is_some()
+                {
+                    self.remove_unavailable_endpoint(endpoint_arn).await;
+                }
+                out.push(result.map(|_| platform.success()));
             }
         }
 
         out
+    }
+
+    /// Remove the device registration for an endpoint SNS will no longer deliver to, so
+    /// later notifications stop targeting it. The device gets a fresh registration the next
+    /// time the app registers its push token.
+    async fn remove_unavailable_endpoint(&self, endpoint_arn: &str) {
+        tracing::info!(
+            endpoint_arn,
+            "removing device registration for unavailable push endpoint"
+        );
+        let _ = self
+            .repository
+            .delete_device_by_endpoint(endpoint_arn)
+            .await
+            .inspect_err(|e| {
+                tracing::warn!(error=?e, endpoint_arn, "failed to remove device registration for unavailable push endpoint");
+            });
     }
 
     /// Deliver via email.

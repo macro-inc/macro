@@ -1,5 +1,6 @@
 //! Mobile push notification adapter.
 
+use aws_sdk_sns::operation::publish::PublishError;
 use aws_sdk_sns::types::MessageAttributeValue;
 use rootcause::Report;
 use serde::Serialize;
@@ -7,11 +8,14 @@ use std::collections::HashMap;
 
 use crate::domain::models::android::FCMMessage;
 use crate::domain::models::apple::{APNSPushNotification, VoipPushPayload};
-use crate::domain::models::mobile::{MessageAttributes, PushType};
+use crate::domain::models::mobile::{MessageAttributes, PushEndpointUnavailable, PushType};
 use crate::domain::ports::NotificationSender;
 
 mod payload;
 pub use payload::SnsTarget;
+
+#[cfg(test)]
+mod test;
 
 /// Mobile push notification adapter.
 ///
@@ -58,13 +62,30 @@ impl MobilePushOps for aws_sdk_sns::Client {
             .send()
             .await
             .map_err(|e| {
-                rootcause::report!(
+                let report = rootcause::report!(
                     "SNS publish to {endpoint_arn} failed: {}",
                     aws_sdk_sns::error::DisplayErrorContext(&e)
-                )
+                );
+                if e.as_service_error().is_some_and(is_unavailable_endpoint) {
+                    report.context(PushEndpointUnavailable).into_dynamic()
+                } else {
+                    report
+                }
             })?;
 
         Ok(output.message_id.unwrap_or_default())
+    }
+}
+
+/// Whether SNS rejected the publish because the target endpoint can no longer receive pushes,
+/// as opposed to a problem with the message or the platform application.
+fn is_unavailable_endpoint(err: &PublishError) -> bool {
+    match err {
+        PublishError::EndpointDisabledException(_) | PublishError::NotFoundException(_) => true,
+        PublishError::InvalidParameterException(e) => e
+            .message()
+            .is_some_and(|message| message.contains("No endpoint found")),
+        _ => false,
     }
 }
 
