@@ -42,6 +42,7 @@ export function getInitialsFromName(
 }
 
 const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
+const FAILED_FETCH_RETRY_SECONDS = 30;
 
 type DisplayNameStore = Record<string, UserNameItem>;
 
@@ -115,14 +116,15 @@ async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
   });
   if (result.isErr()) {
     console.error('Failed to fetch user display names');
-    // Mark as not-loading with an expired timestamp so the next access
-    // retries the fetch instead of getting stuck showing the email
-    // fallback forever (see `ensureUserNameItem`'s `cacheExpired` check).
-    return ids.map((id) => ({
-      _createdAt: new Date(0),
-      id,
-      loading: false,
-    }));
+    // Labels read this store in tracked scopes, so an entry written already
+    // expired re-queues the failed request the moment it lands. Backdate it to
+    // expire after FAILED_FETCH_RETRY_SECONDS so a later access retries
+    // instead of the label sticking on the email fallback.
+    const expiresSoon = new Date(
+      Date.now() -
+        (DEFAULT_CACHE_TIME_SECONDS - FAILED_FETCH_RETRY_SECONDS) * 1000
+    );
+    return ids.map((id) => ({ _createdAt: expiresSoon, id, loading: false }));
   }
 
   const data = result.value;
