@@ -1,12 +1,101 @@
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use tracing::{Event, Level, Subscriber};
+use tracing_subscriber::layer::{Context, SubscriberExt};
+use tracing_subscriber::{Layer, Registry};
 use uuid::Uuid;
 
 use super::super::models::{
-    AccessToken, ApiOperationKind, EmailApiError, RateLimitRefusal, TokenError, TokenFreshness,
+    AccessToken, ApiOperationKind, EmailApiError, RateLimitOrigin, RateLimitRefusal, TokenError,
+    TokenFreshness,
 };
 use super::EmailApiClientServiceImpl;
 use super::test_support::{Call, FakeRateLimiter, FakeRepository, FakeTokenSource, call_log};
+
+#[derive(Clone, Default)]
+struct LevelLog(Arc<Mutex<Vec<Level>>>);
+
+impl<S: Subscriber> Layer<S> for LevelLog {
+    fn on_event(&self, event: &Event<'_>, _: Context<'_, S>) {
+        self.0.lock().unwrap().push(*event.metadata().level());
+    }
+}
+
+/// Runs a failing `get_message` and returns the most severe level it logged.
+async fn most_severe_level_logged(
+    rate_limit: Result<(), RateLimitRefusal>,
+    token: Result<AccessToken, TokenError>,
+    provider_error: EmailApiError,
+) -> Option<Level> {
+    let levels = LevelLog::default();
+    let _guard = tracing::subscriber::set_default(Registry::default().with(levels.clone()));
+    let calls = call_log();
+    let service = EmailApiClientServiceImpl::new(
+        FakeRepository::failing_with(calls.clone(), provider_error),
+        FakeTokenSource::new(calls.clone(), token),
+        FakeRateLimiter::new(calls, rate_limit),
+    );
+
+    assert!(
+        service
+            .get_message(Uuid::nil(), "message-id")
+            .await
+            .is_err()
+    );
+
+    // `tracing` orders levels by verbosity, so the most severe is the minimum.
+    levels.0.lock().unwrap().iter().min().copied()
+}
+
+#[tokio::test]
+async fn only_local_rate_limit_refusals_log_below_error() {
+    let token = Ok(AccessToken::new("access-token"));
+    let provider_failure = EmailApiError::Permanent {
+        message: "provider failure".to_string(),
+    };
+    let provider_throttle = EmailApiError::RateLimited {
+        retry_after: Some(Duration::from_secs(5)),
+        origin: RateLimitOrigin::Provider,
+    };
+
+    for (case, rate_limit, token, provider_error, expected) in [
+        (
+            "local refusal",
+            Err(RateLimitRefusal::new(None)),
+            token.clone(),
+            provider_failure.clone(),
+            Level::DEBUG,
+        ),
+        (
+            "provider throttling",
+            Ok(()),
+            token.clone(),
+            provider_throttle,
+            Level::ERROR,
+        ),
+        (
+            "token failure",
+            Ok(()),
+            Err(TokenError::ReauthRequired),
+            provider_failure.clone(),
+            Level::ERROR,
+        ),
+        (
+            "provider failure",
+            Ok(()),
+            token,
+            provider_failure,
+            Level::ERROR,
+        ),
+    ] {
+        assert_eq!(
+            most_severe_level_logged(rate_limit, token, provider_error).await,
+            Some(expected),
+            "{case}"
+        );
+    }
+}
 
 #[tokio::test]
 async fn token_failure_stops_before_repository_after_the_quota_check() {

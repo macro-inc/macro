@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use super::super::models::EmailApiError;
 use super::super::ports::{MailboxAttachmentClient, ProviderRateLimiter, ProviderTokenSource};
-use super::{ApiOperationKind, EmailApiClientServiceImpl};
+use super::{ApiOperationKind, EmailApiClientServiceImpl, log_operation_error};
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
@@ -11,7 +11,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Downloads an attachment from a provider message.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn get_attachment(
         &self,
         link_id: Uuid,
@@ -25,6 +25,7 @@ where
         self.repository
             .get_attachment(&access_token, provider_message_id, provider_attachment_id)
             .await
+            .inspect_err(log_operation_error)
     }
 }
 
