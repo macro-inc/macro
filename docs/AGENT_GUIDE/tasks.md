@@ -208,12 +208,18 @@ review requests.
 `Authored by me`, `Assigned to me`, and `Review requests` match the linked
 GitHub user ID. If the link-status endpoint has no identity, the list explains
 why the tab is unavailable.
-Search, filter, and sort controls appear above the list. Below them, the same
-sliding tabs used by Chat offer Open and Closed. Open is the default; Closed
-includes both closed and merged PRs. The filter dropdown and mobile drawer also
+The sidebar starts with a **Search reviews** field (styled like Settings' search)
+and, on pointer devices, a **Board**/**List** toggle (`aria-label="Pull request
+layout"`); List is the default and the choice is remembered. When the sidebar is
+collapsed or narrow, the search moves above the list under the scope heading.
+Filter and sort controls appear above the list. Below the layout toggle, an
+**Open** / **Closed** / **All** toggle with icons (`aria-label="Pull request
+status"`) picks the status; it moves above the list on touch devices or when the
+sidebar is hidden, and the board hides it. Open is the default; Closed includes
+both closed and merged PRs, and All shows every status. The filter dropdown and mobile drawer also
 offer independent Open, Closed, and Merged selections. Custom multi-status
-selections hide the tabs, except the combined Closed preset keeps them visible.
-A partial Closed-only or Merged-only selection leaves both tabs unhighlighted.
+selections hide the toggle, except the combined Closed preset keeps it visible.
+A partial Closed-only or Merged-only selection leaves every option unhighlighted.
 Status combines with other filters, counts toward filter badges, and applies
 before pagination. Clearing filters resets to Open. Other filters cover
 priority, linked work, started from, repository, author, assignee, label, and,
@@ -225,7 +231,9 @@ Saved review selections stay inactive, including their filter badge and empty-st
 copy, while the GitHub identity is unavailable; they resume when it returns.
 Sort offers Priority, Recently updated, Least recently updated, Newest, and Oldest;
 Priority orders the loaded rows most urgent first and keeps recency within a
-priority. When visible PRs
+priority. Date sorts group rows under the same headings as email (Today,
+Yesterday, Last 7 days, Earlier this month, Last month, Older) by the sorted
+date; Priority sorts and searches list rows flat. When visible PRs
 have GitHub labels, a Labels section below Favorites lists them with their
 colors; choosing a label shows only PRs with it, and choosing it again clears
 it. PR rows use the shared entity layout with selection checkboxes,
@@ -245,15 +253,22 @@ The PR's status pill stays passive; status filtering lives in the Reviews list t
 Each PR row shows what it links to. A priority icon before the title comes from
 the most urgent open linked task (a closed task counts only when none is open),
 otherwise from a GitHub priority label (`P0`–`P3`, `priority: high`, `urgent`,
-`critical`); the tooltip names its source. Pills before the author show the
-linked **Agent session**s (sessions an agent opened the PR from, or a person
-linked), **Customer**s (CRM companies in linked tasks' Companies property, or a
-company whose thread started a session), **Ticket**s (tasks the PR text, branch,
-or comments mention as `MACRO-<id>`, and tasks whose thread started a session),
-and **Channel**s (channels whose thread started a session). A pill with one item
-opens it (Shift-click for another split); with more it shows `+N` and opens a
-list. Items the viewer cannot access are omitted. Rows show a pulsing
-placeholder while links load. The first pill names where the PR was started
+`critical`); the tooltip names its source. Row pills use the email tag style
+(neutral outline; GitHub labels show a colored dot and name). After the title
+they show where the PR was started, the **channel messages** its agents were
+started from (for example an @mention), **Customer**s (CRM companies in linked
+tasks' Companies property, or a company whose thread started a session),
+**Ticket**s (tasks the PR text, branch, or comments mention as `MACRO-<id>`, and
+tasks whose thread started a session), the GitHub labels, the author, the diff
+size, comments, and the linked agent sessions chip. A channel pill names the
+channel; hovering it previews the starting message in the same card as message
+mentions, and clicking opens the channel at that message (Shift-click for
+another split). Several channel messages stack as overlapping pills that spread
+out on hover. Customer and ticket pills with one item open it; with more they
+show `+N` and open a list. Items the viewer cannot access are omitted. When the
+pills would squeeze the title, they drop their text (keeping icons, dots, and
+tooltips) and overlap; they expand again once the row is wide enough. Rows show
+a pulsing placeholder while links load. The first pill names where the PR was started
 (Claude, Codex, Cursor, Devin, Copilot, Jules, or Macro), including PRs opened
 outside Macro: a Macro agent session that opened the PR wins and shows the tool
 its harness ran; otherwise a session link in the description (`claude.ai/code/…`,
@@ -269,6 +284,20 @@ and **Started from** (each tool, or Unknown); these run on the loaded rows,
 which wait for their links before matching. The PR side panel's **Linked work**
 section shows the same origin under **Started from**, plus the priority,
 tickets, customers, and channels.
+
+**Board** lays the scope's open and merged PRs (status filter and tabs give
+way to the board) out in columns: **Draft**, **In review** (checks running or
+none), **Checks failing**, **Conflicts** (GitHub reports the branch conflicting
+with its base; read live for the open PRs on the board), **Ready to merge**
+(every check passed), and **Merged**. Cards show the status icon, priority,
+title, checks, `owner/repo#N`, author, link pills, labels, and agent sessions;
+clicking a card opens the PR. Dragging asks GitHub for the change as you: drop
+on **Merged** (from In review or Ready to merge) to merge after the same
+confirmation as the PR's Merge button; drop on **Draft** to convert any open PR
+to a draft; drop a draft on **In review** to mark it ready for review. Checks
+failing, Conflicts, and Ready to merge take no drops, and merged cards cannot be
+dragged. A refusal shows GitHub's message and the card returns. **Load more pull
+requests** fetches the next page.
 
 PR rows can be added to or removed from Favorites through their context menu or
 bulk entity actions. When at least one accessible PR is favorited, Reviews shows

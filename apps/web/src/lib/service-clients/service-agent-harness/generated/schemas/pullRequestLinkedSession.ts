@@ -4,7 +4,7 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { PullRequestLinkedSessionOriginMessageId } from './pullRequestLinkedSessionOriginMessageId';
 import type { PullRequestLinkedSessionThreadParent } from './pullRequestLinkedSessionThreadParent';
 import type { PullRequestLinkSource } from './pullRequestLinkSource';
 
@@ -12,6 +12,9 @@ import type { PullRequestLinkSource } from './pullRequestLinkSource';
  * A session linked to a pull request, as a viewer of that session sees it.
  */
 export interface PullRequestLinkedSession {
+  /** The message that started the session, such as an @mention, when it was
+started from a thread. A mention inside a thread is that reply, not the root. */
+  originMessageId?: PullRequestLinkedSessionOriginMessageId;
   /** The session id. */
   sessionId: string;
   /** Who associated the pull request with the session. */

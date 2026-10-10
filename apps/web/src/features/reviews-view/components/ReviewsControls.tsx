@@ -35,6 +35,8 @@ export type ReviewsControlProps = {
   labels: ListControlOption<string>[];
   /** Offers the review filters that match the viewer's GitHub user id. */
   hasGithubIdentity: boolean;
+  /** Leaves out Status, for layouts that lay pull requests out by status. */
+  hideStatus?: boolean;
   selected: ReviewsFilterSelection;
   onFilterChange: (
     group: ReviewsFilterId,
@@ -92,7 +94,9 @@ function filterGroups(
   props: ReviewsControlProps
 ): ListFilterGroup<ReviewsFilterId, string>[] {
   return [
-    { id: 'status', label: 'Status', options: STATUS_OPTIONS },
+    ...(props.hideStatus
+      ? []
+      : [{ id: 'status' as const, label: 'Status', options: STATUS_OPTIONS }]),
     { id: 'priority', label: 'Priority', options: PRIORITY_OPTIONS },
     { id: 'linked', label: 'Linked to', options: LINKED_OPTIONS },
     { id: 'origin', label: 'Started from', options: ORIGIN_OPTIONS },

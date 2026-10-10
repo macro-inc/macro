@@ -165,6 +165,7 @@ export async function fetchPrLinks(
         id: session.sessionId,
         source: session.source,
         parent: sessionParent(session.threadParent),
+        messageId: session.originMessageId ?? undefined,
       })),
     ])
   );

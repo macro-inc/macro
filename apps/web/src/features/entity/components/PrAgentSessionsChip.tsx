@@ -1,12 +1,15 @@
 import SparkleIcon from '@phosphor/sparkle.svg';
 import { Button, cn, Dropdown } from '@ui';
 import type { ParentProps } from 'solid-js';
+import { rowPillTriggerClasses } from './row-pill';
 
 function ChipLabel(props: { label: string }) {
   return (
     <>
       <SparkleIcon class="size-3 shrink-0 text-chat" aria-hidden="true" />
-      <span class="min-w-0 truncate">{props.label}</span>
+      <span data-pill-text class="min-w-0 truncate">
+        {props.label}
+      </span>
     </>
   );
 }
@@ -22,10 +25,7 @@ export function PrAgentSessionChip(props: {
       variant="ghost"
       size="xs"
       noTouchResize
-      class={cn(
-        'h-auto min-w-0 max-w-48 gap-1.5 rounded-full border-edge bg-surface/50 px-1.5 py-1 text-xs font-medium leading-tight text-ink-muted',
-        props.class
-      )}
+      class={cn(rowPillTriggerClasses('max-w-48'), props.class)}
       title={props.label}
       label={`Open agent session: ${props.label}`}
       disabled={props.disabled}
@@ -57,10 +57,7 @@ export function PrAgentSessionsCountChip(
         variant="ghost"
         size="xs"
         noTouchResize
-        class={cn(
-          'h-auto min-w-0 max-w-48 gap-1.5 rounded-full border-edge bg-surface/50 px-1.5 py-1 text-xs font-medium leading-tight text-ink-muted',
-          props.class
-        )}
+        class={cn(rowPillTriggerClasses('max-w-48'), props.class)}
         title={label()}
         label={`Show ${label()}`}
         onClick={(event: MouseEvent) => event.stopPropagation()}

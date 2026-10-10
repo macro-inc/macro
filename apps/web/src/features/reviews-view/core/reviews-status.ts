@@ -7,6 +7,7 @@ import type {
 export function reviewsStatusTab(
   statuses: readonly string[]
 ): ReviewsStatusTabId | undefined {
+  if (statuses.length === 0) return 'all';
   if (statuses.length === 1 && statuses[0] === 'open') return 'open';
   if (
     statuses.length === 2 &&
@@ -28,9 +29,10 @@ const STATUS_TAB_SELECTIONS: Record<
 > = {
   open: ['open'],
   closed: ['closed', 'merged'],
+  all: [],
 };
 
-/** Closed includes merged PRs; menu choices remain independently selectable. */
+/** Closed includes merged PRs, and All filters on no status; menu choices remain independently selectable. */
 export const reviewsStatusTabSelection = (
   tab: ReviewsStatusTabId
 ): ReviewsStatusFilterId[] => [...STATUS_TAB_SELECTIONS[tab]];

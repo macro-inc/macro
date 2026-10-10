@@ -28,14 +28,20 @@ import {
 } from '@entity';
 import { GithubLabelPill } from '@entity/components/GithubLabelPill';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
+import { makePersisted } from '@solid-primitives/storage';
+import { Button } from '@ui';
 import {
   createMemo,
   createRenderEffect,
   createSignal,
+  type JSX,
+  Match,
   onMount,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
+import { ReviewsBoard } from './components/ReviewsBoard';
 import {
   activeReviewsFilterCount,
   ReviewsControls,
@@ -51,6 +57,7 @@ import {
 } from './core/reviews-status';
 import { createReviewsListController } from './primitives/create-reviews-list-controller';
 import { useReviewsFacetsQuery } from './queries/use-reviews-facets-query';
+import { useReviewsMergeabilityQuery } from './queries/use-reviews-mergeability-query';
 import { useReviewsQuery } from './queries/use-reviews-query';
 import {
   applyReviewLinks,
@@ -65,6 +72,7 @@ import {
   REVIEWS_SCOPES,
   type ReviewsFilterId,
   type ReviewsFilterSelection,
+  type ReviewsLayout,
   type ReviewsScope,
   type ReviewsSortId,
   type ReviewsStatusTabId,
@@ -82,13 +90,44 @@ const REVIEW_SCOPE_TITLES: Record<ReviewsScope, string> = {
 const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = REVIEWS_SCOPES.map(
   (scope) => ({ value: scope, label: REVIEW_SCOPE_TITLES[scope] })
 );
-function ReviewsListScopeHeading(props: { title: string }) {
+/** The board's status filter: open pull requests on their way, and merged ones. */
+const BOARD_STATUSES = ['open', 'merged'];
+
+/** The status toggle above the list, for touch layouts and a hidden sidebar. */
+function ReviewsHeaderStatusTabs(props: { children: JSX.Element }) {
+  const shell = useViewShell();
+  return (
+    <Show
+      when={
+        isTouchDevice() ||
+        shell.breakpoints.narrow?.() ||
+        shell.aside.isCollapsed()
+      }
+    >
+      <div class="mt-3 min-w-0 overflow-x-auto">{props.children}</div>
+    </Show>
+  );
+}
+
+/** Shown in the list header when the sidebar, with its own search, is hidden. */
+function ReviewsListScopeHeading(props: {
+  title: string;
+  search: string;
+  onSearchChange: (search: string) => void;
+}) {
   const shell = useViewShell();
   return (
     <Show when={shell.breakpoints.narrow?.() || shell.aside.isCollapsed()}>
       <div class="flex h-8 min-w-0 items-center">
         <h2 class="truncate text-xl font-semibold text-ink">{props.title}</h2>
       </div>
+      <SearchBar
+        label="Search reviews"
+        value={props.search}
+        onValueChange={props.onSearchChange}
+        placeholder="Search reviews"
+        class="max-w-md"
+      />
     </Show>
   );
 }
@@ -105,6 +144,11 @@ function ReviewsRoot() {
   const scope = (): ReviewsScope => tabSearch.tab;
   const scopeTitle = () => REVIEW_SCOPE_TITLES[scope()];
   const [search, setSearch] = createSignal('');
+  const [reviewsLayout, setReviewsLayout] = makePersisted(
+    createSignal<ReviewsLayout>('list'),
+    { name: 'reviews-layout' }
+  );
+  const boardVisible = () => reviewsLayout() === 'board' && !isTouchDevice();
   const [sort, setSort] = createSignal<ReviewsSortId>('recently_updated');
   const [filters, setFilters] = createSignal<ReviewsFilterSelection>(
     DEFAULT_REVIEWS_FILTERS
@@ -116,8 +160,13 @@ function ReviewsRoot() {
     githubLink.isPending ? undefined : githubLink.data?.username;
   const authorId = () =>
     githubLink.isPending ? undefined : githubLink.data?.userId;
-  const activeFilters = () =>
-    effectiveReviewsFilters(filters(), Boolean(authorId()));
+  const activeFilters = () => {
+    const effective = effectiveReviewsFilters(filters(), Boolean(authorId()));
+    // The board lays pull requests out by status itself.
+    return boardVisible()
+      ? { ...effective, status: BOARD_STATUSES }
+      : effective;
+  };
   const listEnabled = () =>
     listVisible() &&
     (!scopeMatchesViewerGithubId(scope()) || Boolean(authorId()));
@@ -151,6 +200,10 @@ function ReviewsRoot() {
       ...current,
       status: reviewsStatusTabSelection(status),
     }));
+  const statusToggle = () =>
+    !boardVisible() && showReviewsStatusTabs(filters().status)
+      ? { value: statusTab(), onChange: selectStatusTab }
+      : undefined;
   const clearSearch = () => setSearch('');
   const searchForTab = (tab: ReviewsScope) => ({
     [reviewsTabSearch.namespace]: reviewsTabSearchCodec.serialize({ tab }),
@@ -228,6 +281,26 @@ function ReviewsRoot() {
   const openLink = (content: SplitContent, newSplit: boolean) =>
     layout.openWithSplit(content, { preferNewSplit: newSplit });
   const listController = createReviewsListController(reviews, openReview);
+  // Conflicts are read live, and only for the open pull requests on the board.
+  // Like links, they load for every fetched row so search keeps the cache.
+  const mergeability = useReviewsMergeabilityQuery(
+    () =>
+      boardVisible()
+        ? source
+            .reviews()
+            .map((review) => review.metadata)
+            .filter((pullRequest) => pullRequest.status === 'open')
+        : [],
+    boardVisible
+  );
+  const loadMore = async () => {
+    if (source.isLoadingMore() || !source.hasMore()) return;
+    try {
+      await source.loadMore();
+    } catch {
+      // The query owns the page error; the board keeps its Load more button.
+    }
+  };
   const selectLabels = (labels: string[]) => {
     setFilters((current) => ({ ...current, label: labels }));
     if (!listVisible()) openList();
@@ -244,7 +317,11 @@ function ReviewsRoot() {
       content: () => <GithubLabelPill name={label.name} color={label.color} />,
     })),
     hasGithubIdentity: Boolean(authorId()),
-    selected: activeFilters(),
+    // The board's columns are its status, so Status neither shows nor counts.
+    hideStatus: boardVisible(),
+    selected: boardVisible()
+      ? { ...activeFilters(), status: [] }
+      : activeFilters(),
     onFilterChange: changeFilter,
     onClearFilters: clearFilters,
   });
@@ -256,15 +333,12 @@ function ReviewsRoot() {
           when={isTouchDevice()}
           fallback={
             <div class="flex min-w-0 flex-col gap-3">
-              <ReviewsListScopeHeading title={scopeTitle()} />
-              <div class="flex min-w-0 items-center justify-between gap-3">
-                <SearchBar
-                  label="Search reviews"
-                  value={search()}
-                  onValueChange={setSearch}
-                  placeholder="Search reviews"
-                  class="max-w-md flex-1"
-                />
+              <ReviewsListScopeHeading
+                title={scopeTitle()}
+                search={search()}
+                onSearchChange={setSearch}
+              />
+              <div class="flex min-w-0 items-center justify-end gap-3">
                 <ReviewsControls {...controls()} />
               </div>
             </div>
@@ -288,42 +362,97 @@ function ReviewsRoot() {
             />
           </div>
         </Show>
-        <Show when={showReviewsStatusTabs(filters().status)}>
-          <div class="mt-3 min-w-0 overflow-x-auto">
-            <ReviewsStatusTabs value={statusTab()} onChange={selectStatusTab} />
-          </div>
+        {/* The sidebar holds the toggle; without one it sits above the list. */}
+        <Show when={statusToggle()}>
+          {(status) => (
+            <ReviewsHeaderStatusTabs>
+              <ReviewsStatusTabs
+                value={status().value}
+                onChange={status().onChange}
+                class="h-auto max-w-sm"
+              />
+            </ReviewsHeaderStatusTabs>
+          )}
         </Show>
       </ViewShell.Header>
       <ViewShell.Content>
-        <ReviewsList
-          list={listController}
-          source={listSource}
-          links={{
-            linksFor,
-            companyName: links.companyName,
-            onOpen: openLink,
-          }}
-          scope={scope()}
-          authorLogin={authorLogin()}
-          authorId={authorId()}
-          viewerName={viewer.userInfo()?.name ?? undefined}
-          githubIdentityLoading={githubLink.isPending}
-          githubAccountStatus={
-            githubLink.isError
-              ? 'error'
-              : githubLink.isPending
-                ? undefined
-                : githubLink.data?.status
+        <Show
+          when={boardVisible()}
+          fallback={
+            <ReviewsList
+              list={listController}
+              source={listSource}
+              links={{
+                linksFor,
+                companyName: links.companyName,
+                onOpen: openLink,
+              }}
+              scope={scope()}
+              sort={sort()}
+              authorLogin={authorLogin()}
+              authorId={authorId()}
+              viewerName={viewer.userInfo()?.name ?? undefined}
+              githubIdentityLoading={githubLink.isPending}
+              githubAccountStatus={
+                githubLink.isError
+                  ? 'error'
+                  : githubLink.isPending
+                    ? undefined
+                    : githubLink.data?.status
+              }
+              search={search()}
+              hasFilters={
+                activeReviewsFilterCount(activeFilters()) >
+                (statusTab() === 'open' ? 1 : 0)
+              }
+              onClearFilters={clearFilters}
+              onClearSearch={clearSearch}
+              onOpen={openReview}
+            />
           }
-          search={search()}
-          hasFilters={
-            activeReviewsFilterCount(activeFilters()) >
-            (statusTab() === 'open' ? 1 : 0)
-          }
-          onClearFilters={clearFilters}
-          onClearSearch={clearSearch}
-          onOpen={openReview}
-        />
+        >
+          <Switch>
+            <Match when={listSource.isLoading()}>
+              <div
+                role="status"
+                class="grid size-full place-items-center text-sm text-ink-muted"
+              >
+                Loading pull requests…
+              </div>
+            </Match>
+            <Match when={listSource.error()}>
+              <div
+                role="alert"
+                class="flex size-full flex-col items-center justify-center gap-3 text-sm text-ink-muted"
+              >
+                <span>Reviews couldn’t be loaded.</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void listSource.retry()}
+                >
+                  Try again
+                </Button>
+              </div>
+            </Match>
+            <Match when={true}>
+              <ReviewsBoard
+                reviews={reviews()}
+                mergeability={mergeability.mergeability}
+                links={{
+                  linksFor,
+                  companyName: links.companyName,
+                  onOpen: openLink,
+                }}
+                scope={JSON.stringify([scope(), activeFilters(), search()])}
+                hasMore={source.hasMore()}
+                isLoadingMore={source.isLoadingMore()}
+                onLoadMore={() => void loadMore()}
+                onOpen={openReview}
+              />
+            </Match>
+          </Switch>
+        </Show>
       </ViewShell.Content>
     </>
   );
@@ -363,6 +492,11 @@ function ReviewsRoot() {
           >
             <ViewShell.Aside>
               <ReviewsSidebar
+                status={statusToggle()}
+                search={search()}
+                onSearchChange={setSearch}
+                layout={reviewsLayout()}
+                onLayoutChange={setReviewsLayout}
                 scope={scope()}
                 onScopeChange={selectScope}
                 labels={facets.labels()}

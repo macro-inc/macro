@@ -112,6 +112,7 @@ impl SessionPullRequestLinkRepo for Arc<StubLinks> {
                 session: *session,
                 source: *source,
                 thread_parent: Some(MessageParent::Channel(session.as_uuid())),
+                origin_message_id: Some(session.as_uuid()),
             })
             .collect())
     }
@@ -350,6 +351,10 @@ async fn sessions_for_pull_requests_answers_each_requested_pull_request_in_order
     assert_eq!(
         pull_requests[0].sessions[0].thread_parent,
         Some(MessageParent::Channel(visible.as_uuid()))
+    );
+    assert_eq!(
+        pull_requests[0].sessions[0].origin_message_id,
+        Some(visible.as_uuid())
     );
 }
 

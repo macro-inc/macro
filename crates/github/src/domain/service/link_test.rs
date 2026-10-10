@@ -22,10 +22,12 @@ use macro_user_id::{
 use crate::domain::{
     models::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubAccessToken,
-        GithubError, GithubExchangeTokenResponse, GithubLink, GithubMergeMethod,
-        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestDetails, GithubPullRequestMerge,
-        GithubPullRequestRef, GithubRepositoryMergeSettings, GithubUserInfo,
-        MergeGithubPullRequestRequest,
+        GithubDraftOutcome, GithubError, GithubExchangeTokenResponse, GithubLink,
+        GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestDetails,
+        GithubPullRequestMerge, GithubPullRequestMergeability, GithubPullRequestMergeabilityEntry,
+        GithubPullRequestNumber, GithubPullRequestRef, GithubPullRequestUpdateRejection,
+        GithubRepositoryMergeSettings, GithubUserInfo, MergeGithubPullRequestRequest,
+        SetGithubPullRequestDraftRequest,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -185,6 +187,9 @@ struct StubGithubOauthState {
     merge_settings_calls: u32,
     merge_outcome: Option<GithubMergeOutcome>,
     merge_calls: Vec<MergeCall>,
+    draft_outcome: Option<GithubDraftOutcome>,
+    draft_calls: Vec<(String, u64, bool)>,
+    mergeability_calls: Vec<Vec<GithubPullRequestNumber>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -252,6 +257,19 @@ impl StubGithubOauth {
 
     fn merge_calls(&self) -> Vec<MergeCall> {
         self.state.lock().unwrap().merge_calls.clone()
+    }
+
+    fn with_draft_outcome(self, outcome: GithubDraftOutcome) -> Self {
+        self.state.lock().unwrap().draft_outcome = Some(outcome);
+        self
+    }
+
+    fn draft_calls(&self) -> Vec<(String, u64, bool)> {
+        self.state.lock().unwrap().draft_calls.clone()
+    }
+
+    fn mergeability_calls(&self) -> Vec<Vec<GithubPullRequestNumber>> {
+        self.state.lock().unwrap().mergeability_calls.clone()
     }
 }
 
@@ -405,6 +423,42 @@ impl GithubOauth for StubGithubOauth {
             .merge_outcome
             .clone()
             .ok_or_else(|| anyhow::anyhow!("GitHub unreachable"))
+    }
+
+    async fn set_pull_request_draft(
+        &self,
+        _access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        draft: bool,
+    ) -> Result<GithubDraftOutcome, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state
+            .draft_calls
+            .push((format!("{owner}/{repo}"), number, draft));
+        state
+            .draft_outcome
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("GitHub unreachable"))
+    }
+
+    async fn get_pull_request_mergeability(
+        &self,
+        _access_token: &str,
+        pull_requests: &[GithubPullRequestNumber],
+    ) -> Result<Vec<GithubPullRequestMergeabilityEntry>, Self::Err> {
+        let mut state = self.state.lock().unwrap();
+        state.mergeability_calls.push(pull_requests.to_vec());
+        Ok(pull_requests
+            .iter()
+            .map(|pull_request| GithubPullRequestMergeabilityEntry {
+                owner: pull_request.owner.clone(),
+                repo: pull_request.repo.clone(),
+                number: pull_request.number,
+                mergeability: GithubPullRequestMergeability::Conflicting,
+            })
+            .collect())
     }
 }
 
@@ -1255,6 +1309,161 @@ async fn merge_pull_request_still_reports_the_merge_when_the_refresh_fails() {
     assert_eq!(response.sha, "6dcb09b5");
     assert!(response.pull_request.is_none());
     assert!(foreign_entity_service.patch_calls().is_empty());
+}
+
+fn draft_request(draft: bool) -> SetGithubPullRequestDraftRequest {
+    SetGithubPullRequestDraftRequest {
+        owner: "macro".to_string(),
+        repo: "app".to_string(),
+        number: 7,
+        draft,
+    }
+}
+
+#[tokio::test]
+async fn set_pull_request_draft_changes_state_and_refreshes() {
+    let user_id = test_user_id();
+    let oauth =
+        StubGithubOauth::new(false).with_draft_outcome(GithubDraftOutcome::Changed { draft: true });
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("valid-token"),
+    );
+
+    let response = service
+        .set_pull_request_draft(&user_id, draft_request(true))
+        .await
+        .unwrap();
+
+    assert!(response.draft);
+    assert_eq!(
+        response
+            .pull_request
+            .map(|pull_request| pull_request.github_key),
+        Some("macro/app/pull/7".to_string())
+    );
+    assert_eq!(
+        oauth.draft_calls(),
+        vec![("macro/app".to_string(), 7, true)]
+    );
+    assert_eq!(oauth.pull_request_detail_calls().len(), 1);
+}
+
+#[tokio::test]
+async fn set_pull_request_draft_surfaces_githubs_refusal() {
+    let user_id = test_user_id();
+    let oauth = StubGithubOauth::new(false).with_draft_outcome(GithubDraftOutcome::Rejected {
+        rejection: GithubPullRequestUpdateRejection::Forbidden,
+        message: "Resource not accessible by integration".to_string(),
+    });
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("valid-token"),
+    );
+
+    let result = service
+        .set_pull_request_draft(&user_id, draft_request(false))
+        .await;
+
+    match result {
+        Err(GithubError::PullRequestUpdateRejected { rejection, message }) => {
+            assert_eq!(rejection, GithubPullRequestUpdateRejection::Forbidden);
+            assert_eq!(message, "Resource not accessible by integration");
+        }
+        other => panic!("expected an update rejection, got {other:?}"),
+    }
+    assert!(oauth.pull_request_detail_calls().is_empty());
+}
+
+#[tokio::test]
+async fn set_pull_request_draft_requires_a_valid_grant() {
+    let user_id = test_user_id();
+    let oauth = StubGithubOauth::new(true);
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("expired-token"),
+    );
+
+    let result = service
+        .set_pull_request_draft(&user_id, draft_request(true))
+        .await;
+
+    assert!(matches!(result, Err(GithubError::ReauthenticationRequired)));
+    assert!(oauth.draft_calls().is_empty());
+}
+
+fn pull_request_number(number: u64) -> GithubPullRequestNumber {
+    GithubPullRequestNumber {
+        owner: "macro".to_string(),
+        repo: "app".to_string(),
+        number,
+    }
+}
+
+#[tokio::test]
+async fn get_pull_request_mergeability_reads_each_pull_request() {
+    let user_id = test_user_id();
+    let oauth = StubGithubOauth::new(false);
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("valid-token"),
+    );
+
+    let entries = service
+        .get_pull_request_mergeability(
+            &user_id,
+            vec![pull_request_number(7), pull_request_number(8)],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(entries.len(), 2);
+    assert_eq!(
+        entries[1].mergeability,
+        GithubPullRequestMergeability::Conflicting
+    );
+    assert_eq!(oauth.mergeability_calls().len(), 1);
+}
+
+#[tokio::test]
+async fn get_pull_request_mergeability_skips_github_for_an_empty_request() {
+    let user_id = test_user_id();
+    let oauth = StubGithubOauth::new(false);
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("valid-token"),
+    );
+
+    let entries = service
+        .get_pull_request_mergeability(&user_id, Vec::new())
+        .await
+        .unwrap();
+
+    assert!(entries.is_empty());
+    assert!(oauth.mergeability_calls().is_empty());
+}
+
+#[tokio::test]
+async fn get_pull_request_mergeability_rejects_too_many_pull_requests() {
+    let user_id = test_user_id();
+    let oauth = StubGithubOauth::new(false);
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        oauth.clone(),
+        StubAuth::new("valid-token"),
+    );
+
+    let result = service
+        .get_pull_request_mergeability(&user_id, (0..101).map(pull_request_number).collect())
+        .await;
+
+    assert!(matches!(result, Err(GithubError::TooManyPullRequests)));
+    assert!(oauth.mergeability_calls().is_empty());
 }
 
 #[tokio::test]

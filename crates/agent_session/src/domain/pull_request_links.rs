@@ -63,6 +63,8 @@ pub struct PullRequestSessionLinkRow {
     pub source: PullRequestLinkSource,
     /// The entity whose thread the session was started from, if any.
     pub thread_parent: Option<MessageParent>,
+    /// The message that started the session, if it was started from a thread.
+    pub origin_message_id: Option<Uuid>,
 }
 
 /// A session linked to a pull request, as a viewer of that session sees it.
@@ -77,6 +79,10 @@ pub struct PullRequestLinkedSession {
     pub source: PullRequestLinkSource,
     /// The channel, task, or CRM record whose thread the session was started from, if any.
     pub thread_parent: Option<MessageParent>,
+    /// The message that started the session, such as an @mention, when it was
+    /// started from a thread. A mention inside a thread is that reply, not the root.
+    #[cfg_attr(feature = "schema", schema(value_type = Option<Uuid>))]
+    pub origin_message_id: Option<Uuid>,
 }
 
 /// The sessions linked to one pull request that the caller can view.
@@ -296,6 +302,7 @@ impl<R: SessionPullRequestLinkRepo> SessionPullRequestLinks for SessionPullReque
                     session_id: row.session.as_uuid(),
                     source: row.source,
                     thread_parent: row.thread_parent,
+                    origin_message_id: row.origin_message_id,
                 });
         }
         for pull_request in &mut requested {

@@ -186,6 +186,7 @@ export * from './promptAttachment';
 export * from './promptAttachmentMimeType';
 export * from './promptAttachmentSize';
 export * from './pullRequestLinkedSession';
+export * from './pullRequestLinkedSessionOriginMessageId';
 export * from './pullRequestLinkedSessionThreadParent';
 export * from './pullRequestLinkSource';
 export * from './pullRequestSessions';

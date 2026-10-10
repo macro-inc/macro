@@ -1203,6 +1203,11 @@ export type PullRequestLinkSource = 'agent' | 'user';
  */
 export type PullRequestLinkedSession = {
     /**
+     * The message that started the session, such as an @mention, when it was
+     * started from a thread. A mention inside a thread is that reply, not the root.
+     */
+    originMessageId?: string | null;
+    /**
      * The session id.
      */
     sessionId: string;

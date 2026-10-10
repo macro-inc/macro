@@ -16,13 +16,16 @@ pub use app_jwt::AppJwt;
 pub(crate) use app_jwt::app_jwt;
 pub use github_pull_requests::domain::models::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef, GithubKey,
-    GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestCheckRun,
-    GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestLabel,
-    GithubPullRequestMerge, GithubPullRequestRef, GithubPullRequestReview,
-    GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser,
-    GithubRepositoryMergeSettings, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
-    latest_reviews,
+    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef,
+    GithubDraftOutcome, GithubKey, GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
+    GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
+    GithubPullRequestLabel, GithubPullRequestMerge, GithubPullRequestMergeability,
+    GithubPullRequestMergeabilityEntry, GithubPullRequestMergeabilityRequest,
+    GithubPullRequestMergeabilityResponse, GithubPullRequestNumber, GithubPullRequestRef,
+    GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestStatus,
+    GithubPullRequestUpdateRejection, GithubPullRequestUser, GithubRepositoryMergeSettings,
+    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+    SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse, latest_reviews,
 };
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
@@ -91,4 +94,16 @@ pub enum GithubError {
         /// GitHub's message for the user.
         message: String,
     },
+    /// GitHub declined to change the pull request. The message is GitHub's
+    /// own and is written for the person who asked, so it is safe to show.
+    #[error("GitHub declined to change the pull request: {message}")]
+    PullRequestUpdateRejected {
+        /// Why GitHub declined.
+        rejection: GithubPullRequestUpdateRejection,
+        /// GitHub's message for the user.
+        message: String,
+    },
+    /// The request asked for more pull requests than one call may cover.
+    #[error("too many pull requests requested")]
+    TooManyPullRequests,
 }
