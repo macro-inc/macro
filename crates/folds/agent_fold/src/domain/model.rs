@@ -58,8 +58,8 @@ pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
 pub use segment::{
-    ActivityRow, ActivityStatus, ProjectedSegment, Segment, SegmentKind, TurnPhase, phase, project,
-    prose_text, segments,
+    ActivityCard, ActivityRow, ActivityStatus, CardAction, CardItemType, ProjectedSegment, Segment,
+    SegmentKind, TurnPhase, phase, project, prose_text, segments,
 };
 pub use signal::TurnSignal;
 pub use subagent::{SubagentResult, ToolStats};

@@ -18,6 +18,16 @@ vi.mock('./queries/live-session', () => ({
 vi.mock('@app/features/block-agent/ui', () => ({
   TextShimmer: (props: { text: string }) => <>{props.text}</>,
 }));
+vi.mock('./components/activity-cards', () => ({
+  default: (props: { rows: { id: string; card?: unknown }[] }) => (
+    <aside aria-label="Cards">
+      {props.rows
+        .filter((row) => row.card)
+        .map((row) => row.id)
+        .join(',')}
+    </aside>
+  ),
+}));
 
 import { AgentActivity } from './agent-activity';
 
@@ -111,4 +121,53 @@ it('folds a long run behind a count of its earlier steps', () => {
   expect(view.queryByText('Step 1')).toBeNull();
   view.getByRole('button', { name: '2 earlier steps' }).click();
   expect(view.getByText('Step 1')).toBeTruthy();
+});
+
+it('shows a composed view in place of its step, and what the steps produced after them', async () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={[
+        {
+          id: 't1',
+          label: 'Create document',
+          detail: 'Launch FAQ',
+          status: 'completed',
+          card: {
+            kind: 'item',
+            itemType: 'document',
+            itemId: 'doc-1',
+            action: 'created',
+          },
+        },
+        {
+          id: 't2',
+          label: 'Display results',
+          status: 'completed',
+          card: { kind: 'view', view: { widgets: [] } },
+        },
+      ]}
+      sealed
+    />
+  ));
+  expect(steps(view)).toEqual([['Create documentLaunch FAQ', 'completed']]);
+  expect(
+    (await view.findByRole('complementary', { name: 'Cards' })).textContent
+  ).toBe('t1,t2');
+  expect(live.acquired).toEqual([]);
+});
+
+it('loads no cards for a run that produced none', () => {
+  const view = render(() => (
+    <AgentActivity
+      agentSessionId="session"
+      turn={2}
+      segment={1}
+      rows={snapshot}
+      sealed
+    />
+  ));
+  expect(view.queryByRole('complementary', { name: 'Cards' })).toBeNull();
 });

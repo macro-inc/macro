@@ -139,6 +139,82 @@ describe('agent announcements', () => {
       'Checking first.\n\n<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":1,"rows":[{"id":"t1","label":"Ran","status":"completed","detail":"ls"},{"id":"t2","label":"Read","status":"completed"}],"sealed":true}</m-agent-activity>'
     );
   });
+  it('keeps what a step produced as its card', async () => {
+    const card = {
+      kind: 'item',
+      itemType: 'document',
+      itemId: 'doc-1',
+      fileType: 'md',
+      action: 'created',
+      title: 'Launch FAQ',
+    };
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        link: false,
+        body: {
+          kind: 'segments',
+          segments: [
+            {
+              kind: 'activity',
+              turn: 2,
+              segment: 0,
+              sealed: true,
+              rows: [
+                {
+                  id: 't1',
+                  label: 'Create document',
+                  detail: 'Launch FAQ',
+                  status: 'completed',
+                  card,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(response.status).toBe(200);
+    const { markdown } = await response.json<{ markdown: string }>();
+    expect(markdown).toBe(
+      `<m-agent-activity>{"agentSessionId":"session","turn":2,"segment":0,"rows":[{"id":"t1","label":"Create document","status":"completed","detail":"Launch FAQ","card":${JSON.stringify(card)}}],"sealed":true}</m-agent-activity>`
+    );
+  });
+
+  it('rejects a card it does not know', async () => {
+    const response = await request({
+      chatReply: {
+        sessionId: 'session',
+        body: {
+          kind: 'segments',
+          segments: [
+            {
+              kind: 'activity',
+              turn: 2,
+              segment: 0,
+              sealed: true,
+              rows: [
+                {
+                  id: 't1',
+                  label: 'Ran',
+                  status: 'completed',
+                  card: {
+                    kind: 'item',
+                    itemType: 'spaceship',
+                    itemId: 'x',
+                    action: 'created',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+  });
+
   it('rejects a chat reply body it does not know', async () => {
     const response = await request({
       chatReply: { sessionId: 'session', body: { kind: 'spinner' } },

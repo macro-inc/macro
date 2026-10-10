@@ -8,7 +8,9 @@ import type {
   WidgetOf,
   WidgetType,
 } from './schema';
+import { Cards } from './widgets/Cards';
 import { ChannelMessage } from './widgets/ChannelMessage';
+import { Events } from './widgets/Events';
 import { List } from './widgets/List';
 import { Md } from './widgets/Md';
 import { Timeline } from './widgets/Timeline';
@@ -26,6 +28,8 @@ export function Render(props: { node: Widget }): JSX.Element {
     .with({ type: 'timeline' }, (n) => <Timeline {...n} />)
     .with({ type: 'channelMessage' }, (n) => <ChannelMessage {...n} />)
     .with({ type: 'list' }, (n) => <List {...n} />)
+    .with({ type: 'events' }, (n) => <Events {...n} />)
+    .with({ type: 'cards' }, (n) => <Cards {...n} />)
     .with({ type: 'container' }, (n) => <Container node={n} />)
     .exhaustive();
 }
@@ -35,7 +39,10 @@ export function Render(props: { node: Widget }): JSX.Element {
  * share a horizontal row, so e.g. a `list` dropped into a `row` still renders
  * full-width on its own line instead of being squished into a column.
  */
-const FULL_WIDTH_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>(['list']);
+const FULL_WIDTH_TYPES: ReadonlySet<WidgetType> = new Set<WidgetType>([
+  'list',
+  'events',
+]);
 
 /**
  * Renders a `container` node: picks {@link RowLayout} or {@link Col} by

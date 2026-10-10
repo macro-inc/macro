@@ -93,6 +93,67 @@ export const ChannelMessageWidgetSchema = z.object({
 export type ChannelMessageWidget = z.infer<typeof ChannelMessageWidgetSchema>;
 
 /**
+ * A calendar agenda: events grouped by day with their times, places and
+ * people, loaded live from the viewer's own calendars. Times are never
+ * restated by the model, so they cannot drift from the calendar.
+ */
+export const EventsWidgetSchema = z
+  .object({
+    type: z.literal('events'),
+    title: z.string().optional(),
+    events: z.array(
+      z.object({
+        eventId: z
+          .string()
+          .describe(
+            'The eventId a calendar tool such as ListCalendarEvents returned.'
+          ),
+        occurrenceKey: z
+          .string()
+          .optional()
+          .describe(
+            "One instance of a recurring event: that instance's recurrenceId from ListCalendarEvents."
+          ),
+      })
+    ),
+  })
+  .describe(
+    "A calendar agenda: the events grouped by day with their times, places and attendees, loaded live from the user's calendars. Use it whenever an answer is about calendar events instead of listing them in text."
+  );
+export type EventsWidget = z.infer<typeof EventsWidgetSchema>;
+
+/** The kinds of item a `cards` widget shows. */
+export const CARD_ITEM_TYPES = [
+  'document',
+  'email_thread',
+  'calendar_event',
+] as const;
+
+/**
+ * Rich cards for the few specific items an answer is about. Each card loads
+ * its item with the viewer's own access and opens it.
+ */
+export const CardsWidgetSchema = z
+  .object({
+    type: z.literal('cards'),
+    title: z.string().optional(),
+    items: z.array(
+      z.object({
+        type: z.enum(CARD_ITEM_TYPES),
+        id: z
+          .string()
+          .describe(
+            'A document id (documents and spreadsheets), an email thread id, or a calendar eventId, exactly as a tool returned it.'
+          ),
+      })
+    ),
+  })
+  .describe(
+    'Rich cards for the one to four specific items the answer is about: a document or spreadsheet, an email thread, or a calendar event. Each card opens its item. Use a list widget for longer sets.'
+  );
+export type CardsWidget = z.infer<typeof CardsWidgetSchema>;
+
+/**
  * A nestable flex container. This is what makes real dashboards composable.
  *
  * `ContainerWidget` and `Widget` are mutually recursive, so their types are
@@ -129,6 +190,8 @@ export type Widget =
   | TimelineWidget
   | ListWidget
   | ChannelMessageWidget
+  | EventsWidget
+  | CardsWidget
   | ContainerWidget;
 
 export const WidgetSchema: z.ZodType<Widget> = z.union([
@@ -136,6 +199,8 @@ export const WidgetSchema: z.ZodType<Widget> = z.union([
   TimelineWidgetSchema,
   ListWidgetSchema,
   ChannelMessageWidgetSchema,
+  EventsWidgetSchema,
+  CardsWidgetSchema,
   ContainerWidgetSchema,
 ]);
 

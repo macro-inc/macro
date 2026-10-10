@@ -32,5 +32,6 @@
  *   `task-list` with the `list` wire shape plus optional `$.taskListView` node state
  *   (persisted check-list task filters).
  * Version 8.0 - Oct 2026. Added AgentActivityNode: the steps of an agent's reply between two passages, with a snapshot of its rows and live rendering where the session is readable.
+ * Version 8.1 - Oct 2026. AgentActivityNode rows carry an optional `card`: an item the step created, changed or sent, or a view the agent composed.
  */
-export const MARKDOWN_VERSION_COUNTER = 8.0;
+export const MARKDOWN_VERSION_COUNTER = 8.1;

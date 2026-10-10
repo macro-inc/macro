@@ -52,6 +52,38 @@ fn macro_tool(id: &str, name: &str, input: serde_json::Value, status: ToolStatus
     }
 }
 
+fn macro_result(
+    id: &str,
+    name: &str,
+    input: serde_json::Value,
+    output: serde_json::Value,
+) -> MessagePart {
+    MessagePart::ToolUse {
+        id: ToolUseId(id.to_owned()),
+        name: ToolName::native(name),
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Macro {
+            input,
+            output: Some(output),
+            error: None,
+        },
+    }
+}
+
+fn user_tool(
+    id: &str,
+    name: &str,
+    input: serde_json::Value,
+    outcome: UserToolOutcome,
+) -> MessagePart {
+    MessagePart::ToolUse {
+        id: ToolUseId(id.to_owned()),
+        name: ToolName::native(name),
+        status: ToolStatus::Completed,
+        detail: ToolDetail::UserTool { input, outcome },
+    }
+}
+
 fn permission(id: i64, outcome: PermissionOutcome) -> MessagePart {
     MessagePart::Permission {
         request_id: AgentRequestId::Number(id),
@@ -104,12 +136,14 @@ fn narration_work_and_answer_are_three_segments_with_the_steps_grouped() {
                 label: "Ran".to_owned(),
                 detail: Some("cargo test".to_owned()),
                 status: ActivityStatus::Completed,
+                card: None,
             },
             ActivityRow {
                 id: "b".to_owned(),
                 label: "Read".to_owned(),
                 detail: Some("lib.rs".to_owned()),
                 status: ActivityStatus::Completed,
+                card: None,
             },
         ]
     );
@@ -276,6 +310,231 @@ fn macro_tools_read_as_their_name_with_what_they_acted_on() {
     assert_eq!(rows[1].detail, None);
     assert_eq!(rows[2].label, "Create document");
     assert_eq!(rows[2].detail.as_deref(), Some("Launch FAQ"));
+}
+
+#[test]
+fn a_created_document_is_a_card_named_as_the_agent_named_it() {
+    let parts = [macro_result(
+        "a",
+        "CreateDocument",
+        serde_json::json!({"documentName": "Launch FAQ", "fileExtension": "md", "fileContent": "..."}),
+        serde_json::json!({"documentId": "doc-1"}),
+    )];
+    let rows = &segments(&parts, true)[0].rows;
+    assert_eq!(
+        rows[0].card,
+        Some(ActivityCard::Item {
+            item_type: CardItemType::Document,
+            item_id: "doc-1".to_owned(),
+            file_type: Some("md".to_owned()),
+            action: CardAction::Created,
+            title: Some("Launch FAQ".to_owned()),
+        })
+    );
+}
+
+#[test]
+fn a_step_earns_its_card_only_once_it_has_finished() {
+    let parts = [
+        macro_tool(
+            "a",
+            "CreateDocument",
+            serde_json::json!({"documentName": "Launch FAQ"}),
+            ToolStatus::Running,
+        ),
+        macro_tool(
+            "b",
+            "EditSpreadsheet",
+            serde_json::json!({"documentId": "sheet-1"}),
+            ToolStatus::Failed,
+        ),
+    ];
+    let rows = &segments(&parts, false)[0].rows;
+    assert!(rows.iter().all(|row| row.card.is_none()));
+}
+
+#[test]
+fn edits_name_the_document_they_changed() {
+    let parts = [
+        macro_tool(
+            "a",
+            "EditDocument",
+            serde_json::json!({"document_id": "doc-1", "instructions": "tighten it"}),
+            ToolStatus::Completed,
+        ),
+        macro_tool(
+            "b",
+            "EditSpreadsheet",
+            serde_json::json!({"documentId": "sheet-1", "operations": []}),
+            ToolStatus::Completed,
+        ),
+    ];
+    let cards: Vec<_> = segments(&parts, true)[0]
+        .rows
+        .iter()
+        .map(|row| row.card.clone())
+        .collect();
+    assert_eq!(
+        cards,
+        [
+            Some(ActivityCard::Item {
+                item_type: CardItemType::Document,
+                item_id: "doc-1".to_owned(),
+                file_type: Some("md".to_owned()),
+                action: CardAction::Edited,
+                title: None,
+            }),
+            Some(ActivityCard::Item {
+                item_type: CardItemType::Document,
+                item_id: "sheet-1".to_owned(),
+                file_type: Some("spreadsheet".to_owned()),
+                action: CardAction::Edited,
+                title: None,
+            }),
+        ]
+    );
+}
+
+#[test]
+fn an_edit_that_asked_for_clarification_changed_nothing() {
+    let parts = [macro_result(
+        "a",
+        "EditDocument",
+        serde_json::json!({"document_id": "doc-1", "instructions": "tighten it"}),
+        serde_json::json!({
+            "summary": "Paused for clarification; no edits applied.",
+            "clarification": "Which section?"
+        }),
+    )];
+    assert_eq!(segments(&parts, true)[0].rows[0].card, None);
+}
+
+#[test]
+fn a_shown_view_is_its_card() {
+    let view =
+        serde_json::json!({"title": "Your week", "widgets": [{"type": "md", "markdown": "Hi"}]});
+    let parts = [macro_tool(
+        "a",
+        "DisplayResults",
+        serde_json::json!({"view": view.clone()}),
+        ToolStatus::Completed,
+    )];
+    assert_eq!(
+        segments(&parts, true)[0].rows[0].card,
+        Some(ActivityCard::View { view })
+    );
+}
+
+#[test]
+fn calendar_tools_card_the_event_they_returned() {
+    let event = serde_json::json!({"eventId": "event-1", "title": "Design review", "start": "2026-10-09T15:00:00Z"});
+    let parts = [
+        macro_result(
+            "a",
+            "CreateConfirmedCalendarEvent",
+            serde_json::json!({}),
+            event.clone(),
+        ),
+        macro_result(
+            "b",
+            "UpdateCalendarEvent",
+            serde_json::json!({}),
+            event.clone(),
+        ),
+        user_tool(
+            "c",
+            "CreateCalendarEvent",
+            serde_json::json!({"title": "Design review"}),
+            UserToolOutcome::Completed { result: event },
+        ),
+    ];
+    let actions: Vec<_> = segments(&parts, true)[0]
+        .rows
+        .iter()
+        .map(|row| match &row.card {
+            Some(ActivityCard::Item {
+                item_type: CardItemType::CalendarEvent,
+                item_id,
+                title,
+                action,
+                ..
+            }) => {
+                assert_eq!(item_id, "event-1");
+                assert_eq!(title.as_deref(), Some("Design review"));
+                *action
+            }
+            other => panic!("expected an event card, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        actions,
+        [CardAction::Created, CardAction::Edited, CardAction::Created]
+    );
+}
+
+#[test]
+fn a_sent_email_is_a_card_and_an_unsent_draft_is_not() {
+    let draft = serde_json::json!({"subject": "Launch plan", "to": ["ada@example.com"]});
+    let parts = [
+        user_tool(
+            "a",
+            "SendEmail",
+            draft.clone(),
+            UserToolOutcome::Sent {
+                message_id: "message-1".to_owned(),
+                thread_id: "thread-1".to_owned(),
+            },
+        ),
+        user_tool("b", "SendEmail", draft, UserToolOutcome::Pending),
+    ];
+    let rows = &segments(&parts, true)[0].rows;
+    assert_eq!(
+        rows[0].card,
+        Some(ActivityCard::Item {
+            item_type: CardItemType::EmailThread,
+            item_id: "thread-1".to_owned(),
+            file_type: None,
+            action: CardAction::Sent,
+            title: Some("Launch plan".to_owned()),
+        })
+    );
+    assert_eq!(rows[1].card, None);
+}
+
+#[test]
+fn a_card_travels_in_the_row_it_belongs_to() {
+    let plain = ActivityRow {
+        id: "a".to_owned(),
+        label: "Ran".to_owned(),
+        detail: None,
+        status: ActivityStatus::Completed,
+        card: None,
+    };
+    assert_eq!(
+        serde_json::to_value(&plain).unwrap(),
+        serde_json::json!({"id": "a", "label": "Ran", "detail": null, "status": "completed", "card": null})
+    );
+    let carded = ActivityRow {
+        card: Some(ActivityCard::Item {
+            item_type: CardItemType::EmailThread,
+            item_id: "thread-1".to_owned(),
+            file_type: None,
+            action: CardAction::Sent,
+            title: None,
+        }),
+        ..plain
+    };
+    assert_eq!(
+        serde_json::to_value(&carded).unwrap()["card"],
+        serde_json::json!({
+            "kind": "item",
+            "itemType": "email_thread",
+            "itemId": "thread-1",
+            "fileType": null,
+            "action": "sent",
+            "title": null,
+        })
+    );
 }
 
 #[test]

@@ -79,6 +79,23 @@ fn chat_reply(session_id: AgentSessionId, body: AgentChatReplyBody) -> AgentChat
     }
 }
 
+/// Largest card a message stores, serialized. A view is the model's own
+/// arguments; one this large is a runaway, and its row still says what the
+/// step did.
+const MAX_STORED_CARD_BYTES: usize = 32 * 1024;
+
+/// A step's card as a message stores it, unless it is too large to store.
+fn stored_card(
+    card: &agent_fold::domain::model::ActivityCard,
+) -> Option<agent_fold::domain::model::ActivityCard> {
+    let size = serde_json::to_vec(card).map_or(usize::MAX, |bytes| bytes.len());
+    if size > MAX_STORED_CARD_BYTES {
+        tracing::warn!(size, "dropping an activity card too large to store");
+        return None;
+    }
+    Some(card.clone())
+}
+
 /// A reply's segments as the message composer takes them: passages as the
 /// agent wrote them, and runs of steps with their rows. Requests for the
 /// user are answered live and are not part of a message.
@@ -107,6 +124,7 @@ fn reply_segments(turn: TurnId, segments: &[ProjectedSegment]) -> Vec<AgentReply
                             ActivityStatus::Failed => AgentActivityStatus::Failed,
                             ActivityStatus::Interrupted => AgentActivityStatus::Interrupted,
                         },
+                        card: row.card.as_ref().and_then(stored_card),
                     })
                     .collect(),
                 sealed: projected.segment.sealed,

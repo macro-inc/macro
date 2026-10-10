@@ -58,7 +58,8 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
                     "id": "tool-1",
                     "label": "Running",
                     "detail": "ls",
-                    "status": "running"
+                    "status": "running",
+                    "card": null
                 }]
             }],
             "phase": "working"

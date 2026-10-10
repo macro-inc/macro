@@ -175,6 +175,37 @@ it('puts a question for the running turn under the row', () => {
   ).toEqual(['ask-1']);
 });
 
+it('names the step under way next to the row, outside the live region', () => {
+  typing('working');
+  setMessages([
+    {
+      ...writing(''),
+      segments: [
+        {
+          index: 0,
+          kind: 'activity',
+          start: 0,
+          end: 1,
+          sealed: false,
+          rows: [
+            {
+              id: 't1',
+              label: 'Create document',
+              detail: 'Launch FAQ',
+              status: 'running',
+              card: null,
+            },
+          ],
+        },
+      ],
+      phase: 'working',
+    },
+  ]);
+  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
+  expect(view.getByText('Create document Launch FAQ')).toBeTruthy();
+  expect(view.getByRole('status').textContent).not.toContain('Launch FAQ');
+});
+
 it('offers no Stop to a viewer who cannot drive the session', () => {
   mocks.canEdit = false;
   typing('working');

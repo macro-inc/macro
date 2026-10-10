@@ -74,6 +74,7 @@ const ID_FIELD_BY_TYPE: Partial<Record<EntityRef['type'], IdFieldName>> = {
   call: 'callId',
   foreign_entity: 'foreignEntityRecordId',
   crm_company: 'crmCompanyId',
+  calendar_event: 'calendarEventId',
   // user / team / crm_contact / static_file have no soup item filter — skipped.
 };
 

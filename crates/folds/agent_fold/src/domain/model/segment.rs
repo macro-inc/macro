@@ -16,6 +16,12 @@
 //! message once its segment is posted, so the label a person reads later is
 //! the label the live view showed; wording that differed between the two
 //! would make a finished turn look like it changed.
+//!
+//! A row can also carry a card: what the step produced that a reader wants to
+//! see or open rather than read about - the document the agent created, the
+//! email it sent, the view it composed for the user. Cards are read from
+//! Macro's own tools, whose arguments and results are Macro's whichever
+//! harness relayed them, and are stored with the row for the same reason.
 
 use agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus;
 use serde::{Deserialize, Serialize};
@@ -72,6 +78,67 @@ pub struct ActivityRow {
     pub detail: Option<String>,
     /// Where it got to.
     pub status: ActivityStatus,
+    /// What the step produced that a reader may want to see or open, once
+    /// it has produced it.
+    #[serde(default)]
+    pub card: Option<ActivityCard>,
+}
+
+/// Something a step produced, shown as a card after the steps of its run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ActivityCard {
+    /// A workspace item the step created, changed or sent. Readers load the
+    /// item with their own access; the title is what the step knew it as,
+    /// for the moment before it loads and for a reader who cannot open it.
+    Item {
+        /// What kind of item it is.
+        #[serde(rename = "itemType")]
+        item_type: CardItemType,
+        /// The item's id.
+        #[serde(rename = "itemId")]
+        item_id: String,
+        /// A document's file type, when the step named it: `md`,
+        /// `spreadsheet`.
+        #[serde(rename = "fileType")]
+        file_type: Option<String>,
+        /// What the step did to it.
+        action: CardAction,
+        /// The item's name, as the step knew it.
+        title: Option<String>,
+    },
+    /// A view the agent composed for the user: the `DisplayResults` tool's
+    /// `view` argument, as the model wrote it. Its widgets name the items
+    /// they show, and readers load those with their own access.
+    View {
+        /// The dynamic-UI view.
+        #[specta(type = specta_typescript::Unknown)]
+        view: serde_json::Value,
+    },
+}
+
+/// The kinds of workspace item a card opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum CardItemType {
+    /// A document, including a spreadsheet.
+    Document,
+    /// An email thread.
+    EmailThread,
+    /// A calendar event.
+    CalendarEvent,
+}
+
+/// What a step did to the item its card opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum CardAction {
+    /// The step made it: a document, an event.
+    Created,
+    /// The step changed it.
+    Edited,
+    /// The step sent it: an email.
+    Sent,
 }
 
 /// A run of a reply's parts that reads as one unit.
@@ -272,6 +339,7 @@ fn activity_rows(parts: &[MessagePart], closed: bool) -> Vec<ActivityRow> {
                     label: "Updated the plan".to_owned(),
                     detail: Some(format!("{done}/{} done", entries.len())),
                     status: ActivityStatus::Completed,
+                    card: None,
                 })
             }
             _ => None,
@@ -340,6 +408,13 @@ fn tool_row(
         ToolStatus::Completed => ActivityStatus::Completed,
         ToolStatus::Failed => ActivityStatus::Failed,
     };
+    let card = match detail {
+        ToolDetail::Macro { input, output, .. } if status == ActivityStatus::Completed => {
+            macro_card(tool_name(name), input, output.as_ref())
+        }
+        ToolDetail::UserTool { input, outcome } => user_tool_card(tool_name(name), input, outcome),
+        _ => None,
+    };
     let named = humanize(tool_name(name));
     let verbed = |verbs: &Verbs, detail: Option<String>| {
         let label = match status {
@@ -384,7 +459,114 @@ fn tool_row(
         label,
         detail,
         status,
+        card,
     }
+}
+
+/// The card a finished Macro tool call earns, by the tool's own arguments
+/// and result.
+fn macro_card(
+    tool: &str,
+    input: &serde_json::Value,
+    output: Option<&serde_json::Value>,
+) -> Option<ActivityCard> {
+    let field = |value: Option<&serde_json::Value>, key: &str| {
+        value
+            .and_then(|value| value.get(key))
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    };
+    let document = |id, file_type: Option<&str>, action, title| ActivityCard::Item {
+        item_type: CardItemType::Document,
+        item_id: id,
+        file_type: file_type.map(str::to_owned),
+        action,
+        title,
+    };
+    match tool {
+        "DisplayResults" => input
+            .get("view")
+            .map(|view| ActivityCard::View { view: view.clone() }),
+        "CreateDocument" => Some(document(
+            field(output, "documentId")?,
+            field(Some(input), "fileExtension").as_deref(),
+            CardAction::Created,
+            field(Some(input), "documentName"),
+        )),
+        // EditDocument's arguments keep their Rust names. An edit that asked
+        // for clarification instead changed nothing.
+        "EditDocument" => output
+            .and_then(|output| output.get("clarification"))
+            .is_none_or(serde_json::Value::is_null)
+            .then(|| {
+                Some(document(
+                    field(Some(input), "document_id")?,
+                    Some("md"),
+                    CardAction::Edited,
+                    None,
+                ))
+            })
+            .flatten(),
+        "EditSpreadsheet" => Some(document(
+            field(Some(input), "documentId")?,
+            Some("spreadsheet"),
+            CardAction::Edited,
+            None,
+        )),
+        "CreateConfirmedCalendarEvent" => event_card(output?, CardAction::Created),
+        "UpdateCalendarEvent" => event_card(output?, CardAction::Edited),
+        _ => None,
+    }
+}
+
+/// The card a user tool earns once the user has finished what the agent
+/// drafted: the email they sent, the event they created.
+fn user_tool_card(
+    tool: &str,
+    input: &serde_json::Value,
+    outcome: &UserToolOutcome,
+) -> Option<ActivityCard> {
+    match outcome {
+        UserToolOutcome::Sent { thread_id, .. } if tool == "SendEmail" => {
+            Some(ActivityCard::Item {
+                item_type: CardItemType::EmailThread,
+                item_id: thread_id.clone(),
+                file_type: None,
+                action: CardAction::Sent,
+                title: input
+                    .get("subject")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+                    .filter(|subject| !subject.is_empty())
+                    .map(str::to_owned),
+            })
+        }
+        UserToolOutcome::Completed { result } if tool == "CreateCalendarEvent" => {
+            event_card(result, CardAction::Created)
+        }
+        _ => None,
+    }
+}
+
+/// A calendar event's card, from the event a calendar tool returned.
+fn event_card(event: &serde_json::Value, action: CardAction) -> Option<ActivityCard> {
+    let text = |key: &str| {
+        event
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    };
+    Some(ActivityCard::Item {
+        item_type: CardItemType::CalendarEvent,
+        item_id: text("eventId")?,
+        file_type: None,
+        action,
+        title: text("title"),
+    })
 }
 
 /// A tool known only by name reads as its name in every state; the status

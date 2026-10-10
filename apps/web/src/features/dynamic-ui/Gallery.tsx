@@ -96,6 +96,29 @@ const CATALOG: Array<{ label: string; widget: Widget }> = [
     },
   },
   {
+    // An agenda resolves events through the viewer's own calendars; ids from
+    // another workspace render as events that are not on the calendar.
+    label: 'events',
+    widget: {
+      type: 'events',
+      title: 'This week',
+      events: [
+        { eventId: '019e9d3c-0000-7000-8000-000000000001' },
+        { eventId: '019e9d3c-0000-7000-8000-000000000002' },
+      ],
+    },
+  },
+  {
+    label: 'cards',
+    widget: {
+      type: 'cards',
+      items: [
+        { type: 'document', id: DOC_SHOWCASE },
+        { type: 'document', id: DOC_STABILIZE },
+      ],
+    },
+  },
+  {
     // Container demo: a row laying out two *different* widgets side by side.
     label: 'container',
     widget: {

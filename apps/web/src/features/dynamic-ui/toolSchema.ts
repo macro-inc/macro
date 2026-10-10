@@ -11,12 +11,14 @@ export function displayResultsToolSchema() {
     z.object({ view: ViewSchema }).meta({
       title: 'DisplayResults',
       description: [
-        'Present results as a rich, interactive view (lists, timelines, channel messages) directly in the conversation.',
+        'Present results as a rich, interactive view (lists, timelines, calendar agendas, item cards, channel messages) directly in the conversation.',
         'Prefer this tool when answering questions about workspace data: summaries of tasks/docs/activity, lists of entities, and information that would otherwise need a markdown table or long bulleted list. The user does not need to ask for a dashboard.',
         'Typical triggers: "what did I get done this week?", "what is a teammate working on?", "show my open tasks", "summarize this project", and "what happened in this channel?".',
         'ReadActivity already renders a complete activity timeline: do not call DisplayResults to repeat its events; add at most one short textual takeaway.',
         'The view is the answer. Keep accompanying prose to a one-line lead-in at most and do not restate the same data.',
         'Entity-backed widgets take real workspace entity ids obtained from other tools such as ListEntities or search; never invent ids. Prefer list sources with kind "items" and those entity references.',
+        'To show calendar events, use an events widget with the eventIds a calendar tool returned: it renders an agenda loaded live from the calendar, so never restate the times in prose. When the answer is about one to four specific items - a document or spreadsheet, an email thread, an event - show them in a cards widget; mention items in passing as chips instead.',
+        'In a channel or a private conversation with the user, the view is posted with your reply.',
         'The frontend renders the view from the tool arguments immediately; this tool only acknowledges it.',
       ].join(' '),
     }),

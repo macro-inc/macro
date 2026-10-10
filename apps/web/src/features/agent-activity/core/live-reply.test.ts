@@ -5,6 +5,7 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import {
+  currentStep,
   openReply,
   replyToTurn,
   segmentRows,
@@ -109,5 +110,41 @@ describe('live reply', () => {
     expect(typingLabel('Scout', 'waiting')).toBe(
       'Scout is waiting for an answer'
     );
+  });
+});
+
+describe('the step under way', () => {
+  const run = (sealed: boolean, statuses: ('running' | 'completed')[]) =>
+    reply(
+      4,
+      [],
+      [
+        prose(0, 0, true),
+        {
+          index: 1,
+          kind: 'activity',
+          start: 1,
+          end: 1 + statuses.length,
+          sealed,
+          rows: statuses.map((status, index) => ({
+            id: `t${index}`,
+            label: index === 0 ? 'Search documents' : 'Create document',
+            detail: index === 0 ? 'launch' : 'Launch FAQ',
+            status,
+            card: null,
+          })),
+        },
+      ]
+    );
+
+  it('is the latest running step of the open run, worded as its row', () => {
+    expect(currentStep(run(false, ['completed', 'running']))).toBe(
+      'Create document Launch FAQ'
+    );
+  });
+
+  it('is nothing between steps or once the run has sealed', () => {
+    expect(currentStep(run(false, ['completed', 'completed']))).toBeUndefined();
+    expect(currentStep(run(true, ['completed', 'running']))).toBeUndefined();
   });
 });

@@ -52,7 +52,15 @@ fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
         .collect::<Vec<_>>();
     assert_eq!(
         names,
-        ["md", "timeline", "list", "channelMessage", "container"]
+        [
+            "md",
+            "timeline",
+            "list",
+            "channelMessage",
+            "events",
+            "cards",
+            "container"
+        ]
     );
     let container = variants.last().unwrap();
     assert_eq!(
