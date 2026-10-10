@@ -28,7 +28,9 @@ const notificationDocuments = new Set<QueryRevalidation['document']>([
 /** Registers an existing notification feed without activating its lazy query. */
 export function registerNotificationReader(reader: NotificationReader) {
   notificationReaders.add(reader);
-  return () => notificationReaders.delete(reader);
+  return () => {
+    notificationReaders.delete(reader);
+  };
 }
 
 async function refreshSafely(refresh: () => Promise<unknown>): Promise<void> {
@@ -47,14 +49,19 @@ async function refreshSafely(refresh: () => Promise<unknown>): Promise<void> {
  * cached history. Disabled/unstarted notification feeds remain dormant.
  */
 export async function revalidateNotificationReaders(
-  client: Client
+  client: Pick<Client, 'query'>,
+  options: { includeAllSoup?: boolean; isCurrent?: () => boolean } = {}
 ): Promise<void> {
+  const isCurrent = options.isCurrent ?? (() => true);
+  if (!isCurrent()) return;
   const pages = getActiveGraphqlSoupRevalidations(client).filter(
-    ({ document }) => notificationDocuments.has(document)
+    ({ document }) =>
+      options.includeAllSoup || notificationDocuments.has(document)
   );
   await Promise.all([
     ...pages.map(({ document, variables }) =>
       refreshSafely(async () => {
+        if (!isCurrent()) return;
         if (delegateChannelNotificationRefresh(client, { document, variables }))
           return;
         const result = await client
@@ -65,6 +72,10 @@ export async function revalidateNotificationReaders(
     ),
     ...[...notificationReaders]
       .filter((reader) => reader.isEnabled() && reader.client() === client)
-      .map((reader) => refreshSafely(reader.refresh)),
+      .map((reader) =>
+        refreshSafely(async () => {
+          if (isCurrent()) await reader.refresh();
+        })
+      ),
   ]);
 }

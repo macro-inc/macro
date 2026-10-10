@@ -48,6 +48,7 @@ vi.mock('@queries/storage/document-cache', () => ({
 vi.mock('@service-auth/client', () => ({
   authServiceClient: { logout: vi.fn() },
 }));
+vi.mock('@service-auth/fetch', () => ({ resetMacroApiToken: vi.fn() }));
 vi.mock('./push-registration-lifecycle', () => ({
   unregisterPushRegistrationsForLogout: vi.fn(async () => {}),
 }));

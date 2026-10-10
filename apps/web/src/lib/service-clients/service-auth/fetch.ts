@@ -16,24 +16,36 @@ function isExpired(token: string) {
 }
 
 let macroApiTokenPromise: Promise<string> | null = null;
+let macroApiTokenGeneration = 0;
 
-function requestMacroApiToken() {
-  const promise = authServiceClient.macroApiToken().then((result) => {
-    if (result.isErr()) {
-      throw result.error;
-    }
-    return result.value.macro_api_token;
-  });
+/** Retire the previous account's credential, including pending refreshes. */
+export function resetMacroApiToken(): void {
+  macroApiTokenGeneration += 1;
+  macroApiTokenPromise = null;
+}
 
+async function fetchMacroApiToken(generation: number): Promise<string> {
+  const result = await authServiceClient.macroApiToken();
+  if (generation !== macroApiTokenGeneration) {
+    throw new Error('Macro API token request belongs to a previous session');
+  }
+  if (result.isErr()) throw result.error;
+  return result.value.macro_api_token;
+}
+
+async function requestMacroApiToken(): Promise<string> {
+  const promise = fetchMacroApiToken(macroApiTokenGeneration);
   macroApiTokenPromise = promise;
-  void promise.catch(() => {
+  try {
+    return await promise;
+  } catch (error) {
     // A failed request must not poison the cache permanently. Keep the
     // identity check so an older rejection cannot clear a newer request.
     if (macroApiTokenPromise === promise) {
       macroApiTokenPromise = null;
     }
-  });
-  return promise;
+    throw error;
+  }
 }
 
 export async function getMacroApiToken() {
@@ -45,11 +57,15 @@ export async function getMacroApiToken() {
   }
 
   const cachedPromise = macroApiTokenPromise;
+  const generation = macroApiTokenGeneration;
   if (!cachedPromise) {
     return requestMacroApiToken();
   }
 
   const apiToken = await cachedPromise;
+  if (generation !== macroApiTokenGeneration) {
+    throw new Error('Macro API token request belongs to a previous session');
+  }
   if (!isExpired(apiToken)) {
     return apiToken;
   }

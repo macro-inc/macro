@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client, OperationResult } from '@urql/core';
@@ -6,6 +5,7 @@ import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
+import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
 import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
@@ -15,36 +15,11 @@ import {
 } from './graphql/generated/graphql';
 import { createActivityUpdatesHandler } from './graphql-activity-updates';
 import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
+import { registerGraphqlSoupRealtimeConnection } from './graphql-soup-realtime-session';
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 
-/** Maximum reconnect attempts for the Soup updates websocket. */
-export const SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS = 5;
-
-const RETRYABLE_WEBSOCKET_CLOSE_CODES = new Set([
-  1001, // endpoint is temporarily going away
-  1005, // no close status received
-  1006, // abnormal network closure
-  1012, // service restart
-  1013, // try again later
-  1014, // bad gateway
-  4408, // connection initialisation timeout
-  4504, // connection acknowledgement timeout
-]);
-
-/** Retry transient transport failures, but not auth or protocol failures. */
-export function shouldRetryGraphqlSoupWebSocket(error: unknown): boolean {
-  if (error !== null && typeof error === 'object' && 'code' in error) {
-    const code = (error as { code?: unknown }).code;
-    return (
-      typeof code === 'number' && RETRYABLE_WEBSOCKET_CLOSE_CODES.has(code)
-    );
-  }
-
-  // Browser websocket network failures arrive as Events. Errors thrown while
-  // resolving auth or processing the protocol are not retryable.
-  return typeof Event !== 'undefined' && error instanceof Event;
-}
+export { shouldRetryGraphqlSoupWebSocket } from './graphql-soup-retry';
 
 /** Converts a DSS HTTP origin into its Soup GraphQL websocket endpoint. */
 export function buildGraphqlSoupWebSocketUrl(
@@ -70,7 +45,7 @@ type GraphqlSoupWebSocketAuth = {
   refreshCookieAuth: () => Promise<void>;
 };
 
-/** Creates the reconnect-safe URL resolver used by graphql-ws. */
+/** Refreshes authentication before each new transport attempt. */
 export function createGraphqlSoupWebSocketUrlResolver({
   dssHost,
   bearerTokenAuth,
@@ -135,15 +110,41 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     client?: Pick<Client, 'subscription' | 'query'>,
     host?: CacheHost
   ): void;
-  connected(): void;
+  connected(recovered?: boolean): void;
   dispose(): void;
 } {
   let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
   let currentHost: CacheHost | undefined;
   let suspended = false;
+  let sessionPaused = false;
   let unsubscribes: Array<() => void> = [];
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
   let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
+  let generation = 0;
+  let refreshing = false;
+  let refreshPending = false;
+
+  const refreshAfterReconnect = async () => {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      while (refreshPending && currentClient && !suspended && !sessionPaused) {
+        refreshPending = false;
+        const client = currentClient;
+        const epoch = generation;
+        await revalidateNotificationReaders(client, {
+          includeAllSoup: true,
+          isCurrent: () =>
+            epoch === generation &&
+            currentClient === client &&
+            !suspended &&
+            !sessionPaused,
+        });
+      }
+    } finally {
+      refreshing = false;
+    }
+  };
 
   const unsubscribeAll = () => {
     for (const unsubscribe of unsubscribes) unsubscribe();
@@ -174,12 +175,14 @@ export function createGraphqlSoupSubscriptionsLifecycle(
 
   const lifecycle = {
     replace(client?: Pick<Client, 'subscription' | 'query'>, host?: CacheHost) {
+      generation += 1;
+      refreshPending = false;
       if (currentClient && currentClient !== client)
         disposeChannelNotificationRefresh(currentClient);
       currentClient = client;
       currentHost = host;
       unsubscribeAll();
-      if (!client || suspended) return;
+      if (!client || suspended || sessionPaused) return;
       activity = createActivityUpdatesHandler(client);
       channels = createChannelListUpdatesHandler(client, host);
       const activityHandler = activity;
@@ -191,11 +194,17 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           : LIVE_UPDATE_SUBSCRIPTIONS.filter(
               ({ document }) => document !== SoupUpdatesDocument
             );
-      let signaledFailure = false;
+      const subscriptionGeneration = generation;
       unsubscribes = subscriptions.map(({ document, errorMessage }) => {
         const subscription = client
           .subscription(document, {})
           .subscribe((result) => {
+            if (
+              subscriptionGeneration !== generation ||
+              suspended ||
+              sessionPaused
+            )
+              return;
             if (document === ActivityUpdatesDocument) {
               activityHandler.onResult(
                 result as OperationResult<ActivityUpdatesSubscription>
@@ -217,22 +226,23 @@ export function createGraphqlSoupSubscriptionsLifecycle(
             }
             if (result.error) {
               console.warn(errorMessage, result.error);
-              if (!signaledFailure) {
-                signaledFailure = true;
-                toast.failure('Live updates disconnected', {
-                  subtext: 'Refresh to reconnect.',
-                });
-              }
             }
           });
         return () => subscription.unsubscribe();
       });
     },
-    connected: () => {
+    connected: (recovered = false) => {
       activity?.reconnect();
       channels?.reconnect();
+      if (recovered && currentClient && !suspended && !sessionPaused) {
+        refreshPending = true;
+        void refreshAfterReconnect();
+      }
     },
     dispose() {
+      unregisterSession();
+      generation += 1;
+      refreshPending = false;
       if (options.suspendOnPagehide) {
         removeEventListener('pagehide', onPagehide);
         removeEventListener('pageshow', onPageshow);
@@ -243,5 +253,21 @@ export function createGraphqlSoupSubscriptionsLifecycle(
       unsubscribeAll();
     },
   };
+  const unregisterSession = registerGraphqlSoupRealtimeConnection({
+    pause() {
+      sessionPaused = true;
+      generation += 1;
+      refreshPending = false;
+      if (currentClient)
+        channelNotificationRefresh(currentClient).suspend(true);
+      unsubscribeAll();
+    },
+    restart() {
+      sessionPaused = false;
+      if (currentClient)
+        channelNotificationRefresh(currentClient).suspend(suspended);
+      lifecycle.replace(currentClient, currentHost);
+    },
+  });
   return lifecycle;
 }

@@ -18,6 +18,8 @@ import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session'
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
+import { resetMacroApiToken } from '@service-auth/fetch';
+import { pauseGraphqlSoupRealtimeSession } from '@service-storage/graphql-soup-realtime-session';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -44,6 +46,8 @@ const unauthenticatedUserInfo: UserInfoData = {
 };
 
 export async function clearLocalAuthSession() {
+  pauseGraphqlSoupRealtimeSession();
+  resetMacroApiToken();
   document.cookie =
     'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
   syncLoginStorage(false);
