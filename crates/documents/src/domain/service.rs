@@ -40,6 +40,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{DocumentResponseMetadata, LocationResponseData};
 use model::document::{
     ContentType, DocumentBasic, DocumentMetadata, FileAssociation, FileType, FileTypeExt,
+    MAX_DOCUMENT_NAME_GRAPHEMES,
 };
 use model::response::PresignedUrl;
 use model_owner::{CreationPrincipal, Owner};
@@ -211,8 +212,6 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
         }
     }
 }
-
-const MAX_DOCUMENT_NAME_GRAPHEMES: usize = 200;
 
 fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
     let uuid = macro_uuid::string_to_uuid(entity_id)
