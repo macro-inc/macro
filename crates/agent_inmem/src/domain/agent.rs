@@ -863,7 +863,7 @@ async fn run_turn(
         result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
     };
     let explicit_compact = prompt.is_compact_command();
-    compaction::compact_if_needed(
+    if let Err(error) = compaction::compact_if_needed(
         state,
         connection,
         &acp_session_id,
@@ -871,7 +871,22 @@ async fn run_turn(
         access,
         &cancel,
     )
-    .await?;
+    .await
+    {
+        if cancel.is_cancelled() {
+            return Ok(StopReason::Cancelled);
+        }
+        if explicit_compact {
+            return Err(error);
+        }
+        // The whole history still fits the model; only the bound summaries
+        // keep was missed, so the user's message runs on it as it is.
+        tracing::warn!(
+            session_id = %state.session_id,
+            ?error,
+            "could not summarize the conversation; the turn runs on its whole history"
+        );
+    }
     if explicit_compact {
         return Ok(StopReason::EndTurn);
     }

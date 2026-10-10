@@ -817,6 +817,86 @@ async fn a_failed_summary_preserves_context_and_reports_failure() {
 }
 
 #[tokio::test]
+async fn a_failed_automatic_summary_runs_the_message_on_the_whole_history() {
+    let engine = Arc::new(FailedSummaryEngine(ScriptedEngine::new(vec![
+        StreamPart::Content("noted".into()),
+    ])));
+    with_agent(engine.clone(), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, &"x".repeat(110_000)))
+            .block_task()
+            .await
+            .unwrap();
+        let response = connection
+            .send_request(text_prompt(&session, "continue"))
+            .block_task()
+            .await
+            .expect("the message runs although its summary failed");
+        assert_eq!(response.stop_reason, StopReason::EndTurn);
+    })
+    .await;
+    let requests = engine.0.requests();
+    let last = requests.last().unwrap();
+    assert_eq!(last.purpose, TurnPurpose::Conversation);
+    assert_eq!(last.messages.last().unwrap(), "continue");
+    assert_eq!(last.messages[0].len(), 110_000, "on the whole history");
+}
+
+/// An engine whose summaries wait until they are cancelled, saying when one
+/// has started.
+struct HangingSummaryEngine {
+    turns: ScriptedEngine,
+    summarizing: Arc<tokio::sync::Notify>,
+}
+
+impl TurnEngine for HangingSummaryEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        if request.purpose == TurnPurpose::Summary {
+            self.summarizing.notify_one();
+            HangingEngine.run_turn(request)
+        } else {
+            self.turns.run_turn(request)
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_stop_while_summarizing_stops_the_turn() {
+    let summarizing = Arc::new(tokio::sync::Notify::new());
+    let engine = Arc::new(HangingSummaryEngine {
+        turns: ScriptedEngine::new(vec![StreamPart::Content("noted".into())]),
+        summarizing: Arc::clone(&summarizing),
+    });
+    let (_, _, response) = with_agent(engine, async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, &"x".repeat(110_000)))
+            .block_task()
+            .await
+            .unwrap();
+        let pending = connection.send_request(text_prompt(&session, "continue"));
+        summarizing.notified().await;
+        connection
+            .send_notification(agent_client_protocol::schema::v1::CancelNotification::new(
+                session.clone(),
+            ))
+            .expect("the cancel notification should send");
+        pending
+            .block_task()
+            .await
+            .expect("a stopped turn completes")
+    })
+    .await;
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+}
+
+#[tokio::test]
 async fn a_long_conversation_is_summarized_in_bounded_calls_before_the_next_turn() {
     let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
         "preserved facts".into(),

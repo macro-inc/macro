@@ -107,6 +107,9 @@ pub(super) async fn compact_if_needed(
     if !access.allows(&input.model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
     }
+    // The summary has its own stream: a Stop ends it with the turn, but a
+    // summary that fails is abandoned without cancelling the turn.
+    let cancel = cancel.child_token();
     let mut remaining = source.as_str();
     let mut summary = String::new();
     while !remaining.is_empty() {
