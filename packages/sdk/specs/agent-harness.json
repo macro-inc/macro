@@ -46,7 +46,7 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime is disconnected"
+            "description": "Macrod runtime or Cursor account is not connected"
           },
           "502": {
             "description": "Provider probe failed"
@@ -184,7 +184,7 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime is disconnected"
+            "description": "Macrod runtime or Cursor account is not connected"
           },
           "502": {
             "description": "Provider probe failed"

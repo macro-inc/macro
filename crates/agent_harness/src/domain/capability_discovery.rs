@@ -69,7 +69,7 @@ pub enum RawCapabilityProbe {
 /// A provider probe failure.
 #[derive(Debug, thiserror::Error)]
 pub enum CapabilityProbeError {
-    /// A required live runtime is not connected.
+    /// A required live runtime, or the caller's Cursor account, is not connected.
     #[error("the requested harness is disconnected")]
     Disconnected,
     /// Provider-specific probing failed.
