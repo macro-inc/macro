@@ -206,6 +206,7 @@ pub trait BotRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<BotTokenCandidate>, Self::Err>> + Send;
 
     /// Lookup a channel-scoped token candidate by hashing the presented raw token.
+    /// A direct agent conversation accepts no token.
     fn channel_token_candidate(
         &self,
         channel_id: Uuid,

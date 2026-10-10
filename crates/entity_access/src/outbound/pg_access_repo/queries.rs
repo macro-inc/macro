@@ -93,6 +93,9 @@ pub async fn get_user_source_ids(
 }
 
 /// Grabs the source ids available to a bot operating in its owning team's scope.
+///
+/// A direct agent conversation is not among them, although the persona takes
+/// part in it: what is shared there belongs to the person it is with.
 #[tracing::instrument(skip(pool), err)]
 #[cfg_attr(
     not(test),
@@ -134,6 +137,12 @@ pub async fn get_team_scope_source_ids(
         JOIN comms_channel_participants cp
           ON cp.user_id = $1
          AND cp.left_at IS NULL
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM comms_channel_agents ca
+            WHERE ca.channel_id = cp.channel_id
+              AND ca.kind = 'direct'
+        )
         "#,
         bot_id.as_ref(),
         bot_id.as_uuid(),

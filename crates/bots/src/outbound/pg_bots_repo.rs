@@ -1518,6 +1518,15 @@ impl BotRepo for PgBotsRepo {
              AND cp.left_at IS NULL
             WHERE bt.token_hash = $2
               AND b.deleted_at IS NULL
+              -- Its owner or any member of its team can mint a persona's
+              -- token, not just the person a direct conversation is with, so
+              -- no token posts into one.
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM comms_channel_agents ca
+                  WHERE ca.channel_id = $1
+                    AND ca.kind = 'direct'
+              )
             "#,
             channel_id,
             &token_hash[..],
