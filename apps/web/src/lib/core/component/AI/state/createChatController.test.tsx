@@ -24,8 +24,18 @@ vi.mock('@core/component/Toast/Toast', () => ({
 vi.mock('@service-connection/stream', () => ({
   getEntityStreams: () => () => [],
 }));
+// The real module opens the gateway socket at import time.
+vi.mock('@service-connection/websocket', () => ({
+  createConnectionReconnectEffect: () => {},
+}));
+// Tests inject `loadMessages`; the default fetch is never reached.
+vi.mock('@queries/cognition/chat-data', () => ({
+  fetchAndCacheChat: vi.fn(),
+}));
 
+import type { ChatMessageStream } from '@service-connection/stream';
 import {
+  type ChatController,
   type ChatControllerOptions,
   createChatController,
 } from './createChatController';
@@ -140,6 +150,128 @@ describe('createChatController: provider-failure toast', () => {
       hasAlternateModel: () => true,
     });
     expect(lastToastActions()?.[0].label).toBe('Switch model');
+    dispose();
+  });
+});
+
+describe('createChatController: recovering a stream whose end never arrived', () => {
+  const STREAM_ID = 'stream-1';
+
+  /** A live stream that has delivered one text chunk and no `stream_end`. */
+  function partialStream(): ChatMessageStream {
+    return {
+      id: () => ({
+        entity_type: 'chat',
+        entity_id: 'chat-1',
+        stream_id: STREAM_ID,
+      }),
+      data: () => [
+        {
+          type: 'chat_message_response',
+          stream_id: STREAM_ID,
+          chat_id: 'chat-1',
+          message_id: STREAM_ID,
+          content: { type: 'text', text: 'partial' },
+        },
+      ],
+      isDone: () => false,
+    };
+  }
+
+  const persisted: ChatMessageWithAttachments = {
+    id: STREAM_ID,
+    content: [{ type: 'text', text: 'partial, then the rest' }],
+    role: 'assistant',
+    attachments: [],
+  } as ChatMessageWithAttachments;
+
+  /** A controller stuck in `streaming` on a stream that will never end. */
+  function stuckStreaming(options?: ChatControllerOptions) {
+    let dispose = () => {};
+    let controller!: ChatController;
+    createRoot((d) => {
+      dispose = d;
+      controller = createChatController('chat-1', [optimistic], options);
+      controller.dispatch({
+        type: 'stream_connected',
+        stream: partialStream(),
+      });
+    });
+    expect(controller.isGenerating()).toBe(true);
+    return { controller, dispose };
+  }
+
+  it('reconcile finishes the turn with the persisted assistant message', async () => {
+    const loadMessages = vi.fn(async () => [optimistic, persisted]);
+    const { controller, dispose } = stuckStreaming({ loadMessages });
+
+    await expect(controller.reconcile()).resolves.toBe(true);
+
+    expect(loadMessages).toHaveBeenCalledWith('chat-1');
+    expect(controller.isGenerating()).toBe(false);
+    expect(controller.stream()).toBeUndefined();
+    expect(controller.messages()).toEqual([optimistic, persisted]);
+    dispose();
+  });
+
+  it('reconcile keeps streaming while the server has not persisted the response', async () => {
+    const loadMessages = vi.fn(async () => [optimistic]);
+    const { controller, dispose } = stuckStreaming({ loadMessages });
+
+    await expect(controller.reconcile()).resolves.toBe(false);
+
+    expect(controller.isGenerating()).toBe(true);
+    expect(controller.messages()).toEqual([optimistic]);
+    dispose();
+  });
+
+  it('reconcile does not fetch when nothing is streaming', async () => {
+    const loadMessages = vi.fn(async () => [optimistic, persisted]);
+    let dispose = () => {};
+    let controller!: ChatController;
+    createRoot((d) => {
+      dispose = d;
+      controller = createChatController('chat-1', [optimistic], {
+        loadMessages,
+      });
+    });
+
+    await expect(controller.reconcile()).resolves.toBe(false);
+    expect(loadMessages).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('overlapping reconciles share one request', async () => {
+    let resolve!: (messages: ChatMessageWithAttachments[]) => void;
+    const loadMessages = vi.fn(
+      () =>
+        new Promise<ChatMessageWithAttachments[]>((r) => {
+          resolve = r;
+        })
+    );
+    const { controller, dispose } = stuckStreaming({ loadMessages });
+
+    const first = controller.reconcile();
+    const second = controller.reconcile();
+    expect(loadMessages).toHaveBeenCalledTimes(1);
+
+    resolve([optimistic, persisted]);
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(controller.isGenerating()).toBe(false);
+    dispose();
+  });
+
+  it('abandonStream finishes the turn with what was received', () => {
+    const { controller, dispose } = stuckStreaming();
+
+    controller.abandonStream();
+
+    expect(controller.isGenerating()).toBe(false);
+    expect(controller.messages()).toHaveLength(2);
+    const last = controller.messages().at(-1)!;
+    expect(last.id).toBe(STREAM_ID);
+    expect(last.role).toBe('assistant');
+    expect(last.content).toEqual([{ type: 'text', text: 'partial' }]);
     dispose();
   });
 });

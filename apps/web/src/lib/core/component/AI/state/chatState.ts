@@ -83,6 +83,11 @@ const rejected = (phase: ChatPhase, event: string): TransitionResult => {
   return { phase, effects: [] };
 };
 
+/**
+ * `stream_connected` is also accepted while `streaming`: after a socket
+ * reconnect the gateway replays the stream into a fresh copy that replaces
+ * the live one.
+ */
 export function transition(
   phase: ChatPhase,
   event: ChatEvent
@@ -110,7 +115,10 @@ export function transition(
     }))
 
     .with(
-      [{ type: P.union('idle', 'sending') }, { type: 'stream_connected' }],
+      [
+        { type: P.union('idle', 'sending', 'streaming') },
+        { type: 'stream_connected' },
+      ],
       () => ({
         phase: { type: 'streaming' as const },
         effects: [],

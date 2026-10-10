@@ -31,6 +31,13 @@ pub trait StreamRepo: Send + Sync + 'static {
     async fn close(&self, id: &StreamId) -> Result<()>;
     /// List active streams for an entity (implementations may treat all streams as active).
     async fn active_streams(&self, entity_id: &str) -> Result<Vec<StreamId>>;
+    /// List the streams a new subscriber of an entity should be replayed from the
+    /// beginning: the active streams plus any that closed recently enough that a
+    /// client which dropped mid-stream may have missed their tail. Defaults to the
+    /// active streams.
+    async fn replayable_streams(&self, entity_id: &str) -> Result<Vec<StreamId>> {
+        self.active_streams(entity_id).await
+    }
     /// A receiver that receives stream lifecycle events.
     async fn notify(&self) -> Receiver<StreamEvent>;
 }

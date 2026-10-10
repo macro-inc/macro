@@ -7,6 +7,7 @@ use redis::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::OnceCell;
 use tokio::sync::broadcast::{self, Receiver};
 use tokio::task::JoinHandle;
@@ -15,6 +16,12 @@ const NOTIFY_CHANNEL: &str = "stream:notifications";
 const NOTIFY_CHANNEL_BUFFER: usize = 1024;
 /// TTL for a closed stream in Redis (60 seconds for consumers to finish reading)
 const CLOSED_STREAM_TTL_SECS: i64 = 60;
+/// How long after closing a stream is still replayed to new subscribers of its
+/// entity. A client that drops between the last item it received and the close
+/// only recovers the tail (including the end marker) through this replay, so
+/// the window must end before the Redis data expires.
+const CLOSED_STREAM_REPLAY_WINDOW: Duration = Duration::from_secs(45);
+const _: () = assert!(CLOSED_STREAM_REPLAY_WINDOW.as_secs() < CLOSED_STREAM_TTL_SECS as u64);
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
@@ -263,10 +270,18 @@ impl StreamRepo for RedisPostgresStreamRepo {
             .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to set closed stream TTL"));
 
-        // Remove from PostgreSQL tracking
-        let _ = super::queries::delete_active_stream(&self.pg_pool, id)
+        // Keep the row for the replay window instead of deleting it, so a late
+        // subscriber is still sent the tail of the stream. Rows past the window
+        // are removed opportunistically here; the table only holds streams that
+        // are open or just closed, so this stays cheap.
+        let _ = super::queries::mark_stream_closed(&self.pg_pool, id)
             .await
-            .inspect_err(|e| tracing::error!(error=?e, "failed to remove stream from postgres"));
+            .inspect_err(|e| tracing::error!(error=?e, "failed to mark stream closed in postgres"));
+        let _ = super::queries::purge_closed_streams(&self.pg_pool, CLOSED_STREAM_REPLAY_WINDOW)
+            .await
+            .inspect_err(
+                |e| tracing::error!(error=?e, "failed to purge closed streams from postgres"),
+            );
 
         let event = StreamEvent::Closed(id.clone());
         let notification = serde_json::to_string(&event).expect("json");
@@ -280,13 +295,19 @@ impl StreamRepo for RedisPostgresStreamRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn active_streams(&self, entity_id: &str) -> Result<Vec<StreamId>> {
-        super::queries::get_active_stream_keys(&self.pg_pool, entity_id)
-            .await
-            .map_err(|e| StreamServiceError::StorageError(e.to_string()))?
-            .into_iter()
-            .map(StreamId::try_from)
-            .collect::<Result<Vec<_>>>()
-            .map_err(|e| StreamServiceError::StorageError(e.to_string()))
+        let keys = super::queries::get_active_stream_keys(&self.pg_pool, entity_id).await?;
+        parse_stream_keys(keys)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn replayable_streams(&self, entity_id: &str) -> Result<Vec<StreamId>> {
+        let keys = super::queries::get_replayable_stream_keys(
+            &self.pg_pool,
+            entity_id,
+            CLOSED_STREAM_REPLAY_WINDOW,
+        )
+        .await?;
+        parse_stream_keys(keys)
     }
 
     async fn notify(&self) -> Receiver<StreamEvent> {
@@ -295,6 +316,13 @@ impl StreamRepo for RedisPostgresStreamRepo {
             .await
             .subscribe()
     }
+}
+
+fn parse_stream_keys(keys: Vec<String>) -> Result<Vec<StreamId>> {
+    keys.into_iter()
+        .map(StreamId::try_from)
+        .collect::<Result<Vec<_>>>()
+        .map_err(|e| StreamServiceError::StorageError(e.to_string()))
 }
 
 // The domain error stays sqlx-free; this adapter owns the mapping.

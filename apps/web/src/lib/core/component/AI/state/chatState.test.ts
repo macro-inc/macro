@@ -97,6 +97,32 @@ describe('transition: sanity of the happy path used by the failure tests', () =>
   });
 });
 
+describe('transition: recovering a stream whose end was never delivered', () => {
+  const assistantMessage: ChatMessageWithAttachments = {
+    id: 'stream-1',
+    content: [{ type: 'text', text: 'done' }],
+    role: 'assistant',
+    attachments: [],
+  } as ChatMessageWithAttachments;
+
+  it('a reconnect replay keeps the chat streaming on the replacement stream', () => {
+    const result = transition(streaming, { type: 'stream_connected' });
+    expect(result.phase).toEqual({ type: 'streaming' });
+    expect(result.effects).toHaveLength(0);
+  });
+
+  it('stream_done with the persisted message leaves streaming and appends it once', () => {
+    const result = transition(streaming, {
+      type: 'stream_done',
+      message: assistantMessage,
+    });
+    expect(result.phase).toEqual({ type: 'idle' });
+    const messages = result.messages!([userMessage]);
+    expect(messages).toEqual([userMessage, assistantMessage]);
+    expect(result.messages!(messages)).toEqual(messages);
+  });
+});
+
 // Note: `transition` stays availability-agnostic by design — it always sets
 // `offerModelSwitch: true` for a provider_error. Whether that becomes a "Switch
 // model" button or a plain "try again later" outage message depends on whether

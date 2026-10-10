@@ -14,6 +14,7 @@ const mocks = await vi.hoisted(async () => {
   return {
     send: vi.fn(),
     clearStream: vi.fn(),
+    markStreamsAwaitingReplay: vi.fn(),
     focused,
     setFocused,
     invalidate: vi.fn().mockResolvedValue(undefined),
@@ -28,6 +29,7 @@ vi.mock('@macro-inc/observability', () => ({
 vi.mock('@core/signal/tabFocus', () => ({ isTabFocused: mocks.focused }));
 vi.mock('@service-connection/stream', () => ({
   clearStream: mocks.clearStream,
+  markStreamsAwaitingReplay: mocks.markStreamsAwaitingReplay,
 }));
 vi.mock('@service-connection/websocket', async () => {
   const { onCleanup } = await import('solid-js');
@@ -177,6 +179,11 @@ it('shares heartbeat and reconnect work across many threads in one parent', () =
   expect(sent('ping')).toHaveLength(1);
   for (const reconnect of mocks.reconnects) reconnect();
   expect(sent('open')).toHaveLength(2);
+  // Streams are marked before the re-sent `open` triggers their replay.
+  expect(mocks.markStreamsAwaitingReplay).toHaveBeenCalledTimes(1);
+  expect(
+    mocks.markStreamsAwaitingReplay.mock.invocationCallOrder[0]
+  ).toBeLessThan(mocks.send.mock.invocationCallOrder.at(-1)!);
   expect(mocks.invalidate).toHaveBeenCalledTimes(3);
 
   closeThreads[0]();
