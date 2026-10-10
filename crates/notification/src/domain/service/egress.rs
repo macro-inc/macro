@@ -28,7 +28,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
 use std::time::Duration;
-use tracing::Level;
 
 /// Maximum time to wait for a single notification delivery before timing out.
 pub(crate) const DELIVERY_TIMEOUT: Duration = Duration::from_secs(15);
@@ -155,7 +154,7 @@ where
     /// on failure. Returns a list of results for each delivery attempt.
     ///
     /// If a rate limit is configured and exceeded, returns an empty list (no delivery).
-    #[tracing::instrument(ret, level = Level::INFO, skip(self))]
+    #[tracing::instrument(ret, skip_all, fields(message_type = message.message_type()))]
     pub async fn deliver_notification(
         &self,
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
