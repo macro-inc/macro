@@ -142,7 +142,7 @@ async fn contact_listing_failures_log_at_warn() {
         FakeRateLimiter::new(calls, Ok(())),
     );
     let levels = EventLevels::default();
-    let _guard = tracing::subscriber::set_default(levels.clone());
+    let _capture = levels.capture();
 
     let link_id = Uuid::new_v4();
     assert!(service.list_contacts(link_id, Some("token")).await.is_err());

@@ -38,7 +38,7 @@ async fn expired_sync_tokens_are_outdated_cursors_logged_below_error() {
             .await;
     }
     let levels = EventLevels::default();
-    let _guard = tracing::subscriber::set_default(levels.clone());
+    let _capture = levels.capture();
 
     let token = AccessToken::new("token");
     let link_id = Uuid::now_v7();
