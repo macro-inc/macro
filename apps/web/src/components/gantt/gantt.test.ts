@@ -250,7 +250,8 @@ it('keeps the year on pinned months and January while zooming across year bounda
       (mark) =>
         mark.classList.contains('top-full') &&
         mark.classList.contains('left-1/2') &&
-        mark.parentElement?.textContent?.trim()
+        mark.parentElement?.classList.contains('h-4') &&
+        mark.closest('[data-gantt-date-tick]')
     )
   ).toBe(true);
   viewport.scrollLeft =
@@ -277,7 +278,6 @@ it('keeps the year on pinned months and January while zooming across year bounda
   expect(
     view.getByText('March').parentElement!.querySelector('[data-gantt-year]')
   ).toBeNull();
-  const dateMark = februaryLabel.querySelector('[data-gantt-date-mark]');
   viewport.scrollLeft += 20;
   gantt.updateViewport();
   expect(view.getByText('February').parentElement).toBe(februaryLabel);
@@ -287,7 +287,7 @@ it('keeps the year on pinned months and January while zooming across year bounda
   expect(view.getByText('Feb').parentElement).toBe(februaryLabel);
   expect(view.queryByText('February')).toBeNull();
   expect(view.getByText('Feb').nextElementSibling).toBe(februaryYear);
-  expect(februaryLabel.querySelector('[data-gantt-date-mark]')).toBe(dateMark);
+  expect(februaryLabel.querySelector('[data-gantt-date-mark]')).toBeNull();
   expect(view.container.querySelector('[data-gantt-year]')?.textContent).toBe(
     '2027'
   );
@@ -300,6 +300,27 @@ it('keeps the year on pinned months and January while zooming across year bounda
   )) {
     const day = Number.parseFloat(tick.style.left) / gantt.pixelsPerDay();
     expect(day).toBeCloseTo(Math.round(day));
+  }
+  for (const lastDay of ['2026-12-31', '2027-01-31', '2027-02-28']) {
+    const position = (toGanttDay(lastDay)! - start) * gantt.pixelsPerDay();
+    viewport.scrollLeft = position;
+    gantt.updateViewport();
+    const boundaryTicks = [
+      ...view.container.querySelectorAll<HTMLElement>('[data-gantt-date-tick]'),
+    ].slice(0, 3);
+    expect(
+      boundaryTicks.map((tick) => Number.parseFloat(tick.style.left))
+    ).toEqual([
+      position,
+      position + gantt.pixelsPerDay(),
+      position + 2 * gantt.pixelsPerDay(),
+    ]);
+    // Month text can hide a day label, but never its date-aligned mark.
+    expect(
+      boundaryTicks.map(
+        (tick) => tick.querySelectorAll('[data-gantt-date-mark]').length
+      )
+    ).toEqual([1, 1, 1]);
   }
 });
 

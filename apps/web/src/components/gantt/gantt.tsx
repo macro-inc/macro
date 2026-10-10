@@ -640,41 +640,39 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
       </Show>
       <div class="relative isolate flex-1 overflow-clip">
         <TodayLine header />
-        <Show when={gantt.scale() !== 'month'}>
-          <For each={ticks()}>
-            {(tick) => (
-              <div
-                data-gantt-date-tick=""
-                class="absolute inset-y-0 flex items-center leading-4 whitespace-nowrap"
-                style={{
-                  left: `${left(tick.start)}px`,
-                }}
-              >
+        <For each={ticks()}>
+          {(tick) => (
+            <div
+              data-gantt-date-tick=""
+              class="absolute inset-y-0 flex items-center leading-4 whitespace-nowrap"
+              style={{ left: `${left(tick.start)}px` }}
+            >
+              <span class="relative h-4 -translate-x-1/2">
                 <Show
                   when={
+                    gantt.scale() !== 'month' &&
                     !months().some((month) => {
                       const distance = left(tick.start) - monthLeft(month);
                       const halfLabel = tick.label.length * 3 + 4;
                       return (
+                        monthOpacity(month) > 0 &&
                         distance > -halfLabel &&
                         distance < monthLabelWidth(month) + halfLabel
                       );
                     })
                   }
                 >
-                  <span class="relative -translate-x-1/2">
-                    {tick.label}
-                    <span
-                      aria-hidden="true"
-                      data-gantt-date-mark=""
-                      class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-ink-extra-muted/70"
-                    />
-                  </span>
+                  {tick.label}
                 </Show>
-              </div>
-            )}
-          </For>
-        </Show>
+                <span
+                  aria-hidden="true"
+                  data-gantt-date-mark=""
+                  class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-ink-extra-muted/70"
+                />
+              </span>
+            </div>
+          )}
+        </For>
         <Key each={months()} by="start">
           {(tick) => (
             <div
@@ -701,11 +699,6 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
                     {monthYear(tick())}
                   </span>
                 </Show>
-                <span
-                  aria-hidden="true"
-                  data-gantt-date-mark=""
-                  class="absolute top-full left-1/2 mt-1 h-1.5 w-px -translate-x-1/2 bg-ink-extra-muted/70"
-                />
               </span>
             </div>
           )}

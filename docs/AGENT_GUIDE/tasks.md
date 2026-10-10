@@ -138,9 +138,11 @@ style (Solid, Dashed). Grid settings do not change item dates. Compact bold mont
 names share the main date band and switch from abbreviated names at Month zoom
 to full names at Week/Day zoom. The pinned month always includes its year; other
 months show the year after January only, when a new year starts. Short,
-higher-contrast date marks sit beneath their centered labels
-instead of full-height header lines. Month/year labels fade as the next month
-pushes them toward the left edge, before reaching the expand/collapse button.
+higher-contrast date marks stay anchored to their calendar dates, even when month
+text hides an overlapping day number. Marks do not move with the sticky month
+labels, so daily gaps stay equal across month boundaries. Month/year labels fade
+as the next month pushes them toward the left edge, before the expand/collapse
+button.
 Week-scale date marks divide each month into four near-even calendar-day sections,
 not Monday-based weeks. Weekly grid lines use the same sections. Day spacing and
 month widths still follow the real calendar, including leap-year February.
