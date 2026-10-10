@@ -16,6 +16,7 @@ in
 {
   imports = [
     ./dashboards.nix
+    ./ci-dashboard.nix
     ./alerting.nix
   ];
   services.grafana = {

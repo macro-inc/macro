@@ -1,0 +1,77 @@
+name: Export CI telemetry
+on:
+  workflow_run:
+    # Explicit names avoid recursively observing this exporter. Add new workflows here.
+    workflows:
+      - "Auto Label PRs"
+      - "Build Agent Daemon on Tag"
+      - "Build AppImage"
+      - "Build Desktop on Tag"
+      - "Build Rust CI Image"
+      - "Build Web App"
+      - "Build macOS DMG"
+      - "CLA"
+      - "Cancel Stuck Cloud Storage Deploys"
+      - "Cleanup Preview"
+      - "Deploy AI Editing Worker"
+      - "Deploy All Services"
+      - "Deploy CLA Worker"
+      - "Deploy FusionAuth Instance"
+      - "Deploy Lexical Service"
+      - "Deploy Preview"
+      - "Deploy Production Release"
+      - "Deploy Service (Generic)"
+      - "Deploy Sync Service"
+      - "Deploy Web App"
+      - "Deploy Website"
+      - "Deploy analytics proxy dev"
+      - "Deploy on Push"
+      - "Ensure Daytona Snapshot"
+      - "Export Datadog observability definitions"
+      - "Migrate Macro Database"
+      - "Publish SDK"
+      - "Pull Request"
+      - "Pulumi Preview on PR"
+      - "Push local stack binaries"
+      - "Release SDK"
+      - "Reusable Deploy Service"
+      - "Reusable Preview Service"
+      - "SDK Check"
+      - "Web App Pr Checks"
+      - "cargo deny check"
+      - "cargo workspace dependency check"
+      - "check generated workflows"
+      - "check node_modules nix"
+      - "cloud storage code check"
+      - "conventions code check"
+      - "deploy pulumi service"
+      - "iOS Preview"
+      - "infra code check"
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # workflow_run executes trusted default-branch code, never the triggering PR.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: infra/stacks/observability/ci
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.8'
+      - uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+        with:
+          role-to-assume: arn:aws:iam::569036502058:role/macro-observability-ci
+          aws-region: us-east-1
+          role-duration-seconds: 900
+      - name: Export completed workflow and job metadata
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bun infra/stacks/observability/ci/export-run.ts

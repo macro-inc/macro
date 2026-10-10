@@ -1,5 +1,42 @@
 # Observability pilot
 
+## CI telemetry
+
+`.github/workflows/export-ci-telemetry.yml` observes completed workflows on its
+explicit name list. It runs trusted default-branch code and reads GitHub's run and
+job metadata for the exact attempt, including failures, cancellations and skipped
+jobs. It never checks out the triggering PR, downloads artifacts or reads raw job
+logs. Existing CI jobs and Datadog exporters are unchanged.
+
+Each completed attempt emits structured events to the existing OTLP receiver with
+`service_name="github-actions"` and `deployment_environment="ci"`. Workflow/job
+names, outcomes, timestamps, execution durations, branch, commit and GitHub links
+are searchable in Logs Drilldown. `/d/macro-ci` shows outcomes, failures and p95
+durations. Events arrive only after the whole workflow finishes. Job duration
+excludes waiting; workflow duration includes dependency waits. This first pass
+does not measure runner queue time, collect steps/logs, or backfill historical runs.
+
+Deploy the prod Pulumi stack before enabling the workflow: it creates the account's
+GitHub OIDC provider and `macro-observability-ci` role, restricted to this repository's
+`main` identity and reading only `observability/dev-ingest` from Secrets Manager.
+There are no stored AWS access keys in this workflow. `ciIngestSecretArn` must match
+that existing Virginia secret. The role can submit telemetry but cannot read stored
+logs or obtain Grafana's OAuth credentials. The provider is account-wide and protected;
+import it into Pulumi if another stack creates it before this rollout.
+
+Build, publish and smoke-boot a NixOS image with `ci-dashboard.nix`, then pin its AMI
+and deploy normally to provision the dashboard. Keep this image release separate
+from the service Drilldown rollout. The workflow starts observing after merge to
+`main`; add new workflow names to its list when they are introduced. GitHub's
+three-level `workflow_run` chaining limit still applies.
+
+Exporter failures appear as failed **Export CI telemetry** runs and do not change
+the observed workflow's result. Rerun that exporter for transient API/receiver
+failures; completed attempts use stable timestamps and event IDs. Delivery is not
+transactional or guaranteed exactly once, and sufficiently old reruns can fall
+outside Loki's out-of-order window. Do not repeatedly replay historical events into
+this live stream. No CI alerts are enabled by this change.
+
 This stack starts Grafana alongside Datadog on one private EC2 instance. It
 runs Grafana, Loki, Tempo, Prometheus, Alloy and nginx as native systemd services
 on a prebuilt NixOS image. There is no Docker or Compose dependency. Nix owns
