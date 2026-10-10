@@ -1,6 +1,6 @@
 //! Call access extractors.
 //!
-//! Resolves a call (from both `calls` and `call_records` tables), checks channel
+//! Resolves a durable call entity, checks channel
 //! membership, and exposes the call's `share_permission_id` for downstream handlers.
 
 #[cfg(test)]
@@ -42,8 +42,8 @@ struct CallWithChannelIdAccessParams {
 /// Validates that the user satisfies the required permission for the channel
 /// that a call belongs to, using a `call_id` path parameter.
 ///
-/// Resolves the call from both `calls` (active) and `call_records` (archived)
-/// tables, then checks the user's channel membership.
+/// Resolves the durable call entity, then checks the user's channel membership
+/// or the call's entity access when it has no channel.
 ///
 /// Type parameter `T` specifies the required permission marker.
 /// Type parameter `Svc` is the entity access service implementation.

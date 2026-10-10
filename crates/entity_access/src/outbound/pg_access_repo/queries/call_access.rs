@@ -28,16 +28,7 @@ pub async fn get_call_access(
                 share_permission."linkShareAccessLevel" AS "access_level!: AccessLevel"
             FROM "SharePermission" share_permission
             JOIN (
-                SELECT share_permission_id
-                FROM calls
-                WHERE id = $1
-
-                UNION ALL
-
-                SELECT share_permission_id
-                FROM call_records
-                WHERE id = $1
-                LIMIT 1
+                SELECT share_permission_id FROM call_entities WHERE id = $1
             ) call_item ON call_item.share_permission_id = share_permission.id
             WHERE share_permission."linkShare" = 'PUBLIC'
               AND share_permission."linkShareAccessLevel" IS NOT NULL
@@ -66,16 +57,7 @@ pub async fn get_call_access(
                 share_permission."linkShareAccessLevel"::text AS access_level
             FROM "SharePermission" share_permission
             JOIN (
-                SELECT share_permission_id, created_by
-                FROM calls
-                WHERE id = $1
-
-                UNION ALL
-
-                SELECT share_permission_id, created_by
-                FROM call_records
-                WHERE id = $1
-                LIMIT 1
+                SELECT share_permission_id, user_id AS created_by FROM call_entities WHERE id = $1
             ) call_item ON call_item.share_permission_id = share_permission.id
             WHERE share_permission."linkShareAccessLevel" IS NOT NULL
               AND (
@@ -121,16 +103,7 @@ pub async fn explain_call_access(
             share_permission."linkShareAccessLevel" AS "access_level!: AccessLevel"
         FROM "SharePermission" share_permission
         JOIN (
-            SELECT share_permission_id
-            FROM calls
-            WHERE id = $1
-
-            UNION ALL
-
-            SELECT share_permission_id
-            FROM call_records
-            WHERE id = $1
-            LIMIT 1
+            SELECT share_permission_id FROM call_entities WHERE id = $1
         ) call_item ON call_item.share_permission_id = share_permission.id
         WHERE share_permission."linkShare" = 'PUBLIC'
           AND share_permission."linkShareAccessLevel" IS NOT NULL
@@ -156,16 +129,7 @@ pub async fn explain_call_access(
             owner_team.team_id AS "owner_team_id!"
         FROM "SharePermission" share_permission
         JOIN (
-            SELECT share_permission_id, created_by
-            FROM calls
-            WHERE id = $1
-
-            UNION ALL
-
-            SELECT share_permission_id, created_by
-            FROM call_records
-            WHERE id = $1
-            LIMIT 1
+            SELECT share_permission_id, user_id AS created_by FROM call_entities WHERE id = $1
         ) call_item ON call_item.share_permission_id = share_permission.id
         JOIN team_user owner_team
           ON owner_team.user_id = call_item.created_by

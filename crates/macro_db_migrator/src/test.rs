@@ -64,3 +64,30 @@ async fn schema_drop_rejects_rootless_placeables_atomically(pool: PgPool) {
     .await
     .unwrap();
 }
+
+#[sqlx::test(migrations = false)]
+async fn generic_call_entities_preserve_native_identity_and_optional_resources(pool: PgPool) {
+    let before_calls = Migrator {
+        migrations: Cow::Owned(
+            MACRO_DB_MIGRATIONS
+                .iter()
+                .filter(|migration| migration.version < 20261006214256)
+                .cloned()
+                .collect(),
+        ),
+        ..Migrator::DEFAULT
+    };
+    before_calls.run(&pool).await.unwrap();
+    // Multi-statement migration fixtures intentionally exercise both historical
+    // and current schemas, including constraint failures inside savepoints.
+    sqlx::raw_sql(include_str!("test/call_entities_before.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!("test/call_entities_after.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    MACRO_DB_MIGRATIONS.run(&pool).await.unwrap();
+}

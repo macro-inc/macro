@@ -113,12 +113,7 @@ where
             sqlx::query_scalar!(
                 r#"
                 SELECT share_permission_id as "share_permission_id!"
-                FROM (
-                    SELECT share_permission_id FROM calls WHERE id = $1
-                    UNION ALL
-                    SELECT share_permission_id FROM call_records WHERE id = $1
-                ) t
-                LIMIT 1
+                FROM call_entities WHERE id = $1
                 "#,
                 item_id,
             )

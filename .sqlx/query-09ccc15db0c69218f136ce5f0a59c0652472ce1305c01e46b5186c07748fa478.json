@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_entities (id, user_id, created_via, share_permission_id) VALUES ($1, $2, 'import', $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "09ccc15db0c69218f136ce5f0a59c0652472ce1305c01e46b5186c07748fa478"
+}

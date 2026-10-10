@@ -577,7 +577,7 @@ impl MessageRepository for PgMessageRepository {
                 .fetch_one(&self.pool).await,
             MessageParent::Channel(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
-            MessageParent::Call(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1 UNION ALL SELECT 1 FROM call_records WHERE id = $1) AS "exists!""#, id)
+            MessageParent::Call(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
         };
         exists.map_err(database_error)
@@ -690,7 +690,7 @@ impl MessageRepository for PgMessageRepository {
             .await
             .map_err(database_error)?;
             let parent_exists = sqlx::query_scalar!(
-                r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1 UNION ALL SELECT 1 FROM call_records WHERE id = $1) AS "exists!""#,
+                r#"SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS "exists!""#,
                 root_id,
             )
             .fetch_one(&mut *tx)

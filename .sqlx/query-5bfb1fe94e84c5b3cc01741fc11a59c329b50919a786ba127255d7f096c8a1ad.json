@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1 UNION ALL SELECT 1 FROM call_records WHERE id = $1) AS \"exists!\"",
+  "query": "SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS \"exists!\"",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "169aff669342e0bcf9bee8306009716589d4671ade11f841d0cbcf2c5986ce5c"
+  "hash": "5bfb1fe94e84c5b3cc01741fc11a59c329b50919a786ba127255d7f096c8a1ad"
 }
