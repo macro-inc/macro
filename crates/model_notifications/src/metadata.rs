@@ -731,6 +731,58 @@ impl NotificationTitle for InboxReauthRequiredMetadata {
     }
 }
 
+/// Where an imported item came from.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportedFrom {
+    /// A Notion page, imported as a document.
+    Notion,
+    /// A Linear issue, imported as a task.
+    Linear,
+}
+
+impl ImportedFrom {
+    /// The product name, as users see it.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Notion => "Notion",
+            Self::Linear => "Linear",
+        }
+    }
+}
+
+/// Metadata for a notification that an import brought in an item the user is
+/// actively working on. Self-addressed: it puts the item on Home, labelled
+/// with where it came from.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemImportedMetadata {
+    /// The source system.
+    pub source: ImportedFrom,
+    /// The imported item's name.
+    pub item_name: String,
+}
+
+impl notification::domain::models::Notification for ItemImportedMetadata {
+    const TYPE_NAME: &'static str = "item_imported";
+}
+
+impl NotificationTitle for ItemImportedMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.item_name.clone())
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("From {}", self.source.label()))
+    }
+}
+
 impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
 }

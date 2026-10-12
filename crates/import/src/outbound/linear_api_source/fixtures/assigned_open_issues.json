@@ -1,0 +1,126 @@
+{
+  "data": {
+    "viewer": {
+      "assignedIssues": {
+        "nodes": [
+          {
+            "id": "0b0c0001-1111-4222-8333-444455550001",
+            "identifier": "ENG-142",
+            "title": "Exports time out for large workspaces",
+            "description": "## Context\n\nCustomers on the **Enterprise** plan report that exports time out after 30 seconds when a workspace has more than 10k rows.\n\n## Repro\n\n1. Open a workspace with a large table\n2. Click **Export \u2192 CSV**\n3. Wait\n\n```sql\nSELECT count(*) FROM export_jobs WHERE status = 'running';\n```\n\n## Notes\n\n- Observation 1: the worker retried the chunk `0001` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 2: the worker retried the chunk `0002` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 3: the worker retried the chunk `0003` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 4: the worker retried the chunk `0004` after a lock timeout and the p95 latency rose by 5ms.\n- Observation 5: the worker retried the chunk `0005` after a lock timeout and the p95 latency rose by 6ms.\n- Observation 6: the worker retried the chunk `0006` after a lock timeout and the p95 latency rose by 7ms.\n- Observation 7: the worker retried the chunk `0007` after a lock timeout and the p95 latency rose by 1ms.\n- Observation 8: the worker retried the chunk `0008` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 9: the worker retried the chunk `0009` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 10: the worker retried the chunk `0010` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 11: the worker retried the chunk `0011` after a lock timeout and the p95 latency rose by 5ms.\n- Observation 12: the worker retried the chunk `0012` after a lock timeout and the p95 latency rose by 6ms.\n- Observation 13: the worker retried the chunk `0013` after a lock timeout and the p95 latency rose by 7ms.\n- Observation 14: the worker retried the chunk `0014` after a lock timeout and the p95 latency rose by 1ms.\n- Observation 15: the worker retried the chunk `0015` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 16: the worker retried the chunk `0016` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 17: the worker retried the chunk `0017` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 18: the worker retried the chunk `0018` after a lock timeout and the p95 latency rose by 5ms.\n- Observation 19: the worker retried the chunk `0019` after a lock timeout and the p95 latency rose by 6ms.\n- Observation 20: the worker retried the chunk `0020` after a lock timeout and the p95 latency rose by 7ms.\n- Observation 21: the worker retried the chunk `0021` after a lock timeout and the p95 latency rose by 1ms.\n- Observation 22: the worker retried the chunk `0022` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 23: the worker retried the chunk `0023` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 24: the worker retried the chunk `0024` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 25: the worker retried the chunk `0025` after a lock timeout and the p95 latency rose by 5ms.\n- Observation 26: the worker retried the chunk `0026` after a lock timeout and the p95 latency rose by 6ms.\n- Observation 27: the worker retried the chunk `0027` after a lock timeout and the p95 latency rose by 7ms.\n- Observation 28: the worker retried the chunk `0028` after a lock timeout and the p95 latency rose by 1ms.\n- Observation 29: the worker retried the chunk `0029` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 30: the worker retried the chunk `0030` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 31: the worker retried the chunk `0031` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 32: the worker retried the chunk `0032` after a lock timeout and the p95 latency rose by 5ms.\n- Observation 33: the worker retried the chunk `0033` after a lock timeout and the p95 latency rose by 6ms.\n- Observation 34: the worker retried the chunk `0034` after a lock timeout and the p95 latency rose by 7ms.\n- Observation 35: the worker retried the chunk `0035` after a lock timeout and the p95 latency rose by 1ms.\n- Observation 36: the worker retried the chunk `0036` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 37: the worker retried the chunk `0037` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 38: the worker retried the chunk `0038` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 39: the worker retried the chunk `0039` after a lock timeout and the p95 latency rose by 5ms.\n- Observation 40: the worker retried the chunk `0040` after a lock timeout and the p95 latency rose by 6ms.\n- Observation 41: the worker retried the chunk `0041` after a lock timeout and the p95 latency rose by 7ms.\n- Observation 42: the worker retried the chunk `0042` after a lock timeout and the p95 latency rose by 1ms.\n- Observation 43: the worker retried the chunk `0043` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 44: the worker retried the chunk `0044` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 45: the worker retried the chunk `0045` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 46: the worker retried the chunk `0046` after a lock timeout and the p95 latency rose by 5ms.\n- Observation 47: the worker retried the chunk `0047` after a lock timeout and the p95 latency rose by 6ms.\n- Observation 48: the worker retried the chunk `0048` after a lock timeout and the p95 latency rose by 7ms.\n- Observation 49: the worker retried the chunk `0049` after a lock timeout and the p95 latency rose by 1ms.\n- Observation 50: the worker retried the chunk `0050` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 51: the worker retried the chunk `0051` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 52: the worker retried the chunk `0052` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 53: the worker retried the chunk `0053` after a lock timeout and the p95 latency rose by 5ms.\n- Observation 54: the worker retried the chunk `0054` after a lock timeout and the p95 latency rose by 6ms.\n- Observation 55: the worker retried the chunk `0055` after a lock timeout and the p95 latency rose by 7ms.\n- Observation 56: the worker retried the chunk `0056` after a lock timeout and the p95 latency rose by 1ms.\n- Observation 57: the worker retried the chunk `0057` after a lock timeout and the p95 latency rose by 2ms.\n- Observation 58: the worker retried the chunk `0058` after a lock timeout and the p95 latency rose by 3ms.\n- Observation 59: the worker retried the chunk `0059` after a lock timeout and the p95 latency rose by 4ms.\n- Observation 60: the worker retried the chunk `0060` after a lock timeout and the p95 latency rose by 5ms.\n\n> Keep the existing retry budget; see [the runbook](https://example.com/runbook).\n",
+            "url": "https://linear.app/example-co/issue/eng-142/redacted",
+            "priority": 1,
+            "dueDate": "2026-10-10",
+            "createdAt": "2026-08-01T09:00:00.000Z",
+            "updatedAt": "2026-10-07T16:20:00.000Z",
+            "archivedAt": null,
+            "state": {
+              "name": "In Progress",
+              "type": "started"
+            }
+          },
+          {
+            "id": "0b0c0002-1111-4222-8333-444455550002",
+            "identifier": "ENG-150",
+            "title": "Review retry budget change",
+            "description": "Ready for review in the export worker PR.\n\n- [x] Tests\n- [ ] Docs",
+            "url": "https://linear.app/example-co/issue/eng-150/redacted",
+            "priority": 2,
+            "dueDate": null,
+            "createdAt": "2026-08-01T09:00:00.000Z",
+            "updatedAt": "2026-10-08T08:05:00.000Z",
+            "archivedAt": null,
+            "state": {
+              "name": "In Review",
+              "type": "started"
+            }
+          },
+          {
+            "id": "0b0c0003-1111-4222-8333-444455550003",
+            "identifier": "ENG-151",
+            "title": "Tidy export settings copy",
+            "description": "Shorter labels for the export dialog.",
+            "url": "https://linear.app/example-co/issue/eng-151/redacted",
+            "priority": 3,
+            "dueDate": "2026-10-20",
+            "createdAt": "2026-08-01T09:00:00.000Z",
+            "updatedAt": "2026-10-02T11:00:00.000Z",
+            "archivedAt": null,
+            "state": {
+              "name": "Todo",
+              "type": "unstarted"
+            }
+          },
+          {
+            "id": "0b0c0004-1111-4222-8333-444455550004",
+            "identifier": "ENG-160",
+            "title": "Investigate flaky CSV test",
+            "description": null,
+            "url": "https://linear.app/example-co/issue/eng-160/redacted",
+            "priority": 4,
+            "dueDate": null,
+            "createdAt": "2026-08-01T09:00:00.000Z",
+            "updatedAt": "2026-09-12T10:00:00.000Z",
+            "archivedAt": null,
+            "state": {
+              "name": "Backlog",
+              "type": "backlog"
+            }
+          },
+          {
+            "id": "0b0c0005-1111-4222-8333-444455550005",
+            "identifier": "OPS-7",
+            "title": "Customer report: missing rows",
+            "description": "Reported via support.",
+            "url": "https://linear.app/example-co/issue/ops-7/redacted",
+            "priority": 0,
+            "dueDate": null,
+            "createdAt": "2026-08-01T09:00:00.000Z",
+            "updatedAt": "2026-10-06T13:30:00.000Z",
+            "archivedAt": null,
+            "state": {
+              "name": "Triage",
+              "type": "triage"
+            }
+          },
+          {
+            "id": "0b0c0006-1111-4222-8333-444455550006",
+            "identifier": "ENG-99",
+            "title": "Old archived spike",
+            "description": "Archived.",
+            "url": "https://linear.app/example-co/issue/eng-99/redacted",
+            "priority": 3,
+            "dueDate": null,
+            "createdAt": "2026-08-01T09:00:00.000Z",
+            "updatedAt": "2026-05-01T10:00:00.000Z",
+            "archivedAt": "2026-06-01T00:00:00.000Z",
+            "state": {
+              "name": "Backlog",
+              "type": "backlog"
+            }
+          },
+          {
+            "id": "0b0c0007-1111-4222-8333-444455550007",
+            "identifier": "ENG-120",
+            "title": "Shipped last week",
+            "description": "Should never be imported.",
+            "url": "https://linear.app/example-co/issue/eng-120/redacted",
+            "priority": 2,
+            "dueDate": null,
+            "createdAt": "2026-08-01T09:00:00.000Z",
+            "updatedAt": "2026-10-01T10:00:00.000Z",
+            "archivedAt": null,
+            "state": {
+              "name": "Done",
+              "type": "completed"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "cursor-1"
+        }
+      }
+    }
+  }
+}

@@ -4,9 +4,12 @@ pub mod catalog;
 pub mod connect;
 /// Discover suitable connectors before asking a user to authorize them.
 pub mod discovery;
+/// Requests to connected apps' own APIs through the Connect API proxy.
+pub mod proxy;
 /// The Pipedream MCP tool set.
 pub mod toolset;
 
 pub use catalog::browse_catalog;
 pub use connect::{PipedreamConnectError, complete_pipedream_connection, disconnect_mcp_server};
+pub use proxy::PipedreamConnectProxy;
 pub use toolset::PipedreamToolSet;

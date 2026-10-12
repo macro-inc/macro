@@ -9,6 +9,10 @@ import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { entityIsMuted } from '@entity/utils/notification';
 import { getDocumentCommentNotification } from '@notifications/document-comment-notification';
+import {
+  getImportedItemSource,
+  importedFromLabel,
+} from '@notifications/imported-item-notification';
 import { getNotificationAgentSender } from '@notifications/notification-sender';
 import type { UnifiedNotification } from '@notifications/types';
 import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
@@ -32,6 +36,8 @@ export function HomeListEntity(props: HomeListEntityProps) {
   // comment glyph, who did what, and where. Opening it lands on the comment.
   const commentNotification = () =>
     getDocumentCommentNotification(props.entity);
+  // An item an import just brought in says where it came from.
+  const importedFrom = () => getImportedItemSource(props.entity);
   const unread = () => unreadFilterFn(props.entity);
   const notificationSource = useGlobalNotificationSource();
   const muted = () =>
@@ -98,6 +104,18 @@ export function HomeListEntity(props: HomeListEntityProps) {
                         entity={props.entity}
                         notification={notification()}
                       />
+                    )}
+                  </Match>
+                  <Match when={importedFrom()}>
+                    {(source) => (
+                      <span class="flex min-w-0 items-center">
+                        <span class="min-w-0 truncate">
+                          <Entity.Title entity={props.entity} />
+                        </span>
+                        <span class="shrink-0 whitespace-pre text-ink-extra-muted">
+                          {` · ${importedFromLabel(source())}`}
+                        </span>
+                      </span>
                     )}
                   </Match>
                 </Switch>

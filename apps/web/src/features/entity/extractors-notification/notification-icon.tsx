@@ -3,6 +3,7 @@ import GithubIcon from '@icon/mcp-github.svg';
 import type { NotificationStack } from '@notifications';
 import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
 import ArrowBendUpLeftIcon from '@phosphor/arrow-bend-up-left.svg';
+import ArrowSquareInIcon from '@phosphor/arrow-square-in.svg';
 import AtIcon from '@phosphor/at.svg';
 import BellIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
@@ -70,6 +71,7 @@ function getNotificationIcon(
     .with('reminder', () => BellIcon)
     .with('calendar_event_reminder', () => CalendarBlankIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
+    .with('item_imported', () => ArrowSquareInIcon)
     .with('agent_session_settled', () => AgentIcon)
     .with('agent_session_waiting_for_input', () => QuestionIcon)
     .with('agent_session_mentioned', () => AtIcon)

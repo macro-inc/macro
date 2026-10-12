@@ -10,6 +10,10 @@ import type { NotionDocMetaUrl } from './notionDocMetaUrl';
 /**
  * Metadata for one staged Notion page. Deliberately has NO content field:
 page bodies are fetched at import time, for accepted pages only.
+
+Discovery records the page facts the import needs (so it never re-reads
+the page object); chat staging may record only `title`/`url`, so every
+field beyond `title` is optional and older rows keep deserializing.
  */
 export interface NotionDocMeta {
   /** One-line summary of what the page contains. */

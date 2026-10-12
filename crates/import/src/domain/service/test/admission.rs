@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::ports::ImportedTaskProperties;
 use ai_billing::{AiAdmissionError, AiAdmissionService, DenyReason};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -56,6 +57,7 @@ struct Ledger {
     team_id: Option<Uuid>,
     roster: Vec<MacroUserIdStr<'static>>,
     target: Option<ImportTargetReservation>,
+    folders: Vec<(ImportSource, String, Uuid)>,
 }
 
 impl Repo {
@@ -67,7 +69,17 @@ impl Repo {
         })))
     }
 
-    fn seed(&self, source: ImportSource) -> ImportEntity {
+    /// Every ledger row, in insertion order.
+    pub(in crate::domain::service) fn rows(&self) -> Vec<ImportEntity> {
+        self.0.lock().unwrap().rows.clone()
+    }
+
+    /// Insert a row as-is (e.g. a teammate's imported row).
+    pub(in crate::domain::service) fn insert(&self, row: ImportEntity) {
+        self.0.lock().unwrap().rows.push(row);
+    }
+
+    pub(in crate::domain::service) fn seed(&self, source: ImportSource) -> ImportEntity {
         let row = ImportEntity {
             id: Uuid::now_v7(),
             user_id: user().to_string(),
@@ -279,7 +291,7 @@ impl ImportRepo for Repo {
         id: Uuid,
         entity_id: &str,
         entity_type: &str,
-        _: Option<Uuid>,
+        team_id: Option<Uuid>,
     ) -> Result<Option<ImportEntity>> {
         let mut ledger = self.0.lock().unwrap();
         let row = ledger.rows.iter_mut().find(|row| row.id == id).unwrap();
@@ -289,6 +301,7 @@ impl ImportRepo for Repo {
         row.status = ImportStatus::Imported;
         row.entity_id = Some(entity_id.into());
         row.entity_type = Some(entity_type.into());
+        row.team_id = team_id;
         Ok(Some(row.clone()))
     }
     async fn mark_import_failed(
@@ -306,6 +319,14 @@ impl ImportRepo for Repo {
         row.last_error = Some(error.into());
         Ok(true)
     }
+    async fn remove_importing(&self, _: &MacroUserIdStr<'static>, id: Uuid) -> Result<bool> {
+        let mut ledger = self.0.lock().unwrap();
+        let before = ledger.rows.len();
+        ledger
+            .rows
+            .retain(|row| !(row.id == id && row.status == ImportStatus::Importing));
+        Ok(ledger.rows.len() < before)
+    }
     async fn discard(&self, _: &MacroUserIdStr<'static>, id: Uuid) -> Result<bool> {
         let mut ledger = self.0.lock().unwrap();
         let row = ledger.rows.iter_mut().find(|row| row.id == id).unwrap();
@@ -314,6 +335,35 @@ impl ImportRepo for Repo {
         }
         row.status = ImportStatus::Discarded;
         Ok(true)
+    }
+    async fn import_folder(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        key: &str,
+    ) -> Result<Option<Uuid>> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .folders
+            .iter()
+            .find(|(s, k, _)| *s == source && k == key)
+            .map(|(_, _, folder)| *folder))
+    }
+    async fn save_import_folder(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        key: &str,
+        folder: Uuid,
+    ) -> Result<()> {
+        let mut ledger = self.0.lock().unwrap();
+        ledger
+            .folders
+            .retain(|(s, k, _)| !(*s == source && k == key));
+        ledger.folders.push((source, key.to_string(), folder));
+        Ok(())
     }
     async fn user_team_id(&self, _: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
         Ok(self.0.lock().unwrap().team_id)
@@ -334,7 +384,7 @@ impl ImportRepo for Repo {
     }
     async fn get_own_by_foreign_id(
         &self,
-        _: &MacroUserIdStr<'static>,
+        caller: &MacroUserIdStr<'static>,
         source: ImportSource,
         foreign_id: &str,
     ) -> Result<Option<ImportEntity>> {
@@ -344,16 +394,32 @@ impl ImportRepo for Repo {
             .unwrap()
             .rows
             .iter()
-            .find(|row| row.source == source && row.foreign_id == foreign_id)
+            .find(|row| {
+                row.user_id == caller.as_ref()
+                    && row.source == source
+                    && row.foreign_id == foreign_id
+            })
             .cloned())
     }
     async fn find_team_imported(
         &self,
-        _: &MacroUserIdStr<'static>,
-        _: ImportSource,
-        _: &str,
+        caller: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        foreign_id: &str,
     ) -> Result<Option<ImportEntity>> {
-        Ok(None)
+        let ledger = self.0.lock().unwrap();
+        Ok(ledger
+            .rows
+            .iter()
+            .find(|row| {
+                row.user_id != caller.as_ref()
+                    && row.source == source
+                    && row.foreign_id == foreign_id
+                    && row.status == ImportStatus::Imported
+                    && row.team_id.is_some()
+                    && row.team_id == ledger.team_id
+            })
+            .cloned())
     }
     async fn upsert_staged(
         &self,
@@ -468,9 +534,22 @@ impl EntityCreator for Creator {
         _: &str,
         _: &str,
         _: &ImportedDocumentProperties,
+        _: Option<Uuid>,
     ) -> anyhow::Result<String> {
         self.0.fetch_add(1, Ordering::SeqCst);
         Ok(Uuid::now_v7().to_string())
+    }
+    async fn create_folder(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+        _: Option<Uuid>,
+    ) -> anyhow::Result<Uuid> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Ok(Uuid::now_v7())
+    }
+    async fn folder_usable(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
+        Ok(true)
     }
     async fn create_channel(
         &self,
@@ -526,111 +605,42 @@ impl<Context: Send> ToolSet<Context> for Tools {
         }])
     }
 }
-fn notion_tools(truncated: bool) -> Arc<Tools> {
-    Arc::new(Tools {
-        name: "mcp__Notion__notion-fetch",
-        result: serde_json::json!({"title": "A page", "text": "A complete page", "truncated": truncated}),
-        calls: AtomicUsize::new(0),
+
+async fn wait_for_run(service: &Service, status: RunStatus) -> ImportRun {
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let run = service
+                .repo
+                .list_runs(&user())
+                .await
+                .unwrap()
+                .pop()
+                .unwrap();
+            if run.status == status {
+                return run;
+            }
+            tokio::task::yield_now().await;
+        }
     })
+    .await
+    .unwrap()
 }
 
+/// Discovery reads the sources' own APIs, so starting a gather neither
+/// spends nor checks AI allowance.
 #[tokio::test]
-async fn initial_gather_and_retry_refuse_before_running_or_connector_calls() {
-    for error in [denied(), AiAdmissionError::Unavailable] {
-        let admission = Admission::refusing(error);
-        let service = service(admission.clone());
-        for source in [ImportSource::Linear, ImportSource::Notion] {
-            assert!(
-                matches!(service.start_gather(user(), source, true).await, Err(ImportError::Admission(e)) if e == error)
-            );
-            assert!(service.repo.list_runs(&user()).await.unwrap().is_empty());
-            assert!(
-                matches!(service.retry_gather(user(), source).await, Err(ImportError::Admission(e)) if e == error)
-            );
-        }
+async fn gathers_never_consult_admission() {
+    let admission = Admission::refusing(denied());
+    let service = service(admission.clone());
+    assert!(
         service
-            .repo
-            .start_run(&user(), ImportSource::Linear, &[], true)
-            .await
-            .unwrap();
-        service
-            .repo
-            .finish_run(
-                &user(),
-                ImportSource::Linear,
-                RunStatus::Failed,
-                Some("old failure"),
-            )
-            .await
-            .unwrap();
-        assert!(
-            matches!(service.retry_gather(user(), ImportSource::Linear).await, Err(ImportError::Admission(e)) if e == error)
-        );
-        let run = service
-            .repo
-            .list_runs(&user())
+            .start_gather(user(), ImportSource::Linear, true)
             .await
             .unwrap()
-            .pop()
-            .unwrap();
-        assert_eq!(run.status, RunStatus::Failed);
-        assert!(run.auto_import);
-        assert_eq!(run.error.as_deref(), Some("old failure"));
-        service
-            .dismiss_run(user(), ImportSource::Linear)
-            .await
-            .unwrap();
-        let calls = admission.calls.load(Ordering::SeqCst);
-        assert!(
-            !service
-                .start_gather(user(), ImportSource::Linear, false)
-                .await
-                .unwrap()
-        );
-        assert_eq!(admission.calls.load(Ordering::SeqCst), calls);
-        assert_eq!(
-            service.state(user()).await.unwrap().runs[0].status,
-            RunStatus::Dismissed
-        );
-    }
-}
-
-#[tokio::test]
-async fn queued_gather_rechecks_and_finishes_failed_without_loading_tools() {
-    for error in [denied(), AiAdmissionError::Unavailable] {
-        let admission = Arc::new(Admission {
-            error: Mutex::new(Some(error)),
-            calls: AtomicUsize::new(0),
-            allow_first: true,
-        });
-        let service = service(admission.clone());
-        assert!(
-            service
-                .start_gather(user(), ImportSource::Notion, true)
-                .await
-                .unwrap()
-        );
-        tokio::time::timeout(Duration::from_secs(2), async {
-            loop {
-                let run = service
-                    .repo
-                    .list_runs(&user())
-                    .await
-                    .unwrap()
-                    .pop()
-                    .unwrap();
-                if run.status == RunStatus::Failed {
-                    assert!(run.error.unwrap().starts_with(error.code()));
-                    assert!(run.auto_import);
-                    break;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .unwrap();
-        assert_eq!(admission.calls.load(Ordering::SeqCst), 2);
-    }
+    );
+    let run = wait_for_run(&service, RunStatus::Ready).await;
+    assert_eq!(run.error, None);
+    assert_eq!(admission.calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -648,7 +658,6 @@ async fn active_gather_retries_are_noops_and_failed_retries_preserve_configurati
             .await
             .unwrap()
     );
-    assert_eq!(admission.calls.load(Ordering::SeqCst), 0);
     service
         .repo
         .finish_run(
@@ -659,39 +668,31 @@ async fn active_gather_retries_are_noops_and_failed_retries_preserve_configurati
         )
         .await
         .unwrap();
-
-    // Admission recovers for the retry, then fails again when the task starts.
-    let admission = Arc::new(Admission {
-        error: Mutex::new(Some(AiAdmissionError::Unavailable)),
-        calls: AtomicUsize::new(0),
-        allow_first: true,
-    });
-    let service = service.with_admission(admission);
     assert!(
         service
             .retry_gather(user(), ImportSource::Linear)
             .await
             .unwrap()
     );
-    tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            let run = service
-                .repo
-                .list_runs(&user())
-                .await
-                .unwrap()
-                .pop()
-                .unwrap();
-            if run.status == RunStatus::Failed {
-                assert!(run.auto_import);
-                assert!(run.error.unwrap().starts_with("ai_billing_unavailable"));
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
+    let run = wait_for_run(&service, RunStatus::Ready).await;
+    assert!(run.auto_import);
+    assert_eq!(run.error, None);
+    // A dismissed source stays dismissed until explicitly retried.
+    service
+        .dismiss_run(user(), ImportSource::Linear)
+        .await
+        .unwrap();
+    assert!(
+        !service
+            .start_gather(user(), ImportSource::Linear, false)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        service.state(user()).await.unwrap().runs[0].status,
+        RunStatus::Dismissed
+    );
+    assert_eq!(admission.calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -705,7 +706,7 @@ async fn default_constructor_keeps_admission_disabled() {
     service.admit_ai(&user()).await.unwrap();
     assert!(
         service
-            .prepare_gather(&user(), ImportSource::Notion, &[])
+            .prepare_gather(&user(), ImportSource::Slack, &[])
             .await
             .unwrap()
     );
@@ -734,97 +735,4 @@ async fn slack_agent_fallback_still_requires_admission() {
     assert_eq!(error.downcast_ref::<AiAdmissionError>(), Some(&denied()));
     assert_eq!(admission.calls.load(Ordering::SeqCst), 1);
     assert_eq!(tools.calls.load(Ordering::SeqCst), 0);
-}
-
-#[tokio::test]
-async fn notion_direct_import_succeeds_and_denied_fallback_releases_claim() {
-    for error in [denied(), AiAdmissionError::Unavailable] {
-        let admission = Admission::refusing(error);
-        let service = service(admission.clone());
-        let direct = service.repo.seed(ImportSource::Notion);
-        let fallback = service.repo.seed(ImportSource::Notion);
-        let rows = service
-            .repo
-            .mark_importing(&user(), &[direct.id, fallback.id])
-            .await
-            .unwrap();
-        service
-            .process_notion_page(&user(), notion_tools(false), &rows[0])
-            .await
-            .unwrap();
-        assert_eq!(admission.calls.load(Ordering::SeqCst), 0);
-        let result = service
-            .process_notion_page(&user(), notion_tools(true), &rows[1])
-            .await
-            .unwrap_err();
-        assert_eq!(result.downcast_ref::<AiAdmissionError>(), Some(&error));
-        let failed = service
-            .repo
-            .get(&user(), fallback.id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(failed.status, ImportStatus::Staged);
-        assert!(failed.last_error.unwrap().starts_with(error.code()));
-        assert_eq!(
-            service
-                .repo
-                .get(&user(), direct.id)
-                .await
-                .unwrap()
-                .unwrap()
-                .status,
-            ImportStatus::Imported
-        );
-        assert_eq!(service.creator.0.load(Ordering::SeqCst), 1);
-    }
-}
-
-#[tokio::test]
-async fn delayed_notion_work_rechecks_current_allowance_and_mixed_work_survives() {
-    let admission = Admission::refusing(denied());
-    *admission.error.lock().unwrap() = None;
-    let service = service(admission.clone());
-    service.admit_ai(&user()).await.unwrap();
-    service.repo.0.lock().unwrap().team_id = Some(Uuid::now_v7());
-    let notion = service.repo.seed(ImportSource::Notion);
-    let linear = service.repo.seed(ImportSource::Linear);
-    let slack = service.repo.seed(ImportSource::Slack);
-    let discard = service.repo.seed(ImportSource::Notion);
-    // Claim before the quota changes, as when waiting behind a concurrency cap.
-    let rows = service
-        .repo
-        .mark_importing(&user(), &[notion.id])
-        .await
-        .unwrap();
-    *admission.error.lock().unwrap() = Some(denied());
-    let outcome = service
-        .run_import(user(), vec![linear.id, slack.id], vec![discard.id])
-        .await
-        .unwrap();
-    assert_eq!(outcome.importing, 2);
-    assert_eq!(outcome.discarded, 1);
-    let error = service
-        .process_notion_page(&user(), notion_tools(true), &rows[0])
-        .await
-        .unwrap_err();
-    assert_eq!(error.downcast_ref::<AiAdmissionError>(), Some(&denied()));
-    tokio::time::timeout(Duration::from_secs(2), async {
-        while service.creator.0.load(Ordering::SeqCst) < 2 {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-    assert_eq!(
-        service
-            .repo
-            .get(&user(), notion.id)
-            .await
-            .unwrap()
-            .unwrap()
-            .status,
-        ImportStatus::Staged
-    );
-    assert_eq!(admission.calls.load(Ordering::SeqCst), 2);
 }

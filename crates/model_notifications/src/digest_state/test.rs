@@ -37,3 +37,12 @@ fn colleague_joined_macro_never_lands_in_a_digest() {
             .is_left()
     );
 }
+
+#[test]
+fn imported_items_never_land_in_a_digest() {
+    assert!(
+        digest_email_block_list()
+            .notification_is_allowed(row_of::<crate::ItemImportedMetadata>())
+            .is_right()
+    );
+}

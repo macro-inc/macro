@@ -1,0 +1,30 @@
+query ImportAssignedOpenIssues($first: Int!, $after: String) {
+  viewer {
+    assignedIssues(
+      first: $first
+      after: $after
+      orderBy: updatedAt
+      filter: { state: { type: { nin: ["completed", "canceled"] } } }
+    ) {
+      nodes {
+        id
+        identifier
+        title
+        description
+        url
+        priority
+        dueDate
+        updatedAt
+        archivedAt
+        state {
+          name
+          type
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

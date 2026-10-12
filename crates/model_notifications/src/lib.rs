@@ -19,8 +19,8 @@ pub use metadata::{
     GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
     GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
     GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged,
-    GithubReviewRequested, InboxReauthRequiredMetadata, InitiativeDiscussionMetadata,
-    InitiativeDiscussionReason, InviteToTeamMetadata, ItemSharedMetadata,
+    GithubReviewRequested, ImportedFrom, InboxReauthRequiredMetadata, InitiativeDiscussionMetadata,
+    InitiativeDiscussionReason, InviteToTeamMetadata, ItemImportedMetadata, ItemSharedMetadata,
     MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
     NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
@@ -265,6 +265,9 @@ define_notif_event!(
 
         /// Someone reacted to one of the user's channel messages.
         ChannelMessageReaction(ChannelMessageReactionMetadata),
+
+        /// An item the user is actively working on was imported into Macro.
+        ItemImported(ItemImportedMetadata),
     }
 );
 
@@ -300,6 +303,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_title(sender_id),
             NotifEvent::InboxReauthRequired(m) => m.format_title(sender_id),
+            NotifEvent::ItemImported(m) => m.format_title(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_title(sender_id)
@@ -366,6 +370,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_body(sender_id),
             NotifEvent::InboxReauthRequired(m) => m.format_body(sender_id),
+            NotifEvent::ItemImported(m) => m.format_body(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_body(sender_id)

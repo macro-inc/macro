@@ -176,6 +176,7 @@ fn fixed_entity_type_mapping() {
 
 #[test]
 fn validate_metadata_caps_and_drops_unknown_fields() {
+    // Descriptions are imported verbatim, so long ones survive whole …
     let long = "x".repeat(10_000);
     let raw = serde_json::json!({
         "title": "Roadmap",
@@ -184,12 +185,20 @@ fn validate_metadata_caps_and_drops_unknown_fields() {
     });
     let validated = validate_metadata(ImportSource::Linear, raw).expect("valid linear metadata");
     assert_eq!(validated["title"], "Roadmap");
+    assert_eq!(validated["description"].as_str().unwrap().len(), 10_000);
+    assert!(validated.get("surprise_field").is_none());
+    // … up to a bound that keeps rows sane.
+    let huge = "x".repeat(300_000);
+    let validated = validate_metadata(
+        ImportSource::Linear,
+        serde_json::json!({"title": "Roadmap", "description": huge}),
+    )
+    .expect("valid linear metadata");
     assert_eq!(
         validated["description"].as_str().unwrap().len(),
-        4_000,
-        "long description is capped"
+        200_000,
+        "huge description is capped"
     );
-    assert!(validated.get("surprise_field").is_none());
 
     // Missing required fields error.
     assert!(validate_metadata(ImportSource::Slack, serde_json::json!({"purpose": "x"})).is_err());

@@ -571,6 +571,10 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
 	}
+	... on GraphqlItemImportedMetadata {
+		itemImportedSource: source
+		itemImportedItemName: itemName
+	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName
 		inviteToTeamTeamId: teamId

@@ -1,0 +1,1304 @@
+{
+  "1a2b0001-0000-4000-8000-000000000001": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b0064-0000-4000-8000-000000000064",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Owner: "
+              },
+              "plain_text": "Owner: "
+            },
+            {
+              "type": "mention",
+              "mention": {
+                "type": "user",
+                "user": {
+                  "object": "user",
+                  "id": "9f000000-0000-4000-8000-000000000001",
+                  "name": "Dana Example"
+                }
+              },
+              "plain_text": "@Dana Example"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": " · Kickoff "
+              },
+              "plain_text": " · Kickoff "
+            },
+            {
+              "type": "mention",
+              "mention": {
+                "type": "date",
+                "date": {
+                  "start": "2026-10-08",
+                  "end": null,
+                  "time_zone": null
+                }
+              },
+              "plain_text": "2026-10-08"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": ". This plan is "
+              },
+              "plain_text": ". This plan is "
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": "final"
+              },
+              "annotations": {
+                "bold": true
+              },
+              "plain_text": "final"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": ", "
+              },
+              "plain_text": ", "
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": "mostly"
+              },
+              "annotations": {
+                "italic": true
+              },
+              "plain_text": "mostly"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": " "
+              },
+              "plain_text": " "
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": "not draft"
+              },
+              "annotations": {
+                "strikethrough": true
+              },
+              "plain_text": "not draft"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": ", "
+              },
+              "plain_text": ", "
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": "signed off"
+              },
+              "annotations": {
+                "underline": true
+              },
+              "plain_text": "signed off"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": ", see "
+              },
+              "plain_text": ", see "
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": "the brief",
+                "link": {
+                  "url": "https://example.com/brief"
+                }
+              },
+              "plain_text": "the brief",
+              "href": "https://example.com/brief"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": " and run "
+              },
+              "plain_text": " and run "
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": "make launch"
+              },
+              "annotations": {
+                "code": true
+              },
+              "plain_text": "make launch"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": ". Growth target "
+              },
+              "plain_text": ". Growth target "
+            },
+            {
+              "type": "equation",
+              "equation": {
+                "expression": "r = 1.2^t"
+              },
+              "plain_text": "r = 1.2^t"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": ". Related: "
+              },
+              "plain_text": ". Related: "
+            },
+            {
+              "type": "mention",
+              "mention": {
+                "type": "page",
+                "page": {
+                  "id": "1a2b0002-0000-4000-8000-000000000002"
+                }
+              },
+              "plain_text": "Launch checklist",
+              "href": "https://www.notion.so/1a2b0002000040008000000000000002"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": ". Literal *stars*, _underscores_, 2 < 3 and a | pipe."
+              },
+              "plain_text": ". Literal *stars*, _underscores_, 2 < 3 and a | pipe."
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0065-0000-4000-8000-000000000065",
+        "has_children": false,
+        "type": "heading_1",
+        "heading_1": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Goals"
+              },
+              "plain_text": "Goals"
+            }
+          ],
+          "is_toggleable": false
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0066-0000-4000-8000-000000000066",
+        "has_children": true,
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Ship the "
+              },
+              "plain_text": "Ship the "
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": "export"
+              },
+              "annotations": {
+                "bold": true
+              },
+              "plain_text": "export"
+            },
+            {
+              "type": "text",
+              "text": {
+                "content": " redesign"
+              },
+              "plain_text": " redesign"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0067-0000-4000-8000-000000000067",
+        "has_children": false,
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Hit 99.9% uptime"
+              },
+              "plain_text": "Hit 99.9% uptime"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0068-0000-4000-8000-000000000068",
+        "has_children": false,
+        "type": "heading_2",
+        "heading_2": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Milestones"
+              },
+              "plain_text": "Milestones"
+            }
+          ],
+          "is_toggleable": false
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0069-0000-4000-8000-000000000069",
+        "has_children": false,
+        "type": "numbered_list_item",
+        "numbered_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Design review"
+              },
+              "plain_text": "Design review"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b006a-0000-4000-8000-00000000006a",
+        "has_children": true,
+        "type": "numbered_list_item",
+        "numbered_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Beta"
+              },
+              "plain_text": "Beta"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b006b-0000-4000-8000-00000000006b",
+        "has_children": false,
+        "type": "numbered_list_item",
+        "numbered_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "GA"
+              },
+              "plain_text": "GA"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b006c-0000-4000-8000-00000000006c",
+        "has_children": false,
+        "type": "heading_3",
+        "heading_3": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Checklist"
+              },
+              "plain_text": "Checklist"
+            }
+          ],
+          "is_toggleable": false
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b006d-0000-4000-8000-00000000006d",
+        "has_children": false,
+        "type": "to_do",
+        "to_do": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Draft announcement"
+              },
+              "plain_text": "Draft announcement"
+            }
+          ],
+          "checked": true
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b006e-0000-4000-8000-00000000006e",
+        "has_children": false,
+        "type": "to_do",
+        "to_do": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Book the launch review"
+              },
+              "plain_text": "Book the launch review"
+            }
+          ],
+          "checked": false
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b006f-0000-4000-8000-00000000006f",
+        "has_children": true,
+        "type": "toggle",
+        "toggle": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Open questions"
+              },
+              "plain_text": "Open questions"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0070-0000-4000-8000-000000000070",
+        "has_children": true,
+        "type": "heading_2",
+        "heading_2": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Risks"
+              },
+              "plain_text": "Risks"
+            }
+          ],
+          "is_toggleable": true
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0071-0000-4000-8000-000000000071",
+        "has_children": true,
+        "type": "quote",
+        "quote": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Ship small, ship often."
+              },
+              "plain_text": "Ship small, ship often."
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0072-0000-4000-8000-000000000072",
+        "has_children": true,
+        "type": "callout",
+        "callout": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Freeze starts Nov 1"
+              },
+              "plain_text": "Freeze starts Nov 1"
+            }
+          ],
+          "icon": {
+            "type": "emoji",
+            "emoji": "⚠️"
+          }
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0073-0000-4000-8000-000000000073",
+        "has_children": false,
+        "type": "code",
+        "code": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "fn main() {\n    println!(\"launch\");\n}"
+              },
+              "plain_text": "fn main() {\n    println!(\"launch\");\n}"
+            }
+          ],
+          "caption": [],
+          "language": "rust"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0074-0000-4000-8000-000000000074",
+        "has_children": false,
+        "type": "divider",
+        "divider": {}
+      },
+      {
+        "object": "block",
+        "id": "1a2b0075-0000-4000-8000-000000000075",
+        "has_children": false,
+        "type": "equation",
+        "equation": {
+          "expression": "\\sum_{i=1}^{n} x_i"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0076-0000-4000-8000-000000000076",
+        "has_children": true,
+        "type": "table",
+        "table": {
+          "table_width": 3,
+          "has_column_header": true,
+          "has_row_header": false
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0077-0000-4000-8000-000000000077",
+        "has_children": true,
+        "type": "column_list",
+        "column_list": {}
+      },
+      {
+        "object": "block",
+        "id": "1a2b0078-0000-4000-8000-000000000078",
+        "has_children": true,
+        "type": "synced_block",
+        "synced_block": {
+          "synced_from": null
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0079-0000-4000-8000-000000000079",
+        "has_children": true,
+        "type": "synced_block",
+        "synced_block": {
+          "synced_from": {
+            "type": "block_id",
+            "block_id": "1a2b0078-0000-4000-8000-000000000078"
+          }
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b007a-0000-4000-8000-00000000007a",
+        "has_children": false,
+        "type": "image",
+        "image": {
+          "caption": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Architecture diagram"
+              },
+              "plain_text": "Architecture diagram"
+            }
+          ],
+          "type": "file",
+          "file": {
+            "url": "https://prod-files-secure.s3.us-west-2.amazonaws.com/ws-redacted/img-redacted/architecture.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=redacted",
+            "expiry_time": "2026-10-08T12:00:00.000Z"
+          }
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b007b-0000-4000-8000-00000000007b",
+        "has_children": false,
+        "type": "image",
+        "image": {
+          "caption": [],
+          "type": "external",
+          "external": {
+            "url": "https://images.example.com/team.jpg"
+          }
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b007c-0000-4000-8000-00000000007c",
+        "has_children": false,
+        "type": "file",
+        "file": {
+          "caption": [],
+          "type": "file",
+          "file": {
+            "url": "https://prod-files-secure.s3.us-west-2.amazonaws.com/ws-redacted/file-redacted/budget.xlsx?X-Amz-Signature=redacted",
+            "expiry_time": "2026-10-08T12:00:00.000Z"
+          },
+          "name": "budget.xlsx"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b007d-0000-4000-8000-00000000007d",
+        "has_children": false,
+        "type": "pdf",
+        "pdf": {
+          "caption": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Launch deck"
+              },
+              "plain_text": "Launch deck"
+            }
+          ],
+          "type": "external",
+          "external": {
+            "url": "https://example.com/deck.pdf"
+          }
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b007e-0000-4000-8000-00000000007e",
+        "has_children": false,
+        "type": "video",
+        "video": {
+          "caption": [],
+          "type": "external",
+          "external": {
+            "url": "https://www.youtube.com/watch?v=redacted"
+          }
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0080-0000-4000-8000-000000000080",
+        "has_children": false,
+        "type": "bookmark",
+        "bookmark": {
+          "caption": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Competitor teardown"
+              },
+              "plain_text": "Competitor teardown"
+            }
+          ],
+          "url": "https://example.com/teardown"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0081-0000-4000-8000-000000000081",
+        "has_children": false,
+        "type": "embed",
+        "embed": {
+          "caption": [],
+          "url": "https://figma.com/file/redacted"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0082-0000-4000-8000-000000000082",
+        "has_children": false,
+        "type": "link_preview",
+        "link_preview": {
+          "url": "https://github.com/example/repo/pull/42"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0002-0000-4000-8000-000000000002",
+        "has_children": false,
+        "type": "child_page",
+        "child_page": {
+          "title": "Launch checklist"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0084-0000-4000-8000-000000000084",
+        "has_children": false,
+        "type": "link_to_page",
+        "link_to_page": {
+          "type": "page_id",
+          "page_id": "1a2b000a-0000-4000-8000-00000000000a"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0003-0000-4000-8000-000000000003",
+        "has_children": false,
+        "type": "child_database",
+        "child_database": {
+          "title": "Projects"
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b0086-0000-4000-8000-000000000086",
+        "has_children": false,
+        "type": "table_of_contents",
+        "table_of_contents": {}
+      },
+      {
+        "object": "block",
+        "id": "1a2b0087-0000-4000-8000-000000000087",
+        "has_children": false,
+        "type": "breadcrumb",
+        "breadcrumb": {}
+      },
+      {
+        "object": "block",
+        "id": "1a2b0088-0000-4000-8000-000000000088",
+        "has_children": false,
+        "type": "unsupported",
+        "unsupported": {}
+      },
+      {
+        "object": "block",
+        "id": "1a2b0089-0000-4000-8000-000000000089",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": []
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0066-0000-4000-8000-000000000066": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00c8-0000-4000-8000-0000000000c8",
+        "has_children": true,
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Migrate CSV exports"
+              },
+              "plain_text": "Migrate CSV exports"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b00c9-0000-4000-8000-0000000000c9",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Owner: platform team"
+              },
+              "plain_text": "Owner: platform team"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b00c8-0000-4000-8000-0000000000c8": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00d2-0000-4000-8000-0000000000d2",
+        "has_children": false,
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Backfill historical files"
+              },
+              "plain_text": "Backfill historical files"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b006a-0000-4000-8000-00000000006a": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00ca-0000-4000-8000-0000000000ca",
+        "has_children": false,
+        "type": "numbered_list_item",
+        "numbered_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Invite 50 customers"
+              },
+              "plain_text": "Invite 50 customers"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b00cb-0000-4000-8000-0000000000cb",
+        "has_children": false,
+        "type": "numbered_list_item",
+        "numbered_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Collect feedback"
+              },
+              "plain_text": "Collect feedback"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b006f-0000-4000-8000-00000000006f": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00cc-0000-4000-8000-0000000000cc",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Do we need a status page?"
+              },
+              "plain_text": "Do we need a status page?"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b00cd-0000-4000-8000-0000000000cd",
+        "has_children": false,
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Pricing for EU"
+              },
+              "plain_text": "Pricing for EU"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0070-0000-4000-8000-000000000070": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00ce-0000-4000-8000-0000000000ce",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Vendor delays could push GA by a week."
+              },
+              "plain_text": "Vendor delays could push GA by a week."
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0071-0000-4000-8000-000000000071": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00cf-0000-4000-8000-0000000000cf",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "— the launch team"
+              },
+              "plain_text": "— the launch team"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0072-0000-4000-8000-000000000072": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00d0-0000-4000-8000-0000000000d0",
+        "has_children": false,
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "No schema migrations after the freeze"
+              },
+              "plain_text": "No schema migrations after the freeze"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0076-0000-4000-8000-000000000076": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00d3-0000-4000-8000-0000000000d3",
+        "has_children": false,
+        "type": "table_row",
+        "table_row": {
+          "cells": [
+            [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Area"
+                },
+                "plain_text": "Area"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Owner"
+                },
+                "plain_text": "Owner"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Status"
+                },
+                "plain_text": "Status"
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b00d4-0000-4000-8000-0000000000d4",
+        "has_children": false,
+        "type": "table_row",
+        "table_row": {
+          "cells": [
+            [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Exports"
+                },
+                "plain_text": "Exports"
+              }
+            ],
+            [
+              {
+                "type": "mention",
+                "mention": {
+                  "type": "user",
+                  "user": {
+                    "object": "user",
+                    "id": "9f000000-0000-4000-8000-000000000001",
+                    "name": "Dana Example"
+                  }
+                },
+                "plain_text": "@Dana Example"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": {
+                  "content": "On track"
+                },
+                "annotations": {
+                  "bold": true
+                },
+                "plain_text": "On track"
+              }
+            ]
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b00d5-0000-4000-8000-0000000000d5",
+        "has_children": false,
+        "type": "table_row",
+        "table_row": {
+          "cells": [
+            [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Billing"
+                },
+                "plain_text": "Billing"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": {
+                  "content": "Sam"
+                },
+                "plain_text": "Sam"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": {
+                  "content": "A | B testing"
+                },
+                "plain_text": "A | B testing"
+              }
+            ]
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0077-0000-4000-8000-000000000077": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00d6-0000-4000-8000-0000000000d6",
+        "has_children": true,
+        "type": "column",
+        "column": {}
+      },
+      {
+        "object": "block",
+        "id": "1a2b00d7-0000-4000-8000-0000000000d7",
+        "has_children": true,
+        "type": "column",
+        "column": {}
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b00d6-0000-4000-8000-0000000000d6": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00d8-0000-4000-8000-0000000000d8",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Left column: scope"
+              },
+              "plain_text": "Left column: scope"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b00d7-0000-4000-8000-0000000000d7": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00d9-0000-4000-8000-0000000000d9",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Right column: timeline"
+              },
+              "plain_text": "Right column: timeline"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0078-0000-4000-8000-000000000078": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b00da-0000-4000-8000-0000000000da",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Synced: support hours are 9–5 ET."
+              },
+              "plain_text": "Synced: support hours are 9–5 ET."
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0005-0000-4000-8000-000000000005": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b012c-0000-4000-8000-00000000012c",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "The exporter rewrite moves CSV generation into a streaming worker so large workspaces stop timing out. We keep the existing API contract and add a progress endpoint for the web client to poll."
+              },
+              "plain_text": "The exporter rewrite moves CSV generation into a streaming worker so large workspaces stop timing out. We keep the existing API contract and add a progress endpoint for the web client to poll."
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b012d-0000-4000-8000-00000000012d",
+        "has_children": false,
+        "type": "heading_2",
+        "heading_2": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Plan"
+              },
+              "plain_text": "Plan"
+            }
+          ],
+          "is_toggleable": false
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b012e-0000-4000-8000-00000000012e",
+        "has_children": false,
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Stream rows in 10k chunks"
+              },
+              "plain_text": "Stream rows in 10k chunks"
+            }
+          ]
+        }
+      },
+      {
+        "object": "block",
+        "id": "1a2b012f-0000-4000-8000-00000000012f",
+        "has_children": false,
+        "type": "bulleted_list_item",
+        "bulleted_list_item": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Resume from the last chunk on retry"
+              },
+              "plain_text": "Resume from the last chunk on retry"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0006-0000-4000-8000-000000000006": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b0136-0000-4000-8000-000000000136",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "todo"
+              },
+              "plain_text": "todo"
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0002-0000-4000-8000-000000000002": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b0140-0000-4000-8000-000000000140",
+        "has_children": false,
+        "type": "to_do",
+        "to_do": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "QA sign-off"
+              },
+              "plain_text": "QA sign-off"
+            }
+          ],
+          "checked": false
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  },
+  "1a2b0009-0000-4000-8000-000000000009": {
+    "object": "list",
+    "results": [
+      {
+        "object": "block",
+        "id": "1a2b014a-0000-4000-8000-00000000014a",
+        "has_children": false,
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [
+            {
+              "type": "text",
+              "text": {
+                "content": "Notes that live inside a column of the team home page."
+              },
+              "plain_text": "Notes that live inside a column of the team home page."
+            }
+          ]
+        }
+      }
+    ],
+    "next_cursor": null,
+    "has_more": false
+  }
+}

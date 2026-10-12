@@ -1,0 +1,10 @@
+{
+  "errors": [
+    {
+      "message": "Rate limit exceeded",
+      "extensions": {
+        "code": "RATELIMITED"
+      }
+    }
+  ]
+}

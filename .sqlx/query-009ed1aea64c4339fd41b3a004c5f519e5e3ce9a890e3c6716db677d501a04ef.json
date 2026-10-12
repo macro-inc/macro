@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Project\" (id, name, \"userId\") VALUES ($1, 'Notion', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "009ed1aea64c4339fd41b3a004c5f519e5e3ce9a890e3c6716db677d501a04ef"
+}

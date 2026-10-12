@@ -497,6 +497,9 @@ struct PageInfo {
     end_cursor: Option<String>,
 }
 
+/// [`ConnectProxyTransport`](crate::domain::ports::ConnectProxyTransport) over the Connect API proxy.
+mod proxy;
+
 #[cfg(test)]
 mod test;
 

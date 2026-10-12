@@ -12,11 +12,10 @@ const isDocumentCommentTag = (tag: string) =>
   (DOCUMENT_COMMENT_EVENT_TYPES as readonly string[]).includes(tag);
 
 /**
- * A document row can announce its newest outstanding event when it is a
- * comment. Home supplies a cutoff so newer own activity cannot borrow an old
- * comment's label or click target. Reading a comment does not dismiss it.
+ * A document row's newest outstanding event. Home supplies a cutoff so newer
+ * own activity cannot borrow an older event's label or click target.
  */
-export function getDocumentCommentNotification(
+export function getNewestDocumentNotification(
   entity: WithNotification<{
     type: string;
   }>
@@ -27,16 +26,29 @@ export function getDocumentCommentNotification(
     .sort((a, b) => compareDateDesc(a.created_at, b.created_at))[0];
   if (
     !notification ||
-    !isDocumentCommentTag(notification.notification_metadata.tag)
-  ) {
-    return undefined;
-  }
-  if (
-    entity.notificationDisplayCutoff != null &&
-    compareDateDesc(notification.created_at, entity.notificationDisplayCutoff) >
-      0
+    (entity.notificationDisplayCutoff != null &&
+      compareDateDesc(
+        notification.created_at,
+        entity.notificationDisplayCutoff
+      ) > 0)
   ) {
     return undefined;
   }
   return notification;
+}
+
+/**
+ * A document row can announce its newest outstanding event when it is a
+ * comment. Reading a comment does not dismiss it.
+ */
+export function getDocumentCommentNotification(
+  entity: WithNotification<{
+    type: string;
+  }>
+): UnifiedNotification | undefined {
+  const notification = getNewestDocumentNotification(entity);
+  return notification &&
+    isDocumentCommentTag(notification.notification_metadata.tag)
+    ? notification
+    : undefined;
 }

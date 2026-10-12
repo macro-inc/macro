@@ -133,6 +133,10 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'task_assigned' }, () => {
       refreshSoupEntity(notification, 'document');
     })
+    // An import surfaced the item on Home: show its row live.
+    .with({ tag: 'item_imported' }, () => {
+      refreshSoupEntity(notification, 'document');
+    })
     .with({ tag: 'ai_response' }, () => {
       refreshSoupEntity(notification, 'chat');
     })

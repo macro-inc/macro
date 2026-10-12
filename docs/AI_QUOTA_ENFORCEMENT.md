@@ -255,9 +255,10 @@ inspect the content type and code rather than assuming every 503 is billing.
   rather than announcing a rejection that was not saved. Retrying an already
   queued/in-flight action ID does not duplicate work or retroactively refuse the
   original turn. A rejected steering follow-up does not cancel the running turn.
-- AI imports check before running/spawn and again when delayed AI work begins;
-  failures clear running state and remain visible in import status. Deterministic
-  connector fetches/import branches and status/dismiss/discard remain available.
+- Import discovery and import jobs read sources' own APIs and spend no AI, so
+  they never check admission. The one remaining AI path, the Slack onboarding
+  gather fallback, checks when its agent session starts; a refusal fails the
+  run and stays visible in import status.
 - Scheduled model work checks the stored owner before resource preparation.
   Manual, cron, and event runs share the execution boundary; claims and failure
   bookkeeping are finalized even on refusal. Cron schedules advance; event failures
@@ -308,7 +309,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Direct subagent / inherited feature | [operations service](../crates/ai_tools/src/ai_operations.rs), [subagent](../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../services/mcp_service/src/context.rs) using `pg_settling_recorder` | [zero provider calls](../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../crates/ai_tools/src/subagent/test.rs) |
 | Native Anthropic WebSearch/WebFetch/code tools / inherited feature | [invoke_server_tool](../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../crates/anthropic/src/toolset/test.rs) |
 | AI document editing / AiEditing | [document orchestration](../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../crates/documents/src/inbound/toolset/edit_document/test.rs) |
-| AI gather/Notion imports / Import | [import admission](../crates/import/src/domain/service/admission.rs), [execution/rechecks](../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [initial/retry/delayed/deterministic cases](../crates/import/src/domain/service/test/admission.rs), [HTTP](../crates/import/src/inbound/axum_router/test.rs) |
+| Slack gather fallback / Import | [import admission](../crates/import/src/domain/service/admission.rs), [agent session](../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [fallback refusal, deterministic gathers](../crates/import/src/domain/service/test/admission.rs), [HTTP](../crates/import/src/inbound/axum_router/test.rs) |
 | Channel responder / ChannelBot | [bot service](../crates/channel_bots/src/domain/service.rs) | [DSS main](../services/document_storage_service/src/main.rs), common context T | [response refusal](../crates/channel_bots/src/domain/service/tests.rs) |
 | Optional channel classification / ChannelBot | [trigger detector](../crates/channel_bots/src/domain/trigger_detector.rs) | DSS main, independent R for classifier | [explicit routing and inference skip](../crates/channel_bots/src/domain/trigger_detector/tests.rs) |
 | Trigger inference and image captions / Automation | [trigger service](../crates/agent_trigger/src/domain/service.rs) | [standalone trigger main](../services/agent_trigger_service/src/main.rs) R; [harness trigger](../services/agent_harness_service/src/trigger.rs) receives the harness's settling recorder from harness main | [classification/caption refusal](../crates/agent_trigger/src/domain/service/test/admission.rs), [no system fallback](../crates/agent_trigger/src/outbound/fast_model_judge/test.rs) |

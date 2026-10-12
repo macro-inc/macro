@@ -1,21 +1,19 @@
 //! AI tools over the import ledger.
 //!
-//! One tool surface serves three callers, differing only in the
+//! One tool surface serves two callers, differing only in the
 //! [`ToolPolicy`] baked into the context:
 //! - chat sessions get the ledger tools plus the single-page Notion import
 //!   workflow, staging as `initiator = chat`;
-//! - gather jobs get only `CreateImportEntity`, locked to one source and
-//!   `initiator = onboarding`, staging only;
-//! - Notion import jobs get only `FinalizeImport`.
+//! - the Slack onboarding gather fallback gets only `CreateImportEntity`,
+//!   locked to one source and `initiator = onboarding`, staging only.
 //!
 //! The policy lives server-side in the tool context — the model can never
 //! spoof another user, source, or initiator.
 
 use crate::domain::models::{ImportEntity, ImportSource, ImportStatus, Initiator, metadata_label};
-use crate::domain::ports::{ImportError, ImportedDocumentProperties, ImportedDocumentProperty};
+use crate::domain::ports::ImportError;
 use crate::domain::service::{
-    DiscardOutcome, ImportFinalizer, ImportNotionPageOutcome, ImportStager, NotionPageImporter,
-    StageOutcome,
+    DiscardOutcome, ImportNotionPageOutcome, ImportStager, NotionPageImporter, StageOutcome,
 };
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolCallError, ToolResult,
@@ -57,16 +55,6 @@ impl ToolPolicy {
         Self {
             initiator: Initiator::Onboarding,
             forced_source: Some(source),
-            allow_imported: false,
-        }
-    }
-
-    /// Policy for a Notion import job (only `FinalizeImport` is registered,
-    /// which ignores staging policy).
-    pub fn import_job() -> Self {
-        Self {
-            initiator: Initiator::Onboarding,
-            forced_source: Some(ImportSource::Notion),
             allow_imported: false,
         }
     }
@@ -134,11 +122,6 @@ pub fn import_toolset<T: ImportStager + NotionPageImporter>()
 /// The staging-only toolset for gather jobs.
 pub fn gather_toolset<T: ImportStager>() -> AsyncToolCollection<ImportToolContext<T>> {
     AsyncToolCollection::new().add_tool::<CreateImportEntity, ImportToolContext<T>>()
-}
-
-/// The finalize-only toolset for Notion import jobs.
-pub fn notion_import_toolset<T: ImportFinalizer>() -> AsyncToolCollection<ImportToolContext<T>> {
-    AsyncToolCollection::new().add_tool::<FinalizeImport, ImportToolContext<T>>()
 }
 
 fn tool_error(description: String, e: impl Into<anyhow::Error>) -> ToolCallError {
@@ -400,7 +383,7 @@ fn stage_response(outcome: StageOutcome, user: &str) -> CreateImportEntityRespon
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ImportNotionPage",
-    description = "Import one specific Notion page through Macro's canonical Notion importer. Use this when the user explicitly asks to import a page URL or id. The tool performs deduplication, fetches through the user's connected Notion MCP, normalizes the page, creates the Macro markdown document, and returns its entity id. Do not fetch and recreate the page manually with generic document tools. Notion databases and database-first pages are intentionally not imported."
+    description = "Import one specific Notion page through Macro's canonical Notion importer. Use this when the user explicitly asks to import a page URL or id. The tool performs deduplication, reads the page through the user's Notion connection, converts it, files it under the Notion folder, creates the Macro markdown document, and returns its entity id. Do not fetch and recreate the page manually with generic document tools. Notion databases themselves are not imported, only pages."
 )]
 pub struct ImportNotionPage {
     /// The exact Notion page URL or stable 32-character page id.
@@ -620,84 +603,6 @@ impl<T: ImportStager> AsyncTool<ImportToolContext<T>> for ListImportEntities {
                 .iter()
                 .map(|row| ImportEntityView::of(row, user.as_ref()))
                 .collect(),
-        })
-    }
-}
-
-/// Finalize one importing row as a Macro document.
-#[derive(Debug, Clone, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-#[schemars(
-    title = "FinalizeImport",
-    description = "Create the Macro document for one accepted import item and mark it imported. Call exactly once per item you were asked to import."
-)]
-pub struct FinalizeImport {
-    /// The importing ledger row to finalize.
-    #[schemars(description = "The import_id of the item, as listed in the instructions.")]
-    pub import_id: Uuid,
-
-    /// The document name.
-    #[schemars(description = "The name for the created document (usually the item's title).")]
-    pub name: String,
-
-    /// The document body.
-    #[schemars(description = "The full markdown body for the created document.")]
-    pub content_markdown: String,
-
-    /// Notion database properties to attach to the document.
-    #[serde(default)]
-    #[schemars(
-        description = "Useful non-title Notion page properties, typed for Macro. Omit unsupported or empty values."
-    )]
-    pub properties: Vec<ImportedDocumentProperty>,
-
-    /// Notion labels/tags to attach as Macro tags.
-    #[serde(default)]
-    #[schemars(description = "Labels from Notion properties named Tags, Tag, Labels, or Label.")]
-    pub tags: Vec<String>,
-}
-
-/// Response from finalizing an item.
-#[derive(Debug, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct FinalizeImportResponse {
-    /// The Macro entity id that now exists.
-    pub entity_id: String,
-    /// The Macro entity type.
-    pub entity_type: String,
-}
-
-impl ToolAnnotated for FinalizeImport {
-    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Finalize import");
-}
-
-#[async_trait]
-impl<T: ImportFinalizer> AsyncTool<ImportToolContext<T>> for FinalizeImport {
-    type Output = FinalizeImportResponse;
-
-    #[tracing::instrument(skip_all, fields(user_id = %request_context.user_id, import_id = %self.import_id), err)]
-    async fn call(
-        &self,
-        service_context: ServiceContext<ImportToolContext<T>>,
-        request_context: RequestContext,
-    ) -> ToolResult<Self::Output> {
-        let row = service_context
-            .require_service()?
-            .finalize_document(
-                &request_context.user_id.clone(),
-                self.import_id,
-                self.name.trim(),
-                &self.content_markdown,
-                &ImportedDocumentProperties {
-                    values: self.properties.clone(),
-                    tags: self.tags.clone(),
-                },
-            )
-            .await
-            .map_err(|e| import_error("Failed to finalize import", e))?;
-        Ok(FinalizeImportResponse {
-            entity_id: row.entity_id.unwrap_or_default(),
-            entity_type: row.entity_type.unwrap_or_default(),
         })
     }
 }

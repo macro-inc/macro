@@ -1147,6 +1147,20 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'inbox_reauth_required'>
     )
     .with(
+      { __typename: 'GraphqlItemImportedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'item_imported',
+          content: {
+            source: match(metadata.itemImportedSource)
+              .with('NOTION', () => 'notion' as const)
+              .with('LINEAR', () => 'linear' as const)
+              .exhaustive(),
+            itemName: metadata.itemImportedItemName,
+          },
+        }) satisfies NotifEventMember<'item_imported'>
+    )
+    .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
       (metadata) =>
         ({

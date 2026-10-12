@@ -1,0 +1,29 @@
+{
+  "object": "database",
+  "id": "1a2b0003-0000-4000-8000-000000000003",
+  "title": [
+    {
+      "type": "text",
+      "text": {
+        "content": "Projects"
+      },
+      "plain_text": "Projects"
+    }
+  ],
+  "icon": {
+    "type": "emoji",
+    "emoji": "📁"
+  },
+  "parent": {
+    "type": "page_id",
+    "page_id": "1a2b000a-0000-4000-8000-00000000000a"
+  },
+  "is_inline": true,
+  "data_sources": [
+    {
+      "id": "1a2b0004-0000-4000-8000-000000000004",
+      "name": "Projects"
+    }
+  ],
+  "url": "https://www.notion.so/1a2b0003000040008000000000000003"
+}
