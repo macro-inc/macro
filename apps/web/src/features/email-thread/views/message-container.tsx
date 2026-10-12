@@ -139,7 +139,7 @@ export function MessageContainer(props: MessageContainerProps) {
       }
     >
       <Show when={showInlineReplyArea()}>
-        <div class="relative -mx-4 mb-0 border-t border-ink/20 mt-4">
+        <div class="relative -mx-4 mb-0 border-t border-ink/4 mt-4">
           <Show when={props.isLastMessage && !isTouchDevice()}>
             <FloatingInputLoader
               isLoading={context.query.isFetching}
