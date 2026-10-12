@@ -37,11 +37,13 @@ import {
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { isEmailAccessDenied } from './access-denied';
 import { updateEmailThreadLabel } from './cache-cleanup';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
   mapGraphqlThreadError,
+  readCachedGraphqlEmailThread,
 } from './graphql/thread';
 import {
   archiveEmailThread,
@@ -90,6 +92,27 @@ function flattenThreadPages(
     ...firstPage,
     messages: data.pages.flatMap((p) => p.messages),
   };
+}
+
+/** Existing source cache remains the authority; an artifact is never a source. */
+export async function readCachedEmailThread(
+  threadId: string
+): Promise<ThreadQueryData | undefined> {
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    const thread = await readCachedGraphqlEmailThread(threadId);
+    return thread
+      ? {
+          thread,
+          hasMore: thread.messages.length === DEFAULT_THREAD_MESSAGES_LIMIT,
+        }
+      : undefined;
+  }
+  const queryKey = emailKeys.threadMessages(threadId).queryKey;
+  const error = queryClient.getQueryState(queryKey)?.error;
+  if (isEmailAccessDenied(error)) throw error;
+  const pages =
+    queryClient.getQueryData<InfiniteData<Thread, number>>(queryKey);
+  return pages?.pages.length ? selectThreadQueryData(pages) : undefined;
 }
 
 /**

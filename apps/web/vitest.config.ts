@@ -79,6 +79,18 @@ export default defineConfig({
     fsModuleCachePath: moduleCachePath(),
     projects: [
       {
+        extends: false,
+        test: {
+          environment: 'node',
+          include: [
+            'src/lib/email-render-cache/**/*.test.ts',
+            'src/features/email-thread/preparation.test.ts',
+            'src/features/email-view/preparation-window.test.ts',
+          ],
+          name: 'email-render-cache',
+        },
+      },
+      {
         extends: './src/features/scheduling/vitest.config.ts',
         test: {
           include: ['src/features/scheduling/**/*.{test,spec}.{ts,tsx}'],
@@ -224,6 +236,10 @@ export default defineConfig({
           include: [
             'src/features/{block-email,email-message,email-thread,email-compose}/**/*.{test,spec}.{ts,tsx}',
           ],
+          exclude: [
+            ...configDefaults.exclude,
+            'src/features/email-thread/preparation.test.ts',
+          ],
           name: 'email',
         },
       },
@@ -272,6 +288,7 @@ export default defineConfig({
           exclude: [
             ...configDefaults.exclude,
             'src/components/view-shell/**/*',
+            'src/features/email-view/preparation-window.test.ts',
             'src/features/scheduling/**/*',
             'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email,email-message,email-thread,email-compose}/**/*',
           ],
@@ -279,6 +296,7 @@ export default defineConfig({
             'src/components/**/*.{test,spec}.{ts,tsx}',
             'src/features/**/*.{test,spec}.{ts,tsx}',
             'src/lib/analytics/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/email-render-cache/**/*.test.tsx',
             'src/lib/constants/**/*.{test,spec}.{ts,tsx}',
             'src/lib/fullcalendar-solid/**/*.{test,spec}.{ts,tsx}',
             'src/lib/persistence/**/*.{test,spec}.{ts,tsx}',

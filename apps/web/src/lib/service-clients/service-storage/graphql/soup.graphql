@@ -35,6 +35,33 @@ query SoupBackfill($input: SoupInput!) {
 	}
 }
 
+# SoupBackfill plus the page's item ids, which prepared-body warming
+# (enable-email-render-cache) needs. Keep the two selections in step.
+query SoupBackfillPreparation($input: SoupInput!) {
+	user {
+		id @cacheOnly
+		emailLinks @cacheOnly { ...MailAccountFields }
+		soup(input: $input) {
+			items @cacheOnly {
+				...SoupItemFields
+				... on GraphqlSoupEmailThread {
+					viewerPermission {
+						__typename
+						... on GraphqlAccessLevelPermission {
+							accessLevel
+						}
+					}
+					messages(offset: 0, limit: 20) {
+						...EmailThreadMessageFields
+					}
+				}
+			}
+			preparationIds: items { __typename id }
+			nextCursor
+		}
+	}
+}
+
 query SoupMailBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly

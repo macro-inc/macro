@@ -1,4 +1,6 @@
 import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
+import { isEmailAccessDenied } from '@queries/email/access-denied';
+import { revokeCachedEmailThread } from '@queries/email/cached-access';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
 import { localDraftMessage } from '@queries/email/local-drafts';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
@@ -94,8 +96,25 @@ export function toEmailThread(thread: ApiThread): EmailThread {
 
 export function createEmailThreadSource(
   threadId: Accessor<string>,
-  query: ThreadQueryResult<ThreadQueryData>
+  query: ThreadQueryResult<ThreadQueryData>,
+  /** Hide a thread the server denies and revoke its cached copies. */
+  revokeDenied: Accessor<boolean> = () => false
 ): EmailThreadSource {
+  const accessDenied = createMemo(
+    () => revokeDenied() && query.isError && isEmailAccessDenied(query.error)
+  );
+  let revokedId: string | undefined;
+  createEffect(() => {
+    if (accessDenied()) {
+      // The denied query reads the canonical server identity.
+      const id = query.resolvedThreadId ?? threadId();
+      // Cache invalidation can re-execute the query. One continuing denial
+      // must not become a refetch/invalidation loop.
+      if (revokedId === id) return;
+      revokedId = id;
+      void revokeCachedEmailThread(id);
+    } else if (query.isSuccess && !query.isFetching) revokedId = undefined;
+  });
   // Status guards prevent a pending Solid resource from suspending its owner.
   const snapshot = createMemo<{ requested: string; thread?: EmailThread }>(
     (previous) => {
@@ -109,6 +128,7 @@ export function createEmailThreadSource(
             previous?.requested === requested ? previous.thread : undefined,
         };
       }
+      if (accessDenied()) return { requested };
       const data = query.data?.thread;
       if (!data) return { requested };
       // Cache aliases and the async identity lookup have separate subscribers.

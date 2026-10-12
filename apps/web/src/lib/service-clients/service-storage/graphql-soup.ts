@@ -1926,6 +1926,7 @@ export function mapGraphqlGroupedSoupPage(
 
 export type GraphqlSoupHydrationPage = {
   nextCursor: string | null;
+  preparationIds?: string[];
   /** Explicit membership evidence returned by a complete-scope backfill query. */
   entityIds?: string[];
 };
@@ -1965,9 +1966,17 @@ export async function hydrateGraphqlSoup<
   }
   const soup = result.data.user.soup as typeof result.data.user.soup & {
     scopeIds?: Array<{ id: string }>;
+    preparationIds?: Array<{ __typename: string; id: string }>;
   };
   return {
     nextCursor: soup.nextCursor,
+    ...(soup.preparationIds
+      ? {
+          preparationIds: soup.preparationIds
+            .filter((item) => item.__typename === 'GraphqlSoupEmailThread')
+            .map((item) => item.id),
+        }
+      : {}),
     ...(soup.scopeIds
       ? { entityIds: soup.scopeIds.map((item) => item.id) }
       : {}),

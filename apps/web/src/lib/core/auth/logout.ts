@@ -1,5 +1,6 @@
 import { clearMcpAuthAttempts } from '@app/features/settings/mcp-auth-attempt';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { invalidateEmailRenders } from '@app/lib/email-render-cache/lifecycle';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { syncLoginStorage } from '@core/util/cookies';
@@ -44,6 +45,9 @@ const unauthenticatedUserInfo: UserInfoData = {
 };
 
 export async function clearLocalAuthSession() {
+  // End artifact ownership explicitly before reactive auth/cache resets can
+  // rebind a service. Other tabs may still have a cached authenticated user.
+  const renderCacheClear = invalidateEmailRenders('session-ended');
   document.cookie =
     'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
   syncLoginStorage(false);
@@ -57,6 +61,7 @@ export async function clearLocalAuthSession() {
     clearRegisteredCaches(),
     queryPersistence.clear(),
     clearLocalDrafts(),
+    renderCacheClear,
   ]);
   if (results.some((result) => result.status === 'rejected')) {
     await rotateCacheScope();

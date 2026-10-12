@@ -8,6 +8,8 @@ export interface UiOperation {
   run<T>(work: () => T): T;
   /** Static phase names only; never include user content. */
   mark(phase: string): void;
+  /** Bounded categories and counts only, like the start attributes. */
+  setAttributes(attributes: Attributes): void;
   finish(outcome?: Outcome): void;
   /** Call after updating the UI; this measures a paint opportunity, not pixels. */
   afterPaint(): void;
@@ -118,6 +120,7 @@ function inputTime(event: Event | undefined, now: number): number | undefined {
 const noop: UiOperation = {
   run: (work) => work(),
   mark: () => {},
+  setAttributes: () => {},
   finish: () => {},
   afterPaint: () => {},
   cancel: () => {},
@@ -240,6 +243,11 @@ export function startUiOperation(
     mark: (phase) => {
       if (!ended)
         span.event(phase, { 'ui.elapsed_ms': performance.now() - started });
+    },
+    setAttributes: (attributes) => {
+      if (ended) return;
+      for (const [key, value] of Object.entries(attributes))
+        span.setAttr(key, value);
     },
     finish,
     afterPaint: () => {

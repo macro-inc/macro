@@ -5,6 +5,7 @@ import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { useEmailRenderCacheRollout } from '@app/lib/email-render-cache/session';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { emailThreadRoute } from '@app/routes/routes';
 import { EmailThreadControls } from '@block-email/component/EmailThreadControls';
@@ -127,7 +128,11 @@ export function EmailDetailView(props: {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
-  const source = createEmailThreadSource(threadId, threadQuery);
+  const source = createEmailThreadSource(
+    threadId,
+    threadQuery,
+    useEmailRenderCacheRollout().enabled
+  );
   const threadData = source.thread;
   const title = () => {
     const thread = threadData();

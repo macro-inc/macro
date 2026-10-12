@@ -36,6 +36,12 @@ renderer.dispose();
 
 ## Responsibility and dependency rules
 
+The core exports `PREPARE_VERSION`, independently of the package version. Bump it
+when parsing, sanitization, quote/signature handling, image URL policy, or relevant
+parser dependency behavior changes. App-owned prepared caches must reject other
+versions and regenerate from original source; theme-only browser changes do not
+invalidate pure preparation.
+
 `src/core` may import other core modules and the pinned HTML/CSS parsers. It must
 not import the browser entry point or read ambient theme, origin, flags, time,
 network, or storage. Its TypeScript configuration excludes DOM libraries; its

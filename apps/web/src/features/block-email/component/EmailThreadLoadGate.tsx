@@ -1,3 +1,5 @@
+import { EmailBodyOpenProvider } from '@app/features/email-message/context/body-open';
+import { useEmailRenderCacheRollout } from '@app/lib/email-render-cache/session';
 import { ContentLoading } from '@components/app/ContentLoading';
 import {
   EntityLoadGate,
@@ -5,7 +7,23 @@ import {
 } from '@core/component/EntityLoadGate';
 import { EmailDebouncedReadMarker } from '@notifications';
 import type { ComponentProps, ParentProps } from 'solid-js';
-import { Suspense } from 'solid-js';
+import {
+  createComputed,
+  createEffect,
+  on,
+  onCleanup,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { createThreadOpenTracker } from './thread-open';
+
+const INPUT_EVENT = /^(click|key|pointer|mouse|touch)/;
+
+/** The input being dispatched, when an input handler opened the thread. */
+function currentInputEvent(): Event | undefined {
+  const event = (globalThis as { event?: Event }).event;
+  return event && INPUT_EVENT.test(event.type) ? event : undefined;
+}
 
 export type EmailThreadLoadGateProps<Data> = ParentProps<{
   result: EntityLoadResult<Data>;
@@ -22,6 +40,19 @@ export type EmailThreadLoadGateProps<Data> = ParentProps<{
 export function EmailThreadLoadGate<Data>(
   props: EmailThreadLoadGateProps<Data>
 ) {
+  const opens = createThreadOpenTracker(useEmailRenderCacheRollout());
+  // Runs before the new thread renders, so the open covers its bodies.
+  createComputed(
+    on(
+      () => props.threadId,
+      (threadId) => opens.start(threadId, currentInputEvent())
+    )
+  );
+  createEffect(() => {
+    if (props.result.data() !== undefined) opens.ready();
+    else if (props.result.error()) opens.fail();
+  });
+  onCleanup(() => opens.dispose());
   return (
     <Suspense fallback={<ContentLoading />}>
       <EntityLoadGate
@@ -40,13 +71,19 @@ export function EmailThreadLoadGate<Data>(
         loadErrorTitle="Unable to load this email"
         onRetry={props.onRetry}
       >
-        <EmailDebouncedReadMarker
-          notificationSource={props.notificationSource}
-          threadId={props.threadId}
-          linkId={props.linkId}
-          debounceTime={props.debounceTime}
-        />
-        {props.children}
+        <Show when={props.threadId} keyed>
+          {(threadId) => (
+            <EmailDebouncedReadMarker
+              notificationSource={props.notificationSource}
+              threadId={threadId}
+              linkId={props.linkId}
+              debounceTime={props.debounceTime}
+            />
+          )}
+        </Show>
+        <EmailBodyOpenProvider value={opens.observer}>
+          {props.children}
+        </EmailBodyOpenProvider>
       </EntityLoadGate>
     </Suspense>
   );

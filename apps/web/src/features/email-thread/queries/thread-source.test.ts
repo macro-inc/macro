@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiMessage, ApiThread } from '@service-email/generated/schemas';
 import { batch, createRoot, createSignal } from 'solid-js';
@@ -7,6 +8,10 @@ import { invitationFixture } from '../../email-message/core/calendar-invitation-
 const invalidateInvitations = vi.hoisted(() => vi.fn());
 vi.mock('@queries/calendar/invitations', () => ({
   invalidateInvitationScheduling: invalidateInvitations,
+}));
+
+vi.mock('@queries/email/cached-access', () => ({
+  revokeCachedEmailThread: vi.fn(async () => {}),
 }));
 
 function message(id: string, overrides: Partial<ApiMessage> = {}): ApiMessage {
@@ -122,6 +127,47 @@ it('keeps a reopened local draft through server identity adoption and rejects an
   }));
 
 describe('thread query adaptation', () => {
+  const deniedQuery = (): ThreadQueryResult<ThreadQueryData> => ({
+    resolvedThreadId: 'thread',
+    isError: true,
+    isSuccess: false,
+    isLoading: false,
+    error: new ThrownResultError([
+      { code: 'FORBIDDEN', message: 'Access removed' },
+    ]),
+    data: { thread: thread([message('cached')]), hasMore: false },
+    isFetching: false,
+    isFetchingNextPage: false,
+    isEnabled: true,
+    hasNextPage: false,
+    transport: 'rest',
+    fetchNextPage: async () => {},
+    refetch: async () => {},
+  });
+  it('does not render retained data after an authoritative access denial', () =>
+    createRoot((dispose) => {
+      try {
+        const source = createEmailThreadSource(
+          () => 'thread',
+          deniedQuery(),
+          () => true
+        );
+        expect(source.thread()).toBeUndefined();
+      } finally {
+        dispose();
+      }
+    }));
+  it('keeps retained data on a denial outside the render-cache rollout', () =>
+    createRoot((dispose) => {
+      try {
+        const source = createEmailThreadSource(() => 'thread', deniedQuery());
+        expect(source.thread()?.messages.map((m) => m.db_id)).toEqual([
+          'cached',
+        ]);
+      } finally {
+        dispose();
+      }
+    }));
   it('preserves saved invitations through the explicit cached message projection', () => {
     const invitations = [invitationFixture];
     expect(

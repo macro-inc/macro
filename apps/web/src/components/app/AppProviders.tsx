@@ -1,6 +1,7 @@
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { SearchProvider } from '@app/features/soup/search/context';
+import { EmailRenderCacheProvider } from '@app/lib/email-render-cache/session';
 import { useCalendarCache } from '@app/lib/queries/calendar/graphql/use-calendar-cache';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
@@ -72,7 +73,8 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 
 /**
  * State only the app's views use: notifications, undo, search, and the caches
- * and sync behind them. Auth, booking, and meeting pages render without it.
+ * and sync behind them, including prepared email bodies. Auth, booking, and
+ * meeting pages render without it.
  */
 export function AppProviders(props: ParentProps) {
   const userId = useUserId();
@@ -82,16 +84,18 @@ export function AppProviders(props: ParentProps) {
   useGlobalAttachableHistory();
 
   return (
-    <TeamContextProvider>
-      <ConfiguredGlobalAppStateProvider>
-        <MutationUndoProvider>
-          <SearchProvider>
-            <IncomingMeetingInvitationsProvider>
-              {props.children}
-            </IncomingMeetingInvitationsProvider>
-          </SearchProvider>
-        </MutationUndoProvider>
-      </ConfiguredGlobalAppStateProvider>
-    </TeamContextProvider>
+    <EmailRenderCacheProvider>
+      <TeamContextProvider>
+        <ConfiguredGlobalAppStateProvider>
+          <MutationUndoProvider>
+            <SearchProvider>
+              <IncomingMeetingInvitationsProvider>
+                {props.children}
+              </IncomingMeetingInvitationsProvider>
+            </SearchProvider>
+          </MutationUndoProvider>
+        </ConfiguredGlobalAppStateProvider>
+      </TeamContextProvider>
+    </EmailRenderCacheProvider>
   );
 }

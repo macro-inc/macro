@@ -40,6 +40,29 @@ describe('clearRegisteredCaches', () => {
     expect(localStorage.getItem('unrelated')).toBe('keep');
   });
 
+  it('clears hosts without waiting on derived caches, then waits for them', async () => {
+    const clear = vi.fn().mockResolvedValue(undefined);
+    const {
+      clearRegisteredCaches,
+      registerCacheHost,
+      registerCacheResetListener,
+    } = await import('./lifecycle');
+    registerCacheHost(hostWithClear(clear));
+    const derived = Promise.withResolvers<void>();
+    registerCacheResetListener(() => derived.promise);
+    let settled = false;
+
+    const clearing = clearRegisteredCaches().then(() => {
+      settled = true;
+    });
+    expect(clear).toHaveBeenCalledOnce();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+    derived.resolve();
+    await clearing;
+    expect(settled).toBe(true);
+  });
+
   it('awaits the serialized scope rotation before logout clearing resolves', async () => {
     localStorage.setItem('graphql-cache:scope', 'current-scope');
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(

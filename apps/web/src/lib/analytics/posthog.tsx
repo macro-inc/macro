@@ -57,6 +57,8 @@ type FeatureFlagResult<T> = {
   enabled: boolean;
   payload: T;
   loading: boolean;
+  /** An experiment's variant key; `enabled` is true for every variant. */
+  variant?: string;
 };
 
 type FeatureFlagOpts<T> = {
@@ -94,6 +96,7 @@ function readFeatureFlag<T extends JsonType>(
         enabled: result?.enabled ?? false,
         payload: (result?.payload as T) ?? fallbackPayload,
         loading: false,
+        variant: result?.variant,
       };
     },
     undefined,
@@ -101,7 +104,8 @@ function readFeatureFlag<T extends JsonType>(
       equals: (prev, next) =>
         prev.enabled === next.enabled &&
         prev.payload === next.payload &&
-        prev.loading === next.loading,
+        prev.loading === next.loading &&
+        prev.variant === next.variant,
     }
   );
 }

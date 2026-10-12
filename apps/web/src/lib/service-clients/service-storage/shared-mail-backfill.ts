@@ -1,3 +1,4 @@
+import { invalidateEmailRenders } from '@app/lib/email-render-cache/lifecycle';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { SoupSharedMailBackfillDocument } from './graphql/generated/graphql';
 import {
@@ -82,11 +83,15 @@ export async function createSharedMailBackfillFetcher(
         (viewer.data as IdentityData).user.id === userId
       ) {
         const missing = [...previous].filter((key) => !seen.has(key));
+        // Clear cold derived artifacts too. Source membership remains owned by
+        // this successful, complete scan; interrupted scans never infer loss.
         for (let offset = 0; offset < missing.length; offset += 500) {
           if (options?.signal?.aborted)
             throw new Error('Shared Mail scan cancelled');
           await host.invalidate(missing.slice(offset, offset + 500));
         }
+        // Restart preparation only after cached source proof has been revoked.
+        if (missing.length) void invalidateEmailRenders();
       }
     }
     return page;

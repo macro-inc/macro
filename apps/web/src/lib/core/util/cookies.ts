@@ -37,6 +37,18 @@ export function hasLoginCookie(): boolean {
 }
 
 /** Sync the login state to localStorage for environments where cookies don't persist, e.g. Tauri. */
+/** Another tab signing in or out; same-tab changes do not notify. */
+export function onLoginStorageChange(
+  listener: (signedIn: boolean) => void
+): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const handle = (event: StorageEvent) => {
+    if (event.key === LOGIN_STORAGE_KEY) listener(event.newValue === 'true');
+  };
+  window.addEventListener('storage', handle);
+  return () => window.removeEventListener('storage', handle);
+}
+
 export function syncLoginStorage(isAuthenticated: boolean) {
   if (typeof localStorage === 'undefined') return;
   if (isAuthenticated) {

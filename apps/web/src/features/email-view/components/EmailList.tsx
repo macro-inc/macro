@@ -57,6 +57,11 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import {
+  emailThreadId,
+  emailThreadIds,
+  usePrepareEmailNeighbors,
+} from '../preparation-adapter';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import { EMAIL_TOUR } from '../tour';
@@ -85,6 +90,10 @@ export function EmailList(props: EmailListProps) {
     filterByTag,
   } = useEmailView();
   const panel = useSplitPanelOrThrow();
+  usePrepareEmailNeighbors(
+    () => emailThreadIds(source.items()),
+    () => emailThreadId(list.focus.result()?.item)
+  );
 
   function openEntity(
     entity: EntityData,

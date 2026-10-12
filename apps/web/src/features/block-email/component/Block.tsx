@@ -1,6 +1,7 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { useEmailRenderCacheRollout } from '@app/lib/email-render-cache/session';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useBlockId } from '@core/block';
@@ -21,7 +22,11 @@ export default function BlockEmail() {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
-  const source = createEmailThreadSource(threadId, threadQuery);
+  const source = createEmailThreadSource(
+    threadId,
+    threadQuery,
+    useEmailRenderCacheRollout().enabled
+  );
   const threadData = source.thread;
 
   // Email threads are absent from quick access, so the entity the block-level

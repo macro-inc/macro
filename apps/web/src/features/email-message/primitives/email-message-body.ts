@@ -27,6 +27,9 @@ export function createEmailMessageBody(
   props: EmailMessageBodyProps,
   renderingContext: EmailRenderingContextValue
 ) {
+  const createdAt = performance.now();
+  let prepareMs = 0;
+  let reported = false;
   const [showFullHTML, setShowFullHTML] = createSignal(false);
   // Thread refreshes replace message objects after every draft save. Only
   // changes to rendering inputs should dispose the body and its image resources.
@@ -47,13 +50,16 @@ export function createEmailMessageBody(
     undefined,
     { equals: deepEqual }
   );
-  const prepared = createMemo(() =>
-    prepareEmailBody(content(), {
+  const prepared = createMemo(() => {
+    const start = performance.now();
+    const body = prepareEmailBody(content(), {
       showQuotedContent: showFullHTML(),
       showFullContent: content().showFullContent,
       images: renderingContext.images,
-    })
-  );
+    });
+    prepareMs = performance.now() - start;
+    return body;
+  });
   const rendered = createMemo(() => {
     // Preserve the app's existing Markdown paths without starting hidden HTML
     // resources behind them. Their Lexical semantics stay at the app boundary.
@@ -64,6 +70,7 @@ export function createEmailMessageBody(
     // Keep the renderer at pane width so wide designed email scrolls within it.
     host.style.minWidth = '0';
     host.style.width = '100%';
+    const mountStart = performance.now();
     const renderer = mountEmailBody(host, body, {
       theme: renderingContext.theme(),
       adaptColors: content().isPersonal || !body.hasTable,
@@ -73,6 +80,19 @@ export function createEmailMessageBody(
       resolveImages: (root, lifetime) =>
         renderingContext.resolveImages(root, attachments, lifetime),
     });
+    if (!reported) {
+      reported = true;
+      const now = performance.now();
+      renderingContext.reportBodyShown?.({
+        messageId: content().id,
+        path: 'direct',
+        source: 'direct',
+        prepareMs,
+        mountMs: now - mountStart,
+        totalMs: now - createdAt,
+        htmlLength: content().html?.length ?? 0,
+      });
+    }
     onCleanup(() => renderer.dispose());
     return { host, renderer };
   });

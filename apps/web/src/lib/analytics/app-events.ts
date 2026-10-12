@@ -198,6 +198,21 @@ export type AppEvents = {
   plan_changed: { plan: 'premium' | 'max'; from?: string };
 
   email_message_sent: Record<string, unknown>;
+  /**
+   * An email body's first display in a view, for the prepared-body cache
+   * rollout (`enable-email-render-cache`). Sent only by enrolled viewers.
+   * `repeat` marks a message already shown in this page load.
+   */
+  email_body_shown: {
+    arm: string;
+    path: 'cache' | 'direct';
+    source: 'memory' | 'storage' | 'parsed' | 'direct';
+    repeat: boolean;
+    prepare_ms: number;
+    mount_ms: number;
+    total_ms: number;
+    html_kb: number;
+  };
 
   channel_message_sent: Record<string, unknown>;
   channel_messages_load: {

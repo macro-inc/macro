@@ -15,7 +15,10 @@ const config: CodegenConfig = {
         {
           './scripts/graphql-cache-only-projection-codegen.ts': {
             // Only hydration consumes a result with cache-only fields removed.
-            cacheOnlyResultOperations: ['SoupBackfill'],
+            cacheOnlyResultOperations: [
+              'SoupBackfill',
+              'SoupBackfillPreparation',
+            ],
           } satisfies CacheOnlyProjectionConfig,
         },
       ],
