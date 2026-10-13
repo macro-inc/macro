@@ -21,7 +21,7 @@ impl<
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
     /// Webhooks can beat the startup API response, especially if a call ends
-    /// immediately. Correlate only standalone rooms whose UUID is their call ID.
+    /// immediately. Correlate rooms whose UUID is their call ID, including channel sessions.
     #[tracing::instrument(err, skip_all)]
     pub(super) async fn link_meeting_recording_webhook(
         &self,
@@ -40,7 +40,6 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
         if let Some(record) = record
-            && record.channel_id.is_none()
             && record.room_name == room_name
         {
             self.repo

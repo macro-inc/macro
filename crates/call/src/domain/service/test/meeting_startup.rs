@@ -358,8 +358,13 @@ fn test_egress_config() -> EgressS3Config {
 
 #[tokio::test]
 async fn recording_webhook_can_link_before_the_startup_response() {
-    for correct_room in [false, true] {
+    for (correct_room, channel_id) in [
+        (false, None),
+        (true, None),
+        (true, Some(STARTED_EVENT_CHANNEL_ID)),
+    ] {
         let mut record = standalone_record(false);
+        record.channel_id = channel_id;
         let call_id = record.call_id;
         let room_name = call_id.to_string();
         record.room_name = if correct_room {
