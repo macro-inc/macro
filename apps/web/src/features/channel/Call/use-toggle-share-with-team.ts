@@ -8,7 +8,8 @@ import { useCallContext } from './CallContext';
  * `POST /call/record/{id}/share-with-team/toggle` and mirrors the new value
  * into the local call store. Any participant with edit access may flip it;
  * the toggle becomes canonical team sharing (view for the creator's team)
- * when the call is archived. Standalone calls never enter team memory.
+ * when the call is archived. A live meeting follows its host's settings
+ * instead, and its creator can change its team sharing once it ends.
  */
 export function useActiveCallTeamShare() {
   const callCtx = useCallContext();

@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO call_team_policies (\n                team_id,\n                block_recording_huddles,\n                block_recording_one_on_ones,\n                block_recording_internal_meetings,\n                block_recording_external_meetings,\n                block_huddle_sharing\n            )\n            VALUES (\n                $1,\n                COALESCE($2, FALSE),\n                COALESCE($3, FALSE),\n                COALESCE($4, FALSE),\n                COALESCE($5, FALSE),\n                COALESCE($6, FALSE)\n            )\n            ON CONFLICT (team_id) DO UPDATE SET\n                block_recording_huddles =\n                    COALESCE($2, call_team_policies.block_recording_huddles),\n                block_recording_one_on_ones =\n                    COALESCE($3, call_team_policies.block_recording_one_on_ones),\n                block_recording_internal_meetings =\n                    COALESCE($4, call_team_policies.block_recording_internal_meetings),\n                block_recording_external_meetings =\n                    COALESCE($5, call_team_policies.block_recording_external_meetings),\n                block_huddle_sharing = COALESCE($6, call_team_policies.block_huddle_sharing),\n                updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "687399b8e17ffe36b6cae73703b48ef7a670bf95a47e400ae8c4bec72211e036"
+}

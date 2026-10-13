@@ -1,4 +1,8 @@
 use super::*;
+use crate::domain::recording::{
+    CallKind, CallPreferences, MeetingAttendance, RecordingRules, ShareAudience,
+};
+use crate::domain::service::recording::MeetingJoiner;
 
 fn service(
     repo: MockCallRepository,
@@ -118,7 +122,10 @@ async fn prepared_room_skips_external_creation_and_a_concurrent_join_does_not_de
     rtc.expect_delete_room().never();
     assert_eq!(
         service(repo, rtc)
-            .prepare_meeting_call(&meeting)
+            .prepare_meeting_call(
+                &meeting,
+                MeetingJoiner::Account(user(ARCHIVED_EVENT_CREATOR)),
+            )
             .await
             .unwrap()
             .id,
@@ -211,6 +218,34 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     repo.expect_get_or_create_meeting_call()
         .times(1)
         .return_once(move |_, _| Box::pin(async move { Ok((call, true)) }));
+    // A guest starts it external, so it records and transcribes at once.
+    repo.expect_mark_call_external()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+    // ...and shares it with whoever its host shares external meetings with.
+    repo.expect_get_call_preferences()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(CallPreferences::default()) }));
+    repo.expect_set_meeting_audience()
+        .times(1)
+        .returning(move |id, kind, audience| {
+            assert_eq!(*id, call_id);
+            assert_eq!(kind, CallKind::ExternalMeeting);
+            assert_eq!(audience, ShareAudience::Team);
+            Box::pin(async { Ok(()) })
+        });
+    repo.expect_get_recording_rules()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(RecordingRules::default()) }));
+    repo.expect_claim_meeting_transcriber()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(true) }));
+    repo.expect_claim_meeting_recorder()
+        .times(1)
+        .returning(move |id| {
+            assert_eq!(*id, call_id);
+            Box::pin(async { Ok(true) })
+        });
     let (release_agent, agent_wait) = tokio::sync::oneshot::channel();
     let (release_recorder, recorder_wait) = tokio::sync::oneshot::channel();
     let (attached, attachment) = tokio::sync::oneshot::channel();
@@ -244,14 +279,12 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
             Box::pin(async move { Ok(true) })
         });
     background_repo
-        .expect_get_call_by_id()
+        .expect_get_meeting_attendance()
         .times(1)
         .return_once(move |_| {
             Box::pin(async move {
                 attached.send(()).unwrap();
-                Ok(Some(started_event_call(
-                    user(ARCHIVED_EVENT_CREATOR).as_ref(),
-                )))
+                Ok(Some(MeetingAttendance::default()))
             })
         });
     let service: BaseWebhookCallService<StubConnectionService> = CallServiceImpl::new(
@@ -267,7 +300,7 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     configure_repository_clone(&service.repo, background_repo);
     let prepared = tokio::time::timeout(
         Duration::from_millis(200),
-        service.prepare_meeting_call(&meeting),
+        service.prepare_meeting_call(&meeting, MeetingJoiner::Guest),
     )
     .await
     .expect("room allocation must not wait for media services")
@@ -316,6 +349,8 @@ async fn late_meeting_recording_is_attached_before_it_is_stopped() {
             Uuid::now_v7(),
             "room",
             Some(&test_egress_config()),
+            RecordingRules::default(),
+            CallKind::OneOnOne,
         )
         .await;
     }
@@ -331,7 +366,7 @@ async fn meeting_recording_stops_if_call_ends_just_after_attachment() {
     repo.expect_attach_meeting_recording()
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(true) }));
-    repo.expect_get_call_by_id()
+    repo.expect_get_meeting_attendance()
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
     rtc.expect_stop_egress()
@@ -343,6 +378,8 @@ async fn meeting_recording_stops_if_call_ends_just_after_attachment() {
         Uuid::now_v7(),
         "room",
         Some(&test_egress_config()),
+        RecordingRules::default(),
+        CallKind::OneOnOne,
     )
     .await;
 }

@@ -1,9 +1,11 @@
 //! Invitation use cases. Guests receive room access; signed-in attendees also receive call-only Comment access for chat.
 
+use super::recording::MeetingJoiner;
 use super::*;
 use crate::domain::meetings::{
     CreateMeetingRequest, GuestId, GuestJoinRequest, Meeting, MeetingToken,
 };
+use crate::domain::recording::{CallKind, RecordingRules};
 use rootcause::compat::boxed_error::IntoBoxedError;
 use tracing::Instrument;
 
@@ -297,8 +299,15 @@ impl<
         Ok(MeetingParticipants { participants })
     }
 
+    /// Find or start `meeting`'s live session for `joiner`, applying the
+    /// host's recording rules before the joiner receives credentials.
     #[tracing::instrument(err, skip_all)]
-    pub(super) async fn prepare_meeting_call(&self, meeting: &Meeting) -> Result<Call, CallError> {
+    pub(super) async fn prepare_meeting_call(
+        &self,
+        meeting: &Meeting,
+        joiner: MeetingJoiner<'_>,
+    ) -> Result<Call, CallError> {
+        let kind = self.meeting_kind(meeting, joiner).await?;
         if let Some(call_id) = meeting.call_id
             && let Some(call) = self
                 .repo
@@ -306,6 +315,7 @@ impl<
                 .await
                 .map_err(|e| CallError::Internal(e.into()))?
         {
+            self.admit_meeting_kind(&call, kind).await?;
             return Ok(call);
         }
         let preparation = self.repo.get_meeting_preparation(&meeting.id).await?;
@@ -333,32 +343,45 @@ impl<
                 .ok();
         }
         let (call, created) = allocated?;
-        if created {
-            let created_by = MacroUserIdStr::parse_from_str(&call.created_by)
-                .map_err(|error| CallError::Internal(error.into()))?
-                .into_owned();
-            self.publish_call_event(&CallMacroEvent::started(CallStartedMetadata {
-                call_id: call.id,
-                channel_id: None,
-                created_by,
-                created_at: call.created_at,
-                recording_enabled: self.egress_s3_config.is_some(),
-            }));
-            // Token issuance needs a room, not a running recorder or agent.
-            // Only the allocation winner schedules these best-effort services.
-            let rtc = self.rtc_client.clone();
-            let repo = self.repo.clone();
-            let config = self.egress_s3_config.clone();
-            let room_name = call.room_name.clone();
-            let call_id = call.id;
-            tokio::spawn(async move {
-                let transcription = async {
-                    rtc.dispatch_transcription_agent(&room_name).await
-                        .inspect_err(|error| tracing::error!(error=?error, "failed to dispatch meeting transcription agent")).ok();
-                };
-                let recording = start_meeting_recording(&repo, rtc.as_ref(), call_id, &room_name, config.as_ref());
-                tokio::join!(transcription, recording);
-            }.instrument(tracing::info_span!("start_meeting_media", call_id = %call_id)));
+        if !created {
+            self.admit_meeting_kind(&call, kind).await?;
+            return Ok(call);
+        }
+        let created_by = MacroUserIdStr::parse_from_str(&call.created_by)
+            .map_err(|error| CallError::Internal(error.into()))?
+            .into_owned();
+        if kind == CallKind::ExternalMeeting {
+            // The session starts external, so later joins have nothing to flip.
+            self.repo.mark_call_external(&call.id).await?;
+        }
+        self.share_meeting(&call, kind).await;
+        // A one-on-one waits for its second participant, whose settings
+        // decide whether it records or transcribes at all.
+        let one_on_one = kind == CallKind::OneOnOne;
+        let recording = match self.host_recording_rules(&call.created_by).await {
+            Some(rules)
+                if !one_on_one
+                    && rules.records(kind)
+                    && self.claim_meeting_recorder(&call).await =>
+            {
+                Some(rules)
+            }
+            _ => None,
+        };
+        if !one_on_one {
+            self.start_meeting_transcriber(&call).await;
+        }
+        self.publish_call_event(&CallMacroEvent::started(CallStartedMetadata {
+            call_id: call.id,
+            channel_id: None,
+            created_by,
+            created_at: call.created_at,
+            recording_enabled: recording.is_some(),
+        }));
+        // Token issuance needs a room, not a running recorder or agent.
+        // Only the allocation winner schedules these best-effort services.
+        if let Some(rules) = recording {
+            self.spawn_meeting_recording(&call, rules, kind);
         }
         Ok(call)
     }
@@ -370,7 +393,9 @@ impl<
         actor: MacroUserIdStr<'_>,
     ) -> Result<CallTokenResponse, CallError> {
         let meeting = self.resolve_invitation(&token).await?;
-        let call = self.prepare_meeting_call(&meeting).await?;
+        let call = self
+            .prepare_meeting_call(&meeting, MeetingJoiner::Account(actor.copied()))
+            .await?;
         self.leave_other_active_call(actor.copied(), call.id)
             .await?;
         let rtc_token = self
@@ -388,6 +413,18 @@ impl<
                 return Err(CallError::AlreadyInCall("another call".to_string()));
             }
             Err(AddParticipantError::Repository(error)) => return Err(CallError::Internal(error)),
+        }
+        if let Err(error) = self.admit_meeting_participant(&call).await {
+            // Without the check the recording could outlive the one-on-one, so
+            // this join is undone instead.
+            self.repo
+                .remove_participant(&call.id, actor.copied())
+                .await
+                .inspect_err(
+                    |e| tracing::error!(error=?e, "failed to release unchecked participant"),
+                )
+                .ok();
+            return Err(error);
         }
         self.send_meeting_answered_event(meeting.id, actor.copied())
             .await;
@@ -416,7 +453,9 @@ impl<
                 "Sign in to join this call".to_string(),
             ));
         }
-        let call = self.prepare_meeting_call(&meeting).await?;
+        let call = self
+            .prepare_meeting_call(&meeting, MeetingJoiner::Guest)
+            .await?;
         let guest_id = GuestId::generate();
         // Lock and persist before minting so a join racing archival fails here.
         self.repo.add_guest(&call.id, guest_id, &name).await?;
@@ -604,6 +643,11 @@ impl<
 
 /// A late recorder must be attached before stopping so its completion webhook
 /// can find the archived record. Any failed attachment must also stop egress.
+///
+/// The recorder starts for a session of kind `since`. Once attached, it stops
+/// if the session has since been any kind that `rules` do not record: the join
+/// that changed the session's kind saw no recorder yet, so stopping it falls to
+/// this side.
 #[tracing::instrument(skip_all, fields(%call_id))]
 pub(super) async fn start_meeting_recording<R: CallRepository, C: CallRtcClient>(
     repo: &R,
@@ -611,6 +655,8 @@ pub(super) async fn start_meeting_recording<R: CallRepository, C: CallRtcClient>
     call_id: Uuid,
     room_name: &str,
     config: Option<&EgressS3Config>,
+    rules: RecordingRules,
+    since: CallKind,
 ) {
     let Some(config) = config else {
         return;
@@ -622,26 +668,42 @@ pub(super) async fn start_meeting_recording<R: CallRepository, C: CallRtcClient>
             return;
         }
     };
-    let active = match repo.attach_meeting_recording(&call_id, &egress_id).await {
-        Ok(true) => match repo.get_call_by_id(&call_id).await {
-            Ok(call) => call.is_some(),
-            Err(error) => {
-                tracing::error!(error=?error, "failed to confirm meeting is still active");
-                false
-            }
-        },
+    let keep = match repo.attach_meeting_recording(&call_id, &egress_id).await {
+        Ok(true) => still_recordable(repo, call_id, rules, since).await,
         Ok(false) => false,
         Err(error) => {
             tracing::error!(error=?error, "failed to attach meeting recording");
             false
         }
     };
-    if !active {
+    if !keep {
         rtc.stop_egress(&egress_id)
             .await
             .inspect_err(
                 |error| tracing::error!(error=?error, "failed to stop late meeting recording"),
             )
             .ok();
+    }
+}
+
+/// Whether the session is still live and has only been kinds that `rules`
+/// record since it was `since`. A failed check counts as no, so a blocked
+/// recording never continues unverified.
+async fn still_recordable<R: CallRepository>(
+    repo: &R,
+    call_id: Uuid,
+    rules: RecordingRules,
+    since: CallKind,
+) -> bool {
+    match repo.get_meeting_attendance(&call_id).await {
+        Ok(Some(attendance)) => attendance
+            .kinds_since(since)
+            .into_iter()
+            .all(|kind| rules.records(kind)),
+        Ok(None) => false,
+        Err(error) => {
+            tracing::error!(error=?error, "failed to check who joined the meeting");
+            false
+        }
     }
 }

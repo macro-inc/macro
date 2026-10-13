@@ -48,6 +48,10 @@ on standalone meeting calls, never on channel calls. */
   guests: CallRecordGuest[];
   /** Whether the call is currently active (from `calls` table). */
   isActive: boolean;
+  /** People in this live one-on-one who refuse being recorded or
+transcribed in one-on-ones, which is why it is not recording. Empty
+otherwise, and always empty once the call has ended. */
+  oneOnOneRecordingRefusedBy: string[];
   /** Macro-account participants (both active and historic). */
   participants: CallRecordParticipant[];
   /** Presigned URL for the call recording preview image, if available. */

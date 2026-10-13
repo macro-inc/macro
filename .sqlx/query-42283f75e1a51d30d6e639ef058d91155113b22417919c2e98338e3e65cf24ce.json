@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calls SET transcriber_claimed = TRUE WHERE id = $1 AND NOT transcriber_claimed",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "42283f75e1a51d30d6e639ef058d91155113b22417919c2e98338e3e65cf24ce"
+}

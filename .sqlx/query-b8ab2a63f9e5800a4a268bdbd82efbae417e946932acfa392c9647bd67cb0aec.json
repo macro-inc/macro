@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT has_more_than_two_participants, has_external_participants\n            FROM calls WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "has_more_than_two_participants",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "has_external_participants",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b8ab2a63f9e5800a4a268bdbd82efbae417e946932acfa392c9647bd67cb0aec"
+}

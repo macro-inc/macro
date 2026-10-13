@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT channel_type = 'direct_message' AS \"is_direct_message!\"\n            FROM comms_channels WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_direct_message!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "412fecb4eb468e5ecaba810b730e751baae7e96994cb0c667f58c1d2ab5d9836"
+}

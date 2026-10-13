@@ -20,3 +20,6 @@ pub mod service;
 
 /// Persistent meeting invitations and guest models.
 pub mod meetings;
+
+/// Recording defaults, team recording blocks, and the rule that combines them.
+pub mod recording;

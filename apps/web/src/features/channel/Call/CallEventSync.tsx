@@ -1,5 +1,6 @@
 import {
   isCallSharedWithTeam,
+  setCallRecordRefusalsCache,
   setCallRecordTeamShareCache,
   useCallRecordQuery,
 } from '@queries/call/call';
@@ -15,6 +16,7 @@ export function CallEventSync() {
     const current = record.data;
     if (!current || current.callId !== callCtx.activeCallId()) return;
     callCtx.setSharedWithTeam(isCallSharedWithTeam(current));
+    callCtx.setRecordingRefusedBy(current.oneOnOneRecordingRefusedBy);
   });
 
   createCallEventsEffect({
@@ -22,6 +24,11 @@ export function CallEventSync() {
       if (callId !== callCtx.activeCallId()) return;
       setCallRecordTeamShareCache(callId, shareWithTeam);
       callCtx.setSharedWithTeam(shareWithTeam);
+    },
+    onRecordingRefusalsChanged: ({ callId, refusedBy }) => {
+      if (callId !== callCtx.activeCallId()) return;
+      setCallRecordRefusalsCache(callId, refusedBy);
+      callCtx.setRecordingRefusedBy(refusedBy);
     },
   });
 

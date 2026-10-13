@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
       guests: [],
       isActive: false,
       participants: [],
+      oneOnOneRecordingRefusedBy: [],
       roomName: 'room',
       shareWithTeam: false,
       startedAt: '2026-10-02T00:00:00Z',

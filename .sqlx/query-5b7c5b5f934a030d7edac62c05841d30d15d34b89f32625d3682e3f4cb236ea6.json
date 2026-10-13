@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calls\n            SET has_external_participants = TRUE, one_on_one_recording_refused_by = '{}'\n            WHERE id = $1 AND NOT has_external_participants\n            RETURNING egress_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "egress_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5b7c5b5f934a030d7edac62c05841d30d15d34b89f32625d3682e3f4cb236ea6"
+}

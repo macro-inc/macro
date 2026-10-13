@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                COALESCE(p.record_huddles, TRUE) AS \"record_huddles!\",\n                COALESCE(p.record_one_on_ones, TRUE) AS \"record_one_on_ones!\",\n                COALESCE(p.record_internal_meetings, TRUE) AS \"record_internal_meetings!\",\n                COALESCE(p.record_external_meetings, TRUE) AS \"record_external_meetings!\",\n                COALESCE(p.share_huddles, 'channel') AS \"share_huddles!\",\n                COALESCE(p.share_one_on_ones, 'participants') AS \"share_one_on_ones!\",\n                COALESCE(p.share_internal_meetings, 'invited') AS \"share_internal_meetings!\",\n                COALESCE(p.share_external_meetings, 'team') AS \"share_external_meetings!\",\n                COALESCE(p.refuse_one_on_one_recording, FALSE)\n                    AS \"refuse_one_on_one_recording!\",\n                COALESCE(t.block_recording_huddles, FALSE) AS \"block_recording_huddles!\",\n                COALESCE(t.block_recording_one_on_ones, FALSE)\n                    AS \"block_recording_one_on_ones!\",\n                COALESCE(t.block_recording_internal_meetings, FALSE)\n                    AS \"block_recording_internal_meetings!\",\n                COALESCE(t.block_recording_external_meetings, FALSE)\n                    AS \"block_recording_external_meetings!\",\n                COALESCE(t.block_huddle_sharing, FALSE) AS \"block_huddle_sharing!\"\n            FROM (SELECT 1) AS anchor\n            LEFT JOIN call_preferences p ON p.user_id = $1\n            LEFT JOIN call_team_policies t ON t.team_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record_huddles!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "record_one_on_ones!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "record_internal_meetings!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "record_external_meetings!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "share_huddles!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "share_one_on_ones!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "share_internal_meetings!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "share_external_meetings!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "refuse_one_on_one_recording!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "block_recording_huddles!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "block_recording_one_on_ones!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "block_recording_internal_meetings!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "block_recording_external_meetings!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "block_huddle_sharing!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8a40301af18c8591473b42157a97479933f40e1059486f3b629452ed8e39bbf0"
+}

@@ -22,6 +22,10 @@ describe('settings navigation', () => {
     expect(settingsSlugToTab('booking-links')).toBe('Booking links');
     expect(settingsTabToSlug('Booking links')).toBe('booking-links');
   });
+  it('routes calls settings to their own page', () => {
+    expect(settingsSlugToTab('calls')).toBe('Calls');
+    expect(settingsTabToSlug('Calls')).toBe('calls');
+  });
   it('routes agent-connections to the Connections tab', () => {
     expect(settingsSlugToTab('agent-connections')).toBe('Connections');
     expect(settingsTabToSlug('Connections')).toBe('agent-connections');
@@ -37,6 +41,7 @@ describe('settings navigation', () => {
       'Email',
       'Calendar',
       'Booking links',
+      'Calls',
       'Agents',
       'CRM',
     ]);

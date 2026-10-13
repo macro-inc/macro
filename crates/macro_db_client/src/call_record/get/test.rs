@@ -249,7 +249,7 @@ async fn standalone_record_metadata_and_search_payload_do_not_require_a_channel(
 }
 
 #[sqlx::test]
-async fn standalone_search_requires_individual_access_even_with_team_or_public_sharing(
+async fn standalone_search_takes_individual_or_team_grants_but_never_link_shares(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
@@ -297,10 +297,11 @@ async fn standalone_search_requires_individual_access_even_with_team_or_public_s
     .await?;
     tx.commit().await?;
 
-    assert!(
-        get_accessible_call_ids(&pool, REQUESTER, &[])
-            .await?
-            .is_empty()
+    // A meeting shared with the team is found by its members; public and
+    // team link shares never make a meeting discoverable.
+    assert_eq!(
+        get_accessible_call_ids(&pool, REQUESTER, &[]).await?,
+        vec![team_grant]
     );
     assert_eq!(
         get_accessible_call_ids(&pool, SAME_TEAM_OWNER, &[])

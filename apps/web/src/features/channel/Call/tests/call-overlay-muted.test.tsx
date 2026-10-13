@@ -136,6 +136,7 @@ function setUpCallState(
     isParticipantSpeaking: () => false,
     isScreenSharing: () => false,
     isSharedWithTeam: () => false,
+    recordingRefusedBy: () => [],
     isVideoMuted: () => false,
     remoteParticipants: participants,
     room: () => ({
@@ -166,6 +167,26 @@ describe('CallOverlay muted microphone badges', () => {
     ).toBeTruthy();
     controls.setChannelId(null);
     expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('says why a one-on-one is not recording', () => {
+    setUpCallState();
+    mocks.displayNames.set('macro|sam@example.com', 'Sam');
+    render(() => (
+      <CallOverlay
+        onLeave={() => undefined}
+        recordingRefusedBy={['macro|sam@example.com']}
+      />
+    ));
+    expect(screen.getByRole('status').textContent).toBe(
+      "Not recording or transcribing: Sam doesn't allow 1:1 recordings"
+    );
+  });
+
+  it('shows no recording notice when nobody refuses', () => {
+    setUpCallState();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    expect(screen.queryByText(/Not recording/)).toBeNull();
   });
 
   it('uses the guest name from the media session and hides team sharing for guests', () => {

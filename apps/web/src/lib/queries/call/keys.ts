@@ -7,6 +7,7 @@ const link = [...root, 'link'] as const;
 export const callKeys = {
   _def: root,
   meetings: { queryKey: [...root, 'meetings'] as const },
+  settings: { queryKey: [...root, 'settings'] as const },
   activeMeetings: { queryKey: [...active, 'meetings'] as const },
   meeting: Object.assign(
     (shareToken: string) => ({

@@ -66,7 +66,7 @@ pub(super) static USER_A: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-a@test.com").unwrap());
 pub(super) static USER_B: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-b@test.com").unwrap());
-static USER_C: LazyLock<MacroUserIdStr<'static>> =
+pub(super) static USER_C: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-c@test.com").unwrap());
 static USER_D: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-d@test.com").unwrap());
@@ -3526,9 +3526,11 @@ async fn authenticated_meeting_attendee_gets_only_call_access_and_owner_keeps_ow
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn standalone_archive_never_translates_pending_intent_into_team_memory(
+async fn a_meeting_shared_with_the_team_is_team_shared_once_it_ends(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    use crate::domain::recording::{CallKind, ShareAudience};
+
     give_user_a_team(&pool, USER_B.as_ref(), &Uuid::now_v7()).await?;
     let repo = repo(pool.clone());
     let meeting = repo.create_meeting(standalone_meeting()).await?;
@@ -3542,23 +3544,13 @@ async fn standalone_archive_never_translates_pending_intent_into_team_memory(
             .unwrap()
             .share_with_team
     );
-    // Simulate an old or internal writer; archival must still enforce the policy.
-    repo.patch_call_record(
-        &call.id,
-        &EditCallRecordRepoArgs {
-            share_permission: None,
-            custom_name: None,
-            team_share: None,
-            live_share_with_team: Some(true),
-        },
-    )
-    .await?;
+    repo.set_meeting_audience(&call.id, CallKind::OneOnOne, ShareAudience::Team)
+        .await?;
     repo.archive_call(&call.id).await?;
 
     let record = repo.get_call_record_by_call_id(&call.id).await?.unwrap();
-    assert!(!record.share_with_team);
-    assert_eq!(record.team_share_access_level, None);
-    assert_eq!(team_entity_access_count(&pool, call.id).await?, 0);
+    assert!(record.share_with_team);
+    assert_eq!(team_entity_access_count(&pool, call.id).await?, 1);
     Ok(())
 }
 
@@ -3566,7 +3558,124 @@ async fn standalone_archive_never_translates_pending_intent_into_team_memory(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn standalone_call_list_requires_individual_grants_live_and_archived(
+async fn a_meeting_keeps_the_audience_of_the_kind_it_is_now(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::recording::{CallKind, ShareAudience};
+
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool.clone());
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    let shared = || async {
+        sqlx::query!(
+            "SELECT share_with_team, share_with_invitees FROM calls WHERE id = $1",
+            call.id,
+        )
+        .fetch_one(&pool)
+        .await
+        .map(|row| (row.share_with_team, row.share_with_invitees))
+    };
+    repo.set_meeting_audience(&call.id, CallKind::OneOnOne, ShareAudience::Team)
+        .await?;
+    assert_eq!(shared().await?, (true, false));
+
+    repo.mark_call_external(&call.id).await?;
+    repo.set_meeting_audience(&call.id, CallKind::ExternalMeeting, ShareAudience::Invited)
+        .await?;
+    assert_eq!(shared().await?, (false, true));
+    // A slow write for an earlier kind, or a kind it never was, changes nothing.
+    for kind in [CallKind::OneOnOne, CallKind::InternalMeeting] {
+        repo.set_meeting_audience(&call.id, kind, ShareAudience::Team)
+            .await?;
+        assert_eq!(shared().await?, (false, true), "{kind:?}");
+    }
+    repo.set_meeting_audience(
+        &call.id,
+        CallKind::ExternalMeeting,
+        ShareAudience::Participants,
+    )
+    .await?;
+    assert_eq!(shared().await?, (false, false));
+
+    // Channel calls keep their own toggle.
+    repo.set_meeting_audience(&CALL1, CallKind::OneOnOne, ShareAudience::Participants)
+        .await?;
+    assert!(
+        repo.get_call_record_by_call_id(&CALL1)
+            .await?
+            .unwrap()
+            .share_with_team
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_meeting_shared_with_its_invitees_lets_them_view_it_once_it_ends(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::recording::{CallKind, ShareAudience};
+
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    insert_user_mapping(&pool, USER_C.deref(), MACRO_USER_C).await?;
+    insert_user_mapping(&pool, USER_D.deref(), Uuid::now_v7()).await?;
+    let repo = repo(pool.clone());
+    for audience in [ShareAudience::Participants, ShareAudience::Invited] {
+        let meeting = repo.create_meeting(standalone_meeting()).await?;
+        let (call, _) = repo
+            .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+            .await?;
+        // USER_D is invited to the session; USER_C only to the calendar event
+        // carrying the link, alongside someone without a Macro account.
+        repo.add_meeting_invitees(&meeting.id, &call.id, &[USER_D.deref().copied()])
+            .await?;
+        insert_calendar_event_with_attendees(
+            &pool,
+            USER_B.as_ref(),
+            &format!(
+                "https://macro.com/app/meet/join/{}",
+                meeting.share_token.as_str()
+            ),
+            &(Utc::now() - Duration::minutes(10)).to_rfc3339(),
+            &["User-C@test.com", "nobody@acme.com"],
+        )
+        .await?;
+        repo.mark_call_external(&call.id).await?;
+        repo.set_meeting_audience(&call.id, CallKind::ExternalMeeting, audience)
+            .await?;
+        repo.archive_call(&call.id).await?;
+
+        let invited = audience == ShareAudience::Invited;
+        for (user, expected) in [
+            (USER_B.deref(), true),
+            (USER_C.deref(), invited),
+            (USER_D.deref(), invited),
+            (USER_A.deref(), false),
+        ] {
+            let records = repo
+                .get_call_records_by_user(user.copied(), 10, &None)
+                .await?;
+            assert_eq!(
+                records.iter().any(|record| record.call_id == call.id),
+                expected,
+                "user={user}, audience={audience:?}"
+            );
+        }
+        assert_eq!(team_entity_access_count(&pool, call.id).await?, 0);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn standalone_call_list_takes_own_and_team_grants_never_channel_ones(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     use entity_access_db_utils::{EntityAccessSourceType, EntityType, insert_entity_access_row};
@@ -3583,8 +3692,8 @@ async fn standalone_call_list_requires_individual_grants_live_and_archived(
     repo.add_meeting_participant(&call.id, USER_D.deref().copied())
         .await?;
 
-    // Neither an old team grant nor sharing to an unrelated channel makes this
-    // standalone call discoverable. Individual owner and attendee access remains.
+    // Sharing with a team makes this standalone call discoverable to its
+    // members; a channel grant never does. Owner and attendee access remains.
     let mut tx = pool.begin().await?;
     for (source, source_type) in [
         (team_id, EntityAccessSourceType::Team),
@@ -3608,7 +3717,7 @@ async fn standalone_call_list_requires_individual_grants_live_and_archived(
         }
         for (user, expected) in [
             (USER_A.deref(), false),
-            (USER_C.deref(), false),
+            (USER_C.deref(), true),
             (USER_B.deref(), true),
             (USER_D.deref(), true),
         ] {

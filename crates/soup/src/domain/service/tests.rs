@@ -254,6 +254,7 @@ fn call_record(
         status: None,
         user_access_level: None,
         viewer_has_declined: false,
+        one_on_one_recording_refused_by: Vec::new(),
         participants: Vec::new(),
         guests: Vec::new(),
         transcript: Vec::new(),

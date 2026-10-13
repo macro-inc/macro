@@ -8,7 +8,9 @@ use std::future::Future;
 
 use chrono::{DateTime, Utc};
 
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    AdminTeamRole, EditAccessLevel, EntityAccessReceipt, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -26,6 +28,11 @@ use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestId, GuestJoinRequest, InviteMeetingUsersRequest,
     Meeting, MeetingInvitePermissions, MeetingParticipants, MeetingPreparation,
     MeetingRtcParticipant, MeetingToken, UpdateMeetingRequest,
+};
+
+use super::recording::{
+    CallPreferences, CallSettings, MeetingAttendance, MeetingKindChange, RecordingRules,
+    UpdateCallSettingsRequest, UpdateTeamCallPolicyRequest,
 };
 
 use super::models::{
@@ -323,9 +330,9 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
-    /// For channel calls, the live `share_with_team` intent is translated into
-    /// canonical team sharing (View for the creator's current team) in the same
-    /// transaction. Calls without a channel must archive with team sharing off.
+    /// The live `share_with_team` intent is translated into canonical team
+    /// sharing (View for the creator's current team) in the same transaction,
+    /// and a standalone call shared with its invitees grants each of them View.
     /// Returns facts committed by the archive transaction.
     fn archive_call(
         &self,
@@ -435,7 +442,7 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Fetch visible active and archived records, without transcripts. Status
     /// reflects the user's participation and current channel membership.
-    /// Standalone calls require an individual user grant, never a group grant.
+    /// Standalone calls need the user's own grant or their team's.
     /// Apply `filter`, order by start time descending, and return at most `limit`.
     fn get_call_records_by_user<'a>(
         &self,
@@ -553,6 +560,127 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         name: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Load a host's recording defaults and, when `team_id` is set, that
+    /// team's blocks. Missing rows read as [`RecordingRules::default`].
+    fn get_recording_rules<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<RecordingRules, CallError>> + Send;
+
+    /// Load a person's call settings and, when `team_id` is set, that team's
+    /// blocks. Missing rows read as [`CallPreferences::default`].
+    fn get_call_preferences<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<CallPreferences, CallError>> + Send;
+
+    /// Apply `patch` to a person's call settings.
+    fn update_call_preferences<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        patch: UpdateCallSettingsRequest,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Apply `patch` to a team's call policy.
+    fn update_team_call_policy(
+        &self,
+        team_id: &Uuid,
+        patch: UpdateTeamCallPolicyRequest,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Flag a live call that only the host's teammates have joined as having
+    /// had more than two participants, counting everyone who ever joined it.
+    /// Call it after recording the newest participant. Returns `Some` only for
+    /// the call that flips the flag, carrying the recorder attached at that
+    /// moment; `None` when the call has had two participants at most, was
+    /// already flagged, is external, or is no longer live.
+    fn mark_call_more_than_two(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<MeetingKindChange>, CallError>> + Send;
+
+    /// Flag a live call as having had someone from outside the host's team.
+    /// Returns `Some` only for the call that flips the flag, carrying the
+    /// recorder attached at that moment; `None` when the call was already
+    /// flagged or is no longer live.
+    fn mark_call_external(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<MeetingKindChange>, CallError>> + Send;
+
+    /// The flags [`Self::mark_call_more_than_two`] and
+    /// [`Self::mark_call_external`] set on a live call; `None` once the call
+    /// is no longer live.
+    fn get_meeting_attendance(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<MeetingAttendance>, CallError>> + Send;
+
+    /// Claim a live call's one recorder: `true` only for the first claim, so
+    /// a call never starts a second recorder. `false` once it is no longer
+    /// live.
+    fn claim_meeting_recorder(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
+
+    /// Claim a live call's one transcriber: `true` only for the first claim.
+    /// `false` once it is no longer live.
+    fn claim_meeting_transcriber(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
+
+    /// Everyone who has joined a call, including those who left.
+    fn get_meeting_participant_ids(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Vec<String>, CallError>> + Send;
+
+    /// The current participants of a direct-message channel, bots included;
+    /// `None` when the channel is not a direct message.
+    fn get_direct_message_participants(
+        &self,
+        channel_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Vec<String>>, CallError>> + Send;
+
+    /// Which of `user_ids` refuse being recorded or transcribed in
+    /// one-on-ones.
+    fn get_one_on_one_refusers(
+        &self,
+        user_ids: &[String],
+    ) -> impl Future<Output = Result<Vec<String>, CallError>> + Send;
+
+    /// Record who in a live one-on-one refused recording, so the call can say
+    /// why it is not recording. `false`, writing nothing, when the call has
+    /// already started transcribing, is past its one-on-one, or is no longer
+    /// live. [`Self::mark_call_more_than_two`] and [`Self::mark_call_external`]
+    /// clear it.
+    fn record_one_on_one_refusals(
+        &self,
+        call_id: &Uuid,
+        refused_by: &[String],
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
+
+    /// Turn "Share with team" off on every live huddle hosted by a member of
+    /// `team_id`.
+    fn unshare_live_team_huddles(
+        &self,
+        team_id: &Uuid,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// Share a live standalone call of `kind` with `audience` when it ends.
+    /// Does nothing once the call has become a later kind, so a late write
+    /// cannot undo the audience of the kind it is now.
+    fn set_meeting_audience(
+        &self,
+        call_id: &Uuid,
+        kind: crate::domain::recording::CallKind,
+        audience: crate::domain::recording::ShareAudience,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
 }
 
 /// Storage port for generating signed recording GET URLs and deleting objects.
@@ -1046,6 +1174,26 @@ pub trait CallService: Send + Sync + 'static {
         macro_user_id: &Uuid,
         embedding: &[f32],
     ) -> impl Future<Output = Result<Uuid, CallError>> + Send;
+
+    /// The actor's call settings and their team's call policy.
+    fn get_call_settings<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<CallSettings, CallError>> + Send;
+
+    /// Change the actor's own call settings.
+    fn update_call_settings<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+        request: UpdateCallSettingsRequest,
+    ) -> impl Future<Output = Result<CallSettings, CallError>> + Send;
+
+    /// Change what the receipt's team forbids recording or sharing.
+    fn update_team_call_policy(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        request: UpdateTeamCallPolicyRequest,
+    ) -> impl Future<Output = Result<CallSettings, CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.
@@ -1056,8 +1204,8 @@ pub trait CallService: Send + Sync + 'static {
 pub trait CallRecordQueryService: Send + Sync + 'static {
     /// Fetch the most recent call records visible to the user, ordered by
     /// `started_at` descending. Transcript data is excluded, and status is
-    /// computed relative to the requesting user. Calls without a channel require
-    /// an individual user grant; group grants do not make them discoverable.
+    /// computed relative to the requesting user. Calls without a channel need
+    /// the user's own grant or their team's; channel grants never reach them.
     fn get_user_call_records(
         &self,
         req: GetCallRecordsRequest,

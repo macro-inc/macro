@@ -17,7 +17,7 @@ impl PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, meeting_id,
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team, share_with_invitees, meeting_id,
                    (SELECT title FROM call_meetings WHERE id = calls.meeting_id) AS meeting_title
             FROM calls
             WHERE id = $1
@@ -49,10 +49,7 @@ impl PgCallRepo {
             .num_milliseconds()
             .max(0);
         let has_recording = call.egress_id.is_some();
-        let share_with_team = crate::domain::models::permitted_team_memory_intent(
-            call.channel_id,
-            call.share_with_team,
-        );
+        let share_with_team = call.share_with_team;
         // Insert into call_records (including egress_id and any early recording keys).
         // The record keeps the same id as the original call.
         // The legacy column is still copied for older readers until it is
@@ -84,6 +81,10 @@ impl PgCallRepo {
         // Translate the live intent into canonical team sharing: View for the
         // creator's current team when the toggle was on, nothing otherwise.
         team_share::translate_live_share_with_team(&mut tx, call_id, share_with_team).await?;
+
+        if call.channel_id.is_none() && call.share_with_invitees {
+            grant_invitees_view(&mut tx, call_id).await?;
+        }
 
         // Copy all lifetime-distinct participants (including soft-deleted) to
         // call_record_participants. Each inserted row represents one participant.
@@ -229,5 +230,73 @@ pub(super) async fn lock_active_call(
     sqlx::query_scalar!("SELECT id FROM calls WHERE id = $1 FOR KEY SHARE", call_id)
         .fetch_one(tx.as_mut())
         .await?;
+    Ok(())
+}
+
+/// Let everyone invited to a standalone call that is being archived view its
+/// record: the people invited to the session, and the Macro accounts among the
+/// attendees of the calendar event it took place in. Run it after the record
+/// is inserted and before the live call (and its invitees) is deleted.
+async fn grant_invitees_view(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    call_id: &Uuid,
+) -> Result<(), CallError> {
+    // The calendar match is the one `get_call_record_people` uses: the event
+    // of the meeting owner carrying the link that overlaps the call.
+    sqlx::query!(
+        r#"
+        WITH invited AS (
+            SELECT i.user_id
+            FROM call_invitees i
+            WHERE i.call_id = $1
+            UNION
+            SELECT u.id
+            FROM call_records cr
+            JOIN call_meetings m ON m.id = cr.meeting_id
+            JOIN calendar_events e ON e.owner_id = m.user_id
+            JOIN calendar_event_attendees a ON a.event_id = e.id
+            JOIN "User" u ON u.id = 'macro|' || LOWER(a.email)
+            WHERE cr.id = $1
+              AND (
+                  STRPOS(e.location, m.share_token) > 0
+                  OR STRPOS(e.description, m.share_token) > 0
+                  OR STRPOS(e.conference_url, m.share_token) > 0
+              )
+              AND (
+                  (e.starts_at IS NOT NULL
+                      AND tstzrange(e.starts_at, e.ends_at) && tstzrange(cr.started_at, cr.ended_at))
+                  OR (e.start_date IS NOT NULL
+                      AND daterange(e.start_date, e.end_date) && daterange(
+                          (cr.started_at - interval '1 day')::date,
+                          (cr.ended_at + interval '1 day')::date,
+                          '[]'
+                      ))
+                  OR EXISTS (
+                      SELECT 1 FROM calendar_event_occurrences o
+                      WHERE o.event_id = e.id
+                        AND o.owner_id = e.owner_id
+                        AND NOT o.is_cancelled
+                        AND (
+                            o.timed_span && tstzrange(cr.started_at, cr.ended_at)
+                            OR o.day_span && daterange(
+                                (cr.started_at - interval '1 day')::date,
+                                (cr.ended_at + interval '1 day')::date,
+                                '[]'
+                            )
+                        )
+                  )
+              )
+        )
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT $1, 'call', user_id, 'user', 'view'
+        FROM invited
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        DO NOTHING
+        "#,
+        call_id,
+    )
+    .execute(tx.as_mut())
+    .await?;
     Ok(())
 }

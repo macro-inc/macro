@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO call_preferences (\n                user_id,\n                record_huddles,\n                record_one_on_ones,\n                record_internal_meetings,\n                record_external_meetings,\n                share_huddles,\n                share_one_on_ones,\n                share_internal_meetings,\n                share_external_meetings,\n                refuse_one_on_one_recording\n            )\n            VALUES (\n                $1,\n                COALESCE($2, TRUE),\n                COALESCE($3, TRUE),\n                COALESCE($4, TRUE),\n                COALESCE($5, TRUE),\n                COALESCE($6, 'channel'),\n                COALESCE($7, 'participants'),\n                COALESCE($8, 'invited'),\n                COALESCE($9, 'team'),\n                COALESCE($10, FALSE)\n            )\n            ON CONFLICT (user_id) DO UPDATE SET\n                record_huddles = COALESCE($2, call_preferences.record_huddles),\n                record_one_on_ones =\n                    COALESCE($3, call_preferences.record_one_on_ones),\n                record_internal_meetings =\n                    COALESCE($4, call_preferences.record_internal_meetings),\n                record_external_meetings =\n                    COALESCE($5, call_preferences.record_external_meetings),\n                share_huddles = COALESCE($6, call_preferences.share_huddles),\n                share_one_on_ones = COALESCE($7, call_preferences.share_one_on_ones),\n                share_internal_meetings =\n                    COALESCE($8, call_preferences.share_internal_meetings),\n                share_external_meetings =\n                    COALESCE($9, call_preferences.share_external_meetings),\n                refuse_one_on_one_recording =\n                    COALESCE($10, call_preferences.refuse_one_on_one_recording),\n                updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7973284380afd039fb25fb94acf3ddcfd0bd37281b0030f748b60ff36607822e"
+}

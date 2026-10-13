@@ -287,6 +287,10 @@ type CallStoreState = {
   // record once it loads and kept in sync by the
   // `call_share_with_team_toggled` event and local toggles.
   isSharedWithTeam: boolean;
+  // People in the active one-on-one who refuse being recorded or transcribed
+  // there. Seeded from the call record and kept in sync by the
+  // `call_recording_refusals_changed` event.
+  recordingRefusedBy: string[];
 };
 
 const initialState: CallStoreState = {
@@ -311,6 +315,7 @@ const initialState: CallStoreState = {
   callPageChannelId: null,
   backgroundEffect: { type: 'none' },
   isSharedWithTeam: false,
+  recordingRefusedBy: [],
 };
 
 // Persisted across reloads — background effect is a privacy preference users
@@ -442,6 +447,10 @@ export type CallState = {
   isSharedWithTeam: () => boolean;
   /** Update the locally-cached team-sharing flag (after a record load, an edit, or a sync event) */
   setSharedWithTeam: (value: boolean) => void;
+  /** Who in the active one-on-one refuses being recorded, so it is not recording */
+  recordingRefusedBy: () => string[];
+  /** Update who refuses recording the active call (after a record load or a sync event) */
+  setRecordingRefusedBy: (userIds: string[]) => void;
 };
 
 const CallContext = createContext<CallState>();
@@ -1505,6 +1514,10 @@ function createCallState() {
     setStore('isSharedWithTeam', value);
   }
 
+  function setRecordingRefusedBy(userIds: string[]) {
+    setStore('recordingRefusedBy', userIds);
+  }
+
   async function toggleNoiseSuppression() {
     const newMode: MicNoiseSuppressionMode = isNoiseSuppressionEnabled(
       store.noiseSuppressionMode
@@ -1743,6 +1756,8 @@ function createCallState() {
     setBackgroundEffect,
     isSharedWithTeam: () => store.isSharedWithTeam,
     setSharedWithTeam,
+    recordingRefusedBy: () => store.recordingRefusedBy,
+    setRecordingRefusedBy,
   };
 
   return state;

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calls c SET share_with_team = FALSE\n            FROM team_user tu\n            WHERE tu.team_id = $1\n                AND tu.user_id = c.created_by\n                AND c.channel_id IS NOT NULL\n                AND c.share_with_team\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d9876a2ace48ece3eaccc4202a894f53f98004d9df2f5482d1bdd185d9a1a738"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calls SET recorder_claimed = TRUE WHERE id = $1 AND NOT recorder_claimed",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0fe8d5bd569634547e72dddefc7b44cb35f6ea1d5d8602c2ebbd965f7ddd4e4"
+}

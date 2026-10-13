@@ -6,6 +6,12 @@ import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { ToggleSwitch } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { CallSettingsProvider } from '../../call-settings/context/call-settings-context';
+import {
+  type CallSettings,
+  withKind,
+} from '../../call-settings/core/call-settings';
+import { CallSettingsView } from '../../call-settings/views/call-settings-view';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { themeCssVars } from '../../theme/utils/themeColorTokens';
@@ -38,6 +44,7 @@ function Fixture() {
   const [narrow, setNarrow] = createSignal(false);
   const [mobile, setMobile] = createSignal(false);
   const [mobilePage, setMobilePage] = createSignal<SettingsTab>();
+  const [teamAdmin, setTeamAdmin] = createSignal(true);
   const applyTheme = (value: boolean) => {
     setDark(value);
     for (const [key, token] of Object.entries(
@@ -142,17 +149,22 @@ function Fixture() {
     <Show when={page !== 'Appearance'} fallback={<Appearance />}>
       <Show when={page !== 'Shortcuts'} fallback={<Shortcuts />}>
         <Show
-          when={page !== 'Desktop App'}
-          fallback={
-            <Show when={desktop()} fallback={<DesktopApp />}>
-              <DesktopAppInfo
-                version="2.5.0"
-                buildDate={new Date('2026-10-01T16:30:00Z')}
-              />
-            </Show>
-          }
+          when={page !== 'Calls'}
+          fallback={<FixtureCalls admin={teamAdmin()} />}
         >
-          {sampleContent(page)}
+          <Show
+            when={page !== 'Desktop App'}
+            fallback={
+              <Show when={desktop()} fallback={<DesktopApp />}>
+                <DesktopAppInfo
+                  version="2.5.0"
+                  buildDate={new Date('2026-10-01T16:30:00Z')}
+                />
+              </Show>
+            }
+          >
+            {sampleContent(page)}
+          </Show>
         </Show>
       </Show>
     </Show>
@@ -175,6 +187,9 @@ function Fixture() {
         </Button>
         <Button size="sm" onClick={() => setMobile(true)}>
           Mobile settings
+        </Button>
+        <Button size="sm" onClick={() => setTeamAdmin(!teamAdmin())}>
+          {teamAdmin() ? 'Calls: team admin' : 'Calls: team member'}
         </Button>
       </div>
       <div class="min-h-0 flex-1">
@@ -277,6 +292,80 @@ function FixtureSignature(props: { email: string }) {
         </p>
       </Show>
     </>
+  );
+}
+/** Calls settings over in-memory state; `admin` decides who may edit team blocks. */
+function FixtureCalls(props: { admin: boolean }) {
+  const [settings, setSettings] = createSignal<CallSettings>({
+    recordByDefault: {
+      huddles: true,
+      oneOnOnes: false,
+      internalMeetings: true,
+      externalMeetings: true,
+    },
+    shareByDefault: {
+      huddles: 'channel',
+      oneOnOnes: 'participants',
+      internalMeetings: 'invited',
+      externalMeetings: 'team',
+    },
+    refuseOneOnOneRecording: false,
+    team: {
+      recordingBlocked: {
+        huddles: false,
+        oneOnOnes: false,
+        internalMeetings: false,
+        externalMeetings: true,
+      },
+      huddleSharingBlocked: false,
+      canEdit: true,
+    },
+  });
+  const updateTeam = (
+    change: (team: NonNullable<CallSettings['team']>) => CallSettings['team']
+  ) =>
+    setSettings((current) =>
+      current.team ? { ...current, team: change(current.team) } : current
+    );
+  return (
+    <CallSettingsProvider
+      value={{
+        createSource: () => ({
+          settings: () => {
+            const current = settings();
+            return {
+              ...current,
+              team: current.team && { ...current.team, canEdit: props.admin },
+            };
+          },
+          error: () => false,
+        }),
+        setRecordByDefault: (kind, value) =>
+          setSettings((current) => ({
+            ...current,
+            recordByDefault: withKind(current.recordByDefault, kind, value),
+          })),
+        setShareByDefault: (kind, audience) =>
+          setSettings((current) => ({
+            ...current,
+            shareByDefault: { ...current.shareByDefault, [kind]: audience },
+          })),
+        setRefuseOneOnOneRecording: (value) =>
+          setSettings((current) => ({
+            ...current,
+            refuseOneOnOneRecording: value,
+          })),
+        setRecordingBlocked: (kind, blocked) =>
+          updateTeam((team) => ({
+            ...team,
+            recordingBlocked: withKind(team.recordingBlocked, kind, blocked),
+          })),
+        setHuddleSharingBlocked: (blocked) =>
+          updateTeam((team) => ({ ...team, huddleSharingBlocked: blocked })),
+      }}
+    >
+      <CallSettingsView />
+    </CallSettingsProvider>
   );
 }
 const root = document.getElementById('root');

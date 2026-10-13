@@ -41,6 +41,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
         transcript: Vec::new(),
         user_access_level: None,
         viewer_has_declined: false,
+        one_on_one_recording_refused_by: Vec::new(),
     }
 }
 

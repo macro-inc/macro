@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::meetings::{InviteMeetingUsersRequest, Meeting};
 
-mod access;
+pub(super) mod access;
 use access::TeamAccessService;
 
 const OWNER_EMAIL: &str = "owner@example.com";
@@ -28,7 +28,7 @@ fn same_team() -> TeamAccessService {
             .into_iter()
             .map(|email| (user(email).to_string(), team_id))
             .collect(),
-        fail_lookup: false,
+        ..TeamAccessService::default()
     }
 }
 
@@ -363,6 +363,20 @@ async fn successful_join_resolves_only_the_answering_users_meeting_ring() {
             .return_once(move |_| Box::pin(async move { Ok(Some(meeting)) }));
         repo.expect_get_call_by_id()
             .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
+        // Without shared teams the joiner is an outsider, and the session
+        // already counts as external.
+        repo.expect_mark_call_external()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        repo.expect_mark_call_more_than_two()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        repo.expect_get_meeting_attendance().returning(|_| {
+            Box::pin(async {
+                Ok(Some(crate::domain::recording::MeetingAttendance {
+                    more_than_two: false,
+                    external: true,
+                }))
+            })
+        });
         repo.expect_find_active_call_for_user()
             .returning(|_| Box::pin(async { Ok(None) }));
         repo.expect_add_meeting_participant()

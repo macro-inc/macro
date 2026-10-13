@@ -23,6 +23,7 @@ import {
 } from './call-panel-breakpoints';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
+import { recordingRefusalNotice } from './recording-refusal-notice';
 import { TrackView } from './TrackView';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 
@@ -223,6 +224,8 @@ export function CallOverlay(props: {
   onLeave: () => void;
   showTeamSharing?: boolean;
   sharedWithTeam?: boolean;
+  /** Who refuses recording this one-on-one; defaults to the call context. */
+  recordingRefusedBy?: string[];
   localName?: string;
   /** Shared messages require an authenticated Macro participant. */
   showChat?: boolean;
@@ -234,6 +237,15 @@ export function CallOverlay(props: {
   const teamShare = useActiveCallTeamShare();
   const sharedWithTeam = () =>
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
+  const refusalNotice = () =>
+    recordingRefusalNotice(
+      props.recordingRefusedBy ?? callCtx.recordingRefusedBy(),
+      currentUserId(),
+      (userId) => {
+        const macroId = tryMacroId(userId);
+        return (macroId && getDisplayName(macroId)) || 'Someone';
+      }
+    );
   const [chatOpen, setChatOpen] = createSignal(false);
   const [chatMounted, setChatMounted] = createSignal(false);
   const chatId = createUniqueId();
@@ -401,6 +413,16 @@ export function CallOverlay(props: {
       </div>
       {/* Settings expand over the tiles; sharing stays clear of the controls. */}
       <div class="relative flex shrink-0 flex-col items-center gap-2 py-3">
+        <Show when={refusalNotice()}>
+          {(notice) => (
+            <p
+              role="status"
+              class="order-0 max-w-full px-3 text-center text-xs text-ink-muted"
+            >
+              {notice()}
+            </p>
+          )}
+        </Show>
         <Show
           when={
             callCtx.activeChannelId() !== null &&

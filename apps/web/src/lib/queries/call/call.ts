@@ -198,11 +198,19 @@ export function fetchCallRecord(
 }
 
 /**
+ * Whether a call's team sharing can be changed by hand: a channel call's at any
+ * time, a meeting's once it ends. A live meeting follows its host's settings.
+ */
+export function hasCallTeamShareControl(record: CallRecord): boolean {
+  return record.channelId != null || !record.isActive;
+}
+
+/**
  * Whether a call is shared with its creator's team: the pending toggle while
- * the call is live, the canonical `view` grant once it is archived.
+ * a channel call is live, the canonical `view` grant once a call is archived.
  */
 export function isCallSharedWithTeam(record: CallRecord): boolean {
-  return record.channelId != null && record.shareWithTeam;
+  return hasCallTeamShareControl(record) && record.shareWithTeam;
 }
 
 export function sharePermissionFromCallRecord(
@@ -241,13 +249,12 @@ function patchCachedCallTeamShare(
 ): CallRecord {
   return {
     ...record,
-    shareWithTeam: record.channelId != null && shared,
-    teamShareAccessLevel:
-      record.channelId == null
-        ? null
-        : record.isActive
-          ? record.teamShareAccessLevel
-          : buildCallTeamSharePayload(shared).teamShareAccessLevel,
+    shareWithTeam: hasCallTeamShareControl(record) && shared,
+    teamShareAccessLevel: !hasCallTeamShareControl(record)
+      ? null
+      : record.isActive
+        ? record.teamShareAccessLevel
+        : buildCallTeamSharePayload(shared).teamShareAccessLevel,
   };
 }
 
@@ -257,6 +264,18 @@ export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
   void queryClient.cancelQueries({ queryKey });
   queryClient.setQueryData<CallRecord>(queryKey, (prev) =>
     prev ? patchCachedCallTeamShare(prev, shared) : prev
+  );
+}
+
+/** Mirror a live call's one-on-one recording refusals into its cached record. */
+export function setCallRecordRefusalsCache(
+  callId: string,
+  refusedBy: string[]
+) {
+  const queryKey = callKeys.record(callId).queryKey;
+  void queryClient.cancelQueries({ queryKey });
+  queryClient.setQueryData<CallRecord>(queryKey, (prev) =>
+    prev ? { ...prev, oneOnOneRecordingRefusedBy: refusedBy } : prev
   );
 }
 

@@ -115,6 +115,34 @@ const SETTINGS: Setting[] = [
     keywords: 'analytics statistics',
   },
   {
+    tab: 'Calls',
+    title: 'Record by default',
+    target: 'Record by default',
+    keywords:
+      'recording automatic huddles dm direct message 1:1 one-on-one internal external meetings',
+  },
+  {
+    tab: 'Calls',
+    title: 'Share by default',
+    target: 'Share by default',
+    keywords:
+      'share team huddles meetings channel participants invited invitees recording transcript notes visibility audience',
+  },
+  {
+    tab: 'Calls',
+    title: '1:1 privacy',
+    target: '1:1 privacy',
+    keywords:
+      "block all opt out don't record transcribe one-on-one dm direct message privacy",
+  },
+  {
+    tab: 'Calls',
+    title: 'Team call policy',
+    target: 'Team policy',
+    keywords:
+      'block recording sharing admin huddles 1:1 one-on-one internal external meetings',
+  },
+  {
     tab: 'Agents',
     title: 'Team agents',
     target: 'Team agents',

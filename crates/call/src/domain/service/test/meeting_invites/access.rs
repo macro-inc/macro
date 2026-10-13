@@ -12,9 +12,11 @@ use macro_user_id::{
 use uuid::Uuid;
 
 #[derive(Clone, Default)]
-pub(super) struct TeamAccessService {
-    pub(super) teams: HashMap<String, Uuid>,
-    pub(super) fail_lookup: bool,
+pub(in crate::domain::service::test) struct TeamAccessService {
+    pub(in crate::domain::service::test) teams: HashMap<String, Uuid>,
+    /// Users holding a role above member; everyone else is a member.
+    pub(in crate::domain::service::test) roles: HashMap<String, TeamRole>,
+    pub(in crate::domain::service::test) fail_lookup: bool,
 }
 
 impl EntityAccessService for TeamAccessService {
@@ -139,7 +141,11 @@ impl EntityAccessService for TeamAccessService {
             .get(user_id.as_ref())
             .map(|team_id| UserTeamInfo {
                 team_id: *team_id,
-                role: TeamRole::Member,
+                role: self
+                    .roles
+                    .get(user_id.as_ref())
+                    .copied()
+                    .unwrap_or(TeamRole::Member),
             }))
     }
 }

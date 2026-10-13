@@ -23,9 +23,11 @@ use serde_json::json;
 use uuid::Uuid;
 
 mod active_meetings;
+mod call_settings;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
+mod recording_rules;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -37,6 +39,7 @@ use crate::domain::ports::{
     CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
     NoOpVoiceRepository,
 };
+use crate::domain::recording::CallPreferences;
 
 use super::{
     CallServiceImpl, NoopCallSummarizer, derive_preview_key_from_recording_key,
@@ -58,6 +61,8 @@ struct MockRtcClient {
     removed: Arc<Mutex<Vec<(String, String)>>>,
     /// Identities connected per room; a room missing here does not exist.
     rooms: Mutex<HashMap<String, Vec<String>>>,
+    /// Rooms a transcriber was dispatched to.
+    transcribed: Mutex<Vec<String>>,
 }
 
 impl MockRtcClient {
@@ -67,7 +72,12 @@ impl MockRtcClient {
             generate_calls: Mutex::new(Vec::new()),
             removed: Arc::default(),
             rooms: Mutex::default(),
+            transcribed: Mutex::default(),
         }
+    }
+
+    fn transcribed_rooms(&self) -> Vec<String> {
+        self.transcribed.lock().unwrap().clone()
     }
 
     fn with_room(self, room_name: &str, identities: &[&str]) -> Self {
@@ -214,7 +224,8 @@ impl CallRtcClient for MockRtcClient {
         unreachable!("verify_access_token not exercised by these tests")
     }
 
-    async fn dispatch_transcription_agent(&self, _room_name: &str) -> anyhow::Result<()> {
+    async fn dispatch_transcription_agent(&self, room_name: &str) -> anyhow::Result<()> {
+        self.transcribed.lock().unwrap().push(room_name.to_string());
         Ok(())
     }
 }
@@ -477,6 +488,24 @@ fn mock_get_or_create_repo(
                 .times(1)
                 .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
         }
+    }
+
+    // The creator's untouched settings in a channel that is not a direct
+    // message: record and transcribe, and keep the huddle in its channel by
+    // turning off the live "Share with team" it starts with.
+    if matches!(scenario, GetOrCreateScenario::CreatorWins) {
+        repo.expect_get_call_preferences()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(CallPreferences::default()) }));
+        repo.expect_get_direct_message_participants()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(None) }));
+        repo.expect_patch_call_record()
+            .times(1)
+            .returning(|_, args| {
+                assert_eq!(args.live_share_with_team, Some(false));
+                Box::pin(async { Ok(()) })
+            });
     }
 
     if recording_enabled {
@@ -1525,6 +1554,7 @@ fn call_record_for_mutation() -> CallRecord {
         summary: None,
         team_share_access_level: None,
         share_with_team: false,
+        one_on_one_recording_refused_by: Vec::new(),
         is_active: false,
         status: None,
         user_access_level: None,
@@ -1923,6 +1953,12 @@ fn team_edit(
 
 /// Repo that serves `facts` once, returns `record`, and asserts the command
 /// forwarded to `patch_call_record` targets `expected_target` (`None` = clear).
+/// The creator's team allows sharing huddles, whatever the edit asks for.
+fn expect_huddle_sharing_allowed(repo: &mut MockCallRepository) {
+    repo.expect_get_call_preferences()
+        .returning(|_, _| Box::pin(async { Ok(CallPreferences::default()) }));
+}
+
 fn mock_team_share_repo(
     facts: TeamShareFacts,
     record: CallRecord,
@@ -1938,6 +1974,7 @@ fn mock_team_share_repo(
     repo.expect_get_call_record_by_call_id()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(record)) }));
+    expect_huddle_sharing_allowed(&mut repo);
     repo.expect_patch_call_record()
         .times(1)
         .returning(move |call_id, args| {
@@ -1959,6 +1996,7 @@ fn expect_archived_record(repo: &mut MockCallRepository) {
     repo.expect_get_call_record_by_call_id()
         .times(1)
         .returning(|_| Box::pin(async { Ok(Some(call_record_for_mutation())) }));
+    expect_huddle_sharing_allowed(repo);
 }
 
 #[tokio::test]
@@ -2129,6 +2167,7 @@ async fn team_share_rejects_missing_team_and_contradictory_inputs() {
 #[tokio::test]
 async fn team_share_repo_conflict_publishes_nothing() {
     let mut repo = MockCallRepository::new();
+    expect_huddle_sharing_allowed(&mut repo);
     repo.expect_get_team_share_facts()
         .times(1)
         .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
@@ -2166,6 +2205,7 @@ fn live_record() -> CallRecord {
 /// toggle instead of a command.
 fn mock_live_edit_repo(expected_toggle: bool) -> MockCallRepository {
     let mut repo = MockCallRepository::new();
+    expect_huddle_sharing_allowed(&mut repo);
     repo.expect_get_call_record_by_call_id()
         .times(1)
         .returning(|_| Box::pin(async { Ok(Some(live_record())) }));
@@ -2249,6 +2289,7 @@ async fn live_call_team_share_rejects_non_view_levels_and_contradictions() {
 #[tokio::test]
 async fn toggle_share_with_team_publishes_updated_event() {
     let mut repo = MockCallRepository::new();
+    expect_huddle_sharing_allowed(&mut repo);
     repo.expect_get_call_record_by_call_id()
         .times(1)
         .returning(|_| Box::pin(async { Ok(Some(live_record())) }));
@@ -2289,7 +2330,7 @@ async fn toggle_share_with_team_on_archived_call_conflicts_without_events() {
     assert!(event_broker.events().is_empty());
 }
 
-/// Standalone records retain individual access, but cannot enter team memory.
+/// A meeting's record, live or ended.
 fn standalone_record(is_active: bool) -> CallRecord {
     let mut record = call_record_for_mutation();
     record.channel_id = None;
@@ -2298,52 +2339,55 @@ fn standalone_record(is_active: bool) -> CallRecord {
 }
 
 #[tokio::test]
-async fn standalone_call_team_memory_enable_is_forbidden_live_and_archived() {
-    for is_active in [true, false] {
-        for request in [
-            team_edit(Some(team_share_request(Some(AccessLevel::View))), None),
-            team_edit(None, Some(true)),
-        ] {
-            let mut repo = MockCallRepository::new();
-            repo.expect_get_call_record_by_call_id()
-                .times(1)
-                .returning(move |_| {
-                    Box::pin(async move { Ok(Some(standalone_record(is_active))) })
-                });
-            let events = RecordingEventBroker::default();
-            let service = build_mutation_service(repo, events.clone());
+async fn a_live_meeting_cannot_be_shared_with_the_team_by_hand() {
+    for request in [
+        team_edit(Some(team_share_request(Some(AccessLevel::View))), None),
+        team_edit(None, Some(true)),
+    ] {
+        let mut repo = MockCallRepository::new();
+        repo.expect_get_call_record_by_call_id()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Some(standalone_record(true))) }));
+        repo.expect_patch_call_record().never();
+        let events = RecordingEventBroker::default();
+        let service = build_mutation_service(repo, events.clone());
 
-            assert!(matches!(
-                service
-                    .edit_call_record(creator_mutation_receipt(), request)
-                    .await,
-                Err(CallError::Forbidden(_))
-            ));
-            assert!(events.events().is_empty());
-        }
+        assert!(matches!(
+            service
+                .edit_call_record(creator_mutation_receipt(), request)
+                .await,
+            Err(CallError::Forbidden(_))
+        ));
+        assert!(events.events().is_empty());
     }
 }
 
 #[tokio::test]
-async fn standalone_call_team_memory_enable_is_forbidden_through_generic_share_policy() {
-    let mut repo = MockCallRepository::new();
-    repo.expect_get_call_record_by_call_id()
-        .times(2)
-        .returning(|_| Box::pin(async { Ok(Some(standalone_record(false))) }));
+async fn the_creator_can_share_an_ended_meeting_with_the_team() {
+    let repo = mock_team_share_repo(
+        team_share_facts(),
+        standalone_record(false),
+        Some(TeamShareLevel::View),
+    );
     let events = RecordingEventBroker::default();
     let service = build_mutation_service(repo, events.clone());
 
-    assert!(matches!(
-        service
-            .update_share_policy(
-                EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string()),
-                creator_mutation_receipt(),
-                team_share_request(Some(AccessLevel::View)),
-            )
-            .await,
-        Err(entity_mutation::EntityMutationErrorCode::Forbidden(_))
-    ));
-    assert!(events.events().is_empty());
+    service
+        .edit_call_record(
+            creator_mutation_receipt(),
+            team_edit(Some(team_share_request(Some(AccessLevel::View))), None),
+        )
+        .await
+        .expect("the creator may share an ended meeting with the team");
+    let published = events.events();
+    let [updated] = published.as_slice() else {
+        panic!("expected one update, got {published:?}");
+    };
+    assert_eq!(updated.envelope["metadata"]["share_with_team"], true);
+    assert_eq!(
+        updated.envelope["metadata"]["channel_id"],
+        serde_json::Value::Null
+    );
 }
 
 #[tokio::test]
@@ -2668,6 +2712,7 @@ fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
         summary: None,
         team_share_access_level: None,
         share_with_team: false,
+        one_on_one_recording_refused_by: Vec::new(),
         is_active: false,
         status: None,
         user_access_level: None,
@@ -3858,6 +3903,9 @@ async fn guest_join_persists_the_guest_before_minting_a_room_scoped_token() {
     repo.expect_get_call_by_id()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
+    // Guests always make the session external; this one already was.
+    repo.expect_mark_call_external()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_add_guest()
         .times(1)
         .in_sequence(&mut seq)
@@ -3965,6 +4013,9 @@ async fn token_mint_failure_releases_the_pending_guest_row() {
     repo.expect_get_call_by_id()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active)) }));
+    // Guests always make the session external; this one already was.
+    repo.expect_mark_call_external()
+        .returning(|_| Box::pin(async { Ok(None) }));
     repo.expect_add_guest()
         .times(1)
         .returning(|_, _, _| Box::pin(async { Ok(()) }));

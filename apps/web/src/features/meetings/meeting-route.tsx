@@ -1,10 +1,14 @@
 import { useCallContext } from '@channel/Call/CallContext';
 import { CallOverlay } from '@channel/Call/CallOverlay';
+import { createCallEventsEffect } from '@channel/Call/call-events';
 import { getMeetingUrl } from '@channel/Call/call-link';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
 import { readBackgroundImage } from '@core/media/read-background-image';
-import { useCallRecordQuery } from '@queries/call/call';
+import {
+  setCallRecordRefusalsCache,
+  useCallRecordQuery,
+} from '@queries/call/call';
 import {
   leaveMeeting,
   useJoinMeetingMutation,
@@ -55,6 +59,12 @@ export function MeetingRouteContent(props: {
   const record = useCallRecordQuery(() =>
     authenticated() === true ? (call.activeCallId() ?? '') : ''
   );
+  createCallEventsEffect({
+    onRecordingRefusalsChanged: ({ callId, refusedBy }) => {
+      if (callId === call.activeCallId())
+        setCallRecordRefusalsCache(callId, refusedBy);
+    },
+  });
   const canRename = () =>
     authenticated() === true &&
     meeting.isSuccess &&
@@ -136,6 +146,11 @@ export function MeetingRouteContent(props: {
           showTeamSharing={canShareWithTeam()}
           sharedWithTeam={
             record.isSuccess ? record.data.shareWithTeam : undefined
+          }
+          recordingRefusedBy={
+            record.isSuccess
+              ? record.data.oneOnOneRecordingRefusedBy
+              : undefined
           }
         />
       )}

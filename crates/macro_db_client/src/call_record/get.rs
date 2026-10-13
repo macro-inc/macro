@@ -49,8 +49,8 @@ pub struct CallRecordSearchPayload {
 }
 
 /// `status_filter` optionally narrows visible calls by viewer-relative status.
-/// Standalone calls are discoverable only through the caller's individual grant;
-/// team/channel grants and shared links do not add them to team memory.
+/// Standalone calls are discoverable only through the caller's own grant or
+/// their team's; channel grants and shared links never reach them.
 #[tracing::instrument(skip(db, status_filter))]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -93,7 +93,7 @@ pub async fn get_accessible_call_ids(
                     WHERE ea.entity_id = cr.id
                       AND ea.entity_type = 'call'
                       AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-                      AND (cr.channel_id IS NOT NULL OR (ea.source_type = 'user' AND ea.source_id = $1))
+                      AND (cr.channel_id IS NOT NULL OR ea.source_type IN ('user', 'team'))
                 ) OR EXISTS (
                     SELECT 1 FROM "SharePermission" sp
                     WHERE sp.id = cr.share_permission_id

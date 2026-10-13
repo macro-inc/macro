@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calls SET share_with_team = $3, share_with_invitees = $4\n            WHERE id = $1\n                AND channel_id IS NULL\n                AND CASE $2::text\n                    WHEN 'external' THEN has_external_participants\n                    WHEN 'internal'\n                        THEN has_more_than_two_participants AND NOT has_external_participants\n                    ELSE NOT has_more_than_two_participants AND NOT has_external_participants\n                END\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d0b101d76651538273be3198fe2f44c6d2a2df3e1e4c106d6e46646bc3c95500"
+}

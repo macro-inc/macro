@@ -2527,6 +2527,171 @@
         }
       }
     },
+    "/call/settings": {
+      "get": {
+        "tags": ["call::inbound::axum_router::call_settings"],
+        "summary": "Read the caller's call settings and their team's call policy.",
+        "operationId": "get_call_settings",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["call::inbound::axum_router::call_settings"],
+        "summary": "Change the caller's own call settings.",
+        "operationId": "update_call_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCallSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call/settings/team": {
+      "patch": {
+        "tags": ["call::inbound::axum_router::call_settings"],
+        "summary": "Change what no one on the caller's team may record or share. Team admins\nand owners only.",
+        "operationId": "update_team_call_policy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamCallPolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/webhook": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -20094,6 +20259,56 @@
           }
         }
       },
+      "CallKinds": {
+        "type": "object",
+        "description": "One flag per [`CallKind`].",
+        "required": [
+          "huddles",
+          "oneOnOnes",
+          "internalMeetings",
+          "externalMeetings"
+        ],
+        "properties": {
+          "externalMeetings": {
+            "type": "boolean",
+            "description": "Standalone calls that someone outside the host's team joined."
+          },
+          "huddles": {
+            "type": "boolean",
+            "description": "Calls started from a channel other than a two-person direct message."
+          },
+          "internalMeetings": {
+            "type": "boolean",
+            "description": "Standalone calls with three or more people, all teammates."
+          },
+          "oneOnOnes": {
+            "type": "boolean",
+            "description": "Huddles in a two-person direct message, and standalone calls with only\ntwo people, both teammates."
+          }
+        }
+      },
+      "CallKindsPatch": {
+        "type": "object",
+        "description": "A partial update to [`CallKinds`]. Omitted kinds keep their current value,\nso two people changing different kinds at once do not undo each other.",
+        "properties": {
+          "externalMeetings": {
+            "type": ["boolean", "null"],
+            "description": "New value for standalone calls with people from outside the team."
+          },
+          "huddles": {
+            "type": ["boolean", "null"],
+            "description": "New value for huddles."
+          },
+          "internalMeetings": {
+            "type": ["boolean", "null"],
+            "description": "New value for standalone calls with three or more people, all teammates."
+          },
+          "oneOnOnes": {
+            "type": ["boolean", "null"],
+            "description": "New value for one-on-ones."
+          }
+        }
+      },
       "CallRecord": {
         "type": "object",
         "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
@@ -20103,6 +20318,7 @@
           "createdBy",
           "startedAt",
           "shareWithTeam",
+          "oneOnOneRecordingRefusedBy",
           "isActive",
           "participants",
           "guests",
@@ -20155,6 +20371,13 @@
           "isActive": {
             "type": "boolean",
             "description": "Whether the call is currently active (from `calls` table)."
+          },
+          "oneOnOneRecordingRefusedBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "People in this live one-on-one who refuse being recorded or\ntranscribed in one-on-ones, which is why it is not recording. Empty\notherwise, and always empty once the call has ended."
           },
           "participants": {
             "type": "array",
@@ -20409,6 +20632,40 @@
             "type": "string",
             "format": "uuid",
             "description": "Stable DB-row id for the segment."
+          }
+        }
+      },
+      "CallSettings": {
+        "type": "object",
+        "description": "The caller's call settings.",
+        "required": [
+          "recordByDefault",
+          "shareByDefault",
+          "refuseOneOnOneRecording"
+        ],
+        "properties": {
+          "recordByDefault": {
+            "$ref": "#/components/schemas/CallKinds",
+            "description": "Kinds of call the caller's own calls record by default."
+          },
+          "refuseOneOnOneRecording": {
+            "type": "boolean",
+            "description": "The caller does not allow being recorded or transcribed in\none-on-ones, whoever hosts them."
+          },
+          "shareByDefault": {
+            "$ref": "#/components/schemas/ShareByDefault",
+            "description": "Who each kind of call the caller hosts is shared with once it ends."
+          },
+          "team": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TeamCallPolicy",
+                "description": "The caller's team policy; absent when the caller is not on a team."
+              }
+            ]
           }
         }
       },
@@ -35199,6 +35456,89 @@
         "type": "string",
         "description": "SHA-256 encoded as exactly 64 lowercase hexadecimal characters."
       },
+      "ShareAudience": {
+        "type": "string",
+        "description": "Who can open a call's recording, transcript and notes once it ends, besides\nits host.",
+        "enum": ["participants", "channel", "invited", "team"]
+      },
+      "ShareByDefault": {
+        "type": "object",
+        "description": "Who each kind of call a person hosts is shared with once it ends.",
+        "required": [
+          "huddles",
+          "oneOnOnes",
+          "internalMeetings",
+          "externalMeetings"
+        ],
+        "properties": {
+          "externalMeetings": {
+            "$ref": "#/components/schemas/ShareAudience",
+            "description": "External meetings: participants, invitees or the whole team."
+          },
+          "huddles": {
+            "$ref": "#/components/schemas/ShareAudience",
+            "description": "Huddles: their channel or the whole team."
+          },
+          "internalMeetings": {
+            "$ref": "#/components/schemas/ShareAudience",
+            "description": "Internal meetings: participants, invitees or the whole team."
+          },
+          "oneOnOnes": {
+            "$ref": "#/components/schemas/ShareAudience",
+            "description": "One-on-ones: the two people in them or the whole team."
+          }
+        }
+      },
+      "ShareByDefaultPatch": {
+        "type": "object",
+        "description": "A partial update to [`ShareByDefault`]. Omitted kinds keep their audience.",
+        "properties": {
+          "externalMeetings": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ShareAudience",
+                "description": "New audience for external meetings: `participants`, `invited` or `team`."
+              }
+            ]
+          },
+          "huddles": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ShareAudience",
+                "description": "New audience for huddles: `channel` or `team`."
+              }
+            ]
+          },
+          "internalMeetings": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ShareAudience",
+                "description": "New audience for internal meetings: `participants`, `invited` or `team`."
+              }
+            ]
+          },
+          "oneOnOnes": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ShareAudience",
+                "description": "New audience for one-on-ones: `participants` or `team`."
+              }
+            ]
+          }
+        }
+      },
       "SharePermissionV2": {
         "type": "object",
         "required": ["id", "owner"],
@@ -38424,6 +38764,25 @@
         "description": "What a user exposes through their team membership.",
         "enum": ["all", "busy_only", "none"]
       },
+      "TeamCallPolicy": {
+        "type": "object",
+        "description": "What a team's admins forbid for everyone on the team.",
+        "required": ["recordingBlocked", "huddleSharingBlocked", "canEdit"],
+        "properties": {
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the caller may change the blocks (team admins and owners)."
+          },
+          "huddleSharingBlocked": {
+            "type": "boolean",
+            "description": "No call started from a channel, direct messages included, may be\nshared with the team."
+          },
+          "recordingBlocked": {
+            "$ref": "#/components/schemas/CallKinds",
+            "description": "Kinds of call no one on the team may record."
+          }
+        }
+      },
       "TeamOutOfOfficeItem": {
         "type": "object",
         "description": "One teammate's out-of-office occurrence.",
@@ -39244,6 +39603,24 @@
           }
         }
       },
+      "UpdateCallSettingsRequest": {
+        "type": "object",
+        "description": "Body of `PATCH /call/settings`. Omitted fields keep their current value.",
+        "properties": {
+          "recordByDefault": {
+            "$ref": "#/components/schemas/CallKindsPatch",
+            "description": "Changes to the kinds of call the caller records by default."
+          },
+          "refuseOneOnOneRecording": {
+            "type": ["boolean", "null"],
+            "description": "New value for refusing to be recorded or transcribed in one-on-ones."
+          },
+          "shareByDefault": {
+            "$ref": "#/components/schemas/ShareByDefaultPatch",
+            "description": "Changes to who each kind of call the caller hosts is shared with."
+          }
+        }
+      },
       "UpdateChannelSharePermission": {
         "type": "object",
         "required": ["operation", "channelId"],
@@ -39452,6 +39829,20 @@
                 "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
               }
             ]
+          }
+        }
+      },
+      "UpdateTeamCallPolicyRequest": {
+        "type": "object",
+        "description": "Body of `PATCH /call/settings/team`. Omitted fields keep their current\nvalue.",
+        "properties": {
+          "huddleSharingBlocked": {
+            "type": ["boolean", "null"],
+            "description": "New value for forbidding sharing huddles with the team."
+          },
+          "recordingBlocked": {
+            "$ref": "#/components/schemas/CallKindsPatch",
+            "description": "Changes to the kinds of call no one on the team may record."
           }
         }
       },

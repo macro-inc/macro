@@ -22,6 +22,25 @@ describe('individual settings search', () => {
       target: 'bookings',
     });
   });
+  it('finds call recording controls on the Calls page', () => {
+    expect(search('block recording')[0]).toMatchObject({
+      tab: 'Calls',
+      target: 'team-policy',
+    });
+    expect(search('opt out transcribe')[0]).toMatchObject({
+      tab: 'Calls',
+      target: '1-1-privacy',
+    });
+    expect(search('share huddles')[0]).toMatchObject({
+      tab: 'Calls',
+      target: 'share-by-default',
+    });
+    expect(search('record huddles')[0]).toMatchObject({
+      tab: 'Calls',
+      target: 'record-by-default',
+    });
+    expect(search('one-on-one')[0]).toMatchObject({ tab: 'Calls' });
+  });
   it('finds and targets a signature without knowing its page', () => {
     expect(search('signatre')[0]).toMatchObject({
       tab: 'Email',

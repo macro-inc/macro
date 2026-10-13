@@ -7,6 +7,7 @@ import { References } from '@core/component/References';
 import { useUserId } from '@core/context/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import {
+  hasCallTeamShareControl,
   isCallSharedWithTeam,
   useSetCallRecordTeamShareMutation,
   useToggleShareWithTeamMutation,
@@ -38,7 +39,7 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
           <PropertiesSectionContent record={props.record} />
         </Suspense>
       </SidePanel.Section>
-      <Show when={props.record.channelId != null}>
+      <Show when={hasCallTeamShareControl(props.record)}>
         <SidePanel.Section id="sharing" title="Sharing" order={20}>
           <SharingSectionContent record={props.record} />
         </SidePanel.Section>
@@ -116,7 +117,7 @@ function SharingSectionContent(props: { record: CallRecord }) {
 
   const handleChange = async (checked: boolean) => {
     const current = record();
-    if (!current.channelId) return;
+    if (!hasCallTeamShareControl(current)) return;
     try {
       const newValue = current.isActive
         ? await toggleLiveShare.mutateAsync(current.callId)

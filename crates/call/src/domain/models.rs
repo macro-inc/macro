@@ -515,6 +515,10 @@ pub struct CallRecord {
     /// live this is the pending toggle applied at archive; afterwards it
     /// mirrors `team_share_access_level`.
     pub share_with_team: bool,
+    /// People in this live one-on-one who refuse being recorded or
+    /// transcribed in one-on-ones, which is why it is not recording. Empty
+    /// otherwise, and always empty once the call has ended.
+    pub one_on_one_recording_refused_by: Vec<String>,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
     /// Viewer-relative call status when fetched in the context of a specific user.
@@ -692,11 +696,4 @@ impl From<TeamSharePolicyError> for CallError {
             | TeamSharePolicyError::ContradictoryInputs => Self::InvalidRequest(error.to_string()),
         }
     }
-}
-
-/// Team memory may only include calls associated with a channel.
-/// Standalone invitations and their records always keep team sharing disabled.
-#[cfg(feature = "ports")]
-pub(crate) fn permitted_team_memory_intent(channel_id: Option<Uuid>, enabled: bool) -> bool {
-    channel_id.is_some() && enabled
 }

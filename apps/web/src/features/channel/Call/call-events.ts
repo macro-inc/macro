@@ -39,6 +39,12 @@ type CallShareWithTeamToggledWirePayload = {
   toggled_by?: string | null;
 };
 
+type CallRecordingRefusalsChangedWirePayload = {
+  channel_id?: string | null;
+  call_id?: string;
+  refused_by?: unknown;
+};
+
 /** A call was started in a channel the user is a member of. */
 export type CallStartedEvent = {
   channelId: string;
@@ -81,6 +87,15 @@ export type CallShareWithTeamToggledEvent = {
   toggledBy: string | null;
 };
 
+/**
+ * Who in a live one-on-one refuses being recorded or transcribed changed;
+ * empty once nobody's refusal applies.
+ */
+export type CallRecordingRefusalsChangedEvent = {
+  callId: string;
+  refusedBy: string[];
+};
+
 export type CallEvent =
   | ({ type: 'call_started' } & CallStartedEvent)
   | ({ type: 'call_ended' } & CallEndedEvent)
@@ -88,7 +103,10 @@ export type CallEvent =
   | ({ type: 'call_declined' } & CallDeclinedEvent)
   | ({
       type: 'call_share_with_team_toggled';
-    } & CallShareWithTeamToggledEvent);
+    } & CallShareWithTeamToggledEvent)
+  | ({
+      type: 'call_recording_refusals_changed';
+    } & CallRecordingRefusalsChangedEvent);
 
 export type CallEventType = CallEvent['type'];
 
@@ -98,6 +116,7 @@ const CALL_EVENT_TYPES = new Set<string>([
   'call_answered',
   'call_declined',
   'call_share_with_team_toggled',
+  'call_recording_refusals_changed',
 ]);
 
 export function isCallEventType(type: string): type is CallEventType {
@@ -187,6 +206,18 @@ export function parseCallEvent(
         toggledBy: toggledBy ?? null,
       };
     })
+    .with('call_recording_refusals_changed', (eventType) => {
+      const { call_id: callId, refused_by: refusedBy } =
+        payload as CallRecordingRefusalsChangedWirePayload;
+      if (
+        !callId ||
+        !Array.isArray(refusedBy) ||
+        !refusedBy.every((userId) => typeof userId === 'string')
+      ) {
+        return null;
+      }
+      return { type: eventType, callId, refusedBy };
+    })
     .exhaustive();
 }
 
@@ -201,6 +232,9 @@ type CallEventHandlers = {
   onCallAnswered?: (event: CallAnsweredEvent) => void;
   onCallDeclined?: (event: CallDeclinedEvent) => void;
   onShareWithTeamToggled?: (event: CallShareWithTeamToggledEvent) => void;
+  onRecordingRefusalsChanged?: (
+    event: CallRecordingRefusalsChangedEvent
+  ) => void;
 };
 
 /**
@@ -261,6 +295,12 @@ export function createCallEventsEffect(handlers: CallEventHandlers) {
           callId: event.callId,
           shareWithTeam: event.shareWithTeam,
           toggledBy: event.toggledBy,
+        });
+      })
+      .with({ type: 'call_recording_refusals_changed' }, (event) => {
+        handlers.onRecordingRefusalsChanged?.({
+          callId: event.callId,
+          refusedBy: event.refusedBy,
         });
       })
       .exhaustive();
