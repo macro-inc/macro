@@ -286,7 +286,11 @@ zip = { workspace = true }
 cool_asserts = "2"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 ordered-float = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["connection_gateway_client"]

@@ -210,11 +210,13 @@ deny = [
     "coding_agent_worker",       # Standalone daemon logging setup
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only
+    "document_storage_service",  # GraphQL telemetry span and log tests only (dev-dependency)
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "genai_telemetry",           # GenAI span tests
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "loom",                      # External concurrency testing dependency
+    "macro_authorization",       # Auth log-level tests only (dev-dependency)
     "macro_entrypoint",
     "macro_authorization",      # Credential-redaction span tests only
     "macro_tower_layers",        # OpenTelemetry layer tests
