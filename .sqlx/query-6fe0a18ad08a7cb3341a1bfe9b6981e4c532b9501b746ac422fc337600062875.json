@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT stream_key FROM active_streams WHERE entity_id = $1 AND (closed_at IS NULL OR closed_at > now() - make_interval(secs => $2))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stream_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6fe0a18ad08a7cb3341a1bfe9b6981e4c532b9501b746ac422fc337600062875"
+}

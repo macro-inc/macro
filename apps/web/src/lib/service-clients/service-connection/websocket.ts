@@ -4,6 +4,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import {
   ArrayQueue,
+  createReconnectEffect,
   createSocketEffect,
   JsonSerializer,
   LinearBackoff,
@@ -94,4 +95,9 @@ export function createConnectionWebsocketEffect(
   callback: (data: FromWebsocketMessage) => void
 ) {
   createSocketEffect(ws, callback);
+}
+
+/** Run `callback` each time the gateway socket reconnects after a drop. */
+export function createConnectionReconnectEffect(callback: () => void) {
+  createReconnectEffect(ws, callback);
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE active_streams SET closed_at = now() WHERE entity_id = $1 AND stream_key = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa301945d8c0a5d4e4ad5c9630208d8ec1676b636a7b8414acb4e35b7840ad6c"
+}
