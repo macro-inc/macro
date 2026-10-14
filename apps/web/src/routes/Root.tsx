@@ -43,6 +43,7 @@ import {
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -73,6 +74,7 @@ function useSyncLoginCookie() {
     const { value, ...options } = getLoginCookieOptions(authenticated);
     updateCookie('login', value, options);
     syncLoginStorage(authenticated);
+    setGraphqlSoupSessionActive(authenticated);
   });
 }
 

@@ -66,11 +66,16 @@ export function buildGraphqlSoupWebSocketUrl(
 type GraphqlSoupWebSocketAuth = {
   dssHost: string;
   bearerTokenAuth: boolean;
-  getApiToken: () => Promise<string>;
-  refreshCookieAuth: () => Promise<void>;
+  getApiToken: () => Promise<string | undefined>;
+  refreshCookieAuth: () => Promise<unknown>;
 };
 
-/** Creates the reconnect-safe URL resolver used by graphql-ws. */
+/**
+ * Creates the reconnect-safe URL resolver used by graphql-ws. It never
+ * rejects: graphql-ws leaves its connection pending forever when `url`
+ * throws, so no retry, error, or toast ever follows. A failed auth refresh
+ * still connects and lets the server's 401 drive the retry policy.
+ */
 export function createGraphqlSoupWebSocketUrlResolver({
   dssHost,
   bearerTokenAuth,
@@ -79,13 +84,12 @@ export function createGraphqlSoupWebSocketUrlResolver({
 }: GraphqlSoupWebSocketAuth): () => Promise<string> {
   return async () => {
     if (bearerTokenAuth) {
-      const apiToken = await getApiToken();
-      if (!apiToken) throw new Error('No Macro API token');
+      const apiToken = await getApiToken().catch(() => undefined);
       return buildGraphqlSoupWebSocketUrl(dssHost, apiToken);
     }
 
     // Browsers authenticate the websocket upgrade with the refreshed cookie.
-    await refreshCookieAuth();
+    await refreshCookieAuth().catch(() => undefined);
     return buildGraphqlSoupWebSocketUrl(dssHost);
   };
 }

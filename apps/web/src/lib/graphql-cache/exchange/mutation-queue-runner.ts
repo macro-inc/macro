@@ -64,6 +64,9 @@ const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
 export const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 export const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+// A deferred admission usually waits on user info, which lands within a
+// second or two of the cache client at startup.
+const DEFERRED_ADMISSION_RETRY_MS = 1_000;
 const MAX_MUTATION_SERVER_FAILURES = 10;
 const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
 
@@ -341,6 +344,7 @@ export function createMutationQueueRunner(
   let head: HeadState = IDLE;
   // Pump state: wakeups and the retry hint are independent of the head.
   let queuePreparation: Promise<void> | undefined;
+  const reportedRecoveryFailures = new Set<string>();
   let drainRunning = false;
   let drainRequested = false;
   let deferredUntil: number | undefined;
@@ -421,12 +425,16 @@ export function createMutationQueueRunner(
     if (!transition(attempt, PREPARING)) return;
     try {
       if (options.prepareMutationQueue) await prepareQueueRecovery();
-      if (
-        options.beforeMutationAttempt &&
-        !(await boundedMutationLifecycle(() =>
-          options.beforeMutationAttempt!(claimed)
-        ))
-      ) {
+      const admission = options.beforeMutationAttempt
+        ? await boundedMutationLifecycle(() =>
+            options.beforeMutationAttempt!(claimed)
+          )
+        : true;
+      if (admission === 'defer') {
+        await deferAdmission(claimed, attempt);
+        return;
+      }
+      if (!admission) {
         // preparing → settling → idle: discard obsolete local intent.
         if (!transition(attempt, SETTLING)) return;
         await host.rollbackOptimisticWrite(
@@ -528,6 +536,29 @@ export function createMutationQueueRunner(
     resolveLiveOperationsAsQueued();
   }
 
+  /** preparing → settling → idle, keeping a head its admission cannot judge yet. */
+  async function deferAdmission(
+    claimed: ClaimedMutation,
+    attempt: QueueAttemptContext
+  ): Promise<void> {
+    try {
+      if (!transition(attempt, SETTLING)) return;
+      await host.deferOptimisticWrite(
+        claimed.transactionId,
+        claimOf(attempt),
+        Date.now() + DEFERRED_ADMISSION_RETRY_MS,
+        'Admission deferred'
+      );
+    } catch {
+      // The lease expires and the head is claimed again; nothing is lost.
+    } finally {
+      if (transition(attempt, IDLE)) {
+        resolveLiveOperationsAsQueued();
+        scheduleDrain(DEFERRED_ADMISSION_RETRY_MS);
+      }
+    }
+  }
+
   /** preparing → settling → idle for a head whose recovery state failed. */
   async function failPreparation(
     claimed: ClaimedMutation,
@@ -590,6 +621,12 @@ export function createMutationQueueRunner(
   }
 
   async function drainQueue(): Promise<void> {
+    // A retired host stays disabled for good: stop polling instead of failing
+    // every 30 seconds against the no-op host.
+    if (host.disabled) {
+      resolveLiveOperationsAsQueued();
+      return;
+    }
     if (isActive(head)) {
       // Every newly enqueued operation is behind the claimed head. Its
       // caller can stop waiting; durable replay now owns the mutation.
@@ -646,12 +683,19 @@ export function createMutationQueueRunner(
 
   async function prepareQueueRecovery(): Promise<void> {
     try {
-      queuePreparation ??= boundedMutationLifecycle(() =>
-        options.prepareMutationQueue!()
-      );
+      queuePreparation ??= (async () => {
+        const prepared = await boundedMutationLifecycle(() =>
+          options.prepareMutationQueue!()
+        );
+        if (prepared === false) queuePreparation = undefined;
+      })();
       await queuePreparation;
     } catch (error) {
       queuePreparation = undefined;
+      // A stuck tab retries every poll; one warning per cause is enough.
+      const cause = error instanceof Error ? error.message : String(error);
+      if (reportedRecoveryFailures.has(cause)) return;
+      reportedRecoveryFailures.add(cause);
       console.warn(
         '[graphql-cache] Unable to prepare mutation recovery',
         error

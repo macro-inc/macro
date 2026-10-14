@@ -141,6 +141,7 @@ const mocks = vi.hoisted(() => {
   let enabled = true;
   let graphqlEnabled = true;
   let tauri = false;
+  let signedIn = true;
   let releaseApi: (() => void) | undefined;
   let markApiStarted: (() => void) | undefined;
   const apiStarted = () =>
@@ -198,6 +199,12 @@ const mocks = vi.hoisted(() => {
     },
     set tauri(value: boolean) {
       tauri = value;
+    },
+    get signedIn() {
+      return signedIn;
+    },
+    set signedIn(value: boolean) {
+      signedIn = value;
     },
     host,
     apiCall,
@@ -258,6 +265,9 @@ vi.mock('@core/constant/featureFlags', () => ({
 }));
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },
+}));
+vi.mock('@core/util/cookies', () => ({
+  hasLoginCookie: () => mocks.signedIn,
 }));
 vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
@@ -606,6 +616,7 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.enabled = true;
     mocks.graphqlEnabled = true;
     mocks.tauri = false;
+    mocks.signedIn = true;
     mocks.resetQueue();
     mocks.platformFetch.mockReset();
     mocks.telemetryError.mockReset();
@@ -720,6 +731,76 @@ describe('GraphQL Soup browser cache session gate', () => {
       mocks.realtimeClient
     );
   });
+
+  it.each([true, false])(
+    'builds neither the cache nor live updates while signed out (cache rollout: %s)',
+    async (cacheEnabled) => {
+      mocks.enabled = cacheEnabled;
+      mocks.signedIn = false;
+      const soup = await import('./graphql-soup');
+
+      expect(soup.getGraphqlSoupClient()).toBe(mocks.plainClient);
+      expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+      expect(soup.graphqlCacheEnabled()).toBe(false);
+      expect(mocks.createWorkerCacheHost).not.toHaveBeenCalled();
+      expect(mocks.replaceSubscriptions).not.toHaveBeenCalled();
+
+      soup.setGraphqlSoupSessionActive(true);
+      expect(soup.getGraphqlSoupClient()).not.toBe(mocks.plainClient);
+      expect(mocks.replaceSubscriptions).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('moves readers that sampled the signed-out host onto the cache at sign-in', async () => {
+    mocks.signedIn = false;
+    const soup = await import('./graphql-soup');
+    const { createMemo, createRoot } = await import('solid-js');
+    const readers = createRoot((dispose) => ({
+      dispose,
+      host: createMemo(() => soup.getGraphqlCacheHost()),
+      gatedHost: createMemo(() =>
+        soup.graphqlCacheEnabled() ? !!soup.getGraphqlCacheHost() : false
+      ),
+    }));
+    expect(readers.host()).toBeUndefined();
+    expect(readers.gatedHost()).toBe(false);
+
+    soup.setGraphqlSoupSessionActive(true);
+
+    expect(readers.host()).toBeDefined();
+    expect(readers.gatedHost()).toBe(true);
+    expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+    readers.dispose();
+  });
+
+  it.each([true, false])(
+    'tears down the session clients when the session ends (cache rollout: %s)',
+    async (cacheEnabled) => {
+      mocks.enabled = cacheEnabled;
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const { createMemo, createRoot } = await import('solid-js');
+      const readers = createRoot((dispose) => ({
+        dispose,
+        enabled: createMemo(() => soup.graphqlCacheEnabled()),
+        host: createMemo(() => soup.getGraphqlSoupCacheHost()),
+      }));
+      expect(readers.enabled()).toBe(cacheEnabled);
+
+      soup.setGraphqlSoupSessionActive(false);
+
+      expect(mocks.cleanupOrder()).toEqual(
+        cacheEnabled ? ['subscriptions', 'host'] : ['subscriptions']
+      );
+      expect(readers.enabled()).toBe(false);
+      expect(readers.host()).toBeUndefined();
+      expect(soup.getGraphqlSoupClient()).toBe(mocks.plainClient);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(
+        cacheEnabled ? 1 : 0
+      );
+      readers.dispose();
+    }
+  );
 
   it('latches an activated client through a flag change until navigation', async () => {
     const apiStarted = mocks.apiStarted();

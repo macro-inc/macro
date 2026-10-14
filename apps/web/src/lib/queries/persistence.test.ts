@@ -1,4 +1,4 @@
-import { partialMatchKey } from '@tanstack/query-core';
+import { partialMatchKey, QueryObserver } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
@@ -650,6 +650,39 @@ describe('account persistence reset', () => {
     await restore;
     expect(queryClient.getQueryData(entry.queryKey)).toEqual({ owner: 'bob' });
     expect(store.entries.has('["private","unhydrated"]')).toBe(false);
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it('keeps mounted observers bound to their queries across a reset', async () => {
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], createMockStore())],
+    });
+    const queryKey = ['session', 'user'];
+    queryClient.setQueryData(queryKey, { owner: 'alice' });
+    queryClient.setQueryData(['session', 'unobserved'], { owner: 'alice' });
+    const observer = new QueryObserver(queryClient, {
+      queryKey,
+      queryFn: () => new Promise<never>(() => {}),
+      enabled: false,
+    });
+    const results: unknown[] = [];
+    const unsubscribe = observer.subscribe((result) => {
+      results.push(result.data);
+    });
+
+    await persistence.clear();
+    expect(observer.getCurrentResult().data).toBeUndefined();
+    expect(
+      queryClient.getQueryCache().find({ queryKey: ['session', 'unobserved'] })
+    ).toBeUndefined();
+
+    queryClient.setQueryData(queryKey, { owner: 'bob' });
+    expect(observer.getCurrentResult().data).toEqual({ owner: 'bob' });
+    expect(results.at(-1)).toEqual({ owner: 'bob' });
+    unsubscribe();
     persistence.dispose();
     queryClient.clear();
   });

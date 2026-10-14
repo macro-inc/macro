@@ -1,3 +1,4 @@
+import { createClient as createGraphqlWsClient } from 'graphql-ws';
 import { describe, expect, it, vi } from 'vitest';
 
 const toastFailure = vi.hoisted(() => vi.fn());
@@ -64,6 +65,77 @@ describe('GraphQL Soup websocket auth', () => {
     await expect(resolveUrl()).resolves.toContain('macro-api-token=first');
     await expect(resolveUrl()).resolves.toContain('macro-api-token=second');
     expect(refreshCookieAuth).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { bearerTokenAuth: false, failure: 'cookie refresh' },
+    { bearerTokenAuth: true, failure: 'API token request' },
+  ])(
+    'still resolves a URL when the $failure fails',
+    async ({ bearerTokenAuth }) => {
+      const resolveUrl = createGraphqlSoupWebSocketUrlResolver({
+        dssHost: 'https://gateway.macro.com/dss',
+        bearerTokenAuth,
+        getApiToken: vi.fn().mockRejectedValue(new Error('no session')),
+        refreshCookieAuth: vi.fn().mockRejectedValue(new Error('no session')),
+      });
+
+      await expect(resolveUrl()).resolves.toBe(
+        'wss://gateway.macro.com/dss/items/soup/graphql/ws'
+      );
+    }
+  );
+
+  it('lets a rejected upgrade retry and then error after a failed refresh', async () => {
+    const urls: string[] = [];
+    // A browser reports an upgrade the server answered with 401 as an error
+    // event followed by an abnormal close.
+    class RejectedUpgradeSocket {
+      static readonly CONNECTING = 0;
+      static readonly OPEN = 1;
+      static readonly CLOSING = 2;
+      static readonly CLOSED = 3;
+      readyState = RejectedUpgradeSocket.CONNECTING;
+      onerror: ((event: Event) => void) | null = null;
+      onclose: ((event: unknown) => void) | null = null;
+      onopen: (() => void) | null = null;
+      onmessage: (() => void) | null = null;
+      constructor(url: string) {
+        urls.push(url);
+        setTimeout(() => {
+          this.readyState = RejectedUpgradeSocket.CLOSED;
+          this.onerror?.(new Event('error'));
+          this.onclose?.({ code: 1006, reason: '', wasClean: false });
+        });
+      }
+      send() {}
+      close() {}
+    }
+    const resolveUrl = createGraphqlSoupWebSocketUrlResolver({
+      dssHost: 'https://gateway.macro.com/dss',
+      bearerTokenAuth: false,
+      getApiToken: vi.fn(),
+      refreshCookieAuth: vi.fn().mockRejectedValue(new Error('refresh 400')),
+    });
+    const client = createGraphqlWsClient({
+      url: resolveUrl,
+      webSocketImpl: RejectedUpgradeSocket,
+      retryAttempts: 2,
+      retryWait: async () => {},
+      shouldRetry: shouldRetryGraphqlSoupWebSocket,
+    });
+    const error = Promise.withResolvers<unknown>();
+
+    client.subscribe(
+      { query: 'subscription { soupUpdates { __typename } }' },
+      { next: () => {}, error: error.resolve, complete: () => {} }
+    );
+
+    await expect(error.promise).resolves.toBeInstanceOf(Event);
+    expect(urls).toEqual(
+      Array(3).fill('wss://gateway.macro.com/dss/items/soup/graphql/ws')
+    );
+    await client.dispose();
   });
 });
 

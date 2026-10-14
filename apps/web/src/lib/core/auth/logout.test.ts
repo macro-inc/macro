@@ -36,6 +36,9 @@ vi.mock('@core/util/cookies', () => ({ syncLoginStorage: vi.fn() }));
 vi.mock('@graphql-cache/lifecycle', () => ({
   clearRegisteredCaches: vi.fn(async () => {}),
 }));
+vi.mock('@service-storage/graphql-soup', () => ({
+  setGraphqlSoupSessionActive: vi.fn(),
+}));
 vi.mock('@queries/auth/user-info', () => ({
   authKeys: {
     userInfo: { queryKey: ['auth', 'user-info'] },
@@ -53,14 +56,33 @@ vi.mock('./push-registration-lifecycle', () => ({
 }));
 
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import {
   clearLocalDrafts,
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
 import { authServiceClient } from '@service-auth/client';
+import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { confirmDialog } from '@ui';
 import { clearLocalAuthSession, useLogout } from './logout';
+
+describe('logout GraphQL session teardown', () => {
+  it('ends the GraphQL session only after the cache wipe', async () => {
+    client.current = new QueryClient();
+    const order: string[] = [];
+    vi.mocked(clearRegisteredCaches).mockImplementationOnce(async () => {
+      order.push('wipe');
+    });
+    vi.mocked(setGraphqlSoupSessionActive).mockImplementationOnce(() => {
+      order.push('teardown');
+    });
+    await clearLocalAuthSession();
+    expect(order).toEqual(['wipe', 'teardown']);
+    expect(setGraphqlSoupSessionActive).toHaveBeenCalledWith(false);
+    client.current.clear();
+  });
+});
 
 describe('logout notification cache isolation', () => {
   it('retires pending Done buckets and rotates the display-intent session', async () => {

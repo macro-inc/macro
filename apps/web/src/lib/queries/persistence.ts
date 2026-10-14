@@ -2,7 +2,12 @@ import {
   type ParsedDuration,
   parsedDurationToMilliseconds,
 } from '@core/util/dateSearch/dateParser';
-import type { Query, QueryClient, QueryKey } from '@tanstack/query-core';
+import {
+  notifyManager,
+  type Query,
+  type QueryClient,
+  type QueryKey,
+} from '@tanstack/query-core';
 import type {
   ClearablePerQueryPersistence,
   PersistedQueryEntry,
@@ -105,6 +110,22 @@ async function handleRestore(
   queryClient.setQueryData(query.queryKey, entry.data, {
     updatedAt: entry.dataUpdatedAt,
   });
+}
+
+/**
+ * Drops every query's data and cancels its fetch. A mounted observer stays
+ * bound to its query object, so a removed query would strand it showing the
+ * previous account's last result; observed queries reset in place instead.
+ */
+function clearQueryMemory(queryClient: QueryClient): void {
+  const queryCache = queryClient.getQueryCache();
+  notifyManager.batch(() => {
+    for (const query of queryCache.getAll()) {
+      if (query.getObserversCount() > 0) query.reset();
+      else queryCache.remove(query);
+    }
+  });
+  queryClient.getMutationCache().clear();
 }
 
 /**
@@ -219,7 +240,7 @@ export function setupQueryPersistence(
       clearing = true;
       restores = new WeakMap();
       // Clear memory synchronously; removed-query events cannot race the reset.
-      queryClient.clear();
+      clearQueryMemory(queryClient);
       try {
         const results = await Promise.allSettled(
           scopes.map((scope) => scope.store.clear())

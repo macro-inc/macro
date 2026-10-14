@@ -716,8 +716,17 @@ export function localDraftQueueLifecycle(
       throw new Error('Queued email draft disappeared before recovery');
     return await preserveLegacy(queued);
   }
+  const accountKnown = () => {
+    const user = queryClient.getQueryData<UserInfoData>(
+      authKeys.userInfo.queryKey
+    );
+    return !!user?.authenticated && !!user.id;
+  };
   return {
     async prepareMutationQueue() {
+      // Signed-out tabs have no drafts, and a signed-in tab's first drain
+      // can run before user info loads. Retry later instead of failing.
+      if (!accountKnown()) return false;
       try {
         initialized ??= prepare();
         await initialized;
@@ -727,6 +736,16 @@ export function localDraftQueueLifecycle(
       }
     },
     async beforeMutationAttempt(mutation) {
+      // Without the account, a draft cannot be checked against its working
+      // copy; rejecting it here would roll back the saved intent.
+      if (
+        !accountKnown() &&
+        (attemptOf(mutation) ||
+          legacy.has(mutation.transactionId) ||
+          mutation.operationName === 'SaveEmailDraft' ||
+          mutation.operationName === 'DeleteEmailDraft')
+      )
+        return 'defer';
       const attempt = await resolveAttempt(mutation);
       if (!attempt) return true;
       const owner = await session();

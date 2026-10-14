@@ -18,6 +18,7 @@ import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session'
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
+import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -61,6 +62,8 @@ export async function clearLocalAuthSession() {
   if (results.some((result) => result.status === 'rejected')) {
     await rotateCacheScope();
   }
+  // Only after the wipes: clearing the cache needs its registered host.
+  setGraphqlSoupSessionActive(false);
   resetGraphqlSoupDoneSession();
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   clearMcpAuthAttempts();
