@@ -5,21 +5,34 @@ import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { createMemo } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 import type { EmailFilterGroupId } from '../types';
-import { EMAIL_FILTER_GROUPS } from './email-facets';
+import { EMAIL_FILTER_GROUPS, EMAIL_FOCUS_FILTER_GROUP } from './email-facets';
 
 type EmailFilterGroup = ListFilterGroup<EmailFilterGroupId, string>;
 
-const STATIC_FILTER_GROUPS: EmailFilterGroup[] = EMAIL_FILTER_GROUPS.map(
-  (group) => ({
-    ...group,
-    options: group.options.map((option) => ({
-      ...option,
-      icon: option.iconType
-        ? () => <EntityIcon targetType={option.iconType} size="xs" />
-        : undefined,
-    })),
-  })
-);
+const withIcons = (
+  group: (typeof EMAIL_FILTER_GROUPS)[number]
+): EmailFilterGroup => ({
+  ...group,
+  options: group.options.map((option) => ({
+    ...option,
+    icon: option.iconType
+      ? () => <EntityIcon targetType={option.iconType} size="xs" />
+      : undefined,
+  })),
+});
+
+const STATIC_FILTER_GROUPS: EmailFilterGroup[] =
+  EMAIL_FILTER_GROUPS.map(withIcons);
+
+// Focus lists only threads still in the inbox, so Done has nothing to filter.
+// Status filters on the client, where opening a thread would mark it read and
+// drop it from an Unread list mid-read, so Focus leaves it out too.
+const FOCUS_FILTER_GROUPS: EmailFilterGroup[] = [
+  withIcons(EMAIL_FOCUS_FILTER_GROUP),
+  ...STATIC_FILTER_GROUPS.filter(
+    (group) => group.id !== 'done' && group.id !== 'read'
+  ),
+];
 
 /** Shared selection semantics for the desktop menu and mobile drawer. */
 export function useEmailFilters() {
@@ -27,7 +40,7 @@ export function useEmailFilters() {
   const tagGroup = useTagFilterGroup();
   // Tags come last: the static groups are short, the tag list grows with use.
   const groups = createMemo((): EmailFilterGroup[] => [
-    ...STATIC_FILTER_GROUPS,
+    ...(state.tab === 'focus' ? FOCUS_FILTER_GROUPS : STATIC_FILTER_GROUPS),
     ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
   ]);
   const groupFor = (groupId: EmailFilterGroupId) =>

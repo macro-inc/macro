@@ -4,6 +4,7 @@ import EmptyStateEmailGraphic from '@design/empty-state-email.svg';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
+import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -55,6 +56,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
     .with('archived', () => ({
       title: 'No archived email',
       description: 'Email you archive will appear here.',
+    }))
+    .with('focus', () => ({
+      title: 'Nothing needs you',
+      description: `Signal email worth your attention from the last ${FOCUS_WINDOW_DAYS} days appears here.`,
     }))
     .with('all', () => ({
       title: 'No email yet',
@@ -110,7 +115,11 @@ export function EmailEmptyState() {
             centered
             graphic={EmptyStateNoSearchMatchGraphic}
             title={`No results for "${search()}"`}
-            description="Search across subjects, senders, and message content. Try a different query."
+            description={
+              state.tab === 'focus'
+                ? 'Focus search covers subjects, senders, and previews. Try a different query.'
+                : 'Search across subjects, senders, and message content. Try a different query.'
+            }
             documentationUrl={`${DOCS_BASE}/product/search`}
           />
         )}

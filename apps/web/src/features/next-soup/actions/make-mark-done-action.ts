@@ -51,6 +51,8 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   // Calendar lists invite threads from the "all" email view, so done rows
   // stay in place and flip to the done state exactly like mail "All".
   'mail-calendar',
+  // Focus rows are signal threads; done archives them like Signal does.
+  'mail-focus',
   'mail-shared',
   'mail-archived',
 ];

@@ -36,6 +36,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   titleLeading?: JSX.Element;
   /** Caller-owned metadata ahead of the entity's own, in wide rows only. */
   meta?: JSX.Element;
+  /** Caller-owned metadata after the entity's own, in wide rows only. */
+  metaEnd?: JSX.Element;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -72,6 +74,7 @@ export interface LayoutProps {
   leadingAction?: JSX.Element;
   titleLeading?: JSX.Element;
   meta?: JSX.Element;
+  metaEnd?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;

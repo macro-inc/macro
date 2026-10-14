@@ -2,6 +2,8 @@
 mod email_pg_repo;
 #[cfg(feature = "http_client")]
 mod email_service_http;
+#[cfg(feature = "outbound")]
+mod focus_pg;
 #[cfg(feature = "gmail_token")]
 mod gmail_token_provider;
 #[cfg(feature = "outbound")]
@@ -13,6 +15,8 @@ mod s3_draft_attachment_storage;
 pub use email_pg_repo::EmailPgRepo;
 #[cfg(feature = "http_client")]
 pub use email_service_http::EmailServiceHttpClient;
+#[cfg(feature = "outbound")]
+pub use focus_pg::FocusPgRepository;
 #[cfg(feature = "gmail_token")]
 pub use gmail_token_provider::GmailTokenProviderImpl;
 #[cfg(feature = "s3")]

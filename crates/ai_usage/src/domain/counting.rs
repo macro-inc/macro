@@ -34,13 +34,15 @@ impl AiUsageEnforcement {
 
 /// Features whose provider costs are recorded but never consume allowances,
 /// prepaid credits, or overage. Dictation is the Whispr transcription feature;
-/// chat rename is the automatic title given to a new chat or agent session.
-pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 5] = [
+/// chat rename is the automatic title given to a new chat or agent session;
+/// email focus classifies incoming mail in the background.
+pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 6] = [
     AiFeature::Memory,
     AiFeature::AiProjection,
     AiFeature::CallSummary,
     AiFeature::Dictation,
     AiFeature::ChatRename,
+    AiFeature::EmailFocus,
 ];
 
 /// Whether a feature's usage is billable, independent of enforcement or identity.
@@ -51,7 +53,8 @@ pub const fn is_billable_feature(feature: AiFeature) -> bool {
         | AiFeature::AiProjection
         | AiFeature::CallSummary
         | AiFeature::Dictation
-        | AiFeature::ChatRename => false,
+        | AiFeature::ChatRename
+        | AiFeature::EmailFocus => false,
         AiFeature::Chat
         | AiFeature::Automation
         | AiFeature::DynamicCompletionsApi

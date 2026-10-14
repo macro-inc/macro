@@ -20,6 +20,7 @@ const current = (): EmailViewState => ({
   search: '',
   inboxIds: undefined,
   facets: {},
+  focusSort: 'importance',
   collapsedSidebarSectionIds: [],
 });
 
@@ -50,5 +51,32 @@ describe('createEmailViewPersistence', () => {
     }
 
     expect(state.tab).toBe('archived');
+  });
+
+  it('keeps the Focus tab and its sort per user', () => {
+    const handle: EntryPersistenceHandle = {
+      currentEntryState: () => ({}),
+      registerEntryStateCaptor: () => () => {},
+    };
+    const { storages } = createEmailViewPersistence({
+      handle,
+      userId: () => 'focus-sort-user',
+      restoreEntryState: false,
+      restorePreferences: false,
+    });
+    const list = Array.isArray(storages) ? storages : [storages];
+    for (const storage of list) {
+      storage.initialize?.(current(), current);
+      storage.write({ ...current(), tab: 'focus', focusSort: 'recent' });
+    }
+
+    let state = current();
+    for (const storage of list) {
+      const next = storage.restore(state);
+      if (next !== undefined) state = next;
+    }
+
+    expect(state.tab).toBe('focus');
+    expect(state.focusSort).toBe('recent');
   });
 });

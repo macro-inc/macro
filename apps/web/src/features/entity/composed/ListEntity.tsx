@@ -100,6 +100,7 @@ export function ListEntity(props: ListEntityProps) {
   const leadingAction = children(() => props.leadingAction);
   const titleLeading = children(() => props.titleLeading);
   const meta = children(() => props.meta);
+  const metaEnd = children(() => props.metaEnd);
   const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
@@ -160,6 +161,7 @@ export function ListEntity(props: ListEntityProps) {
     leadingAction: !isTouchDevice() ? leadingAction() : undefined,
     titleLeading: titleLeading(),
     meta: meta(),
+    metaEnd: metaEnd(),
     scheduleStatus: scheduleStatus(),
     authorDisplayName: props.authorDisplayName,
     checked: props.checked,
