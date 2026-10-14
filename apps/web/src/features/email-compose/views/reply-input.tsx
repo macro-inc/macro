@@ -14,11 +14,22 @@ import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import DotsThree from '@phosphor/dots-three.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import Trash from '@phosphor/trash.svg';
+import { useMergedFromOptions } from '@queries/email/link';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
-import { createResource, createSignal, For, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  on,
+  onMount,
+  Show,
+  untrack,
+} from 'solid-js';
 import { createAttachmentViewer } from '../components/attachment-viewer';
 import { DraftSyncStatus } from '../components/draft-sync-status';
 import { EmailDateSelector } from '../components/email-date-selector';
@@ -111,6 +122,30 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
   let composeContainerRef: HTMLDivElement | undefined;
   let bottomBarRef: HTMLDivElement | undefined;
   const [editor, setEditor] = createSignal<LexicalEditor>();
+
+  const mergedFromOptions = useMergedFromOptions();
+
+  const fromOptions = createMemo(() => {
+    const inboxes = composeContext.accounts.inboxes();
+    const merged = mergedFromOptions();
+    if (merged.length === 0) {
+      return inboxes.map((inbox) => ({
+        id: inbox.id,
+        email_address: inbox.email_address,
+        displayName: inbox.displayName,
+        photo_url: inbox.photo_url,
+        isAlias: false as const,
+        parentInboxId: undefined as string | undefined,
+        settings: inbox.settings,
+      }));
+    }
+    return merged;
+  });
+
+  // Auto-select the alias if the message being replied to was sent to one of
+  // our aliases. Track whether we've done the initial auto-selection.
+  const [aliasAutoSelected, setAliasAutoSelected] = createSignal(false);
+
   const state = createReplyComposer(
     {
       drafts: composeContext.drafts,
@@ -184,6 +219,49 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     sendActionDisabled,
     toggleQuotedText,
   } = state;
+
+  // Auto-select the alias if the message being replied to was sent to one of
+  // our aliases. This effect runs once when aliases are loaded and we haven't
+  // yet auto-selected.
+  createEffect(
+    on(
+      [fromOptions, () => props.replyingTo()],
+      ([options, replyingTo]) => {
+        if (aliasAutoSelected() || !replyingTo || options.length === 0) return;
+
+        // Get all the "To" addresses from the message being replied to (these
+        // are addresses the sender sent the email to, one of which might be our
+        // alias).
+        const toAddresses = [
+          ...(replyingTo.to ?? []).map((r) => r.email.toLowerCase()),
+          ...(replyingTo.cc ?? []).map((r) => r.email.toLowerCase()),
+        ];
+
+        // Find if any of our aliases match a "To" address
+        for (const option of options) {
+          if (!option.isAlias) continue;
+          if (toAddresses.includes(option.email_address.toLowerCase())) {
+            // Found a matching alias - auto-select it
+            setAliasAutoSelected(true);
+            untrack(() => {
+              if (option.parentInboxId) {
+                persistDraftOnSenderSwitch(
+                  option.parentInboxId,
+                  option.email_address
+                );
+              }
+            });
+            return;
+          }
+        }
+
+        // No alias match found, mark as attempted so we don't keep trying
+        setAliasAutoSelected(true);
+      },
+      { defer: true }
+    )
+  );
+
   const sendActionHidden = () =>
     composeContext.presentation.isTouch() &&
     !state.hasBodyText() &&
@@ -452,7 +530,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           fields={state.recipients}
           values={form.recipients}
           options={props.session.recipientOptions}
-          inboxes={composeContext.accounts.inboxes}
+          inboxes={fromOptions}
           activeInboxId={activeInboxId}
           senderEmail={activeInboxEmail}
           onSenderChange={persistDraftOnSenderSwitch}

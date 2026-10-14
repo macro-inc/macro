@@ -84,6 +84,8 @@ export type EmailViewContext = {
   setState: SetStoreFunction<EmailViewState>;
   setTab: (tab: EmailTab) => void;
   setInboxIds: (ids: string[] | undefined) => void;
+  /** Filter by a send-as alias email address, or clear the filter. */
+  setAliasFilter: (alias: string | undefined) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
   /**
    * Shows the given tags across the whole mailbox: a non-empty selection
@@ -350,6 +352,15 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const setInboxIds = (ids: string[] | undefined) => {
     closeThread();
     setState('inboxIds', normalizeInboxSelection(ids));
+    setState('aliasFilter', undefined);
+  };
+
+  const setAliasFilter = (alias: string | undefined) => {
+    closeThread();
+    setState('aliasFilter', alias);
+    if (alias) {
+      setState('inboxIds', undefined);
+    }
   };
 
   // This belongs to the view lifecycle, even while every inbox picker is unmounted.
@@ -406,6 +417,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setState,
     setTab,
     setInboxIds,
+    setAliasFilter,
     setFacets,
     showTags,
     filterByTag,

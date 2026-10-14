@@ -32,6 +32,7 @@ import type {
   ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
+  ListSendAsResponse,
   PatchSettingsRequest,
   PatchSettingsResponse,
   ResyncResponse,
@@ -403,6 +404,20 @@ export const emailClient = {
         };
       },
     });
+  },
+
+  /**
+   * List send-as aliases for one connected inbox. These are the email addresses
+   * the user can send mail as from this inbox, including aliases configured in
+   * Gmail settings.
+   */
+  async listSendAs(linkId?: string) {
+    return (
+      await emailFetch<ListSendAsResponse>('/email/settings/send-as', {
+        method: 'GET',
+        headers: emailLinkHeaders(linkId),
+      })
+    ).map((result) => result);
   },
 
   async deleteLink(args: { linkId: string }) {

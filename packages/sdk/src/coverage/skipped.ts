@@ -242,6 +242,7 @@ export const emailBacklog = [
   'getThreadCalendarInvitations',
   'listContacts',
   'listEmailFilters',
+  'listSendAs',
   'removeDraftAttachment',
   'removeForwardedAttachment',
   'upsertEmailFilter',

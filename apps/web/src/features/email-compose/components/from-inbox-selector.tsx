@@ -3,39 +3,39 @@ import { UserIcon } from '@core/component/UserIcon';
 import ChevronDown from '@phosphor/caret-down.svg';
 import Check from '@phosphor/check.svg';
 import { cn, Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
+import type { FromInboxOption } from '../primitives/compose-view-state';
 
-type FromInbox = {
-  id: string;
-  email_address: string;
-  displayName?: string;
-  photo_url?: string | null;
-};
-
-/** A single inbox: the account's user icon, name, and address. */
-function FromInboxOption(props: { inbox: FromInbox }) {
-  const name = () => props.inbox.displayName;
+/** A single inbox or alias: the account's user icon, name, and address. */
+function FromInboxOptionRow(props: {
+  option: FromInboxOption;
+  isAlias?: boolean;
+}) {
+  const name = () => props.option.displayName;
   return (
     <>
       <UserIcon
-        {...inboxIconProps(props.inbox.email_address)}
-        photoUrl={props.inbox.photo_url ?? undefined}
+        {...inboxIconProps(props.option.email_address)}
+        photoUrl={props.option.photo_url ?? undefined}
         size="sm"
         suppressClick
         class="shrink-0"
       />
-      <span class="flex-1 truncate">
-        <Show when={name()} fallback={props.inbox.email_address}>
-          {name()} &lt;{props.inbox.email_address}&gt;
+      <span class={cn('flex-1 truncate', props.isAlias && 'ml-2')}>
+        <Show when={name()} fallback={props.option.email_address}>
+          {name()} &lt;{props.option.email_address}&gt;
         </Show>
       </span>
     </>
   );
 }
 
-function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
-  const name = () => props.inbox.displayName;
-  const label = () => name() || props.inbox.email_address;
+function FromInboxPill(props: {
+  option: FromInboxOption;
+  selectable: boolean;
+}) {
+  const name = () => props.option.displayName;
+  const label = () => name() || props.option.email_address;
 
   return (
     <div
@@ -45,8 +45,8 @@ function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
       )}
     >
       <UserIcon
-        {...inboxIconProps(props.inbox.email_address)}
-        photoUrl={props.inbox.photo_url ?? undefined}
+        {...inboxIconProps(props.option.email_address)}
+        photoUrl={props.option.photo_url ?? undefined}
         size="sm"
         suppressClick
         class="shrink-0"
@@ -60,26 +60,76 @@ function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
 }
 
 /**
- * Lets the user pick which linked inbox a compose/reply sends from. Renders an
- * identical "from" chip in every composer: the active inbox's icon, name, and
- * address, with a dropdown over the other inboxes when there's more than one.
+ * Lets the user pick which linked inbox or alias a compose/reply sends from.
+ * Renders an identical "from" chip in every composer: the active inbox's icon,
+ * name, and address, with a dropdown over the other inboxes/aliases when there's
+ * more than one option.
  */
 export function FromInboxSelector(props: {
-  links: FromInbox[];
+  links: FromInboxOption[];
   activeInboxId: string | undefined;
-  onSelect: (inboxId: string) => void;
+  /** The currently selected sender email (alias or inbox email). Used to
+   * highlight the correct option when an alias is selected. */
+  activeEmail?: string;
+  onSelect: (inboxId: string, aliasEmail?: string) => void;
   disabled?: boolean;
   compact?: boolean;
   pill?: boolean;
   class?: string;
   portalScope?: 'local';
 }) {
-  const activeInbox = () =>
-    props.links.find((l) => l.id === props.activeInboxId);
-  const sortedLinks = () =>
+  // Find the active option by matching the activeEmail (which can be an alias)
+  // or fall back to matching by activeInboxId for inboxes
+  const activeOption = () => {
+    const email = props.activeEmail?.toLowerCase();
+    if (email) {
+      const byEmail = props.links.find(
+        (l) => l.email_address.toLowerCase() === email
+      );
+      if (byEmail) return byEmail;
+    }
+    return props.links.find((l) => l.id === props.activeInboxId);
+  };
+
+  // Group options: primary inboxes first, then aliases grouped under their parent
+  const groupedOptions = createMemo(() => {
+    const inboxes = props.links.filter((l) => !l.isAlias);
+    const aliases = props.links.filter((l) => l.isAlias);
+
+    // Sort inboxes alphabetically
+    inboxes.sort((a, b) => a.email_address.localeCompare(b.email_address));
+
+    // Group aliases by parent inbox
+    const aliasesByParent = new Map<string, FromInboxOption[]>();
+    for (const alias of aliases) {
+      if (!alias.parentInboxId) continue;
+      const existing = aliasesByParent.get(alias.parentInboxId) ?? [];
+      existing.push(alias);
+      aliasesByParent.set(alias.parentInboxId, existing);
+    }
+
+    // Sort aliases within each group
+    for (const group of aliasesByParent.values()) {
+      group.sort((a, b) => a.email_address.localeCompare(b.email_address));
+    }
+
+    return { inboxes, aliasesByParent };
+  });
+
+  // Flat sorted list for simple dropdowns
+  const sortedLinks = createMemo(() =>
     [...props.links].sort((a, b) =>
       a.email_address.localeCompare(b.email_address)
-    );
+    )
+  );
+
+  const handleSelect = (option: FromInboxOption) => {
+    if (option.isAlias && option.parentInboxId) {
+      props.onSelect(option.parentInboxId, option.email_address);
+    } else {
+      props.onSelect(option.id);
+    }
+  };
 
   const unresolvedInboxPicker = () => (
     <Show when={props.links.length > 0}>
@@ -97,9 +147,12 @@ export function FromInboxSelector(props: {
         <Dropdown.Content portalScope={props.portalScope}>
           <Dropdown.Group>
             <For each={sortedLinks()}>
-              {(inbox) => (
-                <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                  <FromInboxOption inbox={inbox} />
+              {(option) => (
+                <Dropdown.Item onSelect={() => handleSelect(option)}>
+                  <FromInboxOptionRow
+                    option={option}
+                    isAlias={option.isAlias}
+                  />
                 </Dropdown.Item>
               )}
             </For>
@@ -109,9 +162,69 @@ export function FromInboxSelector(props: {
     </Show>
   );
 
+  const isActive = (option: FromInboxOption) =>
+    activeOption()?.id === option.id;
+
+  const renderDropdownContent = () => {
+    const { inboxes, aliasesByParent } = groupedOptions();
+    const hasAliases = aliasesByParent.size > 0;
+
+    // If no aliases, render a simple flat list
+    if (!hasAliases) {
+      return (
+        <Dropdown.Group>
+          <For each={inboxes}>
+            {(inbox) => (
+              <Dropdown.Item onSelect={() => handleSelect(inbox)}>
+                <FromInboxOptionRow option={inbox} />
+                <Show when={isActive(inbox)}>
+                  <Check class="size-3.5 shrink-0" />
+                </Show>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      );
+    }
+
+    // With aliases, render inboxes and their aliases grouped together
+    return (
+      <For each={inboxes}>
+        {(inbox, index) => {
+          const inboxAliases = aliasesByParent.get(inbox.id) ?? [];
+          return (
+            <>
+              <Show when={index() > 0}>
+                <Dropdown.Separator />
+              </Show>
+              <Dropdown.Group>
+                <Dropdown.Item onSelect={() => handleSelect(inbox)}>
+                  <FromInboxOptionRow option={inbox} />
+                  <Show when={isActive(inbox)}>
+                    <Check class="size-3.5 shrink-0" />
+                  </Show>
+                </Dropdown.Item>
+                <For each={inboxAliases}>
+                  {(alias) => (
+                    <Dropdown.Item onSelect={() => handleSelect(alias)}>
+                      <FromInboxOptionRow option={alias} isAlias />
+                      <Show when={isActive(alias)}>
+                        <Check class="size-3.5 shrink-0" />
+                      </Show>
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Group>
+            </>
+          );
+        }}
+      </For>
+    );
+  };
+
   if (props.compact) {
     return (
-      <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
+      <Show when={activeOption()} fallback={unresolvedInboxPicker()}>
         {(active) => (
           <Show
             when={props.links.length > 1}
@@ -126,18 +239,7 @@ export function FromInboxSelector(props: {
                 <ChevronDown class="size-3 shrink-0" />
               </Dropdown.Trigger>
               <Dropdown.Content portalScope={props.portalScope}>
-                <Dropdown.Group>
-                  <For each={sortedLinks()}>
-                    {(inbox) => (
-                      <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                        <FromInboxOption inbox={inbox} />
-                        <Show when={inbox.id === props.activeInboxId}>
-                          <Check class="size-3.5 shrink-0" />
-                        </Show>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Group>
+                {renderDropdownContent()}
               </Dropdown.Content>
             </Dropdown>
           </Show>
@@ -148,13 +250,13 @@ export function FromInboxSelector(props: {
 
   if (props.pill) {
     return (
-      <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
+      <Show when={activeOption()} fallback={unresolvedInboxPicker()}>
         {(active) => (
           <Show
             when={props.links.length > 1}
             fallback={
               <div class={props.class}>
-                <FromInboxPill inbox={active()} selectable={false} />
+                <FromInboxPill option={active()} selectable={false} />
               </div>
             }
           >
@@ -166,21 +268,10 @@ export function FromInboxSelector(props: {
                   props.class
                 )}
               >
-                <FromInboxPill inbox={active()} selectable={true} />
+                <FromInboxPill option={active()} selectable={true} />
               </Dropdown.Trigger>
               <Dropdown.Content portalScope={props.portalScope}>
-                <Dropdown.Group>
-                  <For each={sortedLinks()}>
-                    {(inbox) => (
-                      <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                        <FromInboxOption inbox={inbox} />
-                        <Show when={inbox.id === props.activeInboxId}>
-                          <Check class="size-3.5 shrink-0" />
-                        </Show>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Group>
+                {renderDropdownContent()}
               </Dropdown.Content>
             </Dropdown>
           </Show>
@@ -190,14 +281,14 @@ export function FromInboxSelector(props: {
   }
 
   return (
-    <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
+    <Show when={activeOption()} fallback={unresolvedInboxPicker()}>
       {(active) => (
         <Show
           when={props.links.length > 1}
           fallback={
             <div class="flex items-center gap-2 min-w-0 text-sm text-ink-muted">
               <Show when={active()} keyed>
-                {(inbox) => <FromInboxOption inbox={inbox} />}
+                {(option) => <FromInboxOptionRow option={option} />}
               </Show>
             </div>
           }
@@ -208,23 +299,12 @@ export function FromInboxSelector(props: {
               class="flex items-center min-w-0 max-w-full gap-2 text-sm text-ink-muted"
             >
               <Show when={active()} keyed>
-                {(inbox) => <FromInboxOption inbox={inbox} />}
+                {(option) => <FromInboxOptionRow option={option} />}
               </Show>
               <ChevronDown class="size-3 shrink-0" />
             </Dropdown.Trigger>
             <Dropdown.Content portalScope={props.portalScope}>
-              <Dropdown.Group>
-                <For each={sortedLinks()}>
-                  {(inbox) => (
-                    <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                      <FromInboxOption inbox={inbox} />
-                      <Show when={inbox.id === props.activeInboxId}>
-                        <Check class="size-3.5 shrink-0" />
-                      </Show>
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Group>
+              {renderDropdownContent()}
             </Dropdown.Content>
           </Dropdown>
         </Show>

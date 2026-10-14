@@ -2349,6 +2349,38 @@
         }
       }
     },
+    "/email/settings/send-as": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "List the user's send-as aliases (email addresses they can send as) for a\nlinked Gmail inbox.",
+        "operationId": "list_send_as",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSendAsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Failed to communicate with Gmail"
+          }
+        }
+      }
+    },
     "/email/sync": {
       "delete": {
         "tags": ["Sync"],
@@ -5365,6 +5397,20 @@
           }
         }
       },
+      "ListSendAsResponse": {
+        "type": "object",
+        "description": "The response from the list send-as aliases endpoint.",
+        "required": ["aliases"],
+        "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SendAsAlias"
+            },
+            "description": "The list of send-as aliases for this inbox."
+          }
+        }
+      },
       "Message": {
         "type": "object",
         "required": [
@@ -5804,6 +5850,29 @@
             "type": "string",
             "format": "uuid",
             "description": "The backfill job driving the (re-)sync. Either the freshly enqueued job or\nthe one already in progress."
+          }
+        }
+      },
+      "SendAsAlias": {
+        "type": "object",
+        "description": "A send-as alias from Gmail settings, representing an email address the user\ncan send mail as. This includes the primary address as well as any configured\naliases.",
+        "required": ["send_as_email", "is_primary", "is_default"],
+        "properties": {
+          "display_name": {
+            "type": ["string", "null"],
+            "description": "A name that appears as the sender in the \"From:\" header for mail sent\nusing this alias."
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "Whether this address is the default \"from\" address for composing new\nmessages (not replies)."
+          },
+          "is_primary": {
+            "type": "boolean",
+            "description": "Whether this address is the primary address used to login to Gmail."
+          },
+          "send_as_email": {
+            "type": "string",
+            "description": "The email address that appears in the \"From:\" header for mail sent using\nthis alias."
           }
         }
       },

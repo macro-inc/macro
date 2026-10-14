@@ -21,6 +21,7 @@ use crate::api::email::links::list::ListLinksResponse;
 use crate::api::email::links::resync::ResyncResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
+use crate::api::email::settings::send_as::ListSendAsResponse;
 use crate::api::email::threads::archived::ArchiveThreadRequest;
 use crate::api::{email, health};
 use ::email::inbound;
@@ -44,6 +45,7 @@ use ::email::inbound::axum::thread_project_router::{
 use model::response::EmptyResponse;
 use models_email::api::link::SyncStatus;
 use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
+use models_email::api::send_as::SendAsAlias;
 use models_email::api::settings::Settings;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfoWithInteraction;
@@ -107,6 +109,7 @@ use utoipa::OpenApi;
         email::contacts::list_blocked::handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
+        email::settings::send_as::list_send_as_handler,
     ),
     components(
         schemas(
@@ -188,7 +191,10 @@ use utoipa::OpenApi;
             service::thread::Thread,
             service::message::Message,
             PatchSettingsRequest,
-            PatchSettingsResponse
+            PatchSettingsResponse,
+            // Send-as types
+            ListSendAsResponse,
+            SendAsAlias
         ),
     ),
     tags(

@@ -30,6 +30,12 @@ export type EmailViewState = {
    * explicitly none, otherwise the selected email link ids.
    */
   inboxIds: string[] | undefined;
+  /**
+   * Filter emails by a specific send-as alias email address. When set, shows
+   * only emails where the user received the message at this alias. Mutually
+   * exclusive with inboxIds — selecting an alias clears inboxIds and vice versa.
+   */
+  aliasFilter?: string;
   facets: FacetSelection;
   /** Sidebar sections the user folded away; kept per user, not per visit. */
   collapsedSidebarSectionIds: string[];

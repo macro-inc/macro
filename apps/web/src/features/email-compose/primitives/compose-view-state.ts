@@ -8,6 +8,27 @@ import type {
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailScheduleState } from './email-send-schedule';
 
+/**
+ * An option in the From inbox/alias selector. Can represent either an inbox
+ * (connected email account) or an alias (alternate send-as address).
+ */
+export type FromInboxOption = {
+  /** Unique identifier. For inboxes, this is the link id. For aliases, this is
+   * a composite key like `{linkId}:{aliasEmail}`. */
+  id: string;
+  /** The email address to display and send from. */
+  email_address: string;
+  /** Display name (e.g. "John Doe"). */
+  displayName?: string;
+  /** Profile photo URL. */
+  photo_url?: string | null;
+  /** True if this is an alias (send-as address) rather than the inbox's primary
+   * address. */
+  isAlias?: boolean;
+  /** For aliases, the id of the parent inbox this alias belongs to. */
+  parentInboxId?: string;
+};
+
 export type ComposeValidationError = {
   type: 'no_recipient' | 'no_message' | 'no_subject' | 'no_link';
   message: string;
@@ -80,18 +101,13 @@ export interface ComposeState {
 
   // Display
   fromAddress?: Accessor<string | undefined>;
-  // From-inbox selection: the inboxes the user can send from, the active one,
-  // and a setter to change it.
-  fromInboxes?: Accessor<
-    {
-      id: string;
-      email_address: string;
-      displayName?: string;
-      photo_url?: string | null;
-    }[]
-  >;
+  // From-inbox selection: the inboxes and aliases the user can send from, the
+  // active one, and a setter to change it.
+  fromInboxes?: Accessor<FromInboxOption[]>;
   selectedInboxId?: Accessor<string | undefined>;
-  onSelectInbox?: (inboxId: string) => void;
+  /** The selected alias email address (if sending from an alias). */
+  selectedAliasEmail?: Accessor<string | undefined>;
+  onSelectInbox?: (inboxId: string, aliasEmail?: string) => void;
   hasPaidAccess: Accessor<boolean>;
 
   // Signature preview slot — rendered below the body. Provided by the new-email

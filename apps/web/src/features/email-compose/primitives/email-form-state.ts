@@ -116,6 +116,11 @@ export function createEmailFormState(
   const [selectedInboxId, setSelectedInboxId] = createSignal<
     string | undefined
   >((draft ?? replyingTo)?.link_id ?? undefined);
+  // When sending from an alias, this is the alias email address. Undefined means
+  // send from the inbox's primary address. Used with Gmail's send-as feature.
+  const [selectedAliasEmail, setSelectedAliasEmail] = createSignal<
+    string | undefined
+  >(undefined);
   // Reply logic ("did I send this?") must be judged against the inbox the
   // message is sent from, not the account's primary email — otherwise replying
   // from a secondary or delegated inbox misclassifies the sender and picks the
@@ -255,8 +260,14 @@ export function createEmailFormState(
 
   // Change the inbox this compose sends from. For an active reply, re-derive the
   // recipients against the newly selected inbox (the sender comparison changes).
-  const setSelectedInbox = (inboxId: string | undefined) => {
+  // An optional aliasEmail lets the user send from a send-as alias (e.g.
+  // group alias, custom domain) rather than the inbox's primary address.
+  const setSelectedInbox = (
+    inboxId: string | undefined,
+    aliasEmail?: string
+  ) => {
     setSelectedInboxId(inboxId);
+    setSelectedAliasEmail(aliasEmail);
     if (!replyingTo || draft || state.replyType === 'forward') return;
     const recalculated =
       state.replyType === 'reply-all'
@@ -293,6 +304,7 @@ export function createEmailFormState(
     replyType: () => state.replyType,
     setReplyType,
     selectedInboxId,
+    selectedAliasEmail,
     setSelectedInbox,
     editRevision,
     reset: () => reset(getInitialState()),

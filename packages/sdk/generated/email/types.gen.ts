@@ -1320,6 +1320,16 @@ export type ListLinksResponse = {
     links: Array<Link>;
 };
 
+/**
+ * The response from the list send-as aliases endpoint.
+ */
+export type ListSendAsResponse = {
+    /**
+     * The list of send-as aliases for this inbox.
+     */
+    aliases: Array<SendAsAlias>;
+};
+
 export type Message = {
     attachments: Array<Attachment>;
     /**
@@ -1441,6 +1451,33 @@ export type ResyncResponse = {
      * the one already in progress.
      */
     backfill_job_id: string;
+};
+
+/**
+ * A send-as alias from Gmail settings, representing an email address the user
+ * can send mail as. This includes the primary address as well as any configured
+ * aliases.
+ */
+export type SendAsAlias = {
+    /**
+     * A name that appears as the sender in the "From:" header for mail sent
+     * using this alias.
+     */
+    display_name?: string | null;
+    /**
+     * Whether this address is the default "from" address for composing new
+     * messages (not replies).
+     */
+    is_default: boolean;
+    /**
+     * Whether this address is the primary address used to login to Gmail.
+     */
+    is_primary: boolean;
+    /**
+     * The email address that appears in the "From:" header for mail sent using
+     * this alias.
+     */
+    send_as_email: string;
 };
 
 /**
@@ -2541,6 +2578,29 @@ export type PatchSettingsResponses = {
 };
 
 export type PatchSettingsResponse2 = PatchSettingsResponses[keyof PatchSettingsResponses];
+
+export type ListSendAsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/email/settings/send-as';
+};
+
+export type ListSendAsErrors = {
+    401: ErrorResponse;
+    /**
+     * Failed to communicate with Gmail
+     */
+    502: unknown;
+};
+
+export type ListSendAsError = ListSendAsErrors[keyof ListSendAsErrors];
+
+export type ListSendAsResponses = {
+    200: ListSendAsResponse;
+};
+
+export type ListSendAsResponse2 = ListSendAsResponses[keyof ListSendAsResponses];
 
 export type DisableSyncData = {
     body?: never;

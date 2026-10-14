@@ -38,6 +38,7 @@ import type {
   ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
+  ListSendAsResponse,
   ParsedMessage,
   PatchSettingsRequest,
   PatchSettingsResponse,
@@ -2486,6 +2487,61 @@ export const patchSettings = async (
     status: res.status,
     headers: res.headers,
   } as patchSettingsResponse;
+};
+
+/**
+ * @summary List the user's send-as aliases (email addresses they can send as) for a
+linked Gmail inbox.
+ */
+export type listSendAsResponse200 = {
+  data: ListSendAsResponse;
+  status: 200;
+};
+
+export type listSendAsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listSendAsResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type listSendAsResponseSuccess = listSendAsResponse200 & {
+  headers: Headers;
+};
+export type listSendAsResponseError = (
+  | listSendAsResponse401
+  | listSendAsResponse502
+) & {
+  headers: Headers;
+};
+
+export type listSendAsResponse =
+  | listSendAsResponseSuccess
+  | listSendAsResponseError;
+
+export const getListSendAsUrl = () => {
+  return `/email/settings/send-as`;
+};
+
+export const listSendAs = async (
+  options?: RequestInit
+): Promise<listSendAsResponse> => {
+  const res = await fetch(getListSendAsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSendAsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listSendAsResponse;
 };
 
 /**

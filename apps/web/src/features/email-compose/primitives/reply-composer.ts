@@ -182,9 +182,12 @@ export function createReplyComposer(
     primaryInboxId() ??
     props.accounts.inboxes()[0]?.id;
   // The address of the inbox this input sends from, for the "from" display.
+  // Returns the alias email if one is selected, otherwise the inbox's primary address.
   const activeInboxEmail = () =>
+    form.selectedAliasEmail() ??
     props.accounts.inboxes().find((l) => l.id === activeInboxId())
-      ?.email_address ?? userEmail();
+      ?.email_address ??
+    userEmail();
 
   // The full Link object for the sending inbox (for its saved signature and the
   // "add to replies & forwards" preference).
@@ -683,7 +686,8 @@ export function createReplyComposer(
   // Persist the draft immediately when the user switches the sending inbox, even
   // without a text edit, so it moves to the new inbox and the choice survives a
   // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
-  const saveSelectedInbox = async (inboxId: string) => {
+  // An optional aliasEmail lets the user send from a send-as alias.
+  const saveSelectedInbox = async (inboxId: string, aliasEmail?: string) => {
     if (
       submitting() ||
       pendingDeletion() ||
@@ -698,7 +702,7 @@ export function createReplyComposer(
     try {
       editVersion += 1;
       props.onEngaged?.();
-      form.setSelectedInbox(inboxId);
+      form.setSelectedInbox(inboxId, aliasEmail);
       autosave.cancel();
       await executeSaveDraft();
     } catch {
@@ -707,8 +711,8 @@ export function createReplyComposer(
       setMovingInbox(false);
     }
   };
-  const persistDraftOnSenderSwitch = (inboxId: string) => {
-    void saveSelectedInbox(inboxId);
+  const persistDraftOnSenderSwitch = (inboxId: string, aliasEmail?: string) => {
+    void saveSelectedInbox(inboxId, aliasEmail);
   };
 
   const saveForSchedule = async () => {

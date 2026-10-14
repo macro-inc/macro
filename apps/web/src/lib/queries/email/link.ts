@@ -5,8 +5,11 @@ import { invalidateCalendarViews } from '@queries/calendar/sync';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
-import type { ListLinksResponse } from '@service-email/generated/schemas';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import type {
+  ListLinksResponse,
+  SendAsAlias,
+} from '@service-email/generated/schemas';
+import { useMutation, useQueries, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -118,6 +121,180 @@ export function useNonPrimaryEmailLinkIdHeader() {
   const primaryLinkId = usePrimaryEmailLinkId();
   return (linkId: string | undefined | null) =>
     nonPrimaryEmailLinkIdHeader(linkId, primaryLinkId());
+}
+
+const SEND_AS_STALE_TIME = 10 * 60 * 1000;
+
+function fetchSendAsAliases(linkId: string | undefined) {
+  return throwOnErr(() => emailClient.listSendAs(linkId));
+}
+
+/**
+ * A send-as alias enriched with the link id it belongs to, for use in the From
+ * dropdown and sidebar filter.
+ */
+export interface SendAsAliasWithLink extends SendAsAlias {
+  /** The linked inbox this alias belongs to. */
+  link_id: string;
+  /** The email address of the linked inbox (helps identify whether an alias
+   * differs from the inbox's primary address). */
+  inbox_email: string;
+}
+
+/**
+ * Fetches send-as aliases for all linked inboxes. Returns a flattened list of
+ * aliases, each annotated with its parent link id. Aliases let the user send
+ * email "from" an address other than the inbox's primary address (e.g. group
+ * aliases, custom domains, or delegated senders configured in Gmail).
+ *
+ * The query is disabled until links finish loading; once enabled, it fetches
+ * aliases for every linked inbox in parallel.
+ */
+export function useSendAsAliasesQuery() {
+  const linksQuery = useEmailLinksQuery();
+  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
+
+  const queries = useQueries(() => {
+    const links = queryReadyGate(linksQuery) ? linksQuery.data.links : [];
+    return {
+      queries: links.map((link) => ({
+        queryKey: emailKeys.sendAsAliases(link.id).queryKey,
+        queryFn: () => fetchSendAsAliases(toHeaderLinkId(link.id)),
+        staleTime: SEND_AS_STALE_TIME,
+        enabled: queryReadyGate(linksQuery),
+      })),
+    };
+  });
+
+  const aliases = createMemo((): SendAsAliasWithLink[] => {
+    if (!queryReadyGate(linksQuery)) return [];
+    const links = linksQuery.data.links;
+    const result: SendAsAliasWithLink[] = [];
+
+    queries.forEach((query, i) => {
+      if (query.isSuccess && query.data) {
+        const link = links[i];
+        for (const alias of query.data.aliases) {
+          result.push({
+            ...alias,
+            link_id: link.id,
+            inbox_email: link.email_address,
+          });
+        }
+      }
+    });
+
+    return result;
+  });
+
+  const isLoading = createMemo(() => queries.some((q) => q.isLoading));
+  const isError = createMemo(() => queries.some((q) => q.isError));
+  const isSuccess = createMemo(
+    () => queries.length > 0 && queries.every((q) => q.isSuccess)
+  );
+
+  return { aliases, isLoading, isError, isSuccess };
+}
+
+/**
+ * Returns all send-as aliases that differ from their parent inbox's primary
+ * email address. These are the "extra" addresses the user can send as, excluding
+ * the inbox's own address (which is already shown in the From dropdown).
+ */
+export function useNonPrimaryAliases() {
+  const { aliases, isLoading, isError } = useSendAsAliasesQuery();
+
+  return createMemo(() => {
+    if (isLoading() || isError()) return [];
+    return aliases().filter(
+      (alias) =>
+        alias.send_as_email.toLowerCase() !== alias.inbox_email.toLowerCase()
+    );
+  });
+}
+
+/**
+ * Option in the From dropdown for inbox/alias selection. Compatible with
+ * FromInboxOption in compose-view-state.ts but defined here to avoid circular
+ * dependencies.
+ */
+export interface MergedFromOption {
+  id: string;
+  email_address: string;
+  displayName?: string;
+  photo_url?: string | null;
+  isAlias?: boolean;
+  parentInboxId?: string;
+  settings?: {
+    signature?: string | null;
+    signature_on_replies_forwards?: boolean | null;
+  };
+}
+
+/**
+ * Merges linked inboxes with their send-as aliases into a unified list for the
+ * From dropdown. Returns inboxes with their primary address, plus any aliases
+ * that differ from the inbox's email (avoiding duplicates).
+ *
+ * The return type is compatible with FromInboxOption from compose-view-state.
+ * Each alias's `parentInboxId` points to the linked inbox it belongs to, and
+ * its id is `{linkId}:{aliasEmail}` to ensure uniqueness.
+ */
+export function useMergedFromOptions(): Accessor<MergedFromOption[]> {
+  const linksQuery = useEmailLinksQuery();
+  const nonPrimaryAliases = useNonPrimaryAliases();
+
+  return createMemo(() => {
+    if (!queryReadyGate(linksQuery)) return [];
+
+    const links = linksQuery.data.links;
+    const result: MergedFromOption[] = [];
+
+    for (const link of links) {
+      result.push({
+        id: link.id,
+        email_address: link.email_address,
+        photo_url: link.photo_url,
+        isAlias: false,
+        settings: link.settings,
+      });
+    }
+
+    for (const alias of nonPrimaryAliases()) {
+      result.push({
+        id: `${alias.link_id}:${alias.send_as_email}`,
+        email_address: alias.send_as_email,
+        displayName: alias.display_name ?? undefined,
+        photo_url: undefined,
+        isAlias: true,
+        parentInboxId: alias.link_id,
+      });
+    }
+
+    return result;
+  });
+}
+
+/**
+ * Given a list of email addresses (from an email thread's recipients), finds
+ * the best matching inbox or alias to send from. Prefers an exact alias match,
+ * then falls back to the inbox whose address matches.
+ */
+export function findMatchingFromOption(
+  options: MergedFromOption[],
+  recipientEmails: string[]
+): MergedFromOption | undefined {
+  const normalizedRecipients = new Set(
+    recipientEmails.map((e) => e.toLowerCase())
+  );
+
+  for (const option of options) {
+    if (normalizedRecipients.has(option.email_address.toLowerCase())) {
+      return option;
+    }
+  }
+
+  return undefined;
 }
 
 export function invalidateEmailLinks() {

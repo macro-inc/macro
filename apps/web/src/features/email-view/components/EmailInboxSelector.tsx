@@ -8,41 +8,80 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import TrayIcon from '@phosphor/tray.svg';
-import { useEmailLinksQuery } from '@queries/email/link';
+import { useEmailLinksQuery, useNonPrimaryAliases } from '@queries/email/link';
 import { cn, Dropdown, pressHandlers } from '@ui';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 
 const ALL_INBOXES_ID = 'all';
 
-type InboxOption = { id: string; label: string; photoUrl?: string };
+type InboxOption = {
+  id: string;
+  label: string;
+  photoUrl?: string;
+  /** True if this is an alias, not a primary inbox. */
+  isAlias?: boolean;
+  /** For aliases, the link id of the parent inbox. */
+  parentLinkId?: string;
+};
 
 /**
- * Single-select over the user's linked inboxes: one inbox, or all of them.
- * `undefined` in view state means all; a chosen inbox is stored as `[id]`.
- * Legacy multi-id selections are normalized to their first inbox on restore.
+ * Single-select over the user's linked inboxes and their aliases: one
+ * inbox/alias, or all of them. `undefined` in view state means all; a chosen
+ * inbox is stored as `[id]` (for inboxes, the link id; for aliases, the alias
+ * email).
  */
 function useInboxSelection() {
-  const { state, setInboxIds } = useEmailView();
+  const { state, setInboxIds, setAliasFilter } = useEmailView();
   const linksQuery = useEmailLinksQuery();
+  const nonPrimaryAliases = useNonPrimaryAliases();
   const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
-  const options = createMemo((): InboxOption[] =>
+  // Primary inboxes (connected accounts)
+  const inboxOptions = createMemo((): InboxOption[] =>
     (linksQuery.isSuccess ? linksQuery.data.links : [])
       .map((link) => ({
         id: link.id,
         label: link.email_address,
         photoUrl: link.photo_url ?? undefined,
+        isAlias: false,
       }))
       .sort((a, b) => a.label.localeCompare(b.label))
   );
 
-  const isAll = () => state.inboxIds === undefined;
-  const hasMultipleInboxes = () => options().length > 1;
-  const isSelected = (id: string) =>
-    options().length === 1 || (state.inboxIds?.includes(id) ?? false);
+  // Aliases (send-as addresses that differ from the inbox's primary address)
+  const aliasOptions = createMemo((): InboxOption[] =>
+    nonPrimaryAliases().map((alias) => ({
+      id: `alias:${alias.send_as_email}`,
+      label: alias.send_as_email,
+      isAlias: true,
+      parentLinkId: alias.link_id,
+    }))
+  );
+
+  // All options: inboxes first, then aliases
+  const options = createMemo((): InboxOption[] => [
+    ...inboxOptions(),
+    ...aliasOptions(),
+  ]);
+
+  const isAll = () => state.inboxIds === undefined && !state.aliasFilter;
+  const hasMultipleOptions = () => options().length > 1;
+  const isSelected = (option: InboxOption) => {
+    if (option.isAlias) {
+      return state.aliasFilter === option.label;
+    }
+    return (
+      options().length === 1 ||
+      (state.inboxIds?.includes(option.id) ?? false) ||
+      (!state.aliasFilter && !state.inboxIds)
+    );
+  };
   const selectedId = () => {
+    if (state.aliasFilter) {
+      return `alias:${state.aliasFilter}`;
+    }
     const ids = state.inboxIds;
     return ids?.length === 1 ? ids[0] : undefined;
   };
@@ -53,18 +92,43 @@ function useInboxSelection() {
       : options().find((option) => option.id === id);
   };
 
+  const selectOption = (option: InboxOption) => {
+    if (option.isAlias) {
+      setAliasFilter?.(option.label);
+      setInboxIds(undefined);
+    } else {
+      setAliasFilter?.(undefined);
+      setInboxIds([option.id]);
+    }
+  };
+
+  const selectById = (id: string) => {
+    const option = options().find((o) => o.id === id);
+    if (option) selectOption(option);
+  };
+
   return {
     options,
+    inboxOptions,
+    aliasOptions,
     /** Keep the connected account visible even when there is no choice to make. */
     visible: () => multiInboxFlag().enabled || options().length > 0,
-    hasMultipleInboxes,
+    hasMultipleOptions,
+    /** Legacy: true if there are multiple inboxes (excluding aliases). */
+    hasMultipleInboxes: () => inboxOptions().length > 1,
     canAddInbox: () => multiInboxFlag().enabled,
     addInbox: () => void addInbox(),
     isAll,
     isSelected,
     selectedOption,
-    selectAll: () => setInboxIds(undefined),
-    select: (id: string) => setInboxIds([id]),
+    selectAll: () => {
+      setAliasFilter?.(undefined);
+      setInboxIds(undefined);
+    },
+    /** Select an option directly. */
+    select: selectOption,
+    /** Select by option id (for radio groups). */
+    selectById,
     label: () => {
       const sole = selectedOption();
       if (sole) return sole.label;
@@ -133,15 +197,13 @@ export function EmailInboxList(props: { class?: string }) {
           <For each={selection.options()}>
             {(option) => (
               <ViewSidebar.Item
-                active={selection.isSelected(option.id)}
-                aria-current={
-                  selection.isSelected(option.id) ? 'true' : undefined
-                }
-                {...pressHandlers(() => selection.select(option.id))}
+                active={selection.isSelected(option)}
+                aria-current={selection.isSelected(option) ? 'true' : undefined}
+                {...pressHandlers(() => selection.select(option))}
               >
                 <ViewSidebar.Icon>
                   <Show
-                    when={selection.isSelected(option.id)}
+                    when={selection.isSelected(option)}
                     fallback={
                       <InboxAvatar option={option} size="sm" class="size-5" />
                     }
@@ -149,7 +211,9 @@ export function EmailInboxList(props: { class?: string }) {
                     <CheckIcon class="size-4 text-accent" />
                   </Show>
                 </ViewSidebar.Icon>
-                <span class="truncate">{option.label}</span>
+                <span class={cn('truncate', option.isAlias && 'pl-2')}>
+                  {option.label}
+                </span>
               </ViewSidebar.Item>
             )}
           </For>
@@ -197,7 +261,7 @@ export function EmailInboxFilter(props: { class?: string }) {
                   value={selected().id}
                   onChange={(value) => {
                     if (value === ALL_INBOXES_ID) selection.selectAll();
-                    else selection.select(value);
+                    else selection.selectById(value);
                   }}
                 >
                   <InboxRadioItem
@@ -240,7 +304,7 @@ export function EmailInboxMenu(props: { class?: string }) {
 
   const onRadioChange = (value: string) => {
     if (value === ALL_INBOXES_ID) selection.selectAll();
-    else selection.select(value);
+    else selection.selectById(value);
   };
 
   return (
@@ -350,8 +414,8 @@ export function EmailInboxDrawerSection(props: { value: string }) {
             {(option) => (
               <MobileFilterDrawer.Option
                 selectionMode="single"
-                checked={selection.isSelected(option.id)}
-                onChange={() => selection.select(option.id)}
+                checked={selection.isSelected(option)}
+                onChange={() => selection.select(option)}
                 icon={<InboxAvatar option={option} size="sm" />}
               >
                 {option.label}

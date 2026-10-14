@@ -6,10 +6,10 @@ import type { Accessor } from 'solid-js';
 import { Show } from 'solid-js';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { RecipientDropRow } from '../components/recipient-drop-row';
-import type { EmailInbox } from '../context/compose-capabilities';
 import type { EmailRecipient, RecipientFieldId } from '../core/email-recipient';
 import { getRecipientDisplayName } from '../core/email-recipient';
 import type { ReplyType } from '../core/reply-type';
+import type { FromInboxOption } from '../primitives/compose-view-state';
 import type { EmailFormRecipients } from '../primitives/email-form-state';
 import type { createReplyRecipientFields } from '../primitives/reply-recipient-fields';
 
@@ -17,10 +17,10 @@ type ReplyEnvelopeProps = {
   fields: ReturnType<typeof createReplyRecipientFields>;
   values: Accessor<EmailFormRecipients>;
   options: Accessor<EmailRecipient[]>;
-  inboxes: Accessor<EmailInbox[]>;
+  inboxes: Accessor<FromInboxOption[]>;
   activeInboxId: Accessor<string | undefined>;
   senderEmail: Accessor<string | undefined>;
-  onSenderChange: (id: string) => void;
+  onSenderChange: (id: string, aliasEmail?: string) => void;
   subject: Accessor<string>;
   onSubjectChange: (subject: string) => void;
   showSubject: boolean;
@@ -136,6 +136,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                       class="min-w-0"
                       links={props.inboxes()}
                       activeInboxId={props.activeInboxId()}
+                      activeEmail={props.senderEmail()}
                       onSelect={props.onSenderChange}
                       portalScope={props.portalScope()}
                       disabled={props.disabled()}
@@ -306,6 +307,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             class="min-w-0 truncate text-ink-muted"
             links={props.inboxes()}
             activeInboxId={props.activeInboxId()}
+            activeEmail={props.senderEmail()}
             onSelect={props.onSenderChange}
             portalScope={props.portalScope()}
             disabled={props.disabled()}
