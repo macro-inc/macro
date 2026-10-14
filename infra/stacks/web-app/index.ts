@@ -106,11 +106,13 @@ new aws.s3.BucketObjectv2(
     dependsOn: [ownershipControls, publicAccessBlock],
   }
 );
-// Copy the index.html to the routing lambda
-execSync(
-  `cp ${shellQuote(`${buildOutputPath}/index.html`)} ./appRouteLambda/index.html`,
-  { stdio: 'inherit' }
-);
+// Copy the app's index.html and the booking page's booking.html to the routing lambda
+for (const page of ['index.html', 'booking.html']) {
+  execSync(
+    `cp ${shellQuote(`${buildOutputPath}/${page}`)} ./appRouteLambda/${page}`,
+    { stdio: 'inherit' }
+  );
+}
 
 const syncAssetsCommand = new command.local.Command(
   'sync-assets-command',

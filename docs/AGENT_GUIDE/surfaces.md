@@ -1331,11 +1331,9 @@ the event details without sending a response.
 Calendar scheduling is on by default in dev. Production uses the PostHog flag
 `enable-calendar-scheduling` and stays off unless enabled remotely. Set
 `VITE_ENABLE_CALENDAR_SCHEDULING=false` to test the disabled state locally.
-While off, the Calendar settings tab and calendar booking shortcuts are hidden;
-public booking and receipt links show an unavailable page without fetching
-scheduling data. When enabling a production rollout, include anonymous visitors
-so invitees can open those links. A public booking link stays available when
-the flag request gets no answer, for example when a browser blocks it.
+While off, the Calendar settings tab and calendar booking shortcuts are hidden.
+The standalone booking page (below) does not read the flag: the scheduling
+service decides which links exist and take bookings.
 
 Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
 Scheduling lives in the separate **Settings → Booking links** item
@@ -1402,7 +1400,11 @@ Oversized result sets return an error instead of silently truncating insights.
 
 The calendar header includes `Copy booking link` and `Open calendar scheduling
 settings`. Copy opens settings when no active personal link exists. Public
-`/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. The website
+`/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. They and
+`/app/booking/:id` receipts are their own page (`apps/web/booking.html`), apart
+from the app: no sign-in, workspace data or live updates load, and the service
+worker leaves them to the network. The app still routes both paths, for
+environments without the route function (previews, desktop). The website
 opens them in its own dialog; framed there, a booking page and its receipt drop their
 Macro heading and footer, and the booking page tells the website when a booking is
 made. Only macro.com can frame them. Uncertain

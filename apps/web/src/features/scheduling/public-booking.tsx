@@ -67,6 +67,19 @@ function BookingPageContent(params: BookingPageParams) {
     </Show>
   );
 }
+
+/**
+ * A booking page on its own, as the standalone booking page serves it: the
+ * scheduling service decides which links exist and take bookings.
+ */
+export function BookingPage(props: BookingPageParams) {
+  return (
+    <Suspense fallback={<p class="p-12">Loading…</p>}>
+      <BookingPageContent profile={props.profile} slug={props.slug} />
+    </Suspense>
+  );
+}
+
 export function PublicBookingPage(props: BookingPageParams) {
   // A guest whose browser blocks the flag request must still be able to book;
   // only an answer that the rollout is off hides the page.
@@ -84,9 +97,7 @@ export function PublicBookingPage(props: BookingPageParams) {
         </p>
       }
     >
-      <Suspense fallback={<p class="p-12">Loading…</p>}>
-        <BookingPageContent profile={props.profile} slug={props.slug} />
-      </Suspense>
+      <BookingPage profile={props.profile} slug={props.slug} />
     </Show>
   );
 }

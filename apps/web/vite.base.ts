@@ -152,6 +152,27 @@ function loroAsyncWasm(): Plugin {
   };
 }
 
+/** Public booking pages and receipts, which booking.html serves apart from the app. */
+const BOOKING_PAGE_PATH = /^\/app\/(?:book|booking)\//;
+
+/**
+ * Serves booking.html for booking paths in development, as the app's route
+ * function does in deployed environments.
+ */
+function bookingPageDevRoute(): Plugin {
+  return {
+    name: 'booking-page-dev-route',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url && BOOKING_PAGE_PATH.test(req.url))
+          req.url = `${server.config.base}booking.html`;
+        next();
+      });
+    },
+  };
+}
+
 /** Hashed assets the first screen needs; index.html requests them while it parses. */
 const HTML_PRELOADS = [
   // The app waits for Loro to initialize before rendering.
@@ -185,7 +206,11 @@ function htmlPreloads(): Plugin {
       order: 'post',
       handler(_html, ctx) {
         const files = Object.keys(ctx.bundle ?? {});
-        return HTML_PRELOADS.flatMap((preload) => {
+        // The booking page draws without Loro.
+        const preloads = ctx.path.endsWith('booking.html')
+          ? HTML_PRELOADS.filter((preload) => preload.as === 'font')
+          : HTML_PRELOADS;
+        return preloads.flatMap((preload) => {
           const file = files.find((fileName) => preload.file.test(fileName));
           if (!file) return [];
           return [
@@ -231,6 +256,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         wasm(),
         loroAsyncWasm(),
         htmlPreloads(),
+        bookingPageDevRoute(),
         tailwind(),
         solidSvg({ defaultAsComponent: true }),
         tsconfigpaths({
@@ -272,6 +298,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         rollupOptions: {
           input: {
             app: resolve(__dirname, 'index.html'),
+            booking: resolve(__dirname, 'booking.html'),
           },
           // KaTeX and PDF.js are now reachable through lazy boundaries. Let
           // Rollup place them naturally; forcing named chunks hoists shared

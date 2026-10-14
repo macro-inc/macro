@@ -6,6 +6,9 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const template = readFileSync(join(__dirname, 'index.html'), 'utf-8');
+// Public booking pages and receipts are their own page, apart from the app.
+const bookingTemplate = readFileSync(join(__dirname, 'booking.html'), 'utf-8');
+const BOOKING_PAGE = /^\/app\/(?:book|booking)\//;
 const PREVIEW_URL = process.env.PREVIEW_URL;
 
 function escapeHtmlText(value) {
@@ -30,6 +33,15 @@ export const handler = async (event) => {
   }
 
   const path = event.requestContext.http.path;
+  if (BOOKING_PAGE.test(path)) {
+    return {
+      statusCode: '200',
+      headers: {
+        'Content-Type': 'text/html',
+      },
+      body: bookingTemplate,
+    };
+  }
   try {
     // Get the document name from DSS
     const blockName = path.split('/')[2];

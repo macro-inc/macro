@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="icon" href="%ASSETS_PATH%/macro-favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="%GATEWAY_ORIGIN%" crossorigin="use-credentials" />
+    <title>Book a time · Macro</title>
+  </head>
+  <!--
+    Public booking pages and receipts. Their own page, apart from the app: a
+    guest needs only the booking picker, not the signed-in workspace.
+  -->
+  <body>
+    <noscript>You need to enable JavaScript to book a time.</noscript>
+    <div id="root" class="flex h-[100dvh] flex-col"></div>
+    <script type="module" src="/src/booking-page/index.tsx"></script>
+  </body>
+</html>
