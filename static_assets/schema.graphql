@@ -5286,6 +5286,39 @@ enum GraphqlOwnerType {
 }
 
 """
+A message body prepared for the reader's default view: quoted history and
+signature collapsed, remote images through this environment's proxy.
+"""
+type GraphqlPreparedEmailBody {
+	"""
+	The preparation version that produced `html`.
+	"""
+	version: Int!
+	"""
+	Sanitized HTML for the web renderer's mount, head styles first.
+	"""
+	html: String!
+	"""
+	Whether the shown content contains a table.
+	"""
+	hasTable: Boolean!
+	"""
+	Whether quoted history or a signature was hidden.
+	"""
+	hasHiddenContent: Boolean!
+	"""
+	The proxy applied to `img[src]`. A client using another proxy prepares
+	the body itself.
+	"""
+	imageProxyUrl: String
+	"""
+	UTF-16 length of the HTML and replyless HTML this was prepared from, so
+	a client holding a different source prepares the body itself.
+	"""
+	sourceLength: Int!
+}
+
+"""
 The two operands of a recursive `ProjectFilterExpr` binary expression.
 """
 input GraphqlProjectBinaryExpr {
@@ -7549,6 +7582,12 @@ type GraphqlSoupEmailMessage {
 	The message body with quoted replies removed.
 	"""
 	bodyReplyless: String
+	"""
+	The body prepared on the server for the reader's default view, or null
+	when the message has no HTML body or the server prepares a different
+	`version` (the client then prepares the body itself).
+	"""
+	preparedBody(version: Int!): GraphqlPreparedEmailBody
 	"""
 	Provider-hosted attachments on the message.
 	"""

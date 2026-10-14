@@ -6,8 +6,11 @@ edition = "2024"
 
 [dependencies]
 ammonia = { workspace = true }
+# Same versions scraper uses, so preparation shares its parsers.
+cssparser = "0.31"
 ego-tree = { workspace = true }
 html2text = "0.16.5"
+html5ever = "0.26"
 lazy_static = { workspace = true }
 regex = { workspace = true }
 scraper = { workspace = true }

@@ -126,3 +126,33 @@ fragment EmailThreadIdentityFields on GraphqlSoupEmailThread {
     id
     cacheProjection @cacheOnly
 }
+
+# Server-prepared reader HTML for a thread page's messages. Kept out of
+# EmailThreadPage so threads cached by backfill, whose records lack it, still
+# open from the cache.
+query EmailThreadPreparedBodies(
+	$threadId: ID!
+	$offset: Int!
+	$limit: Int!
+	$version: Int!
+) {
+	user {
+		id
+		emailThread(input: { threadId: $threadId }) {
+			__typename
+			id
+			messages(offset: $offset, limit: $limit) {
+				__typename
+				id
+				preparedBody(version: $version) {
+					version
+					html
+					hasTable
+					hasHiddenContent
+					imageProxyUrl
+					sourceLength
+				}
+			}
+		}
+	}
+}

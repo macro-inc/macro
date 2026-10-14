@@ -1,6 +1,7 @@
 import type { ResourceLifetime } from '@macro-inc/email-renderer/browser';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ServerPreparedBody } from '../context/email-rendering-context';
 import { message } from '../tests/messages';
 import {
   createEmailMessageBody,
@@ -191,4 +192,85 @@ describe('independent email body', () => {
       expect(resolveImages).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('server-prepared bodies', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const proxyUrl = 'https://gateway.test/image-proxy/proxy';
+  const html = '<p>From the client</p>';
+  const serverBody = (overrides: Partial<ServerPreparedBody> = {}) => ({
+    body: {
+      html: '<p>From the server</p>',
+      kind: 'html' as const,
+      hasTable: false,
+      hasHiddenContent: true,
+    },
+    imageProxyUrl: proxyUrl,
+    sourceLength: html.length,
+    ...overrides,
+  });
+  function mount(
+    server: ServerPreparedBody | undefined,
+    overrides: Partial<EmailMessageBodyProps> = {},
+    message_overrides: Parameters<typeof message>[1] = {}
+  ) {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    return createRoot((dispose) => {
+      const body = createEmailMessageBody(
+        {
+          message: message('one', {
+            body_html_sanitized: html,
+            ...message_overrides,
+          }),
+          ...bodyOptions,
+          ...overrides,
+        },
+        {
+          theme: () => theme,
+          images: { remote: 'allow', proxyUrl },
+          preparedBody: (id) => (id === 'one' ? server : undefined),
+          resolveImages: async () => {},
+        }
+      );
+      return { body, dispose };
+    });
+  }
+  const text = (root: ReturnType<typeof mount>) =>
+    root.body.host()?.shadowRoot?.textContent ?? '';
+
+  it('mounts a matching server body for the default view', () => {
+    const root = mount(serverBody());
+    expect(text(root)).toContain('From the server');
+    expect(root.body.hasHiddenReplyStructure()).toBe(true);
+    root.dispose();
+  });
+
+  it.each([
+    ['another image proxy', serverBody({ imageProxyUrl: null })],
+    ['a different source', serverBody({ sourceLength: html.length + 1 })],
+    ['no server body', undefined],
+  ])('prepares locally with %s', (_, server) => {
+    const root = mount(server);
+    expect(text(root)).toContain('From the client');
+    root.dispose();
+  });
+
+  it('prepares drafts and other variants locally', () => {
+    const draft = mount(serverBody(), {}, { is_draft: true });
+    expect(text(draft)).toContain('From the client');
+    draft.dispose();
+    const full = mount(serverBody(), { showFullContent: true });
+    expect(text(full)).toContain('From the client');
+    full.dispose();
+    const quoted = mount(serverBody());
+    quoted.body.setShowFullHTML(true);
+    expect(text(quoted)).toContain('From the client');
+    quoted.dispose();
+  });
 });

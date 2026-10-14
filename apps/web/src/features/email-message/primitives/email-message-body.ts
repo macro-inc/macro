@@ -43,17 +43,34 @@ export function createEmailMessageBody(
       normalizeFonts:
         props.isPersonal &&
         !props.message.from?.email?.toLowerCase().endsWith('@macro.com'),
+      isDraft: props.message.is_draft,
     }),
     undefined,
     { equals: deepEqual }
   );
-  const prepared = createMemo(() =>
-    prepareEmailBody(content(), {
+  const prepared = createMemo(() => {
+    const input = content();
+    const options = {
       showQuotedContent: showFullHTML(),
-      showFullContent: content().showFullContent,
+      showFullContent: input.showFullContent,
       images: renderingContext.images,
-    })
-  );
+    };
+    // The server prepares the default view of received and sent mail. Read it
+    // untracked: one arriving after this body is shown must not rebuild it.
+    const server =
+      !options.showQuotedContent && !options.showFullContent && !input.isDraft
+        ? untrack(() => renderingContext.preparedBody?.(input.id))
+        : undefined;
+    if (
+      server &&
+      server.imageProxyUrl === (options.images?.proxyUrl ?? null) &&
+      (options.images?.remote ?? 'allow') === 'allow' &&
+      server.sourceLength ===
+        (input.html?.length ?? 0) + (input.replylessHtml?.length ?? 0)
+    )
+      return server.body;
+    return prepareEmailBody(input, options);
+  });
   const rendered = createMemo(() => {
     // Preserve the app's existing Markdown paths without starting hidden HTML
     // resources behind them. Their Lexical semantics stay at the app boundary.

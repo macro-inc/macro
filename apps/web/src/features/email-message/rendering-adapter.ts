@@ -5,10 +5,13 @@ import type { EmailRenderingContextValue } from './context/email-rendering-conte
 import { fetchImagesViaPlatform, resolveCidImages } from './image-adapter';
 import { createEmailTheme } from './theme';
 
-export function createEmailRenderingContext(): EmailRenderingContextValue {
+export function createEmailRenderingContext(
+  options: Pick<EmailRenderingContextValue, 'preparedBody'> = {}
+): EmailRenderingContextValue {
   const theme = createEmailTheme();
   return {
     theme,
+    preparedBody: options.preparedBody,
     images: {
       remote: 'allow',
       proxyUrl: ENABLE_PROXY_EMAIL_IMAGES

@@ -74,6 +74,19 @@ before mutating nodes. Register owned blob URLs or other handles through
 Handle an image failure in the adapter or supply `onResourceError` for reporting.
 There is no implicit fetch client or native-platform detection in this package.
 
+## Server preparation
+
+The server prepares the reader's default view of received and sent mail with a
+Rust port of this core (`crates/email_utils/src/prepare.rs`), served as
+`preparedBody` on GraphQL email messages. The web app mounts it when the server's
+version, image proxy and source length match, and prepares locally otherwise:
+drafts, quote expansion, the first message of a fully loaded thread, and
+clients or transports without it. Change both implementations together and bump
+the Rust `PREPARE_VERSION` with the client's `SERVER_PREPARE_VERSION`, so older
+clients fall back instead of mounting HTML they do not expect. The port's CSS
+output keeps source tokens rather than css-tree's formatting, so the two are
+compared by rendering, not by string.
+
 ## Content policy
 
 - Nonempty HTML takes precedence over plaintext. Plaintext is escaped and rendered

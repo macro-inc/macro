@@ -3,6 +3,7 @@ pub mod body_replyless;
 pub mod generic_email;
 pub mod macro_sender;
 pub mod normalize_contact;
+pub mod prepare;
 pub mod sanitizer;
 pub mod token_cache_key;
 

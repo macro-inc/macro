@@ -12,6 +12,7 @@ email_utils = { path = "../email_utils" }
 entity_access = { path = "../entity_access", default-features = false }
 futures = { workspace = true }
 graphql_common = { path = "../graphql_common" }
+macro_service_urls = { path = "../macro_service_urls" }
 macro_user_id = { path = "../macro_user_id" }
 tokio = { workspace = true }
 tracing = { workspace = true }

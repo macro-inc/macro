@@ -12,6 +12,7 @@ use crate::loaders::{
     EmailThreadMetadataLoader, SoupEmailContentEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
     SoupEmailThreadMetadataEdgeReader,
 };
+use crate::prepared_body::{self, GraphqlPreparedEmailBody};
 
 const FULL_MESSAGE_FIELDS: &[&str] = &[
     "providerId",
@@ -250,6 +251,22 @@ impl GraphqlSoupEmailMessage {
     /// The message body with quoted replies removed.
     async fn body_replyless(&self) -> Option<&str> {
         self.parsed().body_replyless.as_deref()
+    }
+
+    /// The body prepared on the server for the reader's default view, or null
+    /// when the message has no HTML body or the server prepares a different
+    /// `version` (the client then prepares the body itself).
+    async fn prepared_body(
+        &self,
+        version: i32,
+    ) -> async_graphql::Result<Option<GraphqlPreparedEmailBody>> {
+        let parsed = self.parsed();
+        prepared_body::prepare(
+            version,
+            parsed.body_html_sanitized.as_deref(),
+            parsed.body_replyless.as_deref(),
+        )
+        .await
     }
 
     /// Provider-hosted attachments on the message.
