@@ -65,10 +65,7 @@ export function MarkdownSidePanelSections() {
   return (
     <>
       <SidePanel.HeaderActions>
-        <div class="flex shrink-0 items-center gap-1">
-          <Show when={isTask() && !isMobile()}>
-            <DispatchAgentButton showPrimaryLabel />
-          </Show>
+        <div class="flex shrink-0 items-center gap-0.5">
           <AskMacroButton
             entity={{
               type: 'document',
@@ -77,7 +74,13 @@ export function MarkdownSidePanelSections() {
               fileType: 'md',
             }}
           />
+          <span aria-hidden="true" class="h-4 w-px bg-ink/10" />
         </div>
+      </SidePanel.HeaderActions>
+      <SidePanel.HeaderActions placement="trailing">
+        <Show when={isTask() && !isMobile()}>
+          <DispatchAgentButton />
+        </Show>
       </SidePanel.HeaderActions>
       <SidePanel.Footer>
         <Show when={!isTask()}>

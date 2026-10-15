@@ -1,6 +1,6 @@
 import { BaseTool } from '@core/component/AI/component/tool/BaseTool';
 import { createToolRenderer } from '@core/component/AI/component/tool/ToolRenderer';
-import Kanban from '@phosphor-icons/core/regular/kanban.svg';
+import Kanban from '@icon/system/regular/kanban.svg';
 import { queryClient } from '@queries/client';
 import { Show } from 'solid-js';
 import { pluralize } from './components/tool-companies';

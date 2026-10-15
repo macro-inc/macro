@@ -1,5 +1,5 @@
-import PushPinSlashIcon from '@phosphor/push-pin-slash.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertiesContext } from '@property/context/PropertiesContext';

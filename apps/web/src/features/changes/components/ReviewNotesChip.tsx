@@ -1,6 +1,6 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import NoteIcon from '@phosphor/note.svg';
-import XIcon from '@phosphor/x.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import NoteIcon from '@icon/system/regular/note.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
 import { Index, Show } from 'solid-js';
 import {

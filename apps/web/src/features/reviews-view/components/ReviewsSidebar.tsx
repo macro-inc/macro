@@ -1,6 +1,7 @@
 import {
   CollapsibleSection,
   SearchBar,
+  SidebarActionRow,
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
@@ -19,14 +20,14 @@ import { TabsInset } from '@core/component/TabsInset';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
+import SplitIcon from '@icon/system/regular/columns.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import UserIcon from '@icon/system/regular/user.svg';
+import UserCircleCheckIcon from '@icon/system/regular/user-circle-check.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import SplitIcon from '@phosphor/columns.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import StarIcon from '@phosphor/star.svg';
-import UserIcon from '@phosphor/user.svg';
-import UserCircleCheckIcon from '@phosphor/user-circle-check.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
 import { selectSidebarTag } from '@property/tags/SidebarTagsSection';
 import {
   useFavoritesData,
@@ -291,22 +292,21 @@ export function ReviewsSidebar(props: {
 
   return (
     <ViewSidebar.Root aria-label="Reviews navigation">
-      <ViewSidebar.Header>
-        <div class="flex min-w-0 items-center gap-1">
-          <ViewSidebar.CloseButton />
-          <ViewSidebar.Title>Reviews</ViewSidebar.Title>
-        </div>
-      </ViewSidebar.Header>
-      <ViewSidebar.Primary class="flex flex-col gap-2">
-        <SearchBar
-          label="Search reviews"
-          placeholder="Search reviews"
-          autocomplete="off"
-          value={props.search}
-          onValueChange={props.onSearchChange}
-          class="border-0 bg-ink/5 shadow-none"
-          onEscape={() => props.onSearchChange('')}
-        />
+      <SidebarActionRow
+        title="Reviews"
+        search={
+          <SearchBar
+            label="Search reviews"
+            placeholder="Search reviews"
+            autocomplete="off"
+            value={props.search}
+            onValueChange={props.onSearchChange}
+            class="h-8"
+            onEscape={() => props.onSearchChange('')}
+          />
+        }
+      />
+      <ViewSidebar.Primary class="flex flex-col gap-2 pt-0">
         {/* Touch layouts list pull requests; the board needs a pointer to drag. */}
         <Show when={!isTouchDevice()}>
           <TabsInset

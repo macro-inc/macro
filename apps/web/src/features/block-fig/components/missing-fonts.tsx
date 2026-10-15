@@ -5,8 +5,8 @@
  */
 
 import type { FontUse } from '@core/fig-engine/types';
-import WarningCircle from '@phosphor/warning-circle.svg';
-import X from '@phosphor/x.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
+import X from '@icon/system/regular/x.svg';
 import { createSignal, For, Show } from 'solid-js';
 
 export function MissingFonts(props: {

@@ -1,8 +1,8 @@
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import CaretDown from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import CaretDown from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { cn, Dropdown } from '@ui';
 import {
   type Component,
@@ -70,7 +70,7 @@ export function ModelRow(props: ModelRowProps) {
         <span class="shrink-0 text-xs text-ink-extra-muted">{props.hint}</span>
       </Show>
       <Show when={props.selected}>
-        <CheckIcon class="size-3.5 shrink-0 text-accent" />
+        <CheckIcon class="size-3.5 shrink-0 text-ink" />
       </Show>
     </Dropdown.Item>
   );

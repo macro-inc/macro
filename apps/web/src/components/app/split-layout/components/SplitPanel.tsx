@@ -10,10 +10,11 @@ import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { EVENT_MODIFIER_KEYS } from '@core/hotkey/constants';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import { isPlatform } from '@core/util/platform';
-import CloseIcon from '@phosphor/x.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Panel } from '@ui';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
@@ -140,6 +141,11 @@ export function SplitPanel(props: SplitPanelProps) {
     props.split.mount.kind === 'component' &&
     props.split.mount.meta.splitPanelLayout === 'composable';
 
+  const canCloseSplit = () => {
+    const manager = globalSplitManager();
+    return manager ? shouldShowSplitCloseButton(manager) : false;
+  };
+
   const MountedContent = () => (
     <SplitPanelControllerProvider
       controller={{
@@ -150,11 +156,11 @@ export function SplitPanel(props: SplitPanelProps) {
         },
         canGoForward: props.handle.canGoForward,
         goForward: props.handle.goForward,
-        canClose: () => {
-          const manager = globalSplitManager();
-          return manager ? shouldShowSplitCloseButton(manager) : false;
-        },
+        canClose: canCloseSplit,
         close: props.handle.close,
+        get closeButtonPlacement() {
+          return isTouchDevice() ? 'header' : 'frame';
+        },
       }}
     >
       <Suspense>
@@ -358,6 +364,23 @@ export function SplitPanel(props: SplitPanelProps) {
                 </Show>
               </Panel.Body>
             </Panel>
+            <Show when={!isTouchDevice() && canCloseSplit()}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                square
+                label="Close split"
+                hotkey={TOKENS.split.close}
+                class="absolute top-0.5 left-0.5 z-split-panel-chrome size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-edge-muted/60 bg-panel text-ink-muted/70 shadow-[0_1px_2px_rgb(0_0_0/6%)] hover:bg-hover hover:text-ink"
+                data-split-frame-close=""
+                onClick={(event) => {
+                  event.stopPropagation();
+                  props.handle.close();
+                }}
+              >
+                <CloseIcon class="size-3" />
+              </Button>
+            </Show>
             <Show when={isTouchDevice()}>
               <Suspense>
                 <MobilePageActionRow />

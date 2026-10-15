@@ -49,6 +49,9 @@ export default defineConfig({
       },
     },
     environment: 'jsdom',
+    setupFiles: [
+      fileURLToPath(new URL('../../../tests/setup-dom.ts', import.meta.url)),
+    ],
     globals: true,
     server: {
       deps: {

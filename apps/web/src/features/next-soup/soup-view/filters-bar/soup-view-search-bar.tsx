@@ -5,9 +5,9 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg?component-solid';
 import { cn, Hotkey } from '@ui';
 import {
   $getRoot,
@@ -169,6 +169,7 @@ export const SoupSearchbar = (props: SoupSearchbarProps) => {
       }}
     >
       <div
+        data-search-bar
         class={cn(
           'group w-full relative flex items-center gap-1 rounded-lg h-7 mobile:h-9 pl-1 pr-1 py-1 mobile:min-w-35 border text-xs',
           variantStyles[props.variant ?? 'secondary']

@@ -116,7 +116,7 @@ export default function DocxBlock(props: { share?: string }) {
         <SplitHeaderRight>
           <div class="order-[999] flex items-center">
             <ChatWithAgentButton
-              label="Ask Macro"
+              label="Ask AI"
               entity={{
                 type: 'document',
                 id: documentId,

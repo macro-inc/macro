@@ -6,6 +6,7 @@ export function HeaderActionButton(props: {
   ref?: Ref<HTMLButtonElement>;
   label: string;
   icon: JSX.Element;
+  textOnly?: boolean;
   onClick: () => void;
   tooltip?: string;
   disabled?: boolean;
@@ -24,12 +25,17 @@ export function HeaderActionButton(props: {
       disabled={props.disabled}
       aria-busy={props.busy}
       class={cn(
-        '@max-[600px]/split-header:w-8 @max-[600px]/split-header:p-0',
+        '[&>svg]:size-4',
+        !props.textOnly &&
+          '@max-[600px]/split-header:w-8 @max-[600px]/split-header:p-0',
         props.class
       )}
     >
-      {props.icon}
-      <span data-header-action-label class="@max-[600px]/split-header:hidden">
+      {!props.textOnly && props.icon}
+      <span
+        data-header-action-label
+        class={cn(!props.textOnly && '@max-[600px]/split-header:hidden')}
+      >
         {props.label}
       </span>
     </Button>

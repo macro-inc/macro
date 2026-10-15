@@ -4,8 +4,8 @@
  * Everything picked goes into the equation's linear text at its caret.
  */
 
-import MathOperations from '@phosphor/math-operations.svg';
-import TextAa from '@phosphor/text-aa.svg';
+import MathOperations from '@icon/system/regular/math-operations.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import {
   BUILT_IN_EQUATIONS,

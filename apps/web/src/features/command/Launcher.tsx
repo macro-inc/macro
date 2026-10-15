@@ -23,7 +23,6 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableAiEditor,
-  enableCarouselCreateMenu,
   enableChatV3Agents,
   enableDatabases,
   enableFigViewer,
@@ -51,12 +50,11 @@ import {
   createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { Dialog } from '@kobalte/core/dialog';
+import ChatIcon from '@icon/system/regular/chat.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import type { Span } from '@macro-inc/observability';
-import ChatIcon from '@phosphor/chat.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { createDatabase } from '@queries/storage/databases';
 import { createForm } from '@queries/storage/forms';
 import { makePersisted } from '@solid-primitives/storage';
@@ -66,6 +64,7 @@ import {
   CommandMenuShell,
   cn,
   createCommandListController,
+  Dialog,
   Hotkey,
   ToggleSwitch,
 } from '@ui';
@@ -94,7 +93,6 @@ import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName, OpenCreatedItem } from './types';
 
 const LAUNCHER_FRECENCY_STORE = 'launcher-frecency-v1';
-const LAUNCHER_SEARCH_MODE_STORE = 'launcher-search-mode-v1';
 
 type LauncherFrecencyEntry = {
   count: number;
@@ -106,10 +104,6 @@ type LauncherFrecencyStore = Record<string, LauncherFrecencyEntry>;
 const [launcherFrecencyStore, setLauncherFrecencyStore] = makePersisted(
   createStore<LauncherFrecencyStore>({}),
   { name: LAUNCHER_FRECENCY_STORE }
-);
-const [launcherSearchMode, setLauncherSearchModePreference] = makePersisted(
-  createSignal(false),
-  { name: LAUNCHER_SEARCH_MODE_STORE }
 );
 
 export function useRecentCreateMenuBlocks(items: Accessor<CreatableBlock[]>) {
@@ -960,28 +954,26 @@ type LauncherMenuItemProps = {
 };
 
 export const LauncherMenuItem = (props: LauncherMenuItemProps) => {
-  const selectedIconColor = () =>
-    getIconConfig(props.creatableBlock.blockName).foreground;
   const launcherHint = () => props.creatableBlock.launcherHint;
 
   return (
     <>
       <div
         class={cn(
-          'size-4 shrink-0 text-ink-extra-muted transition-colors',
-          props.selected && selectedIconColor()
+          'size-4 shrink-0 text-ink-muted transition-colors [&_svg]:size-4',
+          props.selected && 'text-ink'
         )}
       >
         <Dynamic component={props.creatableBlock.icon} />
       </div>
 
       <div class="min-w-0 flex-1 flex items-baseline gap-2">
-        <span class="truncate text-sm font-medium text-ink">
+        <span class="truncate text-sm font-normal text-ink">
           {props.creatableBlock.label}
         </span>
         <Show when={launcherHint()}>
           {(hint) => (
-            <span class="min-w-0 truncate font-medium text-ink-extra-muted/70">
+            <span class="min-w-0 truncate font-normal text-ink-extra-muted/70">
               {hint()}
             </span>
           )}
@@ -1035,7 +1027,7 @@ export const LauncherShell = (
     sortLauncherBlocks(availableBlocks(), launcherFrecencyStore)
   );
   const [searchQuery, setSearchQuery] = createSignal('');
-  const searchMode = launcherSearchMode;
+  const [searchMode, setSearchMode] = createSignal(true);
   const recentBlocks = useRecentCreateMenuBlocks(availableBlocks);
   const filteredBlocks = createMemo(() => {
     if (!searchMode()) return sortedBlocks();
@@ -1086,7 +1078,7 @@ export const LauncherShell = (
 
   const setLauncherSearchMode = (next: boolean) => {
     const selectedItem = blocks()[focusedIndex()];
-    setLauncherSearchModePreference(next);
+    setSearchMode(next);
 
     if (!next) {
       setSearchQuery('');
@@ -1140,6 +1132,7 @@ export const LauncherShell = (
     description: 'Close Launcher',
     condition: () =>
       createMenuOpen() &&
+      !searchMode() &&
       !availableBlocks().some((item) => item.hotkey === 'c'),
     registrationType: 'add',
     keyDownHandler: () => {
@@ -1256,11 +1249,9 @@ export const LauncherShell = (
   onCleanup(hkGroup.dispose);
 
   return (
-    // The shared shell stopped painting its own pane (cmd+k gets one from the
-    // app Dialog wrapper); this raw-Kobalte dialog carries it here.
     <div
       class={cn(
-        'elevated-surface create-menu-pane w-200 max-w-[calc(100vw-16px)] touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)]',
+        'create-menu-pane w-full touch:elevated-surface max-w-[calc(100vw-16px)] touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)]',
         props.class
       )}
     >
@@ -1273,17 +1264,17 @@ export const LauncherShell = (
       <CommandMenuShell
         depth={2}
         hideBorder
-        class="h-auto w-full max-h-[75vh] outline-none touch:rounded-none"
+        class="h-auto w-full max-h-[75vh] rounded-[18px] outline-none touch:rounded-none"
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header>
+        <CommandMenuShell.Header class="min-h-15 border-edge-frame px-5 py-3">
           <Show
             when={searchMode()}
             fallback={
               <div class="min-w-0 flex h-7 flex-1 items-center gap-2 text-ink-muted">
                 <PlusIcon class="size-4 shrink-0 text-ink-extra-muted" />
-                <h1 class="truncate text-base font-normal">Create New</h1>
+                <h1 class="truncate text-base font-medium">Create New</h1>
               </div>
             }
           >
@@ -1311,12 +1302,12 @@ export const LauncherShell = (
                 <Hotkey
                   shortcut={searchModeHotkey.hotkey()}
                   theme="subtle"
-                  class="border-ink/12 px-2 py-0.5"
+                  class="border-transparent bg-ink/5 px-1.5 py-0.5"
                 />
               </span>
             }
             labelClass="flex items-center"
-            controlClass="bg-ink-extra-muted/25 data-checked:bg-accent"
+            controlClass="bg-ink-extra-muted/25 data-checked:bg-ink-muted"
             class="ml-auto flex-row-reverse gap-1.5 px-2 py-1"
           />
         </CommandMenuShell.Header>
@@ -1340,7 +1331,7 @@ export const LauncherShell = (
             scrollSelectedIntoView: listController.shouldScrollSelectedIntoView,
           })}
         </CommandMenuShell.Body>
-        <CommandMenuShell.Footer class="touch:px-6 touch:py-4">
+        <CommandMenuShell.Footer class="min-h-10 gap-4 border-edge-frame bg-ink/3 px-4 py-2 text-[11px] touch:px-6 touch:py-4">
           <style>{`
               @keyframes shift-ripple {
                 0%   { transform: scale(1); opacity: 0.6; }
@@ -1352,13 +1343,13 @@ export const LauncherShell = (
             `}</style>
           <span class="flex items-center gap-1">
             <div class="flex gap-1">
-              <div class="flex w-7 justify-center border border-ink/12 text-xxs rounded-md items-center px-1.5 py-px font-normal">
+              <div class="flex justify-center bg-ink/5 text-[10px] rounded items-center px-1.5 py-px font-normal">
                 <Hotkey
                   shortcut={searchMode() ? 'arrowup' : navUpHotkey.hotkey()}
                   class="space-x-1"
                 />
               </div>
-              <div class="flex w-7 justify-center border border-ink/12 text-xxs rounded-md items-center px-1.5 py-px font-normal">
+              <div class="flex justify-center bg-ink/5 text-[10px] rounded items-center px-1.5 py-px font-normal">
                 <Hotkey
                   shortcut={searchMode() ? 'arrowdown' : navDownHotkey.hotkey()}
                   class="space-x-1"
@@ -1368,24 +1359,22 @@ export const LauncherShell = (
             Navigate
           </span>
           <span class="flex items-center gap-1">
-            <div class="flex w-7 justify-center border border-ink/12 text-xxs rounded-md items-center px-1.5 py-px font-normal">
+            <div class="flex justify-center bg-ink/5 text-[10px] rounded items-center px-1.5 py-px font-normal">
               <Hotkey shortcut={confirmHotkey.hotkey()} />
             </div>
             Create
           </span>
-          <span class="hidden touch:hidden md:flex items-center gap-1">
+          <span class="ml-auto hidden touch:hidden md:flex items-center gap-1">
             Hold
             <span class="relative inline-flex place-items-center">
               <span
                 ref={shiftRippleRef}
-                class="shift-ripple absolute inset-0 rounded-sm border border-accent pointer-events-none opacity-0"
+                class="shift-ripple absolute inset-0 rounded-sm border border-ink/20 pointer-events-none opacity-0"
               />
               <span
                 class={cn(
-                  'border text-xxs px-1.5 py-px rounded-md transition-colors duration-150',
-                  shiftHeld()
-                    ? 'border-accent text-accent bg-accent/10'
-                    : 'border-ink/12'
+                  'text-[10px] px-1.5 py-px rounded transition-colors duration-150 motion-reduce:transition-none',
+                  shiftHeld() ? 'text-ink bg-ink/15' : 'bg-ink/5'
                 )}
               >
                 {getNormalizedKeyString({ shortcut: 'shift' })}
@@ -1399,19 +1388,12 @@ export const LauncherShell = (
   );
 };
 
-const DetailsLauncher = lazy(() => import('./DetailsLauncher'));
-const CarouselLauncher = lazy(() => import('./CarouselLauncher'));
+const ListLauncher = lazy(() => import('./ListLauncher'));
 
 export const LauncherInner = (props: LauncherInnerProps) => {
-  const carouselFlag = useFeatureFlag(enableCarouselCreateMenu);
   return (
     <Suspense>
-      <Show
-        when={carouselFlag().enabled}
-        fallback={<DetailsLauncher {...props} />}
-      >
-        <CarouselLauncher {...props} />
-      </Show>
+      <ListLauncher {...props} />
     </Suspense>
   );
 };
@@ -1448,25 +1430,18 @@ export const Launcher = (props: LauncherProps) => (
 
 const DesktopLauncher = (props: LauncherProps) => {
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
-      <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass dialog-overlay-open-animation" />
-        <Dialog.Content
-          aria-label="Create New"
-          class="fixed inset-x-0 top-0 bottom-(--virtual-keyboard-height,0) z-modal flex items-start justify-center px-2 pt-[10vh] outline-none [--color-surface:var(--color-dialog)]"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              props.onOpenChange(false);
-            }
-          }}
-        >
-          <LauncherInner
-            onClose={(shouldReturnFocus) =>
-              props.onOpenChange(false, shouldReturnFocus)
-            }
-          />
-        </Dialog.Content>
-      </Dialog.Portal>
+    <Dialog
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      class="w-180"
+      animate
+    >
+      <Dialog.Title class="sr-only">Create New</Dialog.Title>
+      <LauncherInner
+        onClose={(shouldReturnFocus) =>
+          props.onOpenChange(false, shouldReturnFocus)
+        }
+      />
     </Dialog>
   );
 };

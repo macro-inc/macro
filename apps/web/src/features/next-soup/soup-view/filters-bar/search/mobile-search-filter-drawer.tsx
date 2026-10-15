@@ -1,8 +1,8 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import ChevronDownIcon from '@icon/system/regular/caret-down.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { type SearchFacetVM, useSearchFacets } from './search-facets';

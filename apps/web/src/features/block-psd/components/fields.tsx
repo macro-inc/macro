@@ -300,7 +300,7 @@ export function CheckField(props: {
     <label class="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-ink-muted text-xs">
       <input
         type="checkbox"
-        class="accent-accent"
+        class="accent-ink"
         checked={props.checked}
         disabled={props.disabled}
         data-testid={props.testId}

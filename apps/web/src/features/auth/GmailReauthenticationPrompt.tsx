@@ -31,7 +31,7 @@ export function GmailReauthenticationPrompt() {
           ? 'Reconnect email and calendar'
           : 'Reconnect Gmail',
       content(): string {
-        return `Sync stopped for ${link.email_address}. Reconnect to restore ${reconnectScopes(link) === 'gmail_and_calendar' ? 'email and calendar' : 'email'} sync.`;
+        return `Sync stopped for ${link.email_address}.`;
       },
       actions: [
         {

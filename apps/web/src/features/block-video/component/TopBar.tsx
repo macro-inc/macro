@@ -22,8 +22,8 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download.svg';
-import Spinner from '@phosphor/spinner.svg';
+import Download from '@icon/system/regular/download.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { createSignal } from 'solid-js';
 import { useGetFileBlob } from '../signal/blockData';

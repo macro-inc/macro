@@ -1,5 +1,5 @@
 import { useChannelName } from '@core/context/channels';
-import PaperPlaneTilt from '@phosphor-icons/core/regular/paper-plane-tilt.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 

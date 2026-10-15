@@ -15,28 +15,28 @@ import type {
   ShapeOutline,
   SlideOutline,
 } from '@core/pptx-engine/types';
+import ArrowClockwise from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CloudCheck from '@icon/system/regular/cloud-check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import CopySimple from '@icon/system/regular/copy-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import ImageSquare from '@icon/system/regular/image-square.svg';
+import Layout from '@icon/system/regular/layout.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import PencilSimpleLine from '@icon/system/regular/pencil-simple-line.svg';
+import Play from '@icon/system/regular/play.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Printer from '@icon/system/regular/printer.svg';
+import Rectangle from '@icon/system/regular/rectangle.svg';
+import Scissors from '@icon/system/regular/scissors.svg';
+import SelectionAll from '@icon/system/regular/selection-all.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CloudCheck from '@phosphor/cloud-check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import CopySimple from '@phosphor/copy-simple.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import ImageSquare from '@phosphor/image-square.svg';
-import Layout from '@phosphor/layout.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import PencilSimpleLine from '@phosphor/pencil-simple-line.svg';
-import Play from '@phosphor/play.svg';
-import Plus from '@phosphor/plus.svg';
-import Printer from '@phosphor/printer.svg';
-import Rectangle from '@phosphor/rectangle.svg';
-import Scissors from '@phosphor/scissors.svg';
-import SelectionAll from '@phosphor/selection-all.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
-import Trash from '@phosphor/trash.svg';
-import WarningIcon from '@phosphor/warning.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -229,7 +229,7 @@ type TableGesture =
 
 /** The format painter's pointer: an arrow with a brush, hot spot at the tip. */
 const PAINT_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M2 2v15l4-4 3 6 2-1-3-6h5z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/><g transform="translate(12 10) scale(0.06)"><path d="M232,32a8,8,0,0,0-8-8c-44.08,0-89.31,49.71-114.43,82.63A60,60,0,0,0,32,164c0,30.88-19.54,44.73-20.47,45.37A8,8,0,0,0,16,224H92a60,60,0,0,0,57.37-77.57C182.3,121.31,232,76.08,232,32Z" fill="#fff" stroke="#000" stroke-width="18"/></g></svg>'
+  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M2 2v15l4-4 3 6 2-1-3-6h5z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/><g transform="translate(12 10) scale(0.65)"><path d="m8 14 10-11 4 4-11 10ZM8 14c-5-1-3 5-6 7 7 1 9-2 9-4" fill="#fff" stroke="#000" stroke-width="1.6" stroke-linejoin="round"/></g></svg>'
 )}") 2 2, copy`;
 
 export function PptxEditor() {

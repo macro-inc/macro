@@ -7,13 +7,13 @@ import { InspectorSelect } from './inspector-select';
  */
 
 import type { TextInfo } from '@core/fig-engine/types';
-import AlignBottomSimple from '@phosphor/align-bottom-simple.svg';
-import AlignCenterVerticalSimple from '@phosphor/align-center-vertical-simple.svg';
-import AlignTopSimple from '@phosphor/align-top-simple.svg';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignJustify from '@phosphor/text-align-justify.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
+import AlignBottomSimple from '@icon/system/regular/align-bottom-simple.svg';
+import AlignCenterVerticalSimple from '@icon/system/regular/align-center-vertical-simple.svg';
+import AlignTopSimple from '@icon/system/regular/align-top-simple.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignJustify from '@icon/system/regular/text-align-justify.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
 
 import type { MixedTextField } from '../core/rich-text';
 import {

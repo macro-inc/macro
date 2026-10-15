@@ -5,7 +5,7 @@
  * the arrow keys move between bullets, as in PowerPoint.
  */
 
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import {
   createMemo,
   createSignal,

@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import {
   useApproveHarnessPairingMutation,
   useHarnessPairingQuery,

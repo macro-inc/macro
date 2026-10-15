@@ -3,6 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { openShareModal } from '@core/component/TopBar/shareModal';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import type { DialogHandle } from '@ui';
+import { getOwner } from 'solid-js';
 import {
   isShareableEntityType,
   type ShareableEntityData,
@@ -13,13 +14,14 @@ export const openGlobalShareModal = async (props: {
   entity: ShareableEntityData;
 }): Promise<DialogHandle | undefined> => {
   const { entity } = props;
+  const owner = getOwner();
   // A form shares its respond link and audience at its own access level.
   if (entity.type === 'form') {
     try {
       const { openFormShareModal } = await import(
         '@app/features/block-form/form-global-sharing'
       );
-      return await openFormShareModal(entity.id);
+      return await openFormShareModal(entity.id, owner);
     } catch {
       toast.failure('This form’s sharing couldn’t be loaded.');
       return;

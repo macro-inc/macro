@@ -1,4 +1,5 @@
 import type { EntityData } from '@entity';
+import { createRoot, getOwner } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { EntityActionListState } from './entity-action-context';
 
@@ -78,5 +79,18 @@ it('advances to the current next row only after the email snooze has been saved'
   expect(onNavigate).toHaveBeenCalledWith({
     actionId: 'create-reminder',
     entity: next,
+  });
+});
+
+it('preserves the app owner when a reminder is opened from an event handler', () => {
+  createRoot((dispose) => {
+    try {
+      const owner = getOwner();
+      const action = makeCreateReminderAction();
+      action.execute([entity('email')]);
+      expect(mocks.open.mock.calls[0][1].owner).toBe(owner);
+    } finally {
+      dispose();
+    }
   });
 });

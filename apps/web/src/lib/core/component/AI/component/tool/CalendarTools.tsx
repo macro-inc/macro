@@ -1,9 +1,9 @@
 import type { CalendarEventTime } from '@app/features/calendar-view/calendar-range';
-import CalendarBlank from '@phosphor-icons/core/regular/calendar-blank.svg';
-import CalendarDots from '@phosphor-icons/core/regular/calendar-dots.svg';
-import CalendarPlus from '@phosphor-icons/core/regular/calendar-plus.svg';
-import CalendarX from '@phosphor-icons/core/regular/calendar-x.svg';
-import VideoCamera from '@phosphor-icons/core/regular/video-camera.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarDots from '@icon/system/regular/calendar-dots.svg';
+import CalendarPlus from '@icon/system/regular/calendar-plus.svg';
+import CalendarX from '@icon/system/regular/calendar-x.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { format, isSameDay, subDays } from 'date-fns';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';

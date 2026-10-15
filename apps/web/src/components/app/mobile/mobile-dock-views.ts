@@ -2,12 +2,12 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { enableCrm } from '@core/constant/featureFlags';
-import BellIcon from '@phosphor/bell.svg';
-import BellFillIcon from '@phosphor-fill/bell-fill.svg';
-import CalendarFillIcon from '@phosphor-fill/calendar-fill.svg';
-import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
-import FilesFillIcon from '@phosphor-fill/files-fill.svg';
-import ChannelFillIcon from '@phosphor-fill/hash-straight-fill.svg';
+import BellFillIcon from '@icon/system/fill/bell-fill.svg';
+import CalendarFillIcon from '@icon/system/fill/calendar-fill.svg';
+import EmailFillIcon from '@icon/system/fill/envelope-fill.svg';
+import FilesFillIcon from '@icon/system/fill/files-fill.svg';
+import ChannelFillIcon from '@icon/system/fill/hash-straight-fill.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';

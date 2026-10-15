@@ -13,7 +13,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { GithubPullRequestEntity } from '@entity';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { useSlashMenuPullRequests } from '@queries/soup/slash-menu-pull-requests';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import type { SystemSkillSummary } from '@service-storage/generated/schemas/systemSkillSummary';

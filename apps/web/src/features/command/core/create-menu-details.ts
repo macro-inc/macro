@@ -170,7 +170,7 @@ const DETAILS: Record<string, CreateMenuDetails> = {
     group: 'tasks',
     tagline: 'Nudge yourself at a time you pick',
     details:
-      'Ask Macro to remind you about something later — no document or task required.',
+      'Ask AI to remind you about something later — no document or task required.',
     examples: ['Call back', 'Check in Friday', 'Renew license'],
   },
   Agent: {

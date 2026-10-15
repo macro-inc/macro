@@ -16,6 +16,8 @@ export type SidePanelSectionEntry = {
 export type SidePanelContextType = {
   headerActionsMount: Accessor<HTMLDivElement | undefined>;
   setHeaderActionsMount: Setter<HTMLDivElement | undefined>;
+  trailingHeaderActionsMount: Accessor<HTMLDivElement | undefined>;
+  setTrailingHeaderActionsMount: Setter<HTMLDivElement | undefined>;
   register: (entry: SidePanelSectionEntry) => void;
   unregister: (id: string) => void;
   sections: Accessor<SidePanelSectionEntry[]>;

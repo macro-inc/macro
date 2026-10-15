@@ -1,10 +1,10 @@
 import { TabsInset } from '@core/component/TabsInset';
-import CheckSquareIcon from '@phosphor/check-square.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FilesIcon from '@phosphor/files.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import SquaresFourIcon from '@phosphor/squares-four.svg';
-import UsersIcon from '@phosphor/users.svg';
+import CheckSquareIcon from '@icon/system/regular/check-square.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FilesIcon from '@icon/system/regular/files.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import type { Component, JSX } from 'solid-js';
 import {
   CRM_RECORD_SECTION_LABELS,

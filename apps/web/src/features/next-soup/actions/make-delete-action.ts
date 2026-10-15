@@ -3,7 +3,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { type EmailEntity, type EntityData, isEmailEntity } from '@entity';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import type { SoupRow } from '../create-soup-state';
 import { restoreSoupFocus, trashEmails } from '../utils';
 import type { EntityActionListState } from './entity-action-context';

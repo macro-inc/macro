@@ -2,10 +2,12 @@ import { createListController } from '@app/components/list';
 import {
   CollapsibleSection,
   SearchBar,
+  SidebarActionRow,
   useViewControlHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { useSidebarSearchFocus } from '@app/components/view-shell/SidebarActionRow';
+import { SidebarCreateAction } from '@app/components/view-shell/SidebarCreateAction';
 import { changeSessionArchiveState } from '@app/features/block-agent/queries/change-session-archive-state';
 import {
   type EntityActionListState,
@@ -21,11 +23,10 @@ import { MenuItem } from '@core/component/ContextMenu';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { unreadFilterFn } from '@entity/utils/filter';
-import RoutineIcon from '@phosphor/clock-clockwise.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlugIcon from '@phosphor/plugs-connected.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import TrayIcon from '@phosphor/tray.svg';
+import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
+import PlugIcon from '@icon/system/regular/plugs-connected.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
+import TrayIcon from '@icon/system/regular/tray.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -160,9 +161,9 @@ function Row(props: {
 
 export function AgentsSidebar(props: AgentsSidebarProps) {
   const panel = useSplitPanelOrThrow();
-  const [searchOpen, setSearchOpen] = createSignal(false);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
   let searchInput: HTMLInputElement | undefined;
+  const focusSearch = useSidebarSearchFocus(() => searchInput);
   const inMode = (conversations: AgentConversationEntity[]) =>
     conversations.filter(
       (conversation) => props.modeForConversation(conversation) === props.mode
@@ -219,12 +220,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
 
   const openSearch = () => {
     setConversationsOpen(true);
-    setSearchOpen(true);
-    queueMicrotask(() => searchInput?.focus());
-  };
-  const closeSearch = () => {
-    props.onSearchChange('');
-    setSearchOpen(false);
+    if (props.activeConversationId) props.onNewConversation();
+    focusSearch();
   };
 
   useViewControlHotkeys({
@@ -243,15 +240,33 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <ViewSidebar.Root aria-label="Agents navigation">
-        <Show when={!isTouchDevice()}>
-          <ViewSidebar.Header>
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewSidebar.CloseButton />
-              <ViewSidebar.Title>Agents</ViewSidebar.Title>
-            </div>
-          </ViewSidebar.Header>
-        </Show>
-
+        <SidebarActionRow
+          title="Agents"
+          onSearch={() => {
+            openSearch();
+          }}
+          search={
+            <SearchBar
+              ref={searchInput}
+              placeholder="Search chats"
+              label="Search conversations"
+              value={props.search}
+              onValueChange={(value) => {
+                setConversationsOpen(true);
+                props.onSearchChange(value);
+              }}
+            />
+          }
+          create={() => (
+            <SidebarCreateAction
+              aria-label="New conversation"
+              onClick={props.onNewConversation}
+              ref={tourTarget(AGENTS_TOUR.newChat)}
+            >
+              New
+            </SidebarCreateAction>
+          )}
+        />
         <div
           ref={tourTarget(AGENTS_TOUR.modeSwitch)}
           class="px-(--sidebar-gutter) pt-1 touch:pt-0"
@@ -269,16 +284,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             }
           />
         </div>
-
-        <Show when={!isTouchDevice()}>
-          <div class="px-(--sidebar-gutter) pt-2">
-            <SidebarCreateButton
-              label="New conversation"
-              onCreate={props.onNewConversation}
-              ref={tourTarget(AGENTS_TOUR.newChat)}
-            />
-          </div>
-        </Show>
 
         <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
           <Show when={!isTouchDevice()}>
@@ -326,29 +331,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 <span class="min-w-0 truncate">Conversations</span>
                 <CollapsibleSection.Indicator />
               </CollapsibleSection.Trigger>
-              <CollapsibleSection.Action
-                label="Search conversations"
-                aria-pressed={searchOpen()}
-                class={cn(searchOpen() && 'bg-active text-ink')}
-                onClick={() => (searchOpen() ? closeSearch() : openSearch())}
-              >
-                <MagnifyingGlassIcon class="size-3.5" />
-              </CollapsibleSection.Action>
             </CollapsibleSection.Header>
             <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col gap-1">
-              <Show when={searchOpen()}>
-                <SearchBar
-                  ref={searchInput}
-                  placeholder="Search conversations"
-                  label="Search conversations"
-                  value={props.search}
-                  onValueChange={props.onSearchChange}
-                  onEscape={() => {
-                    if (!props.search) closeSearch();
-                  }}
-                  class="h-9 shrink-0 rounded-xl"
-                />
-              </Show>
               <ViewSidebar.Nav
                 class="min-h-0 flex-1 shrink overflow-auto"
                 aria-label="Recent conversations"

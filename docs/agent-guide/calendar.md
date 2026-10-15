@@ -2,6 +2,11 @@
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+Open **Calendar settings** from the gear at the right of the desktop top bar
+(on touch and preview layouts, beside the month picker). **Booking links** lives
+in the sidebar footer, or in a single icon menu in the header when the sidebar
+is not docked. Its **Manage booking links** action opens **Settings → Booking links**.
+
 Event composer dropdown triggers and date/time inputs use the theme control
 surface, so they blend with the dialog instead of using the darker page fill.
 Their menus stay inside the composer's portal scope. Verify that calendar,
@@ -116,8 +121,8 @@ Scheduling lives in the separate **Settings → Booking links** item
 **Personal** or **Team · team name**,
 then use **Links**, **Availability**, **Booking page**, **Bookings**, or **Insights**.
 Every section and creation action applies to that selected owner. The default is
-Personal. **Manage teams** in that menu opens team settings. The calendar toolbar’s booking
-actions open Booking links; connection shortcuts continue to open Calendar.
+Personal. **Manage teams** in that menu opens team settings. The calendar’s **Manage booking links**
+action opens Booking links; connection shortcuts continue to open Calendar.
 **New booking link** and **New schedule** create for the selected owner and open
 inline editors. Save changes or Cancel returns to that owner's list.
 Connected calendars offers Connect account (the existing Google consent flow),
@@ -173,8 +178,9 @@ bookings excluding recorded no-shows. Rescheduled counts bookings with recorded
 reschedule history. Ratings/CSAT are not shown because no survey data is collected.
 Oversized result sets return an error instead of silently truncating insights.
 
-The calendar header includes `Copy booking link` and `Open calendar scheduling
-settings`. Copy opens settings when no active personal link exists. Public
+The calendar’s `Booking links` menu lists active personal links under
+`Copy a booking link`; selecting one copies its URL. `Manage booking links`
+is always available, including when no active personal link exists. Public
 `/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. The website
 opens them in its own dialog; framed there, a booking page and its receipt drop their
 Macro heading and footer, and the booking page tells the website when a booking is
@@ -189,9 +195,10 @@ time zone. Calendar provider failures show an error; they never report a
 confirmed booking. Current integrations check hosts' connected calendars and
 write invitations/Google Meet through the existing calendar service.
 
-The standalone Calendar view has a left navigation sidebar. The `New` menu
+The standalone Calendar view has a left navigation sidebar. The `New event` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
-`Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
+`Booking link`. `Booking link` opens Settings → Booking links directly in a new
+personal booking-link editor. The compact calendar menu offers the same actions. An icon-only shortcut in the `Upcoming events` header opens the
 availability dialog. Start/end time selectors and a weekend switch sit above
 copy ranges that wrap on narrow screens. The dialog checks all ranges using one
 calendar-occurrence query; ranges without free time are disabled, show an X
@@ -201,14 +208,13 @@ Copying rechecks the occurrences and current time, so changes since opening do
 not enter the copied text. The option keeps its width while a left spinner and
 `Copying…` crossfade to `Copied` with a green check icon; the button keeps its
 neutral styling. Reduced-motion preferences skip the crossfade and spin.
-Collapsible `Upcoming events` and `Calendars` sections follow; calendar
+Collapsible `Calendars` and `Upcoming events` sections follow, in that order; calendar
 account rows use Drive-style trailing disclosure buttons and animated nested
 branches. Their 14px visibility checkboxes precede the swatch and label, with
 separate account and individual-calendar visibility controls. `Team out of office`
 is feature-gated and lists teammates with 24px avatars; it is a plain
 collapsible section, and the grid overlay always shows. Clicking a teammate's row navigates to that
-date, opens read-only event details, and marks the row active. The icon-only
-`Calendar settings` control fills the sidebar footer.
+date, opens read-only event details, and marks the row active. The `Booking links` menu fills the sidebar footer.
 An account checkbox toggles its calendars together in one update. The checkbox
 responds immediately; the upcoming list and each grid page refresh on deferred
 tasks rather than re-rendering all pages during the click.
@@ -254,24 +260,19 @@ complete availability coverage. Hidden, disconnected, stale, or incomplete
 calendars are reported as unknown, never free. Busy blocks contain no event
 titles or private event metadata.
 
-The in-view desktop Calendar header uses one responsive top bar. The viewed
-month and year stay on the left in a heading that scales from 16px in narrow
-splits to a maximum of 24px, with a compact `New` menu when the sidebar is closed.
-An icon-only ghost `Search events` button sits on the right, before a slightly
-larger gap and the `Today`, period selector, and previous/next controls.
-Click Search or press Cmd/Ctrl+F to expand and focus the wider inline search field.
-The field slides out with a short width transition and focuses immediately.
-The results popup stays hidden until the field contains non-whitespace text,
-then fades and slides in once expansion is nearly complete. Clearing the field
-hides the popup without collapsing search. Reduced-motion preferences skip
-both transitions.
-Close search, Escape, selecting a result, or clicking outside collapses it back
-to the icon without clearing the query. Activating a period control also
-collapses search after the action runs. Escape and Close restore focus to the
-Search button. The expanded field exposes Filters and, after typing, the
-icon-only Exact-match toggle. The filter button stays before Close. The filter
-menu opens below the button, aligned to its right edge: Search in is
-single-select, while Status, Organizer, and Attendee allow multiple values.
+The desktop Calendar workspace shows the month/year heading on the left and
+previous, Today, next, view, settings, and New controls on the right. Its sidebar
+creation pill and Search icon share the standard workspace header. The heading
+uses 20px type; weekday labels are smaller uppercase labels, with a round
+highlight on today's date.
+
+In the desktop workspace, click the sidebar Search icon or press Cmd/Ctrl+F to
+reveal and focus the full-width sidebar search field. Escape hides it without
+clearing the query. Preview and tablet split headers use a search popover;
+Escape, selecting a result, or clicking outside dismisses that popover without
+clearing the query. The search field exposes Filters and, after typing, the
+Exact-match toggle. Search in is single-select; Status, Organizer, and Attendee
+allow multiple values.
 Organizer and Attendee virtualize their contact lists; selected contacts stay
 in place, while custom email addresses appear first. Adding a valid email clears
 the contact search. Filter selections apply immediately, and only these filters
@@ -291,16 +292,9 @@ occurrence details before showing Join. Selecting a result preserves the search
 text. Availability lives in the desktop sidebar's Upcoming events section and
 in the mobile header.
 
-The period controls move into a separate row below 600px of calendar-pane width,
-with `New` on the left and navigation on the right. With a docked sidebar, the
-header needs fewer controls and stays inline down to 480px. This avoids wrapping
-and immediately unwrapping when the sidebar hides. Expanded search does not
-force early wrapping; its results popup stays directly below the search field.
-Below 1040px, search slides over the month title without moving any controls or
-changing the header height. `New` stays outside the search overlay. Resizing the
-pane keeps the search field mounted and preserves its query and focus. Today
-and New retain their text labels until the controls row runs out of room, then
-become icon buttons.
+The right-hand actions move below the date navigation below 620px of main-pane
+width with a docked sidebar, or 680px without one. Today and New retain their
+text labels until space is tight, then become icon buttons. Workspace search stays in the sidebar; split-header previews use a popover.
 Touch devices keep the month selector and header controls without separate
 create or call buttons in the right island. Mobile header islands omit Search.
 The desktop sidebar's mini calendar remains navigable by date and month.

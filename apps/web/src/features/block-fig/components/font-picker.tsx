@@ -5,9 +5,9 @@
  * `preview`, which resolves to a CSS family to draw the name in.
  */
 
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretDown from '@phosphor/caret-down.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
 import { Layer } from '@ui';
 import {
   createMemo,

@@ -1,5 +1,5 @@
 import { SearchBar } from '@app/components/view-shell/SearchBar';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button } from '@ui';
 import { createSignal, createUniqueId, Show } from 'solid-js';
 

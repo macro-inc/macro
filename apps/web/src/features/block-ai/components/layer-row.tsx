@@ -5,19 +5,19 @@
  */
 
 import { isCommitKey } from '@app/features/block-fig/core/shortcuts';
-import BezierCurve from '@phosphor/bezier-curve.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import ImageIcon from '@phosphor/image.svg';
-import LockSimple from '@phosphor/lock-simple.svg';
-import LockSimpleOpen from '@phosphor/lock-simple-open.svg';
-import Selection from '@phosphor/selection.svg';
-import SelectionBackground from '@phosphor/selection-background.svg';
-import Shapes from '@phosphor/shapes.svg';
-import Stack from '@phosphor/stack.svg';
-import TextT from '@phosphor/text-t.svg';
+import BezierCurve from '@icon/system/regular/bezier-curve.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import LockSimple from '@icon/system/regular/lock-simple.svg';
+import LockSimpleOpen from '@icon/system/regular/lock-simple-open.svg';
+import Selection from '@icon/system/regular/selection.svg';
+import SelectionBackground from '@icon/system/regular/selection-background.svg';
+import Shapes from '@icon/system/regular/shapes.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import TextT from '@icon/system/regular/text-t.svg';
 import { type Component, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { DropZone, LayerRow } from '../core/layers';

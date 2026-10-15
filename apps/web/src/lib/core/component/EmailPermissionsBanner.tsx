@@ -1,5 +1,5 @@
 import { useAddInboxFlow } from '@core/email-link';
-import Caution from '@phosphor/warning.svg';
+import Caution from '@icon/system/regular/warning.svg';
 import { Button } from '@ui';
 
 export function EmailPermissionsBanner() {

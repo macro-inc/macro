@@ -202,8 +202,12 @@ export function ComposeLayout(props: {
     >
       <div class="pb-1 w-full h-max shrink-0">
         <div
-          class="min-h-12 flex items-center justify-between gap-2 border-b border-edge-muted"
-          classList={{ hidden: ctx.isMobile() && !props.header }}
+          class="relative min-h-12 flex items-center justify-between gap-2"
+          classList={{
+            hidden: ctx.isMobile() && !props.header,
+            'after:pointer-events-none after:absolute after:bottom-0 after:left-16 after:right-0 after:border-b after:border-edge-frame/50':
+              !props.header,
+          }}
         >
           <Show
             when={props.header}

@@ -109,21 +109,21 @@
 }
 
 .md-list.md-check > li.checked::before {
-  background-color: var(--color-accent);
-  border-color: var(--color-accent);
+  background-color: var(--color-ink);
+  border-color: var(--color-ink);
 }
 
 .md-list.md-check > li.checked.chat-blue::before {
-  background-color: var(--color-accent);
-  border-color: var(--color-accent);
+  background-color: var(--color-ink);
+  border-color: var(--color-ink);
 }
 
 .md-list.md-check > li.checked::after {
   content: " ";
   --md-check-w: 0.6em;
   --md-check-h: 0.32em;
-  border-bottom: 1.5px solid var(--color-surface);
-  border-left: 1.5px solid var(--color-surface);
+  border-bottom: 1.5px solid var(--color-surface-4);
+  border-left: 1.5px solid var(--color-surface-4);
   border-bottom-left-radius: 1px;
   box-sizing: border-box;
   width: var(--md-check-w);

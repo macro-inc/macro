@@ -15,6 +15,7 @@ import {
   type ComponentProps,
   createEffect,
   createSignal,
+  getOwner,
   Suspense,
 } from 'solid-js';
 import { getPermissions } from '../SharePermissions';
@@ -35,7 +36,7 @@ function SuspendedShareModal(props: ShareModalProps) {
 
 /** Opens the share modal outside of any component, e.g. from a list action. */
 export function openShareModal(props: ShareModalInput): DialogHandle {
-  return openDialog(SuspendedShareModal, props);
+  return openDialog(SuspendedShareModal, props, { contextOwner: getOwner() });
 }
 
 /**

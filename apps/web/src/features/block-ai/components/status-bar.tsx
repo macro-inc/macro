@@ -4,12 +4,12 @@
  * Presentational.
  */
 
-import ArrowUUpLeft from '@phosphor/arrow-u-up-left.svg';
-import ArrowUUpRight from '@phosphor/arrow-u-up-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CloudArrowUp from '@phosphor/cloud-arrow-up.svg';
-import CloudCheck from '@phosphor/cloud-check.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
+import ArrowUUpLeft from '@icon/system/regular/arrow-u-up-left.svg';
+import ArrowUUpRight from '@icon/system/regular/arrow-u-up-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CloudArrowUp from '@icon/system/regular/cloud-arrow-up.svg';
+import CloudCheck from '@icon/system/regular/cloud-check.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';

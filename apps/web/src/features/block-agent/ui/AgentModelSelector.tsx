@@ -35,9 +35,9 @@ import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import Check from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import CaretDown from '@icon/system/regular/caret-down.svg?component-solid';
+import Check from '@icon/system/regular/check.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { Button, cn, Dropdown } from '@ui';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
@@ -195,7 +195,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                             {modelLabel(option.id, option.name)}
                           </span>
                           <Show when={option.id === shown()}>
-                            <Check class="size-3.5 shrink-0 text-accent" />
+                            <Check class="size-3.5 shrink-0 text-ink" />
                           </Show>
                         </MobileDrawer.Item>
                       )}

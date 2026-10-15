@@ -7,13 +7,13 @@ import type {
   MessageActionHandler,
   MessageActions,
 } from '@core/messages/types';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
-import CheckSquareIcon from '@phosphor/check-square.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PencilIcon from '@phosphor/pencil.svg';
-import SmileyIcon from '@phosphor/smiley.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import CheckSquareIcon from '@icon/system/regular/check-square.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PencilIcon from '@icon/system/regular/pencil.svg';
+import SmileyIcon from '@icon/system/regular/smiley.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import {
   type Component,
   createSignal,

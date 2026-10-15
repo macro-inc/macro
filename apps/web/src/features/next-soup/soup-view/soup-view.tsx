@@ -91,12 +91,12 @@ import {
   type SearchLocation,
 } from '@entity';
 import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import InfoIcon from '@phosphor/info.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import Spinner from '@phosphor/spinner.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
@@ -454,15 +454,6 @@ export const SoupView = (props: SoupViewProps) => {
           </SplitHeaderLeft>
           <Show when={!isTouchDevice()}>
             <SplitHeaderRight>
-              <Show
-                when={
-                  !narrowSearchExpanded() &&
-                  !isComponentListView('search') &&
-                  props.showCreateButton !== false
-                }
-              >
-                <SoupViewCreateButton />
-              </Show>
               <Show when={narrowSearchExpanded()}>
                 <Layer depth={2}>
                   <div class="flex-1 min-w-0">
@@ -533,6 +524,15 @@ export const SoupView = (props: SoupViewProps) => {
                     )}
                   </CollapsibleHeaderItem>
                 </Show>
+              </Show>
+              <Show
+                when={
+                  !narrowSearchExpanded() &&
+                  !isComponentListView('search') &&
+                  props.showCreateButton !== false
+                }
+              >
+                <SoupViewCreateButton />
               </Show>
             </SplitHeaderRight>
           </Show>

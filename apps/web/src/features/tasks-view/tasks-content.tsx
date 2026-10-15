@@ -1,4 +1,4 @@
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Match, Suspense, Switch } from 'solid-js';
 import { TaskList } from './components/task-list/TaskList';
 import { TasksBoard } from './tasks-board';

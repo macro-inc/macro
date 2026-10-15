@@ -12,7 +12,7 @@ import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { whenSettled } from '@core/util/whenSettled';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import {
   invalidateAllAfterLogin,
   useUserInfoQuery,

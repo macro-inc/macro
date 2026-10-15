@@ -1,7 +1,7 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Button, type ButtonProps, cn, pressHandlers } from '@ui';
 import {
   createContext,
@@ -19,6 +19,7 @@ export type SplitPanelController = {
   goForward: () => void;
   canClose: () => boolean;
   close: () => void;
+  closeButtonPlacement?: 'header' | 'frame';
 };
 
 const SplitPanelControllerContext = createContext<
@@ -256,7 +257,11 @@ function CloseButton(props: SplitControlButtonProps) {
   const label = () => local.label ?? 'Close';
 
   return (
-    <Show when={controller?.canClose()}>
+    <Show
+      when={
+        controller?.canClose() && controller.closeButtonPlacement !== 'frame'
+      }
+    >
       <Button
         {...rest}
         type={local.type ?? 'button'}

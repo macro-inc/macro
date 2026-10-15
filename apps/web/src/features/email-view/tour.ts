@@ -17,8 +17,6 @@ export const emailTour = defineViewTour({
   steps: [
     {
       target: EMAIL_TOUR.signalNoise,
-      entry: VIEW_SHELL_TOUR.sidebarToggle,
-      entryLabel: 'Show the email sidebar to continue',
       title: 'Find the signal in your inbox',
       description:
         'Signal keeps important conversations in focus. Noise gives lower-priority mail its own space, so you can catch up when it suits you.',

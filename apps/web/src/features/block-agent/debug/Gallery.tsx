@@ -14,10 +14,10 @@ import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/comp
 import { MarkdownImage } from '@core/component/LexicalMarkdown/component/decorator/MarkdownImage';
 import { MediaLoadingPlaceholder } from '@core/component/LexicalMarkdown/component/decorator/MediaLoadingPlaceholder';
 import { useUserId } from '@core/context/user';
-import FileText from '@phosphor/file-text.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Terminal from '@phosphor/terminal.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Terminal from '@icon/system/regular/terminal.svg';
 import type {
   ElicitationSchema,
   FoldedMessage,

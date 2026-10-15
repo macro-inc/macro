@@ -1,5 +1,5 @@
-import DownloadIcon from '@phosphor/download-simple.svg';
-import InfoIcon from '@phosphor/info.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
 import { Button, Tooltip } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import {

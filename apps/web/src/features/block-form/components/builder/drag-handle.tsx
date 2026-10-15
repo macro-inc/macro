@@ -1,4 +1,4 @@
-import DotsSixVertical from '@phosphor/dots-six-vertical.svg';
+import DotsSixVertical from '@icon/system/regular/dots-six-vertical.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 

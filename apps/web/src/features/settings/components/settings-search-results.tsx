@@ -1,3 +1,4 @@
+import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { SettingsSearchResult } from '../core/settings-search';
@@ -30,7 +31,10 @@ export function SettingsSearchResults(props: {
             >
               <Dynamic
                 component={result.page.icon}
-                class="mt-0.5 size-(--sidebar-icon-slot) shrink-0 p-0.5 text-ink"
+                class={cn(
+                  'mt-0.5 size-(--sidebar-icon-slot) shrink-0 p-0.5',
+                  props.selectedId === result.id ? 'text-ink' : 'text-ink-muted'
+                )}
               />
               <span class="min-w-0">
                 <span class="block text-sm leading-5 text-ink">

@@ -7,7 +7,7 @@
  * the same rule production chat uses for `ThinkingBlock`.
  */
 
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { createSignal, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
 

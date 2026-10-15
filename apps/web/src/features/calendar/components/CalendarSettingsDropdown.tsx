@@ -3,11 +3,11 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import GearIcon from '@phosphor/gear.svg';
-import MinusIcon from '@phosphor/minus.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import GearIcon from '@icon/system/regular/gear.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -242,7 +242,7 @@ function DesktopCalendarSettings(props: {
                       >
                         <span class="flex-1">{option.label}</span>
                         <Dropdown.ItemIndicator>
-                          <CheckIcon class="size-3.5 text-accent" />
+                          <CheckIcon class="size-3.5 text-ink" />
                         </Dropdown.ItemIndicator>
                       </Dropdown.RadioItem>
                     )}
@@ -275,7 +275,7 @@ function DesktopCalendarSettings(props: {
                       <Dropdown.RadioItem closeOnSelect value={option.value}>
                         <span class="flex-1">{option.label}</span>
                         <Dropdown.ItemIndicator>
-                          <CheckIcon class="size-3.5 text-accent" />
+                          <CheckIcon class="size-3.5 text-ink" />
                         </Dropdown.ItemIndicator>
                       </Dropdown.RadioItem>
                     )}
@@ -395,7 +395,7 @@ function MobileCalendarSettings(props: {
                       when={controls.isAccountPartiallyVisible(group)}
                       fallback={
                         <CheckIcon
-                          class="size-4 shrink-0 text-accent"
+                          class="size-4 shrink-0 text-ink"
                           classList={{
                             invisible: !controls.isAccountVisible(group),
                           }}
@@ -424,7 +424,7 @@ function MobileCalendarSettings(props: {
             >
               <span class="min-w-0 flex-1 truncate">Show weekends</span>
               <CheckIcon
-                class="size-4 shrink-0 text-accent"
+                class="size-4 shrink-0 text-ink"
                 classList={{
                   invisible: !calendarView.displaySettings.showWeekends,
                 }}
@@ -444,7 +444,7 @@ function MobileCalendarSettings(props: {
                 >
                   <span class="flex-1">{option.label}</span>
                   <CheckIcon
-                    class="size-4 shrink-0 text-accent"
+                    class="size-4 shrink-0 text-ink"
                     classList={{
                       invisible:
                         calendarView.displaySettings.weekStartsOn !==
@@ -468,7 +468,7 @@ function MobileCalendarSettings(props: {
                 >
                   <span class="flex-1">{option.label}</span>
                   <CheckIcon
-                    class="size-4 shrink-0 text-accent"
+                    class="size-4 shrink-0 text-ink"
                     classList={{
                       invisible:
                         calendarView.displaySettings.timeFormat !==

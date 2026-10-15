@@ -27,14 +27,12 @@ import { debouncedDependent } from '@core/util/debounce';
 import { openExternalUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
-import Macro from '@icon/macro-logo.svg';
-import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import {
   Badge,
   CommandMenuEmptyState,
-  CommandMenuHotkeyHint,
   CommandMenuSearchInput,
   CommandMenuShell,
   cn,
@@ -85,7 +83,7 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'dms', label: 'People' },
 ];
 
-const VIRTUAL_ITEM_HEIGHT = 40; // tailwind h-10
+const VIRTUAL_ITEM_HEIGHT = 40; // Matches CommandItem h-10.
 const LIST_PADDING = 16; // p-2 = 8px top + 8px bottom
 const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8 + LIST_PADDING;
 const LOAD_MORE_THRESHOLD = VIRTUAL_ITEM_HEIGHT * 3;
@@ -125,6 +123,8 @@ export function CommandMenu() {
 
   return (
     <Dialog
+      class="w-200"
+      animate
       onOpenChange={CommandState.setIsOpen}
       onCloseAutoFocus={(e) => {
         if (suppressCloseAutoFocus) {
@@ -595,7 +595,7 @@ export function CommandMenuInner(props: {
   });
 
   // Backspace when query is empty goes back from command scope
-  const backspaceHotkey = registerHotkey({
+  registerHotkey({
     hotkey: 'backspace',
     scopeId: hotkeyScope,
     description: 'Go back',
@@ -719,15 +719,8 @@ export function CommandMenuInner(props: {
       ref={setCommandMenuRef}
       depth={props.depth}
     >
-      <CommandMenuShell.Header>
-        <Show
-          when={isInCommandScope()}
-          fallback={
-            <span class="flex size-5 shrink-0 items-center justify-center text-accent">
-              <Macro class="size-3" />
-            </span>
-          }
-        >
+      <CommandMenuShell.Header class="gap-3 px-5 py-3 border-edge-frame">
+        <Show when={isInCommandScope()}>
           <button
             class="flex size-5 shrink-0 items-center justify-center text-ink-muted hover:text-ink transition-colors"
             onClick={handleBack}
@@ -738,14 +731,21 @@ export function CommandMenuInner(props: {
         </Show>
         <CommandMenuSearchInput
           type="text"
+          class="text-lg leading-6 font-normal tracking-[-0.01em] text-ink"
+          aria-label="Search commands and content"
           placeholder={
             CommandState.commandScopePlaceholder() ??
-            (isEntityActionMode() ? 'Search actions...' : 'Search...')
+            (isEntityActionMode()
+              ? 'Search actions...'
+              : 'Search anything or run a command...')
           }
           value={CommandState.query()}
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
           autofocus
         />
+        <kbd class="shrink-0 rounded-md bg-ink/5 px-1.5 py-0.5 font-sans text-[10px] leading-4 text-ink-extra-muted">
+          esc
+        </kbd>
       </CommandMenuShell.Header>
 
       <Show
@@ -771,7 +771,7 @@ export function CommandMenuInner(props: {
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <CommandMenuShell.Toolbar
           class={cn(
-            'pl-2.5 pr-1.5 pt-2 border-0 bg-transparent',
+            'px-3 py-2 border-0 bg-transparent',
             isEntityActionMode() && 'gap-1.5'
           )}
         >
@@ -779,6 +779,8 @@ export function CommandMenuInner(props: {
             when={isEntityActionMode()}
             fallback={
               <Tabs
+                class="h-8"
+                labelClass="px-2.5 text-[11px] font-medium"
                 list={categoryTabs()}
                 value={categoryFilter()}
                 onChange={(value) => {
@@ -798,7 +800,9 @@ export function CommandMenuInner(props: {
 
       <CommandMenuShell.Body>
         <div
-          class="overflow-hidden transition-[height] duration-60 ease-out p-2"
+          role="listbox"
+          aria-label="Commands and results"
+          class="overflow-hidden transition-[height] duration-60 ease-out motion-reduce:transition-none p-2"
           style={{ height: `${resultsHeight()}px` }}
         >
           <Show
@@ -823,59 +827,56 @@ export function CommandMenuInner(props: {
         </div>
       </CommandMenuShell.Body>
 
-      <CommandMenuShell.Footer class="bg-transparent">
-        <span class="flex items-center gap-1">
-          <div class="flex gap-1">
-            <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut={navUpHotkey.hotkey()} class="space-x-1" />
-            </div>
-            <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
-              <Hotkey shortcut={navDownHotkey.hotkey()} class="space-x-1" />
-            </div>
-          </div>
-          Navigate
-        </span>
-
-        <Switch>
-          <Match when={isInCommandScope()}>
-            <HotkeyHint command={confirmHotkey} label="Run action" />
-            <HotkeyHint command={backspaceHotkey} label="Back" />
-          </Match>
-          <Match when={selectedIsCommand() || isEntityActionMode()}>
-            <HotkeyHint command={confirmHotkey} label="Run action" />
-          </Match>
-          <Match when={selectedIsSearch()}>
-            <HotkeyHint command={confirmHotkey} label="Search" />
-            <Show when={canOpenInNewSplit()}>
-              <HotkeyHint
-                command={confirmSplitHotkey}
-                label="Search in new split"
-              />
-            </Show>
-          </Match>
-          <Match when={selectedIsAskAi()}>
-            <HotkeyHint command={confirmHotkey} label="Ask AI" />
-          </Match>
-          <Match when={selectedIsEntity()}>
-            <HotkeyHint command={confirmHotkey} label="Open" />
-            <Show when={canOpenInNewSplit()}>
-              <HotkeyHint
-                command={confirmSplitHotkey}
-                label="Open in new split"
-              />
-            </Show>
-          </Match>
-        </Switch>
-
-        <Show when={!isInCommandScope() && !isEntityActionMode()}>
-          <HotkeyHint command={tabHotkey} label="Category" />
-        </Show>
-        <Show
-          when={isInCommandScope()}
-          fallback={<HotkeyHint command={escapeHotkey} label="Close" />}
-        >
-          <HotkeyHint command={escapeHotkey} label="Back" />
-        </Show>
+      <CommandMenuShell.Footer class="min-h-10 justify-between gap-3 border-edge-frame bg-ink/3 px-4 py-2 text-[11px] text-ink-extra-muted">
+        <div class="flex min-w-0 items-center gap-3">
+          <span
+            class="flex items-center gap-1.5"
+            title="Use arrow keys to navigate"
+          >
+            <span class="flex gap-1 text-ink-muted">
+              <Hotkey shortcut={navUpHotkey.hotkey()} />
+              <Hotkey shortcut={navDownHotkey.hotkey()} />
+            </span>
+            Navigate
+          </span>
+          <Show when={!isInCommandScope() && !isEntityActionMode()}>
+            <HotkeyHint command={tabHotkey} label="Category" />
+          </Show>
+          <Show when={isInCommandScope()}>
+            <HotkeyHint command={escapeHotkey} label="Back" />
+          </Show>
+        </div>
+        <div class="flex shrink-0 items-center gap-3">
+          <Show
+            when={
+              (selectedIsEntity() || selectedIsSearch()) && canOpenInNewSplit()
+            }
+          >
+            <HotkeyHint command={confirmSplitHotkey} label="Open in split" />
+          </Show>
+          <span class="text-ink font-medium">
+            <Switch>
+              <Match
+                when={
+                  isInCommandScope() ||
+                  selectedIsCommand() ||
+                  isEntityActionMode()
+                }
+              >
+                <HotkeyHint command={confirmHotkey} label="Run action" />
+              </Match>
+              <Match when={selectedIsSearch()}>
+                <HotkeyHint command={confirmHotkey} label="Search" />
+              </Match>
+              <Match when={selectedIsAskAi()}>
+                <HotkeyHint command={confirmHotkey} label="Ask AI" />
+              </Match>
+              <Match when={selectedIsEntity()}>
+                <HotkeyHint command={confirmHotkey} label="Open" />
+              </Match>
+            </Switch>
+          </span>
+        </div>
       </CommandMenuShell.Footer>
     </CommandMenuShell>
   );
@@ -974,9 +975,11 @@ function VirtualizedCommandList(props: {
 
 function HotkeyHint(props: { command: RegisterHotkeyReturn; label: string }) {
   return (
-    <CommandMenuHotkeyHint
-      hotkey={<Hotkey shortcut={props.command.hotkey()} class="space-x-1" />}
-      label={props.label}
-    />
+    <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
+      {props.label}
+      <span class="inline-flex min-h-5 items-center rounded bg-ink/5 px-1.5 text-[10px] font-normal text-ink-muted">
+        <Hotkey shortcut={props.command.hotkey()} class="space-x-1" />
+      </span>
+    </span>
   );
 }

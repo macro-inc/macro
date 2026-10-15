@@ -4,7 +4,7 @@
  * out like PowerPoint's; ends with "Spell check complete".
  */
 
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { For, Show } from 'solid-js';
 import type { SpellingPaneState } from '../primitives/create-spelling-pane';

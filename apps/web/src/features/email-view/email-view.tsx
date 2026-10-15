@@ -10,7 +10,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   createSignal,
   onMount,
@@ -19,11 +19,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
-import {
-  EmailHeader,
-  EmailTopBar,
-  EmailViewBreadcrumbItem,
-} from './components/EmailHeader';
+import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
@@ -69,10 +65,7 @@ function EmailDesktopLayout(
 ) {
   const list = () => (
     <>
-      <EmailTopBar />
-      <ViewShell.Header>
-        <EmailHeader onSearchEscape={props.onSearchEscape} />
-      </ViewShell.Header>
+      <EmailHeader />
       <ViewTour tour={emailTour} />
       <ViewShell.Content>{props.children}</ViewShell.Content>
     </>
@@ -86,7 +79,7 @@ function EmailDesktopLayout(
       main={{ preferredWidth: 640 }}
     >
       <ViewShell.Aside>
-        <EmailSidebar />
+        <EmailSidebar onSearchEscape={props.onSearchEscape} />
       </ViewShell.Aside>
       <ViewShell.Main>
         <SplitRouter.Outlet fallback={list} />

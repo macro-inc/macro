@@ -1,9 +1,10 @@
+import { SidebarCreateAction } from '@app/components/view-shell/SidebarCreateAction';
 import { ManageMeetingsDialog } from '@app/features/meetings/manage-meetings-dialog';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import UsersIcon from '@phosphor/users.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
-import { Button, Dropdown } from '@ui';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
+import { Dropdown } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 
@@ -20,10 +21,12 @@ export function NewMeetingButton(props: NewMeetingActions) {
     <Show
       when={!flag().loading && flag().enabled}
       fallback={
-        <Button variant="accent" size="sm" onClick={props.onChannelCall}>
-          <VideoCameraIcon class="size-3.5" />
-          New call
-        </Button>
+        <SidebarCreateAction
+          aria-label="New call"
+          onClick={props.onChannelCall}
+        >
+          New
+        </SidebarCreateAction>
       }
     >
       <NewMeetingMenu
@@ -38,15 +41,9 @@ function NewMeetingMenu(props: NewMeetingActions) {
   const [managing, setManaging] = createSignal(false);
   return (
     <>
-      <Dropdown placement="bottom-end" modal={false}>
-        <Dropdown.Trigger
-          variant="accent"
-          size="sm"
-          class="gap-1.5 px-2"
-          label="New call"
-        >
-          <VideoCameraIcon class="size-3.5" />
-          <span>New call</span>
+      <Dropdown placement="bottom-start" modal={false}>
+        <Dropdown.Trigger as={SidebarCreateAction} label="New call">
+          <span>New</span>
           <CaretDownIcon class="size-3" />
         </Dropdown.Trigger>
         <Dropdown.Content class="min-w-60" blockingBackdrop>

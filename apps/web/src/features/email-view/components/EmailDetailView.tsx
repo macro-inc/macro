@@ -7,7 +7,6 @@ import { createEmailThreadSource } from '@app/features/email-thread/queries/thre
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { emailThreadRoute } from '@app/routes/routes';
-import { EmailThreadControls } from '@block-email/component/EmailThreadControls';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import {
   type EmailThreadToolsOptions,
@@ -37,9 +36,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
-import { ButtonGroup } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { createMemo, Show } from 'solid-js';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
 import type { EmailThreadTarget } from '../types';
@@ -49,67 +46,46 @@ function EmailDetailHeader(
   props: EmailThreadToolsOptions & {
     value: string;
     focusThread: () => void;
-    controlsMount: HTMLDivElement | undefined;
     onEmailReminderSaved: () => void | Promise<void>;
   }
 ) {
-  const { emailEntity, permissions, menuTools, controls } =
-    useEmailThreadTools(props);
+  const { emailEntity, permissions, menuTools } = useEmailThreadTools(props);
   return (
-    <>
-      <ViewBreadcrumbs.Item
-        value={props.value}
-        metadata={{ type: 'email', id: props.id }}
-        order={1}
-      >
-        {(item) => (
-          <div class="flex min-w-0 items-center gap-0.5">
-            <ViewBreadcrumbs.Button
-              class="gap-1.5"
-              isActive={item.isActive()}
-              onClick={() => {
-                item.onSelect();
-                props.focusThread();
-              }}
-              tooltip={props.title}
-            >
-              <EntityIcon targetType="email" size="xs" class="shrink-0" />
-              <span class="truncate">{props.title}</span>
-            </ViewBreadcrumbs.Button>
-            <div class="shrink-0">
-              <SplitFileMenu
-                id={props.id}
-                itemType="email"
-                entityKind="email"
-                name={props.title}
-                entity={emailEntity()}
-                permissions={permissions()}
-                ops={[]}
-                tools={menuTools}
-                onEmailReminderSaved={props.onEmailReminderSaved}
-              />
-            </div>
+    <ViewBreadcrumbs.Item
+      value={props.value}
+      metadata={{ type: 'email', id: props.id }}
+      order={1}
+    >
+      {(item) => (
+        <div class="flex min-w-0 items-center gap-0.5">
+          <ViewBreadcrumbs.Button
+            class="gap-1.5"
+            isActive={item.isActive()}
+            onClick={() => {
+              item.onSelect();
+              props.focusThread();
+            }}
+            tooltip={props.title}
+          >
+            <EntityIcon targetType="email" size="xs" class="shrink-0" />
+            <span class="truncate">{props.title}</span>
+          </ViewBreadcrumbs.Button>
+          <div class="shrink-0">
+            <SplitFileMenu
+              id={props.id}
+              itemType="email"
+              entityKind="email"
+              name={props.title}
+              entity={emailEntity()}
+              permissions={permissions()}
+              ops={[]}
+              tools={menuTools}
+              onEmailReminderSaved={props.onEmailReminderSaved}
+            />
           </div>
-        )}
-      </ViewBreadcrumbs.Item>
-      <Show when={props.controlsMount}>
-        {(mount) => (
-          <Portal mount={mount()}>
-            <ButtonGroup variant="outline" size="icon-md" class="touch:hidden">
-              <EmailThreadControls {...controls} />
-              <Show when={props.listNavigation}>
-                {(navigation) => (
-                  <ListNavigationButtons
-                    navigation={navigation()}
-                    class="gap-0"
-                  />
-                )}
-              </Show>
-            </ButtonGroup>
-          </Portal>
-        )}
-      </Show>
-    </>
+        </div>
+      )}
+    </ViewBreadcrumbs.Item>
   );
 }
 
@@ -122,7 +98,6 @@ export function EmailDetailView(props: {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const canAutofocus = useCanAutofocusSplitContent();
-  const [controlsMount, setControlsMount] = createSignal<HTMLDivElement>();
   const threadId = () => props.thread.id;
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
@@ -234,16 +209,19 @@ export function EmailDetailView(props: {
   return (
     <SidePanel.Root floating defaultOpen={false}>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <ViewShell.TopBar class="touch:flex">
+        <ViewShell.TopBar class="h-auto min-h-12 flex-wrap py-2 touch:flex">
           <ViewBreadcrumbs.Outlet
-            class="flex-1"
+            class="min-w-32 flex-1"
             aria-label="Email location"
             fallback={<EntityDetailBreadcrumbSkeleton />}
           />
-          <div class="ml-auto flex shrink-0 items-center gap-1 @max-[900px]/split-header:[&_[data-header-action]]:w-8 @max-[900px]/split-header:[&_[data-header-action]]:p-0 @max-[900px]/split-header:[&_[data-header-action-label]]:hidden">
-            <div ref={setControlsMount} class="flex items-center" />
+          <div class="ml-auto flex shrink-0 items-center gap-1">
+            <ListNavigationButtons
+              navigation={listNavigation}
+              class="touch:hidden"
+            />
             <SidePanel.HeaderActionsOutlet />
-            <Show when={ENABLE_EMAIL_SHARING}>
+            <Show when={isTouchDevice() && ENABLE_EMAIL_SHARING}>
               <ShareTrigger
                 onClick={openShare}
                 id={props.thread.id}
@@ -286,7 +264,6 @@ export function EmailDetailView(props: {
                   listNavigation={listNavigation}
                   value={breadcrumbValue()}
                   focusThread={focusContainer}
-                  controlsMount={controlsMount()}
                 />
               )}
               sidePanelHeaderToggle={false}

@@ -29,6 +29,12 @@ vi.mock('@app/components/view-shell', () => ({
     breakpoints: { narrow: () => false },
   }),
   useViewControlHotkeys: () => {},
+  SidebarActionRow: (props: { search: JSX.Element; create: JSX.Element }) => (
+    <>
+      {props.search}
+      {props.create}
+    </>
+  ),
   SearchBar: () => null,
 }));
 vi.mock('@app/preferences/use-preference', () => ({
@@ -56,7 +62,10 @@ vi.mock('@ui', async () => ({
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
   ) => <button aria-label={props.label} {...props} />,
 }));
-vi.mock('@ui/components/Tour', () => ({ tourTarget: () => () => {} }));
+vi.mock('@ui/components/Tour', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui/components/Tour')>()),
+  tourTarget: () => () => {},
+}));
 vi.mock('@app/components/view-shell/tour', () => ({
   VIEW_SHELL_TOUR: { sidebarToggle: 'sidebar-toggle' },
 }));

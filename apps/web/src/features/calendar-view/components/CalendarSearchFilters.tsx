@@ -1,6 +1,6 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { useContacts, useContactsQuery } from '@queries/contacts/contacts';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -123,7 +123,7 @@ export function CalendarSearchFilters(props: {
                       >
                         <span class="flex-1">{option.label}</span>
                         <Dropdown.ItemIndicator>
-                          <CheckIcon class="size-3.5 text-accent" />
+                          <CheckIcon class="size-3.5 text-ink" />
                         </Dropdown.ItemIndicator>
                       </Dropdown.RadioItem>
                     )}

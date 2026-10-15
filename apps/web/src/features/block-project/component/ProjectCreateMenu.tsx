@@ -24,9 +24,9 @@ import {
   createTask,
 } from '@core/util/create';
 import type { ObjectLike } from '@core/util/result';
-import CaretDown from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import CirclePlus from '@phosphor/plus-circle.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import CirclePlus from '@icon/system/regular/plus-circle.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createProject } from '@queries/storage/projects';
 import { Dialog, Dropdown, Surface } from '@ui';

@@ -1,4 +1,4 @@
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { ContinueButton } from '../components/controls';
 import { ToolTile } from '../components/tool-tile';

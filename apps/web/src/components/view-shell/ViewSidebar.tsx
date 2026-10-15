@@ -1,8 +1,8 @@
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
-import type { JSX } from 'solid-js';
+import type { ComponentProps, JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
@@ -23,8 +23,10 @@ function Root(props: JSX.HTMLAttributes<HTMLElement>) {
   );
 }
 
-function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+function Header(
+  props: JSX.HTMLAttributes<HTMLDivElement> & { trailing?: JSX.Element }
+) {
+  const [local, rest] = splitProps(props, ['children', 'class', 'trailing']);
   return (
     <SplitHeaderContextMenu>
       <div
@@ -37,6 +39,7 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
       >
         {local.children}
         <ViewSidebarToggle action="collapse" />
+        {local.trailing}
       </div>
     </SplitHeaderContextMenu>
   );
@@ -64,7 +67,7 @@ function Primary(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter) touch:pt-[calc(var(--safe-top,0px)+var(--sidebar-gutter))]',
+        'min-w-0 px-(--sidebar-gutter) pt-2 touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
         local.class
       )}
     >
@@ -108,7 +111,7 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex min-h-0 min-w-0 flex-1 flex-col gap-(--sidebar-section-gap) overflow-auto px-(--sidebar-gutter) py-(--sidebar-content-inset)',
+        'flex min-h-0 min-w-0 flex-1 flex-col gap-(--sidebar-section-gap) overflow-auto px-(--sidebar-gutter) py-4',
         local.class
       )}
       data-view-sidebar-content=""
@@ -297,10 +300,15 @@ function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
   );
 }
 
+// Resolve the shell control when rendered, after both modules initialize.
+function CloseButton(props: ComponentProps<typeof ViewSidebarCloseButton>) {
+  return <ViewSidebarCloseButton {...props} />;
+}
+
 export const ViewSidebar = Object.assign(Root, {
   Root,
   Header,
-  CloseButton: ViewSidebarCloseButton,
+  CloseButton,
   Title,
   Primary,
   Toolbar,

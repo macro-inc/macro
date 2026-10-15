@@ -4,11 +4,11 @@ import {
   createPipedreamCatalogConnect,
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import XIcon from '@phosphor/x.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';

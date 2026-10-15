@@ -1,32 +1,29 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
-import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableReminders } from '@core/constant/featureFlags';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArchiveIcon from '@phosphor/archive.svg';
-import BellIcon from '@phosphor/bell-simple.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FileIcon from '@phosphor/file.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import StarIcon from '@phosphor/star.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
-import SignalIcon from '@phosphor/wave-sine.svg';
-import NoiseIcon from '@phosphor/waveform.svg';
+import ArchiveIcon from '@icon/system/regular/archive.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
+import SignalIcon from '@icon/system/regular/wave-sine.svg';
+import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
+import { EmailPrimaryActions } from './EmailHeader';
 import { EmailInboxList } from './EmailInboxSelector';
 
 // Email is personal, so the sidebar lists only the user's own tags.
@@ -68,34 +65,45 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
 export function EmailNavigation(props: { onNavigate?: () => void }) {
   const { state } = useEmailView();
   const reminders = useFeatureFlag(enableReminders);
+  const items = (ids: EmailTab[]) =>
+    ids.flatMap((id) => EMAIL_TABS.filter((tab) => tab.id === id));
   return (
-    <ViewSidebar.Nav aria-label="Email tabs">
-      <div
-        ref={tourTarget(EMAIL_TOUR.signalNoise)}
-        class="flex flex-col gap-(--sidebar-row-gap)"
-      >
-        <For each={EMAIL_TABS.slice(0, 2)}>
+    <div class="flex flex-col gap-5">
+      <ViewSidebar.Nav aria-label="Mailboxes">
+        <For each={items(['favorites', 'drafts', 'sent', 'scheduled'])}>
           {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
         </For>
-      </div>
-      <For
-        each={EMAIL_TABS.slice(2).filter(
-          (tab) =>
-            tab.id !== 'reminders' ||
+        <Show
+          when={
             reminders().enabled ||
             (reminders().loading && state.tab === 'reminders')
-        )}
-      >
-        {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
-      </For>
-    </ViewSidebar.Nav>
+          }
+        >
+          <Tab item={items(['reminders'])[0]} onNavigate={props.onNavigate} />
+        </Show>
+      </ViewSidebar.Nav>
+      <section aria-label="Library" class="flex flex-col gap-2">
+        <h2 class="px-(--sidebar-item-inset) text-xs font-medium text-ink-extra-muted">
+          Library
+        </h2>
+        <ViewSidebar.Nav aria-label="Email library">
+          <For each={items(['all', 'archived', 'shared', 'calendar'])}>
+            {(item) => (
+              <Tab
+                item={item.id === 'all' ? { ...item, label: 'All mail' } : item}
+                onNavigate={props.onNavigate}
+              />
+            )}
+          </For>
+        </ViewSidebar.Nav>
+      </section>
+    </div>
   );
 }
 
-export function EmailSidebar() {
+export function EmailSidebar(props: { onSearchEscape?: () => void }) {
   const reminders = useFeatureFlag(enableReminders);
   const panel = useSplitPanelOrThrow();
-  const { openWithSplit } = useSplitLayout();
   const {
     state,
     setTab,
@@ -125,22 +133,9 @@ export function EmailSidebar() {
 
   return (
     <ViewSidebar.Root aria-label="Email navigation">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header>
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>Email</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
-      </Show>
-
-      <ViewSidebar.Content>
+      <EmailPrimaryActions onSearchEscape={props.onSearchEscape} />
+      <ViewSidebar.Content class="gap-5 pt-2">
         <EmailInboxList />
-
-        <SidebarCreateButton
-          label="New email"
-          onCreate={() => composeEmail(openWithSplit, state.inboxIds)}
-        />
 
         <EmailNavigation />
 

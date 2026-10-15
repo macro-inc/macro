@@ -13,7 +13,7 @@ import { useCopyLink } from '@core/util/useCopyLink';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { fetchFormDetail, useFormDetailQuery } from '@queries/storage/forms';
 import { type DialogHandle, type ManagedDialogProps, openDialog } from '@ui';
-import { type Accessor, Show, Suspense } from 'solid-js';
+import { type Accessor, type Owner, Show, Suspense } from 'solid-js';
 import type { FormContext } from './context/form-context';
 import type { FormDetail } from './core/form-model';
 import { respondLink } from './core/respond-link';
@@ -105,12 +105,13 @@ function FormShareDialog(props: ManagedDialogProps & { formId: string }) {
  * be read is told and nothing opens.
  */
 export async function openFormShareModal(
-  formId: string
+  formId: string,
+  owner?: Owner | null
 ): Promise<DialogHandle | undefined> {
   const detail = await fetchFormDetail(formId);
   if (detail.isErr()) {
     notify.failure('This form’s sharing couldn’t be loaded.');
     return;
   }
-  return openDialog(FormShareDialog, { formId });
+  return openDialog(FormShareDialog, { formId }, { contextOwner: owner });
 }

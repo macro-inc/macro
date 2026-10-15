@@ -98,6 +98,7 @@ function DriveDetailTopBar() {
         <Show when={activeDetail()}>
           {(detail) => (
             <ShareTrigger
+              textOnly
               onClick={openShare}
               id={detail().target.id}
               blockType={detail().blockType}
@@ -106,6 +107,7 @@ function DriveDetailTopBar() {
             />
           )}
         </Show>
+        <SidePanel.HeaderActionsOutlet placement="trailing" />
         <SidePanel.Toggle />
       </div>
     </ViewShell.TopBar>
@@ -169,6 +171,7 @@ function StackEntityDetail(props: {
       </Match>
       <Match when={true}>
         <EntityDetail
+          inlinePdfToolbar
           target={props.entry.data}
           previewHeaderLeading={
             <Show when={hasBlockHeader(props.entry.data)}>
@@ -192,6 +195,7 @@ function StackEntityDetail(props: {
                 userAccessLevel={context.userAccessLevel}
                 blockType={entityDetailBlockType(props.entry.data)!}
                 operations={context.operations}
+                titleControls={context.titleControls}
                 fallbackName={props.entry.data.fallbackName}
                 onClose={navigationStack.pop}
                 onDuplicate={(id, name) => {

@@ -3,8 +3,8 @@
  * way PowerPoint's font boxes work.
  */
 
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretDown from '@phosphor/caret-down.svg';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 /** Fonts every deck can use; the engine substitutes metric-compatible faces. */

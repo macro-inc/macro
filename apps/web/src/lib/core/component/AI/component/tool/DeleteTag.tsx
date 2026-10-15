@@ -1,4 +1,4 @@
-import Trash from '@phosphor-icons/core/regular/trash.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 

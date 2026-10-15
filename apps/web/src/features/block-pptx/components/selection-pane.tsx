@@ -6,13 +6,13 @@
  */
 
 import type { ShapeOutline, SlideOutline } from '@core/pptx-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import X from '@phosphor/x.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, Show } from 'solid-js';
 

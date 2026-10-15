@@ -1,9 +1,9 @@
+import External from '@icon/system/regular/arrow-square-out.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Dots from '@icon/system/regular/dots-three.svg';
+import Link from '@icon/system/regular/link.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import External from '@phosphor/arrow-square-out.svg';
-import Clock from '@phosphor/clock.svg';
-import Copy from '@phosphor/copy.svg';
-import Dots from '@phosphor/dots-three.svg';
-import Link from '@phosphor/link.svg';
 import { Button, ToggleSwitch } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EventType, SchedulingScope } from '../core/types';

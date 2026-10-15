@@ -1,9 +1,9 @@
-import ChatCircleIcon from '@phosphor/chat-circle.svg';
-import HashIcon from '@phosphor/hash.svg';
-import InfoIcon from '@phosphor/info.svg';
-import LockIcon from '@phosphor/lock.svg';
-import UsersIcon from '@phosphor/users.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
+import ChatCircleIcon from '@icon/system/regular/chat-circle.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import LockIcon from '@icon/system/regular/lock.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -176,7 +176,7 @@ export function NativeCheckbox(
   return (
     <input
       type="checkbox"
-      class={cn('size-4 shrink-0 accent-accent', local.class)}
+      class={cn('size-4 shrink-0 accent-ink', local.class)}
       {...rest}
     />
   );

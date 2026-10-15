@@ -1,4 +1,4 @@
-import ChevronDownIcon from '@phosphor/caret-down.svg?component-solid';
+import ChevronDownIcon from '@icon/system/regular/caret-down.svg?component-solid';
 import { cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 

@@ -1,7 +1,7 @@
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import Spinner from '@phosphor/spinner-gap.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Spinner from '@icon/system/regular/spinner-gap.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, type ButtonProps } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

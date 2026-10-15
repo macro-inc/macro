@@ -1,7 +1,7 @@
-import BellSlash from '@phosphor-icons/core/regular/bell-slash.svg';
-import BellZ from '@phosphor-icons/core/regular/bell-z.svg';
-import Check from '@phosphor-icons/core/regular/check.svg';
-import List from '@phosphor-icons/core/regular/list.svg';
+import BellSlash from '@icon/system/regular/bell-slash.svg';
+import BellZ from '@icon/system/regular/bell-z.svg';
+import Check from '@icon/system/regular/check.svg';
+import List from '@icon/system/regular/list.svg';
 import type { ListNotifications as ListNotificationsTool } from '@service-cognition/generated/tools/types';
 import { Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

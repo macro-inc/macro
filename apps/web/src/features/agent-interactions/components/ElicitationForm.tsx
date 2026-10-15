@@ -11,7 +11,7 @@
  * native control does.
  */
 
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import type {
   ElicitationOption,
   ElicitationProperty,
@@ -74,10 +74,10 @@ function ChoiceBox(props: { checked: boolean; multiple: boolean }) {
     <span
       aria-hidden="true"
       class={cn(
-        'mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center border text-surface transition-colors',
+        'mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center border text-surface-4 transition-colors',
         props.multiple ? 'rounded-sm' : 'rounded-full',
         props.checked
-          ? 'border-accent bg-accent'
+          ? 'border-ink bg-ink'
           : 'border-edge-muted bg-transparent group-hover:border-edge'
       )}
     >

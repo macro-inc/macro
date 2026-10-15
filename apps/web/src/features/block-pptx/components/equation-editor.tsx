@@ -4,7 +4,7 @@
  * while writing a new equation and while one is selected on the slide.
  */
 
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { onMount, Show } from 'solid-js';
 import type { EquationEditor as Editor } from '../primitives/create-equation-editor';

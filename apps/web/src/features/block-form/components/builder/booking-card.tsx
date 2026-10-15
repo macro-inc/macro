@@ -1,7 +1,7 @@
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import Check from '@phosphor/check.svg';
-import Warning from '@phosphor/warning.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Check from '@icon/system/regular/check.svg';
+import Warning from '@icon/system/regular/warning.svg';
 import { cn, Dropdown } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { FormBookingLink } from '../../context/form-context';

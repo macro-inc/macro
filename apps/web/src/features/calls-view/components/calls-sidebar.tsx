@@ -1,17 +1,22 @@
-import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
+import {
+  CollapsibleSection,
+  SidebarActionRow,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
+import { NewCallButton } from '@app/features/next-soup/soup-view/NewCallButton';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
 import { usePreference } from '@app/preferences/use-preference';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import PhoneSlashIcon from '@phosphor/phone-slash.svg';
-import PhoneXIcon from '@phosphor/phone-x.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import PhoneSlashIcon from '@icon/system/regular/phone-slash.svg';
+import PhoneXIcon from '@icon/system/regular/phone-x.svg';
 import {
   SidebarTagsSection,
   selectSidebarTag,
@@ -152,19 +157,16 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
 
   return (
     <ViewSidebar.Root aria-label="Calls navigation">
-      <ViewSidebar.Header>
-        <div class="flex min-w-0 items-center gap-1">
-          <ViewSidebar.CloseButton class="shrink-0" />
-          <ViewSidebar.Title>Calls</ViewSidebar.Title>
-        </div>
-      </ViewSidebar.Header>
-      <ViewSidebar.Primary>
-        <div onFocusIn={props.onNavigate}>
+      <SidebarActionRow
+        title="Calls"
+        onSearch={props.onNavigate}
+        search={
           <Layer depth={2}>
             <SoupSearchbar variant="secondary" placeholder="Search calls" />
           </Layer>
-        </div>
-      </ViewSidebar.Primary>
+        }
+        create={() => <NewCallButton />}
+      />
 
       <ViewSidebar.Content>
         <ViewSidebar.Nav aria-label="Call views">

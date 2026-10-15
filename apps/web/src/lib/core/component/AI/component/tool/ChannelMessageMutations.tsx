@@ -1,8 +1,8 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import ChatCircleDots from '@phosphor-icons/core/regular/chat-circle-dots.svg';
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
-import Smiley from '@phosphor-icons/core/regular/smiley.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg';
+import ChatCircleDots from '@icon/system/regular/chat-circle-dots.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Smiley from '@icon/system/regular/smiley.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

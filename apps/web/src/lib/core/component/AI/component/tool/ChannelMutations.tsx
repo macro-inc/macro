@@ -1,8 +1,8 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import Hash from '@phosphor-icons/core/regular/hash.svg';
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
-import ShareNetwork from '@phosphor-icons/core/regular/share-network.svg';
-import Users from '@phosphor-icons/core/regular/users.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import ShareNetwork from '@icon/system/regular/share-network.svg';
+import Users from '@icon/system/regular/users.svg';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

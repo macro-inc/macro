@@ -21,8 +21,8 @@ import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import IconShared from '@icon/share.svg';
-import ChatDebugIcon from '@phosphor/chat-text.svg';
-import Notepad from '@phosphor/notepad.svg';
+import ChatDebugIcon from '@icon/system/regular/chat-text.svg';
+import Notepad from '@icon/system/regular/notepad.svg';
 import type { Accessor } from 'solid-js';
 
 export function TopBar(props: {

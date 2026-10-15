@@ -3,9 +3,9 @@ import { useCodexAgentsAccess } from '@core/codex/flag';
 import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { ThrownResultError } from '@core/util/result';
+import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,

@@ -1,8 +1,8 @@
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Copy from '@phosphor/copy.svg';
-import Plus from '@phosphor/plus.svg';
-import X from '@phosphor/x.svg';
 import { Button, ToggleSwitch } from '@ui';
 import { createSignal, For, Index, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';

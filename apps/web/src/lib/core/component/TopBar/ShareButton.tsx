@@ -38,17 +38,18 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import IconShared from '@icon/share.svg';
-import { Dialog } from '@kobalte/core/dialog';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import IconComment from '@phosphor/chat-teardrop.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import IconEye from '@phosphor/eye.svg';
-import IconLink from '@phosphor/link.svg';
-import IconEdit from '@phosphor/pencil.svg';
-import UserCircle from '@phosphor/user-circle.svg';
-import UsersIcon from '@phosphor/users.svg';
-import IconX from '@phosphor/x.svg';
+import ChevronDownIcon from '@icon/system/regular/caret-down.svg';
+import IconComment from '@icon/system/regular/chat-teardrop.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import IconEye from '@icon/system/regular/eye.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import IconLink from '@icon/system/regular/link.svg';
+import LockIcon from '@icon/system/regular/lock-simple.svg';
+import IconEdit from '@icon/system/regular/pencil.svg';
+import UserCircle from '@icon/system/regular/user-circle.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import IconX from '@icon/system/regular/x.svg';
 import {
   fetchAgentSessionSharePermissions,
   updateAgentSessionSharePermissions,
@@ -84,12 +85,12 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import {
   Button,
+  CommandMenuShell,
   CopyButton,
   cn,
+  Dialog,
   Dropdown,
   type ManagedDialogProps,
-  Panel,
-  SegmentedControl,
   Tooltip,
 } from '@ui';
 import type { Result } from 'neverthrow';
@@ -267,17 +268,17 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
   switch (accessLevel) {
     case 'comment':
       if (blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS) {
-        return 'View';
+        return 'Can view';
       }
-      return 'Comment';
+      return 'Can comment';
     case 'view':
-      return 'View';
+      return 'Can view';
     case 'edit':
-      return 'Edit';
+      return 'Can edit';
     case 'owner':
       return 'Owner';
     default:
-      return 'Remove Access';
+      return 'Remove access';
   }
 };
 
@@ -390,6 +391,7 @@ interface LinkSharingControlsProps {
   setLinkShareScope: (scope: LinkShareScope) => void;
   setLinkShareAccessLevel: (accessLevel: AccessLevel | null) => void;
   copyLink: () => void;
+  hideCopyLink?: boolean;
   teamShare?: TeamShareControls;
 }
 
@@ -415,18 +417,19 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
   const teamShareScope = () => getTeamShareScope(props.teamShare.accessLevel);
 
   return (
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-1">
         <span class="font-medium">Team access</span>
         <p class="text-sm text-ink-muted">
-          Share this {props.teamShare.itemNoun} directly with the owner's team.
+          Give everyone on the owner's team access to this{' '}
+          {props.teamShare.itemNoun} without needing a link.
         </p>
       </div>
       <Dropdown>
         <Dropdown.Trigger
           variant="outline"
           aria-label="Team access"
-          class="min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1"
+          class="shrink-0 flex items-center gap-1 rounded-lg px-2.5 py-1.5"
         >
           {getTeamShareScopeCopy(teamShareScope())}
           <ChevronDownIcon class="size-4 text-ink-extra-muted" />
@@ -444,7 +447,7 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
                 <Dropdown.RadioItem value={option.value}>
                   <span class="flex-1 truncate">{option.label}</span>
                   <Dropdown.ItemIndicator>
-                    <CheckIcon class="size-3.5 text-accent" />
+                    <CheckIcon class="size-3.5 text-ink" />
                   </Dropdown.ItemIndicator>
                 </Dropdown.RadioItem>
               )}
@@ -459,65 +462,90 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
 function LinkSharingControls(props: LinkSharingControlsProps) {
   const scope = () => getLinkShareScope(props.linkShare);
   const scopeCopy = () => getLinkShareScopeCopy(scope());
-  const shareStatus = () =>
-    getShareStatus(
-      props.linkShare,
-      props.hasExplicitShares,
-      props.teamShare?.accessLevel
-    );
+  const ScopeIcon = () =>
+    scope() === 'PUBLIC'
+      ? GlobeIcon
+      : scope() === 'TEAM'
+        ? UsersIcon
+        : LockIcon;
 
   return (
-    <div class="flex flex-col gap-3 p-4 text-sm text-ink">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <span class="font-medium">{scopeCopy().title}</span>
-          <Tooltip label={shareStatus().tooltip}>
-            <div
-              class={cn(
-                'flex items-center justify-center rounded-xl border px-2 py-0.5',
-                shareStatus().label === 'Just me'
-                  ? 'border-edge-muted bg-edge-muted text-ink-extra-muted'
-                  : 'border-accent/30 bg-accent/10 text-accent'
-              )}
+    <div class="flex flex-col gap-4 px-6 py-6 text-sm text-ink">
+      <h3 class="font-medium">Link access</h3>
+      <div class="flex items-start gap-3">
+        <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-hover text-ink">
+          <Dynamic component={ScopeIcon()} class="size-4" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <Dropdown>
+            <Dropdown.Trigger
+              variant="ghost"
+              aria-label="Who can open this link"
+              class="-ml-2 flex max-w-full items-center gap-1 rounded-lg px-2 py-1 font-medium"
             >
-              <span class="text-xs font-medium whitespace-nowrap">
-                {shareStatus().label}
-              </span>
-            </div>
-          </Tooltip>
+              <span class="truncate">{scopeCopy().label}</span>
+              <ChevronDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+            </Dropdown.Trigger>
+            <Dropdown.Content
+              portalScope="local"
+              class="max-w-[calc(100vw-48px)] w-80"
+            >
+              <Dropdown.RadioGroup
+                aria-label="Link sharing scope"
+                value={scope()}
+                onChange={(value) =>
+                  props.setLinkShareScope(value as LinkShareScope)
+                }
+              >
+                <For each={LINK_SHARE_SCOPE_OPTIONS}>
+                  {(option) => (
+                    <Dropdown.RadioItem
+                      value={option.value}
+                      class="items-start py-2.5"
+                    >
+                      <div class="min-w-0 flex-1">
+                        <div class="font-medium">{option.label}</div>
+                        <div class="mt-1 text-xs leading-relaxed text-ink-muted whitespace-normal">
+                          {getLinkShareScopeCopy(option.value).description}
+                        </div>
+                      </div>
+                      <Dropdown.ItemIndicator>
+                        <CheckIcon class="mt-0.5 size-3.5" />
+                      </Dropdown.ItemIndicator>
+                    </Dropdown.RadioItem>
+                  )}
+                </For>
+              </Dropdown.RadioGroup>
+            </Dropdown.Content>
+          </Dropdown>
         </div>
-        <SegmentedControl
-          aria-label="Link sharing scope"
-          size="sm"
-          value={scope()}
-          options={LINK_SHARE_SCOPE_OPTIONS}
-          onChange={props.setLinkShareScope}
-        />
+        <Show when={scope() !== 'NONE'}>
+          <ShareOptions
+            editPermissionEnabled={props.editPermissionEnabled}
+            permissions={props.linkShareAccessLevel ?? 'view'}
+            hideNoAccess
+            setPermissions={props.setLinkShareAccessLevel}
+          />
+        </Show>
       </div>
-      <p class="text-sm text-ink-muted">{scopeCopy().description}</p>
-      <Show when={scope() !== 'NONE'}>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex items-center gap-2 text-ink-muted">
-            <span>Access level</span>
-            <ShareOptions
-              editPermissionEnabled={props.editPermissionEnabled}
-              permissions={props.linkShareAccessLevel ?? 'view'}
-              hideNoAccess={true}
-              setPermissions={props.setLinkShareAccessLevel}
-            />
-          </div>
-          <Button variant="outline" onClick={props.copyLink}>
-            <CopyIcon class="size-4" />
-            <span>Copy Link</span>
-          </Button>
-        </div>
-      </Show>
       <Show when={props.teamShare}>
         {(teamShare) => (
-          <div class="border-t border-edge-muted pt-3">
-            <TeamAccessSection teamShare={teamShare()} />
-          </div>
+          <details class="group" open={teamShare().accessLevel != null}>
+            <summary class="flex items-center gap-1 text-xs text-ink-muted list-none hover:text-ink">
+              More access options
+              <ChevronDownIcon class="size-3.5 transition-transform group-open:rotate-180" />
+            </summary>
+            <div class="pt-4">
+              <TeamAccessSection teamShare={teamShare()} />
+            </div>
+          </details>
         )}
+      </Show>
+      <Show when={!props.hideCopyLink}>
+        <Button variant="outline" onClick={props.copyLink}>
+          <IconLink class="size-4" />
+          Copy link
+        </Button>
       </Show>
     </div>
   );
@@ -676,7 +704,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               <div class="px-4 py-3">
                 <Button variant="outline" onClick={props.copyLink}>
                   <CopyIcon class="size-4" />
-                  <span>Copy Link</span>
+                  <span>Copy link</span>
                 </Button>
               </div>
             </Show>
@@ -1455,259 +1483,269 @@ export function ShareModal(props: ShareModalProps) {
         />
       }
     >
-      <Dialog onOpenChange={props.onOpenChange} open={props.open}>
-        <Dialog.Portal>
-          <Dialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
-          <div class="z-modal fixed inset-0">
-            <Dialog.Content
-              class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope isolate flex flex-col gap-2 *:max-h-[75vh]"
-              style={{ width: '800px' }}
+      <Dialog
+        onOpenChange={props.onOpenChange}
+        open={props.open}
+        class="w-150"
+        animate
+      >
+        <CommandMenuShell
+          depth={2}
+          hideBorder
+          class="max-h-[min(75vh,calc(100dvh-2rem))]"
+        >
+          <CommandMenuShell.Header class="items-start justify-between gap-4 pl-5 pr-14 py-4 border-edge-frame">
+            <div class="min-w-0">
+              <Dialog.Title class="text-lg font-semibold tracking-tight line-clamp-2">
+                Share{' '}
+                <span>{props.name || props.itemType.replaceAll('_', ' ')}</span>
+              </Dialog.Title>
+              <Dialog.Description class="sr-only">
+                Choose who can access this item or send someone a link.
+              </Dialog.Description>
+            </div>
+          </CommandMenuShell.Header>
+          <CommandMenuShell.Body scroll class="py-4">
+            <section>
+              <div>
+                <Show when={!canForward()}>
+                  <p class="px-4 py-3 text-sm text-ink-muted">
+                    {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
+                  </p>
+                </Show>
+                <Show when={canForward()}>
+                  <ForwardToChannel
+                    compact
+                    {...forwardTarget(
+                      props.blockAlias,
+                      props.id,
+                      setChannelPermissions
+                    )}
+                    editPermissionEnabled={editPermissionEnabled()}
+                    submitPermissionInfo={{
+                      setChannelPermissions: (id, accessLevel) =>
+                        setChannelPermissions(id, accessLevel, true),
+                      userPermissions: userPermissions(),
+                      channelSharePermissions: recipients(),
+                    }}
+                    onSubmit={() => props.onOpenChange(false)}
+                    refetch={refetch}
+                    name={props.name}
+                    hideAccessLevelSelector={props.itemType === 'email'}
+                    initialAccessLevel={
+                      props.itemType === 'email' ? 'view' : null
+                    }
+                    allowedAccessLevels={shareLevelsFor(props.itemType)}
+                  />
+                </Show>
+              </div>
+            </section>
+
+            {/* Link and team access */}
+            <Show
+              when={
+                props.linkSharing ||
+                (userPermissions() === Permissions.OWNER &&
+                  !isLinkSharingDisabledForItem(props.itemType))
+              }
             >
-              {/* Card 1: Share form — gradient border */}
-              <Panel depth={2} class="rounded-xl bg-dialog">
-                <Panel.Header class="px-4">
-                  <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
-                    <span class="shrink-0">Share:</span>
-                    <EntityIcon
-                      targetType={props.blockAlias}
-                      size="sm"
-                      class="shrink-0"
-                    />
-                    <span class="truncate">{props.name}</span>
-                  </Dialog.Title>
-                </Panel.Header>
-                <Panel.Body>
-                  <Show when={!canForward()}>
-                    <p class="px-4 py-3 text-sm text-ink-muted">
-                      {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
-                    </p>
-                  </Show>
-                  <Show when={canForward()}>
-                    <ForwardToChannel
-                      {...forwardTarget(
-                        props.blockAlias,
-                        props.id,
-                        setChannelPermissions
-                      )}
-                      editPermissionEnabled={editPermissionEnabled()}
-                      submitPermissionInfo={{
-                        setChannelPermissions: (id, accessLevel) =>
-                          setChannelPermissions(id, accessLevel, true),
-                        userPermissions: recipientPermissions(),
-                        channelSharePermissions: recipients(),
-                      }}
-                      onSubmit={() => props.onOpenChange(false)}
-                      onCancel={() => props.onOpenChange(false)}
-                      refetch={refetch}
-                      name={props.name}
-                      hideAccessLevelSelector={props.itemType === 'email'}
-                      initialAccessLevel={
-                        props.itemType === 'email' ? 'view' : null
-                      }
-                      allowedAccessLevels={shareLevelsFor(props.itemType)}
-                    />
-                  </Show>
-                  <Show when={!canForward()}>
-                    <div class="flex justify-end px-4 py-3">
-                      <Button variant="outline" onClick={copyLink}>
-                        <CopyIcon class="size-4" />
-                        <span>Copy Link</span>
-                      </Button>
+              <section>
+                <div>
+                  <Show
+                    when={props.linkSharing}
+                    fallback={
+                      <LinkSharingControls
+                        hideCopyLink
+                        editPermissionEnabled={editPermissionEnabled()}
+                        linkShare={linkShare()}
+                        linkShareAccessLevel={linkShareAccessLevel()}
+                        hasExplicitShares={
+                          (recipients()?.length ?? 0) > 0 ||
+                          !!props.hasDirectShares
+                        }
+                        setLinkShareScope={setLinkShareScope}
+                        setLinkShareAccessLevel={setLinkShareAccessLevel}
+                        copyLink={copyLink}
+                        teamShare={teamShareControls()}
+                      />
+                    }
+                  >
+                    <div class="p-4">
+                      <Dynamic component={props.linkSharing} />
                     </div>
                   </Show>
-                </Panel.Body>
-              </Panel>
-
-              {/* Card 2: Recipients — plain border */}
-              <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-                <Panel depth={2} class="rounded-xl bg-dialog">
-                  <Panel.Header class="px-4">
-                    <span class="text-sm font-medium">
-                      <Show when={!ownerOnlyRoster()} fallback="Owner">
-                        People with access to this{' '}
-                        {getShareItemNoun(props.itemType)}
-                      </Show>
-                    </span>
-                  </Panel.Header>
-                  <Panel.Body class="text-ink">
-                    <div class="relative">
-                      <ScrollIndicators
-                        scrollRef={recipientScrollRef}
-                        noBorderStart
-                        noBorderEnd
-                      />
-                      <CustomScrollbar scrollContainer={recipientScrollRef} />
-                      <div
-                        class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
-                        ref={setRecipientScrollRef}
-                      >
-                        <div class="grid gap-3 text-ink text-sm select-none p-4">
-                          <Show when={props.owner}>
-                            <div class="flex justify-between">
-                              <div class="flex items-center gap-2 overflow-hidden font-medium">
-                                <OwnerLabel
-                                  ownerId={props.owner}
-                                  viewerLabel="Me"
-                                />
-                              </div>
-                              <div class="flex items-center">
-                                <div class="font-medium text-ink-muted text-xs">
-                                  Owner
-                                </div>
+                </div>
+              </section>
+            </Show>
+            <Show
+              when={teamShareOnOwnCard(props.itemType, teamShareControls())}
+            >
+              {(teamShare) => (
+                <section>
+                  <div>
+                    <div class="p-4 text-sm text-ink">
+                      <TeamAccessSection teamShare={teamShare()} />
+                    </div>
+                  </div>
+                </section>
+              )}
+            </Show>
+            {/* Existing access */}
+            <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
+              <section class="pb-4">
+                <div class="px-6 pt-2">
+                  <span class="text-sm font-medium">
+                    <Show when={!ownerOnlyRoster()} fallback="Owner">
+                      Who has access
+                    </Show>
+                  </span>
+                </div>
+                <div class="text-ink">
+                  <div class="relative">
+                    <ScrollIndicators
+                      scrollRef={recipientScrollRef}
+                      noBorderStart
+                      noBorderEnd
+                    />
+                    <CustomScrollbar scrollContainer={recipientScrollRef} />
+                    <div
+                      class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
+                      ref={setRecipientScrollRef}
+                    >
+                      <div class="grid gap-4 text-ink text-sm select-none p-6 pt-4">
+                        <Show when={props.owner}>
+                          <div class="flex justify-between">
+                            <div class="flex items-center gap-2 overflow-hidden font-medium">
+                              <OwnerLabel ownerId={props.owner} />
+                            </div>
+                            <div class="flex items-center">
+                              <div class="font-medium text-ink-muted text-xs">
+                                Owner
                               </div>
                             </div>
-                          </Show>
-                          <Dynamic component={props.people} />
-                          <For each={recipients() || []}>
-                            {(recipient) => (
-                              <div class="flex justify-between">
-                                <div
-                                  class="flex items-center gap-2 overflow-hidden"
-                                  onClick={() =>
-                                    navigateToChannel(recipient.channel_id)
+                          </div>
+                        </Show>
+                        <Dynamic component={props.people} />
+                        <For each={recipients() || []}>
+                          {(recipient) => (
+                            <div class="flex justify-between">
+                              <div
+                                class="flex items-center gap-2 overflow-hidden"
+                                onClick={() =>
+                                  navigateToChannel(recipient.channel_id)
+                                }
+                              >
+                                <Switch
+                                  fallback={
+                                    <UsersIcon class="shrink-0 size-4" />
                                   }
                                 >
-                                  <Switch
-                                    fallback={
-                                      <UsersIcon class="shrink-0 size-4" />
+                                  <Match
+                                    when={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.type === 'direct_message'
                                     }
                                   >
-                                    <Match
-                                      when={
-                                        channelNameMap().get(
-                                          recipient.channel_id
-                                        )?.type === 'direct_message'
-                                      }
-                                    >
-                                      <DmRecipientIcon
-                                        channelId={recipient.channel_id}
-                                      />
-                                    </Match>
-                                    <Match
-                                      when={channelNameMap().get(
-                                        recipient.channel_id
-                                      )}
-                                    >
-                                      <UsersIcon class="shrink-0 size-4" />
-                                    </Match>
-                                  </Switch>
-                                  <div class="font-medium truncate">
-                                    <Show
-                                      when={
-                                        channelNameMap().get(
-                                          recipient.channel_id
-                                        )?.type !== 'direct_message'
-                                      }
-                                      fallback={
+                                    <DmRecipientIcon
+                                      channelId={recipient.channel_id}
+                                    />
+                                  </Match>
+                                  <Match
+                                    when={channelNameMap().get(
+                                      recipient.channel_id
+                                    )}
+                                  >
+                                    <UsersIcon class="shrink-0 size-4" />
+                                  </Match>
+                                </Switch>
+                                <div class="font-medium truncate">
+                                  <Show
+                                    when={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.type !== 'direct_message'
+                                    }
+                                    fallback={
+                                      channelNameMap().get(recipient.channel_id)
+                                        ?.name || 'Conversation'
+                                    }
+                                  >
+                                    <GroupChannelLabel
+                                      channelId={recipient.channel_id}
+                                      fallbackName={
                                         channelNameMap().get(
                                           recipient.channel_id
                                         )?.name || 'Conversation'
                                       }
-                                    >
-                                      <GroupChannelLabel
-                                        channelId={recipient.channel_id}
-                                        fallbackName={
-                                          channelNameMap().get(
-                                            recipient.channel_id
-                                          )?.name || 'Conversation'
-                                        }
-                                      />
-                                    </Show>
-                                  </div>
-                                  <Show when={props.itemType === 'form'}>
-                                    <span class="shrink-0 text-xs text-ink-muted">
-                                      Can respond (channel)
-                                    </span>
+                                    />
                                   </Show>
                                 </div>
-                                <div class="flex items-center">
-                                  <ShareOptions
-                                    editPermissionEnabled={editPermissionEnabled()}
-                                    allowedAccessLevels={shareLevelsFor(
-                                      props.itemType
-                                    )}
-                                    disabled={
-                                      recipientPermissions() !==
-                                      Permissions.OWNER
-                                    }
-                                    permissions={recipient.access_level}
-                                    setPermissions={(accessLevel) => {
-                                      if (accessLevel === null) {
-                                        removeChannelAccess(
-                                          recipient.channel_id
-                                        );
-                                      } else if (
-                                        accessLevel !== recipient.access_level
-                                      ) {
-                                        setChannelPermissions(
-                                          recipient.channel_id,
-                                          accessLevel
-                                        );
-                                      }
-                                    }}
-                                  />
-                                </div>
+                                <Show when={props.itemType === 'form'}>
+                                  <span class="shrink-0 text-xs text-ink-muted">
+                                    Can respond (channel)
+                                  </span>
+                                </Show>
                               </div>
-                            )}
-                          </For>
-                        </div>
+                              <div class="flex items-center">
+                                <ShareOptions
+                                  editPermissionEnabled={editPermissionEnabled()}
+                                  allowedAccessLevels={shareLevelsFor(
+                                    props.itemType
+                                  )}
+                                  disabled={
+                                    userPermissions() !== Permissions.OWNER
+                                  }
+                                  permissions={recipient.access_level}
+                                  setPermissions={(accessLevel) => {
+                                    if (accessLevel === null) {
+                                      removeChannelAccess(recipient.channel_id);
+                                    } else if (
+                                      accessLevel !== recipient.access_level
+                                    ) {
+                                      setChannelPermissions(
+                                        recipient.channel_id,
+                                        accessLevel
+                                      );
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </For>
                       </div>
                     </div>
-                  </Panel.Body>
-                </Panel>
-              </Show>
-
-              {/* Card 3: Link sharing — plain border */}
-              <Show
-                when={
-                  props.linkSharing ||
-                  (userPermissions() === Permissions.OWNER &&
-                    !isLinkSharingDisabledForItem(props.itemType))
-                }
-              >
-                <Panel depth={2} class="rounded-xl bg-dialog">
-                  <Panel.Body>
-                    <Show
-                      when={props.linkSharing}
-                      fallback={
-                        <LinkSharingControls
-                          editPermissionEnabled={editPermissionEnabled()}
-                          linkShare={linkShare()}
-                          linkShareAccessLevel={linkShareAccessLevel()}
-                          hasExplicitShares={
-                            (recipients()?.length ?? 0) > 0 ||
-                            !!props.hasDirectShares
-                          }
-                          setLinkShareScope={setLinkShareScope}
-                          setLinkShareAccessLevel={setLinkShareAccessLevel}
-                          copyLink={copyLink}
-                          teamShare={teamShareControls()}
-                        />
-                      }
-                    >
-                      <div class="p-4">
-                        <Dynamic component={props.linkSharing} />
-                      </div>
-                    </Show>
-                  </Panel.Body>
-                </Panel>
-              </Show>
-              <Show
-                when={teamShareOnOwnCard(props.itemType, teamShareControls())}
-              >
-                {(teamShare) => (
-                  <Panel depth={2} class="rounded-xl bg-dialog">
-                    <Panel.Body>
-                      <div class="p-4 text-sm text-ink">
-                        <TeamAccessSection teamShare={teamShare()} />
-                      </div>
-                    </Panel.Body>
-                  </Panel>
-                )}
-              </Show>
-            </Dialog.Content>
-          </div>
-        </Dialog.Portal>
+                  </div>
+                </div>
+              </section>
+            </Show>
+          </CommandMenuShell.Body>
+          <CommandMenuShell.Footer class="justify-between gap-3 px-5 py-3 border-edge-frame bg-ink/3">
+            <Button
+              variant="outline"
+              class="rounded-full px-4 py-2"
+              onClick={copyLink}
+            >
+              <IconLink class="size-4" />
+              Copy link
+            </Button>
+            <Button
+              variant="cta"
+              class="rounded-full px-5 py-2"
+              onClick={() => props.onOpenChange(false)}
+            >
+              Done
+            </Button>
+          </CommandMenuShell.Footer>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="absolute right-4 top-4"
+            label="Close sharing"
+            onClick={() => props.onOpenChange(false)}
+          >
+            <IconX class="size-4" />
+          </Button>
+        </CommandMenuShell>
       </Dialog>
     </Show>
   );
@@ -1719,6 +1757,7 @@ export function ShareTrigger(props: {
   blockType?: ShareBlockType;
   hotkeyScope?: string;
   copyLink?: () => void;
+  textOnly?: boolean;
 }) {
   const isAuthenticated = useIsAuthenticated();
   const inBlock = isInBlock();
@@ -1822,6 +1861,7 @@ export function ShareTrigger(props: {
       >
         <HeaderActionButton
           label="Share"
+          textOnly
           icon={<IconShared />}
           onClick={() => {
             if (!isAuthenticated()) {
@@ -1834,14 +1874,16 @@ export function ShareTrigger(props: {
         />
       </Tooltip>
 
-      <CopyButton
-        variant="ghost"
-        tooltip="Copy Share Link"
-        size="icon-md"
-        onClick={ShareLinkAction().action}
-      >
-        <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
-      </CopyButton>
+      <Show when={!props.textOnly}>
+        <CopyButton
+          variant="ghost"
+          tooltip="Copy Share Link"
+          size="icon-md"
+          onClick={ShareLinkAction().action}
+        >
+          <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
+        </CopyButton>
+      </Show>
     </div>
   );
 }
@@ -1934,7 +1976,10 @@ export function ShareOptions(props: {
       <Dropdown.Trigger
         variant="outline"
         disabled={props.disabled}
-        class={`min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
+        class={cn(
+          'shrink-0 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm',
+          props.noBorder && 'border-0'
+        )}
         on:keydown={(e: KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.stopPropagation();
@@ -1963,7 +2008,7 @@ export function ShareOptions(props: {
                     </div>
                     <span class="flex-1 truncate">{option.label}</span>
                     <Dropdown.ItemIndicator>
-                      <CheckIcon class="size-3.5 text-accent" />
+                      <CheckIcon class="size-3.5 text-ink" />
                     </Dropdown.ItemIndicator>
                   </Dropdown.RadioItem>
                 );
@@ -1978,7 +2023,7 @@ export function ShareOptions(props: {
                 </div>
                 <span class="flex-1 truncate">{accessLevelText(null)}</span>
                 <Dropdown.ItemIndicator>
-                  <CheckIcon class="size-3.5 text-accent" />
+                  <CheckIcon class="size-3.5 text-ink" />
                 </Dropdown.ItemIndicator>
               </Dropdown.RadioItem>
             </Dropdown.Group>

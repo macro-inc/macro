@@ -1,0 +1,132 @@
+.macro-toast-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: gap 240ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  width: 100%;
+  outline: none;
+  pointer-events: auto;
+}
+
+/* Empty regions must not leave invisible gaps between notification groups. */
+[role='region']:has(> .macro-toast-list:empty) {
+  display: none;
+}
+
+.macro-toast {
+  position: relative;
+  overflow: visible;
+  width: 100%;
+  max-height: var(--toast-height, 1000px);
+  border-radius: 14px;
+  pointer-events: auto;
+  transform-origin: bottom center;
+  box-shadow: 0 3px 8px rgb(0 0 0 / 8%), 0 18px 44px -12px rgb(0 0 0 / 22%);
+  transition: max-height 240ms cubic-bezier(0.2, 0.7, 0.3, 1),
+    margin 240ms cubic-bezier(0.2, 0.7, 0.3, 1),
+    width 240ms cubic-bezier(0.2, 0.7, 0.3, 1),
+    transform 240ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+[data-theme-light='false'] .macro-toast {
+  box-shadow: 0 3px 10px rgb(0 0 0 / 20%), 0 20px 48px -12px rgb(0 0 0 / 50%);
+}
+
+.macro-toast-surface {
+  position: relative;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--color-edge-muted);
+  border-radius: inherit;
+  background: var(--color-toast);
+  color: var(--color-ink);
+}
+
+.macro-toast-content {
+  transition: opacity 160ms ease;
+}
+
+.macro-toast[data-opened] {
+  animation: macro-toast-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.macro-toast[data-closed] {
+  animation: macro-toast-out 160ms ease-in forwards;
+  pointer-events: none;
+}
+
+/* Older notices peek behind the newest. Focusing any action opens the stack
+   just like hovering, so tucked-away controls remain keyboard accessible. */
+@media (hover: hover) {
+  .macro-toast-list[data-stack]:not(:hover):not(:focus-within) {
+    gap: 0;
+  }
+
+  .macro-toast-list[data-stack]:not(:hover):not(:focus-within) > .macro-toast:not(:last-child) {
+    overflow: hidden;
+    max-height: 10px;
+    margin: 0 6px -1px;
+    width: calc(100% - 12px);
+    border-radius: 14px 14px 0 0;
+  }
+
+  .macro-toast-list[data-stack]:not(:hover):not(:focus-within) > .macro-toast:nth-last-child(3) {
+    margin-inline: 12px;
+    width: calc(100% - 24px);
+  }
+
+  .macro-toast-list[data-stack]:not(:hover):not(:focus-within) > .macro-toast:not(:last-child) .macro-toast-content {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.macro-toast[data-swipe='move'] {
+  transform: translateX(var(--kb-toast-swipe-move-x));
+  transition: none;
+  animation: none;
+}
+
+.macro-toast[data-swipe='cancel'] {
+  transform: translateX(0);
+}
+
+.macro-toast[data-swipe='end'] {
+  animation: macro-toast-swipe-out 160ms ease-out forwards;
+}
+
+@keyframes macro-toast-in {
+  from { opacity: 0; max-height: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; max-height: var(--toast-height, 200px); transform: translateY(0) scale(1); }
+}
+
+@keyframes macro-toast-out {
+  to { opacity: 0; max-height: 0; transform: translateY(6px) scale(0.98); }
+}
+
+@keyframes macro-toast-swipe-out {
+  from { opacity: 1; transform: translateX(var(--kb-toast-swipe-end-x)); }
+  to { opacity: 0; transform: translateX(var(--kb-toast-swipe-end-x)) scale(0.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .macro-toast,
+  .macro-toast-list,
+  .macro-toast-content {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* The close button straddles the corner on every notification. */
+.macro-toast .macro-toast-corner-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  z-index: 1;
+  border: 1px solid var(--color-edge-muted);
+  border-radius: 50%;
+  background: var(--color-toast);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 12%);
+}

@@ -4,8 +4,8 @@ import {
 } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show, Suspense } from 'solid-js';

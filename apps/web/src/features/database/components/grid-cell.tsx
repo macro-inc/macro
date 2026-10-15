@@ -1,6 +1,6 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Tooltip } from '@kobalte/core/tooltip';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
 import { Checkbox } from '@ui/components/Checkbox';
 import { Dropdown } from '@ui/components/Dropdown';

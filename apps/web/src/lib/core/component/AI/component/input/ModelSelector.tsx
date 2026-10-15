@@ -9,10 +9,10 @@ import {
 import type { TModel } from '@core/component/AI/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import CheckIcon from '@phosphor/check.svg';
-import CloseIcon from '@phosphor/x.svg';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import LockIcon from '@phosphor-icons/core/regular/lock-simple.svg?component-solid';
+import CaretDown from '@icon/system/regular/caret-down.svg?component-solid';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LockIcon from '@icon/system/regular/lock-simple.svg?component-solid';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -188,7 +188,7 @@ export function ModelSelector(props: ModelSelectorProps) {
                           when={!option.available}
                           fallback={
                             <Show when={model() === option.id}>
-                              <CheckIcon class="size-5 text-accent" />
+                              <CheckIcon class="size-5 text-ink" />
                             </Show>
                           }
                         >

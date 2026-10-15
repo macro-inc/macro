@@ -1,8 +1,8 @@
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
-import PencilIcon from '@phosphor/pencil-line.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import PencilIcon from '@icon/system/regular/pencil-line.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { ActionDialogShell } from '@ui/components/ActionDialogShell';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';

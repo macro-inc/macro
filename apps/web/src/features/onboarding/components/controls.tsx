@@ -1,4 +1,4 @@
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import { onCleanup, onMount } from 'solid-js';
 
 export function FormInput(props: {

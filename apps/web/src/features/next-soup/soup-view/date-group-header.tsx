@@ -24,7 +24,7 @@ export const DateGroupHeader = (props: GroupHeaderProps) => {
         // starts exactly where their content does — just past the
         // unread/checkbox gutter — in every soup view.
         geometryClass(),
-        'border-none my-0 bg-panel text-ink-extra-muted/80',
+        'border-none my-0 bg-transparent text-ink-extra-muted/80',
         'mx-(--soup-row-gutter) w-[calc(100%-2*var(--soup-row-gutter))]',
         'pl-[calc(var(--soup-row-content-inset)-var(--soup-row-gutter))]',
         !props.isFirst && 'pt-5'

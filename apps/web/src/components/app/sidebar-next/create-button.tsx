@@ -5,7 +5,7 @@ import {
 import { APP_TOUR } from '@app/features/command/sidebar/tour';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TOKENS } from '@core/hotkey/tokens';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 
@@ -17,10 +17,12 @@ export const SidebarRailCreateButton = () => {
     <Button
       ref={createMenuTarget}
       variant="ghost"
-      class="size-10 [&_svg]:size-5"
+      class="-top-1 size-10 [&_svg]:size-5"
       size="icon-md"
       label="Create"
       tooltipPlacement="right"
+      tooltipOpenDelay={2000}
+      tooltipContentClass="motion-safe:animate-dialog-overlay-open"
       hotkey={TOKENS.global.createCommand}
       aria-haspopup="dialog"
       aria-expanded={createMenuOpen()}

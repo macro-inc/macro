@@ -1,4 +1,4 @@
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

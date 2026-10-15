@@ -1,9 +1,9 @@
 import { TabsInset } from '@core/component/TabsInset';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import UsersIcon from '@phosphor/users.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {

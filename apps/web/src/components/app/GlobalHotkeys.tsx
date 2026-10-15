@@ -32,11 +32,11 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import IconGear from '@phosphor/gear.svg';
-import Plus from '@phosphor/plus.svg';
-import LogoutIcon from '@phosphor/sign-out.svg';
-import Upload from '@phosphor/upload.svg';
-import UserIcon from '@phosphor/user.svg';
+import IconGear from '@icon/system/regular/gear.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import LogoutIcon from '@icon/system/regular/sign-out.svg';
+import Upload from '@icon/system/regular/upload.svg';
+import UserIcon from '@icon/system/regular/user.svg';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';

@@ -17,8 +17,8 @@
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import CaretUpIcon from '@phosphor-icons/core/regular/caret-up.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg?component-solid';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { Button, Surface } from '@ui';
 import {
   createEffect,

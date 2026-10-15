@@ -13,9 +13,9 @@ import {
 import { fileSelector } from '@core/directive/fileSelector';
 import { getUploadFileSize } from '@core/mobile/nativeStagedUpload';
 import { plural } from '@core/util/string';
-import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
-import TextAa from '@phosphor/text-aa.svg';
-import Trash from '@phosphor/trash.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
+import TextAa from '@icon/system/regular/text-aa.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, SendButton } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, type JSX, Show } from 'solid-js';

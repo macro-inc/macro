@@ -2,9 +2,9 @@
  * The comment tool's searchable list of pinned threads, alongside the
  * canvas, with the design's discussion (comments pinned nowhere) below.
  */
-import FunnelSimple from '@phosphor/funnel-simple.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import X from '@phosphor/x.svg';
+import FunnelSimple from '@icon/system/regular/funnel-simple.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import X from '@icon/system/regular/x.svg';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { EditorMenu } from '../components/editor-menu';

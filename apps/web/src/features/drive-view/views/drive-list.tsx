@@ -21,8 +21,8 @@ import {
   ListEntity,
   ListLayoutProvider,
 } from '@entity';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, EmptyStatePanel } from '@ui';
 import {

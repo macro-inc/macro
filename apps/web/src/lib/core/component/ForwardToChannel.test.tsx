@@ -406,3 +406,27 @@ describe('forwarding with selected access', () => {
     expect(onSubmit).toHaveBeenCalledOnce();
   });
 });
+
+it('reveals message and permission controls only after choosing a recipient in compact sharing', () => {
+  render(() => (
+    <ForwardToChannel
+      compact
+      name="Document"
+      blockName="md"
+      blockId="document-1"
+      submitPermissionInfo={{
+        userPermissions: Permissions.OWNER,
+        setChannelPermissions: vi.fn(),
+      }}
+    />
+  ));
+  expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
+  expect(mocks.shareOptions).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Select recipients' }));
+  expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+  expect(mocks.shareOptions).toHaveBeenCalled();
+  expect(mocks.sendToChannel).not.toHaveBeenCalled();
+  mocks.recipients = [];
+  fireEvent.click(screen.getByRole('button', { name: 'Select recipients' }));
+  expect(screen.queryByRole('button', { name: 'Share' })).toBeNull();
+});

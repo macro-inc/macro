@@ -168,7 +168,7 @@ function DesktopDialog(props: DialogProps) {
               'portal-scope isolate',
               props.fullscreen
                 ? 'size-full bg-page'
-                : 'w-200 max-w-[calc(100vw-16px)] elevated-surface [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:bg-transparent [&>[data-layer]>[data-surface]]:rounded-[24px]',
+                : 'w-200 max-w-[calc(100vw-16px)] elevated-surface [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:bg-transparent [&>[data-layer]>[data-surface]]:rounded-[18px]',
               animateOnOpen() &&
                 (props.fullscreen
                   ? 'dialog-fullscreen-open-animation'

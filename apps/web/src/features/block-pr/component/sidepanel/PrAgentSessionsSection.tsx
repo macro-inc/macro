@@ -3,8 +3,8 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { AgentSessionMentionLabel } from '@core/component/LexicalMarkdown/component/decorator/AgentSessionMentionLabel';
 import { toast } from '@core/component/Toast/Toast';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { useAgentSessionMentionPreview } from '@queries/agent-session/mentions';
 import {
   useAgentSessionPullRequestsQuery,

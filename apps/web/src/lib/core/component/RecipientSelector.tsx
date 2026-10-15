@@ -18,17 +18,17 @@ import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';
+import CheckIcon from '@icon/system/regular/check.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import {
   Combobox,
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import XIcon from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Avatar, cn, Layer } from '@ui';
 import * as EmailValidator from 'email-validator';

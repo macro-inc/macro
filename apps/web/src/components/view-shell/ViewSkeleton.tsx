@@ -1,11 +1,10 @@
 import { SplitPanel } from '@components/app/split-panel';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import { ListSkeleton } from './ListSkeleton';
-import { SidebarCreateHeader } from './SidebarCreateButton';
+import { SearchBar } from './SearchBar';
+import { SidebarActionRow } from './SidebarActionRow';
+import { SidebarCreateAction } from './SidebarCreateAction';
 import { ViewShell, type ViewShellRootProps } from './ViewShell';
-import { ViewSidebar } from './ViewSidebar';
 
 const ROW_WIDTHS = [
   'w-3/5',
@@ -71,27 +70,23 @@ function Sidebar(props: {
 }) {
   return (
     <ViewShell.Aside class="flex flex-col bg-panel">
-      <Show
-        when={props.createLabel}
-        fallback={
-          <Show when={!isTouchDevice()}>
-            <ViewSidebar.Header>
-              <div class="flex min-w-0 items-center gap-1">
-                <ViewSidebar.CloseButton class="shrink-0" />
-                <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
-              </div>
-            </ViewSidebar.Header>
-          </Show>
-        }
-      >
-        {(label) => (
-          <SidebarCreateHeader
-            title={props.title}
-            label={label()}
-            onCreate={() => {}}
+      <SidebarActionRow
+        title={props.title}
+        search={
+          <SearchBar
+            label={`Search ${props.title}`}
+            placeholder={`Search ${props.title}`}
+            value=""
+            onValueChange={() => {}}
+            disabled
           />
-        )}
-      </Show>
+        }
+        create={() =>
+          props.createLabel ? (
+            <SidebarCreateAction disabled>New</SidebarCreateAction>
+          ) : undefined
+        }
+      />
       {props.children ?? <Rows label={`Loading ${props.title}`} class="mt-3" />}
     </ViewShell.Aside>
   );
@@ -107,21 +102,11 @@ function Main(props: {
     <ViewShell.Main class="flex flex-col overflow-hidden">
       <Show when={props.title}>
         {(title) => (
-          <ViewShell.TopBar>
-            <span class="truncate font-semibold text-ink text-sm">
+          <ViewShell.TopBar workspaceActions>
+            <span class="min-w-0 flex-1 truncate font-semibold text-ink text-sm">
               {title()}
             </span>
           </ViewShell.TopBar>
-        )}
-      </Show>
-      <Show when={props.searchPlaceholder}>
-        {(placeholder) => (
-          <ViewShell.Header>
-            <div class="flex h-10 w-full max-w-md min-w-0 items-center gap-2 rounded-full border border-edge-button bg-control px-3 text-ink-placeholder text-sm">
-              <MagnifyingGlassIcon class="size-4 shrink-0 text-ink-extra-muted" />
-              <span class="truncate">{placeholder()}</span>
-            </div>
-          </ViewShell.Header>
         )}
       </Show>
       {props.children ?? (

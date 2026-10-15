@@ -1,8 +1,8 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
 import GithubIcon from '@phosphor/github-logo.svg';
 import { Button, createCommandListController } from '@ui';
 import {

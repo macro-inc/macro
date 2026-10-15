@@ -1,11 +1,11 @@
 /** Less-used typography controls, opened beside the inspector. */
 import type { TextInfo } from '@core/fig-engine/types';
+import SlidersHorizontal from '@icon/system/regular/sliders-horizontal.svg';
+import TextItalic from '@icon/system/regular/text-italic.svg';
+import TextStrikethrough from '@icon/system/regular/text-strikethrough.svg';
+import TextUnderline from '@icon/system/regular/text-underline.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import SlidersHorizontal from '@phosphor/sliders-horizontal.svg';
-import TextItalic from '@phosphor/text-italic.svg';
-import TextStrikethrough from '@phosphor/text-strikethrough.svg';
-import TextUnderline from '@phosphor/text-underline.svg';
-import X from '@phosphor/x.svg';
 import type { MixedTextField } from '../core/rich-text';
 import { parseStyle, styleName } from '../core/type';
 import type { Patch } from '../primitives/create-fig-editor';

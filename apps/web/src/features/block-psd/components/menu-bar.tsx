@@ -4,7 +4,7 @@
  * that one, and items may hold a submenu. Presentational.
  */
 
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { cn } from '@ui';
 import { createSignal, Index, type JSX, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';

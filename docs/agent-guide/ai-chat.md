@@ -221,7 +221,7 @@ session is ready; an empty search opens an empty composer. Desktop search replac
 its current split into the Agents workspace, while command-menu and mobile
 actions open a new split.
 
-**Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
+**Ask AI** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
 code files, images, canvases, spreadsheets, email, channels, calls, and projects
 also open agent sessions. Like command-menu Ask AI, they open the bare session in
 a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
@@ -746,7 +746,7 @@ and settlement tests still require the isolated backend fixtures above.
 
 ## Start a doc-scoped chat
 
-Open a doc → side panel `Actions` → `Ask Macro`. Opens an agent session with the
+Open a doc → side panel `Actions` → `Ask AI`. Opens an agent session with the
 document already mentioned as context (a link chip in the composer). The mention
 is an unsent draft: add a question, then Send. Legacy Home background sends
 preserve the submitted tool selection.

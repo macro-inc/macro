@@ -1,4 +1,4 @@
-import ListChecks from '@phosphor-icons/core/regular/list-checks.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
 import { invalidateAuthoredForm } from '@queries/storage/form-tools';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';

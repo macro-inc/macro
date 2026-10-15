@@ -1,7 +1,7 @@
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@phosphor/check.svg';
 import {
   type ComponentProps,
   createSignal,
@@ -328,9 +328,9 @@ function DropdownGroupLabel(props: DropdownGroupLabelProps) {
 
 const CHECKBOX_ITEM_BOX_CLASS = cn(
   'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
-  'border border-transparent text-surface',
+  'border border-transparent text-surface-4',
   'group-data-highlighted:border-edge-muted',
-  'group-data-checked:bg-accent group-data-checked:border-accent'
+  'group-data-checked:bg-ink group-data-checked:border-ink'
 );
 
 function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {

@@ -12,16 +12,16 @@
  */
 
 import { openExternalUrl } from '@core/util/url';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import GitCommitIcon from '@icon/system/regular/git-commit.svg';
+import TimerIcon from '@icon/system/regular/timer.svg';
+import XCircleIcon from '@icon/system/regular/x-circle.svg';
 import type { CursorSystemNotificationDecoratorProps } from '@macro-inc/lexical-core';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import BellIcon from '@phosphor/bell.svg';
-import CheckCircleIcon from '@phosphor/check-circle.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import GitCommitIcon from '@phosphor/git-commit.svg';
 import GithubLogoIcon from '@phosphor/github-logo.svg';
 import SlackLogoIcon from '@phosphor/slack-logo.svg';
-import TimerIcon from '@phosphor/timer.svg';
-import XCircleIcon from '@phosphor/x-circle.svg';
 import { cn } from '@ui/utils/classname';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

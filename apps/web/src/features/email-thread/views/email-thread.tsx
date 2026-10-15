@@ -99,7 +99,6 @@ export function EmailThreadView(props: EmailThreadViewProps) {
                   insets in-scroll and under-scrolls the floating chrome. */}
             <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
               {props.header}
-              {props.actions}
               {/* Measure message gutters against the thread, excluding the side panel. */}
               <div
                 class="@container w-full flex-1 flex flex-col items-center overflow-hidden"
@@ -111,6 +110,7 @@ export function EmailThreadView(props: EmailThreadViewProps) {
                     navigation.setMarkdownDomRef(el);
                   }}
                   title={props.title}
+                  actions={props.actions}
                   underScrollsBottom={!replyInputInFlow()}
                   showMiddleMessages={showMiddleMessages()}
                   hiddenChipFocused={context.messages.hiddenChipFocused()}

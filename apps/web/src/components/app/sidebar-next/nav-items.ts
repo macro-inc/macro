@@ -2,26 +2,26 @@ import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import ChatsCircleIcon from '@phosphor/chats-circle.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FolderSimpleIcon from '@phosphor/folder-simple.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import HouseIcon from '@phosphor/house.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
-import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
-import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
-import EnvelopeFillIcon from '@phosphor-fill/envelope-fill.svg';
-import FolderSimpleFillIcon from '@phosphor-fill/folder-simple-fill.svg';
-import GitPullRequestFillIcon from '@phosphor-fill/git-pull-request-fill.svg';
-import HouseFillIcon from '@phosphor-fill/house-fill.svg';
-import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
-import PhoneCallFillIcon from '@phosphor-fill/phone-call-fill.svg';
-import AgentFillIcon from '@phosphor-fill/sparkle-fill.svg';
+import BuildingsFillIcon from '@icon/system/fill/buildings-fill.svg';
+import CalendarBlankFillIcon from '@icon/system/fill/calendar-blank-fill.svg';
+import ChatsCircleFillIcon from '@icon/system/fill/chats-circle-fill.svg';
+import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
+import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
+import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
+import HouseFillIcon from '@icon/system/fill/house-fill.svg';
+import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
+import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
+import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import HouseIcon from '@icon/system/regular/house.svg';
+import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
 import type { NavIcon } from './nav-glyph';
 import type { SidebarPrefs } from './use-sidebar-prefs';
 
@@ -32,16 +32,15 @@ import type { SidebarPrefs } from './use-sidebar-prefs';
  */
 export type SidebarNextNavItem = SidebarItem & {
   icon: NavIcon;
-  /** Phosphor `fill` weight of `icon`, shown while the view is active. */
+  /** Matching Macro active glyph, shown while the view is active. */
   iconActive: NavIcon;
 };
 
 /**
  * SidebarRail's nav buttons, in default render order.
  *
- * Phosphor icons rather than the animated `wide-*` set: they are plain
- * `fill="currentColor"` SVGs, so the active button's `text-ink-muted` colours
- * the glyph.
+ * Original Macro glyphs share one optical grid across regular and active
+ * states. Both use currentColor so the button owns their emphasis.
  *
  * Every destination is an existing view id, so the `hotkeyToken`s are the ones
  * `GoToHotkeys` registers off `buildSidebarLinks` — `g h` reaches Home, `g f`

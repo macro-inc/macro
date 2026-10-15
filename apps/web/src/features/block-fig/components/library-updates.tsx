@@ -5,9 +5,9 @@
  * Presentational: previews and updates come from the caller.
  */
 
-import ArrowRight from '@phosphor/arrow-right.svg';
-import BookOpen from '@phosphor/book-open.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import BookOpen from '@icon/system/regular/book-open.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { type LibraryUpdate, updateSummary } from '../core/libraries';

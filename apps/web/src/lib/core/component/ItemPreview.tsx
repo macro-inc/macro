@@ -8,9 +8,9 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { NamedSubType } from '@entity';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueuePreviewWakeup,

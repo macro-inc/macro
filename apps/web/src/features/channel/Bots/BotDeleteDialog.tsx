@@ -1,4 +1,4 @@
-import TrashIcon from '@phosphor/trash.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Button, Dialog, Surface } from '@ui';
 
 export function BotDeleteDialog(props: {

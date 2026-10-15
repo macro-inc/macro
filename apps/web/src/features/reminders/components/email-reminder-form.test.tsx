@@ -3,6 +3,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EmailReminderMenu as EmailReminderForm } from '../views/email-reminder-menu';
 
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+
   Element.prototype.scrollIntoView = vi.fn();
   window.scrollTo = vi.fn();
   vi.useFakeTimers();
@@ -11,6 +20,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 function setup(
   overrides: Partial<Parameters<typeof EmailReminderForm>[0]> = {}

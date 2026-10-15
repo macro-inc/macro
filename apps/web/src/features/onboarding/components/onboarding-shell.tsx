@@ -1,5 +1,5 @@
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import { cn } from '@ui/utils/classname';
 import { children, createMemo, createUniqueId, type JSX, Show } from 'solid-js';
 import './onboarding.css';

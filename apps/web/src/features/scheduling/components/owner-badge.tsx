@@ -1,5 +1,5 @@
-import User from '@phosphor/user.svg';
-import Users from '@phosphor/users.svg';
+import User from '@icon/system/regular/user.svg';
+import Users from '@icon/system/regular/users.svg';
 import { Show } from 'solid-js';
 import type { SchedulingScope } from '../core/types';
 

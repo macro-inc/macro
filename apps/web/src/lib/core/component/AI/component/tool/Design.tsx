@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import PenNibIcon from '@phosphor-icons/core/regular/pen-nib.svg';
+import PenNibIcon from '@icon/system/regular/pen-nib.svg';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

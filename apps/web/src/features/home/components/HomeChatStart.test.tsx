@@ -68,8 +68,8 @@ describe('Home agent composer alignment', () => {
     expect(grid?.className).toContain('pb-16');
     expect(
       document.querySelector('[data-home-composer-topbar-align]')
-    ).toBeTruthy();
-    expect(document.querySelector('[data-testid="home-topbar"]')).toBeNull();
+    ).toBeNull();
+    expect(document.querySelector('[data-testid="home-topbar"]')).toBeTruthy();
   });
 
   it('uses the real Home topbar instead of a spacer when the list is collapsed', () => {

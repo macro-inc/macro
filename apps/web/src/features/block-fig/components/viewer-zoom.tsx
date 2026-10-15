@@ -1,4 +1,4 @@
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { EditorMenu, type EditorMenuItem } from './editor-menu';
 
 export function ViewerZoom(props: {

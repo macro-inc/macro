@@ -15,11 +15,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import {
-  TasksHeader,
-  TasksTopBar,
-  TaskViewBreadcrumbItem,
-} from './components/TasksHeader';
+import { TasksHeader, TaskViewBreadcrumbItem } from './components/TasksHeader';
 import { TasksMobileTabs } from './components/TasksMobileTabs';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TasksContent, TasksLoading } from './tasks-content';
@@ -92,10 +88,7 @@ function TasksViewRoot() {
 
   const taskList = () => (
     <>
-      <TasksTopBar />
-      <ViewShell.Header>
-        <TasksHeader onSearchEscape={() => listElement()?.focus()} />
-      </ViewShell.Header>
+      <TasksHeader />
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content>
         <TasksContent ref={setListElement} />
@@ -113,7 +106,7 @@ function TasksViewRoot() {
           main={{ preferredWidth: 640 }}
         >
           <ViewShell.Aside>
-            <TasksSidebar />
+            <TasksSidebar onSearchEscape={() => listElement()?.focus()} />
           </ViewShell.Aside>
           <ViewShell.Main>
             <Suspense fallback={<TasksLoading />}>
@@ -123,7 +116,6 @@ function TasksViewRoot() {
                     when={state.tab === 'projects' && projectsEnabled()}
                     fallback={taskList()}
                   >
-                    <TasksTopBar />
                     <div class="hidden @max-[720px]/view-shell:block">
                       <TasksMobileTabs />
                     </div>

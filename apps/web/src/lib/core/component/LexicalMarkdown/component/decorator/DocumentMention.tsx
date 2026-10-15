@@ -32,15 +32,15 @@ import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import ArrowsOut from '@icon/system/regular/arrows-out-simple.svg';
+import EyeSlashDuo from '@icon/system/regular/eye-slash.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import {
   $convertMentionToCard,
   $isDocumentMentionNode,
   DocumentCardNode,
   type DocumentMentionDecoratorProps,
 } from '@macro-inc/lexical-core';
-import ArrowsOut from '@phosphor/arrows-out-simple.svg';
-import EyeSlashDuo from '@phosphor/eye-slash.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
 import {
   type ItemEntity,
   isAccessiblePreviewItem,

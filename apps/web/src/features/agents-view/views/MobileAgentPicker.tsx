@@ -1,11 +1,11 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
-import Plus from '@phosphor/plus.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';

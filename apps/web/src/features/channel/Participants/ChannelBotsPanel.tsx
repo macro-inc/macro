@@ -2,9 +2,9 @@ import { channelWebhookUrl } from '@channel/Bots/webhook';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import UserPlusIcon from '@phosphor/user-plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import {
   useChannelBotsQuery,
   useRemoveBotFromChannelMutation,

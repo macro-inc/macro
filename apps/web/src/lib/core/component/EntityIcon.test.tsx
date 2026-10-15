@@ -1,24 +1,24 @@
 import { itemToBlockName } from '@core/constant/allBlocks';
-import SpreadsheetIcon from '@icon/wide-spreadsheet.svg';
-import ContactIcon from '@phosphor/address-book.svg';
-import SkillIcon from '@phosphor/blueprint.svg';
-import SnippetIcon from '@phosphor/brackets-curly.svg';
-import CompanyIcon from '@phosphor/building-office.svg';
-import CalendarIcon from '@phosphor/calendar.svg';
-import RoutineIcon from '@phosphor/clock-clockwise.svg';
-import DatabaseIcon from '@phosphor/database.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
-import FileIcon from '@phosphor/file.svg';
-import FileArchive from '@phosphor/file-archive.svg';
-import FilePdf from '@phosphor/file-pdf.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import HashIcon from '@phosphor/hash-straight.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import PhoneIcon from '@phosphor/phone-call.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
-import DirectMessageIcon from '@phosphor/users.svg';
+import ContactIcon from '@icon/system/regular/address-book.svg';
+import SkillIcon from '@icon/system/regular/blueprint.svg';
+import SnippetIcon from '@icon/system/regular/brackets-curly.svg';
+import CompanyIcon from '@icon/system/regular/building-office.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
+import DatabaseIcon from '@icon/system/regular/database.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import EnvelopeOpenIcon from '@icon/system/regular/envelope-open.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import FileArchive from '@icon/system/regular/file-archive.svg';
+import FilePdf from '@icon/system/regular/file-pdf.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import HashIcon from '@icon/system/regular/hash-straight.svg';
+import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import SpreadsheetIcon from '@icon/system/regular/table.svg';
+import DirectMessageIcon from '@icon/system/regular/users.svg';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -164,11 +164,16 @@ describe('EntityIcon weight', () => {
   it('reacts to weight changes', () => {
     const [weight, setWeight] = createSignal<'regular' | 'bold'>('regular');
     const view = render(() => <EntityIcon targetType="md" weight={weight()} />);
-    const regularPath = view.container.querySelector('path')?.getAttribute('d');
+    const regularIcon = view.container.querySelector('svg');
+    expect(regularIcon?.getAttribute('stroke-width')).toBe('2');
+    const regularPath = regularIcon?.querySelector('path')?.getAttribute('d');
+    expect(regularPath).toBeTruthy();
 
     setWeight('bold');
 
-    expect(view.container.querySelector('path')?.getAttribute('d')).not.toBe(
+    const boldIcon = view.container.querySelector('svg');
+    expect(boldIcon?.getAttribute('stroke-width')).toBe('2.3');
+    expect(boldIcon?.querySelector('path')?.getAttribute('d')).toBe(
       regularPath
     );
   });

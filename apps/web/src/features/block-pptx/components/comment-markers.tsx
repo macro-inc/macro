@@ -5,8 +5,8 @@
  */
 
 import type { CommentOutline, ShapeOutline } from '@core/pptx-engine/types';
-import ChatIcon from '@phosphor/chat.svg';
-import ChatFill from '@phosphor-fill/chat-fill.svg';
+import ChatFill from '@icon/system/fill/chat-fill.svg';
+import ChatIcon from '@icon/system/regular/chat.svg';
 import { For, Show } from 'solid-js';
 import { stackMarkers } from '../core/comments';
 import { markerPoint } from '../primitives/create-comments';

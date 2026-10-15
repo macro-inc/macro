@@ -3,6 +3,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireEvent, render, within } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { SidebarActionsProvider, WorkspaceActions } from './SidebarActionRow';
 import { SidebarCreateHeader } from './SidebarCreateButton';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -14,6 +15,8 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
+  Surface: (props: { children?: JSX.Element }) => props.children,
+  Layer: (props: { children?: JSX.Element }) => props.children,
   Button: (
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
   ) => (
@@ -49,18 +52,24 @@ it('closes the owning split without invoking either create action', () => {
   const view = render(() => (
     <>
       <SplitPanel.Root controller={home} aria-label="Home pane">
-        <SidebarCreateHeader
-          title="Home"
-          label="New chat"
-          onCreate={createHome}
-        />
+        <SidebarActionsProvider>
+          <SidebarCreateHeader
+            title="Home"
+            label="New chat"
+            onCreate={createHome}
+          />
+          <WorkspaceActions />
+        </SidebarActionsProvider>
       </SplitPanel.Root>
       <SplitPanel.Root controller={tasks} aria-label="Tasks pane">
-        <SidebarCreateHeader
-          title="Tasks"
-          label="New task"
-          onCreate={createTask}
-        />
+        <SidebarActionsProvider>
+          <SidebarCreateHeader
+            title="Tasks"
+            label="New task"
+            onCreate={createTask}
+          />
+          <WorkspaceActions />
+        </SidebarActionsProvider>
       </SplitPanel.Root>
     </>
   ));
@@ -76,22 +85,32 @@ it('updates close visibility when the last remaining split cannot close', () => 
   const [canClose, setCanClose] = createSignal(true);
   const view = render(() => (
     <SplitPanel.Root controller={controller(canClose)}>
-      <SidebarCreateHeader title="Email" label="New email" onCreate={vi.fn()} />
+      <SidebarActionsProvider>
+        <SidebarCreateHeader
+          title="Email"
+          label="New email"
+          onCreate={vi.fn()}
+        />
+        <WorkspaceActions />
+      </SidebarActionsProvider>
     </SplitPanel.Root>
   ));
   expect(view.queryByRole('button', { name: 'Close' })).not.toBeNull();
   setCanClose(false);
   expect(view.queryByRole('button', { name: 'Close' })).toBeNull();
-  expect(view.queryByRole('button', { name: 'New email' })).not.toBeNull();
+  expect(view.getAllByRole('button', { name: 'New email' })).toHaveLength(2);
 });
 
 it('leaves touch headers without a desktop close control', () => {
   vi.mocked(isTouchDevice).mockReturnValue(true);
   const view = render(() => (
     <SplitPanel.Root controller={controller(() => true)}>
-      <SidebarCreateHeader title="Home" label="New chat" onCreate={vi.fn()} />
+      <SidebarActionsProvider>
+        <SidebarCreateHeader title="Home" label="New chat" onCreate={vi.fn()} />
+        <WorkspaceActions />
+      </SidebarActionsProvider>
     </SplitPanel.Root>
   ));
   expect(view.queryByRole('button', { name: 'Close' })).toBeNull();
-  expect(view.queryByRole('button', { name: 'New chat' })).not.toBeNull();
+  expect(view.getAllByRole('button', { name: 'New chat' })).toHaveLength(2);
 });

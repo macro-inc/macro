@@ -1,4 +1,4 @@
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useTasksView } from '../../tasks-view-context';

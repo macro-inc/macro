@@ -1,4 +1,4 @@
-import BellSlashIcon from '@phosphor/bell-slash.svg';
+import BellSlashIcon from '@icon/system/regular/bell-slash.svg';
 import { cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 

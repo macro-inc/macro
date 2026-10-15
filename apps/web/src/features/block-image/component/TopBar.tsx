@@ -27,7 +27,7 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download.svg';
+import Download from '@icon/system/regular/download.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {
@@ -74,11 +74,11 @@ export function TopBar() {
 
   const tools: BlockTool[] = [
     {
-      label: 'Ask Macro',
+      label: 'Ask AI',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
       buttonComponent: () => (
-        <ChatWithAgentButton entity={chatEntity()} label="Ask Macro" />
+        <ChatWithAgentButton entity={chatEntity()} label="Ask AI" />
       ),
     },
     {

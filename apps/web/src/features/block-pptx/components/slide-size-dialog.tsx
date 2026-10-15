@@ -6,9 +6,9 @@
  */
 
 import type { SlideScale } from '@core/pptx-engine/types';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import X from '@phosphor/x.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { inputClasses } from '@ui/components/Input';

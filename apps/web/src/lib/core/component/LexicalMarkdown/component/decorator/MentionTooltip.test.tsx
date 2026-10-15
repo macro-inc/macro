@@ -13,8 +13,9 @@ describe('MentionTooltip', () => {
     expect(screen.getByText('Open')).toBeTruthy();
     expect(screen.getByText('↵')).toBeTruthy();
 
-    const surface = container.querySelector('.bg-tooltip');
-    expect(surface?.classList.contains('rounded-lg')).toBe(true);
+    const surface = container.querySelector('[data-surface]');
+    expect(surface?.classList.contains('menu-surface')).toBe(true);
+    expect(surface?.classList.contains('rounded-xl')).toBe(true);
     expect(surface?.classList.contains('p-2')).toBe(true);
     expect(surface?.classList.contains('text-xs')).toBe(true);
   });

@@ -1,10 +1,10 @@
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import ArticleIcon from '@phosphor/article.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import ArticleIcon from '@icon/system/regular/article.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import {
   MAX_RECOMMENDATIONS,
   type RecommendedItem,

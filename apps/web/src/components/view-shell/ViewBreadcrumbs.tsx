@@ -1,4 +1,4 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,

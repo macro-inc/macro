@@ -1,6 +1,6 @@
-import EyeSlashIcon from '@phosphor/eye-slash.svg';
-import WarningIcon from '@phosphor/warning-circle.svg';
-import XIcon from '@phosphor/x.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
+import WarningIcon from '@icon/system/regular/warning-circle.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { Show } from 'solid-js';
 

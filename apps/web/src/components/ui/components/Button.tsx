@@ -33,14 +33,16 @@ export const buttonVariants = createVariants(
       outline:
         'bg-control text-ink-muted border-edge-button not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
       accent:
-        'bg-accent-bg not-touch:not-disabled:hover:overlay-accent-bg text-accent',
+        'bg-ink text-surface-4 not-touch:not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-touch:not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
       success:
         'bg-transparent border-edge-button text-success not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:active:overlay-active',
       ghost:
         'bg-transparent text-ink-muted not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
       strong:
         'bg-control text-ink-muted border-edge-button font-semibold not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
-      cta: 'bg-accent text-accent-contrast focus-visible:ring-accent-contrast/70 [--color-edge:var(--color-accent-contrast-muted)] [--color-edge-muted:var(--color-accent-contrast-muted)] not-touch:not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-touch:not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
+      compose:
+        'bg-surface-4 text-ink border-edge-button shadow-xs not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:active:overlay-active',
+      cta: 'bg-ink text-surface-4 focus-visible:ring-surface-4/70 [--color-edge:var(--color-surface-4)] [--color-edge-muted:var(--color-surface-4)] not-touch:not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-touch:not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
     },
     size: {
       xs: "h-5 gap-1 px-1.5 text-xs [&>svg:not([class*='size-'])]:size-3",
@@ -85,6 +87,9 @@ export type ButtonProps = ButtonRootProps<'button'> &
   ComponentProps<'button'> & {
     depth?: 0 | 1 | 2 | 3 | 4;
     tooltipPlacement?: Placement;
+    /** Explicit hover delay; disables the usual tooltip warm-up shortcut. */
+    tooltipOpenDelay?: number;
+    tooltipContentClass?: string;
     /**
      * Stretch the button (and, when a tooltip wraps it, the tooltip's trigger
      * wrapper) to fill the available width. Without this the tooltip wrapper is
@@ -150,7 +155,7 @@ function isIconSize(size: ButtonSize): boolean {
  * line up.
  *
  * @do Use ghost for unframed actions, at any size.
- * @do Use strong for outline actions with bolder type and cta for accent-filled actions.
+ * @do Use strong for outline actions with bolder type and cta for monochrome primary actions.
  * @do Use glass={true} to opt in on desktop, or glass={false} to opt out on touch.
  * @do Always set `label` on icon-only buttons; it is the accessible name.
  * @do Use `danger` only for destructive actions, paired with a confirmation.
@@ -162,6 +167,8 @@ function isIconSize(size: ButtonSize): boolean {
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
+    'tooltipOpenDelay',
+    'tooltipContentClass',
     'children',
     'tooltip',
     'variant',
@@ -235,6 +242,8 @@ export const Button = (props: ButtonProps) => {
           hotkey={local.hotkey}
           shortcut={local.shortcut}
           placement={placement()}
+          openDelay={local.tooltipOpenDelay}
+          contentClass={local.tooltipContentClass}
           label={label()}
           disabled={local.tooltipDisabled}
         >

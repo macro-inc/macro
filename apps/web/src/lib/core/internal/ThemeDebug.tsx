@@ -1,7 +1,7 @@
-import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import CellSignalHighIcon from '@phosphor-icons/core/regular/cell-signal-high.svg?component-solid';
-import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg?component-solid';
+import CellSignalHighIcon from '@icon/system/regular/cell-signal-high.svg?component-solid';
+import CheckIcon from '@icon/system/regular/check.svg?component-solid';
+import PlusIcon from '@icon/system/regular/plus.svg?component-solid';
 import { Badge, Button, Panel } from '@ui';
 import { For } from 'solid-js';
 

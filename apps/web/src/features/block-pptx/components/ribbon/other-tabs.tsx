@@ -3,26 +3,26 @@
  */
 
 import type { TransitionKind } from '@core/pptx-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import ArrowsOut from '@phosphor/arrows-out.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import GearSix from '@phosphor/gear-six.svg';
-import GridFour from '@phosphor/grid-four.svg';
-import Layout from '@phosphor/layout.svg';
-import MagnifyingGlassMinus from '@phosphor/magnifying-glass-minus.svg';
-import MagnifyingGlassPlus from '@phosphor/magnifying-glass-plus.svg';
-import Notepad from '@phosphor/notepad.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import PenNib from '@phosphor/pen-nib.svg';
-import Play from '@phosphor/play.svg';
-import Presentation from '@phosphor/presentation.svg';
-import ProjectorScreen from '@phosphor/projector-screen.svg';
-import Rectangle from '@phosphor/rectangle.svg';
-import Ruler from '@phosphor/ruler.svg';
-import ShapesIcon from '@phosphor/shapes.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
-import Stack from '@phosphor/stack.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import ArrowsOut from '@icon/system/regular/arrows-out.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import GearSix from '@icon/system/regular/gear-six.svg';
+import GridFour from '@icon/system/regular/grid-four.svg';
+import Layout from '@icon/system/regular/layout.svg';
+import MagnifyingGlassMinus from '@icon/system/regular/magnifying-glass-minus.svg';
+import MagnifyingGlassPlus from '@icon/system/regular/magnifying-glass-plus.svg';
+import Notepad from '@icon/system/regular/notepad.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import PenNib from '@icon/system/regular/pen-nib.svg';
+import Play from '@icon/system/regular/play.svg';
+import Presentation from '@icon/system/regular/presentation.svg';
+import ProjectorScreen from '@icon/system/regular/projector-screen.svg';
+import Rectangle from '@icon/system/regular/rectangle.svg';
+import Ruler from '@icon/system/regular/ruler.svg';
+import ShapesIcon from '@icon/system/regular/shapes.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
+import Stack from '@icon/system/regular/stack.svg';
 import { For, Show } from 'solid-js';
 import { boxOf } from '../../core/geometry';
 import { swatchCss } from '../../core/palette';
@@ -899,7 +899,7 @@ export function TransitionsTab() {
         <label class="flex items-center gap-1 px-1 text-xs">
           <input
             type="checkbox"
-            class="accent-accent"
+            class="accent-ink"
             disabled={ro()}
             checked={current()?.advanceOnClick ?? true}
             onChange={(e) =>
@@ -914,7 +914,7 @@ export function TransitionsTab() {
         <label class="flex items-center gap-1 px-1 text-xs">
           <input
             type="checkbox"
-            class="accent-accent"
+            class="accent-ink"
             disabled={ro()}
             checked={current()?.advanceAfterMs !== undefined}
             onChange={(e) =>

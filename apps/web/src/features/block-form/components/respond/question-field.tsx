@@ -1,7 +1,7 @@
-import Paperclip from '@phosphor/paperclip.svg';
-import Spinner from '@phosphor/spinner.svg';
-import UploadSimple from '@phosphor/upload-simple.svg';
-import X from '@phosphor/x.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
+import UploadSimple from '@icon/system/regular/upload-simple.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Checkbox, cn, RadioGroup } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {

@@ -1,4 +1,4 @@
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { PollBars, PollResults } from '../components/poll/poll-bars';

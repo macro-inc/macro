@@ -1,5 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import type { ParentProps } from 'solid-js';
 

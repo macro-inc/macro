@@ -1,8 +1,9 @@
 # Documents
 
-The document header has separate Share, Copy Share Link, and Side Panel buttons.
-They are borderless with a soft rounded background on hover. Share opens the
-sharing dialog; copying a link is a separate action.
+The Drive document header has text-only Ask AI and Share actions, separated by a
+faint divider, followed by the Side Panel toggle. They are borderless with a soft
+rounded background on hover. Share opens the sharing dialog, where Copy Link is
+available as a separate action.
 
 Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
 when the backend refuses a request with a usage-limit code. Free users can choose
@@ -504,16 +505,16 @@ Comment-only access can post/reply; view-only access can read. Edit/delete appli
 to the author's own comments, and failures retain the input draft. Draft demos
 must be saved before persistent comments are available.
 
-## Ask Macro about a spreadsheet
+## Ask AI about a spreadsheet
 
-**Ask Macro** sits immediately left of **Share**. Select the relevant cells, then
+**Ask AI** sits immediately left of **Share**. Select the relevant cells, then
 click it to open a new agent session in a split beside the workbook. The composer starts
 with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
 A viewer can ask questions; editing still requires edit permission.
 
-In the local spreadsheet demo, Ask Macro first saves the entire workbook and
+In the local spreadsheet demo, Ask AI first saves the entire workbook and
 waits for acknowledgement. A failed save leaves the draft editable and supports
 retry, without opening an empty chat. This path needs the updated native-document
 backend, just like Share.
@@ -526,7 +527,7 @@ row additions, column resizing, and sheet creation/rename/duplication/deletion.
 Edits require a revision from a fresh read; a concurrent change rejects the entire
 batch so the AI can reread. Tool rows expand to show the actual results and warnings.
 
-Verify with a saved workbook: select B4:E9, click Ask Macro, check the adjacent
+Verify with a saved workbook: select B4:E9, click Ask AI, check the adjacent
 chat's mention and trailing space, and ask for a total or a what-if calculation.
 The workbook should stay unchanged for scratch calculations. Ask for an edit and
 check both source/formula and displayed result in the sheet and another connected
@@ -1084,7 +1085,7 @@ and as colored dots on the thumbnails of slides they are on. A viewer who opens
 a deck nobody has shared yet, or anyone when the sync service is unreachable,
 gets the stored file read-only.
 
-**Ask Macro**, in the header beside **Share**, opens a new agent session in a
+**Ask AI**, in the header beside **Share**, opens a new agent session in a
 split with the deck mentioned in the composer (nothing sends automatically).
 Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
 sections, transitions, header and footer, and every shape with its id, kind,
@@ -2238,7 +2239,7 @@ Status and detail slots share one TaskPropertiesPreviewProvider per card:
 GraphQL preview data is reused, and REST fallback property/access queries are
 owned once, not separately by each slot. Non-task cards do not load task properties.
 Use the title to open the referenced document and the
-actions menu for the same applicable actions as a mention: Copy Link, Ask Macro
+actions menu for the same applicable actions as a mention: Copy Link, Ask AI
 for supported document types outside chat, Copy Branch Name for tasks, and
 Open in New Split when the reference is not already open. Editable cards also
 offer Convert to Inline Mention and Delete; these actions update when the editor
@@ -2389,6 +2390,12 @@ editable view removes the retained mark when the document loads. Read-only
 viewers see plain text without a dead comment highlight; the stored document
 and overlapping live comments stay intact.
 
+PDF page navigation, markup tools, and the tabs toggle sit in the title bar,
+immediately after the filename's `…` menu, in Drive and standalone PDF views.
+Use the page-number field to jump pages; the **Text Box**, **Signature**, and
+**Comment** buttons retain their existing placement behavior. There is no
+separate PDF toolbar row in these views.
+
 PDF comment threads in the right margin use the channel composer (`Leave a comment...`, Enter sends) and the message
 thread controls. Highlight comments come from selecting text and choosing the
 comment button in the selection menu; placeable comments come from the toolbar
@@ -2506,7 +2513,7 @@ updates live and shows each collaborator's caret with their name
   `addComment` ones) are.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
-- **Ask Macro**, in the header beside **Share**, opens a new agent session in
+- **Ask AI**, in the header beside **Share**, opens a new agent session in
   a split with the document mentioned in the composer (nothing sends
   automatically).
 - AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
@@ -2533,10 +2540,9 @@ independently, and other app splits remain available.
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):
 
-- `Actions` → `Ask Macro` (opens a doc-scoped AI chat, see ai-chat.md), and on
-  desktop a `Copy as prompt` pill for documents and tasks. Its primary button
-  runs the last-used agent action; the `Agent options` caret lists `Copy as
-  prompt`, `MCP setup instructions`, and an `Open in` group (Claude Code Web,
+- `Actions` → `Ask AI` (opens a doc-scoped AI chat, see ai-chat.md), and on
+  desktop tasks have a terminal-shaped `Copy as prompt` icon button immediately
+  after Share in the header. It opens one menu containing `Copy as prompt`, `MCP setup instructions`, and an `Open in` group (Claude Code Web,
   Codex Desktop, Cursor, Zed). Tasks add `Copy branch name`. A document prompt
   wraps the title and markdown in `<document>` / `<document-content>` tags with
   no branch instructions; the toast reads `Prompt copied to clipboard`. The
@@ -2597,3 +2603,22 @@ types do not show these tabs.
 In a disposable Markdown document, change several paragraphs in one edit, then
 undo and redo. Verify the text, paragraph count, and a second peer agree after
 each operation; wait for saving to finish and reload to check persistence.
+
+### Sharing an item
+
+Share opens one centered panel titled with the item name. Use **Add people or
+channels** to choose recipients (email addresses also work). Only after selecting
+a recipient do the optional message, permission picker, and **Share** button
+appear. **Can view / Can comment / Can edit** controls the access granted by
+that action. **Who has access** lists the owner and existing recipients below
+**Link access**.
+
+**Link access** offers **Only people with access**, **Anyone with the link**, or
+**Team members with the link**. Descriptions in the dropdown explain each option.
+Expand **More access options** for team access when it is off. Link
+access and **Team access** are separate: team access grants access to everyone
+on the owner's team without requiring a shared link. Available controls still
+depend on ownership and item type. **Copy link** remains available in the footer,
+even when link access is restricted; copying alone does not change permissions.
+**Done** or the close button dismisses the panel. Mobile uses the same permission
+labels in its Share, People, Link, and Team tabs.

@@ -1,7 +1,7 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
-import PlusIcon from '@phosphor/plus.svg';
-import StackIcon from '@phosphor/stack.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { ProjectsSidebarSkeleton } from '../components/project-skeletons';
 import { useProjectsContext } from '../context/projects-context';

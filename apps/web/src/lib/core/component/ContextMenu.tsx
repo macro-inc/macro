@@ -1,8 +1,8 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
+import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
-import CheckIcon from '@phosphor/check.svg?component-solid';
 import {
   addCtrlJKMenuNavigation,
   cn,
@@ -174,7 +174,7 @@ export function MenuItem(props: MenuItemProps) {
             class={cn(
               'size-3.5 shrink-0 rounded-sm p-0.5',
               (props as CheckboxMenuItemProps).checked
-                ? 'bg-accent text-[white]'
+                ? 'bg-ink text-surface-4'
                 : 'bg-transparent text-transparent border border-edge'
             )}
           />
@@ -192,7 +192,7 @@ export function MenuItem(props: MenuItemProps) {
               'size-3.5 shrink-0 rounded-full',
               (props as RadioMenuItemProps).value ===
                 (props as RadioMenuItemProps).groupValue
-                ? 'bg-accent text-[white]'
+                ? 'bg-ink text-surface-4'
                 : 'bg-transparent text-transparent border border-edge'
             )}
           />

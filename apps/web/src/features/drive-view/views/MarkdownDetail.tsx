@@ -22,8 +22,8 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
 import {
   createComputed,

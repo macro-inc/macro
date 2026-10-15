@@ -28,7 +28,7 @@ describe('openGlobalShareModal', () => {
       access: 'view',
     } as Extract<EntityData, { type: 'form' }>;
     await openGlobalShareModal({ entity: form });
-    expect(openFormShareModal).toHaveBeenCalledWith('form-1');
+    expect(openFormShareModal).toHaveBeenCalledWith('form-1', null);
     expect(openShareModal).not.toHaveBeenCalled();
   });
 

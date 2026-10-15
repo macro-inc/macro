@@ -53,6 +53,7 @@ Real files live in `.agents/`; tool-specific directories only symlink to it.
 | Adding a flow or hot path, or tracing one | `instrumentation` skill |
 | Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
+| Interface icons or icon motion | [Icon system and authoring rules](apps/web/src/components/icon/system/README.md) |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
 | iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
 | Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |

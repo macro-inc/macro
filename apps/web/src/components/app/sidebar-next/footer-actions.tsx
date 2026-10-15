@@ -6,9 +6,9 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
-import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
-import GearIcon from '@phosphor/gear.svg';
-import GearFillIcon from '@phosphor-fill/gear-fill.svg';
+import GearFillIcon from '@icon/system/fill/gear-fill.svg';
+import DeviceMobileDownloadIcon from '@icon/system/regular/device-mobile-download.svg';
+import GearIcon from '@icon/system/regular/gear.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
 import { createMemo, Show } from 'solid-js';
@@ -64,6 +64,8 @@ const MobileAppButton = () => {
         label="Get the mobile app"
         tooltip="Get the mobile app"
         tooltipPlacement="right"
+        tooltipOpenDelay={2000}
+        tooltipContentClass="motion-safe:animate-dialog-overlay-open"
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         data-active={isActive() ? '' : undefined}
@@ -144,6 +146,8 @@ export const FooterActions = (props: {
           }
           tooltip="Settings"
           tooltipPlacement="right"
+          tooltipOpenDelay={2000}
+          tooltipContentClass="motion-safe:animate-dialog-overlay-open"
           hotkey={TOKENS.global.toggleSettings}
           draggable={false}
           aria-current={isSettingsActive() ? 'page' : undefined}

@@ -2,7 +2,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
-import ChatIcon from '@phosphor/chat-circle.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {

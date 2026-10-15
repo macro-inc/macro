@@ -1,5 +1,5 @@
-import CheckCircle from '@phosphor/check-circle.svg';
-import Spinner from '@phosphor/spinner.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { cn } from '@ui';
 import {
   type Accessor,

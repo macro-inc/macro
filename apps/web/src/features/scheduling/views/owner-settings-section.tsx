@@ -1,5 +1,5 @@
 import { SettingsButton as Button } from '@app/features/settings/primitives';
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { Match, Show, Switch } from 'solid-js';
 import { AvailabilityPanel } from '../components/availability-panel';
 import { BookingsPanel } from '../components/bookings-panel';

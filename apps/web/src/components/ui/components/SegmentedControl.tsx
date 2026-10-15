@@ -1,6 +1,6 @@
-import { SegmentedControl as KSegmentedControl } from '@kobalte/core/segmented-control';
-import { For, type JSX } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { cn } from '../utils/classname';
+import { TabsInset } from './TabsInset';
 
 type SegmentedControlOption<T extends string | number | boolean> = {
   value: T;
@@ -19,6 +19,10 @@ type SegmentedControlProps<T extends string | number | boolean> = {
 
 const serialize = (v: string | number | boolean): string => String(v);
 
+/**
+ * @do Use for a small set of mutually exclusive views or filters.
+ * @dont Use segmented choices for independent creation actions; use buttons or a menu.
+ */
 export const SegmentedControl = <T extends string | number | boolean>(
   props: SegmentedControlProps<T>
 ): JSX.Element => {
@@ -32,36 +36,21 @@ export const SegmentedControl = <T extends string | number | boolean>(
   };
 
   return (
-    <KSegmentedControl
+    <TabsInset
       value={serialize(props.value)}
       onChange={handleChange}
       aria-label={props['aria-label']}
-      class={cn(
-        'border border-edge-frame rounded-full inline-flex overflow-hidden',
-        size() === 'sm' ? 'h-6' : 'h-8',
-        props.class
+      list={props.options.map((option) => ({
+        ...option,
+        value: serialize(option.value),
+      }))}
+      class={cn(size() === 'sm' ? 'h-6' : 'h-8', props.class)}
+      trackClass="h-full w-full"
+      itemClass="h-full"
+      labelClass={cn(
+        'h-full py-0',
+        size() === 'sm' ? 'px-2 text-xs' : 'px-3 text-xs'
       )}
-    >
-      <For each={props.options}>
-        {(option) => (
-          <KSegmentedControl.Item
-            value={serialize(option.value)}
-            disabled={option.disabled}
-            class={cn(
-              'relative flex h-full items-center justify-center border-r border-edge-divider last:border-r-0 font-medium outline-none has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus transition-colors duration-120 motion-reduce:transition-none',
-              size() === 'sm' ? 'px-2 text-xs' : 'px-3 text-sm',
-              option.disabled
-                ? 'opacity-50'
-                : 'text-ink-muted not-touch:hover:text-ink not-touch:hover:overlay-hover active:overlay-active data-checked:text-ink data-checked:overlay-active'
-            )}
-          >
-            <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-            <KSegmentedControl.ItemLabel>
-              {option.label}
-            </KSegmentedControl.ItemLabel>
-          </KSegmentedControl.Item>
-        )}
-      </For>
-    </KSegmentedControl>
+    />
   );
 };

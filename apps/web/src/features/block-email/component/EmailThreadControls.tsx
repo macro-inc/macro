@@ -1,9 +1,9 @@
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import CheckIcon from '@phosphor/check.svg';
-import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
-import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
-import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
+import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import CheckIcon from '@icon/system/regular/check.svg';
+import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
+import EnvelopeSimpleOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

@@ -13,13 +13,13 @@ import type {
   PrototypeInfo,
   PrototypeInteraction,
 } from '@core/fig-engine/prototype-types';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import Play from '@icon/system/regular/play.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import Minus from '@phosphor/minus.svg';
-import Play from '@phosphor/play.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
-import X from '@phosphor/x.svg';
 import {
   createEffect,
   createMemo,

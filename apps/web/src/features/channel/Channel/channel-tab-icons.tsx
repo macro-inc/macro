@@ -1,9 +1,9 @@
 import type { TabItem } from '@core/component/Tabs';
-import ChatTextIcon from '@phosphor/chat-text.svg';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import UsersIcon from '@phosphor/users.svg';
+import ChatTextIcon from '@icon/system/regular/chat-text.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import type { Component, JSX } from 'solid-js';
 import type { ChannelTabId } from './channel-tabs';
 

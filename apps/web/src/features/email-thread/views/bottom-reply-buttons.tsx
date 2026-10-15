@@ -3,12 +3,12 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
+import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
+import ArrowBendUpRight from '@icon/system/regular/arrow-bend-up-right.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
 import { type Component, Show } from 'solid-js';

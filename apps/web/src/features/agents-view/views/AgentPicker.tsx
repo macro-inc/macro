@@ -2,11 +2,11 @@ import { ModelCatalogMenu } from '@core/component/AI/component/input/ModelCatalo
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CodeIcon from '@phosphor/code.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { cn, Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, Show } from 'solid-js';
@@ -259,7 +259,7 @@ function AgentPickerRow(props: {
         />
       </Show>
       <Show when={props.selected}>
-        <CheckIcon class="size-3.5 shrink-0 text-accent" />
+        <CheckIcon class="size-3.5 shrink-0 text-ink" />
       </Show>
     </>
   );

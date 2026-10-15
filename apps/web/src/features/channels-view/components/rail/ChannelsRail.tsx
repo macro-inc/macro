@@ -8,6 +8,7 @@ import {
   useViewControlHotkeys,
   useViewTabHotkeys,
 } from '@app/components/view-shell';
+import { useSidebarSearchFocus } from '@app/components/view-shell/SidebarActionRow';
 import {
   type ChannelPreviewSelection,
   channelPreviewSelection,
@@ -277,6 +278,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const [restoreListScroll, setRestoreListScroll] = createSignal(false);
 
   let searchInput: HTMLInputElement | undefined;
+  const focusSearch = useSidebarSearchFocus(() => searchInput);
 
   const previewAfterNavigation = debounce(
     (channel: ChannelPreviewSelection) => setSelectedChannel(channel),
@@ -291,8 +293,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const openSearch = () => {
-    props.onSearchOpenChange(true);
-    queueMicrotask(() => searchInput?.focus());
+    props.onSearchOpenChange(Boolean(searchQuery().trim()));
+    focusSearch();
   };
 
   const selectTab = (tab: ChannelsTab) => {

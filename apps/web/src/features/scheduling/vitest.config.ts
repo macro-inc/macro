@@ -15,6 +15,9 @@ export default defineConfig({
   test: {
     name: 'scheduling',
     environment: 'jsdom',
+    setupFiles: [
+      fileURLToPath(new URL('../../../tests/setup-dom.ts', import.meta.url)),
+    ],
     include: [
       'src/features/scheduling/**/*.{test,spec}.{ts,tsx}',
       'src/lib/core/component/AI/component/tool/BookingLinks.test.tsx',

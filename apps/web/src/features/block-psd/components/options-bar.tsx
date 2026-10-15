@@ -7,8 +7,8 @@
  */
 
 import type { GradientKind, GradientMethod } from '@core/psd-engine/types';
-import Check from '@phosphor/check.svg';
-import X from '@phosphor/x.svg';
+import Check from '@icon/system/regular/check.svg';
+import X from '@icon/system/regular/x.svg';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { BrushSettings } from '../core/brush';
 import { GRADIENT_KINDS, GRADIENT_METHODS } from '../core/gradient';

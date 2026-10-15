@@ -8,9 +8,9 @@ import {
   DatabaseMentionValue,
 } from '@block-database/database-mentions';
 import { createDatabaseRelations } from '@block-database/queries/database-relations';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import Plus from '@phosphor/plus.svg';
-import X from '@phosphor/x.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import X from '@icon/system/regular/x.svg';
 import { useDatabaseTableChanges } from '@queries/storage/databases-sync';
 import { Checkbox, cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';

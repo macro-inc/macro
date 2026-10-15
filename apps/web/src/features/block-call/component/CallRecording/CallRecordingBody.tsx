@@ -3,7 +3,7 @@ import { CallChatHistory } from '@channel/Call/chat/CallChatHistory';
 import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CallRecord } from '@service-call/client';
 import { format } from 'date-fns';
 import {

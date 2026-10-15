@@ -1,4 +1,4 @@
-import Newspaper from '@phosphor-icons/core/regular/newspaper.svg';
+import Newspaper from '@icon/system/regular/newspaper.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 

@@ -10,7 +10,7 @@ import type {
   FilterSpec,
   Interpolation,
 } from '@core/psd-engine/types';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { cn } from '@ui';
 import { Button } from '@ui/components/Button';
 import {

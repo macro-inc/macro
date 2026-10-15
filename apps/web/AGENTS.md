@@ -78,6 +78,19 @@ Conventions for this app live in `.agents/rules/web/` and load when you touch
 matching files: data fetching, Solid reactivity, architecture, UI, UI primitives,
 the startup bundle, and Lexical nodes.
 
+## Interface icons
+- Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons or icon motion. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
+- If a glyph is missing, author original SVG geometry on the 24-unit grid with round caps/joins, restrained detail, `currentColor`, and the documented theme-aware weight. Never trace or import proprietary symbol paths. Match active/bold variants and review 14/16/20/24 px in light and dark mode.
+- Interactive glyphs use the shared `installIconMotion` behavior; do not add per-button bounce/spin effects. Keep state indicators static, preserve accessible control names, and honor reduced motion. See the icon README for wrapper and opt-out attributes.
+
+## Styling
+- Primary actions use `Button variant="cta"`: black in light mode and white in dark mode. Checkboxes (including native inputs, list selection, and menu checks) use `ink` with contrasting `surface-4`, not the theme accent. Keep destructive actions semantic.
+- Workspace sidebars place a fully rounded, content-sized, 32px-high creation pill in the title position, with Search and close/collapse controls on the right. Views without creation retain their title. Center the entity icon and action label (`New Task`, `New File`), and keep multiple creation choices in a dropdown. Main-toolbar New actions retain `Button variant="outline"`. Search expands on demand below the header; Escape hides it while retaining the query. Use `SidebarActionRow`/`SidebarActionOverride` and `sidebarCreate` when a sidebar needs a different creation menu from the main toolbar. Keep creation under its feature context. Search shortcuts reveal navigation and search before focusing; use `onSearch` when focusing search must leave a detail view. Preserve specialized mobile chrome and editor find controls.
+- Use semantic color tokens, not raw Tailwind color classes.
+- Do not add cursor-pointer to clickable elements.
+- Prefer styling in the component (Tailwind classes on the markup) so styling lives next to structure. Reserve `@utility` in `index.css` for styles that are widely shared across many components — not one-off or two-component layouts.
+
+
 ### Good Reference
 - https://github.com/solidjs-community/solid-primitives
 - https://github.com/kobaltedev/kobalte

@@ -1,12 +1,12 @@
+import CheckCircle from '@icon/system/fill/check-circle-fill.svg?component-solid';
+import XCircle from '@icon/system/fill/x-circle-fill.svg?component-solid';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import Check from '@icon/system/regular/check.svg';
+import CircleDashed from '@icon/system/regular/circle-dashed.svg';
+import MinusCircle from '@icon/system/regular/minus-circle.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import Check from '@phosphor/check.svg';
-import CircleDashed from '@phosphor/circle-dashed.svg';
-import MinusCircle from '@phosphor/minus-circle.svg';
-import X from '@phosphor/x.svg';
-import CheckCircle from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
-import XCircle from '@phosphor-icons/core/assets/fill/x-circle-fill.svg?component-solid';
 import { Button, cn, Layer, Surface } from '@ui';
 import {
   createSignal,

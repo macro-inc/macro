@@ -1,4 +1,4 @@
-import MicrophoneSlash from '@phosphor/microphone-slash.svg';
+import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
 import { type JSX, Show } from 'solid-js';
 
 export type MutedMicrophoneBadgeProps = {

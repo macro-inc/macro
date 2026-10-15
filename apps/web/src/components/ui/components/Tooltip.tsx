@@ -16,6 +16,8 @@ type TooltipProps = ParentProps<{
    */
   shortcut?: string | string[];
   placement?: Placement;
+  openDelay?: number;
+  contentClass?: string;
   as?: 'div' | 'span';
   class?: string;
   label: string;
@@ -33,7 +35,7 @@ export type TooltipClassOptions = {
 /** Canonical classes for tooltip content and tooltip-like static hints. */
 export function tooltipClasses(options: TooltipClassOptions = {}): string {
   return cn(
-    'flex items-center justify-center rounded-lg bg-tooltip p-2 text-xs text-ink-muted wrap-break-word',
+    'menu-surface flex items-center justify-center rounded-xl p-2 text-xs text-ink-muted wrap-break-word',
     options.class
   );
 }
@@ -108,7 +110,22 @@ export function Tooltip(props: TooltipProps) {
     })
   );
 
-  onCleanup(() => setOpen(false));
+  // Kobalte shares hover warm-up across tooltips. An explicit delay must apply
+  // to each target, even when the pointer moves directly from another tooltip.
+  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+  const cancelHover = () => {
+    clearTimeout(hoverTimer);
+    hoverTimer = undefined;
+  };
+  const closeDelayedHover = () => {
+    if (props.openDelay === undefined) return;
+    cancelHover();
+    setOpen(false);
+  };
+  onCleanup(() => {
+    cancelHover();
+    setOpen(false);
+  });
   const visible = () => isOpen() && !props.disabled && tooltipsEnabled();
 
   return (
@@ -121,7 +138,8 @@ export function Tooltip(props: TooltipProps) {
       ignoreSafeArea={true}
       overflowPadding={16}
       fitViewport={true}
-      openDelay={400}
+      openDelay={props.openDelay ?? 400}
+      triggerOnFocusOnly={props.openDelay !== undefined}
       closeDelay={0}
       flip={true}
       gutter={4}
@@ -132,6 +150,18 @@ export function Tooltip(props: TooltipProps) {
           setTriggerRef(ref);
         }}
         class={cn('inline-flex items-center', props.class)}
+        onPointerEnter={(event) => {
+          if (props.openDelay === undefined || event.pointerType === 'touch')
+            return;
+          cancelHover();
+          hoverTimer = setTimeout(() => {
+            hoverTimer = undefined;
+            setOpen(!props.disabled && tooltipsEnabled());
+          }, props.openDelay);
+        }}
+        onPointerLeave={closeDelayedHover}
+        onPointerDown={closeDelayedHover}
+        onBlur={closeDelayedHover}
         tabIndex={props.tabIndex}
         as={props.as ?? 'div'}
       >
@@ -139,8 +169,13 @@ export function Tooltip(props: TooltipProps) {
       </KobalteTooltip.Trigger>
       <Show when={visible()}>
         <KobalteTooltip.Portal>
-          <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
-            <Surface class={tooltipClasses()} depth={3}>
+          <KobalteTooltip.Content
+            class={cn(
+              'z-tool-tip max-w-[calc(100vw-32px)]',
+              props.contentClass
+            )}
+          >
+            <Surface class={tooltipClasses()} depth={2} hideBorder>
               <div class="flex flex-row items-center gap-2">
                 <div class="text-xs">{props.label}</div>
                 <Show when={hasHotkey()}>

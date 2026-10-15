@@ -1,6 +1,6 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
-import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
+import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
+import ArrowBendUpRight from '@icon/system/regular/arrow-bend-up-right.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 

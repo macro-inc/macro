@@ -6,7 +6,7 @@
  * turns instead of competing with tool cards for attention.
  */
 
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import type { JSX } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 

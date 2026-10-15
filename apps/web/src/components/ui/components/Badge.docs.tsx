@@ -1,6 +1,6 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { For } from 'solid-js';
 import { Avatar } from './Avatar';
 import { Badge, type BadgeVariant } from './Badge';

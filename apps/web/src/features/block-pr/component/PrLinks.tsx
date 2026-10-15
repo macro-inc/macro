@@ -8,15 +8,15 @@ import {
   rowPillTriggerClasses,
 } from '@entity/components/row-pill';
 import MacroIcon from '@icon/macro-logo.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import { Popover } from '@kobalte/core/popover';
-import BuildingsIcon from '@phosphor/buildings.svg';
 import GithubIcon from '@phosphor/github-logo.svg';
-import HashIcon from '@phosphor/hash.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import RobotIcon from '@phosphor/robot.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { cn, Surface, Tooltip } from '@ui';

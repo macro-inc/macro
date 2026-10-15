@@ -4,6 +4,7 @@ import {
   PdfDocumentContent,
 } from '@block-pdf/component/PdfDocument';
 import {
+  PdfHeaderControls,
   PdfTabsToggle,
   PdfToolbarControls,
 } from '@block-pdf/component/PdfSplitToolbar';
@@ -30,8 +31,8 @@ import {
   Permissions,
 } from '@core/component/SharePermissions';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import Printer from '@phosphor/printer.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import Printer from '@icon/system/regular/printer.svg';
 import { useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
@@ -44,6 +45,7 @@ export type PdfDetailContext = FileDetailContext<PdfDocumentData>;
 function PdfDetailContent(props: {
   data: PdfDocumentData;
   children?: (context: PdfDetailContext) => JSX.Element;
+  inlineToolbar?: boolean;
 }) {
   const isAuth = useIsAuthenticated();
   const pdf = usePdfDocument();
@@ -106,8 +108,9 @@ function PdfDetailContent(props: {
         documentMetadata: props.data.documentMetadata,
         userAccessLevel: props.data.userAccessLevel,
         operations,
+        titleControls: props.inlineToolbar ? <PdfHeaderControls /> : undefined,
       })}
-      <Show when={pdf.documentProxy()}>
+      <Show when={!props.inlineToolbar && pdf.documentProxy()}>
         <div class="flex min-h-11 shrink-0 items-center gap-2 border-edge-muted border-b px-2">
           <PdfToolbarControls />
           <div class="ml-auto">
@@ -133,6 +136,7 @@ export function PdfDetailDocument(props: {
   documentId: string;
   data: PdfDocumentData;
   children?: (context: PdfDetailContext) => JSX.Element;
+  inlineToolbar?: boolean;
 }) {
   const [searchParams] = useSearchParams();
   const target = createPdfRouteTarget(() => props.documentId);
@@ -173,7 +177,11 @@ export function PdfDetailDocument(props: {
         locationParams={getLocationParams(searchParams)}
         navigationTarget={target()}
       >
-        <PdfDetailContent data={props.data} children={props.children} />
+        <PdfDetailContent
+          data={props.data}
+          children={props.children}
+          inlineToolbar={props.inlineToolbar}
+        />
       </PdfDocument>
     </FileDetailLayout>
   );
@@ -182,6 +190,7 @@ export function PdfDetailDocument(props: {
 export function PdfDetail(props: {
   documentId: string;
   children?: (context: PdfDetailContext) => JSX.Element;
+  inlineToolbar?: boolean;
 }) {
   return (
     <FileDetailLoadGate
@@ -192,6 +201,7 @@ export function PdfDetail(props: {
       {(data) => (
         <PdfDetailDocument
           documentId={props.documentId}
+          inlineToolbar={props.inlineToolbar}
           data={data}
           children={props.children}
         />

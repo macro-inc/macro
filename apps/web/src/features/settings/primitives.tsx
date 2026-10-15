@@ -1,4 +1,4 @@
-import CaretLeftIcon from '@phosphor/caret-left.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import { Button, type ButtonProps, ComposerSurface, cn } from '@ui';
 import { children, createContext, type JSX, Show, useContext } from 'solid-js';
 import { settingsTarget } from './core/settings-target';

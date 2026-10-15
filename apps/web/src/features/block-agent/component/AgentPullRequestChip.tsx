@@ -17,9 +17,8 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
-import { cn, Layer } from '@ui';
+import { Layer } from '@ui';
 import { type Accessor, createMemo, type JSX, Show } from 'solid-js';
-import { match } from 'ts-pattern';
 import { ChipShell } from './AgentSessionChipShell';
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -49,13 +48,6 @@ function pullRequestTitle(
   return optionalString(metadataRecord(entity.metadata).name);
 }
 
-function statusTextClass(status: string): string {
-  return match(status)
-    .with('merged', () => 'text-note')
-    .with('closed', () => 'text-failure')
-    .otherwise(() => 'text-success');
-}
-
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -80,9 +72,7 @@ function ChipFace(props: {
       >
         {label()}
       </span>
-      <span class={cn('shrink-0', statusTextClass(props.status))}>
-        {capitalize(props.status)}
-      </span>
+      <span class="shrink-0">{capitalize(props.status)}</span>
     </>
   );
 }

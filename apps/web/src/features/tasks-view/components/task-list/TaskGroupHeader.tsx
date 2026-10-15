@@ -3,28 +3,14 @@ import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { getPropertyOptionLabel } from '@entity';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import { PROPERTY_OPTION_IDS } from '@property';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
-import { cn, Layer, Surface } from '@ui';
+import { cn, Layer } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import type { TaskGroupBy } from '../../types';
-
-export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
-  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
-  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
-  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
-  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
-  [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
-};
 
 export function TaskGroupHeader(props: {
   row: SoupGroupHeaderRow;
@@ -60,22 +46,14 @@ export function TaskGroupHeader(props: {
 
     return props.row.label;
   });
-  const statusTint = createMemo(() =>
-    props.groupBy === 'status'
-      ? STATUS_GROUP_HEADER_TINTS[props.row.groupId]
-      : undefined
-  );
 
   return (
     <div id={props.row.id} role="row">
       <div role="gridcell" aria-colspan={props.columnCount}>
-        <Surface
-          depth={3}
-          hideBorder
+        <div
           data-highlighted={props.focused || undefined}
           class={cn(
-            'group/header mx-1 my-0.5 h-auto w-[calc(100%-0.5rem)] rounded-lg border border-edge-muted text-ink-muted hover:bg-active',
-            statusTint(),
+            'group/header mx-1 my-0.5 h-auto w-[calc(100%-0.5rem)] rounded-lg text-ink-muted hover:bg-active',
             props.focused && 'bg-active'
           )}
         >
@@ -130,8 +108,23 @@ export function TaskGroupHeader(props: {
               </span>
             </Show>
           </button>
-        </Surface>
+        </div>
       </div>
     </div>
   );
 }
+
+export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
+  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
+    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
+    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
+    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
+    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+  [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
+    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
+};
+
+import { PROPERTY_OPTION_IDS } from '@property';

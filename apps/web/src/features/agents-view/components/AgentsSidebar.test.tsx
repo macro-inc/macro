@@ -1,3 +1,7 @@
+import {
+  SidebarActionsProvider,
+  WorkspaceActions,
+} from '@app/components/view-shell/SidebarActionRow';
 import { HomeListEntity } from '@app/features/home/components/HomeListEntity';
 import {
   cleanup,
@@ -140,27 +144,32 @@ describe('mixed Agents sidebar', () => {
     const create = vi.fn();
     const openPage = vi.fn();
     render(() => (
-      <AgentsSidebar
-        mode={mode()}
-        onModeChange={changeMode}
-        activePage="new"
-        onOpenPage={openPage}
-        {...partitionArchived(conversations)}
-        modeForConversation={(conversation) =>
-          conversation.type === 'chat' ? 'chat' : 'code'
-        }
-        activeConversationId="chat"
-        search=""
-        loading={false}
-        error={false}
-        hasNextPage={false}
-        loadingNextPage={false}
-        onNewConversation={create}
-        onSearchChange={vi.fn()}
-        onOpenConversation={open}
-        onRetry={vi.fn()}
-        onLoadMore={vi.fn()}
-      />
+      <SidebarActionsProvider>
+        <AgentsSidebar
+          mode={mode()}
+          onModeChange={changeMode}
+          activePage="new"
+          onOpenPage={openPage}
+          {...partitionArchived(conversations)}
+          modeForConversation={(conversation) =>
+            conversation.type === 'chat' ? 'chat' : 'code'
+          }
+          activeConversationId="chat"
+          search=""
+          loading={false}
+          error={false}
+          hasNextPage={false}
+          loadingNextPage={false}
+          onNewConversation={create}
+          onSearchChange={vi.fn()}
+          onOpenConversation={open}
+          onRetry={vi.fn()}
+          onLoadMore={vi.fn()}
+        />
+        <header>
+          <WorkspaceActions />
+        </header>
+      </SidebarActionsProvider>
     ));
     for (const label of ['Agents', 'Routines', 'Connections']) {
       fireEvent.click(screen.getByRole('button', { name: label }));
@@ -191,8 +200,12 @@ describe('mixed Agents sidebar', () => {
       conversations[0],
       expect.objectContaining({ shiftKey: true })
     );
-    fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
-    expect(create).toHaveBeenCalledOnce();
+    const createButtons = screen.getAllByRole('button', {
+      name: 'New conversation',
+    });
+    expect(createButtons).toHaveLength(2);
+    for (const button of createButtons) fireEvent.click(button);
+    expect(create).toHaveBeenCalledTimes(2);
   });
 
   it('keeps paging while the chosen mode has too few conversations to scroll', () => {

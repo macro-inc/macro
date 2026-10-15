@@ -1,7 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import RssIcon from '@phosphor/rss.svg';
-import WarningIcon from '@phosphor/warning.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import RssIcon from '@icon/system/regular/rss.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import { Checkbox } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';

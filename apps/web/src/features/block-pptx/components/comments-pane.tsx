@@ -9,14 +9,14 @@ import type {
   CommentOutline,
   CommentReplyOutline,
 } from '@core/pptx-engine/types';
+import ChatText from '@icon/system/regular/chat-text.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import PaperPlaneRight from '@icon/system/regular/paper-plane-right.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import ChatText from '@phosphor/chat-text.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
-import PencilSimple from '@phosphor/pencil-simple.svg';
-import Trash from '@phosphor/trash.svg';
-import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,

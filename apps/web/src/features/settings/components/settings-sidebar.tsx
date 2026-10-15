@@ -1,7 +1,11 @@
-import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import {
+  SearchBar,
+  SidebarActionRow,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import type { SettingsTabGroup } from '@core/constant/settingsTabsConfig';
-import SignOutIcon from '@phosphor/sign-out.svg';
+import SignOutIcon from '@icon/system/regular/sign-out.svg';
 import { pressHandlers } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -27,34 +31,30 @@ export function SettingsSidebar(props: {
   let root: HTMLDivElement | undefined;
   return (
     <ViewSidebar.Root ref={root} aria-label="Settings navigation">
-      <ViewSidebar.Header>
-        <div class="flex min-w-0 items-center gap-1">
-          <ViewSidebar.CloseButton class="shrink-0" />
-          <ViewSidebar.Title>Settings</ViewSidebar.Title>
-        </div>
-      </ViewSidebar.Header>
-
-      <ViewSidebar.Primary>
-        <SearchBar
-          label="Search settings"
-          placeholder="Search settings"
-          autocomplete="off"
-          value={props.searchQuery}
-          onValueChange={props.onSearchQueryChange}
-          class="border-0 bg-ink/5 shadow-none"
-          onEscape={() => props.onSearchQueryChange('')}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowDown') {
-              const first =
-                root?.querySelector<HTMLButtonElement>('nav button');
-              if (first) {
-                event.preventDefault();
-                first.focus();
+      <SidebarActionRow
+        title="Settings"
+        search={
+          <SearchBar
+            label="Search settings"
+            placeholder="Search settings"
+            autocomplete="off"
+            value={props.searchQuery}
+            onValueChange={props.onSearchQueryChange}
+            class="border-0 bg-ink/5 shadow-none"
+            onEscape={() => props.onSearchQueryChange('')}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                const first =
+                  root?.querySelector<HTMLButtonElement>('nav button');
+                if (first) {
+                  event.preventDefault();
+                  first.focus();
+                }
               }
-            }
-          }}
-        />
-      </ViewSidebar.Primary>
+            }}
+          />
+        }
+      />
 
       <ViewSidebar.Content>
         <Show
@@ -86,7 +86,6 @@ export function SettingsSidebar(props: {
                       {(item) => (
                         <ViewSidebar.Item
                           active={props.isItemActive(item.tab)}
-                          class="text-ink"
                           {...pressHandlers(() => props.onSelect(item.tab))}
                         >
                           <ViewSidebar.Icon>
@@ -104,7 +103,7 @@ export function SettingsSidebar(props: {
         </Show>
       </ViewSidebar.Content>
 
-      <ViewSidebar.Footer class="py-(--sidebar-gutter)">
+      <ViewSidebar.Footer class="py-2">
         <ViewSidebar.Item {...pressHandlers(() => props.onLogout())}>
           <ViewSidebar.Icon>
             <SignOutIcon class="size-4" />

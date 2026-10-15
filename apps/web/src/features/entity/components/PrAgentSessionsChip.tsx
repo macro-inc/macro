@@ -1,4 +1,4 @@
-import SparkleIcon from '@phosphor/sparkle.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button, cn, Dropdown } from '@ui';
 import type { ParentProps } from 'solid-js';
 import { rowPillTriggerClasses } from './row-pill';

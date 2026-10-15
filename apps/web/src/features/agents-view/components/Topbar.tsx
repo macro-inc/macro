@@ -1,18 +1,27 @@
 import { ViewShell } from '@app/components/view-shell/ViewShell';
 import { SplitPanel } from '@components/app/split-panel';
-import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
 /** Shared workspace chrome for conversation and new-session pages. */
 export function Topbar(props: {
   title: string;
+  workspaceActions?: boolean;
   onBack?: () => void;
   titleContent?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
-    <ViewShell.TopBar class="touch:flex">
+    <ViewShell.TopBar
+      controls={
+        <div class="header-actions ml-auto flex shrink-0 items-center gap-1">
+          {props.children}
+        </div>
+      }
+      workspaceActions={props.workspaceActions}
+      class="touch:flex"
+    >
       <Show
         when={props.onBack}
         fallback={
@@ -34,9 +43,6 @@ export function Topbar(props: {
             {props.title}
           </h1>
         )}
-      </div>
-      <div class="header-actions ml-auto flex shrink-0 items-center gap-1">
-        {props.children}
       </div>
     </ViewShell.TopBar>
   );

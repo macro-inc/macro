@@ -2,9 +2,9 @@ import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { splitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import { TOKENS } from '@core/hotkey/tokens';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import ColumnsPlusIcon from '@phosphor/columns-plus-right.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import ColumnsPlusIcon from '@icon/system/regular/columns-plus-right.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 

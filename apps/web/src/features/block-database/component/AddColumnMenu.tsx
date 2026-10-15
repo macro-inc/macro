@@ -1,4 +1,4 @@
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import type { ColumnDetail } from '@service-storage/generated/schemas/columnDetail';
 import { Button } from '@ui/components/Button';
 import { createSignal, Show } from 'solid-js';

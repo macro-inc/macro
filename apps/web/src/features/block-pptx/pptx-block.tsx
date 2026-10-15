@@ -36,7 +36,7 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import { LoroDoc } from 'loro-crdt';
 import {
@@ -300,7 +300,7 @@ export default function PptxBlock(props: { share?: string }) {
         <SplitHeaderRight>
           <div class="order-[999] flex items-center">
             <ChatWithAgentButton
-              label="Ask Macro"
+              label="Ask AI"
               entity={{
                 type: 'document',
                 id: documentId,

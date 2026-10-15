@@ -5,7 +5,9 @@ import { createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToolCard } from './ToolCard';
 
-vi.mock('@phosphor/caret-right.svg', () => ({ default: () => <svg /> }));
+vi.mock('@icon/system/regular/caret-right.svg', () => ({
+  default: () => <svg />,
+}));
 
 afterEach(cleanup);
 

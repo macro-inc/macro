@@ -11,8 +11,8 @@ import {
   Entity,
   type EntityData,
 } from '@entity';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -509,7 +509,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     <span class="truncate min-w-0">{option.label}</span>
                   </div>
                   <Show when={!props.config.isMultiSelect && isSelected()}>
-                    <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                    <CheckIcon class="size-3.5 shrink-0 text-ink" />
                   </Show>
                 </div>
               );
@@ -616,7 +616,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                         <Show
                           when={!props.config.isMultiSelect && isSelected()}
                         >
-                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                          <CheckIcon class="size-3.5 shrink-0 text-ink" />
                         </Show>
                       </div>
                     </>

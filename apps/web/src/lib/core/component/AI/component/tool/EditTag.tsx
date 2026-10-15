@@ -1,4 +1,4 @@
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
 import { TagDot } from '@property/tags/TagDot';
 import { Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

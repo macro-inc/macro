@@ -18,20 +18,20 @@ import { fuzzyFilter } from '@core/util/fuzzy';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { formatRelativeTimestamp } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import LinkIcon from '@phosphor/link.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import UsersIcon from '@phosphor/users.svg';
-import XIcon from '@phosphor/x.svg';
 import {
   useAiBillingSummaryQuery,
   useGithubLinkStatusQuery,

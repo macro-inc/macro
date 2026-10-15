@@ -5,11 +5,11 @@
  */
 
 import { IS_MAC } from '@core/constant/isMac';
-import Exclude from '@phosphor/exclude.svg';
-import Intersect from '@phosphor/intersect.svg';
-import StackSimple from '@phosphor/stack-simple.svg';
-import Subtract from '@phosphor/subtract.svg';
-import Unite from '@phosphor/unite.svg';
+import Exclude from '@icon/system/regular/exclude.svg';
+import Intersect from '@icon/system/regular/intersect.svg';
+import StackSimple from '@icon/system/regular/stack-simple.svg';
+import Subtract from '@icon/system/regular/subtract.svg';
+import Unite from '@icon/system/regular/unite.svg';
 import { For } from 'solid-js';
 import { match } from 'ts-pattern';
 import {

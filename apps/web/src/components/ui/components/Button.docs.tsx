@@ -1,7 +1,7 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { For, Show } from 'solid-js';
 import { Button, type ButtonVariant } from './Button';
 import { ButtonGroup } from './ButtonGroup';
@@ -14,6 +14,7 @@ const VARIANTS: ButtonVariant[] = [
   'danger',
   'strong',
   'cta',
+  'compose',
 ];
 
 // #region demo:variants
@@ -195,7 +196,7 @@ export default defineDoc({
       id: 'variants',
       title: 'Variants',
       description:
-        '`ghost` for low-emphasis actions in dense chrome, `outline` for standard actions, `strong` for the same frame with bolder text, `accent` for the primary action in a group, `cta` for the single most important action on a screen. `danger` is reserved for destructive work. Framed variants use glass only on touch by default. `glass={true}` opts in on desktop; `glass={false}` removes it everywhere. Success and danger use colored ink with an unfilled outline frame; icon sizes preserve the same emphasis as text buttons.',
+        '`ghost` for low-emphasis actions in dense chrome, `outline` for standard actions, `strong` for the same frame with bolder text, `cta` for the primary action in a group or screen. Primary actions use monochrome ink with contrasting surface text; `accent` is a compatibility alias with the same neutral emphasis. `danger` is reserved for destructive work. Framed variants use glass only on touch by default. `glass={true}` opts in on desktop; `glass={false}` removes it everywhere. Success and danger use colored ink with an unfilled outline frame; icon sizes preserve the same emphasis as text buttons.',
       render: VariantsDemo,
       fill: true,
     },

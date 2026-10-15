@@ -16,7 +16,7 @@ export function MobileWebSignupSent(props: { onBackHome: () => void }) {
         <button
           type="button"
           onClick={() => props.onBackHome()}
-          class="w-full px-3 py-2.5 text-lg font-bold rounded-xs bg-accent text-surface border-none mt-16"
+          class="w-full px-3 py-2.5 text-lg font-bold rounded-xs bg-ink text-surface-4 border-none mt-16"
         >
           Back to Home
         </button>

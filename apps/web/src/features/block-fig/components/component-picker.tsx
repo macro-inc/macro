@@ -6,8 +6,8 @@
 
 import type { NodeRef } from '@core/fig-engine/design-types';
 import type { ComponentInfo } from '@core/fig-engine/types';
+import DiamondsFour from '@icon/system/regular/diamonds-four.svg';
 import { Popover } from '@kobalte/core/popover';
-import DiamondsFour from '@phosphor/diamonds-four.svg';
 import { Layer } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { componentLabel, swapChoices } from '../core/design-system';

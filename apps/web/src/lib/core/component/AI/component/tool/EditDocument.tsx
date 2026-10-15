@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
 import { Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';

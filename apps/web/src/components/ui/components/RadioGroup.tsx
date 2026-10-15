@@ -23,10 +23,10 @@ type ItemLabelProps = ComponentProps<typeof KobalteRadioGroup.ItemLabel>;
 const CONTROL_CLASS = cn(
   'inline-flex items-center justify-center size-4 shrink-0 rounded-full',
   'bg-surface border-1 border-edge',
-  'data-checked:border-accent',
+  'data-checked:border-ink',
   'data-disabled:opacity-50 data-disabled:cursor-not-allowed',
   'data-invalid:border-failure',
-  'peer-focus-visible:ring-2 peer-focus-visible:ring-accent'
+  'peer-focus-visible:ring-2 peer-focus-visible:ring-edge-focus'
 );
 
 function RadioGroupItem(props: ItemProps) {
@@ -49,7 +49,7 @@ function RadioGroupItemControl(props: ItemControlProps) {
         {...rest}
       >
         {local.children ?? (
-          <KobalteRadioGroup.ItemIndicator class="size-2 rounded-full bg-accent" />
+          <KobalteRadioGroup.ItemIndicator class="size-2 rounded-full bg-ink" />
         )}
       </KobalteRadioGroup.ItemControl>
     </>

@@ -1,6 +1,6 @@
+import Eye from '@icon/system/regular/eye.svg';
 import { Popover } from '@kobalte/core/popover';
 import type { AgentContextDecoratorProps } from '@macro-inc/lexical-core';
-import Eye from '@phosphor/eye.svg';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import { AgentContextElement } from './AgentContextElement';
 import { parseContext, summaryOf } from './agent-context-tree';

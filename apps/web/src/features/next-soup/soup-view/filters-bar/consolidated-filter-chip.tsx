@@ -1,6 +1,6 @@
+import CheckIcon from '@icon/system/regular/check.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Combobox } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, cn, Dropdown, Layer } from '@ui';
 import {
   type Accessor,
@@ -184,11 +184,11 @@ const ValueDropdownContent = (props: { filter: ConsolidatedFilter }) => {
                     <span
                       class={cn(
                         'size-4 flex items-center justify-center shrink-0 rounded-full border',
-                        active() ? 'bg-accent border-accent' : 'border-edge'
+                        active() ? 'bg-ink border-ink' : 'border-edge'
                       )}
                     >
                       <Show when={active()}>
-                        <CheckIcon class="size-2.5 text-surface" />
+                        <CheckIcon class="size-2.5 text-surface-4" />
                       </Show>
                     </span>
                   }
@@ -196,11 +196,11 @@ const ValueDropdownContent = (props: { filter: ConsolidatedFilter }) => {
                   <span
                     class={cn(
                       'size-4 flex items-center justify-center shrink-0 rounded border',
-                      active() ? 'bg-accent border-accent' : 'border-edge'
+                      active() ? 'bg-ink border-ink' : 'border-edge'
                     )}
                   >
                     <Show when={active()}>
-                      <CheckIcon class="size-2.5 text-surface" />
+                      <CheckIcon class="size-2.5 text-surface-4" />
                     </Show>
                   </span>
                 </Show>

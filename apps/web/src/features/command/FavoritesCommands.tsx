@@ -7,7 +7,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { registerScope } from '@core/hotkey/utils';
-import Star from '@phosphor/star.svg';
+import Star from '@icon/system/regular/star.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createEffect, createRoot, onCleanup } from 'solid-js';

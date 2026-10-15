@@ -1,4 +1,4 @@
-import PlayIcon from '@phosphor/play.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
 import { cn } from '@ui';
 import type { ParentProps } from 'solid-js';
 

@@ -9,7 +9,7 @@ import {
   highlightTermsInText,
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
-import CopyIcon from '@phosphor/copy.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';

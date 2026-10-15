@@ -12,12 +12,12 @@ import {
   RenderTool,
 } from '@core/component/AI/component/tool/handler';
 import { parseLegacyGeneratedImage } from '@core/component/AI/component/tool/legacy-generated-image';
-import ReadIcon from '@phosphor/file-text.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import ListIcon from '@phosphor/list-bullets.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import WrenchIcon from '@phosphor/wrench.svg';
+import ReadIcon from '@icon/system/regular/file-text.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import WrenchIcon from '@icon/system/regular/wrench.svg';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import {
   deserializeToolCall,

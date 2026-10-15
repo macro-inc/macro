@@ -51,15 +51,15 @@ import {
 } from '@core/mobile/nativeEditMenu';
 import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
+import CheckIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import SparkleIcon from '@icon/system/bold/sparkle-bold.svg?component-solid';
+import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import CheckSquareIcon from '@icon/system/regular/check-square.svg?component-solid';
+import GridIcon from '@icon/system/regular/grid-four.svg';
+import LinkIcon from '@icon/system/regular/link.svg?component-solid';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import GridIcon from '@phosphor/grid-four.svg';
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-solid';
-import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
-import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, SendButton, Toolbar } from '@ui';
 import {

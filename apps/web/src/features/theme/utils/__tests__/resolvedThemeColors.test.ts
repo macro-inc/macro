@@ -27,11 +27,15 @@ describe('resolved theme colors', () => {
     'uses the %s theme panel assignment for first paint',
     (mode) => {
       const colors = resolveThemeColors({}, mode);
-      expect(colors.panel.l).toBeCloseTo(mode === 'dark' ? 0.17 : 1);
-      if (mode === 'dark') {
-        expect(colors.input).toEqual(colors['surface-2']);
-      } else {
-        expect(colors.input.alpha).toBe(0);
+      expect(colors.panel.l).toBeCloseTo(
+        mode === 'dark' ? 0.16376 : 0.99405,
+        5
+      );
+      expect(colors.page).toEqual(colors.panel);
+      expect(colors.input).toEqual(colors['surface-2']);
+      if (mode === 'light') {
+        expect(colors.input.l).toBeCloseTo(1);
+        expect(colors.input.alpha).toBe(1);
       }
     }
   );

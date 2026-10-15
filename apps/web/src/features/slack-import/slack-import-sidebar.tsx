@@ -2,7 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSlackArchiveImport } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import SlackIcon from '@icon/slack-color.svg';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { Button } from '@ui';
 import { Show } from 'solid-js';

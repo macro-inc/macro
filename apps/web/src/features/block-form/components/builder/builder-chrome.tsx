@@ -1,6 +1,6 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import Database from '@phosphor/database.svg';
-import Plus from '@phosphor/plus.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Database from '@icon/system/regular/database.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { QuestionTypeId } from '../../core/question-types';

@@ -5,7 +5,7 @@ import {
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { DisplayName } from '@entity/components/DisplayName';
-import PhoneIcon from '@phosphor/phone-call.svg';
+import PhoneIcon from '@icon/system/fill/phone-call-fill.svg';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { useJoinChannelMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';
@@ -57,7 +57,7 @@ export function ChannelActiveCallBadge(props: { channelId: string }) {
 
   return (
     <Show when={hasActiveCall()}>
-      <PhoneIcon class="size-4 shrink-0 text-accent fill-accent" />
+      <PhoneIcon class="size-4 shrink-0 text-accent" />
     </Show>
   );
 }

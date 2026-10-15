@@ -1,4 +1,4 @@
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, Surface } from '@ui';
 
 export function UsageInfoDialog(props: {

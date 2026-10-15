@@ -1,26 +1,26 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import BellIcon from '@phosphor/bell-simple.svg';
-import BugIcon from '@phosphor/bug.svg';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CpuIcon from '@phosphor/cpu.svg';
-import CreditCardIcon from '@phosphor/credit-card.svg';
-import DesktopIcon from '@phosphor/desktop.svg';
-import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import EmailIcon from '@phosphor/envelope-simple.svg';
-import GaugeIcon from '@phosphor/gauge.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
-import KeyIcon from '@phosphor/key.svg';
-import KeyboardIcon from '@phosphor/keyboard.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PlugIcon from '@phosphor/plug.svg';
-import PlugsConnectedIcon from '@phosphor/plugs-connected.svg';
-import BotIcon from '@phosphor/robot.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import SwatchesIcon from '@phosphor/swatches.svg';
-import TagIcon from '@phosphor/tag-simple.svg';
-import UserIconPhosphor from '@phosphor/user.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import BugIcon from '@icon/system/regular/bug.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CpuIcon from '@icon/system/regular/cpu.svg';
+import CreditCardIcon from '@icon/system/regular/credit-card.svg';
+import DesktopIcon from '@icon/system/regular/desktop.svg';
+import DeviceMobileIcon from '@icon/system/regular/device-mobile-speaker.svg';
+import EmailIcon from '@icon/system/regular/envelope-simple.svg';
+import GaugeIcon from '@icon/system/regular/gauge.svg';
+import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
+import KeyIcon from '@icon/system/regular/key.svg';
+import KeyboardIcon from '@icon/system/regular/keyboard.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
+import PlugsConnectedIcon from '@icon/system/regular/plugs-connected.svg';
+import BotIcon from '@icon/system/regular/robot.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
+import SwatchesIcon from '@icon/system/regular/swatches.svg';
+import TagIcon from '@icon/system/regular/tag-simple.svg';
+import UserIcon from '@icon/system/regular/user.svg';
+import TeamIcon from '@icon/system/regular/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
 import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
@@ -110,7 +110,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       {
         tab: 'Account',
         label: 'Account',
-        icon: UserIconPhosphor,
+        icon: UserIcon,
         keywords: ['profile', 'user', 'email', 'name'],
       },
       {
@@ -163,7 +163,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       {
         tab: 'Team',
         label: 'Team',
-        icon: UsersThreeIcon,
+        icon: TeamIcon,
         keywords: ['members', 'users', 'workspace'],
       },
       {

@@ -3,7 +3,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { UserCardAction } from '@core/component/userCardActions';
 import { enableCrm } from '@core/constant/featureFlags';
-import WideContact from '@phosphor/address-book.svg';
+import WideContact from '@icon/system/regular/address-book.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { Accessor } from 'solid-js';
 

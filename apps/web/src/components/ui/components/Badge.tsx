@@ -4,7 +4,7 @@ import { CONTROL_SIZE_VARIANTS } from '../utils/controlSizes';
 import { createVariants, type VariantProps } from '../utils/variants';
 import { buttonClasses } from './Button';
 
-/** Canonical variant classes for badges and badge-like elements. */
+/** Canonical badge styles; outline uses the same quiet frame as email tag pills. */
 export const badgeVariants = createVariants(
   cn(
     'inline-flex shrink-0 items-center justify-center whitespace-nowrap',
@@ -14,7 +14,7 @@ export const badgeVariants = createVariants(
   {
     variant: {
       ghost: 'bg-transparent text-ink-muted',
-      outline: 'bg-transparent text-ink-muted border-edge-muted',
+      outline: 'bg-control text-ink-muted border-edge-button',
     },
     size: {
       xs: "h-5 gap-1 px-2 text-xs [&>svg:not([class*='size-'])]:size-3 has-[>[data-slot=avatar][data-size=sm]:first-child]:pl-px",

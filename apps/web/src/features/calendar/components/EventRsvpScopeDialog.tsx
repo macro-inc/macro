@@ -1,8 +1,8 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { RadioGroup as KobalteRadioGroup } from '@kobalte/core/radio-group';
-import CheckIcon from '@phosphor/check.svg';
-import CloseIcon from '@phosphor/x.svg';
 import type { CalendarRsvpScope } from '@service-email/client';
 import { Button, Dialog, Panel, RadioGroup } from '@ui';
 import { For, Show } from 'solid-js';
@@ -128,7 +128,7 @@ export function EventRsvpScopeDialog(props: {
                           {option.label}
                           <KobalteRadioGroup.ItemControl class="flex size-5 items-center justify-center">
                             <KobalteRadioGroup.ItemIndicator>
-                              <CheckIcon class="size-5 text-accent" />
+                              <CheckIcon class="size-5 text-ink" />
                             </KobalteRadioGroup.ItemIndicator>
                           </KobalteRadioGroup.ItemControl>
                         </KobalteRadioGroup.ItemLabel>

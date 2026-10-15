@@ -1,7 +1,7 @@
 import { TabsInset } from '@core/component/TabsInset';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import StackIcon from '@phosphor/stack.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import type { Component } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ReviewsStatusTabId } from '../reviews-types';

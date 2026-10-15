@@ -1,5 +1,5 @@
-import Clock from '@phosphor/clock.svg';
-import Globe from '@phosphor/globe.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Globe from '@icon/system/regular/globe.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { AvailabilitySchedule, SchedulingProfile } from '../core/types';

@@ -30,7 +30,12 @@ function SizesDemo() {
         {(size) => (
           <div class="flex flex-col items-start gap-1.5">
             <span class="font-mono text-xs text-ink-subtle">{size}</span>
-            <ToggleSwitch size={size} defaultChecked />
+            <ToggleSwitch
+              size={size}
+              label={`${size} switch`}
+              labelClass="sr-only"
+              defaultChecked
+            />
           </div>
         )}
       </For>
@@ -76,7 +81,7 @@ export default defineDoc({
   name: 'Toggle Switch',
   category: 'Inputs',
   description:
-    'An on/off switch for a setting that applies immediately. If the change needs a save step, use a Checkbox instead.',
+    'An on/off switch with a light thumb and a smooth, 220ms slide. Reduced-motion preferences disable the transition. If the change needs a save step, use a Checkbox instead.',
   status: 'stable',
   exports: ['ToggleSwitch'],
   import: "import { ToggleSwitch } from '@ui';",

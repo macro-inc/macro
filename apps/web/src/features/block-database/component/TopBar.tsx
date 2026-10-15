@@ -11,7 +11,7 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
 import { useGetPermissions } from '@core/signal/permissions';
-import SparkleIcon from '@phosphor/sparkle.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';

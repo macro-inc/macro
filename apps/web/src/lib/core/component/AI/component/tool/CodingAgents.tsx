@@ -1,4 +1,4 @@
-import CodeIcon from '@phosphor/code.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
 import { createSignal, For, type JSX, Show, Suspense } from 'solid-js';
 import { MagicChip } from '../../../LexicalMarkdown/component/decorator/MagicChip';
 import { BaseTool } from './BaseTool';

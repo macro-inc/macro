@@ -1,9 +1,9 @@
 import { formatDate, formatEmailDate } from '@core/util/date';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import ImageIcon from '@phosphor/image.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PhoneIcon from '@phosphor-fill/phone-fill.svg';
+import PhoneIcon from '@icon/system/fill/phone-fill.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import { cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

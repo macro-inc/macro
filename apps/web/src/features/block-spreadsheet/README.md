@@ -43,9 +43,9 @@ the sync acknowledgement, then opens the saved document's sharing dialog. Failed
 saves leave the draft editable. Retrying reuses the document and operation IDs so
 row additions are not duplicated after a lost acknowledgement.
 
-## Ask Macro and spreadsheet tools
+## Ask AI and spreadsheet tools
 
-Ask Macro uses the shared agent session flow and opens an adjacent agent with one
+Ask AI uses the shared agent session flow and opens an adjacent agent with one
 unsent document mention plus a trailing space. The mention includes the active sheet
 ID/name and selection snapshot. Local demos save through the existing acknowledged
 draft path first. Selection remains local presence, not persisted workbook data.
@@ -564,7 +564,7 @@ Deploy the spreadsheet-enabled document service, sync Worker, AI editing Worker,
 and frontend together to dev. The AI Worker deployment watches
 `packages/spreadsheet/**`, so shared schema/calculation updates cannot silently
 leave its bundle behind. After deploy, verify real staff login, creation, reopening,
-sharing with another staff user, two-user edits/cursors, and Ask Macro against a
+sharing with another staff user, two-user edits/cursors, and Ask AI against a
 closed workbook. The isolated local tests cover the production editor/session and
 sync Worker, but do not exercise hosted authentication/token refresh or document
 publication/search. Keep public rollout disabled until those checks and the

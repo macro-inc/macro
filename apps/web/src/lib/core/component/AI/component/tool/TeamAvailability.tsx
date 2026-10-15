@@ -1,5 +1,5 @@
 import { getDisplayName, tryMacroId } from '@core/user';
-import CalendarCheck from '@phosphor-icons/core/regular/calendar-check.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { format } from 'date-fns';
 import { For, Show } from 'solid-js';

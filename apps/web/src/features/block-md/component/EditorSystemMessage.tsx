@@ -1,6 +1,6 @@
-import InfoIcon from '@phosphor/info.svg';
-import WarningIcon from '@phosphor/warning.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import { cn, createVariants, type VariantProps } from '@ui';
 import { type ComponentProps, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

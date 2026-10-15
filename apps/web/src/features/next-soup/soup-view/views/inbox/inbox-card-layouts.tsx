@@ -28,23 +28,23 @@ import {
 } from '@entity';
 import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import GithubIcon from '@icon/mcp-github.svg';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg?component-solid';
+import AtIcon from '@icon/system/regular/at.svg?component-solid';
+import BellSimpleIcon from '@icon/system/regular/bell-simple.svg?component-solid';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg?component-solid';
+import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
+import ChatTextIcon from '@icon/system/regular/chat-text.svg?component-solid';
+import FilesIcon from '@icon/system/regular/files.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
+import PhoneIcon from '@icon/system/regular/phone.svg?component-solid';
+import QuestionIcon from '@icon/system/regular/question.svg?component-solid';
+import SmileyIcon from '@icon/system/regular/smiley.svg?component-solid';
+import AgentIcon from '@icon/system/regular/sparkle.svg?component-solid';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg?component-solid';
 import { formatCalendarReminderTime } from '@notifications';
 import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
-import FilesIcon from '@phosphor/files.svg';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
-import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
-import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
-import CalendarBlankIcon from '@phosphor-icons/core/regular/calendar-blank.svg?component-solid';
-import ChatTeardropIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
-import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
-import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
-import SmileyIcon from '@phosphor-icons/core/regular/smiley.svg?component-solid';
-import AgentIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
-import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
   type PropertySaveHandler,

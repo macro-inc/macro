@@ -2,9 +2,9 @@ import { MediaBackgroundPicker } from '@core/component/media/media-background-pi
 import { MediaDevicePicker } from '@core/component/media/media-device-picker';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { readBackgroundImage } from '@core/media/read-background-image';
-import Microphone from '@phosphor/microphone.svg';
-import SpeakerHigh from '@phosphor/speaker-high.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
+import Microphone from '@icon/system/regular/microphone.svg';
+import SpeakerHigh from '@icon/system/regular/speaker-high.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
 import { InlineCheckbox } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
 import type { CallState } from '../CallContext';

@@ -1,8 +1,8 @@
 /** Text box resizing belongs with its dimensions in the Layout section. */
 import type { TextInfo } from '@core/fig-engine/types';
-import ArrowsOutLineHorizontal from '@phosphor/arrows-out-line-horizontal.svg';
-import ArrowsOutLineVertical from '@phosphor/arrows-out-line-vertical.svg';
-import FrameCorners from '@phosphor/frame-corners.svg';
+import ArrowsOutLineHorizontal from '@icon/system/regular/arrows-out-line-horizontal.svg';
+import ArrowsOutLineVertical from '@icon/system/regular/arrows-out-line-vertical.svg';
+import FrameCorners from '@icon/system/regular/frame-corners.svg';
 import type { Patch } from '../primitives/create-fig-editor';
 import { ChoiceRow } from './design-fields';
 

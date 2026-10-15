@@ -15,12 +15,12 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
-import CollapseIcon from '@phosphor/arrows-in.svg';
-import ExpandIcon from '@phosphor/arrows-out.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CollapseIcon from '@icon/system/regular/arrows-in.svg';
+import ExpandIcon from '@icon/system/regular/arrows-out.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, cn } from '@ui';
@@ -191,7 +191,7 @@ function SplitCloseButton() {
   return (
     <Show
       when={
-        shouldShowSplitCloseButton(layout.manager) ||
+        !shouldShowSplitCloseButton(layout.manager) &&
         !isListViewID(context.handle.content().id)
       }
     >

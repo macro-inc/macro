@@ -1,5 +1,5 @@
 import type { Formula } from '@core/database-sql/generated/types';
-import FunctionIcon from '@phosphor/function.svg';
+import FunctionIcon from '@icon/system/regular/function.svg';
 import { Button } from '@ui/components/Button';
 import { inputClasses } from '@ui/components/Input';
 import {

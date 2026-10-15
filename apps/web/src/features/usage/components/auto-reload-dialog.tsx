@@ -1,4 +1,4 @@
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, InputGroup, Surface, TextField } from '@ui';
 import { Show } from 'solid-js';
 

@@ -68,6 +68,7 @@ const SidebarRailContent = () => {
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
       class={cn(
+        '[&_[data-button]]:bg-none! [&_[data-button]:hover:not(:active):not([data-active])]:bg-hover/50 [&_[data-button]:active]:bg-hover',
         'relative flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-hidden border-edge-frame bg-panel px-2 pb-3 pt-2',
         !isPlatform('desktop') &&
           (globalSplitManager()?.splits().length ?? 1) <= 1 &&

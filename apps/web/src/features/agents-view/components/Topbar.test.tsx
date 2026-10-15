@@ -1,11 +1,16 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Topbar } from './Topbar';
 
 vi.mock('@app/components/view-shell/ViewShell', () => ({
   ViewShell: {
-    TopBar: (props: ParentProps) => <div>{props.children}</div>,
+    TopBar: (props: ParentProps<{ controls?: JSX.Element }>) => (
+      <div>
+        {props.children}
+        {props.controls}
+      </div>
+    ),
   },
 }));
 vi.mock('@components/app/split-panel', () => ({

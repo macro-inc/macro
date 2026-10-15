@@ -4,7 +4,7 @@ import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 export function TasksViewSkeleton() {
   return (
     <ViewSkeleton.Root asidePreferenceKey="tasks">
-      <ViewSkeleton.Sidebar title="Tasks" createLabel="New task" />
+      <ViewSkeleton.Sidebar title="Tasks" />
       <ViewSkeleton.Main title="Tasks" searchPlaceholder="Search tasks" />
     </ViewSkeleton.Root>
   );

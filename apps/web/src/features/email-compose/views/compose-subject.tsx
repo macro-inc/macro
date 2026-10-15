@@ -31,7 +31,7 @@ export function ComposeSubject(props: {
   return (
     <div
       class={cn(
-        'w-full flex gap-2 border-b border-edge-muted focus-within:border-ink/20',
+        'w-full flex gap-2',
         ctx.isMobile() ? 'items-start py-2' : 'items-center py-3'
       )}
     >
@@ -43,7 +43,12 @@ export function ComposeSubject(props: {
       >
         {ctx.isMobile() ? 'Subject:' : 'Subject'}
       </div>
-      <div class="flex-1 min-w-0">
+      <div
+        class={cn(
+          'relative flex-1 min-w-0 after:pointer-events-none after:absolute after:inset-x-0 after:border-b after:border-edge-frame/50',
+          ctx.isMobile() ? 'after:-bottom-2' : 'after:-bottom-3'
+        )}
+      >
         <Show
           when={ctx.isMobile()}
           fallback={

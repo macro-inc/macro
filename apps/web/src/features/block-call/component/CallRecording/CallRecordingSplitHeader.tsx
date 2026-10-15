@@ -26,7 +26,7 @@ import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
@@ -77,7 +77,7 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
 
   const tools: BlockTool[] = [
     {
-      label: 'Ask Macro',
+      label: 'Ask AI',
       icon: ChatWithAgentIcon,
       action: () =>
         openChatWithAgent({
@@ -114,7 +114,7 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
 
   const menuTools: BlockTool[] = [
     {
-      label: 'Ask Macro',
+      label: 'Ask AI',
       icon: ChatWithAgentIcon,
       action: () =>
         openChatWithAgent({

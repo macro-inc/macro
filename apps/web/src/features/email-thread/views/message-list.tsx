@@ -5,6 +5,7 @@ import {
   createEffect,
   createMemo,
   createSelector,
+  type JSX,
   onCleanup,
   Show,
 } from 'solid-js';
@@ -26,6 +27,7 @@ interface MessageListProps {
   initialLoadComplete: boolean;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   title?: string;
+  actions?: JSX.Element;
   /**
    * Full-frame mobile: when nothing is in flow below the list (the collapsed
    * reply buttons float in the accessory region), the list carries the bottom
@@ -117,7 +119,7 @@ export function MessageList(props: MessageListProps) {
           <div
             class={cn(
               'macro-message-width macro-message-padding w-full',
-              viewContext.thread.isTouch() ? 'pt-6 pb-3' : 'pt-12 pb-2.5'
+              viewContext.thread.isTouch() ? 'pt-6 pb-3' : 'pt-8 pb-4'
             )}
           >
             <EmailThreadTitle
@@ -128,9 +130,9 @@ export function MessageList(props: MessageListProps) {
                 viewContext.thread.isTouch() ? 'text-xl pt-1 pb-0' : 'text-2xl'
               }
             />
-            <Show when={!viewContext.thread.isTouch()}>
+            <Show when={!viewContext.thread.isTouch()} fallback={props.actions}>
               <div class="h-4.5" aria-hidden="true" />
-              <EmailParticipants />
+              <EmailParticipants leading={props.actions} />
             </Show>
           </div>
         </div>

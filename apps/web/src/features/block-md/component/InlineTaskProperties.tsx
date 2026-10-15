@@ -143,7 +143,6 @@ export function InlineTaskProperties() {
           <InlineFetchedEntityTagsPill
             entityId={blockId}
             entityType={entityType}
-            class="bg-surface-2"
             showAddButton={documentKind === 'document' && canEdit()}
           />
           <For each={inlineProperties()}>
@@ -151,13 +150,12 @@ export function InlineTaskProperties() {
               <InlinePropertyValue
                 property={property}
                 entityId={blockId}
-                class="bg-surface-2 border border-edge"
                 canManage={documentKind === 'document'}
               />
             )}
           </For>
           <Show when={documentKind === 'document' && canEdit()}>
-            <AddPropertyButton class="gap-1.5 bg-surface-2" />
+            <AddPropertyButton class="gap-1.5" />
           </Show>
           <Show when={documentKind === 'task' && state.editor.md.progressStats}>
             {(progressStats) => (

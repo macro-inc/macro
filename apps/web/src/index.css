@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./components/icon/system/icon-styles.css";
 
 @source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
 @source inline("z-{popup-viewer,viewer-definition-lookup}");
@@ -16,9 +17,9 @@
   --app-border-width: 1px;
   --app-ring-width: 0.5px;
 
-  /* Workspace sidebar geometry. Both icon rails are 26px from the edge.
+  /* Workspace sidebar geometry. Both icon rails are 23px from the edge.
      Controls align by their centers, independent of glyph or button size. */
-  --sidebar-gutter: 0.5rem;
+  --sidebar-gutter: 0.3125rem;
   --sidebar-item-inset: 0.5rem;
   --sidebar-icon-slot: 1.25rem;
   --sidebar-icon-size: 1rem;
@@ -423,6 +424,8 @@ body.tauri-ios {
   --color-page: var(--color-surface-0);
   --color-panel: var(--theme-panel, var(--color-surface-1));
   --color-control: var(--color-surface-2);
+  /* A physical switch thumb stays light in either theme. */
+  --color-switch-thumb: oklch(0.985 0 0);
   --color-edge-frame: color-mix(in oklch, var(--color-content-0) 8%, transparent);
   --color-edge-button: color-mix(in oklch, var(--color-content-0) 5%, transparent);
   --color-edge-divider: color-mix(in oklch, var(--color-content-0) 4%, transparent);
@@ -834,16 +837,9 @@ html[data-theme-light='false'] {
 /* Strip the glass under a variant (e.g. a container query collapsing a pill
    to a bare icon, where a rim would chip it). Variant-prefixed utilities sort
    after plain ones, so `@max-2xl/u-list:glass-none` beats a plain `glass`. */
-/* The scrim behind floating dialogs (cmd+k, create, task compose, confirm).
-   Three quiet layers instead of one flat dim: a tenth of black so the page
-   steps back; a wide top-lit wash that mixes the theme accent in at
-   single-digit strength, so the dimmed page warms toward the brand instead of
-   going gray — like room light through tinted glass; and a whisper of
-   backdrop blur with a nudge of saturation, so what's behind reads as depth
-   rather than as competing detail. The accent wash lives in background-image
-   so a heavier coat (bg-modal-overlay) can replace the base color while
-   keeping the sheen. Standard backdrop-filter only — Lightning CSS adds the
-   -webkit- prefix itself (see the note in `glass`). */
+/* Shared dialog scrim: dim the page and add a subtle accent wash while keeping
+   background content sharp. Destructive flows can replace the base dim with
+   bg-modal-overlay without losing the accent wash. */
 @utility scrim-glass {
   background-color: oklch(0 0 0 / 0.1);
   background-image: radial-gradient(
@@ -852,7 +848,7 @@ html[data-theme-light='false'] {
     color-mix(in oklch, var(--color-accent) 2%, transparent) 40%,
     transparent 68%
   );
-  backdrop-filter: blur(2px) saturate(1.05);
+  backdrop-filter: none;
 }
 
 /* Shared phone sheet geometry: match the screen curve with an even outer
@@ -913,17 +909,26 @@ html[data-theme-light='false'] {
 @utility menu-surface {
   @apply glass relative min-h-0 rounded-xl bg-menu text-ink;
   --color-surface: var(--color-menu);
+
+  @variant light-mode {
+    box-shadow: var(--glass-shadow), 0 18px 48px -10px oklch(0 0 0 / 0.22);
+  }
 }
 
-/* Shared dialog appearance; composers retain their original glass. */
+/* Shared floating modal surface: one rim, a soft fill, and layered shadow.
+   The scrim stays sharp; only the translucent panel blurs behind itself. */
 @utility elevated-surface {
-  @apply glass-input;
-  border-radius: 24px;
-  background-color: var(--color-dialog);
+  position: relative;
+  min-height: 0;
+  border: 0;
+  border-radius: 18px;
   color: var(--color-ink);
+  background-color: color-mix(in oklab, color-mix(in oklab, var(--color-dialog) 96%, var(--color-ink)) 95%, transparent);
+  backdrop-filter: blur(40px);
+  box-shadow: 0 30px 90px -12px oklch(0 0 0 / 0.4), 0 12px 32px -8px oklch(0 0 0 / 0.2), 0 0 0 1px var(--color-edge-frame);
 }
 
-html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
+html[data-theme-light='true'] .glass-input {
   --glass-shadow-y: 4px;
   --glass-shadow-blur: 16px;
   --glass-shadow-spread: -10px;
@@ -1728,11 +1733,10 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
 }
 
 input[type="time"]::-webkit-calendar-picker-indicator {
-  --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 256 256'%3E%3C!-- Icon from Phosphor by Phosphor Icons - https://github.com/phosphor-icons/core/blob/main/LICENSE --%3E%3Cpath fill='currentColor' d='M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m64-88a8 8 0 0 1-8 8h-56a8 8 0 0 1-8-8V72a8 8 0 0 1 16 0v48h48a8 8 0 0 1 8 8'/%3E%3C/svg%3E");
-  -webkit-mask: var(--icon) no-repeat;
+  -webkit-mask: url("./components/icon/system/regular/clock.svg") no-repeat;
   background-color: currentColor;
   -webkit-mask-size: 100% 100%;
-  mask: var(--icon) no-repeat;
+  mask: url("./components/icon/system/regular/clock.svg") no-repeat;
   background-image: none;
   mask-size: 100% 100%;
   color: inherit;
@@ -1782,5 +1786,11 @@ input[type="number"] {
 @media (prefers-reduced-motion: reduce) {
   .empty-state-graphic {
     animation: none;
+  }
+}
+
+@layer base {
+  input[type='checkbox'] {
+    accent-color: var(--color-ink);
   }
 }

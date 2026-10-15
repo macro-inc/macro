@@ -1,5 +1,6 @@
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import IconSystemGallery from '@icon/system/IconSystemGallery';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -145,6 +146,49 @@ for (const [name, component] of Object.entries(staticIcons)) {
 STATIC_ONLY_ICONS.sort((a, b) => a.name.localeCompare(b.name));
 
 export default function IconGallery() {
+  const [view, setView] = createSignal<'system' | 'animated'>('system');
+
+  return (
+    <div class="flex size-full min-h-0 flex-col bg-panel">
+      <SplitHeaderLeft>
+        <StaticSplitLabel label="Icon Gallery" />
+      </SplitHeaderLeft>
+      <div class="flex shrink-0 items-center gap-1 border-b border-edge-muted px-5 py-2 sm:px-8">
+        <button
+          type="button"
+          class="rounded-md px-3 py-2 text-xs hover:bg-hover hover:text-ink"
+          classList={{
+            'bg-active text-ink': view() === 'system',
+            'text-ink-muted': view() !== 'system',
+          }}
+          aria-pressed={view() === 'system'}
+          onClick={() => setView('system')}
+        >
+          Original icons
+        </button>
+        <button
+          type="button"
+          class="rounded-md px-3 py-2 text-xs hover:bg-hover hover:text-ink"
+          classList={{
+            'bg-active text-ink': view() === 'animated',
+            'text-ink-muted': view() !== 'animated',
+          }}
+          aria-pressed={view() === 'animated'}
+          onClick={() => setView('animated')}
+        >
+          Legacy animated icons
+        </button>
+      </div>
+      <div class="min-h-0 flex-1">
+        <Show when={view() === 'system'} fallback={<LegacyIconGallery />}>
+          <IconSystemGallery />
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+function LegacyIconGallery() {
   const [selectedColor, setSelectedColor] = createSignal<ColorOption>(
     THEME_COLORS[0]
   );
@@ -214,9 +258,6 @@ export default function IconGallery() {
           border-radius: 0;
         }
       `}</style>
-      <SplitHeaderLeft>
-        <StaticSplitLabel label="Icon Gallery" />
-      </SplitHeaderLeft>
       <div class="mx-auto max-w-6xl">
         {/* Controls */}
         <div class="mb-6">

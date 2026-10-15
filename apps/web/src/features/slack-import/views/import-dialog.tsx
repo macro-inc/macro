@@ -1,8 +1,8 @@
 import { formatDate } from '@core/util/date';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import FileZipIcon from '@phosphor/file-zip.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import FileZipIcon from '@icon/system/regular/file-zip.svg';
 import { ActionDialogShell, Button, cn, Dialog } from '@ui';
 import {
   createEffect,
@@ -810,7 +810,7 @@ function ArchivePicker(props: {
           </div>
         </div>
         <Show when={!props.disabled}>
-          <span class="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-contrast">
+          <span class="rounded-md bg-ink px-4 py-2 text-sm font-medium text-surface-4">
             Choose ZIP file
           </span>
         </Show>

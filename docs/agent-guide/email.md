@@ -677,3 +677,26 @@ A confirmed save archives the thread and advances within the invoking list.
 Cancel and failed saves keep the current email. H on a pending snooze edits it;
 **Remove reminder** returns it to the inbox. Bare H in a reply or search field
 remains ordinary typing.
+
+
+The Email sidebar's **Accounts** switcher always shows **All inboxes** and every
+connected email address. Select an address directly to scope the current view;
+select All inboxes to combine accounts again. The plus button beside Accounts
+connects another account. The compact header retains an inbox menu when needed.
+
+
+Workspace sidebars place a fully rounded creation pill (at least 120px wide by 32px high, growing to fit its full label)
+in the title position, with Search and close/collapse controls to its right.
+Views without creation keep their title. Multiple creation choices use the pill's
+dropdown: Tasks offers **New Task** and **New Project**, and Chat offers
+**New Message** and **New Channel**. The main **New** action remains available.
+Search expands on demand and Escape hides it without discarding the query.
+Projects and Routines follow the same layout. Editor/detail toolbars keep their
+contextual actions.
+
+
+The sidebar Accounts switcher shows All inboxes and each connected account directly.
+Select an account to scope mail or All inboxes to combine accounts. Long email
+addresses stay on one line and fade at the edge. The plus beside Accounts connects
+another account. Signal and Noise are inset tabs in the main inbox topbar; Favorites
+and Drafts use the same sidebar item style as Sent and Scheduled.

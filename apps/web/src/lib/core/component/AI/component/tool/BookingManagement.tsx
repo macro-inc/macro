@@ -1,4 +1,4 @@
-import Calendar from '@phosphor-icons/core/regular/calendar.svg';
+import Calendar from '@icon/system/regular/calendar.svg';
 import { createSignal } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

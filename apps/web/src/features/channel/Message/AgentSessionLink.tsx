@@ -1,5 +1,5 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { splitMessageContent } from './agent-session-link';

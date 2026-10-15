@@ -3,7 +3,7 @@
  * agent's full wording in a menu so remembered rules can be read before use.
  */
 
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { Button, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';

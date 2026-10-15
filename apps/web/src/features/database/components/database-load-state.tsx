@@ -1,5 +1,5 @@
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import WarningIcon from '@phosphor/warning-circle.svg';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
+import WarningIcon from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 import { For } from 'solid-js';
 

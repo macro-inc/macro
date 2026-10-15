@@ -1,5 +1,5 @@
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
-import EmailIcon from '@phosphor/envelope.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
 import { createEffect, createSignal } from 'solid-js';
 import { MockAppChrome } from '../components/MockAppChrome';
 import { ClickCallout, HotkeyCallout } from '../components-lib';

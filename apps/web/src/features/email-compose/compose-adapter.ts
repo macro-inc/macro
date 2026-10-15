@@ -22,10 +22,10 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { deviceLooksOffline } from '@core/util/connectivity';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
-import ExclamationIcon from '@phosphor-icons/core/regular/exclamation-mark.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   useAddForwardedAttachmentsMutation,

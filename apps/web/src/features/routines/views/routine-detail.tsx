@@ -1,6 +1,6 @@
-import CopyIcon from '@phosphor/copy.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Dropdown } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';

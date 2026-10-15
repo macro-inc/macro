@@ -45,6 +45,8 @@ export const SearchRailButton = () => {
         size: 'icon-md',
         variant: 'ghost',
         tooltipPlacement: 'right',
+        tooltipOpenDelay: 2000,
+        tooltipContentClass: 'motion-safe:animate-dialog-overlay-open',
         hotkey: TOKENS.sidebar.goTo.search,
         'data-sidebar-next-search': '',
         class: 'size-10 rounded-xl [&_svg]:size-5',

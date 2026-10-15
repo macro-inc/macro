@@ -10,7 +10,7 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 ## Top bars
 
 Low-emphasis right-aligned split-header actions (including Calendar's touch/preview
-New event and Channel's idle Call and Ask Macro) are borderless with a rounded-xl
+New event and Channel's idle Call and Ask AI) are borderless with a rounded-xl
 background on hover. Emphasized variants retain their treatment, including an
 active call's green ink and outline frame. Channel, company, contact, and project
 content tabs use inset controls in the top bar. Button sizes do not change variant colors or framing; individual
@@ -51,8 +51,8 @@ write shows failure feedback and leaves the card open for retry.
 
 Actions live in the top bar immediately before Share, with consistent compact
 buttons (labels collapse on narrow headers). There are no Actions sections in
-information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
-includes Ask Macro and Create task; PDF and calls include Ask Macro. Native
+information panels. Markdown/tasks include Ask AI and document/task dispatch; email
+includes Ask AI and Create task; PDF and calls include Ask AI. Native
 projects put Delete in the `Project actions` menu after the project title.
 
 Standard metadata is quiet, non-collapsible text at the bottom of each panel,
@@ -76,3 +76,18 @@ This applies across Markdown/tasks,
 snippets, email, calls, agents, pull requests, projects, and all file blocks
 including PDFs, images, code, video, canvas, unknown file types, and CRM company
 and contact views (both inside the CRM workspace and in standalone blocks).
+
+
+## Workspace creation and search
+
+Workspace sidebars use a fully rounded 32px-high creation pill in the title position.
+It is at least 120px wide and grows to show its complete label. Its left edge aligns
+with the controls below. Search and close/collapse controls sit on the right in the
+48px topbar. Views without creation retain their label. Multiple creation choices
+use the pill's dropdown, including New Task / New Project and New Message / New
+Channel. The main toolbar retains its contextual controls and New action.
+
+Search expands below the sidebar header on demand. Escape hides it without clearing
+the query; the search shortcut reveals navigation and focuses the field. Projects
+and Routines use the same controls when active. Editor/detail toolbars retain their
+contextual actions.

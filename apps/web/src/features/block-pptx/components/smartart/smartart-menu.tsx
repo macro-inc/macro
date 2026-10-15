@@ -8,13 +8,13 @@ import {
   MenuItem,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import Palette from '@icon/system/regular/palette.svg';
+import PlusSquare from '@icon/system/regular/plus-square.svg';
+import Swap from '@icon/system/regular/swap.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
+import TreeStructure from '@icon/system/regular/tree-structure.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import Palette from '@phosphor/palette.svg';
-import PlusSquare from '@phosphor/plus-square.svg';
-import Swap from '@phosphor/swap.svg';
-import TextAa from '@phosphor/text-aa.svg';
-import TreeStructure from '@phosphor/tree-structure.svg';
 import { For, type JSX } from 'solid-js';
 import { colorGroups, shortId } from '../../core/smartart';
 import type { SmartArtState } from '../../primitives/create-smart-art';

@@ -1,4 +1,4 @@
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 

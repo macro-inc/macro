@@ -1,4 +1,4 @@
-import Plug from '@phosphor-icons/core/regular/plug.svg';
+import Plug from '@icon/system/regular/plug.svg';
 import { getMcpServerIcon, type SvgIcon } from '../../constant/mcpServers';
 import { BaseTool } from './BaseTool';
 import type { RenderContext } from './ToolRenderer';

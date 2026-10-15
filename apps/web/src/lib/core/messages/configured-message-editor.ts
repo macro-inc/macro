@@ -14,7 +14,7 @@ import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tabl
 import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { IUser } from '@core/user/types';
-import ImageIcon from '@phosphor/image.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
 import { isIOS } from '@solid-primitives/platform';
 import type { Accessor } from 'solid-js';
 

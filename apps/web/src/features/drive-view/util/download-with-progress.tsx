@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { isPlatform } from '@core/util/platform';
 import { downloadFile } from '@filesystem/download';
-import Spinner from '@phosphor/spinner.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import type { FetchProgress } from '@service-storage/util/fetchPresigned';
 import { createSignal } from 'solid-js';
 

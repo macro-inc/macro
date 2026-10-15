@@ -1,4 +1,4 @@
-import BookOpen from '@phosphor-icons/core/regular/book-open.svg';
+import BookOpen from '@icon/system/regular/book-open.svg';
 import { createSignal } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

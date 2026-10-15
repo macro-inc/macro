@@ -1,4 +1,4 @@
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { InputGroup } from '@ui';
 
 export function ParticipantsSearchInput(props: {

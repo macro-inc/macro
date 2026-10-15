@@ -13,8 +13,8 @@ import { useUserId } from '@core/context/user';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
 import { isMutedItem } from '@entity/utils/notification';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, EmptyStatePanel } from '@ui';
 import {

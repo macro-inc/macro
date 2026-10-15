@@ -45,11 +45,20 @@ vi.mock('../components/event-editor', () => ({
 }));
 
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 });
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 const future = (hours: number) =>
@@ -74,7 +83,12 @@ const teammateBooking: Booking = {
   answers: {},
 };
 
-function fixture(team = { canEdit: true, canManageBookings: true }) {
+function fixture(
+  team = { canEdit: true, canManageBookings: true },
+  createBookingLink = false
+) {
+  const [requested, setRequested] = createSignal(createBookingLink);
+  const handled = vi.fn(() => setRequested(false));
   const sources = new Map<string, SchedulingSource>();
   const saves = vi.fn();
   const createSource: SchedulingCapabilities['createSource'] = (scope) => {
@@ -147,10 +161,13 @@ function fixture(team = { canEdit: true, canManageBookings: true }) {
         manageBooking: async () => {},
       }}
     >
-      <SchedulingSettingsView />
+      <SchedulingSettingsView
+        createBookingLink={requested()}
+        onCloseBookingLink={handled}
+      />
     </SchedulingProvider>
   ));
-  return { sources, saves };
+  return { sources, saves, handled, setRequested };
 }
 
 async function selectOwner(name: string) {
@@ -251,4 +268,23 @@ it('lets a team member edit booking links and manage only the meetings they host
   // One Cancel and one Reschedule: the meeting they host, not the teammate's.
   expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(1);
   expect(screen.getAllByRole('button', { name: 'Reschedule' })).toHaveLength(1);
+});
+
+it('opens a requested personal booking draft once and does not save on cancel', async () => {
+  const { saves, handled, setRequested } = fixture(undefined, true);
+  await screen.findByRole('button', { name: 'Cancel test event' });
+  expect(handled).not.toHaveBeenCalled();
+  expect(saves).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel test event' }));
+  expect(
+    screen.queryByRole('button', { name: 'Cancel test event' })
+  ).toBeNull();
+  await selectOwner('Team · Design');
+  setRequested(true);
+  await screen.findByRole('button', { name: 'Cancel test event' });
+  expect(
+    screen.getByRole('button', { name: 'Booking link owner' }).textContent
+  ).toContain('Personal');
+  expect(handled).toHaveBeenCalledOnce();
+  expect(saves).not.toHaveBeenCalled();
 });

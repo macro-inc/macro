@@ -1,9 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import { ThemeEditor } from '@theme/components/ThemeEditor';

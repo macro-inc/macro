@@ -1,28 +1,32 @@
-import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import {
+  SearchBar,
+  SidebarActionRow,
+  ViewSidebar,
+} from '@app/components/view-shell';
+import { SidebarCreateAction } from '@app/components/view-shell/SidebarCreateAction';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
+import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { type ChannelEntity, Entity } from '@entity';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChatCircleIcon from '@phosphor/chat-circle.svg';
-import ChatsCircleIcon from '@phosphor/chats-circle.svg';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SortIcon from '@phosphor/sort-ascending.svg';
-import XIcon from '@phosphor/x.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChatCircleIcon from '@icon/system/regular/chat-circle.svg';
+import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import SortIcon from '@icon/system/regular/sort-ascending.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   createDraggable,
   createDroppable,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
-import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip } from '@ui';
+import { cn, Dropdown, EmptyStatePanel, Hotkey, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
@@ -128,7 +132,7 @@ const GROUPS: GroupConfig[] = [
   },
   {
     group: 'direct_messages',
-    label: 'DMs',
+    label: 'Direct messages',
     emptyLabel: 'No direct messages',
     createLabel: 'Start direct message',
     onCreate: () => runCreateAction('channel'),
@@ -175,7 +179,7 @@ function ChannelSortDropdown(props: {
                 <Dropdown.RadioItem closeOnSelect value={option.value}>
                   <span class="flex-1">{option.label}</span>
                   <Dropdown.ItemIndicator>
-                    <CheckIcon class="size-3.5 text-accent" />
+                    <CheckIcon class="size-3.5 text-ink" />
                   </Dropdown.ItemIndicator>
                 </Dropdown.RadioItem>
               )}
@@ -394,52 +398,44 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
 
   return (
     <div class="flex shrink-0 flex-col">
-      <ViewSidebar.Header>
-        <div class="flex min-w-0 items-center gap-1">
-          <ViewSidebar.CloseButton />
-          <ViewSidebar.Title>Chat</ViewSidebar.Title>
-        </div>
-      </ViewSidebar.Header>
-      <ViewSidebar.Primary>
-        <ViewSidebar.Toolbar>
-          <Tabs
-            aria-label="Chat sidebar views"
-            list={
-              rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
-            }
-            value={rail.tab()}
-            onChange={selectTab}
-          />
-          <ViewSidebar.Control
-            label={
-              props.search.isOpen() ? 'Close search' : 'Search conversations'
-            }
-            aria-pressed={props.search.isOpen()}
-            class={cn(props.search.isOpen() && 'bg-active text-ink')}
-            onClick={() =>
-              props.search.isOpen() ? props.search.close() : props.search.open()
-            }
-          >
-            <MagnifyingGlassIcon class="size-3.5" />
-          </ViewSidebar.Control>
-        </ViewSidebar.Toolbar>
-      </ViewSidebar.Primary>
-      <Show when={props.search.isOpen()}>
-        <div class="px-(--sidebar-content-inset) pt-(--sidebar-gutter)">
+      <SidebarActionRow
+        title="Chat"
+        onSearch={() => {
+          props.search.open();
+        }}
+        search={
           <SearchBar
             ref={props.search.registerInput}
             label="Search channels and direct messages"
-            placeholder="Search conversations"
+            placeholder="Search chats"
             value={props.search.query()}
-            hotkey="cmd+f"
-            onValueChange={props.search.setQuery}
-            onEscape={() => {
-              if (!props.search.query()) props.search.close();
+            onValueChange={(query) => {
+              if (query.trim()) {
+                props.search.setQuery(query);
+                if (!props.search.isOpen()) props.search.open();
+              } else {
+                props.search.close();
+              }
             }}
-            class="h-9 shrink-0 rounded-xl"
+            onEscape={props.search.close}
+            class="h-8 min-w-0 flex-1"
           />
-        </div>
-      </Show>
+        }
+        create={() => <ConversationsCreateMenu />}
+      />
+      <ViewSidebar.Primary class="pt-0">
+        <TabsInset
+          aria-label="Chat sidebar views"
+          fullWidth
+          class="h-auto"
+          labelClass="py-1.5"
+          list={
+            rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
+          }
+          value={rail.tab()}
+          onChange={selectTab}
+        />
+      </ViewSidebar.Primary>
     </div>
   );
 }
@@ -969,17 +965,16 @@ function ExpandedRecents() {
   );
 }
 
-/** The Threads section's create action: a channel or a direct message. */
+/** Creation is rendered in the Chat homepage toolbar. */
 function ConversationsCreateMenu() {
   return (
-    <Dropdown placement="bottom-end">
+    <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        as={ViewSidebar.Control}
-        variant="ghost"
-        size="icon-sm"
+        as={SidebarCreateAction}
         label="Create channel or direct message"
       >
-        <PlusIcon class="size-3.5" />
+        <span>New</span>
+        <CaretDownIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-44">
         <Dropdown.Group>
@@ -1043,7 +1038,6 @@ function ExpandedThreads() {
           </span>
           <div data-section-action="" class="flex items-center gap-0.5">
             <ChannelSortDropdown group="threads" label="Conversations" />
-            <ConversationsCreateMenu />
           </div>
         </CollapsibleSection.Header>
         <CollapsibleSection.Content

@@ -3,9 +3,9 @@ import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-hea
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, type MacroId, tryMacroId } from '@core/user';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import CircleDashed from '@phosphor/circle-dashed.svg';
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import CircleDashed from '@icon/system/regular/circle-dashed.svg';
+import { SYSTEM_PROPERTY_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { cn, Layer } from '@ui';
 import { createMemo, Match, Switch } from 'solid-js';
@@ -31,19 +31,6 @@ const AssigneeGroupContent = (props: {
   );
 };
 
-const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
-  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
-  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
-  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
-  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
-  [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
-};
-
 export const TaskGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
@@ -61,26 +48,10 @@ export const TaskGroupHeader = (
     return tryMacroId(props.group.key);
   });
 
-  const statusTint = createMemo(() => {
-    const field = groupByField();
-    if (
-      field?.type !== 'property' ||
-      field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS
-    ) {
-      return;
-    }
-
-    const optionId = props.group.value ?? props.group.key;
-    if (typeof optionId !== 'string') return;
-
-    return STATUS_GROUP_HEADER_TINTS[optionId];
-  });
-
   return (
     <SoupSectionHeader
       onClick={() => props.group.toggle()}
       highlighted={props.highlighted}
-      class={statusTint()}
     >
       <Layer depth={3}>
         <div class="flex items-center justify-center size-4.5 rounded-xs group-hover/header:bg-ink/5">

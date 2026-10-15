@@ -1,6 +1,6 @@
 import type { EntityItem } from '@core/context/quickAccess';
-import Pencil from '@phosphor/pencil-simple.svg';
-import Trash from '@phosphor/trash-simple.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
 import { Show } from 'solid-js';
 
 /** Document actions only; built-in skills have no editable document. */

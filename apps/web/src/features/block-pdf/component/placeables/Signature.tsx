@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import Dialog from '@corvu/dialog';
-import Check from '@phosphor/check.svg';
-import Trash from '@phosphor/trash-simple.svg';
+import Check from '@icon/system/regular/check.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
 import SignaturePad from 'signature_pad';

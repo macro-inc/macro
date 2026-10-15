@@ -84,8 +84,19 @@ function rsvp(access: FormDetail['access']): FormDetail {
   };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   copied.length = 0;
   failures.length = 0;
   forms.fetchFormDetail.mockReset();

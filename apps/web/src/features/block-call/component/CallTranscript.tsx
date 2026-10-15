@@ -6,7 +6,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { MessageData } from '@core/messages/types';
 import { idToEmail } from '@core/user';
 import { formatVideoTimestamp } from '@core/util/duration';
-import Subtitles from '@phosphor/subtitles.svg';
+import Subtitles from '@icon/system/regular/subtitles.svg';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import {

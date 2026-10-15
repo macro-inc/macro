@@ -14,7 +14,7 @@ export function CalendarViewSkeleton() {
       asidePreferenceKey="calendar"
       aside={isMobile() ? false : { preserveDuringResize: false }}
     >
-      <ViewSkeleton.Sidebar title="Calendar" createLabel="New" />
+      <ViewSkeleton.Sidebar title="Calendar" createLabel="Event" />
       <ViewSkeleton.Main title={monthTitle()}>
         <div class="flex min-h-0 flex-1">
           <CalendarGridSkeleton dayCount={7} showDayHeader showAllDaySlot />

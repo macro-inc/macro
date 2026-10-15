@@ -1,7 +1,7 @@
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import FlaskIcon from '@phosphor/flask.svg';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import FlaskIcon from '@icon/system/regular/flask.svg';
 import { Button, Dialog, Layer, Surface } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -468,7 +468,7 @@ export function BillingLabView(props: {
               <label class="flex items-center gap-2 text-xs text-ink-muted">
                 <input
                   type="checkbox"
-                  class="accent-accent"
+                  class="accent-ink"
                   checked={lab.failNext()}
                   onChange={(event) =>
                     lab.setFailNext(event.currentTarget.checked)

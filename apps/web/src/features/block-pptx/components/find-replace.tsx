@@ -3,9 +3,9 @@
  * reading order, each shown selected in its shape when visited.
  */
 
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import X from '@phosphor/x.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import {

@@ -1,4 +1,4 @@
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import type { FindOptions } from '../core/sheet-operations';
 import { SpreadsheetDialog as Dialog } from './SpreadsheetDialog';

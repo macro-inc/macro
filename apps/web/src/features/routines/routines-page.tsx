@@ -1,4 +1,5 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
+import { useSidebarSearchFocus } from '@app/components/view-shell/SidebarActionRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { modelLabel } from '@core/component/AI/constant/model-label';
@@ -24,14 +25,14 @@ function RoutinesContent() {
       search: {},
     });
   let searchInput: HTMLInputElement | undefined;
+  const focusSearch = useSidebarSearchFocus(() => searchInput);
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: () => panel.isPanelActive() && !selectedId(),
     search: {
       description: 'Search routines',
       run: () => {
-        searchInput?.focus();
-        searchInput?.select();
+        focusSearch();
         return true;
       },
     },

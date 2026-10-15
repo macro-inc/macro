@@ -1,6 +1,6 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { Button, Dialog } from '@ui';
 import { Show } from 'solid-js';
 

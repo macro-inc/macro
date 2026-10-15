@@ -243,6 +243,7 @@ function HomeEntityDetailBody(props: {
                 />
               )}
             </Show>
+            <SidePanel.HeaderActionsOutlet placement="trailing" />
             <SidePanel.Toggle />
           </div>
         </ViewShell.TopBar>

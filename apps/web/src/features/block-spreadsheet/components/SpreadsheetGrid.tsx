@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
 import type { ConditionalAppearance } from '@macro-inc/spreadsheet/conditional-formatting';
 import {
@@ -12,7 +13,6 @@ import type {
   SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
 import { sqrefBounds } from '@macro-inc/spreadsheet/sheet-rules';
-import CaretDown from '@phosphor/caret-down.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,

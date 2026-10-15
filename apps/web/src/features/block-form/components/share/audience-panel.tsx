@@ -1,4 +1,4 @@
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { CopyButton, SegmentedControl } from '@ui';
 import { createUniqueId, Show } from 'solid-js';
 import type { FormAudience } from '../../core/form-model';

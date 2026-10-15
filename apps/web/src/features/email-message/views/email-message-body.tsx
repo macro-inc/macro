@@ -1,6 +1,6 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import DotsThree from '@phosphor/dots-three.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
 import { Button, cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 

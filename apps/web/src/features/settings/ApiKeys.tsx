@@ -2,11 +2,11 @@ import { CredentialField } from '@channel/Bots/CredentialField';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { formatRelativeTimestamp } from '@entity';
-import KeyIcon from '@phosphor/key.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import XIcon from '@phosphor/x.svg';
+import KeyIcon from '@icon/system/regular/key.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   MAX_USER_API_KEYS,
   normalizeUserApiKeyName,

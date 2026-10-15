@@ -6,9 +6,9 @@
  */
 
 import type { DeckOutline, LinkRegion } from '@core/pptx-engine/types';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import X from '@phosphor/x.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import X from '@icon/system/regular/x.svg';
 import {
   createResource,
   createSignal,

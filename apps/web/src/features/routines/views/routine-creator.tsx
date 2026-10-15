@@ -1,5 +1,5 @@
-import ClockIcon from '@phosphor/clock.svg';
-import XIcon from '@phosphor/x.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, EntityComposer, ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
 import type { RoutineEditorSlots } from '../context/routine-slots';

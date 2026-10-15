@@ -21,7 +21,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import {
@@ -368,6 +368,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                       <>
                         <Show when={page() !== 'routines'}>
                           <Topbar
+                            workspaceActions
                             title={pageTitle()}
                             onBack={
                               isTouchDevice()

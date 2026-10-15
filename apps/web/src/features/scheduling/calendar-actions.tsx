@@ -5,16 +5,15 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getWebOrigin } from '@core/util/webOrigin';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import GearIcon from '@phosphor/gear.svg';
-import LinkIcon from '@phosphor/link.svg';
-import { Button } from '@ui';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import GearIcon from '@icon/system/regular/gear.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import { cn, Dropdown } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { EventType } from './core/types';
 import { useSchedulingProfileWithAutoSetupQuery } from './queries/source';
 
-function Actions() {
+function Actions(props: { sidebar?: boolean }) {
   const user = useUserId();
   const settings = useSettingsState();
   const source = useSchedulingProfileWithAutoSetupQuery(
@@ -50,78 +49,54 @@ function Actions() {
     else toast.failure('Could not copy booking link');
   };
 
-  const handleClick = async () => {
-    const links = enabledLinks();
-    if (links.length === 0) {
-      settings.openSettings('Booking links');
-    } else if (links.length === 1) {
-      await copyLink(links[0]);
-    }
-  };
-
   return (
-    <div class="flex shrink-0 items-center gap-1">
-      <Show
-        when={enabledLinks().length > 1}
-        fallback={
-          <Button
-            variant="ghost"
-            size="lg"
-            class="w-9 px-0 text-sm lg:w-auto lg:px-3"
-            label="Copy booking link"
-            disabled={source.isPending}
-            onClick={() => void handleClick()}
-          >
-            <LinkIcon class="size-5 mobile:size-6 lg:size-4" />
-            <span class="hidden lg:inline">Booking link</span>
-          </Button>
-        }
-      >
-        <DropdownMenu>
-          <DropdownMenu.Trigger
-            as={Button}
-            variant="ghost"
-            size="lg"
-            class="px-2 text-sm lg:px-3"
-            label="Copy booking link"
-            disabled={source.isPending}
-          >
-            <LinkIcon class="size-5 mobile:size-6 lg:size-4" />
-            <span class="hidden lg:inline">Booking link</span>
-            <CaretDownIcon class="size-4" />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content class="z-action-menu min-w-48 rounded-xl border border-edge-muted bg-menu p-1 text-sm shadow-lg">
-              <For each={enabledLinks()}>
-                {(event) => (
-                  <DropdownMenu.Item
-                    class="rounded-lg px-3 py-2 outline-none data-highlighted:bg-hover"
-                    onSelect={() => void copyLink(event)}
-                  >
-                    {event.title}
-                  </DropdownMenu.Item>
-                )}
-              </For>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu>
-      </Show>
-      <Button
+    <Dropdown placement={props.sidebar ? 'top-start' : 'bottom-end'}>
+      <Dropdown.Trigger
         variant="ghost"
-        size="icon-lg"
-        label="Open booking link settings"
-        onClick={() => settings.openSettings('Booking links')}
+        size="md"
+        label="Booking links"
+        class={cn(
+          'h-8 shrink-0 rounded-lg text-sm',
+          props.sidebar ? 'w-full justify-start gap-2 px-2' : 'w-8 px-0'
+        )}
       >
-        <GearIcon class="size-5 mobile:size-6" />
-      </Button>
-    </div>
+        <LinkIcon class="size-4 shrink-0" />
+        <Show when={props.sidebar}>
+          <span class="min-w-0 flex-1 text-left">Booking links</span>
+          <CaretDownIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        </Show>
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-56">
+        <Show when={enabledLinks().length > 0}>
+          <Dropdown.Group>
+            <Dropdown.GroupLabel>Copy a booking link</Dropdown.GroupLabel>
+            <For each={enabledLinks()}>
+              {(event) => (
+                <Dropdown.Item onSelect={() => void copyLink(event)}>
+                  <LinkIcon class="size-4 shrink-0 text-ink-muted" />
+                  <span class="min-w-0 flex-1 truncate">{event.title}</span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Show>
+        <Dropdown.Group>
+          <Dropdown.Item
+            onSelect={() => settings.openSettings('Booking links')}
+          >
+            <GearIcon class="size-4 shrink-0 text-ink-muted" />
+            <span>Manage booking links</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }
-export function CalendarSchedulingActions() {
+export function CalendarSchedulingActions(props: { sidebar?: boolean }) {
   return (
     <ShowFeatureFlag flag={enableCalendarScheduling}>
       <Suspense>
-        <Actions />
+        <Actions sidebar={props.sidebar} />
       </Suspense>
     </ShowFeatureFlag>
   );

@@ -2,7 +2,7 @@ import { ViewShell } from '@app/components/view-shell';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import type { ChannelEntity, ChannelThreadEntity } from '@entity';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
 import { Button, cn, Scroll } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
@@ -316,8 +316,8 @@ export function ChannelThreadsView(props: ChannelThreadsViewProps) {
 
   return (
     <>
-      <ViewShell.TopBar>
-        <span class="min-w-0 truncate text-sm font-semibold">{title()}</span>
+      <ViewShell.TopBar workspaceActions>
+        <h1 class="min-w-0 flex-1 truncate text-sm font-semibold">{title()}</h1>
       </ViewShell.TopBar>
       <div class="relative min-h-0 flex-1">
         <Show when={props.channelId ?? ALL_THREADS_KEY} keyed>

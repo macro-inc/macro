@@ -70,6 +70,7 @@ export type EntityDetailContext =
 
 export type EntityDetailProps = {
   target: EntityDetailTarget;
+  inlinePdfToolbar?: boolean;
   previewHeaderLeading?: JSX.Element;
   navigationRequest?: number | string;
   children?: (context: EntityDetailContext) => JSX.Element;
@@ -228,7 +229,10 @@ export function EntityDetail(props: EntityDetailProps) {
       </Match>
       <Match when={blockType() === 'pdf'}>
         <Suspense>
-          <PdfDetail documentId={props.target.id}>
+          <PdfDetail
+            documentId={props.target.id}
+            inlineToolbar={props.inlinePdfToolbar}
+          >
             {(context) => <>{renderChildren(context)}</>}
           </PdfDetail>
         </Suspense>

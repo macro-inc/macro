@@ -1,10 +1,10 @@
 import type { SystemSortOption } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useListLayout } from '@entity/composed/list-entity/shared';
-import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
-import PriorityHigh from '@icon/wide-priority-high.svg';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import UsersIcon from '@phosphor/users.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import PriorityHigh from '@icon/system/regular/priority-high.svg';
+import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Tooltip } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show } from 'solid-js';

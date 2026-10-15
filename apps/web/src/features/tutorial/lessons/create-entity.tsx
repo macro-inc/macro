@@ -8,8 +8,8 @@ import {
   type SoupState,
 } from '@app/features/next-soup/create-soup-state';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import PlusIcon from '@phosphor/plus.svg';
 import {
   createEffect,
   createSignal,

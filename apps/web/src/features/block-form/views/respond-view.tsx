@@ -1,8 +1,8 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import Spinner from '@phosphor/spinner.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { Button, cn } from '@ui';
 import {
   createMemo,

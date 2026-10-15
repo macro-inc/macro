@@ -2,7 +2,7 @@ import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
 import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { DriveFileDropzone } from '../components/drive-file-dropzone';
 import { useDriveView } from '../context/drive-context';

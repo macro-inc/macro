@@ -5,7 +5,7 @@
  */
 
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import AgentIcon from '@phosphor/sparkle.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
 import type {
   MessagePart,
   SubagentResult,

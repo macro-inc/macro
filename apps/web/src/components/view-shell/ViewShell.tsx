@@ -10,7 +10,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -20,6 +20,8 @@ import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   batch,
+  type ComponentProps,
+  children,
   createComputed,
   createContext,
   createSignal,
@@ -34,6 +36,7 @@ import {
   useContext,
 } from 'solid-js';
 import { createSidebarMotion } from './create-sidebar-motion';
+import { SidebarActionsProvider, WorkspaceActions } from './SidebarActionRow';
 import { VIEW_SHELL_TOUR } from './tour';
 import {
   type AsideLayout,
@@ -360,26 +363,30 @@ function Root(props: ViewShellRootProps) {
   }
 
   return (
-    <ViewShellContext.Provider value={value}>
-      <div
-        {...rest}
-        ref={setRoot}
-        class={cn(
-          '@container/view-shell relative size-full min-h-0 min-w-0',
-          local.class
-        )}
-        data-view-shell=""
-        data-view-shell-layout={atLayoutBreakpoint() ? layoutKey() : undefined}
-      >
-        <Resize.Zone
-          direction="horizontal"
-          gutter={RESIZE_GUTTER}
-          resizable={resizable()}
+    <SidebarActionsProvider revealSearch={value.aside.expand}>
+      <ViewShellContext.Provider value={value}>
+        <div
+          {...rest}
+          ref={setRoot}
+          class={cn(
+            '@container/view-shell relative size-full min-h-0 min-w-0',
+            local.class
+          )}
+          data-view-shell=""
+          data-view-shell-layout={
+            atLayoutBreakpoint() ? layoutKey() : undefined
+          }
         >
-          {local.children}
-        </Resize.Zone>
-      </div>
-    </ViewShellContext.Provider>
+          <Resize.Zone
+            direction="horizontal"
+            gutter={RESIZE_GUTTER}
+            resizable={resizable()}
+          >
+            {local.children}
+          </Resize.Zone>
+        </div>
+      </ViewShellContext.Provider>
+    </SidebarActionsProvider>
   );
 }
 
@@ -399,6 +406,8 @@ function Aside(props: ViewShellAsideProps) {
     'onWidthChangeEnd',
   ]);
   const ws = useViewShellInternal();
+  // Retain navigation ownership so homepage actions survive a closed overlay.
+  const content = children(() => local.children);
   const asideTarget = tourTarget(VIEW_SHELL_TOUR.aside);
   const [resizedWidth, setResizedWidth] = createSignal<{
     configuredWidth: number;
@@ -489,7 +498,7 @@ function Aside(props: ViewShellAsideProps) {
             inert={ws.aside.isCollapsed()}
             aria-hidden={ws.aside.isCollapsed()}
           >
-            {local.children}
+            {content()}
           </div>
         </Resize.Panel>
       }
@@ -529,7 +538,7 @@ function Aside(props: ViewShellAsideProps) {
           >
             {/* Keep text at its resting width while the outer frame reveals it. */}
             <div class="h-full" style={{ width: `${overlayWidth()}px` }}>
-              {local.children}
+              {content()}
             </div>
           </div>
         </div>
@@ -539,7 +548,11 @@ function Aside(props: ViewShellAsideProps) {
 }
 
 /** Keep split close available in both docked and overlay navigation. */
-export const ViewSidebarCloseButton = SplitPanel.CloseButton;
+export function ViewSidebarCloseButton(
+  props: ComponentProps<typeof SplitPanel.CloseButton>
+) {
+  return <SplitPanel.CloseButton {...props} />;
+}
 
 /** Safe outside a shell so block preview headers can share this control. */
 export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
@@ -641,8 +654,19 @@ function Main(props: JSX.HTMLAttributes<HTMLElement>) {
   );
 }
 
-function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
+function TopBar(
+  props: JSX.HTMLAttributes<HTMLDivElement> & {
+    workspaceActions?: boolean;
+    controls?: JSX.Element;
+  }
+) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'ref',
+    'workspaceActions',
+    'controls',
+  ]);
   return (
     <SplitHeaderContextMenu>
       <div
@@ -650,12 +674,26 @@ function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
         ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
         class={cn(
           '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:pl-3 touch:hidden',
-          local.class
+          local.class,
+          local.workspaceActions && 'h-auto min-h-12 px-4 py-2 not-touch:pl-4'
         )}
         data-view-shell-top-bar=""
       >
-        <ViewNavigationControls />
-        {local.children}
+        <Show
+          when={local.workspaceActions}
+          fallback={
+            <>
+              <ViewNavigationControls />
+              {local.children}
+              {local.controls}
+            </>
+          }
+        >
+          <WorkspaceActions controls={local.controls}>
+            <ViewNavigationControls />
+            {local.children}
+          </WorkspaceActions>
+        </Show>
       </div>
     </SplitHeaderContextMenu>
   );

@@ -4,7 +4,7 @@ import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 export function DriveViewSkeleton() {
   return (
     <ViewSkeleton.Root asidePreferenceKey="documents">
-      <ViewSkeleton.Sidebar title="Drive" createLabel="New" />
+      <ViewSkeleton.Sidebar title="Drive" />
       <ViewSkeleton.Main title="Drive" searchPlaceholder="Search files" />
     </ViewSkeleton.Root>
   );

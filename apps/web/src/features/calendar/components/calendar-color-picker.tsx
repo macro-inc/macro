@@ -1,8 +1,8 @@
+import ResetIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Slider } from '@kobalte/core/slider';
-import ResetIcon from '@phosphor/arrow-counter-clockwise.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CloseIcon from '@phosphor/x.svg';
 import { createSignal, For } from 'solid-js';
 import {
   type CalendarColor,

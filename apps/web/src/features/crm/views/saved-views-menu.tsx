@@ -1,11 +1,11 @@
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { toast } from '@core/component/Toast/Toast';
-import FloppyDiskIcon from '@phosphor/floppy-disk.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PushPinIcon from '@phosphor/push-pin.svg';
-import SlidersIcon from '@phosphor/sliders-horizontal.svg';
-import StackIcon from '@phosphor/stack.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import FloppyDiskIcon from '@icon/system/regular/floppy-disk.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PushPinIcon from '@icon/system/regular/push-pin.svg';
+import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Button, cn, Dropdown, SegmentedControl, Tooltip } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';

@@ -1,6 +1,6 @@
-import InfoIcon from '@phosphor/info.svg';
-import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg?component-solid';
+import InfoIcon from '@icon/system/regular/info.svg';
+import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { Tooltip } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
 

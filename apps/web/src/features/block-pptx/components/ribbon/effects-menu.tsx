@@ -9,7 +9,7 @@ import type {
   GlowSpec,
   ShadowSpec,
 } from '@core/pptx-engine/types';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import {
   GLOW_COLORS,

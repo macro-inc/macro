@@ -1,11 +1,11 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import {
   $computeTableMap,
   $isTableCellNode,
   $isTableRowNode,
   getDOMCellFromTarget,
 } from '@lexical/table';
-import TrashIcon from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {

@@ -2,20 +2,12 @@ import { GithubPullRequestStatusIcon } from '@components/app/side-panel';
 import { TOKENS } from '@core/hotkey/tokens';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import GithubIcon from '@icon/mcp-github.svg';
-import GitBranch from '@phosphor/git-branch.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
-import { badgeTriggerClasses, CopyButton, Layer } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { badgeClasses, badgeTriggerClasses, CopyButton, Layer } from '@ui';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-
-const PILL_CLASS = cn(
-  'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
-  'px-2 py-1 leading-tight text-left rounded-full',
-  'bg-surface text-ink-muted hover:bg-hover hover:text-ink',
-  'focus-visible:outline-none focus-visible:ring-accent/20'
-);
 
 function pullRequestName(pr: GithubPullRequest): string | undefined {
   return pr.name?.trim() || undefined;
@@ -50,7 +42,11 @@ function InlineTaskGithubPullRequestsSkeleton(): JSX.Element {
     <Layer depth={2}>
       <div
         aria-hidden="true"
-        class={cn(PILL_CLASS, 'pointer-events-none select-none')}
+        class={badgeClasses({
+          variant: 'outline',
+          size: 'sm',
+          class: 'min-w-0 gap-1.5 pointer-events-none select-none',
+        })}
       >
         <GithubIcon class="size-3 shrink-0 text-ink-extra-muted" />
         <span class="skeleton-shimmer h-3 w-24 rounded-full bg-skeleton" />
@@ -84,7 +80,11 @@ function InlineTaskGithubPullRequestsContent(props: {
             <Layer depth={2}>
               <a
                 aria-label={`Open GitHub pull request ${pullRequestLabel(pr)}`}
-                class={PILL_CLASS}
+                class={badgeTriggerClasses({
+                  variant: 'outline',
+                  size: 'sm',
+                  class: 'min-w-0 gap-1.5',
+                })}
                 href={pr.url}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -146,7 +146,7 @@ function InlineTaskGithubPullRequestsContent(props: {
           class={badgeTriggerClasses({
             variant: 'outline',
             size: 'sm',
-            class: 'gap-1.5 bg-surface-2 border border-edge',
+            class: 'gap-1.5',
           })}
           onClick={() =>
             copyBranchNameToClipboard(props.blockId, { silent: true })

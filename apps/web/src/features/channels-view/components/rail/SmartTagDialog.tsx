@@ -1,6 +1,6 @@
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import HashIcon from '@phosphor/hash.svg';
-import XIcon from '@phosphor/x.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { useSmartTagPreviewQuery } from '@queries/channel-labels/channel-labels';
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import {

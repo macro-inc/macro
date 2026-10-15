@@ -12,8 +12,8 @@ import {
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { InitiativeEntity } from '@entity';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import type { Property } from '@property/types';
 import { formatOptionValue } from '@property/utils/formatting';

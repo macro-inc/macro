@@ -1,5 +1,5 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { cn, Dropdown, Layer } from '@ui';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 
@@ -68,7 +68,7 @@ export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
                 >
                   <span class="flex-1 truncate">{item.label}</span>
                   <Show when={isActive()}>
-                    <CheckIcon class="size-3.5 text-accent" />
+                    <CheckIcon class="size-3.5 text-ink" />
                   </Show>
                 </Dropdown.Item>
               );

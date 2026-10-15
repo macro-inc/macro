@@ -2,8 +2,8 @@ import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { AgentSessionEntity } from '@entity';
-import SparkleIcon from '@phosphor/sparkle.svg';
-import FilledSparkleIcon from '@phosphor-icons/core/fill/sparkle-fill.svg?component-solid';
+import FilledSparkleIcon from '@icon/system/fill/sparkle-fill.svg?component-solid';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Show } from 'solid-js';
 import { AgentSessionCodeDetails } from '../components/AgentSessionCodeDetails';
 import {

@@ -19,6 +19,12 @@ must load through the webview, not native HTTP. A `vite:preloadError` with
 `scheme tauri not supported` indicates an asset-routing failure; reloading the
 same bundle does not resolve it.
 
+When multiple desktop splits are open, each split's **Close split** button floats
+halfway over its top-left corner, outside the content header. It closes only that
+split; the last remaining page keeps its existing return-to-list navigation.
+Mobile keeps its existing navigation controls. Verify both collection and document
+splits, including the exposed half of the button, after changing split chrome.
+
 ## External links in the native app
 
 Desktop external links open in the system browser, whether activated by a normal
@@ -90,6 +96,20 @@ paste an image and select one from Photos: plugins without a native checksum
 must hash the staged image bytes, retain the real attachment size, and upload
 successfully rather than hashing the empty JavaScript placeholder.
 
+## List view actions
+
+Tasks, Projects, Email, Drive, and CRM collections place Search and **New** at
+the right of the title row. Search filters the current collection; **New** opens
+the relevant composer or creation menu. Sorting, grouping, filters, and view
+controls share that row in Tasks, Projects, Files, Email, Reviews, and CRM.
+Routines also keeps Search and New beside its title. There is no reserved second
+toolbar on desktop; mobile navigation tabs and active filter chips can appear
+below. Search and New use the standard compact topbar height. New buttons include their entity icon. Files and
+CRM show a chevron for multiple creation choices; single-action buttons open
+their composer directly. Tasks, Email, and Files no longer repeat New in their
+sidebars. CRM keeps its sidebar create menu only on touch. Primary buttons and checked boxes use contrasting
+black/white styling in both light and dark themes.
+
 ## Direct URLs (all under the frontend origin)
 
 | Route | Surface |
@@ -137,6 +157,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
 | `/app/debug/create-menu-demo` | Inline create-menu comparison: classic list, minimal carousel, and details on the left. Each has independent search and selection; choosing an item only updates the preview status and creates no data. |
+| `/app/debug/icon-gallery` | Original Macro icon specimen: filter by name, compare regular/filled/bold variants at 14/16/20/24 px on light and dark surfaces, and select navigation icons to inspect their filled state. The Legacy animated icons tab preserves the earlier gallery. These controls only change the specimen. |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
@@ -188,6 +209,9 @@ check: in DevTools, enable touch emulation rather than only narrowing the viewpo
 Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
 
 The outer navigation rail uses 20px icons in 40px buttons with 4px gaps.
+Icon hover tooltips wait two seconds, then fade in (without animation when reduced
+motion is enabled). Unselected hover fills are lighter than the selected fill;
+pressing uses the selected fill without an additional dark overlay.
 Command and create-menu headers have 20px horizontal and 12px vertical padding.
 
 Splits: the app is a tiling window manager. Active light-theme panes are white;
@@ -223,7 +247,7 @@ discussion links append `~<message-uuid>` to the project's `overview` route.
 Existing `activity` routes open Overview, preserving a target message when present.
 Cmd+K includes a Projects category, authorized project search results, and
 `New project`. Selecting a project opens its overview; Shift-selection opens a
-new split. The global Create menu also offers `Project` (C, then P), including
+new split. The global Create menu also offers `Project` (press C and search), including
 the full mobile Create sheet. Project opens the same popover host as task creation: a dialog
 on desktop and a bottom drawer on touch. It keeps focus in the project-name
 input, and `Continue editing in split` transfers the current draft. Existing
@@ -269,9 +293,9 @@ expose the full name on hover. Section chevrons point right and stay visible whe
 collapsed. Expanded chevrons point down and appear when hovering their section;
 the section heading also brightens on hover. Sections and nested branches briefly
 animate height and opacity when toggled, and respect reduced-motion preferences.
-The sidebar spacing contract uses 8px outer gutters, 24px between sections, and
+The sidebar spacing contract uses 5px outer gutters, 24px between sections, and
 4px between a section header and its rows. Leading icons and trailing actions
-share rails 26px from either edge, including collapse, search, add, and tree
+share rails 23px from either edge, including collapse, search, add, and tree
 controls. Use the shared slots described in
 [the sidebar spacing guide](../../apps/web/src/components/view-shell/README.md).
 
@@ -435,9 +459,9 @@ offers both kinds. Opening an existing row restores its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 
-Home's inner rail starts with a full-width **New chat** plus button that returns
+Home's inner rail starts with a rounded, content-sized **New Chat** button that returns
 to Home's starting pane without creating a chat. Email and Tasks use the same
-pill styling and top placement for **New email** and **New task**, replacing
+32px pill styling and top placement for **New Email** and **New Task**, replacing
 the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split, including
 when the sidebar is an overlay in a narrow split. Verify with three splits:
@@ -498,43 +522,28 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
+Create, Cmd+K, and other shared dialog overlays dim the background without
+blurring it. Their panels retain their surface styling and shadows.
+
 On desktop, the rail **Create** button, **C**, and the command menu’s **Create**
-entry open the detailed launcher at standard dialog width. Selecting **Create**
-closes the command menu and hands focus to the launcher; individual creation
-commands remain searchable in the command menu. The left list starts with up to three **Recents** from
-actual launcher usage, followed by all choices grouped by category.
-Categories appear in this order: **Docs** (Document, Snippet), **Organization**
-(Folder), **Design** (Canvas, Design, Photoshop file, Illustrator file), **Data**
-(Database, Spreadsheet, Form), **Comms** (Email, Message, Channel, Call), **Tasks**
-(Task, Project, Reminder), **AI** (Agent, Routine, Skill), and **Other** (Code and
-any uncategorized entries). Only available entries and nonempty categories appear.
-Recent items also remain in their categories. With no history, the list starts
-with categories. Hover or keyboard navigation updates the right detail panel;
-click a row or press Enter to start that creation flow. The detail panel is
-top-aligned, shares the list background, and is separated by a vertical divider.
-The shortcut below the description shows the sequence, such as **C then T** for
-Task, while direct shortcut mode is active.
-Its lower-right **Create [type]** button starts the selected creation flow and
-shows the Enter shortcut. Holding Shift adds an **In new split** indicator and
-changes the button shortcut to Shift+Enter; clicking while holding Shift uses
-the same new-split behavior where supported.
+entry open a single-column launcher with compact, single-line choices, like the
+command menu. Selecting **Create** closes the command menu and hands focus to
+the launcher; individual creation commands remain searchable in the command
+menu. Available choices appear once, ordered by launcher usage. Icons use
+neutral theme colors in both light and dark mode. There is no detail pane.
 
-The **Search mode** toggle (or **/**) switches between direct entity shortcuts
-shown beside each choice and the standard create search input. The preference
-persists across opens. Search filters both Recents and categories. Up/Down moves
-through the displayed order and scrolls the selected row into view; Left/Right
-edits the search input. Enter creates the selected item, Shift+Enter opens it in a
-new split where supported, and Escape closes the launcher. Typing in search mode
-never runs an entity shortcut. Switching modes preserves selection and dimensions.
+Every open starts in **Search mode** with the search input focused. Typing filters
+choices and never runs an entity shortcut. The **Search mode** toggle (or **/**)
+can switch to direct entity shortcuts for the current open; shortcuts then appear
+beside each choice. Up/Down moves through the displayed order and scrolls the
+selected row into view; Left/Right edits the search input. Click a row or press
+Enter to start its creation flow. Shift+Enter opens it in a new split where
+supported, and Escape closes the launcher. Switching modes preserves selection
+and dimensions; closing and reopening restores search mode.
 
-The detailed layout replaces the old desktop launcher, including the onboarding
-Create lesson. The PostHog flag `enable-carousel-create-menu` opts into the
-carousel instead; when off, unknown, or loading, the detailed layout is used.
-For local testing, set `VITE_ENABLE_CAROUSEL_CREATE_MENU=true` (or `false` to force
-the detailed layout). The carousel shares creation actions, recents ordering,
-search mode, and shortcuts; Left/Right also navigates its cards outside search.
-The inline `/app/debug/create-menu-demo` keeps all three layouts for comparison
-without creating data. Mobile continues to use its create sheet.
+The single-column layout also applies to the onboarding Create lesson. The
+inline `/app/debug/create-menu-demo` keeps list, details, and carousel previews
+for comparison without creating data. Mobile continues to use its create sheet.
 
 On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
@@ -553,7 +562,7 @@ release so holding its trigger cannot drag or dismiss the opening sheet. Mouse,
 keyboard, and assistive activation use the normal click behavior.
 
 The dock's More views menu uses the same rounded glass bottom sheet as filters,
-with a blurred backdrop, drag handle, and an even 8px outer inset. The home
+with a dimmed, unblurred backdrop, drag handle, and an even 8px outer inset. The home
 indicator clearance sits inside the sheet. Tap a row to select; tap outside, swipe down, or press Escape to dismiss.
 The ellipsis (**More tabs**) button on non-scrolling pill strips opens the same
 drawer on release. Tap a tab to select it and close the drawer; the selected tab
@@ -574,7 +583,7 @@ CRM Companies and People are list-only on every device. The mobile
 The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
 **+ Document** on Files, and **+ Event** on Calendar. On Notifications,
-**+ New** opens a blurred backdrop and a stack of glass actions: Email, Message,
+**+ New** opens a dimmed, unblurred backdrop and a stack of glass actions: Email, Message,
 Document, Event, Task, More. Event follows the calendar UI flag; unavailable
 launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,
 or press Escape, to dismiss. More opens the full create menu as a glass bottom
@@ -748,10 +757,15 @@ comes from the authenticated caller, never a model-supplied user ID.
 
 ## Command menu (Ctrl+K)
 
-Opens a dialog with a focused `Search...` textbox and bubble-style category radios
+Opens an 800px-wide floating dialog, centered horizontally at 10vh from the top
+(with viewport clamping), with a focused `Search commands and content` textbox
+(placeholder: `Search anything or run a command...`) and category radios
 (All / Command / Agents / Files / Tasks / Projects / Channels / People). Type a name, press Enter to open
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
-category, Esc closes. The category strip and footer have transparent backgrounds.
+category, Esc closes. Results use regular-weight text and a rounded selection row;
+the footer shows navigation/category hints on the left and the selected action on
+the right. Verify search, arrow navigation, category switching, and Escape in both
+light and dark themes.
 
 In `Change theme`, Up/Down previews the highlighted palette across the open app,
 including channels and spreadsheets. Moving between rows preserves the original
@@ -988,3 +1002,11 @@ HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the
 is absent. An opener failure displays an inline error and the dialog stays
 dismissible. A missing listing is handled in the external store/browser: return
 to Macro, dismiss, and retry later. Task 07 verifies the live listing.
+
+### Icon interaction feedback
+
+Action icons briefly animate on press, including keyboard activation. Search,
+settings, add, and agent icons can also animate after a short hover. This does not
+change navigation, selection, or the outer rail's two-second tooltip delay.
+Reduced-motion preferences disable this feedback. The icon gallery at
+`/app/debug/icon-gallery` includes interactive light and dark specimens.

@@ -1,4 +1,4 @@
-import InfoIcon from '@phosphor/info.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
 

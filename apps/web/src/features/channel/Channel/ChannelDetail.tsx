@@ -152,7 +152,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const channelType = useChannelType(props.channelId);
   const call = useCall(() => props.channelId);
 
-  // Seed for "Ask Macro": a new chat with this channel @mentioned.
+  // Seed for "Ask AI": a new chat with this channel @mentioned.
   const askMacroEntity = () => {
     const type = channelType();
     if (!type) return undefined;
@@ -165,7 +165,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   };
 
   return (
-    <div class="header-actions ml-auto flex shrink-0 items-center gap-1">
+    <div class="header-actions ml-auto flex shrink-0 items-center gap-0.5">
       <DebugSuspense name="ChannelDetail.live-indicators">
         <ChannelLiveIndicators channelId={props.channelId} />
       </DebugSuspense>
@@ -174,19 +174,31 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           channelId={props.channelId}
           channelName={channelName() ?? 'New Channel'}
           channelType={channelType()}
+          trailing={
+            <Show when={askMacroEntity()}>
+              <span aria-hidden="true" class="h-4 w-px bg-ink/10" />
+            </Show>
+          }
         />
       </DebugSuspense>
       <Show
         when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
       >
         <DebugSuspense name="ChannelDetail.call-button">
-          <ChannelCallButton channelId={props.channelId} />
+          <ChannelCallButton
+            channelId={props.channelId}
+            trailing={
+              <Show when={askMacroEntity()}>
+                <span aria-hidden="true" class="h-4 w-px bg-ink/10" />
+              </Show>
+            }
+          />
         </DebugSuspense>
       </Show>
       <Show when={askMacroEntity()}>
         {(entity) => (
           <DebugSuspense name="ChannelDetail.ask-macro">
-            <ChatWithAgentButton entity={entity()} label="Ask Macro" />
+            <ChatWithAgentButton entity={entity()} label="Ask AI" textOnly />
           </DebugSuspense>
         )}
       </Show>

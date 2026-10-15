@@ -26,18 +26,18 @@ import {
 } from '@core/signal/profilePicture';
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import SignOutIcon from '@icon/system/regular/sign-out.svg?component-solid';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import IconUpload from '@icon/system/regular/upload-simple.svg?component-solid';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import {
   type BundleUpdateStatus,
   nativeUpdateDescription,
   useTauri,
 } from '@macro/tauri';
-import CheckIcon from '@phosphor/check.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
-import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
-import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import {
   invalidateOwnUserName,

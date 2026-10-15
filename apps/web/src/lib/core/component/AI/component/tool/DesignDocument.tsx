@@ -1,7 +1,7 @@
 // Tool rows for the Photoshop and Illustrator document readers.
 import { ItemPreview } from '@core/component/ItemPreview';
-import PenNibIcon from '@phosphor/pen-nib.svg';
-import StackIcon from '@phosphor/stack.svg';
+import PenNibIcon from '@icon/system/regular/pen-nib.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import {
   type Component,
   createSignal,

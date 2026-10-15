@@ -66,7 +66,7 @@ both read states again. A badge counts hidden types plus an active status filter
 Read status and type selections persist.
 There are no desktop Signal/Noise tabs. A **Home** heading
 labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
-**Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
+**Agents** sidebar headings. The **New chat** action in the main homepage header clears the preview and returns to the Home
 starting pane; it does not create a chat. Email and Tasks have matching top pills
 for **New email** and **New task**.
 

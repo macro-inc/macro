@@ -1,6 +1,6 @@
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
+import TerminalIcon from '@icon/system/regular/terminal-window.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import TerminalIcon from '@phosphor/terminal-window.svg';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import { Button } from '@ui';

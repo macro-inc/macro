@@ -35,11 +35,11 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import BellIcon from '@icon/system/regular/bell.svg';
+import HomeIcon from '@icon/system/regular/house.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import BellIcon from '@phosphor/bell.svg';
-import HomeIcon from '@phosphor/house.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import ActivityIcon from '@phosphor/pulse.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import {

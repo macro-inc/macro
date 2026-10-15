@@ -1,5 +1,5 @@
-import CaretRight from '@phosphor-icons/core/regular/caret-right.svg';
-import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';

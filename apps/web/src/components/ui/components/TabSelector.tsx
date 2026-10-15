@@ -1,7 +1,7 @@
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Tabs } from '@kobalte/core/tabs';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Plus from '@phosphor/plus.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   type ComponentProps,

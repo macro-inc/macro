@@ -1,4 +1,4 @@
-import StackIcon from '@phosphor/stack.svg';
+import StackIcon from '@icon/system/regular/stack.svg';
 import { Show } from 'solid-js';
 import type { TaskProjectReference } from '../core/project';
 

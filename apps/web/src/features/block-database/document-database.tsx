@@ -1,7 +1,7 @@
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { toast } from '@core/component/Toast/Toast';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import DatabaseIcon from '@phosphor/database.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import DatabaseIcon from '@icon/system/regular/database.svg';
 import {
   onDatabaseBatchCommitted,
   undoDatabaseChange,

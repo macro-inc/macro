@@ -1,14 +1,15 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { SidebarCreateAction } from '@app/components/view-shell/SidebarCreateAction';
 import {
   CREATABLE_BLOCKS,
   type CreatableName,
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -31,8 +32,7 @@ function SidebarTrigger(props: { label: string }) {
 
 function ToolbarTrigger(props: { label: string }) {
   return (
-    <Dropdown.Trigger variant="outline" size="md" aria-label={props.label}>
-      <PlusIcon class="size-4" />
+    <Dropdown.Trigger as={SidebarCreateAction} aria-label={props.label}>
       <span>New</span>
       <CaretDownIcon class="size-3" />
     </Dropdown.Trigger>
@@ -84,7 +84,7 @@ export function DriveCreateMenu(props: {
   };
 
   return (
-    <Dropdown placement={isToolbar() ? 'bottom-end' : 'bottom-start'}>
+    <Dropdown placement="bottom-start">
       <Show when={isToolbar()} fallback={<SidebarTrigger label={label()} />}>
         <ToolbarTrigger label={label()} />
       </Show>

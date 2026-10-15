@@ -1,12 +1,12 @@
 import CorvuCalendar, {
   type RootSingleProps as CorvuCalendarRootSingleProps,
 } from '@corvu/calendar';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import {
   createMemo,
   createSignal,
@@ -434,7 +434,7 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
                 </span>
                 <span>{option.label}</span>
                 <CheckIcon
-                  class="ml-auto size-3.5 text-accent"
+                  class="ml-auto size-3.5 text-ink"
                   classList={{ invisible: !selected() }}
                 />
               </button>

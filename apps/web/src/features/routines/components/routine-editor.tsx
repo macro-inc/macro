@@ -1,7 +1,7 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import ClockIcon from '@icon/system/regular/clock.svg';
 import { Tabs } from '@kobalte/core/tabs';
-import ClockIcon from '@phosphor/clock.svg';
 import { cn, EntityComposer, Layer } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';

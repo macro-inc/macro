@@ -1,5 +1,5 @@
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';

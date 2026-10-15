@@ -1,5 +1,5 @@
+import Text from '@icon/system/regular/text-t.svg';
 import type { TextGeometry } from '@macro-inc/graphics';
-import Text from '@phosphor/text-t.svg';
 import { Show } from 'solid-js';
 import type { InspectorNumberScrub } from '../primitives/create-inspector-preview';
 import { InspectorField } from './inspector-field';

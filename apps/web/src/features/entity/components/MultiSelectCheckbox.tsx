@@ -1,4 +1,4 @@
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 
@@ -30,15 +30,15 @@ export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
     >
       <div
         class={cn(
-          'size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none',
+          'size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-ink group-hover/button:border pointer-events-none',
           {
             'border border-edge': props.showBorder,
-            'bg-accent border border-accent': props.checked,
+            'bg-ink border border-ink': props.checked,
           }
         )}
       >
         <Show when={props.checked}>
-          <CheckIcon class="size-full text-surface" />
+          <CheckIcon class="size-full text-surface-4" />
         </Show>
       </div>
     </button>

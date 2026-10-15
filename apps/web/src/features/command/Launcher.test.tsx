@@ -76,10 +76,10 @@ vi.mock('@macro-inc/lexical-core/markdown-golden', () => ({}));
 vi.mock('@ui', () => ({}));
 vi.mock('@ui/components/Hotkey', () => ({}));
 vi.mock('./mobile/MobileCreateSheet', () => ({}));
-vi.mock('./DetailsLauncher', () => ({
+vi.mock('./ListLauncher', () => ({
   default: (props: LauncherInnerProps) => (
     <button onClick={() => props.onClose(false)}>
-      Details: {props.blocks?.map((item) => item.label).join(', ')}
+      List: {props.blocks?.map((item) => item.label).join(', ')}
     </button>
   ),
 }));
@@ -106,32 +106,24 @@ beforeEach(() => {
   host.carouselFlag = () => undefined;
 });
 
-it.each([false, undefined])(
-  'uses the detailed launcher when the carousel flag is %s',
+it.each([false, true, undefined])(
+  'uses the single-column launcher even when the legacy carousel flag is %s',
   async (enabled) => {
     host.carouselFlag = () => enabled;
     const view = render(() => <LauncherInner onClose={vi.fn()} />);
-    await view.findByText('Details:');
+    await view.findByText('List:');
     expect(view.queryByText('Carousel:')).toBeNull();
   }
 );
 
-it('switches the launcher with the flag while forwarding sandbox choices and close behavior', async () => {
-  const [enabled, setEnabled] = createSignal(false);
-  host.carouselFlag = enabled;
+it('forwards sandbox choices and close behavior to the list launcher', async () => {
   const onClose = vi.fn();
   const blocks = CREATABLE_BLOCKS.filter((item) => item.label === 'Task');
   const view = render(() => (
     <LauncherInner blocks={blocks} onClose={onClose} />
   ));
-  await view.findByText('Details: Task');
-  setEnabled(true);
-  fireEvent.click(await view.findByText('Carousel: Task'));
+  fireEvent.click(await view.findByText('List: Task'));
   expect(onClose).toHaveBeenCalledExactlyOnceWith(false);
-  expect(view.queryByText('Details: Task')).toBeNull();
-  setEnabled(false);
-  await view.findByText('Details: Task');
-  expect(view.queryByText('Carousel: Task')).toBeNull();
 });
 afterEach(() => {
   cleanup();

@@ -1,9 +1,7 @@
-import {
-  SegmentedControl as KSegmentedControl,
-  type SegmentedControlRootProps,
-} from '@kobalte/core/segmented-control';
-import { For, type JSX, splitProps } from 'solid-js';
+import type { SegmentedControlRootProps } from '@kobalte/core/segmented-control';
+import { type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
+import { TabsInset } from './TabsInset';
 
 export type TabItem = {
   value: string;
@@ -20,60 +18,18 @@ export type TabsProps = {
   fullWidth?: boolean;
 } & Omit<SegmentedControlRootProps, 'defaultValue'>;
 
-/**
- * Borderless tab switcher. No track chrome — a rounded pill slides behind
- * the active item.
- */
+/** Compatibility adapter for the shared inset segmented control. */
 export const Tabs = (props: TabsProps) => {
-  const [local, rootProps] = splitProps(props, [
-    'list',
-    'value',
-    'defaultValue',
-    'disabled',
-    'class',
-    'itemClass',
-    'labelClass',
-    'fullWidth',
-  ]);
-
+  const [local, rest] = splitProps(props, ['list', 'class', 'labelClass']);
   return (
-    <KSegmentedControl
-      value={local.value}
-      defaultValue={local.defaultValue ?? local.list[0]?.value}
-      disabled={local.disabled}
-      {...rootProps}
-      class={cn(
-        'relative inline-flex h-8 items-center',
-        local.fullWidth && 'flex w-full',
-        local.class
-      )}
-    >
-      <KSegmentedControl.Indicator class="pointer-events-none absolute top-0 left-0 z-0 rounded-full border border-edge-frame bg-active transition-[transform,width,height] duration-50 motion-reduce:transition-none" />
-      <For each={local.list}>
-        {(item) => (
-          <KSegmentedControl.Item
-            value={item.value}
-            disabled={local.disabled}
-            class={cn(
-              'relative z-1 inline-flex h-full min-w-0 items-center rounded-full',
-              'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus data-disabled:pointer-events-none data-disabled:opacity-50',
-              local.fullWidth && 'flex-1',
-              local.itemClass
-            )}
-          >
-            <KSegmentedControl.ItemInput class="pointer-events-none absolute inset-0" />
-            <KSegmentedControl.ItemLabel
-              class={cn(
-                'flex h-8 items-center px-4 text-xs font-medium rounded-full select-none text-ink-extra-muted hover:text-ink data-checked:text-ink transition-colors duration-120 motion-reduce:transition-none',
-                local.fullWidth && 'w-full justify-center',
-                local.labelClass
-              )}
-            >
-              {typeof item.label === 'function' ? item.label() : item.label}
-            </KSegmentedControl.ItemLabel>
-          </KSegmentedControl.Item>
-        )}
-      </For>
-    </KSegmentedControl>
+    <TabsInset
+      {...rest}
+      list={local.list.map((item) => ({
+        value: item.value,
+        label: typeof item.label === 'function' ? item.label() : item.label,
+      }))}
+      class={cn('h-auto', local.class)}
+      labelClass={cn('py-1.5', local.labelClass)}
+    />
   );
 };

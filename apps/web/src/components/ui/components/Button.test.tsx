@@ -18,7 +18,7 @@ describe('Button emphasis', () => {
           'font-semibold'
         );
         expect(buttonClasses({ variant: 'cta', size, square })).toContain(
-          'bg-accent '
+          'bg-ink '
         );
         expect(buttonClasses({ variant: 'outline', size, square })).toContain(
           'border-edge-button'
@@ -43,7 +43,7 @@ describe('Button emphasis', () => {
     setGlass(false);
     expect(button.classList.contains('touch:glass')).toBe(false);
     expect(button.classList.contains('glass')).toBe(false);
-    expect(button.classList.contains('bg-accent')).toBe(true);
+    expect(button.classList.contains('bg-ink')).toBe(true);
     expect(button.hasAttribute('glass')).toBe(false);
   });
 

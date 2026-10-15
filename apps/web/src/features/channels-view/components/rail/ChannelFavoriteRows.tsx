@@ -4,7 +4,7 @@ import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';

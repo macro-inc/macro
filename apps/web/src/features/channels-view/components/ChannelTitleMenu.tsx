@@ -2,7 +2,7 @@ import { toSingleEntityActionListState } from '@app/features/next-soup/actions';
 import { SoupEntityActionsDropdown } from '@app/features/soup/SoupEntityActionsDropdown';
 import { ChannelDetailTitle } from '@channel/Channel/ChannelDetail';
 import type { ChannelEntity } from '@entity';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from './rail/ChannelRailItems';
 
 /**

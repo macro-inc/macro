@@ -1,5 +1,5 @@
-import DownloadIcon from '@phosphor-icons/core/regular/download-simple.svg?component-solid';
-import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
+import DownloadIcon from '@icon/system/regular/download-simple.svg?component-solid';
+import SignatureIcon from '@icon/system/regular/signature.svg?component-solid';
 import { ToggleSwitch } from '@ui';
 import { lazy, Show, Suspense } from 'solid-js';
 

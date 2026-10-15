@@ -7,9 +7,9 @@
  */
 
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
-import ArrowsInIcon from '@phosphor/arrows-in.svg';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import ArrowsInIcon from '@icon/system/regular/arrows-in.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, Card, cn, SegmentedControl } from '@ui';

@@ -5,21 +5,20 @@ import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
+import TerminalWindowIcon from '@icon/system/regular/terminal-window.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ZedIcon from '@icon/wide-zed-ide.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import PlugIcon from '@phosphor/plug.svg';
-import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { fetchDocumentThreads } from '@queries/messages/document-messages';
 import { storageServiceClient } from '@service-storage/client';
 import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
-import { Button, ButtonGroup, CopyButton, Dropdown } from '@ui';
+import { Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -183,7 +182,6 @@ type AgentAction = {
   key: string;
   name: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  buttonIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   execute: (prompt: string) => unknown;
 };
 
@@ -191,7 +189,6 @@ const COPY_ACTION: AgentAction = {
   key: 'copy',
   name: 'Copy as prompt',
   icon: CopyIcon,
-  buttonIcon: TerminalWindowIcon,
   execute: async (prompt) => {
     await navigator.clipboard.writeText(prompt);
   },
@@ -321,47 +318,20 @@ export function useDispatchAgentSplitFileActions(): {
   };
 }
 
-export function DispatchAgentButton(
-  props: { showPrimaryLabel?: boolean } = {}
-) {
+export function DispatchAgentButton() {
   const [open, setOpen] = createSignal(false);
-  const { blockId, isTask, lastUsed, executeAction, executeLastUsed } =
-    useDispatchAgentAction();
+  const { blockId, isTask, executeAction } = useDispatchAgentAction();
 
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
-      <ButtonGroup
-        variant="outline"
-        size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
-        depth={2}
-        class={props.showPrimaryLabel ? 'h-8' : undefined}
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-md"
+        label="Copy as prompt"
+        tooltip="Copy as prompt and agent options"
       >
-        <Dynamic
-          component={lastUsed().key === 'copy' ? CopyButton : Button}
-          onClick={executeLastUsed}
-          tooltip={lastUsed().name}
-          class="@max-[600px]/split-header:w-8 @max-[600px]/split-header:p-0"
-        >
-          <Dynamic
-            component={lastUsed().buttonIcon ?? lastUsed().icon}
-            class="size-3.5!"
-          />
-          <Show when={props.showPrimaryLabel}>
-            <span class="max-w-36 truncate @max-[600px]/split-header:hidden">
-              {lastUsed().name}
-            </span>
-          </Show>
-        </Dynamic>
-        <ButtonGroup.Divider />
-        <Dropdown.Trigger
-          variant="outline"
-          size={props.showPrimaryLabel ? 'md' : 'icon-sm'}
-          class="px-2"
-          label="Agent options"
-        >
-          <CaretDown class="size-3.5!" />
-        </Dropdown.Trigger>
-      </ButtonGroup>
+        <TerminalWindowIcon class="size-4" />
+      </Dropdown.Trigger>
       <Dropdown.Content>
         <Dropdown.Group>
           <Dropdown.Item

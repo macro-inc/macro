@@ -1,6 +1,6 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
 import { DEFAULT_TAG_COLOR, TAG_COLOR_OPTIONS } from '@property/tags/tagColors';
 import { queryReadyGate } from '@queries/gate';

@@ -1,5 +1,5 @@
-import PlayIcon from '@phosphor/play.svg';
-import XIcon from '@phosphor/x.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { ViewTourVideo as Video } from '../core/view-tour';

@@ -1,7 +1,9 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import PlusIcon from '@phosphor/plus.svg';
+import { SidebarCreateAction } from '@app/components/view-shell/SidebarCreateAction';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { pressHandlers } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
+import { SearchBar } from './SearchBar';
+import { SidebarActionRow } from './SidebarActionRow';
 import { ViewSidebar } from './ViewSidebar';
 
 export function SidebarCreateHeader(props: {
@@ -10,23 +12,30 @@ export function SidebarCreateHeader(props: {
   onCreate: () => void;
   actions?: JSX.Element;
   titleActions?: JSX.Element;
+  search?: JSX.Element;
 }) {
   return (
-    <header class="flex shrink-0 flex-col">
-      <Show when={!isTouchDevice()}>
-        <ViewSidebar.Header>
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton class="shrink-0" />
-            <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
-            {props.titleActions}
-          </div>
-          {props.actions}
-        </ViewSidebar.Header>
-      </Show>
-      <ViewSidebar.Primary>
-        <SidebarCreateButton label={props.label} onCreate={props.onCreate} />
-      </ViewSidebar.Primary>
-    </header>
+    <SidebarActionRow
+      title={props.title}
+      search={
+        props.search ?? (
+          <SearchBar
+            label={`Search ${props.title}`}
+            placeholder={`Search ${props.title}`}
+            value=""
+            onValueChange={() => {}}
+            disabled
+          />
+        )
+      }
+      titleActions={props.titleActions}
+      actions={props.actions}
+      create={() => (
+        <SidebarCreateAction label={props.label} onClick={props.onCreate}>
+          New
+        </SidebarCreateAction>
+      )}
+    />
   );
 }
 

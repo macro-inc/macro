@@ -156,6 +156,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
                   </Show>
                 )}
               </For>
+              <SidePanel.HeaderActionsOutlet placement="trailing" />
             </div>
           </SplitHeaderRight>
           <SplitTitleFileMenu>

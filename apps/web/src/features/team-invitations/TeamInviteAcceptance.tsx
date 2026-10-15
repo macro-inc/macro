@@ -1,9 +1,9 @@
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { useUserInfo } from '@queries/auth';
 import {
   useJoinTeamMutation,

@@ -1,7 +1,7 @@
 import { BotAvatar } from '@channel/Bots/BotAvatar';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import CopyIcon from '@phosphor/copy.svg';
-import XIcon from '@phosphor/x.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Badge, Button, Item } from '@ui';
 import { Show } from 'solid-js';

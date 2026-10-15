@@ -5,7 +5,7 @@ import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { useNavigate } from '@solidjs/router';
+import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Suspense } from 'solid-js';
 import { SchedulingProvider } from './context/scheduling-context';
 import type { SchedulingProfile, SchedulingScope } from './core/types';
@@ -24,6 +24,7 @@ export function schedulingLink(
 
 function SchedulingSettingsContent() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const manageBooking = useManageBookingMutation();
   const user = useUserContext();
   const team = useCurrentTeamQuery();
@@ -85,7 +86,12 @@ function SchedulingSettingsContent() {
         },
       }}
     >
-      <SchedulingSettingsView />
+      <SchedulingSettingsView
+        createBookingLink={searchParams.createBookingLink === 'true'}
+        onCloseBookingLink={() =>
+          setSearchParams({ createBookingLink: undefined }, { replace: true })
+        }
+      />
     </SchedulingProvider>
   );
 }

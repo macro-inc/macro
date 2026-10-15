@@ -23,6 +23,8 @@ export type PropsSource<P extends object> = P | Accessor<P>;
 
 /** Options controlling an imperative dialog's lifecycle. */
 export type OpenDialogOptions = {
+  /** Context to inherit without tying the dialog lifetime to its trigger (e.g. a menu item). */
+  contextOwner?: Owner | null;
   /**
    * The Solid owner whose context and lifetime the dialog should inherit.
    * Capture this owner while the calling component is being created; event
@@ -139,7 +141,7 @@ export function openDialog<P extends ManagedDialogProps>(
     id,
     component: component as ManagedDialogComponent,
     props: props as PropsSource<Record<string, unknown>>,
-    owner: options.owner ?? undefined,
+    owner: options.owner ?? options.contextOwner ?? undefined,
     isOpen,
     setOpen,
     finalized: false,

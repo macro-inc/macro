@@ -1,5 +1,5 @@
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
-import UserPlusIcon from '@phosphor/user-plus.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { Button, Tabs } from '@ui';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { ParticipantsActionSheet } from './ParticipantsActionSheet';

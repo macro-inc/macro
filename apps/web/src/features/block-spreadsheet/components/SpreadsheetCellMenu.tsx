@@ -1,14 +1,14 @@
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import ArrowDown from '@icon/system/regular/arrow-down.svg?component-solid';
+import ArrowRight from '@icon/system/regular/arrow-right.svg?component-solid';
+import CaretCircleDown from '@icon/system/regular/caret-circle-down.svg?component-solid';
+import Chat from '@icon/system/regular/chat-circle.svg?component-solid';
+import Clipboard from '@icon/system/regular/clipboard.svg?component-solid';
+import Copy from '@icon/system/regular/copy.svg?component-solid';
+import Eraser from '@icon/system/regular/eraser.svg?component-solid';
+import Scissors from '@icon/system/regular/scissors.svg?component-solid';
+import Trash from '@icon/system/regular/trash.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowDown from '@phosphor/arrow-down.svg?component-solid';
-import ArrowRight from '@phosphor/arrow-right.svg?component-solid';
-import CaretCircleDown from '@phosphor/caret-circle-down.svg?component-solid';
-import Chat from '@phosphor/chat-circle.svg?component-solid';
-import Clipboard from '@phosphor/clipboard.svg?component-solid';
-import Copy from '@phosphor/copy.svg?component-solid';
-import Eraser from '@phosphor/eraser.svg?component-solid';
-import Scissors from '@phosphor/scissors.svg?component-solid';
-import Trash from '@phosphor/trash.svg?component-solid';
 import { type Component, type JSX, Show } from 'solid-js';
 import type { SpreadsheetCommand } from '../core/toolbar-types';
 

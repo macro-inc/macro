@@ -1,6 +1,7 @@
 import { openReminderComposer } from '@app/features/reminders/reminder-composer';
 import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
+import { getOwner } from 'solid-js';
 import type {
   EntityActionListState,
   EntityActionNavigationHandler,
@@ -13,6 +14,8 @@ type MakeCreateReminderOptions = {
 export const makeCreateReminderAction = (
   options?: MakeCreateReminderOptions
 ) => {
+  // Event handlers have no owner; retain the app context for the dialog.
+  const owner = getOwner();
   const canExecute = (
     entity: EntityData
   ): entity is Extract<EntityData, { type: 'email' }> =>
@@ -22,6 +25,7 @@ export const makeCreateReminderAction = (
     const [entity] = entities;
     if (!entity || !canExecute(entity)) return;
     openReminderComposer(entity, {
+      owner,
       onCreated: options?.onEmailSaved,
     });
   };
@@ -38,6 +42,7 @@ export const makeCreateReminderAction = (
     const [entity] = entities;
     if (!entity || !canExecute(entity)) return;
     openReminderComposer(entity, {
+      owner,
       onCreated: async () => {
         // A hosted email view owns pagination and its navigation history.
         if (options?.onEmailSaved) {

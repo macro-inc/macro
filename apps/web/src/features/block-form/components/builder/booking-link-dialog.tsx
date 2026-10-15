@@ -1,5 +1,5 @@
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
 import { Button, Dialog, Panel } from '@ui';
 import { For, Match, Switch } from 'solid-js';
 import type { FormBookingLink } from '../../context/form-context';

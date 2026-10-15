@@ -1,9 +1,9 @@
 import { DiffStats } from '@app/components/diff-view';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import ArrowsInSimpleIcon from '@phosphor/arrows-in-simple.svg';
-import ArrowsOutSimpleIcon from '@phosphor/arrows-out-simple.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import ArrowsInSimpleIcon from '@icon/system/regular/arrows-in-simple.svg';
+import ArrowsOutSimpleIcon from '@icon/system/regular/arrows-out-simple.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { pullRequestNumber } from '../core/pull-request';

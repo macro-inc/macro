@@ -9,7 +9,7 @@ import {
 } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import AgentIcon from '@phosphor/sparkle.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { createSignal } from 'solid-js';
 
@@ -140,6 +140,7 @@ export function ChatWithAgentButton(props: {
   /** Button text; defaults to "Chat". */
   label?: string;
   disabled?: boolean;
+  textOnly?: boolean;
 }) {
   const [opening, setOpening] = createSignal(false);
   async function open() {
@@ -155,6 +156,7 @@ export function ChatWithAgentButton(props: {
     <HeaderActionButton
       tooltip={props.label ?? 'Chat with Agent'}
       label={props.label ?? 'Chat'}
+      textOnly={props.textOnly ?? true}
       icon={<AgentIcon />}
       onClick={() => void open()}
       disabled={props.disabled || opening()}
@@ -163,12 +165,17 @@ export function ChatWithAgentButton(props: {
   );
 }
 
-export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
+export function AskMacroButton(props: {
+  entity: ChatWithAgentEntity;
+  textOnly?: boolean;
+  label?: string;
+}) {
   return (
     <HeaderActionButton
       onClick={() => openChatWithAgent(props.entity)}
-      tooltip="Ask Macro"
-      label="Ask Macro"
+      tooltip={props.label ?? 'Ask AI'}
+      label={props.label ?? 'Ask AI'}
+      textOnly={props.textOnly ?? true}
       icon={<AgentIcon />}
     />
   );

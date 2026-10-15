@@ -1,14 +1,15 @@
 import { formatTimeZoneAbbreviation } from '@core/util/date';
-import ClockIcon from '@phosphor/clock.svg';
-import HashIcon from '@phosphor/hash.svg';
-import UserPlus from '@phosphor/user-plus.svg';
-import { cn, HoverCard } from '@ui';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import UserPlus from '@icon/system/regular/user-plus.svg';
+import { cn, HoverCard, Badge as StatusBadge } from '@ui';
 import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
 import { format } from 'date-fns/format';
 import { isThisYear } from 'date-fns/isThisYear';
 import { isToday } from 'date-fns/isToday';
 import { isTomorrow } from 'date-fns/isTomorrow';
 import type { ParentProps } from 'solid-js';
+import { match } from 'ts-pattern';
 import { OwnerLabel } from '../owner/owner-display';
 import type { CallStatus } from '../types/entity';
 
@@ -128,35 +129,23 @@ function _ImportantBadge() {
   );
 }
 
-type CallStatusBadgeConfig = {
-  class: string;
-  label: string;
-};
-
-function getCallStatusBadgeConfig(status: CallStatus): CallStatusBadgeConfig {
-  switch (status) {
-    case 'ATTENDED':
-      return {
-        class: 'text-ink-extra-muted border-transparent bg-ink/5 px-2',
-        label: 'attended',
-      };
-    case 'MISSED':
-      return {
-        class: 'text-warning border-transparent bg-warning/10 px-2',
-        label: 'missed',
-      };
-    case 'UNATTENDED':
-      return {
-        class: 'text-ink-extra-muted/70 border-transparent bg-ink/5 px-2',
-        label: 'unattended',
-      };
-  }
-}
-
 export function CallStatusBadge(props: { status: CallStatus }) {
-  const config = () => getCallStatusBadgeConfig(props.status);
+  const config = () =>
+    match(props.status)
+      .with('ATTENDED', () => ({ dot: 'bg-success', label: 'Attended' }))
+      .with('MISSED', () => ({ dot: 'bg-failure', label: 'Missed' }))
+      .with('UNATTENDED', () => ({ dot: 'bg-warning', label: 'Unattended' }))
+      .exhaustive();
 
-  return <Badge class={config().class}>{config().label}</Badge>;
+  return (
+    <StatusBadge size="xs" class="gap-1.5 text-ink-muted">
+      <span
+        aria-hidden="true"
+        class={cn('size-1.5 shrink-0 rounded-full', config().dot)}
+      />
+      {config().label}
+    </StatusBadge>
+  );
 }
 
 export function CallChannelNameBadge(props: { channelName: string }) {

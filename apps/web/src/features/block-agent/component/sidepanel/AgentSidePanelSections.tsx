@@ -16,7 +16,7 @@ import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { References } from '@core/component/References';
 import { openExternalUrl } from '@core/util/url';
-import GitBranch from '@phosphor/git-branch.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';

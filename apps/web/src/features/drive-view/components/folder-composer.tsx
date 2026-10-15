@@ -1,9 +1,9 @@
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import FileIcon from '@phosphor/file.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, EntityComposer } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { FolderUpload } from '../core/folder-composer';

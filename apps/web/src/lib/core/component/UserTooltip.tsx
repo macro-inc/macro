@@ -1,4 +1,4 @@
-import IconCheck from '@phosphor/check.svg';
+import IconCheck from '@icon/system/regular/check.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -35,8 +35,8 @@ export function UserTooltip(props: UserTooltipProps) {
 
   return (
     <Surface depth={2} class="glass bg-menu-glass rounded-xl">
-      <div class="text-ink max-w-lg">
-        <div class="flex items-center gap-2 p-2">
+      <div class="w-64 max-w-[calc(100vw-2rem)] text-sm text-ink">
+        <div class="flex items-center gap-3 p-3">
           <UserIcon
             {...avatarProps()}
             size="lg"
@@ -46,17 +46,17 @@ export function UserTooltip(props: UserTooltipProps) {
             class="pointer-events-none"
           />
 
-          <div class="flex-1 min-w-0">
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5">
             <div class="text-sm font-medium truncate">{props.displayName}</div>
             <Show when={props.email && props.email !== props.displayName}>
-              <div class="text-xs opacity-60 truncate">{props.email}</div>
+              <div class="truncate text-xs text-ink-muted">{props.email}</div>
             </Show>
           </div>
         </div>
 
         <Show when={actions().length > 0}>
-          <div class="border-t border-edge"></div>
-          <div class="p-1.5 flex flex-col gap-0.5">
+          <div class="border-t border-edge-divider"></div>
+          <div class="flex flex-col p-1.5">
             <For each={actions()}>
               {(action) => (
                 <ActionItem action={action} onClose={props.onClose} />
@@ -93,11 +93,11 @@ function ActionItem(props: { action: UserCardAction; onClose?: () => void }) {
   return (
     <button
       type="button"
-      class="group rounded-lg w-full flex items-center gap-2 px-2 h-8 text-left font-medium text-xs cursor-default outline-none hover:bg-ink/5 focus:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed"
+      class="group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left font-normal outline-none hover:bg-ink/5 focus-visible:bg-ink/5"
       onClick={handleClick}
     >
-      <Show when={!copied()} fallback={<IconCheck class="size-3.5" />}>
-        <Dynamic component={props.action.icon} class="size-3.5" />
+      <Show when={!copied()} fallback={<IconCheck class="size-4 shrink-0" />}>
+        <Dynamic component={props.action.icon} class="size-4 shrink-0" />
       </Show>
       {props.action.label}
     </button>

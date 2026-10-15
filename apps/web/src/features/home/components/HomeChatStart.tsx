@@ -1,8 +1,4 @@
-import {
-  useViewShell,
-  ViewShell,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
@@ -13,17 +9,12 @@ import { HomeRecommendedActions } from './home-recommended-actions';
 
 /** Desktop Home's idle pane uses the single-line chat composer and send flow. */
 export function HomeChatStart() {
-  const shell = useViewShell();
   const agents = useFeatureFlag(enableChatV3Agents);
-  const showHomeTopBar = () =>
-    shell.aside.isCollapsed() || shell.aside.isOverlay();
   return (
     <ChatInputProvider>
-      <Show when={showHomeTopBar()}>
-        <ViewShell.TopBar>
-          <ViewSidebar.Title>Home</ViewSidebar.Title>
-        </ViewShell.TopBar>
-      </Show>
+      <ViewShell.TopBar workspaceActions>
+        <ViewSidebar.Title class="min-w-0 flex-1">Home</ViewSidebar.Title>
+      </ViewShell.TopBar>
       <DragDropWrapper class="relative min-h-0 min-w-0 flex-1 overflow-y-auto px-6">
         <div
           class={
@@ -32,18 +23,6 @@ export function HomeChatStart() {
               : 'h-full min-h-0 min-w-0'
           }
         >
-          {/*
-            Agents new conversation sits under ViewShell.TopBar (h-12) and
-            anchors the greeting above center with .newchat padding 24/64. Home only renders that bar
-            when the list is collapsed, so reserve the same offset here.
-          */}
-          <Show when={agents().enabled && !showHomeTopBar()}>
-            <div
-              class="h-12 shrink-0"
-              aria-hidden="true"
-              data-home-composer-topbar-align=""
-            />
-          </Show>
           <div
             class={
               agents().enabled

@@ -2,7 +2,7 @@ import { makeFlaggedPersisted } from '@app/preferences/make-flagged-persisted';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToDisplayName } from '@core/user/util';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import { useContacts } from '@queries/contacts/contacts';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { type Accessor, createEffect, type JSX } from 'solid-js';

@@ -17,10 +17,10 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import ChevronDownIcon from '@icon/system/regular/caret-down.svg';
+import PlusCircleIcon from '@icon/system/regular/plus-circle.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
@@ -185,15 +185,12 @@ export const SoupViewCreateButton = () => {
 
   const SingleOptionButton = (props: { hideLabel?: boolean }) => (
     <Button
-      variant="accent"
-      class={cn(
-        'border-0 px-3 py-2 pl-1 font-semibold',
-        props.hideLabel && 'pr-1'
-      )}
+      variant="cta"
+      class={cn('border-0 px-4 py-2 font-medium', props.hideLabel && 'pr-1')}
       size="sm"
       onClick={() => handleSelect(options()[0])}
     >
-      <PlusCircleIcon class="size-3.5 text-accent" />
+      <PlusCircleIcon class="size-3.5" />
       <Show when={!props.hideLabel}>
         <span>{createLabel()}</span>
       </Show>
@@ -203,11 +200,8 @@ export const SoupViewCreateButton = () => {
   const MultiOptionButton = (props: { hideLabel?: boolean }) => (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant="accent"
-        class={cn(
-          'border-0 px-3 py-2 pl-1 font-semibold',
-          props.hideLabel && 'pr-1'
-        )}
+        variant="cta"
+        class={cn('border-0 px-4 py-2 font-medium', props.hideLabel && 'pr-1')}
       >
         <PlusCircleIcon class="size-3.5" />
         <Show when={!props.hideLabel}>

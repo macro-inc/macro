@@ -1,41 +1,25 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
-import Circle from '@phosphor/circle.svg';
-import CircleNotch from '@phosphor/circle-notch.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
-import MinusCircle from '@phosphor/minus-circle.svg';
-import XCircle from '@phosphor/x-circle.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import Circle from '@icon/system/regular/circle.svg';
+import CircleNotch from '@icon/system/regular/circle-notch.svg';
+import MinusCircle from '@icon/system/regular/minus-circle.svg';
+import XCircle from '@icon/system/regular/x-circle.svg';
 import type {
   GithubPullRequest,
   GithubPullRequestCheckRun,
 } from '@service-storage/generated/schemas';
-import { cn, Layer } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
+import { PrStatusChip as GithubPullRequestStatusChip } from '../component/PrStatus';
+
+export {
+  PrStatusChip as GithubPullRequestStatusChip,
+  PrStatusIcon as GithubPullRequestStatusIcon,
+} from '../component/PrStatus';
 
 type GithubPullRequestWithPanelDetails = GithubPullRequest & {
   authorLogin?: string | null;
 };
-
-const STATUS_ICON_CLASS: Record<string, string> = {
-  open: 'text-success',
-  merged: 'text-note',
-  closed: 'text-failure',
-};
-
-const STATUS_TEXT_CLASS: Record<string, string> = {
-  open: 'text-success',
-  merged: 'text-note',
-  closed: 'text-failure',
-};
-
-const PR_PILL_CLASS =
-  'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted px-2 py-1 leading-tight text-left rounded-full bg-surface';
-
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
 
 function githubDisplayLogin(login: string): string {
   return login.replace(/\[bot\]$/, '');
@@ -87,48 +71,6 @@ function GithubPullRequestCheckStatusIcon(props: {
         <MinusCircle class="size-3.5 text-ink-placeholder" />
       </Match>
     </Switch>
-  );
-}
-
-export function GithubPullRequestStatusIcon(props: {
-  status: string;
-  class?: string;
-}) {
-  return (
-    <Show
-      when={props.status === 'merged'}
-      fallback={
-        <GitPullRequest
-          class={cn('size-3.5', STATUS_ICON_CLASS[props.status], props.class)}
-        />
-      }
-    >
-      <GitMerge class={cn('size-3.5 text-note', props.class)} />
-    </Show>
-  );
-}
-
-export function GithubPullRequestStatusChip(props: {
-  status: string;
-  class?: string;
-}) {
-  return (
-    <Layer depth={2}>
-      <span
-        class={cn(
-          PR_PILL_CLASS,
-          'shrink-0',
-          STATUS_TEXT_CLASS[props.status],
-          props.class
-        )}
-      >
-        <GithubPullRequestStatusIcon
-          status={props.status}
-          class="size-3 shrink-0"
-        />
-        {capitalize(props.status)}
-      </span>
-    </Layer>
   );
 }
 

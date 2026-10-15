@@ -1,15 +1,14 @@
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
-
+import VideoIcon from '@icon/system/regular/file-video.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
   $isVideoNode,
   type VideoDecoratorProps,
 } from '@macro-inc/lexical-core';
-import VideoIcon from '@phosphor/file-video.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {

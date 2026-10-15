@@ -1,9 +1,6 @@
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@components/app/split-layout/components/SplitToolbar';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { ENABLE_PDF_MARKUP } from '@core/constant/featureFlags';
-import Tabs from '@phosphor/tabs.svg';
+import Tabs from '@icon/system/regular/tabs.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
@@ -40,16 +37,27 @@ export function PdfToolbarControls() {
   );
 }
 
-export function PdfSplitToolbar() {
+/** Compact controls shared by standalone and Drive PDF title rows. */
+export function PdfHeaderControls() {
   const documentProxy = usePdfDocument().documentProxy;
   return (
     <Show when={documentProxy()}>
-      <SplitToolbarLeft>
+      <div
+        role="group"
+        aria-label="PDF controls"
+        class="ml-2 flex shrink-0 items-center gap-1 whitespace-nowrap"
+      >
         <PdfToolbarControls />
-      </SplitToolbarLeft>
-      <SplitToolbarRight>
         <PdfTabsToggle />
-      </SplitToolbarRight>
+      </div>
     </Show>
+  );
+}
+
+export function PdfSplitToolbar() {
+  return (
+    <SplitHeaderLeft>
+      <PdfHeaderControls />
+    </SplitHeaderLeft>
   );
 }

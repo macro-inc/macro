@@ -5,7 +5,8 @@ false && internalDrag;
 import { Lightbox } from '@core/component/Lightbox';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
-
+import ImageIcon from '@icon/system/regular/image-broken.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -13,8 +14,6 @@ import {
   type ImageDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { calculateEffectiveDimensions } from '@macro-inc/lexical-core/utils/media';
-import ImageIcon from '@phosphor/image-broken.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Layer } from '@ui';
 import {

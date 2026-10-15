@@ -1,9 +1,9 @@
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import TableIcon from '@icon/system/regular/table.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import TableIcon from '@phosphor/table.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { Key } from '@solid-primitives/keyed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';

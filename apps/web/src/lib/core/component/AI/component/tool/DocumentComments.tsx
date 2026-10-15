@@ -1,9 +1,9 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg';
-import ChatCircle from '@phosphor-icons/core/regular/chat-circle.svg';
-import CheckCircle from '@phosphor-icons/core/regular/check-circle.svg';
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

@@ -4,6 +4,7 @@ import {
   type ShareableEntityData,
 } from '@app/features/sharing/global-share-modal/shareable-entity';
 import type { EntityData } from '@entity';
+import { createCallback } from '@solid-primitives/rootless';
 import type { EntityActionListState } from './entity-action-context';
 
 export const makeShareAction = () => {
@@ -15,7 +16,7 @@ export const makeShareAction = () => {
     return isShareableEntityType(entity.type);
   };
 
-  const execute = async (entity: EntityData) => {
+  const execute = createCallback(async (entity: EntityData) => {
     if (!isShareableEntityType(entity.type)) {
       return;
     }
@@ -24,7 +25,7 @@ export const makeShareAction = () => {
       // TODO: use type guard on entity data, not the type
       entity: entity as ShareableEntityData,
     });
-  };
+  });
 
   const executeWithSoup = async (
     entities: EntityData[],

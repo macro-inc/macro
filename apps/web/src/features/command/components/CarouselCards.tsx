@@ -1,6 +1,5 @@
-import { getIconConfig } from '@core/component/EntityIcon';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { cn, Hotkey } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -52,7 +51,7 @@ export function CarouselCards(props: {
                   tabindex={active() ? 0 : -1}
                   class={cn(
                     'absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 h-36 flex-col items-start rounded-xl border p-3 text-left outline-none transition-[left,opacity,background-color,box-shadow,border-color] duration-300 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-accent',
-                    getIconConfig(item.blockName).foreground,
+                    'text-ink-muted',
                     active()
                       ? 'border-current/30 bg-current/[0.04] shadow-[0_0_20px_0] shadow-current/[0.06]'
                       : 'border-ink/8 bg-ink/[0.03] hover:border-ink/20',
@@ -77,7 +76,7 @@ export function CarouselCards(props: {
                   <div
                     class={cn(
                       'flex size-8 shrink-0 items-center justify-center rounded-lg',
-                      getIconConfig(item.blockName).background
+                      'bg-ink/5'
                     )}
                   >
                     <div class="size-5 [&_svg]:size-full">

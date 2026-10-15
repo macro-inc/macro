@@ -1,8 +1,8 @@
-import ArrowCounterClockwiseIcon from '@phosphor/arrow-counter-clockwise.svg';
-import CheckIcon from '@phosphor/check.svg';
-import LightningIcon from '@phosphor/lightning.svg';
-import StarIcon from '@phosphor/star.svg';
-import StarFillIcon from '@phosphor-icons/core/fill/star-fill.svg?component-solid';
+import StarFillIcon from '@icon/system/fill/star-fill.svg?component-solid';
+import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import LightningIcon from '@icon/system/regular/lightning.svg';
+import StarIcon from '@icon/system/regular/star.svg';
 import { Button, cn } from '@ui';
 import { type ParentProps, Show } from 'solid-js';
 

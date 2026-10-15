@@ -1,8 +1,8 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CheckCircleIcon from '@phosphor/check-circle.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal } from 'solid-js';
 import { Button } from './Button';
 import { ButtonGroup } from './ButtonGroup';

@@ -1,14 +1,12 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import ExportIcon from '@phosphor/download-simple.svg';
-import GearIcon from '@phosphor/gear-six.svg';
-import ListIcon from '@phosphor/list-bullets.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
-import ImportIcon from '@phosphor/upload-simple.svg';
-import UsersIcon from '@phosphor/users.svg';
-import { Button, Tooltip } from '@ui';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import ExportIcon from '@icon/system/regular/download-simple.svg';
+import GearIcon from '@icon/system/regular/gear-six.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import ImportIcon from '@icon/system/regular/upload-simple.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -21,6 +19,7 @@ const RECORD_ICONS = { active: BuildingsIcon, people: UsersIcon };
 export function CrmSidebar(props: {
   /** The highlighted record type, list, or pipeline. */
   active: string;
+  actions?: JSX.Element;
   pipelines?: JSX.Element;
   lists: { id: string; name: string; count: number }[];
   listsEnabled: boolean;
@@ -43,32 +42,17 @@ export function CrmSidebar(props: {
   return (
     <ViewSidebar.Root aria-label="CRM navigation">
       <header class="flex shrink-0 flex-col">
-        <Show when={!isTouchDevice()}>
-          <ViewSidebar.Header>
-            <div class="flex min-w-0 items-center gap-1">
-              <ViewSidebar.CloseButton class="shrink-0" />
-              <ViewSidebar.Title>Customers</ViewSidebar.Title>
-            </div>
-            <Tooltip label="Collapse CRM sidebar">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                label="Collapse CRM sidebar"
-                onClick={props.onCollapse}
-              >
-                <SidebarIcon class="size-4" />
-              </Button>
-            </Tooltip>
-          </ViewSidebar.Header>
+        <Show when={isTouchDevice() && !props.actions}>
+          <ViewSidebar.Primary ref={tourTarget(COMPANIES_TOUR.create)}>
+            <CrmCreateMenu
+              onCreateCompany={props.onCreateCompany}
+              onCreateContact={props.onCreateContact}
+              pipeline={props.pipeline}
+            />
+          </ViewSidebar.Primary>
         </Show>
-        <ViewSidebar.Primary ref={tourTarget(COMPANIES_TOUR.create)}>
-          <CrmCreateMenu
-            onCreateCompany={props.onCreateCompany}
-            onCreateContact={props.onCreateContact}
-            pipeline={props.pipeline}
-          />
-        </ViewSidebar.Primary>
       </header>
+      {props.actions}
       <ViewSidebar.Content>
         <CollapsibleSection.Root
           open={recordsOpen()}

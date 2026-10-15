@@ -12,8 +12,8 @@ import type {
   PropertyKind,
 } from '@core/fig-engine/design-types';
 import type { ComponentInfo } from '@core/fig-engine/types';
-import Minus from '@phosphor/minus.svg';
-import Plus from '@phosphor/plus.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { createSignal, For, Show } from 'solid-js';
 import {
   defaultPropertyName,

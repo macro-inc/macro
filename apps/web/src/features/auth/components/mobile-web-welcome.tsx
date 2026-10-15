@@ -40,7 +40,7 @@ export function MobileWebWelcome(props: {
           <button
             type="submit"
             disabled={props.pending}
-            class="w-full px-3 py-2.5 text-lg font-bold rounded-xs bg-accent text-surface border-none"
+            class="w-full px-3 py-2.5 text-lg font-bold rounded-xs bg-ink text-surface-4 border-none"
           >
             Sign Up
           </button>

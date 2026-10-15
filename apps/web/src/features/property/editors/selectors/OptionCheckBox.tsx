@@ -19,7 +19,7 @@ export const OptionCheckBox: Component<{
       class="shrink-0"
     >
       <Checkbox.Control
-        class={`size-3.5 border-transparent bg-transparent hover:border-accent data-checked:bg-accent data-checked:border-accent ${
+        class={`size-3.5 border-transparent bg-transparent hover:border-ink data-checked:bg-ink data-checked:border-ink ${
           props.checked ? '' : 'group-hover:not-hover:border-edge-muted'
         } ${props.multiselect === false ? 'rounded-full' : 'rounded-sm'}`}
       />

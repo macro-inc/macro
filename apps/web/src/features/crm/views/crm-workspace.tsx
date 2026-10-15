@@ -1,9 +1,14 @@
 import {
   SearchBar,
+  SidebarActionRow,
   useViewControlHotkeys,
   useViewShell,
   ViewShell,
 } from '@app/components/view-shell';
+import {
+  useSidebarSearchFocus,
+  WorkspaceActions,
+} from '@app/components/view-shell/SidebarActionRow';
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
@@ -22,8 +27,9 @@ import {
   isCrmCompanyEntity,
   isCrmContactEntity,
 } from '@entity';
-import ListIcon from '@phosphor/list.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import ListIcon from '@icon/system/regular/list.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Button, Dropdown, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
@@ -37,6 +43,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { CrmListDialog } from '../components/company-list-dialog';
+import { CrmCreateMenu } from '../components/crm-create-menu';
 import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { PipelineDialog } from '../components/pipeline-dialog';
@@ -45,6 +52,7 @@ import { useCrmContext } from '../context/crm-context';
 import { useCrmWorkspace } from '../context/workspace-context';
 import { CRM_RECORDS, pipelineIdOfTab, pipelineTab } from '../core/navigation';
 import { createCrmExportLoader } from '../primitives/export-source';
+import { COMPANIES_TOUR } from '../tour';
 import { useApplyCrmView } from './apply-view';
 import { CrmExport } from './export-companies';
 import { CrmImport } from './import-companies';
@@ -110,17 +118,17 @@ function NavigationToggle(props: {
   );
 }
 
-function CrmSearchBar() {
+function CrmSearchBar(props: { onSearch?: () => void }) {
   const view = useCrmWorkspace();
   let input: HTMLInputElement | undefined;
+  const focusSearch = useSidebarSearchFocus(() => input);
   useViewControlHotkeys({
     scopeId: view.host.scopeId,
     enabled: view.host.isActive,
     search: {
       description: 'Search companies',
       run: () => {
-        input?.focus();
-        input?.select();
+        focusSearch();
         return true;
       },
     },
@@ -131,18 +139,21 @@ function CrmSearchBar() {
       label="Search companies"
       placeholder="Search companies"
       value={view.searchText()}
-      onValueChange={view.setSearchText}
+      onValueChange={(value) => {
+        props.onSearch?.();
+        view.setSearchText(value);
+      }}
       onEscape={view.host.focus}
-      hotkey="cmd+f"
-      class="max-w-md flex-1"
+      class="h-8 w-60 max-w-full @max-[520px]/crm-header:w-36 @max-[360px]/crm-header:w-28"
     />
   );
 }
 
 /** Contacts are not in the search index, so People searches the soup query. */
-function PeopleSearchBar() {
+function PeopleSearchBar(props: { onSearch?: () => void }) {
   const view = useCrmWorkspace();
   let input: HTMLInputElement | undefined;
+  const focusSearch = useSidebarSearchFocus(() => input);
   const [text, setText] = createSignal(
     view.queryFilters.state.include.crmContactSearch ?? ''
   );
@@ -156,6 +167,7 @@ function PeopleSearchBar() {
   );
   onCleanup(applySearch.clear);
   const search = (value: string) => {
+    props.onSearch?.();
     setText(value);
     applySearch(value);
   };
@@ -165,8 +177,7 @@ function PeopleSearchBar() {
     search: {
       description: 'Search people',
       run: () => {
-        input?.focus();
-        input?.select();
+        focusSearch();
         return true;
       },
     },
@@ -179,8 +190,7 @@ function PeopleSearchBar() {
       value={text()}
       onValueChange={search}
       onEscape={view.host.focus}
-      hotkey="cmd+f"
-      class="max-w-md flex-1"
+      class="h-8 w-60 max-w-full @max-[520px]/crm-header:w-36 @max-[360px]/crm-header:w-28"
     />
   );
 }
@@ -362,6 +372,47 @@ export function CrmWorkspaceView(props: {
   });
   const sidebar = () => (
     <CrmSidebar
+      actions={
+        <SidebarActionRow
+          title="Customers"
+          actions={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              label="Collapse CRM sidebar"
+              onClick={() => setCollapsed(true)}
+            >
+              <SidebarIcon class="size-4" />
+            </Button>
+          }
+          search={
+            <Show
+              when={peopleActive()}
+              fallback={<CrmSearchBar onSearch={closeRecord} />}
+            >
+              <PeopleSearchBar onSearch={closeRecord} />
+            </Show>
+          }
+          create={() => (
+            <div ref={tourTarget(COMPANIES_TOUR.create)}>
+              <CrmCreateMenu
+                presentation="toolbar"
+                record={peopleActive() ? 'contact' : 'company'}
+                onCreateCompany={openCreateCompanyModal}
+                onCreateContact={() => openCreateContactModal()}
+                pipeline={
+                  pipelinesEnabled()
+                    ? {
+                        disabled: !canCreatePipeline(),
+                        onCreate: () => setCreatingPipeline(true),
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          )}
+        />
+      }
       pipelines={
         <Show when={pipelinesEnabled()}>
           <PipelineSidebar
@@ -501,24 +552,61 @@ export function CrmWorkspaceView(props: {
         <Show when={!selectedRecord() && !pipelineId()}>
           <Show when={!isTouchDevice() || peopleActive()}>
             <Show when={!isTouchDevice()}>
-              <div class="flex h-12 shrink-0 items-center gap-3 px-4">
-                <NavigationToggle onExpand={() => setCollapsed(false)}>
-                  <Suspense>{sidebar()}</Suspense>
-                </NavigationToggle>
-                <h1
-                  class="flex h-7 min-w-0 flex-1 items-center px-1 text-sm font-semibold tracking-[-0.03em]"
-                  title={title()}
+              <div class="@container/split-header flex min-h-12 shrink-0 items-center gap-3 px-4 py-2">
+                <WorkspaceActions
+                  controls={
+                    <div class="flex min-w-0 items-center gap-2">
+                      <Show when={!peopleActive()}>
+                        <div class="flex min-w-0 items-center justify-end gap-3">
+                          <div class="flex shrink-0 items-center gap-2 [&_button]:h-8 [&_button]:min-w-8 [&_button>svg]:size-4!">
+                            <SoupViewContextSort />
+                            <SoupViewContextGroup hideLabel variant="ghost" />
+                            <UnifiedFilterDropdown hideLabel variant="ghost" />
+                            <CompanyDisplayMenu />
+                            <Suspense>
+                              <CompanyViewsMenu hideLabel />
+                            </Suspense>
+                            <Show when={listsEnabled() && activeList()}>
+                              {(list) => (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setEditing({
+                                      id: list().id,
+                                      name: list().name,
+                                      companyIds: [...list().config.companyIds],
+                                    })
+                                  }
+                                >
+                                  Edit list
+                                </Button>
+                              )}
+                            </Show>
+                          </div>
+                        </div>
+                      </Show>
+                    </div>
+                  }
                 >
-                  <span class="truncate">{title()}</span>
-                </h1>
+                  <NavigationToggle onExpand={() => setCollapsed(false)}>
+                    <Suspense>{sidebar()}</Suspense>
+                  </NavigationToggle>
+                  <h1
+                    class="flex h-7 min-w-0 flex-1 items-center px-1 text-sm font-semibold tracking-[-0.03em]"
+                    title={title()}
+                  >
+                    <span class="truncate">{title()}</span>
+                  </h1>
+                </WorkspaceActions>
               </div>
             </Show>
             <Show
               when={!peopleActive()}
               fallback={
-                <ViewShell.Header class="touch:pt-0">
+                <ViewShell.Header class="hidden touch:block touch:pt-0">
                   <div class="flex min-w-0 items-center justify-between gap-3">
-                    <PeopleSearchBar />
+                    <PeopleSearchBar onSearch={closeRecord} />
                     <Button
                       variant="outline"
                       class="ml-auto shrink-0"
@@ -531,41 +619,6 @@ export function CrmWorkspaceView(props: {
                 </ViewShell.Header>
               }
             >
-              <ViewShell.Header>
-                <div class="flex min-w-0 items-center justify-between gap-3">
-                  <CrmSearchBar />
-                  <div class="ml-auto flex shrink-0 items-center gap-2 [&_button]:h-8 [&_button]:min-w-8 [&_button>svg]:size-4!">
-                    <SoupViewContextSort />
-                    <SoupViewContextGroup hideLabel variant="ghost" />
-                    <UnifiedFilterDropdown hideLabel variant="ghost" />
-                    <CompanyDisplayMenu />
-                    <Suspense>
-                      <CompanyViewsMenu hideLabel />
-                    </Suspense>
-                    <Show when={listsEnabled() && activeList()}>
-                      {(list) => (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setEditing({
-                              id: list().id,
-                              name: list().name,
-                              companyIds: [...list().config.companyIds],
-                            })
-                          }
-                        >
-                          Edit list
-                        </Button>
-                      )}
-                    </Show>
-                    <Button variant="outline" onClick={openCreateCompanyModal}>
-                      <PlusIcon />
-                      New company
-                    </Button>
-                  </div>
-                </div>
-              </ViewShell.Header>
               <Suspense>
                 <CrmFilterChips onReset={() => navigate(active())} />
               </Suspense>

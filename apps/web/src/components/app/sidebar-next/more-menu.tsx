@@ -5,7 +5,7 @@ import {
   sidebarContent,
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -65,6 +65,8 @@ export function MoreMenu(props: MoreMenuProps) {
           label="More"
           tooltip="More options"
           tooltipPlacement="right"
+          tooltipOpenDelay={2000}
+          tooltipContentClass="motion-safe:animate-dialog-overlay-open"
           draggable={false}
           data-sidebar-next-item="more"
         >

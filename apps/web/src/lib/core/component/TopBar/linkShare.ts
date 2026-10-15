@@ -71,29 +71,28 @@ export type ShareStatus = {
 
 const LINK_SHARE_SCOPE_COPY: Record<LinkShareScope, LinkShareScopeCopy> = {
   NONE: {
-    label: 'None',
-    title: 'Link sharing off',
-    description:
-      'Only people and channels you explicitly share with can access this item.',
+    label: 'Only people with access',
+    title: 'Only people with access',
+    description: 'The link only works for people who already have access.',
   },
   PUBLIC: {
-    label: 'Public',
-    title: 'Public link',
+    label: 'Anyone with the link',
+    title: 'Anyone with the link',
     description: 'Anyone with the link can access this item.',
   },
   TEAM: {
-    label: 'Team',
-    title: 'Team link',
+    label: 'Team members with the link',
+    title: 'Team members with the link',
     description:
-      "Members of the owner's team with the link can access this item. This does not share it directly with a team or channel.",
+      "Members of the owner's team can open this link. Others need to be added separately.",
   },
 };
 
 const TEAM_SHARE_COPY: Record<TeamShareScope, string> = {
-  NONE: 'None',
-  view: 'View',
-  comment: 'Comment',
-  edit: 'Edit',
+  NONE: 'No team access',
+  view: 'Can view',
+  comment: 'Can comment',
+  edit: 'Can edit',
 };
 
 export const LINK_SHARE_SCOPE_OPTIONS = (

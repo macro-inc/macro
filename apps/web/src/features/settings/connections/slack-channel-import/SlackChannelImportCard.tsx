@@ -2,7 +2,7 @@ import { hideSlackImportPromotion } from '@app/features/slack-import/primitives/
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import {
   type ImportState,
   useDiscoverMutation,

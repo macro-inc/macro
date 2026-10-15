@@ -1,6 +1,6 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
-import PlusIcon from '@phosphor/plus.svg';
-import TableIcon from '@phosphor/table.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import { createSignal, For, Show } from 'solid-js';
 import type { Pipeline } from '../core/pipeline';
 

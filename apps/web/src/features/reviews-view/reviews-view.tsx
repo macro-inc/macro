@@ -1,6 +1,5 @@
 import {
   SearchBar,
-  useViewShell,
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
@@ -94,41 +93,11 @@ const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = REVIEWS_SCOPES.map(
 /** The board's status filter: open pull requests on their way, and merged ones. */
 const BOARD_STATUSES = ['open', 'merged'];
 
-/** The status toggle above the list, for touch layouts and a hidden sidebar. */
+/** Touch keeps quick status tabs below its navigation tabs. */
 function ReviewsHeaderStatusTabs(props: { children: JSX.Element }) {
-  const shell = useViewShell();
   return (
-    <Show
-      when={
-        isTouchDevice() ||
-        shell.breakpoints.narrow?.() ||
-        shell.aside.isCollapsed()
-      }
-    >
-      <div class="mt-3 min-w-0 overflow-x-auto">{props.children}</div>
-    </Show>
-  );
-}
-
-/** Shown in the list header when the sidebar, with its own search, is hidden. */
-function ReviewsListScopeHeading(props: {
-  title: string;
-  search: string;
-  onSearchChange: (search: string) => void;
-}) {
-  const shell = useViewShell();
-  return (
-    <Show when={shell.breakpoints.narrow?.() || shell.aside.isCollapsed()}>
-      <div class="flex h-8 min-w-0 items-center">
-        <h2 class="truncate text-xl font-semibold text-ink">{props.title}</h2>
-      </div>
-      <SearchBar
-        label="Search reviews"
-        value={props.search}
-        onValueChange={props.onSearchChange}
-        placeholder="Search reviews"
-        class="max-w-md"
-      />
+    <Show when={isTouchDevice()}>
+      <div class="min-w-0 overflow-x-auto px-4 pb-2">{props.children}</div>
     </Show>
   );
 }
@@ -339,23 +308,11 @@ function ReviewsRoot() {
   });
   const list = () => (
     <>
-      <ReviewsListTopBar />
-      <ViewShell.Header>
-        <Show
-          when={isTouchDevice()}
-          fallback={
-            <div class="flex min-w-0 flex-col gap-3">
-              <ReviewsListScopeHeading
-                title={scopeTitle()}
-                search={search()}
-                onSearchChange={setSearch}
-              />
-              <div class="flex min-w-0 items-center justify-end gap-3">
-                <ReviewsControls {...controls()} />
-              </div>
-            </div>
-          }
-        >
+      <ReviewsListTopBar>
+        <ReviewsControls {...controls()} />
+      </ReviewsListTopBar>
+      <Show when={isTouchDevice()}>
+        <ViewShell.Header>
           <div class="flex min-w-0 flex-col gap-3">
             <div class="h-10 min-w-0 flex-1">
               <PillTabs
@@ -373,20 +330,20 @@ function ReviewsRoot() {
               placeholder="Search reviews"
             />
           </div>
-        </Show>
-        {/* The sidebar holds the toggle; without one it sits above the list. */}
-        <Show when={statusToggle()}>
-          {(status) => (
-            <ReviewsHeaderStatusTabs>
-              <ReviewsStatusTabs
-                value={status().value}
-                onChange={status().onChange}
-                class="h-auto max-w-sm"
-              />
-            </ReviewsHeaderStatusTabs>
-          )}
-        </Show>
-      </ViewShell.Header>
+        </ViewShell.Header>
+      </Show>
+      {/* Desktop status stays in the sidebar and filter menu. */}
+      <Show when={statusToggle()}>
+        {(status) => (
+          <ReviewsHeaderStatusTabs>
+            <ReviewsStatusTabs
+              value={status().value}
+              onChange={status().onChange}
+              class="h-auto max-w-sm"
+            />
+          </ReviewsHeaderStatusTabs>
+        )}
+      </Show>
       <ViewShell.Content>
         <Show
           when={boardVisible()}

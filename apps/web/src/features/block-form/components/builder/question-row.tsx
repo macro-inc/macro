@@ -1,4 +1,4 @@
-import Spinner from '@phosphor/spinner.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { Badge, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { DraftInput } from './draft-input';

@@ -2,18 +2,19 @@ import {
   SettingsButton as Button,
   SettingsSheetContext,
 } from '@app/features/settings/primitives';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Check from '@icon/system/regular/check.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import User from '@icon/system/regular/user.svg';
+import Users from '@icon/system/regular/users.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Tabs } from '@kobalte/core/tabs';
-import CaretDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
-import Plus from '@phosphor/plus.svg';
-import User from '@phosphor/user.svg';
-import Users from '@phosphor/users.svg';
 import {
   createMemo,
   createSignal,
   For,
   mapArray,
+  onMount,
   Show,
   useContext,
 } from 'solid-js';
@@ -63,7 +64,14 @@ function CreateAction(props: {
   );
 }
 
-export function SchedulingSettingsView() {
+function CreateBookingLinkRequest(props: { onCreate: () => void }) {
+  onMount(props.onCreate);
+  return null;
+}
+
+export function SchedulingSettingsView(
+  props: { createBookingLink?: boolean; onCloseBookingLink?: () => void } = {}
+) {
   const capabilities = useScheduling();
   const inSheet = useContext(SettingsSheetContext);
   const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -87,17 +95,42 @@ export function SchedulingSettingsView() {
       (id) => {
         const scope = () =>
           capabilities.scopes().find((item) => item.id === id)!;
-        return createSchedulingOwner(capabilities, scope, () => ({
+        const owner = createSchedulingOwner(capabilities, scope, () => ({
           from: new Date(`${bookingFrom()}T00:00:00`).toISOString(),
           to: new Date(
             `${shiftReportDate(bookingTo(), 1)}T00:00:00`
           ).toISOString(),
         }));
+        return {
+          ...owner,
+          closeEventEditor: () => {
+            owner.closeEventEditor();
+            if (props.createBookingLink && !scope().teamId)
+              props.onCloseBookingLink?.();
+          },
+        };
       }
     )
   );
   const activeOwners = () =>
     owners().filter((owner) => owner.scope().id === activeOwnerId());
+  const requestedOwner = () => {
+    if (!props.createBookingLink) return;
+    return owners().find(
+      (owner) =>
+        !owner.scope().teamId &&
+        owner.scope().canEdit &&
+        owner.source.profile() &&
+        !owner.source.saving()
+    );
+  };
+  const createRequestedBookingLink = (owner: SchedulingOwner) => {
+    setSelectedOwner(owner.scope().id);
+    setSectionTab('links');
+    setSearch('');
+    // Keep any draft already open for this owner.
+    if (!owner.event()) void owner.action(() => owner.createEvent());
+  };
   const matching = (owner: SchedulingOwner) =>
     owner.source
       .profile()
@@ -130,6 +163,13 @@ export function SchedulingSettingsView() {
       data-drawer-scroll-body={inSheet ? true : undefined}
       class="@container/booking-settings h-full min-h-0 overflow-y-auto bg-panel text-ink select-children [overflow-anchor:none]"
     >
+      <Show when={requestedOwner()}>
+        {(owner) => (
+          <CreateBookingLinkRequest
+            onCreate={() => createRequestedBookingLink(owner())}
+          />
+        )}
+      </Show>
       <div
         class="@container mx-auto w-full max-w-[960px] px-8 @max-[600px]/booking-settings:px-4"
         classList={{

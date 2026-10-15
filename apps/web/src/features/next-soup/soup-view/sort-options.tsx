@@ -8,11 +8,11 @@ import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
-import CalendarIcon from '@phosphor/calendar.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import FlagIcon from '@phosphor/flag.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import EditIcon from '@phosphor/pencil-simple.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import FlagIcon from '@icon/system/regular/flag.svg';
+import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import EditIcon from '@icon/system/regular/pencil-simple.svg';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import type { JSX } from 'solid-js';
 

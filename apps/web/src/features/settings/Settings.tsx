@@ -1,4 +1,4 @@
-import { useViewShell, ViewShell } from '@app/components/view-shell';
+import { ViewShell } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   useParams,
@@ -270,12 +270,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
   );
 }
 
-/** Reserve toolbar space only when the navigation controls are visible. */
+/** Workspace search shares the same main header position as other blocks. */
 function SettingsNavigationBar() {
-  const shell = useViewShell();
   return (
-    <Show when={shell.aside.isCollapsed() || shell.aside.isOverlay()}>
-      <ViewShell.TopBar />
-    </Show>
+    <ViewShell.TopBar workspaceActions>
+      <h1 class="min-w-0 flex-1 truncate text-sm font-semibold">Settings</h1>
+    </ViewShell.TopBar>
   );
 }

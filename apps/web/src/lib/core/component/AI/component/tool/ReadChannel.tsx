@@ -1,5 +1,5 @@
 import { useChannelName } from '@core/context/channels';
-import EyeIcon from '@phosphor-icons/core/regular/eye.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
 import {
   addDays,
   isEqual,

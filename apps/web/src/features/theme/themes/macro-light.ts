@@ -6,13 +6,10 @@ export const macroLightTheme = {
   version: 3,
   mode: 'light',
   colorTokens: {
-    'surface-0': 'oklch(0.964 0 59deg)',
-    'surface-1':
-      'color-mix(in srgb, var(--color-surface-0) 30%, var(--color-surface-4))',
-    'surface-2':
-      'color-mix(in srgb, var(--color-surface-0) 15%, var(--color-surface-4))',
-    'surface-3':
-      'color-mix(in srgb, var(--color-surface-0) 7%, var(--color-surface-4))',
+    'surface-0': 'rgb(253, 253, 253)',
+    'surface-1': 'var(--color-surface-4)',
+    'surface-2': 'var(--color-surface-4)',
+    'surface-3': 'var(--color-surface-4)',
     'surface-4': 'oklch(1 0 59deg)',
     'content-0': 'oklch(0.16 0 59deg)',
     'content-1': 'oklch(0.4 0 59deg)',
@@ -45,12 +42,12 @@ export const macroLightTheme = {
     'link-hover': 'var(--color-accent)',
     'link-visited': 'var(--color-accent)',
     page: 'var(--color-surface-0)',
-    panel: 'var(--color-surface-4)',
+    panel: 'var(--color-surface-0)',
     dialog: 'var(--color-surface-3)',
     menu: 'var(--color-surface-3)',
     tooltip: 'var(--color-surface-2)',
     toast: 'var(--color-surface-2)',
-    input: 'transparent',
+    input: 'var(--color-surface-4)',
     'input-focus': 'var(--color-surface-1)',
     message: 'var(--color-surface-1)',
     hover: 'color-mix(in oklch, var(--color-content-0) 3%, transparent)',

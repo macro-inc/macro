@@ -1,13 +1,13 @@
 import { openExternalUrl } from '@core/util/url';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import Check from '@phosphor/check.svg';
-import Clock from '@phosphor/clock.svg';
-import Info from '@phosphor/info.svg';
-import MapPin from '@phosphor/map-pin.svg';
-import PauseCircle from '@phosphor/pause-circle.svg';
-import Users from '@phosphor/users.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import X from '@phosphor/x.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Info from '@icon/system/regular/info.svg';
+import MapPin from '@icon/system/regular/map-pin.svg';
+import PauseCircle from '@icon/system/regular/pause-circle.svg';
+import Users from '@icon/system/regular/users.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -330,7 +330,7 @@ export function CalendarInviteCard(props: {
                 <Show when={conference() && props.actions?.openExternal}>
                   <Button
                     variant="ghost"
-                    class="h-10 gap-1.5 bg-accent px-3.5 text-sm font-semibold text-accent-contrast"
+                    class="h-10 gap-1.5 bg-ink px-3.5 text-sm font-semibold text-surface-4"
                     aria-label="Join meeting"
                     onClick={() => props.actions?.openExternal?.(conference()!)}
                   >

@@ -1,4 +1,9 @@
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import {
   DATABASE_QUERY_CHART_MODES,
   type DatabaseQueryDisplayMode,
@@ -6,11 +11,6 @@ import {
   isDatabaseQueryDisplayMode,
 } from '@macro-inc/lexical-core/nodes/databaseQueryData';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CodeIcon from '@phosphor/code.svg';
-import PlayIcon from '@phosphor/play.svg';
-import TableIcon from '@phosphor/table.svg';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@ui/components/Hotkey';
 import {

@@ -22,6 +22,7 @@ export function EntityDetailTopBar(
       <div class="ml-auto flex shrink-0 items-center gap-1">
         <SidePanel.HeaderActionsOutlet />
         {props.children}
+        <SidePanel.HeaderActionsOutlet placement="trailing" />
         <SidePanel.Toggle />
       </div>
     </ViewShell.TopBar>

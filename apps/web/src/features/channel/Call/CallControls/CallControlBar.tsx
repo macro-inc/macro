@@ -1,11 +1,11 @@
-import CaretUp from '@phosphor/caret-up.svg';
-import Image from '@phosphor/image.svg';
-import Microphone from '@phosphor/microphone.svg';
-import MicrophoneSlash from '@phosphor/microphone-slash.svg';
-import PhoneDisconnect from '@phosphor/phone-disconnect.svg';
-import Screencast from '@phosphor/screencast.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import Image from '@icon/system/regular/image.svg';
+import Microphone from '@icon/system/regular/microphone.svg';
+import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
+import PhoneDisconnect from '@icon/system/regular/phone-disconnect.svg';
+import Screencast from '@icon/system/regular/screencast.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
 import { Button } from '@ui';
 import {
   createSignal,

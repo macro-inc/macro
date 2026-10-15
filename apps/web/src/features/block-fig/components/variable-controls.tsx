@@ -14,9 +14,9 @@ import type {
   VariableInfo,
   VariableValueInfo,
 } from '@core/fig-engine/design-types';
+import Hexagon from '@icon/system/regular/hexagon.svg';
+import LinkBreak from '@icon/system/regular/link-break.svg';
 import { Popover } from '@kobalte/core/popover';
-import Hexagon from '@phosphor/hexagon.svg';
-import LinkBreak from '@phosphor/link-break.svg';
 import { Layer } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { splitStyleName } from '../core/design-system';

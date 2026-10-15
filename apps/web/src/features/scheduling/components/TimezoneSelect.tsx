@@ -1,8 +1,8 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { cn, Layer } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
@@ -43,7 +43,7 @@ const VirtualizedListbox = () => {
                 item={item}
                 class="group flex w-full cursor-default items-center gap-1.5 rounded-lg p-1.5 px-2 text-left text-sm data-highlighted:bg-ink/5"
               >
-                <span class="flex size-3.5 shrink-0 items-center justify-center text-accent">
+                <span class="flex size-3.5 shrink-0 items-center justify-center text-ink">
                   <Combobox.ItemIndicator>
                     <CheckIcon class="size-3" />
                   </Combobox.ItemIndicator>

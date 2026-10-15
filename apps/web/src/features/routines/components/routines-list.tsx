@@ -1,5 +1,10 @@
-import { SearchBar, ViewShell } from '@app/components/view-shell';
-import ClockIcon from '@phosphor/clock-clockwise.svg';
+import {
+  SearchBar,
+  SidebarActionOverride,
+  ViewShell,
+} from '@app/components/view-shell';
+import { SidebarCreateAction } from '@app/components/view-shell/SidebarCreateAction';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
@@ -26,31 +31,40 @@ export function RoutinesList(props: {
     );
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col">
-      <ViewShell.TopBar>
+      <ViewShell.TopBar
+        controls={
+          <div class="flex min-w-0 items-center gap-2">
+            <SidebarActionOverride
+              title="Routines"
+              search={
+                <SearchBar
+                  ref={props.searchRef}
+                  label="Search routines"
+                  placeholder="Search routines"
+                  value={search()}
+                  onValueChange={setSearch}
+                  onEscape={() => list?.focus()}
+                  class="h-8 w-60 @max-[520px]/split-header:w-36 @max-[360px]/split-header:w-28"
+                />
+              }
+              create={() => (
+                <SidebarCreateAction
+                  aria-label="Create Routine"
+                  onClick={props.onCreate}
+                >
+                  New
+                </SidebarCreateAction>
+              )}
+            />
+          </div>
+        }
+        workspaceActions
+        class="h-12 gap-3 px-4 not-touch:pl-4 touch:flex touch:mt-[var(--safe-top,0px)]"
+      >
         <h1 class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
           Routines
         </h1>
       </ViewShell.TopBar>
-      <ViewShell.Header>
-        <h1 class="mb-3 text-xl font-semibold tracking-[-0.03em] text-ink not-touch:hidden">
-          Routines
-        </h1>
-        <div class="flex min-w-0 items-center justify-between gap-3">
-          <SearchBar
-            ref={props.searchRef}
-            label="Search routines"
-            placeholder="Search routines"
-            value={search()}
-            onValueChange={setSearch}
-            onEscape={() => list?.focus()}
-            class="max-w-md flex-1"
-            hotkey="cmd+f"
-          />
-          <Button variant="outline" onClick={props.onCreate}>
-            Create Routine
-          </Button>
-        </div>
-      </ViewShell.Header>
       <Show when={props.error}>
         <div
           role="alert"

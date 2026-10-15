@@ -1,4 +1,4 @@
-import Spinner from '@phosphor/spinner.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import type { Component, JSX } from 'solid-js';
 
 export const CircleSpinner: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (

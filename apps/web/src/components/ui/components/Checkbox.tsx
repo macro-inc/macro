@@ -1,6 +1,6 @@
+import CheckIcon from '@icon/system/regular/check.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
 import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
-import CheckIcon from '@phosphor/check.svg';
-import MinusIcon from '@phosphor/minus.svg';
 import type { ComponentProps } from 'solid-js';
 import { splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
@@ -26,13 +26,13 @@ type IndicatorProps = ComponentProps<typeof KobalteCheckbox.Indicator>;
 type LabelProps = ComponentProps<typeof KobalteCheckbox.Label>;
 
 const CONTROL_CLASS = cn(
-  'inline-flex items-center justify-center size-4 shrink-0 rounded-sm text-surface',
+  'inline-flex items-center justify-center size-4 shrink-0 rounded-sm text-surface-4',
   'bg-surface border-1 border-edge',
-  'data-checked:bg-accent data-checked:border-accent',
-  'data-indeterminate:bg-accent data-indeterminate:border-accent',
+  'data-checked:bg-ink data-checked:border-ink',
+  'data-indeterminate:bg-ink data-indeterminate:border-ink',
   'data-disabled:opacity-50 data-disabled:cursor-not-allowed',
   'data-invalid:border-failure',
-  'peer-focus-visible:ring-2 peer-focus-visible:ring-accent'
+  'peer-focus-visible:ring-2 peer-focus-visible:ring-edge-focus'
 );
 
 function CheckboxIndicator(props: IndicatorProps) {
@@ -107,12 +107,12 @@ export const Checkbox = Object.assign(
 
 export const SingleSelectCheck = (props: { active: boolean }) => (
   <CheckIcon
-    class={cn('size-3 text-accent shrink-0', !props.active && 'hidden')}
+    class={cn('size-3 text-ink shrink-0', !props.active && 'hidden')}
   />
 );
 
 /**
- * Inline checkbox affordance — a small square that fills accent when checked
+ * Inline checkbox affordance — a small square that fills with contrasting ink when checked
  * and shows an outlined empty box when not. Matches the soup-menu checkbox
  * pattern. Visual-only; pair with a clickable parent for the actual toggle.
  */
@@ -122,7 +122,7 @@ export const InlineCheckbox = (props: { checked: boolean }) => (
     class={cn(
       'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
       props.checked
-        ? 'bg-accent text-surface'
+        ? 'bg-ink text-surface-4'
         : 'bg-transparent border-1 border-edge-muted text-transparent'
     )}
   >

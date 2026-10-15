@@ -1,4 +1,4 @@
-import GitMerge from '@phosphor/git-merge.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
 import { Button, type ButtonSize, cn, confirmDialog } from '@ui';
 import { getOwner, type Owner, Show } from 'solid-js';
 import {
@@ -82,7 +82,7 @@ export function MergePullRequestButton(props: {
       })}
     >
       <Button
-        variant="success"
+        variant="outline"
         size={props.size ?? 'sm'}
         noTouchResize
         class={cn('shrink-0', props.class)}

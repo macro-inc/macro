@@ -1,7 +1,7 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import type { JSX } from 'solid-js';
 

@@ -36,23 +36,23 @@ import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
 import { openExternalUrl } from '@core/util/url';
 import MacroEmbed from '@icon/macro-embed.svg';
-import CollapseInlinePreview from '@phosphor/arrows-in-line-horizontal.svg';
-import ExpandInlinePreview from '@phosphor/arrows-out-line-horizontal.svg';
-import MessageIcon from '@phosphor/chat-circle.svg';
-import ThreadIcon from '@phosphor/chats-circle.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import HighlightIcon from '@phosphor/highlighter-circle.svg';
-import Link from '@phosphor/link.svg';
-import MapPinIcon from '@phosphor/map-pin-simple.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
-import UsersIcon from '@phosphor/users.svg';
+import CollapseInlinePreview from '@icon/system/regular/arrows-in-line-horizontal.svg';
+import ExpandInlinePreview from '@icon/system/regular/arrows-out-line-horizontal.svg';
+import MessageIcon from '@icon/system/regular/chat-circle.svg';
+import ThreadIcon from '@icon/system/regular/chats-circle.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import ColumnsPlusRight from '@icon/system/regular/columns-plus-right.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import HighlightIcon from '@icon/system/regular/highlighter-circle.svg';
+import Link from '@icon/system/regular/link.svg';
+import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import TextAlignLeftIcon from '@icon/system/regular/text-align-left.svg';
+import TrashSimple from '@icon/system/regular/trash-simple.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import {
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
@@ -65,7 +65,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Card, cn, Dropdown, Item } from '@ui';
+import { Card, cn, Dropdown, Item, Surface } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
@@ -762,7 +762,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
             <Show when={canOpenInChat()}>
               <Dropdown.Item onSelect={handleOpenInChat}>
                 <SparkleIcon class="size-4" />
-                Ask Macro
+                Ask AI
               </Dropdown.Item>
             </Show>
             <Dropdown.Item onSelect={handleCopy}>
@@ -1024,8 +1024,8 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
 /**
  * Floating hover-card preview for document references. This is the shell used by
  * {@link import('./ItemPreview').ItemPreview} hover cards: a fixed-width,
- * floating, rounded filled card with a semantic border and drop
- * shadow, plus mouse-enter/leave handling to keep the card alive while hovered.
+ * floating card using the shared menu surface, plus mouse-enter/leave handling
+ * to keep the card alive while hovered.
  *
  * The reusable body lives in {@link DocumentPreviewContent}; this component only
  * adds the floating/highlight chrome around it.
@@ -1042,11 +1042,7 @@ export function PopupPreview(
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Card
-        variant="filled"
-        depth={2}
-        class="rounded-xl shadow-lg shadow-drop-shadow"
-      >
+      <Surface depth={2} class="menu-surface rounded-xl size-auto" hideBorder>
         <Suspense fallback={<DocumentPreviewSkeleton />}>
           <DocumentPreviewContent
             delete={props.delete}
@@ -1057,7 +1053,7 @@ export function PopupPreview(
             useFallbackData={props.useFallbackData}
           />
         </Suspense>
-      </Card>
+      </Surface>
     </div>
   );
 }

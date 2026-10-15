@@ -6,7 +6,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import ProjectIcon from '@phosphor/stack.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createLazyMemo } from '@solid-primitives/memo';

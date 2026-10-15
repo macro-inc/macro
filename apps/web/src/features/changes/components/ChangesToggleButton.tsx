@@ -1,4 +1,4 @@
-import SquareSplitHorizontalIcon from '@phosphor/square-split-horizontal.svg';
+import SquareSplitHorizontalIcon from '@icon/system/regular/square-split-horizontal.svg';
 import { Button } from '@ui';
 
 /** Toggles the changes pane; totals live beside the pane's branch range. */

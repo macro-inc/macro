@@ -1,6 +1,6 @@
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import ChevronDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import ChevronDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Button, cn } from '@ui';
 import type { Accessor } from 'solid-js';
 import { Show } from 'solid-js';

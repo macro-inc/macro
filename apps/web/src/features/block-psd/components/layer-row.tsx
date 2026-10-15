@@ -8,19 +8,19 @@
  */
 
 import type { LayerRow as Row } from '@core/psd-engine/types';
-import ArrowBendDownRight from '@phosphor/arrow-bend-down-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CircleHalf from '@phosphor/circle-half.svg';
-import Drop from '@phosphor/drop-half.svg';
-import Eye from '@phosphor/eye.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import FolderSimple from '@phosphor/folder-simple.svg';
-import FrameCorners from '@phosphor/frame-corners.svg';
-import LockSimple from '@phosphor/lock-simple.svg';
-import Shapes from '@phosphor/shapes.svg';
-import Stack from '@phosphor/stack.svg';
-import TextT from '@phosphor/text-t.svg';
+import ArrowBendDownRight from '@icon/system/regular/arrow-bend-down-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CircleHalf from '@icon/system/regular/circle-half.svg';
+import Drop from '@icon/system/regular/drop-half.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import FolderSimple from '@icon/system/regular/folder-simple.svg';
+import FrameCorners from '@icon/system/regular/frame-corners.svg';
+import LockSimple from '@icon/system/regular/lock-simple.svg';
+import Shapes from '@icon/system/regular/shapes.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import TextT from '@icon/system/regular/text-t.svg';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 
 /** Transparency, as Photoshop's checkerboard (literal colors: it is data). */

@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import FilePlus from '@phosphor-icons/core/regular/file-plus.svg';
+import FilePlus from '@icon/system/regular/file-plus.svg';
 import { Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';

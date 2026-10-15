@@ -300,7 +300,7 @@ export const settingsRoute = defineRoute({
       .default(settingsTabToSlug('Account')),
   }),
   claim: () => ({ namespace: 'component', id: 'settings' }),
-  externalSearch: ['pair', 'createAgent'],
+  externalSearch: ['pair', 'createAgent', 'createBookingLink'],
 });
 
 export const agentsRoute = defineRoute({

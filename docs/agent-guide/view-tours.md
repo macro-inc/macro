@@ -40,7 +40,7 @@ and highlights.
   Agents), then Create for automations.
 - **Channels:** channels and DMs, creation, then threads, @mentions, and calls,
   which wait on the channel list until a conversation is open. No Slack action.
-- **Email:** Signal/Noise, tags, then keyboard shortcuts.
+- **Email:** Signal/Noise in the main top bar (available with the sidebar collapsed), tags, then keyboard shortcuts.
 - **Customers:** Companies and People records, relationship details, then the
   **New** menu.
 - **Calendar:** calendar sources and copy availability (beacon on the sidebar

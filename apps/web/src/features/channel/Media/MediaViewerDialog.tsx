@@ -1,10 +1,10 @@
 import { Lightbox, LightboxToolbar } from '@core/component/Lightbox';
 
 import { isMobile } from '@core/mobile/isMobile';
+import ChevronLeftIcon from '@icon/system/regular/caret-left.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import ChevronLeftIcon from '@phosphor/caret-left.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
 import type { MediaItem } from './media-items';

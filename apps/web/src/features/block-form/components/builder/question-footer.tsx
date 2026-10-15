@@ -1,10 +1,10 @@
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Copy from '@phosphor/copy.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import Rows from '@phosphor/rows.svg';
-import Trash from '@phosphor/trash.svg';
-import Warning from '@phosphor/warning.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import Rows from '@icon/system/regular/rows.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import Warning from '@icon/system/regular/warning.svg';
 import { Button, Dropdown, ToggleSwitch } from '@ui';
 import { For } from 'solid-js';
 

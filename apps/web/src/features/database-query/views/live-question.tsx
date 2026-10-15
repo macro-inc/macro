@@ -1,8 +1,8 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
+import LightningIcon from '@icon/system/regular/lightning.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import LightningIcon from '@phosphor/lightning.svg';
-import XIcon from '@phosphor/x.svg';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { AnswerTitleField } from '../components/answer-title-field';
 import { QueryResults, ScalarValue } from '../components/query-results';

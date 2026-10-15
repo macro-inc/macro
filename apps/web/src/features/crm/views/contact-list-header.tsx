@@ -1,5 +1,5 @@
 import { useListLayout } from '@entity/composed/list-entity/shared';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { contactGridTemplate } from '../components/contact-grid-template';

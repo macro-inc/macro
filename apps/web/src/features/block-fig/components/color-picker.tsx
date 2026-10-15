@@ -1,4 +1,5 @@
 import { InspectorSelect } from './inspector-select';
+
 /**
  * Figma's color picker: a saturation and brightness square, hue and
  * opacity sliders, the eyedropper (where the browser has one), the value
@@ -7,8 +8,8 @@ import { InspectorSelect } from './inspector-select';
  * one drag is one undo step. Presentational.
  */
 
+import Eyedropper from '@icon/system/regular/eyedropper.svg';
 import { Slider } from '@kobalte/core/slider';
-import Eyedropper from '@phosphor/eyedropper.svg';
 import { createSignal, For, Index, Show } from 'solid-js';
 import {
   COLOR_FORMATS,

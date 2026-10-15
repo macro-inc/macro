@@ -5,9 +5,9 @@
  */
 
 import { isCommitKey } from '@app/features/block-fig/core/shortcuts';
-import FrameCorners from '@phosphor/frame-corners.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import FrameCorners from '@icon/system/regular/frame-corners.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, Show } from 'solid-js';
 import { toRect } from '../core/geometry';

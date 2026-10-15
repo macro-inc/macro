@@ -1,9 +1,9 @@
+import ArrowClockwise from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowsHorizontal from '@icon/system/regular/arrows-horizontal.svg';
+import ArrowsVertical from '@icon/system/regular/arrows-vertical.svg';
+import Lock from '@icon/system/regular/lock-simple.svg';
+import LockOpen from '@icon/system/regular/lock-simple-open.svg';
 import type { Alignment } from '@macro-inc/graphics';
-import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
-import ArrowsHorizontal from '@phosphor/arrows-horizontal.svg';
-import ArrowsVertical from '@phosphor/arrows-vertical.svg';
-import Lock from '@phosphor/lock-simple.svg';
-import LockOpen from '@phosphor/lock-simple-open.svg';
 import { Button, ButtonGroup } from '@ui';
 import { Show } from 'solid-js';
 import type { LayoutField } from '../core/selection-layout';

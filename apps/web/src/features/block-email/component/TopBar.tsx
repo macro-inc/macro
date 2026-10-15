@@ -7,6 +7,8 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Show } from 'solid-js';
 import { EmailThreadControls } from './EmailThreadControls';
 import {
   type EmailThreadToolsOptions,
@@ -37,12 +39,14 @@ export function TopBar(props: EmailThreadToolsOptions) {
         />
       </SplitHeaderLeft>
 
-      <SplitHeaderRight>
-        <EmailThreadControls {...controls} />
-      </SplitHeaderRight>
+      <Show when={isTouchDevice()}>
+        <SplitHeaderRight>
+          <EmailThreadControls {...controls} />
+        </SplitHeaderRight>
+      </Show>
 
       <ResponsiveBlockToolbar
-        tools={tools}
+        tools={isTouchDevice() ? tools : []}
         menuTools={menuTools}
         ops={[]}
         id={props.id}

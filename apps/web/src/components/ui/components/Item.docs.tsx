@@ -1,9 +1,9 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import CheckCircle from '@phosphor/check-circle.svg';
-import Circle from '@phosphor/circle.svg';
-import FilePdf from '@phosphor/file-pdf.svg';
-import FileText from '@phosphor/file-text.svg';
-import Heart from '@phosphor/heart.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import Circle from '@icon/system/regular/circle.svg';
+import FilePdf from '@icon/system/regular/file-pdf.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import Heart from '@icon/system/regular/heart.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { Badge } from './Badge';
 import { Button } from './Button';

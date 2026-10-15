@@ -56,10 +56,10 @@ function ComposeFieldRow(props: {
   return (
     <div
       class={cn(
-        'flex gap-2 border-b border-edge-muted focus-within:border-ink/20',
+        'flex gap-2',
         ctx.isMobile() ? 'items-start py-1' : 'items-center py-3'
       )}
-      classList={{ 'border-accent bg-accent/10': isDragOver() }}
+      classList={{ 'bg-accent/10': isDragOver() }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -74,7 +74,14 @@ function ComposeFieldRow(props: {
       >
         {props.label}
       </div>
-      <div class="flex-1 min-w-0">{props.children}</div>
+      <div
+        class={cn(
+          'relative flex-1 min-w-0 after:pointer-events-none after:absolute after:left-1 after:right-0 after:border-b after:border-edge-frame/50',
+          ctx.isMobile() ? 'after:-bottom-1' : 'after:-bottom-3'
+        )}
+      >
+        {props.children}
+      </div>
     </div>
   );
 }
@@ -334,7 +341,7 @@ export function ComposeRecipients(props: {
           fallback={
             <button
               type="button"
-              class="w-full flex items-center gap-2 py-1 border-b border-edge-muted text-left"
+              class="w-full flex items-center gap-2 py-1 text-left"
               onClick={expand}
             >
               <span class="text-sm shrink-0 text-ink-placeholder min-h-9 flex items-center">
@@ -348,7 +355,7 @@ export function ComposeRecipients(props: {
         >
           {ccRow(rowFocusHandlers('cc'))}
           {bccRow(rowFocusHandlers('bcc'))}
-          <div class="flex items-center gap-2 py-1 border-b border-edge-muted">
+          <div class="flex items-center gap-2 py-1">
             <div class="text-sm shrink-0 text-ink-placeholder">From:</div>
             <div class="flex-1 min-w-0 min-h-9 flex items-center">
               <FromInboxSelector

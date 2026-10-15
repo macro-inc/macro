@@ -31,7 +31,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { URL_PARAMS } from '../constants';
 import type { CanvasDocumentChrome } from './CanvasDocument';
@@ -91,7 +91,7 @@ export function TopBar(props: { state: CanvasDocumentChrome }) {
 
   const tools: BlockTool[] = [
     {
-      label: 'Ask Macro',
+      label: 'Ask AI',
       icon: ChatWithAgentIcon,
       action: () =>
         openChatWithAgent({

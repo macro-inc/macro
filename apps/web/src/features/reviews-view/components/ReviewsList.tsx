@@ -23,12 +23,12 @@ import {
   ListEntity,
   ListLayoutProvider,
 } from '@entity';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import SplitIcon from '@icon/system/regular/columns.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import StarIcon from '@icon/system/regular/star.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import SplitIcon from '@phosphor/columns.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
-import StarIcon from '@phosphor/star.svg';
 import type { GithubLinkStatus } from '@queries/auth/github-link';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';

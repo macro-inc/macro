@@ -1,6 +1,6 @@
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import type { GithubLinkStatus } from '@queries/auth/github-link';
 import { EmptyStatePanel } from '@ui';
 import { Match, Switch } from 'solid-js';

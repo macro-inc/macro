@@ -1,4 +1,4 @@
-import Link from '@phosphor-icons/core/regular/link.svg';
+import Link from '@icon/system/regular/link.svg';
 import type { BookingLinkResult } from '@service-cognition/generated/tools/types';
 import { createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';

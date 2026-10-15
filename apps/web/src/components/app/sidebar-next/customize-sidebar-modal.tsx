@@ -1,8 +1,8 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretUpIcon from '@phosphor/caret-up.svg';
-import DotsSixVerticalIcon from '@phosphor/dots-six-vertical.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg';
+import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import {
   closestCenter,
   createSortable,

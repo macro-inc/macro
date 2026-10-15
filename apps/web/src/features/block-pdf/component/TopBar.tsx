@@ -35,8 +35,8 @@ import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { useCopyLink } from '@core/util/useCopyLink';
 import IconShared from '@icon/share.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import Printer from '@phosphor/printer.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import Printer from '@icon/system/regular/printer.svg';
 import { blockNameToItemType } from '@service-storage/itemType';
 import { createCallback } from '@solid-primitives/rootless';
 import { usePdfDocument } from '../context/pdf-document-context';
@@ -168,7 +168,7 @@ export function TopBar() {
 
   const menuTools: BlockTool[] = [
     {
-      label: 'Ask Macro',
+      label: 'Ask AI',
       icon: ChatWithAgentIcon,
       action: () =>
         openChatWithAgent({

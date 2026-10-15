@@ -25,7 +25,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
-import PaperclipIcon from '@phosphor/paperclip.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import { isIOS } from '@solid-primitives/platform';
 import { CollapsedInput, ComposerSurface } from '@ui';
 import {
