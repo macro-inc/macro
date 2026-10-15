@@ -1,0 +1,5 @@
+.build*/
+.build-device/
+*.xcuserstate
+xcuserdata/
+.DS_Store

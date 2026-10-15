@@ -203,6 +203,10 @@ Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers bl
 
 To run the frontend against hosted services, or to run the local stack, follow [Running locally](docs/RUNNING_LOCALLY.md).
 
+The standalone [native iPhone client](apps/ios/README.md) builds with Xcode. Its
+[operating guide](docs/AGENT_GUIDE/native-ios.md) covers native screens and isolated
+fixture verification.
+
 To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <br />
@@ -213,6 +217,7 @@ To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 macro/
 ├── apps/
 │   ├── web/       SolidJS client — browser, Tauri desktop, mobile
+│   ├── ios/       Native SwiftUI/UIKit iPhone client
 │   └── docs/      docs.macro.com
 ├── services/      42 deployable services, workers, and Lambda handlers
 ├── crates/        167 Rust libraries — domain logic, models, db clients
