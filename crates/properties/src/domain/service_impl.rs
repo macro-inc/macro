@@ -838,6 +838,39 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(entity_id = %task.entity_id()), err)]
+    async fn mark_task_in_progress(&self, task: &EditReceipt) -> Result<bool, PropertiesErr> {
+        if task.entity_type() != AccessEntityType::Document {
+            return Err(PropertiesErr::Validation(
+                "Only tasks can be marked in progress".to_string(),
+            ));
+        }
+        if self.resolve_subject(task).await?.storage_entity_type != EntityType::Task {
+            return Ok(false);
+        }
+        let Some(mutation) = self
+            .repository
+            .transition_entity_property_option(
+                task.entity_id(),
+                EntityType::Task,
+                SystemPropertyKey::STATUS_UUID,
+                &[StatusOption::NOT_STARTED_UUID],
+                StatusOption::IN_PROGRESS_UUID,
+            )
+            .await
+            .map_err(anyhow::Error::from)?
+        else {
+            return Ok(false);
+        };
+        self.publish_property_event(Self::entity_property_updated_event(
+            &mutation.property,
+            &mutation.value,
+            &mutation.previous_value,
+            task,
+        ));
+        Ok(true)
+    }
+
     #[tracing::instrument(
         skip(self, access),
         fields(

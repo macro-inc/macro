@@ -432,6 +432,26 @@ impl PropertiesRepo for PropertiesPgRepo {
         .await
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn transition_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        from: &[Uuid],
+        to: Uuid,
+    ) -> Result<Option<EntityPropertyMutationSnapshot>, Self::Err> {
+        Ok(entity_property_queries::transition_entity_property_option(
+            &self.pool,
+            entity_id,
+            entity_type,
+            property_definition_id,
+            from,
+            to,
+        )
+        .await?)
+    }
+
     #[tracing::instrument(skip(self))]
     async fn add_entity_property_option(
         &self,

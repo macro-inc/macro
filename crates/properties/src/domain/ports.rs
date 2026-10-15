@@ -282,6 +282,18 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         references: Vec<EntityReference>,
     ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
 
+    /// Atomically replace a single-select value with `to` only while it holds
+    /// no option or only options in `from`, attaching the property if needed.
+    /// Returns no snapshot when the current value was kept.
+    fn transition_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        from: &[Uuid],
+        to: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityPropertyMutationSnapshot>, Self::Err>> + Send;
+
     /// Atomically add one option to a multi-select entity property value,
     /// attaching the property if needed. Re-adding a present option is deduped.
     /// Composes with concurrent option changes without a lost update and returns

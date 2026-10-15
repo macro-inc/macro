@@ -639,7 +639,8 @@ Removing the project agent stops assignment to future tasks; it does not cancel
 sessions already started for its tasks.
 For verification, create a task from the project's Tasks tab, then move another
 task into the project through `Add to project…`; both should start the assigned
-agent's normal task session and show its message in the task's Discussion.
+agent's normal task session, show its message in the task's Discussion, and move
+a Not Started task to In Progress.
 
 Overview's Description uses the shared collaborative Markdown editor on the
 project's collab surface and saves automatically; its access follows project
@@ -762,7 +763,14 @@ as message mentions, alongside your own and team agents.
 Select an agent in the task composer, then create the task to start its session.
 For an existing task, add an agent to Assignees and dismiss the picker to save and
 start the session. Discussion gains one message linking to the assigned agent's
-session; progress and final answers stay in that session. The agent retains the
+session; progress and final answers stay in that session. When the agent picks up
+the task, an unset or **Not Started** Status moves to **In Progress**, attributed
+to the agent acting for the assigning user; any other Status is kept. This needs
+the assigning user to have edit access, and a failed status write does not hold
+back the session. The move happens server-side a few seconds after saving; an
+already-open task page shows it after a reload. It also happens when an agent
+that runs on the user's own account (Claude, Codex, Cursor) replies that the
+account must be connected first. The agent retains the
 original task reference in its session instructions and updates the task's
 description or status as appropriate. It must not post or edit discussion messages
 unless explicitly asked. This also applies to task assignments inherited from a

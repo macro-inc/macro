@@ -183,6 +183,69 @@ pub async fn add_entity_property_references(
     Ok(snapshot)
 }
 
+/// Replace a single-select value under the same locks as replacement writes,
+/// but only while it holds no option or only options in `from`. Any other
+/// value, including one that no longer decodes, is kept without a write.
+pub async fn transition_entity_property_option(
+    pool: &Pool<Postgres>,
+    entity_id: &str,
+    entity_type: EntityType,
+    property_definition_id: Uuid,
+    from: &[Uuid],
+    to: Uuid,
+) -> Result<Option<EntityPropertyMutationSnapshot>, PropertyQueryError> {
+    let mut tx = pool.begin().await?;
+    super::property_option_queries::hold_selected_options(&mut tx, property_definition_id, &[to])
+        .await?;
+    let transition = mutate_entity_property_in_transaction(
+        &mut tx,
+        entity_id,
+        entity_type,
+        property_definition_id,
+        |previous| match decode_stored_property_value(previous) {
+            Ok(None) => Ok(Some(PropertyValue::SelectOption(vec![to]))),
+            Ok(Some(PropertyValue::SelectOption(current)))
+                if current.iter().all(|id| from.contains(id)) =>
+            {
+                Ok(Some(PropertyValue::SelectOption(vec![to])))
+            }
+            Ok(Some(_)) | Err(_) => Err(Transition::Kept),
+        },
+    )
+    .await;
+    match transition {
+        Ok(snapshot) => {
+            tx.commit().await?;
+            Ok(Some(snapshot))
+        }
+        Err(Transition::Kept) => {
+            tx.rollback().await?;
+            Ok(None)
+        }
+        Err(Transition::Failed(error)) => Err(error),
+    }
+}
+
+/// Why a conditional transition did not commit.
+enum Transition {
+    /// The current value is not one the transition replaces.
+    Kept,
+    /// The locked read or the write failed.
+    Failed(PropertyQueryError),
+}
+
+impl From<sqlx::Error> for Transition {
+    fn from(error: sqlx::Error) -> Self {
+        Self::Failed(error.into())
+    }
+}
+
+impl From<serde_json::Error> for Transition {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Failed(error.into())
+    }
+}
+
 async fn mutate_entity_property_in_transaction<Error>(
     tx: &mut sqlx::PgConnection,
     entity_id: &str,

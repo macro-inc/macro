@@ -7,7 +7,7 @@ use agent_trigger::domain::project_assignment::ProjectAssignmentService;
 use agent_trigger::domain::service::AgentTriggerService;
 use agent_trigger::domain::sources::{MessageTriggerEvents, TriggerEvents};
 use agent_trigger::domain::task_assignment::{
-    ProjectTaskAssignmentContext, TaskAssignmentContext, process_task_assignment,
+    ProjectTaskAssignmentContext, TaskAssignmentContext, TaskProgress, process_task_assignment,
 };
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
@@ -84,6 +84,21 @@ impl properties::NotificationService for SilentAssignmentNotifications {
     ) -> Result<(), Self::Err> {
         Ok(())
     }
+}
+
+/// Property writes the trigger makes, published like any other property change.
+fn published_properties(pool: &PgPool, publisher: &Publisher) -> impl PropertiesService {
+    PropertiesServiceImpl::new(
+        PropertiesPgRepo::new(pool.clone()),
+        Some(PermissionServiceImpl::new(
+            pool.clone(),
+            Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+                pool.clone(),
+            ))),
+        )),
+        None::<SilentAssignmentNotifications>,
+    )
+    .with_event_broker(publisher.clone())
 }
 
 fn commit_message<M: MacroEventCollection + 'static>(
@@ -220,20 +235,14 @@ async fn run(
         macro_event_broker::GlobalSpawner,
     );
     let project_assignments = ProjectAssignmentService::new(
-        PropertiesServiceImpl::new(
-            PropertiesPgRepo::new(pool.clone()),
-            Some(PermissionServiceImpl::new(
-                pool.clone(),
-                Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-                    pool.clone(),
-                ))),
-            )),
-            None::<SilentAssignmentNotifications>,
-        )
-        .with_event_broker(publisher.clone()),
+        published_properties(&pool, &publisher),
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(pool.clone())),
-        EntityAccessServiceImpl::new(PgAccessRepository::new(pool)),
+        EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
     );
+    let tasks = TaskAssignments {
+        context: task_context,
+        progress: published_properties(&pool, &publisher),
+    };
     let consumer = KafkaEventConsumer::<AgentTriggerConsumerGroup>::from_env(&kafka_brokers)?;
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer);
     consume::<MessageTriggerEvents>(
@@ -246,7 +255,7 @@ async fn run(
             people,
         },
         messages.as_ref(),
-        &task_context,
+        &tasks,
         &project_assignments,
     )
     .await
@@ -259,6 +268,12 @@ struct ContextReaders<Discussions, People> {
     people: People,
 }
 
+/// How an assignment reads its task and moves it into progress.
+struct TaskAssignments<Context, Progress> {
+    context: Context,
+    progress: Progress,
+}
+
 /// Read the trigger topic until it fails, evaluating every committed post.
 async fn consume<Events: TriggerEvents>(
     consumer: KafkaConsumerAdapter<AgentTriggerConsumerGroup, ()>,
@@ -266,7 +281,7 @@ async fn consume<Events: TriggerEvents>(
     publisher: &Publisher,
     readers: &ContextReaders<impl DiscussionReader, impl PeopleDirectory>,
     messages: &dyn MessageServiceApi,
-    task_context: &impl TaskAssignmentContext,
+    tasks: &TaskAssignments<impl TaskAssignmentContext, impl TaskProgress>,
     project_assignments: &ProjectAssignmentService<
         impl PropertiesService,
         impl SystemPropertiesService,
@@ -329,7 +344,8 @@ async fn consume<Events: TriggerEvents>(
                     trigger,
                     publisher,
                     messages,
-                    task_context,
+                    &tasks.context,
+                    &tasks.progress,
                     &readers.people,
                     assignment,
                 )

@@ -3,6 +3,7 @@
 mod initiatives;
 mod options_batch;
 mod project_agents;
+mod task_progress;
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::error::PropertiesErr;

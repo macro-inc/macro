@@ -1,6 +1,6 @@
 use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use system_properties::SystemPropertyKey;
+use system_properties::{StatusOption, SystemPropertyKey};
 
 fn assignment() -> PropertyValue {
     PropertyValue::EntityRef(vec![EntityReference::new(
@@ -296,5 +296,168 @@ async fn assignment_snapshot_waits_for_writers_using_only_row_locks(
 
     assert_eq!(reassigned.previous_value, None);
     assert_eq!(reassigned.value, Some(assignment()));
+    Ok(())
+}
+
+fn status(option: StatusOption) -> Option<PropertyValue> {
+    Some(PropertyValue::SelectOption(vec![option.uuid()]))
+}
+
+async fn start_task(
+    pool: &Pool<Postgres>,
+    task_id: &str,
+) -> Result<Option<EntityPropertyMutationSnapshot>, PropertyQueryError> {
+    transition_entity_property_option(
+        pool,
+        task_id,
+        EntityType::Task,
+        SystemPropertyKey::STATUS_UUID,
+        &[StatusOption::NOT_STARTED_UUID],
+        StatusOption::IN_PROGRESS_UUID,
+    )
+    .await
+}
+
+async fn stored_status(
+    pool: &Pool<Postgres>,
+    task_id: &str,
+) -> anyhow::Result<(Option<serde_json::Value>, chrono::DateTime<chrono::Utc>)> {
+    let row = sqlx::query!(
+        r#"
+        SELECT values as "values: serde_json::Value", updated_at
+        FROM entity_properties
+        WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+        "#,
+        task_id,
+        EntityType::Task as EntityType,
+        SystemPropertyKey::STATUS_UUID,
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok((row.values, row.updated_at))
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn transitions_start_unset_and_listed_statuses(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let empty = Some(PropertyValue::SelectOption(Vec::new()));
+    for stored in [
+        None,
+        Some(None),
+        Some(empty),
+        Some(status(StatusOption::NotStarted)),
+    ] {
+        let task_id = Uuid::now_v7().to_string();
+        if let Some(value) = stored.clone() {
+            upsert_entity_property(
+                &pool,
+                &task_id,
+                EntityType::Task,
+                SystemPropertyKey::STATUS_UUID,
+                value,
+            )
+            .await?;
+        }
+
+        let started = start_task(&pool, &task_id)
+            .await?
+            .expect("an unstarted status moves in progress");
+
+        assert_eq!(started.previous_value, stored.flatten());
+        assert_eq!(started.value, status(StatusOption::InProgress));
+        assert_eq!(
+            stored_status(&pool, &task_id).await?.0,
+            Some(serde_json::to_value(status(StatusOption::InProgress))?)
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn transitions_keep_other_values_without_writing(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let legacy = Some(PropertyValue::Str("legacy status".to_string()));
+    for kept in [
+        status(StatusOption::InProgress),
+        status(StatusOption::InReview),
+        status(StatusOption::Completed),
+        status(StatusOption::Canceled),
+        legacy,
+    ] {
+        let task_id = Uuid::now_v7().to_string();
+        upsert_entity_property(
+            &pool,
+            &task_id,
+            EntityType::Task,
+            SystemPropertyKey::STATUS_UUID,
+            kept,
+        )
+        .await?;
+        let before = stored_status(&pool, &task_id).await?;
+
+        assert!(start_task(&pool, &task_id).await?.is_none());
+        assert_eq!(stored_status(&pool, &task_id).await?, before);
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_status_set_while_the_transition_waits_is_kept(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let task_id = Uuid::now_v7().to_string();
+    upsert_entity_property(
+        &pool,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::STATUS_UUID,
+        status(StatusOption::NotStarted),
+    )
+    .await?;
+
+    let mut tx = pool.begin().await?;
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *tx)
+        .await?;
+    upsert_entity_property_in_transaction(
+        &mut tx,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::STATUS_UUID,
+        status(StatusOption::InReview),
+    )
+    .await?;
+
+    let writer_pool = pool.clone();
+    let writer_task = task_id.clone();
+    let writer = tokio::spawn(async move { start_task(&writer_pool, &writer_task).await });
+    wait_for_blocked_writer(&pool, blocker).await?;
+    tx.commit().await?;
+
+    assert!(writer.await??.is_none());
+    assert_eq!(
+        stored_status(&pool, &task_id).await?.0,
+        Some(serde_json::to_value(status(StatusOption::InReview))?)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn transitions_reject_an_option_outside_the_property(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let task_id = Uuid::now_v7().to_string();
+    let unknown = Uuid::now_v7();
+
+    let error = transition_entity_property_option(
+        &pool,
+        &task_id,
+        EntityType::Task,
+        SystemPropertyKey::STATUS_UUID,
+        &[StatusOption::NOT_STARTED_UUID],
+        unknown,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(error, PropertyQueryError::MissingOption(id) if id == unknown));
     Ok(())
 }

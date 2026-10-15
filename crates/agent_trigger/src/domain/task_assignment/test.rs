@@ -131,8 +131,15 @@ fn only_task_assignees_with_an_invoking_user_trigger() {
 fn access(
     assignment: &TaskAssignment,
 ) -> entity_access::domain::models::EntityAccessReceipt<MessageWrite> {
+    access_with(assignment, entity_access::domain::models::AccessLevel::Edit)
+}
+
+fn access_with(
+    assignment: &TaskAssignment,
+    access_level: entity_access::domain::models::AccessLevel,
+) -> entity_access::domain::models::EntityAccessReceipt<MessageWrite> {
     use entity_access::domain::models::{
-        AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
+        Entity, EntityAccessReceipt, EntityPermission, EntityType,
     };
     EntityAccessReceipt::try_new_authenticated_user(
         assignment.actor.clone(),
@@ -140,9 +147,7 @@ fn access(
             entity_type: EntityType::Document,
             entity_id: assignment.parent.entity_id(),
         },
-        EntityPermission::AccessLevel {
-            access_level: AccessLevel::Edit,
-        },
+        EntityPermission::AccessLevel { access_level },
     )
     .unwrap()
 }
@@ -332,14 +337,26 @@ impl MacroEventBroker for RecordedEvents {
     }
 }
 
-#[tokio::test]
-async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() {
+fn codex_assignment() -> TaskAssignment {
+    let mut assignment = TaskAssignment::from_update(Uuid::now_v7(), &update()).unwrap();
+    assignment.bots = vec![bot_id::CODEX_BOT_ID];
+    assignment
+}
+
+/// Run one authorized Codex assignment and return the session events it
+/// published. A deleted discussion stands in for an opening message the user
+/// removed before a replay.
+async fn run_assignment(
+    assignment: &TaskAssignment,
+    receipt: entity_access::domain::models::EntityAccessReceipt<MessageWrite>,
+    brief: TaskBrief,
+    progress: MockTaskProgress,
+    deleted_discussion: bool,
+) -> Vec<serde_json::Value> {
     use crate::domain::service::*;
     use agent_session::domain::{model::ThreadSession, ports::MockAgentSessionRepo};
     use messages::domain::api::MockMessageCommands;
 
-    let mut assignment = TaskAssignment::from_update(Uuid::now_v7(), &update()).unwrap();
-    assignment.bots = vec![bot_id::CODEX_BOT_ID];
     let mut bots = MockAgentBotLookup::new();
     bots.expect_get_agent()
         .once()
@@ -352,7 +369,6 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
         })
     });
     let mut history = MockThreadHistory::new();
-    let receipt = access(&assignment);
     history
         .expect_authorize_invocation()
         .once()
@@ -376,27 +392,19 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
         MockImplicitTriggerJudge::new(),
         history,
     );
-    let project_id = initiative::domain::models::InitiativeId::generate();
     let mut context = MockTaskAssignmentContext::new();
     context
         .expect_task_brief()
         .once()
         .withf(|access| access.entity().entity_id == "task-1")
-        .returning(move |_| {
-            Box::pin(async move {
-                Ok(Some(TaskBrief {
-                    project: Some(trigger_context::ProjectRef {
-                        id: project_id.as_uuid(),
-                        name: "Exports".to_owned(),
-                    }),
-                    ..brief()
-                }))
-            })
-        });
+        .return_once(move |_| Box::pin(async move { Ok(Some(brief)) }));
     let mut commands = MockMessageCommands::new();
-    let mut message = discussion(&assignment);
+    let mut message = discussion(assignment);
     message.id = event_id;
     message.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::CODEX_BOT_ID);
+    if deleted_discussion {
+        message.deleted_at = Some(Utc::now());
+    }
     commands
         .expect_post_from_event()
         .once()
@@ -405,7 +413,7 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
             Ok(message)
         });
     let mut people = crate::domain::context::MockPeopleDirectory::new();
-    people.expect_people().once().returning(|ids| {
+    people.expect_people().returning(|ids| {
         Box::pin(async move {
             Ok(ids
                 .into_iter()
@@ -418,10 +426,66 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
         })
     });
     let broker = RecordedEvents::default();
-    process_task_assignment(&trigger, &broker, &commands, &context, &people, &assignment)
-        .await
-        .unwrap();
-    let events = broker.0.lock().unwrap();
+    process_task_assignment(
+        &trigger, &broker, &commands, &context, &progress, &people, assignment,
+    )
+    .await
+    .unwrap();
+    broker.0.lock().unwrap().clone()
+}
+
+/// Expect the task to be started by the agent acting for the assigner.
+fn expect_start(
+    assignment: &TaskAssignment,
+    result: Result<bool, PropertiesErr>,
+) -> MockTaskProgress {
+    let assigner = assignment.actor.clone();
+    let mut progress = MockTaskProgress::new();
+    progress
+        .expect_start()
+        .once()
+        .withf(move |task| {
+            task.entity().entity_id == "task-1"
+                && task.get_authenticated_bot_auth().is_ok_and(|bot| {
+                    bot.bot_id() == bot_id::CODEX_BOT_ID
+                        && bot.scope().acting_user_id() == Some(&assigner)
+                })
+        })
+        .return_once(move |_| Box::pin(async move { result }));
+    progress
+}
+
+fn never_started() -> MockTaskProgress {
+    let mut progress = MockTaskProgress::new();
+    progress.expect_start().never();
+    progress
+}
+
+fn only_task(events: &[serde_json::Value]) -> serde_json::Value {
+    assert_eq!(events.len(), 1);
+    events[0]["metadata"]["context"]["task"].clone()
+}
+
+#[tokio::test]
+async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() {
+    let assignment = codex_assignment();
+    let event_id = discussion_id(assignment.event_id, bot_id::CODEX_BOT_ID);
+    let project_id = initiative::domain::models::InitiativeId::generate();
+    let brief = TaskBrief {
+        project: Some(trigger_context::ProjectRef {
+            id: project_id.as_uuid(),
+            name: "Exports".to_owned(),
+        }),
+        ..brief()
+    };
+    let events = run_assignment(
+        &assignment,
+        access(&assignment),
+        brief,
+        expect_start(&assignment, Ok(false)),
+        false,
+    )
+    .await;
     assert_eq!(events.len(), 1);
     let metadata = &events[0]["metadata"];
     let context = &metadata["context"];
@@ -459,6 +523,89 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
         assert!(instructions.contains("description field"));
     }
     assert_eq!(metadata["parent"]["type"], "document");
+}
+
+fn status_brief(status: &str) -> TaskBrief {
+    TaskBrief {
+        status: Some(status.to_owned()),
+        ..brief()
+    }
+}
+
+#[tokio::test]
+async fn a_picked_up_task_moves_in_progress_as_the_agent() {
+    let assignment = codex_assignment();
+    let events = run_assignment(
+        &assignment,
+        access(&assignment),
+        status_brief("Not Started"),
+        expect_start(&assignment, Ok(true)),
+        false,
+    )
+    .await;
+    assert_eq!(only_task(&events)["status"], "In Progress");
+}
+
+#[tokio::test]
+async fn a_status_the_task_keeps_reaches_the_agent_unchanged() {
+    let assignment = codex_assignment();
+    let events = run_assignment(
+        &assignment,
+        access(&assignment),
+        status_brief("In Review"),
+        expect_start(&assignment, Ok(false)),
+        false,
+    )
+    .await;
+    assert_eq!(only_task(&events)["status"], "In Review");
+}
+
+#[tokio::test]
+async fn a_failed_status_move_still_starts_the_session() {
+    let assignment = codex_assignment();
+    let events = run_assignment(
+        &assignment,
+        access(&assignment),
+        status_brief("Not Started"),
+        expect_start(
+            &assignment,
+            Err(PropertiesErr::Repo(anyhow::anyhow!("database unavailable"))),
+        ),
+        false,
+    )
+    .await;
+    assert_eq!(only_task(&events)["status"], "Not Started");
+}
+
+#[tokio::test]
+async fn an_assigner_who_cannot_edit_leaves_the_status_alone() {
+    let assignment = codex_assignment();
+    let events = run_assignment(
+        &assignment,
+        access_with(
+            &assignment,
+            entity_access::domain::models::AccessLevel::Comment,
+        ),
+        status_brief("Not Started"),
+        never_started(),
+        false,
+    )
+    .await;
+    assert_eq!(only_task(&events)["status"], "Not Started");
+}
+
+#[tokio::test]
+async fn a_deleted_discussion_starts_neither_the_session_nor_the_task() {
+    let assignment = codex_assignment();
+    let events = run_assignment(
+        &assignment,
+        access(&assignment),
+        status_brief("Not Started"),
+        never_started(),
+        true,
+    )
+    .await;
+    assert!(events.is_empty());
 }
 
 #[test]

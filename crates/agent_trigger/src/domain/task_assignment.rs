@@ -9,6 +9,9 @@ use trigger_context::{TaskAssignedContext, TaskSnapshot, TriggerContext};
 use crate::domain::context::PeopleDirectory;
 use agent_session::domain::ports::AgentSessionRepo;
 use bot_id::{BotId, BotIdStr};
+use entity_access::domain::models::{
+    AccessError, BotReceiptScope, EntityAccessReceipt, RequiredPermission,
+};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -19,7 +22,8 @@ use messages::domain::{
 };
 use models_properties::{EntityType, service::property_value::PropertyValue};
 use properties::domain::events::EntityPropertyUpdatedMetadata;
-use system_properties::SystemPropertyKey;
+use properties::{EditReceipt, PropertiesErr, PropertiesService};
+use system_properties::{StatusOption, SystemPropertyKey};
 
 mod project_context;
 pub use project_context::ProjectTaskAssignmentContext;
@@ -63,6 +67,21 @@ pub trait TaskAssignmentContext: Send + Sync + 'static {
         &self,
         access: entity_access::domain::models::EntityAccessReceipt<MessageWrite>,
     ) -> impl Future<Output = AgentResult<Option<TaskBrief>>> + Send;
+}
+
+/// The property domain's move of a picked-up task into progress.
+#[cfg_attr(test, mockall::automock)]
+pub trait TaskProgress: Send + Sync + 'static {
+    /// Whether an unset or Not Started status moved to In Progress; any other
+    /// status stays as it was.
+    fn start(&self, task: &EditReceipt)
+    -> impl Future<Output = Result<bool, PropertiesErr>> + Send;
+}
+
+impl<P: PropertiesService> TaskProgress for P {
+    async fn start(&self, task: &EditReceipt) -> Result<bool, PropertiesErr> {
+        self.mark_task_in_progress(task).await
+    }
 }
 
 /// One committed assignment change, with only the newly assigned agents.
@@ -131,12 +150,14 @@ pub async fn process_task_assignment<
     History,
     Broker,
     Context,
+    Progress,
     People,
 >(
     trigger: &AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, History>,
     publisher: &Broker,
     messages: &dyn MessageCommands,
     context: &Context,
+    progress: &Progress,
     people: &People,
     assignment: &TaskAssignment,
 ) -> Result<(), ProcessMessageEventError>
@@ -150,6 +171,7 @@ where
     History: ThreadHistory,
     Broker: MacroEventBroker,
     Context: TaskAssignmentContext,
+    Progress: TaskProgress,
     People: PeopleDirectory,
 {
     for &bot_id in &assignment.bots {
@@ -171,7 +193,7 @@ where
         {
             continue;
         }
-        let Some(brief) = context.task_brief(invocation.access().clone()).await? else {
+        let Some(mut brief) = context.task_brief(invocation.access().clone()).await? else {
             continue;
         };
         let Some(message) = assignment_discussion(
@@ -185,6 +207,9 @@ where
         else {
             continue;
         };
+        if start_task(assignment, bot_id, invocation.access(), progress).await {
+            brief.status = Some(StatusOption::InProgress.display_value().to_owned());
+        }
         let context = assigned_context(assignment, &brief, message.id, people).await?;
         let event = AgentSessionMacroEvent::new_session(NewAgentSessionEvent::AssignedToTask(
             AgentAssignedToTaskEvent {
@@ -317,17 +342,15 @@ fn task_reference(parent: &MessageParent, title: &str) -> String {
     format!("<m-document-mention>{task_reference}</m-document-mention>")
 }
 
-async fn assignment_discussion(
+/// The agent acting for the assigning user on the task. Agent availability and
+/// the user's capability were checked by `authorize_task_assignment`; the agent
+/// spends that same capability, so it can never exceed the user's access.
+fn agent_access<T: RequiredPermission>(
     assignment: &TaskAssignment,
     bot_id: BotId,
-    discussion_id: Uuid,
-    access: entity_access::domain::models::EntityAccessReceipt<MessageWrite>,
-    commands: &dyn MessageCommands,
-) -> Result<Option<messages::domain::models::Message>, ProcessMessageEventError> {
-    use entity_access::domain::models::{BotReceiptScope, EntityAccessReceipt};
-    // Agent availability and the assigning user's capability were checked by
-    // authorize_task_assignment. The response spends that same capability.
-    let access = EntityAccessReceipt::try_new_bot(
+    access: &EntityAccessReceipt<MessageWrite>,
+) -> Result<EntityAccessReceipt<T>, AccessError> {
+    EntityAccessReceipt::try_new_bot(
         bot_id.into(),
         BotReceiptScope::User {
             acting_user: assignment.actor.clone(),
@@ -335,7 +358,44 @@ async fn assignment_discussion(
         access.entity().clone(),
         *access.entity_permission(),
     )
-    .map_err(|_| {
+}
+
+/// Move the task into progress now that its agent picks it up, attributed to
+/// the agent. Returns whether the status moved.
+async fn start_task(
+    assignment: &TaskAssignment,
+    bot_id: BotId,
+    access: &EntityAccessReceipt<MessageWrite>,
+    progress: &impl TaskProgress,
+) -> bool {
+    // An assigner who can no longer edit the task could not move its status either.
+    let Ok(task) = agent_access(assignment, bot_id, access) else {
+        return false;
+    };
+    match progress.start(&task).await {
+        Ok(started) => started,
+        Err(error) => {
+            // The agent can still set the status itself, so a failed write
+            // must not hold back its session.
+            tracing::warn!(
+                error = ?error,
+                task_id = %assignment.parent.entity_id(),
+                bot_id = %bot_id,
+                "could not mark the assigned task in progress"
+            );
+            false
+        }
+    }
+}
+
+async fn assignment_discussion(
+    assignment: &TaskAssignment,
+    bot_id: BotId,
+    discussion_id: Uuid,
+    access: EntityAccessReceipt<MessageWrite>,
+    commands: &dyn MessageCommands,
+) -> Result<Option<messages::domain::models::Message>, ProcessMessageEventError> {
+    let access = agent_access(assignment, bot_id, &access).map_err(|_| {
         ProcessMessageEventError::Discussion(messages::domain::ports::MessageError::Forbidden)
     })?;
     let message = commands

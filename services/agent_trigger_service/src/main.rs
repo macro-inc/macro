@@ -13,7 +13,7 @@ use agent_trigger::domain::project_assignment::ProjectAssignmentService;
 use agent_trigger::domain::service::AgentTriggerService;
 use agent_trigger::domain::sources::{MessageTriggerEvents, TriggerEvents};
 use agent_trigger::domain::task_assignment::{
-    ProjectTaskAssignmentContext, TaskAssignmentContext, process_task_assignment,
+    ProjectTaskAssignmentContext, TaskAssignmentContext, TaskProgress, process_task_assignment,
 };
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, DssTaskAssignmentContext, FastModelTriggerJudge,
@@ -47,6 +47,7 @@ use properties::{
 };
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
+use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use system_properties::{
@@ -105,6 +106,21 @@ impl properties::NotificationService for SilentAssignmentNotifications {
     ) -> Result<(), Self::Err> {
         Ok(())
     }
+}
+
+/// Property writes this worker makes, published like any other property change.
+fn published_properties(pool: &PgPool, publisher: &Publisher) -> impl PropertiesService {
+    PropertiesServiceImpl::new(
+        PropertiesPgRepo::new(pool.clone()),
+        Some(PermissionServiceImpl::new(
+            pool.clone(),
+            Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+                pool.clone(),
+            ))),
+        )),
+        None::<SilentAssignmentNotifications>,
+    )
+    .with_event_broker(publisher.clone())
 }
 
 fn commit_message<M: MacroEventCollection + 'static>(
@@ -221,20 +237,14 @@ async fn run() -> anyhow::Result<()> {
         macro_event_broker::GlobalSpawner,
     );
     let project_assignments = ProjectAssignmentService::new(
-        PropertiesServiceImpl::new(
-            PropertiesPgRepo::new(pool.clone()),
-            Some(PermissionServiceImpl::new(
-                pool.clone(),
-                Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-                    pool.clone(),
-                ))),
-            )),
-            None::<SilentAssignmentNotifications>,
-        )
-        .with_event_broker(publisher.clone()),
+        published_properties(&pool, &publisher),
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(pool.clone())),
         EntityAccessServiceImpl::new(PgAccessRepository::new(pool.clone())),
     );
+    let tasks = TaskAssignments {
+        context: task_context,
+        progress: published_properties(&pool, &publisher),
+    };
     let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
         messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
@@ -272,7 +282,7 @@ async fn run() -> anyhow::Result<()> {
             people,
         },
         &messages,
-        &task_context,
+        &tasks,
         &project_assignments,
     )
     .await
@@ -285,6 +295,12 @@ struct ContextReaders<Discussions, People> {
     people: People,
 }
 
+/// How an assignment reads its task and moves it into progress.
+struct TaskAssignments<Context, Progress> {
+    context: Context,
+    progress: Progress,
+}
+
 /// Read the trigger topic until shutdown, evaluating every committed post.
 async fn consume<Events: TriggerEvents>(
     consumer: KafkaConsumerAdapter<AgentTriggerConsumerGroup, ()>,
@@ -292,7 +308,7 @@ async fn consume<Events: TriggerEvents>(
     publisher: &Publisher,
     readers: &ContextReaders<impl DiscussionReader, impl PeopleDirectory>,
     messages: &dyn MessageCommands,
-    task_context: &impl TaskAssignmentContext,
+    tasks: &TaskAssignments<impl TaskAssignmentContext, impl TaskProgress>,
     project_assignments: &ProjectAssignmentService<
         impl PropertiesService,
         impl SystemPropertiesService,
@@ -350,7 +366,7 @@ async fn consume<Events: TriggerEvents>(
                         process_message_event(trigger, publisher, &readers.channel_types, &readers.discussions, posted).await?;
                     }
                     if let Some(assignment) = &decoded.assignment {
-                        process_task_assignment(trigger, publisher, messages, task_context, &readers.people, assignment).await?;
+                        process_task_assignment(trigger, publisher, messages, &tasks.context, &tasks.progress, &readers.people, assignment).await?;
                     }
                     if let Some(added) = &decoded.project_task {
                         project_assignments.process(added).await?;

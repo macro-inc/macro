@@ -97,6 +97,15 @@ pub trait PropertiesService: Send + Sync + 'static {
         task: &EditReceipt,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
 
+    /// Move a task whose Status is unset or Not Started to In Progress,
+    /// atomically, leaving every other status in place. Publishes the change
+    /// with the receipt's attribution and returns whether the status moved.
+    /// Documents that are no longer tasks are left alone.
+    fn mark_task_in_progress(
+        &self,
+        task: &EditReceipt,
+    ) -> impl Future<Output = Result<bool, PropertiesErr>> + Send;
+
     /// Add one option to a multi-select entity property value atomically.
     /// Attaches the property if needed and dedupes. Validates the option belongs
     /// to the (multi-select) property. Prefer this over `set_entity_property`
