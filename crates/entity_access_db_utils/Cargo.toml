@@ -5,12 +5,15 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+source_items = { path = "../source_items" }
 # Core
 anyhow = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 serde = { workspace = true }
+rootcause = { workspace = true }
 sqlx = { workspace = true }
 tracing = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }

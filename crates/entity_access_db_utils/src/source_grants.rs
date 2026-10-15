@@ -1,7 +1,7 @@
 //! Grants keyed by their source, across every entity.
 
 use crate::EntityAccessSourceType;
-use sqlx::{Executor, Postgres};
+use sqlx::{Postgres, Transaction};
 
 #[cfg(test)]
 mod test;
@@ -14,21 +14,20 @@ mod test;
 /// team source is a team-sharing mutation, so hold
 /// [`acquire_guard`](crate::team_share::acquire_guard) in the same transaction
 /// first.
-#[tracing::instrument(skip(executor), err)]
-pub async fn delete_source_grants<'e, E>(
-    executor: E,
+#[tracing::instrument(skip(transaction), err)]
+pub async fn delete_source_grants(
+    transaction: &mut Transaction<'_, Postgres>,
     source_type: EntityAccessSourceType,
     source_id: &str,
-) -> Result<u64, sqlx::Error>
-where
-    E: Executor<'e, Database = Postgres>,
-{
-    let result = sqlx::query!(
-        "DELETE FROM entity_access WHERE source_type = $1 AND source_id = $2",
+) -> Result<u64, sqlx::Error> {
+    let rows = sqlx::query!(
+        "DELETE FROM entity_access WHERE source_type = $1 AND source_id = $2 RETURNING entity_type, entity_id::text AS \"entity_id!\"",
         source_type as _,
         source_id,
     )
-    .execute(executor)
+    .map(|row| (row.entity_type, row.entity_id))
+    .fetch_all(transaction.as_mut())
     .await?;
-    Ok(result.rows_affected())
+    source_items::sync_rows(transaction.as_mut(), &rows).await?;
+    Ok(rows.len() as u64)
 }

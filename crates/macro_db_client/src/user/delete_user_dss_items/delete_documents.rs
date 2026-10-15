@@ -80,5 +80,12 @@ pub async fn delete_user_documents(
         entity_registry_db_utils::delete_entity(transaction, document_uuid).await?;
     }
 
+    source_items::sync_many(
+        transaction.as_mut(),
+        model_entity::EntityType::Document,
+        &user_documents,
+    )
+    .await?;
+
     Ok(user_documents)
 }

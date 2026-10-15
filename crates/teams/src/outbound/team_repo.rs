@@ -696,49 +696,57 @@ impl TeamRepository for TeamRepositoryImpl {
 
     #[tracing::instrument(skip(self, cleared), fields(team_id = %cleared.team_id()), err)]
     async fn delete_team(&self, cleared: &ClearedTeam) -> Result<(), TeamError> {
-        let team_id = cleared.team_id();
-        let mut transaction = self.pool.begin().await?;
-        team_share::acquire_guard(&mut transaction).await?;
+        entity_access_db_utils::transaction_retry::on_conflict(
+            || async {
+                let team_id = cleared.team_id();
+                let mut transaction = self.pool.begin().await?;
+                team_share::acquire_guard(&mut transaction).await?;
 
-        delete_source_grants(
-            &mut *transaction,
-            EntityAccessSourceType::Team,
-            &Owner::Team(team_id).principal_id(),
+                delete_source_grants(
+                    &mut transaction,
+                    EntityAccessSourceType::Team,
+                    &Owner::Team(team_id).principal_id(),
+                )
+                .await?;
+                for bot_id in cleared.bot_ids() {
+                    delete_source_grants(
+                        &mut transaction,
+                        EntityAccessSourceType::Bot,
+                        &Owner::Bot(*bot_id).principal_id(),
+                    )
+                    .await?;
+                }
+
+                sqlx::query!(
+                    r#"
+                    DELETE FROM team
+                    WHERE id = $1
+                    "#,
+                    team_id,
+                )
+                .execute(&mut *transaction)
+                .await?;
+
+                sqlx::query!(
+                    r#"
+                    DELETE FROM github_app_installation
+                    WHERE source_id = $1
+                      AND source_type = 'team'::github_app_installation_source_type
+                    "#,
+                    team_id.to_string(),
+                )
+                .execute(&mut *transaction)
+                .await?;
+
+                transaction.commit().await?;
+
+                Ok(())
+            },
+            |error: &TeamError| {
+                entity_access_db_utils::transaction_retry::is_transaction_conflict(error)
+            },
         )
-        .await?;
-        for bot_id in cleared.bot_ids() {
-            delete_source_grants(
-                &mut *transaction,
-                EntityAccessSourceType::Bot,
-                &Owner::Bot(*bot_id).principal_id(),
-            )
-            .await?;
-        }
-
-        sqlx::query!(
-            r#"
-            DELETE FROM team
-            WHERE id = $1
-            "#,
-            team_id,
-        )
-        .execute(&mut *transaction)
-        .await?;
-
-        sqlx::query!(
-            r#"
-            DELETE FROM github_app_installation
-            WHERE source_id = $1
-              AND source_type = 'team'::github_app_installation_source_type
-            "#,
-            team_id.to_string(),
-        )
-        .execute(&mut *transaction)
-        .await?;
-
-        transaction.commit().await?;
-
-        Ok(())
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]

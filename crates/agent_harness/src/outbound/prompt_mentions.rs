@@ -124,15 +124,22 @@ impl SessionAccess for PgSessionAccess {
         // The shared writer for direct user grants: it never touches an
         // owner row, and edit is the most anyone else can hold, so nobody is
         // lowered.
-        entity_access_db_utils::upsert_user_entity_access_bulk(
-            &self.pool,
-            users,
-            &session_id.as_uuid(),
-            EntityType::AgentSession,
-            AccessLevel::Edit,
-        )
-        .await
-        .map_err(|error| HarnessError::Mentions(rootcause::report!(error).into()))
+        let grant = async {
+            let mut transaction = self.pool.begin().await?;
+            entity_access_db_utils::upsert_user_entity_access_bulk(
+                &mut transaction,
+                users,
+                &session_id.as_uuid(),
+                EntityType::AgentSession,
+                AccessLevel::Edit,
+            )
+            .await?;
+            transaction.commit().await?;
+            anyhow::Ok(())
+        };
+        grant
+            .await
+            .map_err(|error| HarnessError::Mentions(rootcause::report!(error).into()))
     }
 }
 

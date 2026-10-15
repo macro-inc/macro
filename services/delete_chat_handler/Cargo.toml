@@ -5,6 +5,8 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+source_items = { path = "../../crates/source_items" }
+entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 anyhow = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["sqs"] }
 lambda_runtime = { workspace = true }

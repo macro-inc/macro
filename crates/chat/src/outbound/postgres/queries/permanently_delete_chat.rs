@@ -49,5 +49,7 @@ pub(crate) async fn permanently_delete_chat(
 
     entity_registry_db_utils::delete_entity(tx, chat_uuid).await?;
 
+    source_items::sync_one(tx.as_mut(), model_entity::EntityType::Chat, chat_id).await?;
+
     Ok(())
 }

@@ -52,169 +52,177 @@ pub async fn save_document(
     modification_data: Option<serde_json::Value>,
     document_bom_parts: Option<Vec<SaveBomPart>>,
 ) -> anyhow::Result<DocumentMetadata> {
-    let mut transaction = db.begin().await?;
+    entity_access_db_utils::transaction_retry::on_conflict(
+        || async {
+            let modification_data = modification_data.clone();
+            let document_bom_parts = document_bom_parts.clone();
+            let mut transaction = db.begin().await?;
 
-    let document = sqlx::query!(
-        r#"
-        UPDATE "Document" SET "updatedAt" = NOW()
-        WHERE id = $1
-        RETURNING id as "document_id", owner, "fileType" as file_type, name as document_name,
-        "branchedFromId" as branched_from_id, "branchedFromVersionId" as branched_from_version_id,
-        "documentFamilyId" as document_family_id,
-        "projectId" as project_id,
-        "deletedAt"::timestamptz as "deleted_at"
-        "#,
-        document_id
-    )
-    .try_map(|row| {
-        Ok(DocumentBasic {
-            document_id: row.document_id,
-            document_name: row.document_name,
-            owner: Owner::from_principal_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-            file_type: row.file_type,
-            sub_type: None,
-            branched_from_id: row.branched_from_id,
-            branched_from_version_id: row.branched_from_version_id,
-            document_family_id: row.document_family_id,
-            project_id: row.project_id,
-            deleted_at: row.deleted_at,
-        })
-    })
-    .fetch_one(&mut *transaction)
-    .await?;
-
-    let project_name = match document.project_id.as_ref() {
-        Some(project_id) => {
-            let project = sqlx::query!(
+            let document = sqlx::query!(
                 r#"
-                select name from "Project" where id = $1
+                UPDATE "Document" SET "updatedAt" = NOW()
+                WHERE id = $1
+                RETURNING id as "document_id", owner, "fileType" as file_type, name as document_name,
+                "branchedFromId" as branched_from_id, "branchedFromVersionId" as branched_from_version_id,
+                "documentFamilyId" as document_family_id,
+                "projectId" as project_id,
+                "deletedAt"::timestamptz as "deleted_at"
                 "#,
-                &project_id,
+                document_id
             )
+            .try_map(|row| {
+                Ok(DocumentBasic {
+                    document_id: row.document_id,
+                    document_name: row.document_name,
+                    owner: Owner::from_principal_str(&row.owner)
+                        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                    file_type: row.file_type,
+                    sub_type: None,
+                    branched_from_id: row.branched_from_id,
+                    branched_from_version_id: row.branched_from_version_id,
+                    document_family_id: row.document_family_id,
+                    project_id: row.project_id,
+                    deleted_at: row.deleted_at,
+                })
+            })
             .fetch_one(&mut *transaction)
             .await?;
-            Some(project.name)
-        }
-        None => None,
-    };
 
-    let mut document_bom = None;
+            let project_name = match document.project_id.as_ref() {
+                Some(project_id) => {
+                    let project = sqlx::query!(
+                        r#"
+                        select name from "Project" where id = $1
+                        "#,
+                        &project_id,
+                    )
+                    .fetch_one(&mut *transaction)
+                    .await?;
+                    Some(project.name)
+                }
+                None => None,
+            };
 
-    let document_version: VersionIDWithTimeStampsOptionalSha = match file_type {
-        FileType::Docx => {
-            // Create new document bom
-            let document_version = sqlx::query_as!(
-                VersionIDWithTimeStampsNoSha,
-            r#"
-                INSERT INTO "DocumentBom" ("documentId")
-                VALUES ($1)
-                RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
-            "#,
-            document_id,
+            let mut document_bom = None;
+
+            let document_version: VersionIDWithTimeStampsOptionalSha = match file_type {
+                FileType::Docx => {
+                    // Create new document bom
+                    let document_version = sqlx::query_as!(
+                        VersionIDWithTimeStampsNoSha,
+                    r#"
+                        INSERT INTO "DocumentBom" ("documentId")
+                        VALUES ($1)
+                        RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
+                    "#,
+                    document_id,
+                    )
+                    .fetch_one(transaction.as_mut())
+                    .await?;
+
+                    // Create new document bom parts
+                    let document_bom_parts = insert_bom_parts(
+                        &mut transaction,
+                        document_id,
+                        document_version.id,
+                        document_bom_parts.expect("bom parts should be present for docx documents"),
+                    )
+                    .await?;
+                    let parts_json: serde_json::Value = serde_json::to_value(document_bom_parts)?;
+
+                    document_bom = Some(parts_json);
+
+                    VersionIDWithTimeStampsOptionalSha {
+                        id: document_version.id,
+                        sha: None,
+                        created_at: document_version.created_at,
+                        updated_at: document_version.updated_at,
+                    }
+                }
+                _ => {
+                    // For non-docx documents, we create a new document instance and
+                    // insert any modification data if it is provided.
+                    let document_instance: VersionIDWithTimeStamps = sqlx::query_as!(
+                        VersionIDWithTimeStamps,
+                    r#"
+                        INSERT INTO "DocumentInstance" ("documentId", "sha")
+                        VALUES ($1, $2)
+                        RETURNING id, sha, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
+                    "#,
+                    document_id,
+                    sha.unwrap_or(""),
+                    )
+                    .fetch_one(&mut *transaction)
+                    .await?;
+
+                    if let Some(modification_data) = modification_data.as_ref() {
+                        // Insert modification data
+                        sqlx::query!(
+                            r#"
+                                INSERT INTO "DocumentInstanceModificationData" ("documentInstanceId", "modificationData")
+                                VALUES ($1, $2);
+                            "#,
+                            document_instance.id,
+                            modification_data,
+                        )
+                        .execute(&mut *transaction)
+                        .await?;
+
+                        // update pdf placeable comment tables
+                        // if file_type == FileType::Pdf {
+                        //     try_insert_comment_data(&mut transaction, &document, modification_data.clone())
+                        //         .await
+                        //         .ok();
+                        // }
+                    }
+
+                    VersionIDWithTimeStampsOptionalSha {
+                        id: document_instance.id,
+                        sha: Some(document_instance.sha),
+                        created_at: document_instance.created_at,
+                        updated_at: document_instance.updated_at,
+                    }
+                }
+            };
+
+            let sub_type: Option<DocumentSubType> = sqlx::query!(
+                r#"
+                    SELECT sub_type as "sub_type: DocumentSubType" FROM document_sub_type WHERE document_id = $1
+                "#,
+                document_id
             )
-            .fetch_one(transaction.as_mut())
+            .map(|row| row.sub_type)
+            .fetch_optional(&mut *transaction)
             .await?;
 
-            // Create new document bom parts
-            let document_bom_parts = insert_bom_parts(
-                &mut transaction,
-                document_id,
-                document_version.id,
-                document_bom_parts.expect("bom parts should be present for docx documents"),
-            )
-            .await?;
-            let parts_json: serde_json::Value = serde_json::to_value(document_bom_parts)?;
+            source_items::sync_one(transaction.as_mut(), model_entity::EntityType::Document, document_id).await?;
+            if let Err(err) = transaction.commit().await {
+                tracing::error!(error=?err, "unable to commit transaction");
+                return Err(err.into());
+            }
 
-            document_bom = Some(parts_json);
-
-            VersionIDWithTimeStampsOptionalSha {
-                id: document_version.id,
-                sha: None,
+            Ok(DocumentMetadata {
+                document_name: document.document_name,
+                document_id: document_id.to_string(),
+                document_version_id: document_version.id,
+                owner: document.owner,
+                file_type: document.file_type,
+                sha: document_version.sha,
+                modification_data,
+                document_family_id: document.document_family_id,
+                branched_from_id: document.branched_from_id,
+                branched_from_version_id: document.branched_from_version_id,
+                document_bom,
+                project_id: document.project_id,
+                project_name,
                 created_at: document_version.created_at,
                 updated_at: document_version.updated_at,
-            }
-        }
-        _ => {
-            // For non-docx documents, we create a new document instance and
-            // insert any modification data if it is provided.
-            let document_instance: VersionIDWithTimeStamps = sqlx::query_as!(
-                VersionIDWithTimeStamps,
-            r#"
-                INSERT INTO "DocumentInstance" ("documentId", "sha")
-                VALUES ($1, $2)
-                RETURNING id, sha, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
-            "#,
-            document_id,
-            sha.unwrap_or(""),
-            )
-            .fetch_one(&mut *transaction)
-            .await?;
-
-            if let Some(modification_data) = modification_data.as_ref() {
-                // Insert modification data
-                sqlx::query!(
-                    r#"
-                        INSERT INTO "DocumentInstanceModificationData" ("documentInstanceId", "modificationData")
-                        VALUES ($1, $2);
-                    "#,
-                    document_instance.id,
-                    modification_data,
-                )
-                .execute(&mut *transaction)
-                .await?;
-
-                // update pdf placeable comment tables
-                // if file_type == FileType::Pdf {
-                //     try_insert_comment_data(&mut transaction, &document, modification_data.clone())
-                //         .await
-                //         .ok();
-                // }
-            }
-
-            VersionIDWithTimeStampsOptionalSha {
-                id: document_instance.id,
-                sha: Some(document_instance.sha),
-                created_at: document_instance.created_at,
-                updated_at: document_instance.updated_at,
-            }
-        }
-    };
-
-    let sub_type: Option<DocumentSubType> = sqlx::query!(
-        r#"
-            SELECT sub_type as "sub_type: DocumentSubType" FROM document_sub_type WHERE document_id = $1
-        "#,
-        document_id
-    )
-    .map(|row| row.sub_type)
-    .fetch_optional(&mut *transaction)
-    .await?;
-
-    if let Err(err) = transaction.commit().await {
-        tracing::error!(error=?err, "unable to commit transaction");
-        return Err(err.into());
-    }
-
-    Ok(DocumentMetadata {
-        document_name: document.document_name,
-        document_id: document_id.to_string(),
-        document_version_id: document_version.id,
-        owner: document.owner,
-        file_type: document.file_type,
-        sha: document_version.sha,
-        modification_data,
-        document_family_id: document.document_family_id,
-        branched_from_id: document.branched_from_id,
-        branched_from_version_id: document.branched_from_version_id,
-        document_bom,
-        project_id: document.project_id,
-        project_name,
-        created_at: document_version.created_at,
-        updated_at: document_version.updated_at,
-        sub_type,
-        deleted_at: None,
-    })
+                sub_type,
+                deleted_at: None,
+            })
+        },
+        |error: &anyhow::Error| entity_access_db_utils::transaction_retry::is_transaction_conflict(error.as_ref()),
+    ).await
 }
 
 #[cfg(test)]

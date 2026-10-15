@@ -71,6 +71,12 @@ pub async fn set_document_sub_type(
         .execute(transaction.as_mut())
         .await?;
 
+        source_items::sync_one(
+            transaction.as_mut(),
+            model_entity::EntityType::Document,
+            &document_id.to_string(),
+        )
+        .await?;
         Ok(Some(sub_type))
     } else {
         Ok(None)

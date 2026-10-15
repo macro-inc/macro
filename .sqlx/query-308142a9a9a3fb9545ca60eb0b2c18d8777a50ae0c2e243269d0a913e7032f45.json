@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT \"sharePermissionId\" as share_permission_id\n                    FROM \"ChatPermission\"\n                    WHERE \"chatId\"=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "share_permission_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "308142a9a9a3fb9545ca60eb0b2c18d8777a50ae0c2e243269d0a913e7032f45"
+}

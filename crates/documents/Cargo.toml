@@ -89,6 +89,7 @@ outbound = [
   "dep:hex",
   "dep:redis",
   "dep:share_permission_db_utils",
+  "dep:source_items",
   "dep:sqlx",
   "ports",
 ]
@@ -102,6 +103,7 @@ service = [
 ]
 
 [dependencies]
+source_items = { path = "../source_items", optional = true }
 macro_db_client = { path = "../macro_db_client", optional = true }
 macro_sha_count_client = { path = "../macro_sha_count_client", optional = true }
 sqs_client = { path = "../sqs_client", optional = true }

@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "source_items"
+publish = false
+version = "0.1.0"
+
+[features]
+cli = ["dep:clap", "dep:macro_env_var", "dep:macro_entrypoint"]
+
+[dependencies]
+clap = { workspace = true, features = ["derive"], optional = true }
+macro_env_var = { path = "../macro_env_var", optional = true }
+model-entity = { path = "../model-entity" }
+rootcause = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tracing = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint", optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+
+[[bin]]
+name = "backfill_source_items"
+path = "src/bin/backfill_source_items.rs"
+required-features = ["cli"]

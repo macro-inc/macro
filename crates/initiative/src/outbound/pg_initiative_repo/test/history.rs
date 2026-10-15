@@ -74,14 +74,16 @@ async fn project_history_filters_task_events_until_task_access_is_granted(
     let hidden = history.read(receipt.clone(), None, 50).await?;
     assert!(hidden.records.is_empty());
 
+    let mut transaction = pool.begin().await?;
     entity_access_db_utils::upsert_user_entity_access_bulk(
-        &pool,
+        &mut transaction,
         &[user(MEMBER)],
         &Uuid::parse_str(&task_id)?,
         EntityType::Document,
         AccessLevel::View,
     )
     .await?;
+    transaction.commit().await?;
     let visible = history.read(receipt, None, 50).await?;
     assert_eq!(visible.records.len(), 1);
     assert_eq!(visible.records[0].action, "task_added");

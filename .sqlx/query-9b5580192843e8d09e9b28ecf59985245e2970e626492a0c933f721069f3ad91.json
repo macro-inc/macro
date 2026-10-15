@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    DELETE FROM \"Pin\" WHERE \"pinnedItemId\" = $1 AND \"pinnedItemType\" = $2\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9b5580192843e8d09e9b28ecf59985245e2970e626492a0c933f721069f3ad91"
+}

@@ -108,5 +108,12 @@ pub async fn patch_chat_transaction(
         .await?;
     }
 
+    source_items::sync_one(
+        transaction.as_mut(),
+        model_entity::EntityType::Chat,
+        chat_id,
+    )
+    .await?;
+
     Ok(())
 }

@@ -1436,3 +1436,85 @@ async fn get_permissions_reads_link_share_columns(pool: Pool<Postgres>) {
     assert_eq!(permission.link_share, Some(LinkShare::Team));
     assert_eq!(permission.link_share_access_level, Some(AccessLevel::Edit));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn classifies_reported_transaction_conflicts(pool: Pool<Postgres>) {
+    let error =
+        sqlx::query!("DO $$ BEGIN RAISE EXCEPTION 'retry test' USING ERRCODE = '40001'; END $$")
+            .execute(&pool)
+            .await
+            .unwrap_err();
+    let report = rootcause::Report::new_sendsync(error).context("sharing write failed");
+    let error = ChatErr::Unknown(report.into());
+    assert!(super::is_transaction_conflict(&error));
+    assert!(!super::is_transaction_conflict(&ChatErr::Conflict(
+        "stale share revision".into()
+    )));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn chat_writes_maintain_source_items_without_triggers(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = test_repo(pool.clone());
+    let id = create_test_chat(&repo, "Projected chat").await;
+    assert_eq!(
+        sqlx::query_scalar!("SELECT grants FROM source_items WHERE entity_id = $1", id)
+            .fetch_one(&pool)
+            .await?,
+        1
+    );
+    let now = Utc::now();
+    crate::domain::ports::MessageRepo::create(
+        &repo,
+        &id,
+        NewChatMessage {
+            id: None,
+            content: ChatMessageContent::Text("hello".to_owned()),
+            role: Role::User,
+            attachments: None,
+            model: "test-model".to_owned(),
+            created_at: now,
+            updated_at: now,
+        },
+    )
+    .await?;
+    let current = sqlx::query_scalar!(
+        r#"SELECT bool_and(s.sort_ts IS NOT DISTINCT FROM c."updatedAt")
+           FROM source_items s JOIN "Chat" c ON c.id = s.entity_id
+           WHERE s.entity_type = 'chat' AND s.entity_id = $1"#,
+        id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(current, Some(true));
+    repo.delete(&id).await?;
+    assert!(
+        sqlx::query_scalar!(
+            "SELECT sort_ts IS NULL AS \"deleted!\" FROM source_items WHERE entity_id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await?
+    );
+    repo.revert_delete(&id, None).await?;
+    assert!(
+        !sqlx::query_scalar!(
+            "SELECT sort_ts IS NULL AS \"deleted!\" FROM source_items WHERE entity_id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await?
+    );
+    repo.permanently_delete(&id).await?;
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM source_items WHERE entity_id = $1", id)
+            .fetch_one(&pool)
+            .await?,
+        Some(0)
+    );
+    Ok(())
+}

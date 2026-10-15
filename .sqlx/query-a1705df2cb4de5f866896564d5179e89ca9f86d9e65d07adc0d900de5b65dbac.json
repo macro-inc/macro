@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE \"Document\"\n                SET \"updatedAt\" = NOW()\n                WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a1705df2cb4de5f866896564d5179e89ca9f86d9e65d07adc0d900de5b65dbac"
+}

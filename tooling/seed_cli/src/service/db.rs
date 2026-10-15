@@ -320,6 +320,7 @@ impl SeedDb {
                ON CONFLICT {conflict}
                DO UPDATE SET access_level = EXCLUDED.access_level"#
         );
+        let mut transaction = self.inner.begin().await?;
         sqlx::query(&query)
             .bind(entity_uuid)
             .bind(entity_type.as_ref())
@@ -327,8 +328,10 @@ impl SeedDb {
             .bind(source_type)
             .bind(access_level)
             .bind(granted_from_project_id.as_deref())
-            .execute(&self.inner)
+            .execute(transaction.as_mut())
             .await?;
+        source_items::sync_one(transaction.as_mut(), entity_type, entity_id).await?;
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -389,6 +392,7 @@ impl SeedDb {
         owner_id: &str,
         parent_id: Option<String>,
     ) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
         sqlx::query!(
             r#"INSERT INTO "Project" (id, name, "userId", "parentId", "createdAt", "updatedAt")
                VALUES ($1, $2, $3, $4, NOW(), NOW())"#,
@@ -397,8 +401,15 @@ impl SeedDb {
             owner_id,
             parent_id.as_deref(),
         )
-        .execute(&self.inner)
+        .execute(transaction.as_mut())
         .await?;
+        source_items::sync_one(
+            transaction.as_mut(),
+            model_entity::EntityType::Project,
+            project_id,
+        )
+        .await?;
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -410,14 +421,22 @@ impl SeedDb {
         owner_id: &str,
         name: &str,
     ) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
         sqlx::query!(
             r#"INSERT INTO "Chat" (id, "userId", name, "isPersistent") VALUES ($1, $2, $3, true)"#,
             chat_id,
             owner_id,
             name,
         )
-        .execute(&self.inner)
+        .execute(transaction.as_mut())
         .await?;
+        source_items::sync_one(
+            transaction.as_mut(),
+            model_entity::EntityType::Chat,
+            chat_id,
+        )
+        .await?;
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -713,6 +732,7 @@ impl SeedDb {
         document_id: &str,
         location: &str,
     ) -> anyhow::Result<()> {
+        let mut transaction = self.inner.begin().await?;
         sqlx::query!(
             r#"UPDATE "Document"
                SET uploaded = true, "contentState" = 'ready', "contentLocation" = $2, "updatedAt" = NOW()
@@ -720,8 +740,15 @@ impl SeedDb {
             document_id,
             location,
         )
-        .execute(&self.inner)
+        .execute(transaction.as_mut())
         .await?;
+        source_items::sync_one(
+            transaction.as_mut(),
+            model_entity::EntityType::Document,
+            document_id,
+        )
+        .await?;
+        transaction.commit().await?;
         Ok(())
     }
 

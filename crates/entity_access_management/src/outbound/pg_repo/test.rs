@@ -465,6 +465,14 @@ async fn remove_entity_from_project_deletes_inherited_access(pool: Pool<Postgres
     let document_id = Uuid::new_v4();
     let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
 
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'Projected document', 'owner')"#,
+        document_id.to_string()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
     // Add entity to project — creates 6 inherited access rows
     repo.add_entity_to_project(&document_id, EntityType::Document, &project_c)
         .await
@@ -479,6 +487,14 @@ async fn remove_entity_from_project_deletes_inherited_access(pool: Pool<Postgres
     .await
     .unwrap();
     assert_eq!(before_count, Some(6));
+    let projected_grants = sqlx::query_scalar!(
+        "SELECT sum(grants) FROM source_items WHERE entity_id = $1",
+        document_id.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(projected_grants, Some(6));
 
     // Remove entity from project
     repo.remove_entity_from_project(&document_id, EntityType::Document, &project_c)
@@ -494,6 +510,14 @@ async fn remove_entity_from_project_deletes_inherited_access(pool: Pool<Postgres
     .await
     .unwrap();
     assert_eq!(after_count, Some(0));
+    let projected_rows = sqlx::query_scalar!(
+        "SELECT count(*) FROM source_items WHERE entity_id = $1",
+        document_id.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(projected_rows, Some(0));
 
     // Pre-existing project access rows should be untouched (12 rows from fixture)
     let project_rows =

@@ -49,6 +49,13 @@ pub(super) async fn edit_project(
     if let Some(permission) = args.share_permission.as_ref() {
         share::edit_project_share_permission(transaction, &args.project_id, permission).await?;
     }
+    source_items::sync_one(
+        transaction.as_mut(),
+        model_entity::EntityType::Project,
+        &args.project_id,
+    )
+    .await?;
+
     Ok(project)
 }
 

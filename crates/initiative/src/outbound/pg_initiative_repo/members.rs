@@ -75,15 +75,9 @@ pub(super) async fn grant_members_edit(
     member_ids: &[MacroUserIdStr<'static>],
 ) -> Result<(), InitiativeError> {
     for (entity_id, entity_type) in targets.each() {
-        upsert_user_entity_access_bulk(
-            tx.as_mut(),
-            member_ids,
-            &entity_id,
-            entity_type,
-            AccessLevel::Edit,
-        )
-        .await
-        .map_err(|error| InitiativeError::Internal(rootcause::report!("{error}")))?;
+        upsert_user_entity_access_bulk(tx, member_ids, &entity_id, entity_type, AccessLevel::Edit)
+            .await
+            .map_err(|error| InitiativeError::Internal(rootcause::report!("{error}")))?;
     }
     Ok(())
 }

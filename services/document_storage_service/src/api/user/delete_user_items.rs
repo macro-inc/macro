@@ -33,46 +33,13 @@ pub async fn delete_user_items_handler(
     Path(Params { user_id }): Path<Params>,
 ) -> Result<Response, Response> {
     tracing::info!("deleting user dss items");
-    let mut transaction = ctx.db.begin().await.map_err(|e| {
-        tracing::error!(error=?e, "failed to begin transaction");
-        (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-    })?;
-
     let document_ids =
-        macro_db_client::user::delete_user_dss_items::delete_documents::delete_user_documents(
-            &mut transaction,
-            &user_id,
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to delete user documents");
-            (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-        })?;
-
-    macro_db_client::user::delete_user_dss_items::delete_chats::delete_user_chats(
-        &mut transaction,
-        &user_id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "failed to delete user chats");
-        (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-    })?;
-
-    macro_db_client::user::delete_user_dss_items::delete_projects::delete_user_projects(
-        &mut transaction,
-        &user_id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "failed to delete user projects");
-        (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-    })?;
-
-    transaction.commit().await.map_err(|e| {
-        tracing::error!(error=?e, "failed to commit transaction");
-        (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-    })?;
+        macro_db_client::user::delete_user_dss_items::delete_user_items(&ctx.db, &user_id)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "failed to delete user items");
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            })?;
 
     let document_ids_with_owner: Vec<(String, String)> = document_ids
         .into_iter()

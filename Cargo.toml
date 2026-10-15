@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  "crates/source_items",
   "crates/routines",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",

@@ -165,6 +165,11 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_team_sharing_enabled: bool,
 
+    /// Use the backfilled source_items projection for flat Soup listings.
+    /// Keep disabled until projection parity and replica catch-up are verified.
+    #[macro_config_default(false)]
+    pub soup_source_items_enabled: bool,
+
     /// Enable Slack import creation and uploads. Existing receipts remain
     /// readable, finalizable and cancellable when this switch is off.
     #[macro_config_default(false)]

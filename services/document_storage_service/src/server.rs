@@ -1532,7 +1532,8 @@ pub async fn run() -> anyhow::Result<()> {
     // mutation metadata include viewer history.
     let primary_entity_soup = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service.clone(),
             ReadonlyEmailPreviewAdapter(email_service.clone()),
             ChannelListServiceImpl::new(
@@ -1560,7 +1561,8 @@ pub async fn run() -> anyhow::Result<()> {
     // normal list traffic never switches to the primary.
     let soup_service = Arc::new(
         SoupImpl::new(
-            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone()))
+                .with_source_items_enabled(config.soup_source_items_enabled),
             frecency_service,
             readonly_email_service,
             ChannelListServiceImpl::new(

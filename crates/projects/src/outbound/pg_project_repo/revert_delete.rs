@@ -150,6 +150,11 @@ async fn restore_items(
     )
     .execute(transaction.as_mut())
     .await?;
+    let entity_type = item_type
+        .parse()
+        .map_err(|error| sqlx::Error::Protocol(format!("invalid projected item type: {error}")))?;
+    source_items::sync_many(transaction.as_mut(), entity_type, item_ids).await?;
+
     Ok(())
 }
 
@@ -181,7 +186,7 @@ async fn clear_registered_entities(
             .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
         entity_registry_db_utils::clear_deleted(transaction, uuid)
             .await
-            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            .map_err(entity_access_db_utils::transaction_retry::report_into_sqlx_error)?;
     }
     Ok(())
 }

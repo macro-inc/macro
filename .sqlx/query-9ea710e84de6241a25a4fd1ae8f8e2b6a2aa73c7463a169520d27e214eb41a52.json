@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    DELETE FROM entity_access\n                    WHERE entity_id = $1 AND entity_type = $2\n                    AND source_id = ANY($3) AND source_type = 'channel'\n                    RETURNING entity_type, entity_id::text AS \"entity_id!\"\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "9ea710e84de6241a25a4fd1ae8f8e2b6a2aa73c7463a169520d27e214eb41a52"
+}

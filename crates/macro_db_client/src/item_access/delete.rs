@@ -8,18 +8,21 @@ pub async fn delete_user_entity_access_by_item(
     entity_id: &uuid::Uuid,
     entity_type: EntityType,
 ) -> anyhow::Result<u64> {
-    let result = sqlx::query!(
+    let rows = sqlx::query!(
         r#"
         DELETE FROM "entity_access"
         WHERE "entity_id" = $1 AND "entity_type" = $2
+        RETURNING entity_type, entity_id::text AS "entity_id!"
         "#,
         entity_id,
         entity_type.as_ref(),
     )
-    .execute(transaction.as_mut())
+    .map(|row| (row.entity_type, row.entity_id))
+    .fetch_all(transaction.as_mut())
     .await?;
 
-    Ok(result.rows_affected())
+    source_items::sync_rows(transaction.as_mut(), &rows).await?;
+    Ok(rows.len() as u64)
 }
 
 #[tracing::instrument(skip(transaction))]
@@ -32,7 +35,7 @@ pub async fn delete_user_entity_access_bulk(
         return Ok(0);
     }
 
-    let result = match entity_type {
+    let rows = match entity_type {
         EntityType::User
         | EntityType::Team
         | EntityType::Channel
@@ -56,6 +59,7 @@ pub async fn delete_user_entity_access_bulk(
         DELETE FROM "entity_access"
         WHERE (entity_id = ANY($1) AND entity_type = $2)
         OR granted_from_project_id = ANY($3)
+        RETURNING entity_type, entity_id::text AS "entity_id!"
         "#,
                 entity_ids,
                 entity_type.as_ref(),
@@ -64,7 +68,8 @@ pub async fn delete_user_entity_access_bulk(
                     .map(|p| p.to_string())
                     .collect::<Vec<String>>()
             )
-            .execute(transaction.as_mut())
+            .map(|row| (row.entity_type, row.entity_id))
+            .fetch_all(transaction.as_mut())
             .await?
         }
         EntityType::Chat
@@ -80,14 +85,17 @@ pub async fn delete_user_entity_access_bulk(
                 r#"
         DELETE FROM "entity_access"
         WHERE entity_id = ANY($1) AND entity_type = $2
+        RETURNING entity_type, entity_id::text AS "entity_id!"
         "#,
                 entity_ids,
                 entity_type.as_ref(),
             )
-            .execute(transaction.as_mut())
+            .map(|row| (row.entity_type, row.entity_id))
+            .fetch_all(transaction.as_mut())
             .await?
         }
     };
 
-    Ok(result.rows_affected())
+    source_items::sync_rows(transaction.as_mut(), &rows).await?;
+    Ok(rows.len() as u64)
 }

@@ -30,37 +30,46 @@ pub async fn share_link_shared_document_with_mentioned_users(
     document_id: &str,
     mentioned_user_ids: &[MacroUserIdStr<'_>],
 ) -> anyhow::Result<()> {
-    if mentioned_user_ids.is_empty() {
-        return Ok(());
-    }
+    entity_access_db_utils::transaction_retry::on_conflict(
+        || async {
+            if mentioned_user_ids.is_empty() {
+                return Ok(());
+            }
 
-    let user_ids: Vec<String> = mentioned_user_ids
-        .iter()
-        .map(|id| id.as_ref().to_string())
-        .collect();
+            let user_ids: Vec<String> = mentioned_user_ids
+                .iter()
+                .map(|id| id.as_ref().to_string())
+                .collect();
 
-    // Insert one access row per mentioned user when the document has a PUBLIC
-    // or TEAM link. The query deliberately does not filter recipients by team
-    // membership. `DO NOTHING` preserves pre-existing (possibly higher) access.
-    sqlx::query!(
-        r#"
-        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-        SELECT dp."documentId"::uuid, 'document', u.user_id, 'user', sp."linkShareAccessLevel"::"AccessLevel"
-        FROM "DocumentPermission" dp
-        JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
-        CROSS JOIN UNNEST($2::text[]) AS u(user_id)
-        WHERE dp."documentId" = $1
-          AND sp."linkShare" IN ('PUBLIC', 'TEAM')
-          AND sp."linkShareAccessLevel" IS NOT NULL
-        ON CONFLICT (entity_id, entity_type, source_id, source_type)
-        WHERE granted_from_project_id IS NULL
-        DO NOTHING
-        "#,
-        document_id,
-        user_ids.as_slice(),
+            // Insert one access row per mentioned user when the document has a PUBLIC
+            // or TEAM link. The query deliberately does not filter recipients by team
+            // membership. `DO NOTHING` preserves pre-existing (possibly higher) access.
+            let mut transaction = db.begin().await?;
+            sqlx::query!(
+                r#"
+                INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+                SELECT dp."documentId"::uuid, 'document', u.user_id, 'user', sp."linkShareAccessLevel"::"AccessLevel"
+                FROM "DocumentPermission" dp
+                JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
+                CROSS JOIN UNNEST($2::text[]) AS u(user_id)
+                WHERE dp."documentId" = $1
+                  AND sp."linkShare" IN ('PUBLIC', 'TEAM')
+                  AND sp."linkShareAccessLevel" IS NOT NULL
+                ON CONFLICT (entity_id, entity_type, source_id, source_type)
+                WHERE granted_from_project_id IS NULL
+                DO NOTHING
+                "#,
+                document_id,
+                user_ids.as_slice(),
+            )
+            .execute(transaction.as_mut())
+            .await?;
+
+            source_items::sync_one(transaction.as_mut(), model_entity::EntityType::Document, document_id).await?;
+            transaction.commit().await?;
+            Ok(())
+        },
+        |error: &anyhow::Error| entity_access_db_utils::transaction_retry::is_transaction_conflict(error.as_ref()),
     )
-    .execute(db)
-    .await?;
-
-    Ok(())
+    .await
 }

@@ -207,16 +207,26 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             return Ok(());
         }
 
-        // Grant edit permissions to all users
-        entity_access_db_utils::upsert_user_entity_access_bulk(
-            &self.db,
-            user_ids,
-            &macro_uuid::string_to_uuid(task_id).unwrap(),
-            model_entity::EntityType::Document,
-            AccessLevel::Edit,
-        )
-        .await?;
+        entity_access_db_utils::transaction_retry::on_conflict(
+            || async {
+                // Grant edit permissions to all users
+                let mut transaction = self.db.begin().await?;
+                entity_access_db_utils::upsert_user_entity_access_bulk(
+                    &mut transaction,
+                    user_ids,
+                    &macro_uuid::string_to_uuid(task_id).unwrap(),
+                    model_entity::EntityType::Document,
+                    AccessLevel::Edit,
+                )
+                .await?;
+                transaction.commit().await?;
 
-        Ok(())
+                Ok(())
+            },
+            |error: &anyhow::Error| {
+                entity_access_db_utils::transaction_retry::is_transaction_conflict(error.as_ref())
+            },
+        )
+        .await
     }
 }

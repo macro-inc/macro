@@ -1116,3 +1116,55 @@ async fn mark_uploaded_is_recursive_and_rejects_missing_root(
     assert!(matches!(missing_error, sqlx::Error::RowNotFound));
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn project_writes_maintain_source_items_without_triggers(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = test_repo(pool.clone());
+    let project = repo
+        .create_project(CreateProjectArgs {
+            owner: project_owner(),
+            name: "Projected project".to_owned(),
+            parent_id: None,
+            share_permission: SharePermissionV2::new_project_share_permission(None),
+        })
+        .await?;
+    let id = &project.id;
+    assert_eq!(
+        sqlx::query_scalar!("SELECT grants FROM source_items WHERE entity_id = $1", id)
+            .fetch_one(&pool)
+            .await?,
+        1
+    );
+    repo.update_project_modified(id).await?;
+    let current = sqlx::query_scalar!(
+        r#"SELECT bool_and(s.sort_ts IS NOT DISTINCT FROM p."updatedAt")
+           FROM source_items s JOIN "Project" p ON p.id = s.entity_id
+           WHERE s.entity_type = 'project' AND s.entity_id = $1"#,
+        id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(current, Some(true));
+    repo.soft_delete_project(id).await?;
+    assert!(
+        sqlx::query_scalar!(
+            "SELECT sort_ts IS NULL AS \"deleted!\" FROM source_items WHERE entity_id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await?
+    );
+    repo.purge_deleted_project_tree(id).await?;
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM source_items WHERE entity_id = $1", id)
+            .fetch_one(&pool)
+            .await?,
+        Some(0)
+    );
+    Ok(())
+}

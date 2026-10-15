@@ -259,15 +259,27 @@ impl crate::domain::delivery::DiscussionMentionSharing for PgDiscussionContext {
         users: Vec<String>,
         level: entity_access::domain::models::AccessLevel,
     ) -> Result<(), rootcause::Report> {
-        sqlx::query!(r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-            SELECT $1::uuid, 'document', u.user_id, 'user', $3::"AccessLevel"
-            FROM UNNEST($2::text[]) u(user_id)
-            WHERE EXISTS (SELECT 1 FROM "DocumentPermission" dp JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
-                JOIN "Document" d ON d.id = dp."documentId"
-                WHERE dp."documentId" = $1::uuid::text AND sp."linkShare" IN ('PUBLIC', 'TEAM')
-                    AND sp."linkShareAccessLevel"::"AccessLevel" = $3 AND d."deletedAt" IS NULL)
-            ON CONFLICT (entity_id, entity_type, source_id, source_type) WHERE granted_from_project_id IS NULL DO NOTHING"#,
-            document, &users, level as _).execute(&self.0).await?;
+        entity_access_db_utils::transaction_retry::on_conflict(
+            || async {
+                let mut transaction = self.0.begin().await?;
+                sqlx::query!(r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+                    SELECT $1::uuid, 'document', u.user_id, 'user', $3::"AccessLevel"
+                    FROM UNNEST($2::text[]) u(user_id)
+                    WHERE EXISTS (SELECT 1 FROM "DocumentPermission" dp JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
+                        JOIN "Document" d ON d.id = dp."documentId"
+                        WHERE dp."documentId" = $1::uuid::text AND sp."linkShare" IN ('PUBLIC', 'TEAM')
+                            AND sp."linkShareAccessLevel"::"AccessLevel" = $3 AND d."deletedAt" IS NULL)
+                    ON CONFLICT (entity_id, entity_type, source_id, source_type) WHERE granted_from_project_id IS NULL DO NOTHING"#,
+                    document, &users, level as _).execute(transaction.as_mut()).await?;
+                source_items::sync_one(transaction.as_mut(), model_entity::EntityType::Document, &document.to_string()).await?;
+                transaction.commit().await?;
+                Ok(())
+            },
+            |error: &sqlx::Error| {
+                entity_access_db_utils::transaction_retry::is_transaction_conflict(error)
+            },
+        )
+        .await?;
         Ok(())
     }
 }

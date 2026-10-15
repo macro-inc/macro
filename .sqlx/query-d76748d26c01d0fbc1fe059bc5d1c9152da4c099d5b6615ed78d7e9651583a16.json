@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM entity_access\n        WHERE entity_id::text = ANY($1)\n           OR \"granted_from_project_id\" = ANY($2)\n        RETURNING entity_type, entity_id::text AS \"entity_id!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "d76748d26c01d0fbc1fe059bc5d1c9152da4c099d5b6615ed78d7e9651583a16"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE \"Document\" SET \"projectId\" = NULL WHERE \"id\" = $1\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68b97dd8945450065a24389374aa303568423c769d8a1bb125eb7c80278139ba"
+}

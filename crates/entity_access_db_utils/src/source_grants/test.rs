@@ -27,14 +27,8 @@ async fn remaining_sources(
 async fn deletes_every_grant_of_the_source_and_nothing_else(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
-    assert_eq!(
-        delete_source_grants(&pool, EntityAccessSourceType::Team, TEAM).await?,
-        3
-    );
-    assert_eq!(
-        delete_source_grants(&pool, EntityAccessSourceType::Bot, BOT).await?,
-        2
-    );
+    assert_eq!(delete(&pool, EntityAccessSourceType::Team, TEAM).await?, 3);
+    assert_eq!(delete(&pool, EntityAccessSourceType::Bot, BOT).await?, 2);
     assert_eq!(
         remaining_sources(&pool).await?,
         vec![
@@ -50,9 +44,17 @@ async fn deletes_every_grant_of_the_source_and_nothing_else(
             ),
         ]
     );
-    assert_eq!(
-        delete_source_grants(&pool, EntityAccessSourceType::Team, TEAM).await?,
-        0
-    );
+    assert_eq!(delete(&pool, EntityAccessSourceType::Team, TEAM).await?, 0);
     Ok(())
+}
+
+async fn delete(
+    pool: &PgPool,
+    source_type: EntityAccessSourceType,
+    source_id: &str,
+) -> Result<u64, sqlx::Error> {
+    let mut transaction = pool.begin().await?;
+    let deleted = delete_source_grants(&mut transaction, source_type, source_id).await?;
+    transaction.commit().await?;
+    Ok(deleted)
 }

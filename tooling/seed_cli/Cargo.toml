@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+source_items = { path = "../../crates/source_items" }
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 base64 = { workspace = true }

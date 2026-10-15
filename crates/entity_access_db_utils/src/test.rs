@@ -44,8 +44,9 @@ async fn bulk_user_upsert_raises_viewers_and_adds_strangers_but_leaves_the_owner
     }
     tx.commit().await.unwrap();
 
+    let mut tx = pool.begin().await.unwrap();
     upsert_user_entity_access_bulk(
-        &pool,
+        &mut tx,
         &[owner.clone(), viewer.clone(), stranger.clone()],
         &session_id,
         EntityType::AgentSession,
@@ -53,6 +54,7 @@ async fn bulk_user_upsert_raises_viewers_and_adds_strangers_but_leaves_the_owner
     )
     .await
     .unwrap();
+    tx.commit().await.unwrap();
 
     let rows = fetch_entity_access_rows(&pool, &session_id, EntityType::AgentSession).await;
     let level_of = |user: &MacroUserIdStr<'_>| {

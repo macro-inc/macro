@@ -1,7 +1,7 @@
 use super::DocumentIdArrays;
 use crate::domain::models::grouping::ItemGroupingInfo;
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, build_document_filter,
+    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, ItemSource, build_document_filter,
     build_grouped_query, build_query, expanded_dynamic_cursor_soup,
     expanded_dynamic_cursor_soup_grouped,
 };
@@ -174,15 +174,27 @@ fn bind_free_rendering_keeps_every_id_inline() {
 
 #[test]
 fn arrays_follow_each_querys_fixed_binds() {
+    for item_source in [ItemSource::ItemTables, ItemSource::SourceItems] {
+        arrays_follow_fixed_binds(item_source);
+    }
+}
+
+fn arrays_follow_fixed_binds(item_source: ItemSource) {
     let render = |count| {
         let filter = tasks(Expr::and(
             any_of(&absent(1, count)),
             Expr::is_not(any_of(&absent(2, count))),
         ));
         let mut flat_ids = DocumentIdArrays::starting_at(9);
-        let flat = build_query(&filter, false, SimpleSortMethod::UpdatedAt, &mut flat_ids)
-            .sql()
-            .to_owned();
+        let flat = build_query(
+            &filter,
+            false,
+            SimpleSortMethod::UpdatedAt,
+            item_source,
+            &mut flat_ids,
+        )
+        .sql()
+        .to_owned();
         let grouping = GroupingConfig {
             field: status(Some("TASK")),
             group_key: None,

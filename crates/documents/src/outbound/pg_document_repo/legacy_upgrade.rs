@@ -78,23 +78,39 @@ impl<B: BotFacts + 'static> LegacyOfficeUpgradeRepoPort for PgDocumentRepo<B> {
         from: FileType,
         to: FileType,
     ) -> Result<bool, DocumentError> {
-        // Stored file types can carry the upload's casing, so compare
-        // case-insensitively and always write the canonical lowercase type.
-        let result = sqlx::query!(
-            r#"
-            UPDATE "Document"
-            SET "fileType" = $3,
-                "updatedAt" = NOW()
-            WHERE id = $1 AND LOWER("fileType") = $2
-            "#,
-            document_id,
-            from.as_str(),
-            to.as_str(),
+        entity_access_db_utils::transaction_retry::on_conflict(
+            || async {
+                let mut transaction = self.pool.begin().await?;
+                // Stored file types can carry the upload's casing, so compare
+                // case-insensitively and always write the canonical lowercase type.
+                let result = sqlx::query!(
+                    r#"
+                    UPDATE "Document"
+                    SET "fileType" = $3,
+                        "updatedAt" = NOW()
+                    WHERE id = $1 AND LOWER("fileType") = $2
+                    "#,
+                    document_id,
+                    from.as_str(),
+                    to.as_str(),
+                )
+                .execute(transaction.as_mut())
+                .await
+                .map_err(internal)?;
+                source_items::sync_one(
+                    transaction.as_mut(),
+                    model_entity::EntityType::Document,
+                    document_id,
+                )
+                .await?;
+                transaction.commit().await?;
+                Ok(result.rows_affected() == 1)
+            },
+            |error: &DocumentError| {
+                entity_access_db_utils::transaction_retry::is_transaction_conflict(error)
+            },
         )
-        .execute(&self.pool)
         .await
-        .map_err(internal)?;
-        Ok(result.rows_affected() == 1)
     }
 
     #[tracing::instrument(err, skip(self, content))]

@@ -80,5 +80,12 @@ pub async fn delete_user_chats(
         entity_registry_db_utils::delete_entity(transaction, chat_uuid).await?;
     }
 
+    source_items::sync_many(
+        transaction.as_mut(),
+        model_entity::EntityType::Chat,
+        &user_chats,
+    )
+    .await?;
+
     Ok(())
 }

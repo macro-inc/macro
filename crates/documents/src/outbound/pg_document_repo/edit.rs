@@ -66,6 +66,13 @@ pub(super) async fn update_document_metadata(
     }
 
     query.execute(transaction.as_mut()).await?;
+    source_items::sync_one(
+        transaction.as_mut(),
+        model_entity::EntityType::Document,
+        document_id,
+    )
+    .await?;
+
     Ok(())
 }
 

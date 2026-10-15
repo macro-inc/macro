@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT sub_type as \"sub_type: DocumentSubType\" FROM document_sub_type WHERE document_id = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sub_type: DocumentSubType",
+        "type_info": {
+          "Custom": {
+            "name": "document_sub_type_value",
+            "kind": {
+              "Enum": [
+                "task",
+                "snippet",
+                "skill",
+                "initiative_description"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dee1519f76e3ca320574ba19bfabb2697fed564ea1ffee4bd0e0e57f22ea28d7"
+}

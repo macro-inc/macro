@@ -5527,6 +5527,7 @@ async fn projection_hydration_carries_viewer_relative_facts_from_flat_and_by_id_
             cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::default()),
             exclude_frecency: false,
         },
+        true,
     )
     .await?;
 
@@ -5670,6 +5671,7 @@ async fn projection_status_extraction_treats_non_array_values_as_empty(
             cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::default()),
             exclude_frecency: false,
         },
+        true,
     )
     .await?;
 

@@ -26,7 +26,8 @@ top of it.
 ## Boundaries
 
 - Depends on: `macro_user_id`, `model-entity`, `model_owner`,
-  `models_entity_access_management`, `models_permissions`.
+  `models_entity_access_management`, `models_permissions`, `source_items`
+  (every grant write refreshes the listing projection in the same transaction).
 - Used by: `crates/entity_access_management`, `crates/entity_registry/entity_registry_db_utils`,
   and most domain crates that grant access as part of a write
   (`channels`, `projects`, `teams`, `crm`, `call`, `chat`, `documents`,

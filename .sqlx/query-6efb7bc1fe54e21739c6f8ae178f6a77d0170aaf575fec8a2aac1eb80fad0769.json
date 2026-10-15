@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE \"Document\"\n                    SET \"uploaded\" = true,\n                        \"contentState\" = 'ready',\n                        \"contentLocation\" = COALESCE(\"contentLocation\", 'unknown'),\n                        \"updatedAt\" = NOW()\n                    WHERE id = $1\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6efb7bc1fe54e21739c6f8ae178f6a77d0170aaf575fec8a2aac1eb80fad0769"
+}

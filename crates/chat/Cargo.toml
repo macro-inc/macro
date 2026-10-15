@@ -26,12 +26,14 @@ outbound = [
   "dep:entity_registry_db_utils",
   "dep:macro_uuid",
   "dep:share_permission_db_utils",
+  "dep:source_items",
   "dep:sqlx",
   "ports",
 ]
 ports = []
 
 [dependencies]
+source_items = { path = "../source_items", optional = true }
 activity = { path = "../activity", default-features = false }
 # Domain (always included)
 agent = { path = "../agent" }

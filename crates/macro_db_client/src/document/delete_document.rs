@@ -5,68 +5,82 @@ use sqlx::{Pool, Postgres, Transaction};
 /// Removing the history and pins for the document as well.
 #[tracing::instrument(skip(db))]
 pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::Result<()> {
-    let mut transaction = db.begin().await?;
-    sqlx::query!(
-        r#"
-        DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
-        "#,
-        document_id,
-        "document",
+    entity_access_db_utils::transaction_retry::on_conflict(
+        || async {
+            let mut transaction = db.begin().await?;
+            sqlx::query!(
+                r#"
+                DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
+                "#,
+                document_id,
+                "document",
+            )
+            .execute(&mut *transaction)
+            .await?;
+
+            sqlx::query!(
+                r#"
+                DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
+                "#,
+                document_id,
+                "document",
+            )
+            .execute(&mut *transaction)
+            .await?;
+
+            let share_permission: Option<String> = sqlx::query!(
+                r#"
+                    SELECT "sharePermissionId" as share_permission_id
+                    FROM "DocumentPermission"
+                    WHERE "documentId"=$1"#,
+                document_id
+            )
+            .map(|row| row.share_permission_id)
+            .fetch_optional(&mut *transaction)
+            .await?;
+
+            if let Some(share_permission) = share_permission {
+                sqlx::query!(
+                    r#"
+                    DELETE FROM "SharePermission" WHERE id = $1"#,
+                    share_permission
+                )
+                .execute(&mut *transaction)
+                .await?;
+            }
+
+            sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id)
+                .execute(&mut *transaction)
+                .await?;
+
+            crate::item_access::delete::delete_user_entity_access_by_item(
+                &mut transaction,
+                &macro_uuid::string_to_uuid(document_id).unwrap(),
+                EntityType::Document,
+            )
+            .await?;
+
+            if let Ok(document_uuid) = macro_uuid::string_to_uuid(document_id) {
+                entity_registry_db_utils::delete_entity(&mut transaction, document_uuid).await?;
+            }
+
+            source_items::sync_one(
+                transaction.as_mut(),
+                model_entity::EntityType::Document,
+                document_id,
+            )
+            .await?;
+            if let Err(e) = transaction.commit().await {
+                tracing::error!(error=?e, "unable to commit transaction");
+                return Err(anyhow::Error::from(e));
+            }
+            Ok(())
+        },
+        |error: &anyhow::Error| {
+            entity_access_db_utils::transaction_retry::is_transaction_conflict(error.as_ref())
+        },
     )
-    .execute(&mut *transaction)
-    .await?;
-
-    sqlx::query!(
-        r#"
-        DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
-        "#,
-        document_id,
-        "document",
-    )
-    .execute(&mut *transaction)
-    .await?;
-
-    let share_permission: Option<String> = sqlx::query!(
-        r#"
-            SELECT "sharePermissionId" as share_permission_id
-            FROM "DocumentPermission"
-            WHERE "documentId"=$1"#,
-        document_id
-    )
-    .map(|row| row.share_permission_id)
-    .fetch_optional(&mut *transaction)
-    .await?;
-
-    if let Some(share_permission) = share_permission {
-        sqlx::query!(
-            r#"
-            DELETE FROM "SharePermission" WHERE id = $1"#,
-            share_permission
-        )
-        .execute(&mut *transaction)
-        .await?;
-    }
-
-    sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id)
-        .execute(&mut *transaction)
-        .await?;
-
-    crate::item_access::delete::delete_user_entity_access_by_item(
-        &mut transaction,
-        &macro_uuid::string_to_uuid(document_id).unwrap(),
-        EntityType::Document,
-    )
-    .await?;
-
-    if let Ok(document_uuid) = macro_uuid::string_to_uuid(document_id) {
-        entity_registry_db_utils::delete_entity(&mut transaction, document_uuid).await?;
-    }
-
-    if let Err(e) = transaction.commit().await {
-        tracing::error!(error=?e, "unable to commit transaction");
-        return Err(anyhow::Error::from(e));
-    }
-    Ok(())
+    .await
 }
 
 /// Hard deletes documents in bulk from the database.
@@ -136,6 +150,13 @@ pub async fn delete_document_bulk_tsx(
     for document_uuid in document_uuids {
         entity_registry_db_utils::delete_entity(transaction, document_uuid).await?;
     }
+
+    source_items::sync_many(
+        transaction.as_mut(),
+        model_entity::EntityType::Document,
+        &document_ids,
+    )
+    .await?;
 
     Ok(())
 }

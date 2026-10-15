@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE \"Document\"\n                SET \"deletedAt\" = NULL\n                WHERE id = $1\n                RETURNING owner as owner\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "01fa83619d1c17a8a45cd2fc82c66b67ef359e7ffe1aae32df0c3bf24a6d993e"
+}

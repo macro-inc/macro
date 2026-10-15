@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH items AS (\n    SELECT d.id,\n           CASE WHEN st.sub_type = 'task' THEN 'task' ELSE 'document' END AS kind,\n           CASE WHEN d.\"deletedAt\" IS NULL THEN d.\"updatedAt\" END AS sort_ts\n    FROM \"Document\" d\n    LEFT JOIN document_sub_type st ON st.document_id = d.id\n    WHERE $1 = 'document' AND d.id = ANY($2)\n    UNION ALL\n    SELECT c.id, 'chat', CASE WHEN c.\"deletedAt\" IS NULL THEN c.\"updatedAt\" END\n    FROM \"Chat\" c WHERE $1 = 'chat' AND c.id = ANY($2)\n    UNION ALL\n    SELECT p.id, 'project', CASE WHEN p.\"deletedAt\" IS NULL THEN p.\"updatedAt\" END\n    FROM \"Project\" p WHERE $1 = 'project' AND p.id = ANY($2)\n), wanted AS (\n    SELECT ea.source_id, i.id AS entity_id, i.kind, i.sort_ts, count(*)::int AS grants\n    FROM items i\n    JOIN entity_access ea ON ea.entity_id::text = i.id AND ea.entity_type = $1\n    GROUP BY ea.source_id, i.id, i.kind, i.sort_ts\n), stale AS (\n    DELETE FROM source_items s\n    WHERE s.entity_type = $1 AND s.entity_id = ANY($2)\n      AND NOT EXISTS (\n          SELECT 1 FROM wanted w WHERE w.entity_id = s.entity_id AND w.source_id = s.source_id\n      )\n)\nINSERT INTO source_items AS s (source_id, entity_type, kind, entity_id, sort_ts, grants)\nSELECT source_id, $1, kind, entity_id, sort_ts, grants FROM wanted\nON CONFLICT (entity_type, entity_id, source_id) DO UPDATE\nSET kind = EXCLUDED.kind, sort_ts = EXCLUDED.sort_ts, grants = EXCLUDED.grants\nWHERE (s.kind, s.sort_ts, s.grants)\n      IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED.sort_ts, EXCLUDED.grants)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c0110faf8ae4c93bb626771749705e0789c2455a4d1751cdc105419ea1362f9"
+}

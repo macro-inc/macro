@@ -17,6 +17,8 @@ pub async fn delete_user_projects(
     .fetch_all(transaction.as_mut())
     .await?;
 
+    let cascade_targets =
+        source_items::project_deletion::capture(transaction.as_mut(), &user_projects).await?;
     // Delete pins
     sqlx::query!(
         r#"
@@ -80,5 +82,6 @@ pub async fn delete_user_projects(
         entity_registry_db_utils::delete_entity(transaction, project_uuid).await?;
     }
 
+    source_items::sync_rows(transaction.as_mut(), &cascade_targets).await?;
     Ok(user_projects)
 }

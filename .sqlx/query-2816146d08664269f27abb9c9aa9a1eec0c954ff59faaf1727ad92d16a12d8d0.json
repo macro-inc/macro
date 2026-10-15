@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM \"entity_access\"\n                WHERE \"entity_id\" = $1 AND \"entity_type\" = $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2816146d08664269f27abb9c9aa9a1eec0c954ff59faaf1727ad92d16a12d8d0"
+}

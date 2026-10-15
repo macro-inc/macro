@@ -113,73 +113,81 @@ async fn ensure_referenced_item_visible_to_channel(
     item: &ReferencedShareItem,
     level: AccessLevel,
 ) -> anyhow::Result<()> {
-    let entity_id = macro_uuid::string_to_uuid(item.entity_id())?;
+    entity_access_db_utils::transaction_retry::on_conflict(
+        || async {
+            let entity_id = macro_uuid::string_to_uuid(item.entity_id())?;
 
-    if item.entity_type() == ReferencedShareItemType::EmailThread {
-        share_permission_db_utils::ensure_thread_share_permission(db, item.entity_id())
+            if item.entity_type() == ReferencedShareItemType::EmailThread {
+                share_permission_db_utils::ensure_thread_share_permission(db, item.entity_id())
+                    .await
+                    .context("failed to insert thread share permissions")?;
+            }
+
+            // Session, calendar event, database and form channel grants are canonical
+            // entity-access rows, and a reference keeps any grant the owner already chose.
+            if matches!(
+                item.entity_type(),
+                ReferencedShareItemType::AgentSession
+                    | ReferencedShareItemType::CalendarEvent
+                    | ReferencedShareItemType::Database
+                    | ReferencedShareItemType::Form
+            ) {
+                let mut transaction = db.begin().await?;
+                entity_access_db_utils::channel_share::insert_if_absent(
+                    &mut transaction,
+                    &entity_id,
+                    entity_access_db_type_for(item.entity_type()),
+                    &channel_id,
+                    level,
+                )
+                .await?;
+                transaction.commit().await?;
+                return Ok(());
+            }
+
+            let share_permission_id = share_permission_db_utils::get_share_permission_id(
+                db,
+                item.entity_id(),
+                item.entity_type().as_str(),
+            )
             .await
-            .context("failed to insert thread share permissions")?;
-    }
+            .context("failed to get share permission id")?;
 
-    // Session, calendar event, database and form channel grants are canonical
-    // entity-access rows, and a reference keeps any grant the owner already chose.
-    if matches!(
-        item.entity_type(),
-        ReferencedShareItemType::AgentSession
-            | ReferencedShareItemType::CalendarEvent
-            | ReferencedShareItemType::Database
-            | ReferencedShareItemType::Form
-    ) {
-        let mut transaction = db.begin().await?;
-        entity_access_db_utils::channel_share::insert_if_absent(
-            &mut transaction,
-            &entity_id,
-            entity_access_db_type_for(item.entity_type()),
-            &channel_id,
-            level,
-        )
-        .await?;
-        transaction.commit().await?;
-        return Ok(());
-    }
+            let mut transaction = db.begin().await?;
+            let insert_result = share_permission_db_utils::insert_channel_share_permission(
+                &mut *transaction,
+                &share_permission_id,
+                &channel_id.to_string(),
+                level,
+            )
+            .await
+            .context("failed to insert channel share permission")?;
 
-    let share_permission_id = share_permission_db_utils::get_share_permission_id(
-        db,
-        item.entity_id(),
-        item.entity_type().as_str(),
+            if insert_result == InsertChannelSharePermissionResult::AlreadyExists {
+                return Ok(());
+            }
+
+            entity_access_db_utils::update_entity_access_channel_share_permissions(
+                &mut transaction,
+                &entity_id,
+                entity_access_db_type_for(item.entity_type()),
+                &[UpdateChannelSharePermission {
+                    channel_id: channel_id.to_string(),
+                    operation: UpdateOperation::Add,
+                    access_level: Some(level),
+                }],
+            )
+            .await
+            .context("failed to update channel entity access")?;
+
+            transaction.commit().await?;
+            Ok(())
+        },
+        |error: &anyhow::Error| {
+            entity_access_db_utils::transaction_retry::is_transaction_conflict(error.as_ref())
+        },
     )
     .await
-    .context("failed to get share permission id")?;
-
-    let mut transaction = db.begin().await?;
-    let insert_result = share_permission_db_utils::insert_channel_share_permission(
-        &mut *transaction,
-        &share_permission_id,
-        &channel_id.to_string(),
-        level,
-    )
-    .await
-    .context("failed to insert channel share permission")?;
-
-    if insert_result == InsertChannelSharePermissionResult::AlreadyExists {
-        return Ok(());
-    }
-
-    entity_access_db_utils::update_entity_access_channel_share_permissions(
-        &mut transaction,
-        &entity_id,
-        entity_access_db_type_for(item.entity_type()),
-        &[UpdateChannelSharePermission {
-            channel_id: channel_id.to_string(),
-            operation: UpdateOperation::Add,
-            access_level: Some(level),
-        }],
-    )
-    .await
-    .context("failed to update channel entity access")?;
-
-    transaction.commit().await?;
-    Ok(())
 }
 
 fn entity_access_type_for(item_type: ReferencedShareItemType) -> EntityType {

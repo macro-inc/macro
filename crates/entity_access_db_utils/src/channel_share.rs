@@ -29,6 +29,8 @@ pub async fn insert_if_absent(
     )
     .execute(transaction.as_mut())
     .await?;
+    source_items::sync_one(transaction.as_mut(), entity_type, &entity_id.to_string()).await?;
+
     Ok(())
 }
 

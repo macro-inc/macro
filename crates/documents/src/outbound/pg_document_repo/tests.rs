@@ -3391,3 +3391,57 @@ async fn test_get_github_pull_request_task_links_returns_requested_keys_oldest_f
         ]
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn document_writes_maintain_source_items_without_triggers(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = test_repo(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, true, None),
+            md_share_permission(),
+        )
+        .await?;
+    let id = &document.document_id;
+    let row = sqlx::query!(
+        "SELECT kind, grants FROM source_items WHERE entity_id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.kind, "task");
+    assert_eq!(row.grants, 1);
+
+    repo.update_document_modified(id).await?;
+    let current = sqlx::query_scalar!(
+        r#"SELECT bool_and(s.sort_ts IS NOT DISTINCT FROM d."updatedAt")
+           FROM source_items s JOIN "Document" d ON d.id = s.entity_id
+           WHERE s.entity_type = 'document' AND s.entity_id = $1"#,
+        id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(current, Some(true));
+
+    repo.soft_delete_document(id).await?;
+    assert!(
+        sqlx::query_scalar!(
+            "SELECT sort_ts IS NULL AS \"deleted!\" FROM source_items WHERE entity_id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await?
+    );
+    repo.delete_document_by_id(id).await?;
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM source_items WHERE entity_id = $1", id)
+            .fetch_one(&pool)
+            .await?,
+        Some(0)
+    );
+    Ok(())
+}

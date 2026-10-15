@@ -40,12 +40,14 @@ gmail_senders = ["gmail_token", "dep:gmail_client", "dep:models_email"]
 gmail_token = ["dep:authentication_service_client", "dep:google_token", "dep:redis", "ports"]
 http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
-outbound = ["dep:calendar_events", "dep:sqlx", "ports"]
+outbound = ["dep:calendar_events", "dep:entity_access_db_utils", "dep:source_items", "dep:sqlx", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 # The S3 adapter for staged draft attachments.
 s3 = ["dep:aws-sdk-s3", "ports"]
 
 [dependencies]
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+source_items = { path = "../source_items", optional = true }
 calendar_events = { path = "../calendar_events", optional = true }
 ical = { version = "0.11", default-features = false, features = ["ical"], optional = true }
 chrono-tz = { workspace = true, optional = true }

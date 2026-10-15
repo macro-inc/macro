@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH RECURSIVE projects AS (\n                SELECT id FROM \"Project\" WHERE id = ANY($1)\n                UNION\n                SELECT p.id FROM \"Project\" p JOIN projects parent ON p.\"parentId\" = parent.id\n            ) SELECT id AS \"id!\" FROM projects ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "353df08e79d866ce5fb947a0bea2bbcbd4c86867c9a98418f28e9f7ea3b2a6da"
+}

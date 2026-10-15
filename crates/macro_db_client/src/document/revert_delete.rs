@@ -8,73 +8,87 @@ pub async fn revert_delete_document(
     document_id: &str,
     project_id: Option<&str>,
 ) -> anyhow::Result<()> {
-    let mut transaction = db.begin().await.context("unable to begin transaction")?;
+    entity_access_db_utils::transaction_retry::on_conflict(
+        || async {
+            let mut transaction = db.begin().await.context("unable to begin transaction")?;
 
-    let document_owner = sqlx::query!(
-        r#"
-        UPDATE "Document"
-        SET "deletedAt" = NULL
-        WHERE id = $1
-        RETURNING owner as owner
-        "#,
-        document_id,
-    )
-    .map(|row| row.owner)
-    .fetch_one(&mut *transaction)
-    .await
-    .context("unable to update document")?;
+            let document_owner = sqlx::query!(
+                r#"
+                UPDATE "Document"
+                SET "deletedAt" = NULL
+                WHERE id = $1
+                RETURNING owner as owner
+                "#,
+                document_id,
+            )
+            .map(|row| row.owner)
+            .fetch_one(&mut *transaction)
+            .await
+            .context("unable to update document")?;
 
-    if let Ok(document_uuid) = macro_uuid::string_to_uuid(document_id) {
-        entity_registry_db_utils::clear_deleted(&mut transaction, document_uuid).await?;
-    }
-
-    sqlx::query!(
-        r#"
-        INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
-        VALUES ($1, $2, $3, NOW(), NOW())
-        ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
-        SET "updatedAt" = NOW();
-        "#,
-        document_owner,
-        document_id,
-        "document",
-    )
-    .execute(&mut *transaction)
-    .await
-    .context("unable to add document to history")?;
-
-    if let Some(project_id) = project_id {
-        tracing::trace!("document was in nested");
-        let is_deleted = sqlx::query!(
-            r#"
-            SELECT "deletedAt" as deleted_at FROM "Project" WHERE "id" = $1
-            "#,
-            project_id
-        )
-        .map(|row| row.deleted_at)
-        .fetch_one(&mut *transaction)
-        .await?;
-
-        if is_deleted.is_some() {
-            tracing::trace!("project is deleted, removing document from project");
+            if let Ok(document_uuid) = macro_uuid::string_to_uuid(document_id) {
+                entity_registry_db_utils::clear_deleted(&mut transaction, document_uuid).await?;
+            }
 
             sqlx::query!(
                 r#"
-                UPDATE "Document" SET "projectId" = NULL WHERE "id" = $1
+                INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
+                VALUES ($1, $2, $3, NOW(), NOW())
+                ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
+                SET "updatedAt" = NOW();
                 "#,
-                document_id
+                document_owner,
+                document_id,
+                "document",
             )
             .execute(&mut *transaction)
+            .await
+            .context("unable to add document to history")?;
+
+            if let Some(project_id) = project_id {
+                tracing::trace!("document was in nested");
+                let is_deleted = sqlx::query!(
+                    r#"
+                    SELECT "deletedAt" as deleted_at FROM "Project" WHERE "id" = $1
+                    "#,
+                    project_id
+                )
+                .map(|row| row.deleted_at)
+                .fetch_one(&mut *transaction)
+                .await?;
+
+                if is_deleted.is_some() {
+                    tracing::trace!("project is deleted, removing document from project");
+
+                    sqlx::query!(
+                        r#"
+                        UPDATE "Document" SET "projectId" = NULL WHERE "id" = $1
+                        "#,
+                        document_id
+                    )
+                    .execute(&mut *transaction)
+                    .await?;
+                }
+            }
+
+            source_items::sync_one(
+                transaction.as_mut(),
+                model_entity::EntityType::Document,
+                document_id,
+            )
             .await?;
-        }
-    }
+            transaction
+                .commit()
+                .await
+                .context("unable to commit transaction")?;
 
-    transaction
-        .commit()
-        .await
-        .context("unable to commit transaction")?;
-
-    Ok(())
+            Ok(())
+        },
+        |error: &anyhow::Error| {
+            entity_access_db_utils::transaction_retry::is_transaction_conflict(error.as_ref())
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

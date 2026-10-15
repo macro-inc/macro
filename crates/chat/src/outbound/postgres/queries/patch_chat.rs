@@ -46,5 +46,7 @@ pub(crate) async fn patch_chat(
         }
     }
 
+    source_items::sync_one(tx.as_mut(), model_entity::EntityType::Chat, chat_id).await?;
+
     Ok(())
 }

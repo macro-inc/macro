@@ -36,6 +36,7 @@ outbound = [
   "dep:hex",
   "dep:macro_sha_count_client",
   "dep:share_permission_db_utils",
+  "dep:source_items",
   "dep:sqlx",
   "dep:sqs_client",
   "dep:system_properties",
@@ -45,6 +46,7 @@ ports = ["dep:tokio"]
 service = ["dep:entity_access_management", "dep:shared_entity_registry", "ports"]
 
 [dependencies]
+source_items = { path = "../source_items", optional = true }
 activity = { path = "../activity", default-features = false }
 # Core
 anyhow = { workspace = true }

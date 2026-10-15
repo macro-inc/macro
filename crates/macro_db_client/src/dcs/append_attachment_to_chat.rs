@@ -53,6 +53,12 @@ pub async fn append_attachment_to_chat(
     .execute(&mut **transaction)
     .await?;
 
+    source_items::sync_one(
+        transaction.as_mut(),
+        model_entity::EntityType::Chat,
+        &attachment.chat_id,
+    )
+    .await?;
     add_attachment(transaction, attachment).await?;
     Ok(())
 }

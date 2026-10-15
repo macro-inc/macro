@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE \"Chat\"\n                SET \"deletedAt\" = NULL\n                WHERE id = $1\n                RETURNING \"userId\" as owner\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2edad393ab15f96c2f8dc9dab8296cd2d4a911f16fe1fb2ff6a55c2a1fba62b8"
+}

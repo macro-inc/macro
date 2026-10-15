@@ -49,6 +49,7 @@ DELETE FROM "SharePermission" WHERE id IN (SELECT id FROM sp_ids)"#
         format!(
             "DELETE FROM entity_access WHERE entity_id::text LIKE '{m}' OR source_id LIKE '{m}'"
         ),
+        format!("DELETE FROM source_items WHERE entity_id LIKE '{m}' OR source_id LIKE '{m}'"),
         format!("DELETE FROM entity_properties WHERE entity_id LIKE '{m}'"),
         // Notifications point at seeded items (message notifications carry
         // the channel id); user_notification rows cascade.

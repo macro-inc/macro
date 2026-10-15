@@ -6,10 +6,12 @@ mod test;
 
 mod database_row;
 mod document_ids;
+mod feed;
 mod initiative;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
+use feed::{Feed, FeedArm};
 use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
     build_initiative_filter, initiative_access_clause, initiative_opted_in,
@@ -69,6 +71,26 @@ static PREFIX: &str = r#"
         SELECT $1
     ),
 "#;
+
+/// Whether the user holds the source of the `source_items` row `g`, checked
+/// with index probes so the cost does not grow with the user's sources. Must
+/// accept exactly the sources `user_source_ids` lists. Channel ids only match
+/// as canonical uuid text there, so other text skips the cast.
+static USER_HOLDS_GRANT_SOURCE: &str = r#"(
+                            g.source_id = $1
+                            OR EXISTS (
+                                SELECT 1 FROM team_user tu
+                                WHERE tu.user_id = $1 AND tu.team_id::text = g.source_id
+                            )
+                            OR EXISTS (
+                                SELECT 1 FROM comms_channel_participants cp
+                                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                                AND cp.channel_id = CASE
+                                    WHEN g.source_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                                    THEN g.source_id::uuid
+                                END
+                            )
+                        )"#;
 
 // -- Lightweight top clauses: only id + sort_ts (plus filter-required joins) --
 
@@ -1404,10 +1426,20 @@ fn project_top_where_clause() -> String {
     )
 }
 
+/// Where `build_query` finds documents, chats and projects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ItemSource {
+    /// `source_items`, under every sort it can order.
+    SourceItems,
+    /// The item tables, which `CreatedAt` always reads.
+    ItemTables,
+}
+
 fn build_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     sort_method: SimpleSortMethod,
+    item_source: ItemSource,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
@@ -1510,61 +1542,95 @@ fn build_query<'a>(
         build_notification_items_cte(&mut builder, predicate, &item_types);
     }
 
+    let properties_filter = filter_ast.properties_filter.as_deref();
+    // Building the document arm binds its id arrays, so build the arms only for
+    // a query that reads them.
+    let feed = if item_source == ItemSource::SourceItems && Feed::serves(sort_method) {
+        let document = include_documents.then(|| {
+            FeedArm::document(
+                document_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && document_notification.is_some(),
+                document_ids,
+            )
+        });
+        let chat = include_chats.then(|| {
+            FeedArm::chat(
+                chat_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && chat_notification.is_some(),
+            )
+        });
+        let project = include_projects.then(|| {
+            FeedArm::project(
+                project_filter,
+                properties_filter,
+                optimized_notification_predicate.is_some() && project_notification.is_some(),
+            )
+        });
+        Feed::new(
+            sort_method,
+            exclude_frecency,
+            [document, chat, project].into_iter().flatten(),
+        )
+    } else {
+        None
+    };
+    if let Some(feed) = &feed {
+        feed.push_ctes(&mut builder);
+    }
+
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
     builder.push("SELECT all_items.item_type, all_items.id, all_items.sort_ts FROM (");
 
     let mut needs_separator = false;
 
-    if include_documents {
-        push_union_separator(&mut builder, &mut needs_separator);
-        // Document top clause (lightweight). The document_sub_type join is
-        // only needed by filters that reference `dt` (Importance / CBM);
-        // SubType literals render as their own EXISTS probes.
-        let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
-        builder.push(document_top_clause(sort_method, needs_task_property_joins));
-        if optimized_notification_predicate.is_some() && document_notification.is_some() {
-            builder.push(build_notification_join("d", "document"));
+    if let Some(feed) = &feed {
+        feed.push_members(&mut builder, &mut needs_separator);
+    } else {
+        if include_documents {
+            push_union_separator(&mut builder, &mut needs_separator);
+            // Document top clause (lightweight). The document_sub_type join is
+            // only needed by filters that reference `dt` (Importance / CBM);
+            // SubType literals render as their own EXISTS probes.
+            let needs_task_property_joins =
+                document_filter_needs_task_property_joins(document_filter);
+            builder.push(document_top_clause(sort_method, needs_task_property_joins));
+            if optimized_notification_predicate.is_some() && document_notification.is_some() {
+                builder.push(build_notification_join("d", "document"));
+            }
+            if needs_task_property_joins {
+                builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
+            }
+            builder.push(document_top_where_clause(sort_method));
+            builder.push(build_document_filter(document_filter, Some(document_ids)));
+            builder.push(build_properties_filter(properties_filter, "d.id"));
         }
-        if needs_task_property_joins {
-            builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
-        }
-        builder.push(document_top_where_clause(sort_method));
-        builder.push(build_document_filter(document_filter, Some(document_ids)));
-        builder.push(build_properties_filter(
-            filter_ast.properties_filter.as_deref(),
-            "d.id",
-        ));
-    }
 
-    if include_chats {
-        push_union_separator(&mut builder, &mut needs_separator);
-        // Chat top clause (lightweight)
-        builder.push(chat_top_clause(sort_method));
-        if optimized_notification_predicate.is_some() && chat_notification.is_some() {
-            builder.push(build_notification_join("c", "chat"));
+        if include_chats {
+            push_union_separator(&mut builder, &mut needs_separator);
+            // Chat top clause (lightweight)
+            builder.push(chat_top_clause(sort_method));
+            if optimized_notification_predicate.is_some() && chat_notification.is_some() {
+                builder.push(build_notification_join("c", "chat"));
+            }
+            builder.push(chat_top_where_clause());
+            builder.push(build_chat_filter(chat_filter));
+            builder.push(build_properties_filter(properties_filter, "c.id"));
         }
-        builder.push(chat_top_where_clause());
-        builder.push(build_chat_filter(chat_filter));
-        builder.push(build_properties_filter(
-            filter_ast.properties_filter.as_deref(),
-            "c.id",
-        ));
-    }
 
-    if include_projects {
-        push_union_separator(&mut builder, &mut needs_separator);
-        // Project top clause (lightweight)
-        builder.push(project_top_clause(sort_method));
-        if optimized_notification_predicate.is_some() && project_notification.is_some() {
-            builder.push(build_notification_join("p", "project"));
+        if include_projects {
+            push_union_separator(&mut builder, &mut needs_separator);
+            // Project top clause (lightweight)
+            builder.push(project_top_clause(sort_method));
+            if optimized_notification_predicate.is_some() && project_notification.is_some() {
+                builder.push(build_notification_join("p", "project"));
+            }
+            builder.push(project_top_where_clause());
+            builder.push(build_project_filter(project_filter));
+            builder.push(build_properties_filter(properties_filter, "p.id"));
         }
-        builder.push(project_top_where_clause());
-        builder.push(build_project_filter(project_filter));
-        builder.push(build_properties_filter(
-            filter_ast.properties_filter.as_deref(),
-            "p.id",
-        ));
     }
 
     if include_initiatives {
@@ -1957,7 +2023,7 @@ impl SoupRow {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     /// the user for which we are performing the query
     pub user_id: MacroUserIdStr<'a>,
@@ -1974,6 +2040,7 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
 async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+    item_source: ItemSource,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
@@ -1995,6 +2062,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         cursor.filter(),
         exclude_frecency,
         *cursor.sort_method(),
+        item_source,
         &mut document_ids,
     );
     let mut query = builder
@@ -2030,19 +2098,44 @@ async fn expanded_dynamic_cursor_soup_hydrated(
 pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
+    source_items_enabled: bool,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
-    expanded_dynamic_cursor_soup_hydrated(db, args).await
+    let item_source = if source_items_enabled {
+        ItemSource::SourceItems
+    } else {
+        ItemSource::ItemTables
+    };
+    expanded_dynamic_cursor_soup_hydrated(db, args, item_source).await
 }
 
-/// Execute a flat expanded dynamic query without exposing projection metadata.
+/// Execute a flat expanded dynamic query on both listing paths, require the same
+/// page from each, and return it without projection metadata.
 #[cfg(test)]
 #[tracing::instrument(skip(db), err)]
 pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    Ok(expanded_dynamic_cursor_soup_hydrated(db, args)
-        .await?
+    let item_tables =
+        expanded_dynamic_cursor_soup_hydrated(db, args.clone(), ItemSource::ItemTables).await?;
+    // Query tests write canonical SQL fixtures directly. Prepare their projection
+    // explicitly; repository tests separately verify application maintenance.
+    source_items::backfill::run(db).await?;
+    let source_items =
+        expanded_dynamic_cursor_soup_hydrated(db, args, ItemSource::SourceItems).await?;
+    let shown = |page: &[SoupProjectionHydration]| {
+        page.iter()
+            .map(|hydration| serde_json::to_value(&hydration.item).unwrap())
+            .collect::<Vec<_>>()
+    };
+    // Production reads the item tables unless the projection is enabled, so
+    // every query test checks both listings and asserts on the default one.
+    assert_eq!(
+        shown(&source_items),
+        shown(&item_tables),
+        "source_items and the item tables listed different pages"
+    );
+    Ok(item_tables
         .into_iter()
         .map(|hydration| hydration.item)
         .collect())

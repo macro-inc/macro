@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Locks the items a refresh rebuilds. Row locks come first: a writer that\n-- already updated an item holds its row lock, so taking the row lock before the\n-- advisory lock keeps one order for both. The advisory locks read the row-lock\n-- count, so they run only after every row lock is held.\n--\n-- Advisory locks stay in PostgreSQL's shared lock table until commit, so a\n-- transaction takes them only while its running total, kept in a\n-- transaction-local setting, stays within $3.\nWITH documents AS MATERIALIZED (\n    SELECT id FROM \"Document\"\n    WHERE $1 = 'document' AND id = ANY($2)\n    ORDER BY id\n    FOR NO KEY UPDATE\n), chats AS MATERIALIZED (\n    SELECT id FROM \"Chat\"\n    WHERE $1 = 'chat' AND id = ANY($2)\n    ORDER BY id\n    FOR NO KEY UPDATE\n), projects AS MATERIALIZED (\n    SELECT id FROM \"Project\"\n    WHERE $1 = 'project' AND id = ANY($2)\n    ORDER BY id\n    FOR NO KEY UPDATE\n), locked AS MATERIALIZED (\n    SELECT (SELECT count(*) FROM documents)\n         + (SELECT count(*) FROM chats)\n         + (SELECT count(*) FROM projects) AS rows\n), held AS MATERIALIZED (\n    -- A setting reset at transaction end reads as '' rather than NULL.\n    SELECT coalesce(nullif(current_setting('source_items.advisory_locks', true), ''), '0')::int\n        AS keys\n)\nSELECT current_setting('transaction_isolation') AS \"isolation!\"\nFROM locked\nCROSS JOIN held\nCROSS JOIN LATERAL (\n    SELECT count(pg_advisory_xact_lock(hashtextextended($1 || ':' || ids.id, 7316)))::int AS keys\n    FROM (SELECT DISTINCT unnest($2::text[]) AS id ORDER BY id) ids\n    WHERE locked.rows >= 0 AND held.keys + cardinality($2) <= $3\n) advisory\nWHERE set_config('source_items.advisory_locks', (held.keys + advisory.keys)::text, true) IS NOT NULL\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "isolation!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b52e18ef0b5278d75f84a3b5de39e8f632198b8f8e19ad4d3afab8839e100900"
+}

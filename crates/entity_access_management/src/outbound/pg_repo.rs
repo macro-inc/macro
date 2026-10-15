@@ -103,39 +103,46 @@ impl EntityAccessManagementRepository for PgRepository {
         entity_type: EntityType,
         project_id: &uuid::Uuid,
     ) -> Result<(), Self::Err> {
-        let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::transaction_retry::on_conflict(
+            || async {
+                let mut transaction = self.pool.begin().await?;
 
-        let walked_up_project_ids = self
-            .walk_up_project_tree(&mut transaction, project_id)
-            .await?;
+                let walked_up_project_ids = self
+                    .walk_up_project_tree(&mut transaction, project_id)
+                    .await?;
 
-        let source_entities = self
-            .get_all_source_entities_for_projects(&mut transaction, &walked_up_project_ids)
-            .await?;
+                let source_entities = self
+                    .get_all_source_entities_for_projects(&mut transaction, &walked_up_project_ids)
+                    .await?;
 
-        if !source_entities.is_empty() {
-            let entity_type_str: &str = entity_type.into();
+                if !source_entities.is_empty() {
+                    let entity_type_str: &str = entity_type.into();
 
-            let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
-                "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",
-            );
+                    let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+                        "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",
+                    );
 
-            qb.push_values(&source_entities, |mut b, source| {
-                b.push_bind(entity_id)
-                    .push_bind(entity_type_str)
-                    .push_bind(&source.source_id)
-                    .push_bind(source.source_type)
-                    .push_bind(source.access_level)
-                    .push_bind(source.project_id.to_string());
-            });
+                    qb.push_values(&source_entities, |mut b, source| {
+                        b.push_bind(entity_id)
+                            .push_bind(entity_type_str)
+                            .push_bind(&source.source_id)
+                            .push_bind(source.source_type)
+                            .push_bind(source.access_level)
+                            .push_bind(source.project_id.to_string());
+                    });
 
-            qb.push(" ON CONFLICT DO NOTHING");
-            qb.build().execute(transaction.as_mut()).await?;
-        }
+                    qb.push(" ON CONFLICT DO NOTHING");
+                    qb.build().execute(transaction.as_mut()).await?;
+                }
 
-        transaction.commit().await?;
+                source_items::sync_one(transaction.as_mut(), entity_type, &entity_id.to_string()).await?;
+                transaction.commit().await?;
 
-        Ok(())
+                Ok(())
+            },
+            |error: &sqlx::Error| entity_access_db_utils::transaction_retry::is_transaction_conflict(error),
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -145,35 +152,49 @@ impl EntityAccessManagementRepository for PgRepository {
         entity_type: EntityType,
         old_project_id: &uuid::Uuid,
     ) -> Result<(), Self::Err> {
-        let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::transaction_retry::on_conflict(
+            || async {
+                let mut transaction = self.pool.begin().await?;
 
-        let walked_up_project_ids = self
-            .walk_up_project_tree(&mut transaction, old_project_id)
-            .await?;
+                let walked_up_project_ids = self
+                    .walk_up_project_tree(&mut transaction, old_project_id)
+                    .await?;
 
-        if !walked_up_project_ids.is_empty() {
-            let entity_type_str: &str = entity_type.into();
-            sqlx::query!(
-                r#"
-                DELETE FROM entity_access
-                WHERE entity_id = $1
-                AND entity_type = $2
-                AND granted_from_project_id = ANY($3)
-                "#,
-                entity_id,
-                entity_type_str,
-                &walked_up_project_ids
-                    .into_iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<String>>(),
-            )
-            .execute(transaction.as_mut())
-            .await?;
+                if !walked_up_project_ids.is_empty() {
+                    let entity_type_str: &str = entity_type.into();
+                    sqlx::query!(
+                        r#"
+                        DELETE FROM entity_access
+                        WHERE entity_id = $1
+                        AND entity_type = $2
+                        AND granted_from_project_id = ANY($3)
+                        "#,
+                        entity_id,
+                        entity_type_str,
+                        &walked_up_project_ids
+                            .into_iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<String>>(),
+                    )
+                    .execute(transaction.as_mut())
+                    .await?;
 
-            transaction.commit().await?;
-        }
+                    source_items::sync_one(
+                        transaction.as_mut(),
+                        entity_type,
+                        &entity_id.to_string(),
+                    )
+                    .await?;
+                    transaction.commit().await?;
+                }
 
-        Ok(())
+                Ok(())
+            },
+            |error: &sqlx::Error| {
+                entity_access_db_utils::transaction_retry::is_transaction_conflict(error)
+            },
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -183,89 +204,97 @@ impl EntityAccessManagementRepository for PgRepository {
         old_project_id: Option<&uuid::Uuid>,
         new_project_id: Option<&uuid::Uuid>,
     ) -> Result<(), Self::Err> {
-        let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::transaction_retry::on_conflict(
+            || async {
+                let mut transaction = self.pool.begin().await?;
 
-        // The project entities we will need to update (including the project itself)
-        let project_entities = self
-            .get_nested_project_entities(&mut transaction, project_id)
-            .await?;
+                // The project entities we will need to update (including the project itself)
+                let project_entities = self
+                    .get_nested_project_entities(&mut transaction, project_id)
+                    .await?;
 
-        // Get all project items including the project itself
-        // If there is an old_project_id we need to remove all project item shares for the old_project_id and above
-        if let Some(old_project_id) = old_project_id {
-            // Walk project tree
-            let old_walked_up_project_ids = self
-                .walk_up_project_tree(&mut transaction, old_project_id)
-                .await?;
+                // Get all project items including the project itself
+                // If there is an old_project_id we need to remove all project item shares for the old_project_id and above
+                if let Some(old_project_id) = old_project_id {
+                    // Walk project tree
+                    let old_walked_up_project_ids = self
+                        .walk_up_project_tree(&mut transaction, old_project_id)
+                        .await?;
 
-            // Delete all entities in the project for projects shared
-            if !old_walked_up_project_ids.is_empty() {
-                sqlx::query!(
-                    r#"
-                DELETE FROM entity_access
-                WHERE entity_id = ANY($1)
-                AND granted_from_project_id = ANY($2)
-                "#,
-                    &project_entities
-                        .iter()
-                        .filter_map(|s| Uuid::parse_str(&s.entity_id).ok())
-                        .collect::<Vec<uuid::Uuid>>(),
-                    &old_walked_up_project_ids
-                        .into_iter()
-                        .map(|s| s.to_string())
-                        .collect::<Vec<String>>(),
-                )
-                .execute(transaction.as_mut())
-                .await?;
-            }
-        }
+                    // Delete all entities in the project for projects shared
+                    if !old_walked_up_project_ids.is_empty() {
+                        sqlx::query!(
+                            r#"
+                        DELETE FROM entity_access
+                        WHERE entity_id = ANY($1)
+                        AND granted_from_project_id = ANY($2)
+                        "#,
+                            &project_entities
+                                .iter()
+                                .filter_map(|s| Uuid::parse_str(&s.entity_id).ok())
+                                .collect::<Vec<uuid::Uuid>>(),
+                            &old_walked_up_project_ids
+                                .into_iter()
+                                .map(|s| s.to_string())
+                                .collect::<Vec<String>>(),
+                        )
+                        .execute(transaction.as_mut())
+                        .await?;
+                    }
+                }
 
-        // If there is a new_project_id we need to add all project item shares for new_project_id and above
-        if let Some(new_project_id) = new_project_id {
-            let new_walked_up_project_ids = self
-                .walk_up_project_tree(&mut transaction, new_project_id)
-                .await?;
+                // If there is a new_project_id we need to add all project item shares for new_project_id and above
+                if let Some(new_project_id) = new_project_id {
+                    let new_walked_up_project_ids = self
+                        .walk_up_project_tree(&mut transaction, new_project_id)
+                        .await?;
 
-            // get all source entities for the new walked up projects
-            let source_entities = self
-                .get_all_source_entities_for_projects(&mut transaction, &new_walked_up_project_ids)
-                .await?;
+                    // get all source entities for the new walked up projects
+                    let source_entities = self
+                        .get_all_source_entities_for_projects(&mut transaction, &new_walked_up_project_ids)
+                        .await?;
 
-            if !source_entities.is_empty() {
-                let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
-                    "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",
-                );
+                    if !source_entities.is_empty() {
+                        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+                            "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",
+                        );
 
-                let rows: Vec<_> = project_entities
-                    .iter()
-                    .filter_map(|entity| {
-                        Uuid::parse_str(&entity.entity_id)
-                            .ok()
-                            .map(|id| (id, &entity.entity_type))
-                    })
-                    .flat_map(|(entity_id, entity_type)| {
-                        source_entities
+                        let rows: Vec<_> = project_entities
                             .iter()
-                            .map(move |source| (entity_id, entity_type, source))
-                    })
-                    .collect();
+                            .filter_map(|entity| {
+                                Uuid::parse_str(&entity.entity_id)
+                                    .ok()
+                                    .map(|id| (id, &entity.entity_type))
+                            })
+                            .flat_map(|(entity_id, entity_type)| {
+                                source_entities
+                                    .iter()
+                                    .map(move |source| (entity_id, entity_type, source))
+                            })
+                            .collect();
 
-                qb.push_values(&rows, |mut b, (entity_id, entity_type, source)| {
-                    b.push_bind(entity_id)
-                        .push_bind(entity_type)
-                        .push_bind(&source.source_id)
-                        .push_bind(source.source_type)
-                        .push_bind(source.access_level)
-                        .push_bind(source.project_id.to_string());
-                });
+                        qb.push_values(&rows, |mut b, (entity_id, entity_type, source)| {
+                            b.push_bind(entity_id)
+                                .push_bind(entity_type)
+                                .push_bind(&source.source_id)
+                                .push_bind(source.source_type)
+                                .push_bind(source.access_level)
+                                .push_bind(source.project_id.to_string());
+                        });
 
-                qb.push(" ON CONFLICT DO NOTHING");
-                qb.build().execute(transaction.as_mut()).await?;
-            }
-        }
+                        qb.push(" ON CONFLICT DO NOTHING");
+                        qb.build().execute(transaction.as_mut()).await?;
+                    }
+                }
 
-        transaction.commit().await?;
+                let affected = project_entities.iter().map(|item| (item.entity_type.clone(), item.entity_id.clone())).collect::<Vec<_>>();
+                source_items::sync_rows(transaction.as_mut(), &affected).await?;
+                transaction.commit().await?;
 
-        Ok(())
+                Ok(())
+            },
+            |error: &sqlx::Error| entity_access_db_utils::transaction_retry::is_transaction_conflict(error),
+        )
+        .await
     }
 }
