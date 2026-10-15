@@ -24,6 +24,7 @@ import {
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormsQuery } from '@queries/storage/forms';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { type Accessor, createMemo } from 'solid-js';
 import type { DriveListSource, DriveSelection } from '../context/drive-source';
 import { DRIVE_FACETS } from '../filters/drive-facets';
@@ -148,7 +149,8 @@ export function createDriveDataSource(options: {
   const matchesFacets = (entity: EntityData) =>
     testFacets(selection().facets, DRIVE_FACETS, entity, facetContext());
 
-  const localPool = createMemo(() => {
+  // Lazy: local search reads the pool only for non-empty text.
+  const localPool = createLazyMemo(() => {
     const attachmentScoped = selection().scope !== 'all';
 
     const admittedDocuments = new Set<string>();

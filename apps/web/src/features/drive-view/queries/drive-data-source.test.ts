@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     refresh: vi.fn(async () => {}),
     fetchNextPage: vi.fn(async () => {}),
   },
+  searchContext: undefined as { entityPool: () => unknown[] } | undefined,
 }));
 vi.mock('@queries/storage/databases', () => ({
   useDatabasesQuery: () => mocks.database,
@@ -50,7 +51,7 @@ vi.mock('@app/features/soup/entity-notifications', () => ({
   withEntityNotifications: (entity: unknown) => entity,
 }));
 vi.mock('@app/features/soup/search', () => ({
-  useOptionalSearchContext: () => undefined,
+  useOptionalSearchContext: () => mocks.searchContext,
   createSearchState: ({ text }: { text: () => string }) => ({
     isSearching: () => !!text(),
     data: () => [],
@@ -70,6 +71,7 @@ import { createDriveDataSource } from './drive-data-source';
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
+  mocks.searchContext = undefined;
   vi.clearAllMocks();
 });
 function setup() {
@@ -115,6 +117,14 @@ function setup() {
   });
 }
 describe('Drive database source integration', () => {
+  it('leaves the local search pool unbuilt while idle', () => {
+    const entityPool = vi.fn(() => []);
+    mocks.searchContext = { entityPool };
+    const { source } = setup();
+    expect(source.items()).toHaveLength(1);
+    expect(entityPool).not.toHaveBeenCalled();
+  });
+
   it('merges databases with files, searches names and applies type facets', () => {
     const { source, setSelection, selection } = setup();
     expect(source.items().map((row) => row.entity.name)).toEqual([

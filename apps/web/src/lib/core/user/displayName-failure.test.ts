@@ -70,3 +70,67 @@ describe('getDisplayName after a failed batch', () => {
     later.dispose();
   });
 });
+
+describe('getDisplayName refresh', () => {
+  const ada = (id: MacroId) =>
+    ok({ names: [{ id, first_name: 'Ada', last_name: 'Lovelace' }] });
+
+  it('keeps a known name rendered while it refreshes and after a failed refresh', async () => {
+    const id = 'macro|known@example.com' as MacroId;
+    mocks.getUserNamesWithEmail
+      .mockResolvedValueOnce(ada(id))
+      .mockResolvedValueOnce(unauthorized);
+    const label = renderLabel(id);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(label.labels.at(-1)).toBe('Ada Lovelace');
+    const resolvedAt = label.labels.length;
+
+    // Past the cache lifetime, a newly mounted label triggers the refresh.
+    await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
+    const refreshing = renderLabel(id);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(mocks.getUserNamesWithEmail).toHaveBeenCalledTimes(2);
+    expect(label.labels.slice(resolvedAt)).not.toContain('known@example.com');
+    expect(label.labels.at(-1)).toBe('Ada Lovelace');
+    expect(refreshing.labels).not.toContain('known@example.com');
+    label.dispose();
+    refreshing.dispose();
+  });
+
+  it('settles ids the response omits so a later access can retry', async () => {
+    const id = 'macro|omitted@example.com' as MacroId;
+    mocks.getUserNamesWithEmail
+      .mockResolvedValueOnce(ok({ names: [] }))
+      .mockResolvedValueOnce(ada(id));
+    renderLabel(id).dispose();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
+    const later = renderLabel(id);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(mocks.getUserNamesWithEmail).toHaveBeenCalledTimes(2);
+    expect(later.labels.at(-1)).toBe('Ada Lovelace');
+    later.dispose();
+  });
+
+  it('treats a thrown request as a failed batch', async () => {
+    const id = 'macro|thrown@example.com' as MacroId;
+    mocks.getUserNamesWithEmail
+      .mockRejectedValueOnce(new Error('token refresh failed'))
+      .mockResolvedValueOnce(ada(id));
+    const first = renderLabel(id);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(first.labels.at(-1)).toBe('thrown@example.com');
+    first.dispose();
+
+    await vi.advanceTimersByTimeAsync(60 * 1000);
+    const later = renderLabel(id);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(mocks.getUserNamesWithEmail).toHaveBeenCalledTimes(2);
+    expect(later.labels.at(-1)).toBe('Ada Lovelace');
+    later.dispose();
+  });
+});

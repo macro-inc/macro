@@ -33,6 +33,7 @@ import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { useContacts } from '@queries/contacts/contacts';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
@@ -202,7 +203,7 @@ export const MobileFilterDrawer = (props: {
     );
   };
 
-  const assigneeOptions = createMemo(() => {
+  const assigneeOptions = createLazyMemo(() => {
     const currentUserId = userId();
     const noAssigneeOption = {
       id: NO_ASSIGNEE,
@@ -237,7 +238,7 @@ export const MobileFilterDrawer = (props: {
     ];
   });
 
-  const filteredAssigneeOptions = createMemo(() => {
+  const filteredAssigneeOptions = createLazyMemo(() => {
     const query = assigneeSearch().toLowerCase();
     if (!query) return assigneeOptions();
     return assigneeOptions().filter((o) =>
@@ -245,7 +246,7 @@ export const MobileFilterDrawer = (props: {
     );
   });
 
-  const createdByOptions = createMemo(() => {
+  const createdByOptions = createLazyMemo(() => {
     const currentUserId = userId();
     return [...contacts()]
       .sort((a, b) => {
@@ -267,7 +268,7 @@ export const MobileFilterDrawer = (props: {
       }));
   });
 
-  const filteredCreatedByOptions = createMemo(() => {
+  const filteredCreatedByOptions = createLazyMemo(() => {
     const query = createdBySearch().toLowerCase();
     if (!query) return createdByOptions();
     return createdByOptions().filter((option) =>

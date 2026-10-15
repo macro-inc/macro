@@ -116,10 +116,14 @@ type MentionsMenuProps = {
 );
 
 export function MentionsMenu(props: MentionsMenuProps) {
+  // Every editor mounts this menu; its sources, effects and listeners only
+  // exist while it is open, and reopening reads current data.
   return (
-    <Suspense>
-      <MentionsMenuInner {...props} />
-    </Suspense>
+    <Show when={props.menu.isOpen()}>
+      <Suspense>
+        <MentionsMenuInner {...props} />
+      </Suspense>
+    </Show>
   );
 }
 

@@ -49,8 +49,38 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
   });
 }
 
-/** Initialize browser telemetry and its application-level lifecycle hooks. */
+const MAX_EARLY_ERRORS = 50;
+
+/**
+ * Initialize browser telemetry and its application-level lifecycle hooks.
+ * Error listeners attach synchronously; callers need not await the rest.
+ */
 export async function initializeBrowserObservability(): Promise<void> {
+  // The app renders while telemetry initializes, and records emitted before a
+  // provider is installed are dropped: hold early errors until init settles.
+  let earlyErrors: Parameters<typeof Telemetry.error>[] | undefined = [];
+  const reportError = (...report: Parameters<typeof Telemetry.error>) => {
+    if (!earlyErrors) Telemetry.error(...report);
+    else if (earlyErrors.length < MAX_EARLY_ERRORS) earlyErrors.push(report);
+  };
+  window.addEventListener('pagehide', () => void Telemetry.flush());
+  window.addEventListener('error', (event) => {
+    reportError(event.error ?? event.message, { 'error.source': 'window' });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    reportError(event.reason, { 'error.source': 'unhandledrejection' });
+  });
+
+  try {
+    await initializeTelemetry();
+  } finally {
+    const reports = earlyErrors;
+    earlyErrors = undefined;
+    for (const report of reports) Telemetry.error(...report);
+  }
+}
+
+async function initializeTelemetry(): Promise<void> {
   let browserEnabled = false;
   const desktop = await readDesktopDiagnostics();
   const recording = desktop?.identity.recordingId
@@ -107,16 +137,4 @@ export async function initializeBrowserObservability(): Promise<void> {
     const disposeUiTelemetry = initializeUiOperationTelemetry();
     import.meta.hot?.dispose(disposeUiTelemetry);
   }
-
-  window.addEventListener('pagehide', () => void Telemetry.flush());
-  window.addEventListener('error', (event) => {
-    Telemetry.error(event.error ?? event.message, {
-      'error.source': 'window',
-    });
-  });
-  window.addEventListener('unhandledrejection', (event) => {
-    Telemetry.error(event.reason, {
-      'error.source': 'unhandledrejection',
-    });
-  });
 }

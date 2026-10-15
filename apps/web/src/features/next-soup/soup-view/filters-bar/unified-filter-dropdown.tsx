@@ -32,6 +32,7 @@ import { PropertyValueIcon } from '@property/component/propertyValue/PropertyVal
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useGithubLinkStatusQuery } from '@queries/auth';
 import { useContacts } from '@queries/contacts/contacts';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { type ButtonVariant, cn, Dropdown, Tooltip } from '@ui';
 import {
   type Accessor,
@@ -523,7 +524,7 @@ export const UnifiedFilterDropdown = (
   };
 
   // Assignee options for tasks view
-  const assigneeOptions = createMemo((): SearchableOption[] => {
+  const assigneeOptions = createLazyMemo((): SearchableOption[] => {
     const currentUserId = userId();
     const noAssigneeOption: SearchableOption = {
       id: NO_ASSIGNEE,
@@ -617,7 +618,7 @@ export const UnifiedFilterDropdown = (
     () => queryFilters.state.include.documentOwnerId ?? []
   );
 
-  const createdByOptions = createMemo((): SearchableOption[] => {
+  const createdByOptions = createLazyMemo((): SearchableOption[] => {
     const currentUserId = userId();
     let meOption: SearchableOption | undefined;
     const otherContactOptions: SearchableOption[] = [];

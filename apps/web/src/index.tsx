@@ -98,8 +98,18 @@ const renderApp = () => {
   render(() => <Root />, root);
 };
 
-async function main() {
-  await initializeBrowserObservability();
+async function startObservability() {
+  try {
+    await initializeBrowserObservability();
+  } catch (error) {
+    console.error('Failed to initialize browser observability', error);
+  }
+}
+
+function main() {
+  // Telemetry can wait seconds on native diagnostics and feature flags; it
+  // must never hold back the first render.
+  void startObservability();
 
   console.log('App Version ', import.meta.env.__APP_VERSION__);
 
@@ -117,5 +127,4 @@ async function main() {
   registerServiceWorker();
 }
 
-// unawaited
 main();

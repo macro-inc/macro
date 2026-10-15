@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn(),
   delete: vi.fn(),
   create: vi.fn(),
+  skillReads: vi.fn(),
+  skillName: 'My skill',
 }));
 const skill = (id: string, name: string, ownerId: string): EntityItem => ({
   kind: 'entity',
@@ -78,13 +80,15 @@ vi.mock('@queries/soup/slash-menu-pull-requests', () => ({
 }));
 vi.mock('../MentionsMenu/hooks/useEntityMention', () => ({
   useEntityMention: (options: { searchTerm: () => string }) => ({
-    entities: () =>
-      [
-        skill('mine', 'My skill', 'me'),
+    entities: () => {
+      mocks.skillReads();
+      return [
+        skill('mine', mocks.skillName, 'me'),
         skill('shared', 'Shared skill', 'someone'),
       ].filter((item) =>
         item.searchText.includes(options.searchTerm().toLowerCase())
-      ),
+      );
+    },
   }),
 }));
 vi.mock('@core/component/ScopedPortal', () => ({
@@ -109,6 +113,7 @@ vi.mock('@ui', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.skillName = 'My skill';
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(cleanup);
@@ -223,5 +228,20 @@ describe('skill slash menu', () => {
     expect(screen.queryByText('Pull requests')).toBeNull();
     expect(screen.queryByText('Commands')).toBeNull();
     expect(screen.getByRole('button', { name: 'Edit My skill' })).toBeTruthy();
+  });
+
+  it('reads no skill sources while closed and current ones when reopened', () => {
+    const menu = createMenuOperations();
+    render(() => <SkillsMenu editor={createEditor()} menu={menu} />);
+    expect(mocks.skillReads).not.toHaveBeenCalled();
+
+    menu.openMenu();
+    expect(screen.getByText('My skill')).toBeTruthy();
+    menu.closeMenu();
+    expect(screen.queryByText('My skill')).toBeNull();
+
+    mocks.skillName = 'Renamed skill';
+    menu.openMenu();
+    expect(screen.getByText('Renamed skill')).toBeTruthy();
   });
 });

@@ -1,5 +1,6 @@
 import { updateFavicon } from '@app/util/favicon';
 import { createCrossTabBus } from '@core/cross-tab/cross-tab-bus';
+import { isTauri } from '@core/util/platform';
 import type { NotificationSource } from '@notifications';
 import { committedThemeAccent } from '@theme/signals/themeSignals';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
@@ -28,6 +29,9 @@ const badgeBus = createCrossTabBus<BadgeMessage>({
 export function useReactiveFavicon(
   globalNotifications: NotificationSource
 ): void {
+  // Native webviews have no browser tab to show an icon in.
+  if (isTauri()) return;
+
   const [showNotificationBadge, setShowNotificationBadge] = createSignal(false);
   const [isAppFocused, setIsAppFocused] = createSignal(!document.hidden);
 

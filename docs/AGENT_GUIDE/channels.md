@@ -192,7 +192,9 @@ it should open only one menu.
 The same software-keyboard check applies to `:` for emoji and `/` for formatting
 commands: type a search and tap a result without sending the draft.
 
-Closed mention menus do not gather, rank, or paginate candidates. When checking
+Closed mention, snippet, and skill menus mount none of their candidate sources,
+so they do not gather, rank, or paginate candidates. (The skill menu still
+prefetches the static system-skills list.) When checking
 channel-switch performance, include touch navigation back to the list and reopening
 a cached channel without typing `@`. Then open mentions, search, close, and reopen:
 results must reflect current people and entities, and scrolling or keyboard

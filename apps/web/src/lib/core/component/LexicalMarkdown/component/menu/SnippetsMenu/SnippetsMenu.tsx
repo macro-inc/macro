@@ -48,10 +48,14 @@ type SnippetsMenuProps = {
  * inserts the snippet's markdown body at the cursor.
  */
 export function SnippetsMenu(props: SnippetsMenuProps) {
+  // Every editor mounts this menu; its sources, effects and listeners only
+  // exist while it is open, and reopening reads current data.
   return (
-    <Suspense>
-      <SnippetsMenuInner {...props} />
-    </Suspense>
+    <Show when={props.menu.isOpen()}>
+      <Suspense>
+        <SnippetsMenuInner {...props} />
+      </Suspense>
+    </Show>
   );
 }
 

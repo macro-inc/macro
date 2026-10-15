@@ -610,6 +610,14 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
+    // Clean up people who are no longer contacts; entityData owns the rest.
+    const seenIds = new Set(allEntries.map((entry) => entry.id));
+    for (const [id, cached] of itemCache) {
+      if (cached.item.bucket === 'person' && !seenIds.has(id)) {
+        itemCache.delete(id);
+      }
+    }
+
     return sortIndexEntries(allEntries);
   });
 
@@ -975,11 +983,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return sortIndexEntries(entries);
   });
 
-  const processedData = createLazyMemo(() => {
+  // People are keyed by user ids, which never collide with entity ids, so they
+  // stay out of this index: entity-only lists then never resolve every
+  // contact's display name.
+  const entityData = createLazyMemo(() => {
     const allEntries = mergeMultipleSortedIndices([
       historyEntries().entries,
       channelEntries(),
-      contactEntries(),
       crmCompanyEntries(),
       crmContactEntries(),
       snippetEntries(),
@@ -992,8 +1002,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const seenIds = new Set(allEntries.map((entry) => entry.id));
 
     // Clean up stale cache entries (items that no longer exist)
-    for (const id of itemCache.keys()) {
-      if (!seenIds.has(id)) {
+    for (const [id, cached] of itemCache) {
+      if (cached.item.bucket !== 'person' && !seenIds.has(id)) {
         itemCache.delete(id);
       }
     }
@@ -1011,6 +1021,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return deduplicatedEntries;
   });
 
+  const processedData = createLazyMemo(() =>
+    mergeSortedIndices(entityData(), contactEntries())
+  );
+
   const getById = (id: string): QuickAccessItem | undefined => {
     return itemCache.get(id)?.item;
   };
@@ -1026,10 +1040,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return result;
   };
 
-  // Pre-compute individual bucket index lists (each already sorted)
-  const bucketIndices = createLazyMemo<Map<Bucket, IndexEntry[]>>(() => {
+  // Pre-compute individual entity bucket index lists (each already sorted)
+  const entityBucketIndices = createLazyMemo<Map<Bucket, IndexEntry[]>>(() => {
     const map = new Map<Bucket, IndexEntry[]>();
-    for (const entry of processedData()) {
+    for (const entry of entityData()) {
       const list = map.get(entry.bucket);
       if (list) {
         list.push(entry);
@@ -1040,12 +1054,17 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return map;
   });
 
+  const bucketIndex = (bucket: Bucket): IndexEntry[] =>
+    bucket === 'person'
+      ? contactEntries()
+      : (entityBucketIndices().get(bucket) ?? []);
+
+  // `all` is processedData; only it pulls in people.
   const preBakedIndices = createLazyMemo<
-    Record<BucketCombination, IndexEntry[]>
+    Record<Exclude<BucketCombination, 'all'>, IndexEntry[]>
   >(() => {
-    const indices = bucketIndices();
+    const indices = entityBucketIndices();
     return {
-      all: processedData(),
       channels: mergeMultipleSortedIndices([
         indices.get('dm') ?? [],
         indices.get('channel') ?? [],
@@ -1067,7 +1086,6 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
   // helper to get a pre-baked index list if the bucket combination matches
   const getPreBakedIndices = (buckets: Bucket[]): IndexEntry[] | undefined => {
-    const baked = preBakedIndices();
     const bucketSet = new Set(buckets);
 
     for (const [name, combo] of Object.entries(BUCKET_COMBINATIONS)) {
@@ -1075,7 +1093,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         combo.length === buckets.length &&
         combo.every((b) => bucketSet.has(b))
       ) {
-        return baked[name as BucketCombination];
+        return name === 'all'
+          ? processedData()
+          : preBakedIndices()[name as Exclude<BucketCombination, 'all'>];
       }
     }
     return undefined;
@@ -1110,7 +1130,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
 
       if (activeBuckets.length === 1) {
         // Single bucket = return pre-computed bucket list
-        indices = bucketIndices().get(activeBuckets[0]) ?? [];
+        indices = bucketIndex(activeBuckets[0]);
       } else {
         // Check for pre-baked combination
         const preBaked = getPreBakedIndices(activeBuckets);
@@ -1118,9 +1138,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           indices = preBaked;
         } else {
           // Fallback: merge-sort the requested bucket index lists
-          const allIndices = bucketIndices();
           const indicesToMerge = activeBuckets
-            .map((b) => allIndices.get(b) ?? [])
+            .map(bucketIndex)
             .filter((arr) => arr.length > 0);
           indices = mergeMultipleSortedIndices(indicesToMerge);
         }

@@ -110,33 +110,40 @@ function defaultNameTransform(
   return formatEmailFallback(email, options);
 }
 
+function failedNameItems(ids: string[]): UserNameItem[] {
+  console.error('Failed to fetch user display names');
+  // Labels read this store in tracked scopes, so an entry written already
+  // expired re-queues the failed request the moment it lands. Backdate it to
+  // expire after FAILED_FETCH_RETRY_SECONDS so a later access retries
+  // instead of the label sticking on the email fallback.
+  const expiresSoon = new Date(
+    Date.now() -
+      (DEFAULT_CACHE_TIME_SECONDS - FAILED_FETCH_RETRY_SECONDS) * 1000
+  );
+  return ids.map((id) => ({ _createdAt: expiresSoon, id, loading: false }));
+}
+
 async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
   const result = await authServiceClient.getUserNamesWithEmail({
     user_ids: ids,
   });
-  if (result.isErr()) {
-    console.error('Failed to fetch user display names');
-    // Labels read this store in tracked scopes, so an entry written already
-    // expired re-queues the failed request the moment it lands. Backdate it to
-    // expire after FAILED_FETCH_RETRY_SECONDS so a later access retries
-    // instead of the label sticking on the email fallback.
-    const expiresSoon = new Date(
-      Date.now() -
-        (DEFAULT_CACHE_TIME_SECONDS - FAILED_FETCH_RETRY_SECONDS) * 1000
-    );
-    return ids.map((id) => ({ _createdAt: expiresSoon, id, loading: false }));
-  }
+  if (result.isErr()) return failedNameItems(ids);
 
-  const data = result.value;
-  return data.names.map((name) => {
-    return {
-      _createdAt: new Date(),
+  // Ids the response omits settle without a name instead of loading forever.
+  const fetchedAt = new Date();
+  const items = new Map<string, UserNameItem>(
+    ids.map((id) => [id, { _createdAt: fetchedAt, id, loading: false }])
+  );
+  for (const name of result.value.names) {
+    items.set(name.id, {
+      _createdAt: fetchedAt,
       id: name.id,
       firstName: name.first_name as string,
       lastName: name.last_name as string,
       loading: false,
-    };
-  });
+    });
+  }
+  return [...items.values()];
 }
 
 const processFetchQueue = debounce(async () => {
@@ -148,9 +155,14 @@ const processFetchQueue = debounce(async () => {
 }, 10);
 
 async function batchFetchNames(ids: string[]) {
-  const [nameResults] = await Promise.all([
-    ids.length > 0 ? fetchDisplayNames(ids) : Promise.resolve([]),
-  ]);
+  let nameResults: UserNameItem[];
+  try {
+    nameResults = await fetchDisplayNames(ids);
+  } catch {
+    // A thrown request (e.g. a failed token refresh) is a failed batch too;
+    // otherwise its ids would stay loading and never retry.
+    nameResults = failedNameItems(ids);
+  }
 
   batch(() => {
     for (const result of nameResults) {
@@ -167,12 +179,17 @@ function ensureUserNameItem(id: MacroId) {
     Date.now() - cached._createdAt.getTime() >
       DEFAULT_CACHE_TIME_SECONDS * 1000;
 
-  if (!cached || cacheExpired) {
+  if (!cached) {
     setUserDisplayNames(id, {
       loading: true,
       _createdAt: new Date(),
       id: id,
     });
+    queueItemsForFetch([id]);
+  } else if (cacheExpired) {
+    // Keep rendering the known name while it refreshes. Store writes merge, so
+    // a failed refresh keeps it too; restamping stops other reads re-queueing.
+    setUserDisplayNames(id, '_createdAt', new Date());
     queueItemsForFetch([id]);
   }
 }

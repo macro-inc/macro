@@ -72,6 +72,38 @@ it('explicit native recording overrides the normal enablement gate and exporter 
   });
 });
 
+it('captures errors raised while optional native diagnostics are still pending', async () => {
+  let resolveDiagnostics!: (snapshot: undefined) => void;
+  vi.mocked(readDesktopDiagnostics).mockReturnValue(
+    new Promise((resolve) => {
+      resolveDiagnostics = resolve;
+    })
+  );
+  const listen = vi.spyOn(window, 'addEventListener');
+  const initialized = initializeBrowserObservability();
+
+  const listeners = new Map(listen.mock.calls.map(([type, fn]) => [type, fn]));
+  listen.mockRestore();
+  expect(Telemetry.init).not.toHaveBeenCalled();
+  expect([...listeners.keys()]).toEqual(
+    expect.arrayContaining(['pagehide', 'error', 'unhandledrejection'])
+  );
+
+  // Held until a provider can export it, then reported once.
+  const error = new Error('startup failure');
+  const onError = listeners.get('error') as (event: ErrorEvent) => void;
+  onError(new ErrorEvent('error', { error }));
+  expect(Telemetry.error).not.toHaveBeenCalled();
+
+  resolveDiagnostics(undefined);
+  await initialized;
+  expect(Telemetry.init).toHaveBeenCalledOnce();
+  expect(Telemetry.error).toHaveBeenCalledOnce();
+  expect(Telemetry.error).toHaveBeenCalledWith(error, {
+    'error.source': 'window',
+  });
+});
+
 it('an older binary without diagnostics still obeys the normal telemetry gate', async () => {
   vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
   await initializeBrowserObservability();

@@ -101,10 +101,16 @@ type SkillsMenuProps = {
  * for the skill at the cursor, which the AI reads with its document tools.
  */
 export function SkillsMenu(props: SkillsMenuProps) {
+  // Keep the static built-in list fetched so the first open shows it.
+  useSystemSkillsQuery();
+  // Every editor mounts this menu; its sources, effects and listeners only
+  // exist while it is open, and reopening reads current data.
   return (
-    <Suspense>
-      <SkillsMenuInner {...props} />
-    </Suspense>
+    <Show when={props.menu.isOpen()}>
+      <Suspense>
+        <SkillsMenuInner {...props} />
+      </Suspense>
+    </Show>
   );
 }
 

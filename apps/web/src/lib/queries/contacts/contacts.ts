@@ -3,8 +3,9 @@ import { idToDisplayName, idToEmail } from '@core/user/util';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { contactsClient } from '@service-contacts/client';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
-import { type Accessor, createMemo } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import { contactsKeys } from './keys';
 
 export function contactsQueryOptions() {
@@ -22,12 +23,15 @@ export function useContactsQuery(enabled: Accessor<boolean> = () => true) {
 /**
  * Returns contacts as IUser objects.
  * Compatible with the previous createResource-based implementation.
+ *
+ * Lazy: resolving every contact's display name only happens once a consumer
+ * reads the list, not when a closed picker or filter mounts.
  */
 export function useContacts(
   enabled: Accessor<boolean> = () => true
 ): Accessor<IUser[]> {
   const query = useContactsQuery(enabled);
-  return createMemo(() => {
+  return createLazyMemo(() => {
     if (!query.isSuccess) return [];
     const contacts = query.data.contacts;
     return contacts.map((c) => ({

@@ -28,6 +28,7 @@ import { deepEqual } from '@core/util/compareUtils';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { batch, createMemo, createSignal, type JSX } from 'solid-js';
 import type {
   ConsolidatedFilter,
@@ -147,8 +148,10 @@ export function useFilterRefinements() {
   /**
    * Human-readable options for the assignee sub-filter, keyed by assignee ID.
    * Mirrors the same logic used in UnifiedFilterDropdown's assigneeOptions.
+   * Lazy like the other people options: only open pickers and active chips
+   * read them, so a mounted filter bar resolves no contact names.
    */
-  const assigneeOptionsMap = createMemo(
+  const assigneeOptionsMap = createLazyMemo(
     (): Map<string, { label: string; icon?: () => JSX.Element }> => {
       const uid = currentUserId();
       const map = new Map<
@@ -179,7 +182,7 @@ export function useFilterRefinements() {
   /**
    * Searchable options for the assignee filter (for use in searchable multi-select).
    */
-  const assigneeSearchableOptions = createMemo((): SearchableOption[] => {
+  const assigneeSearchableOptions = createLazyMemo((): SearchableOption[] => {
     const uid = currentUserId();
     const noAssigneeOption: SearchableOption = {
       id: NO_ASSIGNEE,
@@ -215,7 +218,7 @@ export function useFilterRefinements() {
   });
 
   /** Creator options for the Tasks and Files Created by filter. */
-  const createdByOptionsMap = createMemo(
+  const createdByOptionsMap = createLazyMemo(
     (): Map<string, { label: string; icon?: () => JSX.Element }> => {
       const uid = currentUserId();
       const map = new Map<
@@ -239,7 +242,7 @@ export function useFilterRefinements() {
     }
   );
 
-  const createdBySearchableOptions = createMemo((): SearchableOption[] => {
+  const createdBySearchableOptions = createLazyMemo((): SearchableOption[] => {
     const uid = currentUserId();
     let meOption: SearchableOption | undefined;
     const otherContactOptions: SearchableOption[] = [];

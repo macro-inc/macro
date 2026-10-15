@@ -5,7 +5,8 @@ import {
   useContacts,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
-import { type Accessor, createMemo } from 'solid-js';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor } from 'solid-js';
 
 // 'user' type will include 'contact' for use combined recipients hook
 type KindExpansion = {
@@ -33,18 +34,21 @@ type UseCombinedRecipients<K extends 'user' | 'channel'> = {
   all: Accessor<CombinedRecipientItem<KindExpansion[K]>[]>;
 };
 
+// Lazy: pickers that stay closed (e.g. the always-mounted create-channel and
+// share modals) never project every contact and channel into options.
 const useCombinedRecipientsRoot = () => {
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
 
-  const userContactEntities = createMemo<CombinedRecipientItem<'user'>[]>(() =>
-    contacts()
-      .filter((contact) => !isConnectedSecondaryInbox(contact.id))
-      .map(recipientEntityMapper('user'))
+  const userContactEntities = createLazyMemo<CombinedRecipientItem<'user'>[]>(
+    () =>
+      contacts()
+        .filter((contact) => !isConnectedSecondaryInbox(contact.id))
+        .map(recipientEntityMapper('user'))
   );
 
-  const channelsWithParticipants = createMemo<
+  const channelsWithParticipants = createLazyMemo<
     CombinedRecipientItem<'channel'>[]
   >(() =>
     channelsContext
@@ -66,7 +70,7 @@ export function useCombinedRecipients<
   const includeUsers = kinds.includes('user');
   const includeChannels = kinds.includes('channel');
 
-  const allRecipients = createMemo(() => {
+  const allRecipients = createLazyMemo(() => {
     const options: CombinedRecipientItem[] = [];
     if (includeUsers) {
       options.push(...users());

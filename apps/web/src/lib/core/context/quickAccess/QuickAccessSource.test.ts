@@ -1,3 +1,4 @@
+import type { IUser } from '@core/user';
 import type {
   CrmCompanyEntity,
   CrmContactEntity,
@@ -57,6 +58,7 @@ const mocks = vi.hoisted(() => ({
   readRecordsByKeys: vi.fn(),
   companies: [] as CrmCompanyEntity[],
   crmContacts: [] as CrmContactEntity[],
+  people: vi.fn((): IUser[] => []),
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
   crmEnabled: (): boolean => true,
@@ -88,7 +90,7 @@ vi.mock('@core/context/channels', () => ({
   useDmActivityByUserId: () => () => new Map(),
 }));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
+  useContacts: () => mocks.people,
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 vi.mock('@queries/channel/channels', () => ({
@@ -229,6 +231,7 @@ beforeEach(() => {
   mocks.projectedChannels = [];
   mocks.companies = [];
   mocks.crmContacts = [];
+  mocks.people.mockReset().mockReturnValue([]);
   mocks.initiatives = [];
   mocks.databases = [];
   mocks.crmEnabled = () => true;
@@ -1307,6 +1310,42 @@ describe('CRM contacts', () => {
     mocks.crmContacts = [contact];
     const list = setup((source) => source.useList('crm_contact'));
     expect(list.items()).toEqual([]);
+  });
+});
+
+describe('people', () => {
+  it('resolves contacts only for lists that include people', () => {
+    mocks.history = [
+      {
+        id: 'doc-1',
+        type: 'document',
+        fileType: 'md',
+        name: 'Plan',
+        ownerId: 'owner',
+        updatedAt: '2026-08-02T00:00:00.000Z',
+      },
+    ];
+    mocks.people.mockReturnValue([
+      { id: 'macro|ada@example.com', email: 'ada@example.com', name: 'Ada' },
+    ]);
+    const [notes, channels, people, all] = setup((source) => [
+      source.useList('note'),
+      source.useList('dm', 'channel'),
+      source.useList('person'),
+      source.useList(),
+    ]);
+
+    expect(notes.items().map((item) => item.id)).toEqual(['doc-1']);
+    expect(channels.items()).toEqual([]);
+    expect(mocks.people).not.toHaveBeenCalled();
+
+    expect(people.items().map((item) => item.id)).toEqual([
+      'macro|ada@example.com',
+    ]);
+    expect(all.items().map((item) => item.id)).toEqual([
+      'doc-1',
+      'macro|ada@example.com',
+    ]);
   });
 });
 

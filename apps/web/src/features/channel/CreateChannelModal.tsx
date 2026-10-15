@@ -18,6 +18,7 @@ import {
 } from '@queries/channel/channels';
 import { useAddParticipantsMutation } from '@queries/channel/participants';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { createLazyMemo } from '@solid-primitives/memo';
 import {
   Button,
   Dialog,
@@ -63,7 +64,8 @@ export function CreateChannelModal() {
   const [sentRecipientIds, setSentRecipientIds] = createSignal<string[]>([]);
   const [addedAgentIds, setAddedAgentIds] = createSignal<string[]>([]);
   const channelName = createMemo(() => name().trim());
-  const inviteOptions = createMemo(() => [
+  // The modal stays mounted app-wide; only the invite step reads these.
+  const inviteOptions = createLazyMemo(() => [
     ...recipientOptions(),
     ...(agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
       recipientEntityMapper('agent')(agent.bot)

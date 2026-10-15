@@ -220,6 +220,26 @@ it.each([false, true])(
   }
 );
 
+it('mounts no mention sources until the menu opens', () => {
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  });
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu menu={menu} editor={createEditor()} users={() => []} />
+  ));
+  expect(mocks.requestedBuckets).toEqual([]);
+  expect(useEmailSearchMention).not.toHaveBeenCalled();
+
+  menu.openMenu();
+  expect(mocks.requestedBuckets).toContain('document');
+  expect(useEmailSearchMention).toHaveBeenCalledOnce();
+});
+
 it('only paginates an open mobile menu and resumes on reopen', async () => {
   mocks.mobile = true;
   mocks.crmEnabled = true;

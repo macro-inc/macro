@@ -17,7 +17,8 @@ import type {
   PropertyFilter,
   UnifiedSearchRequest,
 } from '@service-search/generated/models';
-import { type Accessor, createMemo, type Setter } from 'solid-js';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor, Setter } from 'solid-js';
 import { agentSessionSearchFilters } from './agent-session-search-filters';
 
 // Map the tasks-view property filters (status/priority/assignee/custom) into the
@@ -225,7 +226,9 @@ export const createSearchState = ({
   });
 
   const { entityPool } = useSearchContext();
-  const localPool = createMemo(() => {
+  // Lazy: local search reads the pool only for non-empty text, so an idle
+  // view never builds the whole Quick Access index.
+  const localPool = createLazyMemo(() => {
     const pool = entityPool();
     const activeIds = soup.predicates
       .activeIds()
