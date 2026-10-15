@@ -61,15 +61,15 @@ pub(super) fn job() -> Job {
     Job::default()
         .name(JOB_NAME)
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        // Reads only: the PR's labels and merge commit, and a base-branch fetch.
+        // Reads the PR and base branch; updates one gate-status comment on same-repo PRs.
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
-                .pull_requests(Level::Read),
+                .pull_requests(Level::Write),
         )
         // Shallow: the path filter uses the API, and the bump check fetches
         // the base branch itself, only when it runs.
-        .add_step(super::checkout("Checkout Repo", false))
+        .add_step(super::checkout("Checkout Repo", false).id("checkout"))
         .add_step(paths_filter())
         .add_step(cache_wasm_version_bump())
         .add_step(read_labels())
@@ -78,6 +78,7 @@ pub(super) fn job() -> Job {
         .add_step(fetch_credentials())
         .add_step(require_live_version())
         .add_step(skip_notice())
+        .add_step(pr_comment())
 }
 
 fn gated() -> Expression {
@@ -164,6 +165,7 @@ fn setup_bun() -> Step<Use> {
             "setup-bun",
             "0c5077e51419868618aeaa5fe8019c62421857d6",
         ) // v2.2.0
+        .id("bun")
         .if_condition(gated())
         .add_with(("bun-version", "1.3.13"))
 }
@@ -177,6 +179,7 @@ fn verify_bump() -> Step<Run> {
         "#})
         .if_condition(gated())
         .shell("bash")
+        .id("bump")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("BASE_BRANCH", "${{ github.base_ref }}"))
         .add_env(("BASE_REF", "origin/${{ github.base_ref }}"))
@@ -190,6 +193,7 @@ fn fetch_credentials() -> Step<Run> {
             "../scripts/ios_app_store_connect_credentials.sh"
         ))
         .shell("bash")
+        .id("credentials")
         .if_condition(gated())
         .add_env(("DOPPLER_TOKEN", vars::IOS_RELEASE_DOPPLER_TOKEN))
 }
@@ -208,6 +212,7 @@ fn require_live_version() -> Step<Run> {
         ))
         .if_condition(gated())
         .shell("bash")
+        .id("live")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("GH_TOKEN", "${{ github.token }}"))
         .add_env(("GH_REPO", "${{ github.repository }}"))
@@ -221,4 +226,22 @@ fn skip_notice() -> Step<Run> {
              don't break the native/web contract — skipping the App Store release gate.\"",
         )
         .if_condition(Expression::new(format!("{NATIVE_CHANGED} && {SKIP_LABEL}")))
+}
+
+/// Keep release instructions visible on the PR even when an earlier step fails.
+fn pr_comment() -> Step<Use> {
+    Step::new("Update iOS gate status on the PR")
+        .uses(
+            "actions",
+            "github-script",
+            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
+        )
+        .if_condition(Expression::new(
+            "!cancelled() && github.event.pull_request.head.repo.full_name == github.repository",
+        ))
+        .add_env(("IOS_GATE_STEPS", "${{ toJSON(steps) }}"))
+        .add_with((
+            "script",
+            include_str!("../scripts/ios_native_check_comment.js"),
+        ))
 }

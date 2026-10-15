@@ -344,3 +344,39 @@ fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
         "vitest writes its module cache to the mounted path: {test_job}"
     );
 }
+
+#[test]
+fn ios_gate_comment_runs_after_failures_and_only_for_same_repo_prs() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let gate = job(&yaml, "ios-native-check", "status-check");
+    assert!(gate.contains("pull-requests: write"));
+    assert!(gate.contains(
+        "!cancelled() && github.event.pull_request.head.repo.full_name == github.repository"
+    ));
+    assert!(gate.contains("IOS_GATE_STEPS: ${{ toJSON(steps) }}"));
+    for id in ["checkout", "bun", "bump", "credentials", "live"] {
+        assert!(gate.contains(&format!("id: {id}")), "missing step id: {id}");
+    }
+}
+
+#[test]
+fn ios_gate_status_and_comment_scenarios() {
+    let output = std::process::Command::new("node")
+        .arg("--test")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../apps/web/scripts/ios-app-store.test.mjs"
+        ))
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/workflows/scripts/ios_native_check_comment.test.cjs"
+        ))
+        .output()
+        .expect("run iOS gate scenarios with Node");
+    assert!(
+        output.status.success(),
+        "iOS gate scenarios failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
