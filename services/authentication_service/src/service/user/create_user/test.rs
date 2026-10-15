@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use macro_env_var::optional_read_env_var;
 
-use super::{LOCAL_STRIPE_SECRET_STUB, is_local_stripe_stub, local_stripe_customer_id};
+use super::{LOCAL_STRIPE_SECRET_STUB, SignupPlan, is_local_stripe_stub, local_stripe_customer_id};
 
 /// Tests mutate the process env, which is process-global; serialize them so
 /// they can't interleave.
@@ -58,4 +58,23 @@ fn local_stripe_customer_id_is_unique_per_email() {
     let bob = local_stripe_customer_id("bob@seed.macro.local");
     assert_ne!(alice, bob);
     assert!(alice.contains("alice@seed.macro.local"));
+}
+
+#[test]
+fn free_signups_get_only_the_self_serve_role() {
+    assert_eq!(
+        SignupPlan::Free.roles(),
+        ["self_serve".to_string()].into_iter().collect()
+    );
+}
+
+#[test]
+fn pro_signups_get_the_roles_of_an_active_premium_subscription() {
+    assert_eq!(
+        SignupPlan::Pro.roles(),
+        ["self_serve", "professional_subscriber", "sub_opus"]
+            .into_iter()
+            .map(String::from)
+            .collect()
+    );
 }

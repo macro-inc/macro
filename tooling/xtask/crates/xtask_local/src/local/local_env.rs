@@ -159,6 +159,13 @@ impl LocalEnv {
         // Calendar search ships dark too: off in deployed envs until each has
         // its calendar index created and backfilled.
         env.insert("CALENDAR_SEARCH_ENABLED".into(), "true".into());
+        // Event-triggered routines are on in dev; Doppler's local configs
+        // don't set it.
+        env.insert("EVENT_ROUTINES_ENABLED".into(), "true".into());
+        // Every local signup starts on Pro, so paid models work without a
+        // Stripe checkout. Set it to `false` (process env or `--env-file`) to
+        // test the free plan.
+        env.insert("LOCAL_SIGNUP_PRO_PLAN".into(), "true".into());
         env.insert(
             "OVERRIDE_PREVIEW_GATEWAY_URL".into(),
             "http://preview-gateway:8080".into(),

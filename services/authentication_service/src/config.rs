@@ -2,6 +2,7 @@ use std::sync::LazyLock;
 
 use crate::account_link_state::AccountLinkStateKey;
 use crate::service::signup_policy::SignupPolicy;
+use crate::service::user::create_user::SignupPlan;
 use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
 use gtm_invite::domain::models::{GtmInviteConfig, PromoCode};
@@ -210,6 +211,11 @@ pub struct Config {
     /// calendar feature isn't using yet.
     #[macro_config_default(false)]
     pub calendar_scope_enabled: bool,
+    /// Start self-serve signups on the Pro plan instead of the free one, so a
+    /// local stack can use paid models without Stripe. `run_local` turns it
+    /// on; Production and Develop ignore it.
+    #[macro_config_default(false)]
+    pub local_signup_pro_plan: bool,
 }
 
 /// Complete Microsoft OAuth credentials used to enable Outlook account linking.
@@ -325,6 +331,11 @@ impl Config {
         )
     }
 
+    /// The plan self-serve signups start on.
+    pub(crate) fn signup_plan(&self) -> SignupPlan {
+        resolve_signup_plan(self.environment, self.local_signup_pro_plan)
+    }
+
     /// Resolves the offer GTM invite links carry.
     pub(crate) fn gtm_invite_config(&self) -> anyhow::Result<GtmInviteConfig> {
         resolve_gtm_invite_config(&self.gtm_invite_promo_code, &self.gtm_invite_link_ttl_hours)
@@ -377,6 +388,13 @@ fn resolve_signup_policy(
             SignupPolicy::from_allowlist_json(raw_allowlist)
                 .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is invalid")
         }
+    }
+}
+
+fn resolve_signup_plan(environment: Environment, local_signup_pro_plan: bool) -> SignupPlan {
+    match environment {
+        Environment::Local if local_signup_pro_plan => SignupPlan::Pro,
+        Environment::Production | Environment::Develop | Environment::Local => SignupPlan::Free,
     }
 }
 

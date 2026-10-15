@@ -163,6 +163,18 @@ on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
 inbox.
 
+New signups start on the Pro plan, so paid AI models work without a Stripe
+checkout. To test the free plan, start the stack with
+`LOCAL_SIGNUP_PRO_PLAN=false`, or put it in your `--env-file`. The setting only
+applies to new signups: existing users and seeded personas keep the roles
+they already have.
+
+The local frontend never loads PostHog, so a feature flag is on only when its
+`defineFlag` default turns it on. Flags that are on in dev default on under
+the local dev server, through `onInDev` or `LOCAL_ONLY` in
+`apps/web/src/lib/core/constant/featureFlags.ts`. A `VITE_<FLAG>` override in
+`apps/web/.env.local` still wins.
+
 ### Recover an existing instance without resetting data
 
 `run_local` and `stack up` initialize clean state, including snapshot restoration.

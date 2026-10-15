@@ -653,6 +653,7 @@ pub async fn run() -> anyhow::Result<()> {
             sqs_client,
             environment: config.environment,
             signup_policy,
+            signup_plan: config.signup_plan(),
             rate_limit_service: rate_limit,
             calendar_scope_enabled: config.calendar_scope_enabled,
             account_link_state_key,

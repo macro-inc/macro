@@ -1,10 +1,40 @@
+use std::collections::HashSet;
+
 use macro_db_client::user::organization::{
     get_organization_roles_for_user, match_user_to_organization,
 };
 use macro_env_var::optional_read_env_var;
+use roles_and_permissions::domain::model::{ProductTier, RoleId};
 
 #[cfg(test)]
 mod test;
+
+/// The plan a self-serve signup starts on. Organization members take their
+/// organization's roles instead.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SignupPlan {
+    /// The free plan; users upgrade through Stripe checkout.
+    Free,
+    /// The Premium (Pro) plan, granted without Stripe. Only local stacks
+    /// start users here (see `Config::signup_plan`).
+    Pro,
+}
+
+impl SignupPlan {
+    /// The roles a new self-serve user is created with.
+    fn roles(self) -> HashSet<String> {
+        let roles = match self {
+            SignupPlan::Free => vec![RoleId::SelfServe],
+            // The roles Stripe grants an active Premium subscription.
+            SignupPlan::Pro => vec![
+                RoleId::SelfServe,
+                RoleId::ProfessionalSubscriber,
+                ProductTier::Opus.role(),
+            ],
+        };
+        roles.iter().map(RoleId::to_string).collect()
+    }
+}
 
 /// The stub `STRIPE_SECRET_KEY` set by `run_local --no-doppler` (see
 /// `tooling/xtask/crates/xtask_local/src/local/local_env.rs`). With this key a
@@ -36,6 +66,7 @@ pub async fn create_user(
     username: &str,
     email: &str,
     is_verified: bool,
+    signup_plan: SignupPlan,
     db: &sqlx::Pool<sqlx::Postgres>,
     stripe_client: &stripe::Client,
 ) -> anyhow::Result<(String, Option<i32>)> {
@@ -68,7 +99,7 @@ pub async fn create_user(
         Some(organization_id) => {
             get_organization_roles_for_user(db, organization_id, email).await?
         }
-        None => ["self_serve".to_string()].into_iter().collect(),
+        None => signup_plan.roles(),
     };
 
     tracing::info!(organization_id=?organization_id, roles=?roles, "resolved organization and roles for new user");
@@ -122,6 +153,7 @@ pub async fn create_stripe_user(
 pub async fn create_user_profile(
     fusionauth_user_id: &str,
     email: &str,
+    signup_plan: SignupPlan,
     db: &sqlx::Pool<sqlx::Postgres>,
 ) -> anyhow::Result<()> {
     let organization_id = match_user_to_organization(db, email).await?;
@@ -131,7 +163,7 @@ pub async fn create_user_profile(
         Some(organization_id) => {
             get_organization_roles_for_user(db, organization_id, email).await?
         }
-        None => ["self_serve".to_string()].into_iter().collect(),
+        None => signup_plan.roles(),
     };
 
     tracing::trace!(roles=?roles, "got roles for user");

@@ -417,6 +417,24 @@ fn production_and_local_signup_policy_ignore_allowlist_and_bypass() {
 }
 
 #[test]
+fn signups_start_free_unless_a_local_stack_opts_into_pro() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(config.signup_plan(), SignupPlan::Free);
+
+    let mut values = config_values();
+    values["LOCAL_SIGNUP_PRO_PLAN"] = serde_json::json!(true);
+    let config: Config = serde_json::from_value(values).unwrap();
+    assert_eq!(config.signup_plan(), SignupPlan::Pro);
+}
+
+#[test]
+fn deployed_environments_ignore_the_local_pro_signup_plan() {
+    for environment in [Environment::Production, Environment::Develop] {
+        assert_eq!(resolve_signup_plan(environment, true), SignupPlan::Free);
+    }
+}
+
+#[test]
 fn cursor_kms_key_from_config_field() {
     let configured = CursorApiKeyKmsKeyId::new_testing("arn:aws:kms:from-config");
     assert_eq!(

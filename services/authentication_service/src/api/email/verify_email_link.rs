@@ -109,16 +109,21 @@ pub async fn handler(
     })?;
 
     // create new user profile
-    create_user_profile(&link.macro_user_id.to_string(), &link.email, &ctx.db)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to insert macro user email verification");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to insert macro user email verification",
-            )
-                .into_response()
-        })?;
+    create_user_profile(
+        &link.macro_user_id.to_string(),
+        &link.email,
+        ctx.signup_plan,
+        &ctx.db,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "failed to insert macro user email verification");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to insert macro user email verification",
+        )
+            .into_response()
+    })?;
 
     // delete link
     if let Err(e) = macro_db_client::in_progress_email_link::delete_in_progress_email_link(

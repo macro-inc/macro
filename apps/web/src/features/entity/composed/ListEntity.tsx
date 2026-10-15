@@ -1,3 +1,4 @@
+import { enableBulkDocumentWakeup } from '@core/constant/featureFlags';
 import './ListEntity.css';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -9,11 +10,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { stackNotifications } from '@notifications';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import {
   getStreamState,
   subscribeToStreamState,
@@ -104,7 +101,7 @@ export function ListEntity(props: ListEntityProps) {
 
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+  const bulkWakeupEnabled = useFeatureFlag(enableBulkDocumentWakeup);
 
   createEffect(() => {
     if (!bulkWakeupEnabled().enabled) return;

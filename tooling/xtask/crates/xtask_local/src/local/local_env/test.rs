@@ -399,6 +399,27 @@ fn fusionauth_public_url_uses_the_instance_host_port() {
     );
 }
 
+/// Event-triggered routines are on in dev, so they are on locally too.
+#[test]
+fn event_routines_are_on_like_dev() {
+    assert_eq!(
+        local_env()
+            .get("EVENT_ROUTINES_ENABLED")
+            .map(String::as_str),
+        Some("true")
+    );
+}
+
+/// Paid models need a Pro plan, and a local stack has no Stripe checkout to
+/// buy one with.
+#[test]
+fn local_signups_start_on_the_pro_plan() {
+    assert_eq!(
+        local_env().get("LOCAL_SIGNUP_PRO_PLAN").map(String::as_str),
+        Some("true")
+    );
+}
+
 /// A local stack runs sandboxes on the developer's own daemon, so it needs no
 /// Daytona account to exercise the sandbox path.
 #[test]

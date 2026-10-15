@@ -316,6 +316,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         &username,
         &email,
         req.event.user.verified,
+        ctx.signup_plan,
         &ctx.db,
         &ctx.stripe_client,
     )

@@ -1,5 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
+import { enableBulkDocumentWakeup } from '@core/constant/featureFlags';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { type CrmContactEntity, Entity, type EntityData } from '@entity';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
@@ -7,11 +8,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import WideStar from '@phosphor/sparkle.svg';
 import ProjectIcon from '@phosphor/stack.svg';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import { CommandMenuListItem, Hotkey } from '@ui';
 import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -134,7 +131,7 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
 }
 
 function EntityDisplay(props: { entity: EntityData }) {
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+  const bulkWakeupEnabled = useFeatureFlag(enableBulkDocumentWakeup);
 
   createEffect(() => {
     if (!bulkWakeupEnabled().enabled) return;

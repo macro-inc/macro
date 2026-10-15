@@ -1,3 +1,4 @@
+import { enableBulkDocumentWakeup } from '@core/constant/featureFlags';
 import '@entity/composed/ListEntity.css';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -25,11 +26,7 @@ import {
   useListLayout,
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
-import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
-  enqueueDocumentWakeup,
-  isWakeableDocument,
-} from '@queries/preview';
+import { enqueueDocumentWakeup, isWakeableDocument } from '@queries/preview';
 import {
   getStreamState,
   subscribeToStreamState,
@@ -86,7 +83,7 @@ function MaybeEntityRow(props: {
 export function TaskListEntity(props: TaskListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+  const bulkWakeupEnabled = useFeatureFlag(enableBulkDocumentWakeup);
 
   createEffect(() => {
     if (!bulkWakeupEnabled().enabled) return;

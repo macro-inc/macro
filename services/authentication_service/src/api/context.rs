@@ -60,6 +60,7 @@ use tokio_util::task::TaskTracker;
 use crate::account_link_state::AccountLinkStateKey;
 use crate::microsoft_token_cipher::MicrosoftTokenCipher;
 use crate::service::signup_policy::SignupPolicy;
+use crate::service::user::create_user::SignupPlan;
 use cursor_api_key::cipher::CursorApiKeyCipher;
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -190,6 +191,8 @@ pub(crate) struct ApiContext {
     pub sqs_client: Arc<sqs_client::SQS>,
     pub environment: Environment,
     pub signup_policy: Arc<SignupPolicy>,
+    /// The plan self-serve signups start on.
+    pub signup_plan: SignupPlan,
     pub jwt_args: JwtValidationArgs,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub token_context: MacroApiTokenContext,

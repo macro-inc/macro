@@ -2,6 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { enableBulkDocumentWakeup } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
@@ -12,7 +13,6 @@ import EyeSlash from '@phosphor/eye-slash.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
 import {
-  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueuePreviewWakeup,
   type ItemEntity,
   isAccessiblePreviewItem,
@@ -39,7 +39,7 @@ import { HoverCard } from './HoverCard';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item, { documentProperties }] = useItemPreview(entity);
-  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+  const bulkWakeupEnabled = useFeatureFlag(enableBulkDocumentWakeup);
 
   createEffect(() => {
     if (!bulkWakeupEnabled().enabled) return;
