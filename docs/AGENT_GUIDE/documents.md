@@ -27,9 +27,22 @@ property selector for that document.
 Adding or reselecting a property from the title row pins it there. Adding from
 the side panel leaves it unpinned. The side panel shows all assigned properties,
 including unpinned ones.
+In document, task, snippet, and skill side panels, hover or focus a property row
+to find
+**Pin below title** beside **Remove from entity**. These controls stay visible
+on touch devices. A pinned row shows **Unpin from title**; unpinning keeps both
+the saved value and the side-panel row.
+Pinning is unavailable for read-only documents, metadata, and properties still
+being assigned, except the task's default Project placeholder. Long values truncate
+or wrap within the value column without
+covering the pin or remove controls.
+Escape cancels an inline text or number draft without saving it.
 Hover or focus an inline property pill to find **Unpin** (keeps its saved
-value) and **Delete from item** (removes the document's assignment, without
-deleting the shared property definition). Pins are saved with the document.
+value) and **Delete from item** where removal is allowed (removes the assignment,
+without deleting the shared property definition). Task builtins cannot be deleted
+from these pills. Pins are saved with the document, including an explicitly empty
+pin list. Tasks initially show Status, Priority, Assignees, and Project when enabled;
+changing pins keeps the other defaults unless they are explicitly unpinned.
 
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;

@@ -35,6 +35,13 @@ export function $getPinnedProperties(): string[] {
   return $getState(root, pinnedPropertyIdsState);
 }
 
+/** Distinguish untouched default pins from an explicitly saved empty pin list. */
+export function $getStoredPinnedProperties(): string[] | undefined {
+  return Object.hasOwn($getRoot().exportJSON().$ ?? {}, 'pinnedPropertyIds')
+    ? $getPinnedProperties()
+    : undefined;
+}
+
 /**
  * Set property IDs on the root node
  * Must be called within an editor.update() callback
@@ -110,6 +117,11 @@ export const ADD_PINNED_PROPERTY_COMMAND: LexicalCommand<string> =
 export const REMOVE_PINNED_PROPERTY_COMMAND: LexicalCommand<string> =
   createCommand('REMOVE_PINNED_PROPERTY_COMMAND');
 
+/** Resolve and replace pinned IDs atomically using the latest editor state. */
+export const UPDATE_PINNED_PROPERTIES_COMMAND: LexicalCommand<
+  (propertyIds: string[] | undefined) => string[]
+> = createCommand('UPDATE_PINNED_PROPERTIES_COMMAND');
+
 function registerPinnedPropertiesPlugin(editor: LexicalEditor) {
   return mergeRegister(
     // Register ADD command
@@ -130,6 +142,15 @@ function registerPinnedPropertiesPlugin(editor: LexicalEditor) {
         return true;
       },
       COMMAND_PRIORITY_EDITOR
+    ),
+
+    editor.registerCommand(
+      UPDATE_PINNED_PROPERTIES_COMMAND,
+      (update) => {
+        $setPinnedProperties(update($getStoredPinnedProperties()));
+        return true;
+      },
+      COMMAND_PRIORITY_EDITOR
     )
   );
 }
@@ -137,9 +158,10 @@ function registerPinnedPropertiesPlugin(editor: LexicalEditor) {
 /**
  * Plugin for managing pinned properties on the document root node
  *
- * Exposes two commands:
+ * Exposes three commands:
  * - ADD_PINNED_PROPERTY_COMMAND: Add a property ID to the pinned list
  * - REMOVE_PINNED_PROPERTY_COMMAND: Remove a property ID from the pinned list
+ * - UPDATE_PINNED_PROPERTIES_COMMAND: Resolve and replace pins atomically
  *
  * To get pinned properties:
  * - getPinnedProperties(editor) - async function for use outside editor callbacks

@@ -81,6 +81,15 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+In the task's Properties side panel, hover or focus a row for **Pin below title**
+or **Unpin from title**. Pinning adds the property to the title row; unpinning keeps
+its saved value and the side-panel row. The title pill's hover menu also offers
+**Unpin**. Status, Priority, and Assignees are pinned by default, with Project when
+enabled. Unpinning a default preserves the other pins, and clearing all pins stays
+cleared after reopening. The empty Project placeholder can also be pinned or
+unpinned without creating an assignment; its pin follows the real assignment when
+one is saved. Builtin task properties cannot be deleted from the title or side panel.
+
 Property edits should update the visible task before the save finishes. To verify,
 delay the GraphQL mutation and change Status, an existing Priority, and an unset
 Priority in the list and task detail. In a view grouped by that property, the task
