@@ -21,6 +21,7 @@ export function CallControlButton(props: {
   pressed?: boolean;
   disabled?: boolean;
   danger?: boolean;
+  class?: string;
   onClick: () => void;
   children: JSX.Element;
 }) {
@@ -33,7 +34,7 @@ export function CallControlButton(props: {
       aria-pressed={props.pressed}
       disabled={props.disabled}
       onClick={props.onClick}
-      class="size-10 @sm:size-12"
+      class={`size-10 @sm:size-12 ${props.class ?? ''}`}
     >
       {props.children}
     </Button>
@@ -145,11 +146,12 @@ export function CallControlBar(props: {
       <div
         role="group"
         aria-label={group.label}
-        class="flex items-center gap-0.5"
+        class="flex items-center rounded-full border border-edge-muted bg-control"
         onPointerEnter={(event) => preview(group.kind, event)}
         onPointerLeave={cancelIntent}
       >
         <CallControlButton
+          class="rounded-r-none"
           label={group.toggleLabel}
           pressed={group.active}
           disabled={props.disabled || group.disabled}
@@ -174,7 +176,7 @@ export function CallControlBar(props: {
                 ?.focus();
             }
           }}
-          class="h-10 w-5 @sm:h-12 @sm:w-8"
+          class="h-10 w-6 rounded-l-none border-l-edge-muted @sm:h-12 @sm:w-8"
         >
           <CaretUp
             class="size-4 transition-transform duration-200 ease-out motion-reduce:transition-none"

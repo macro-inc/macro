@@ -23,6 +23,7 @@ import {
 } from './call-panel-breakpoints';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
+import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
 import { TrackView } from './TrackView';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 
@@ -83,8 +84,11 @@ function ParticipantAvatar(props: {
   };
 
   return (
-    <div class="flex items-center justify-center size-full p-4">
-      <div class={avatarClass()}>
+    <div class="relative flex items-center justify-center size-full p-4">
+      <Show when={props.userId?.trim()} keyed>
+        {(userId) => <ParticipantAvatarBackground userId={userId} />}
+      </Show>
+      <div class={cn('relative', avatarClass())}>
         <Show
           when={props.userId?.trim()}
           keyed
@@ -400,7 +404,12 @@ export function CallOverlay(props: {
         </Show>
       </div>
       {/* Settings expand over the tiles; sharing stays clear of the controls. */}
-      <div class="relative flex shrink-0 flex-col items-center gap-2 py-3">
+      <div
+        class="relative flex shrink-0 flex-col items-center gap-2 py-3"
+        classList={{
+          '@min-[800px]/call:mr-90': canChat() && chatOpen(),
+        }}
+      >
         <Show
           when={
             callCtx.activeChannelId() !== null &&
@@ -437,13 +446,16 @@ export function CallOverlay(props: {
             </button>
           </Tooltip>
         </Show>
-        <div class="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-2 @min-[500px]/call:gap-3 @min-[500px]/call:px-3 @min-[800px]/call:grid-cols-[minmax(0,1fr)_minmax(0,36rem)_minmax(0,1fr)]">
-          <div
-            class="flex min-w-0 justify-center @min-[800px]/call:col-start-2"
-            classList={{
-              'col-span-2 @min-[800px]/call:col-span-1': !canChat(),
-            }}
-          >
+        <div
+          class="grid w-full items-center gap-2 px-2"
+          classList={{
+            'grid-cols-[minmax(3.5rem,1fr)_minmax(0,36rem)_minmax(3.5rem,1fr)]':
+              canChat(),
+            'grid-cols-[minmax(0,1fr)_minmax(0,36rem)_minmax(0,1fr)]':
+              !canChat(),
+          }}
+        >
+          <div class="col-start-2 flex min-w-0 justify-center">
             <CallControls onLeave={props.onLeave} />
           </div>
           <Show when={canChat()}>
