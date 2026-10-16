@@ -184,7 +184,8 @@ type NavigationDeferredError = {
 type OpenNotificationFromIdError =
   | NotSupportedError
   | NotFoundError
-  | NavigationDeferredError;
+  | NavigationDeferredError
+  | { tag: 'NotificationLookupError'; notificationId: string; cause: unknown };
 
 function getSupportedHandler(
   notification: UnifiedNotification,
@@ -631,8 +632,13 @@ export function openNotificationFromId(
   }
 
   // Fetch if not in notification source
-  return ResultAsync.fromSafePromise(
-    getNotificationById(notificationId)
+  return ResultAsync.fromPromise(
+    getNotificationById(notificationId),
+    (cause): OpenNotificationFromIdError => ({
+      tag: 'NotificationLookupError',
+      notificationId,
+      cause,
+    })
   ).andThen((unified) => {
     if (!unified) {
       const err: NotFoundError = { tag: 'NotFoundError', notificationId };

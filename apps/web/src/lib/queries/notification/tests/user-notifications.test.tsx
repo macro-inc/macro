@@ -6,9 +6,13 @@ import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  onlineManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import { createClient, type Operation } from '@urql/core';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -26,6 +30,7 @@ import type {
 import { notificationKeys } from '../keys';
 import {
   applyNotificationStatusUpdate,
+  getNotificationById,
   optimisticInsertNotification,
   restoreUserNotifications,
   type UserNotificationsQuery,
@@ -44,6 +49,7 @@ const {
   restMarkDoneMock,
   restMarkSeenMock,
   restUserNotificationsMock,
+  restNotificationByIdMock,
   restMarkUndoneMock,
   useFeatureFlagMock,
 } = vi.hoisted(() => ({
@@ -56,6 +62,7 @@ const {
   restMarkDoneMock: vi.fn(),
   restMarkSeenMock: vi.fn(),
   restUserNotificationsMock: vi.fn(),
+  restNotificationByIdMock: vi.fn(),
   restMarkUndoneMock: vi.fn(),
   useFeatureFlagMock: vi.fn(),
 }));
@@ -72,6 +79,7 @@ vi.mock('@core/constant/featureFlags', () => ({
 vi.mock('@service-notification/client', () => ({
   notificationServiceClient: {
     userNotifications: restUserNotificationsMock,
+    getUserNotificationById: restNotificationByIdMock,
     bulkGetUserNotificationsByEventItemId: vi.fn(),
     bulkMarkNotificationAsDone: restMarkDoneMock,
     bulkMarkNotificationAsSeen: restMarkSeenMock,
@@ -246,6 +254,74 @@ function createMockNotificationPage(
     next_cursor: nextCursor,
   };
 }
+
+describe('notification lookup after a push tap', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    testQueryClient = new QueryClient();
+    restNotificationByIdMock.mockReset();
+  });
+
+  afterEach(() => {
+    testQueryClient.clear();
+    onlineManager.setOnline(true);
+    vi.useRealTimers();
+  });
+
+  it('retries a transient failure while the native online status is stale', async () => {
+    onlineManager.setOnline(false);
+    const notification = createMockNotification({ id: 'push-1' });
+    restNotificationByIdMock
+      .mockResolvedValueOnce(
+        err([{ code: 'NETWORK_ERROR', message: 'offline' }])
+      )
+      .mockResolvedValueOnce(ok({ ...notification, owner_id: 'owner-1' }));
+
+    const lookup = getNotificationById('push-1');
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(lookup).resolves.toEqual(notification);
+    expect(restNotificationByIdMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['NOT_FOUND', 'GONE'])(
+    'does not retry a %s notification',
+    async (code) => {
+      restNotificationByIdMock.mockResolvedValue(
+        err([{ code, message: 'missing' }])
+      );
+      await expect(getNotificationById('push-1')).resolves.toBeUndefined();
+      expect(restNotificationByIdMock).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each(['UNAUTHORIZED', 'FORBIDDEN'])('does not retry %s', async (code) => {
+    restNotificationByIdMock.mockResolvedValue(
+      err([{ code, message: 'denied' }])
+    );
+    await expect(getNotificationById('push-1')).rejects.toThrow('denied');
+    expect(restNotificationByIdMock).toHaveBeenCalledOnce();
+  });
+
+  it('stops after three attempts and allows the next tap to fetch again', async () => {
+    restNotificationByIdMock.mockResolvedValue(
+      err([{ code: 'UNKNOWN_ERROR', message: 'native network failure' }])
+    );
+    const failure = expect(getNotificationById('push-1')).rejects.toThrow(
+      'native network failure'
+    );
+    await vi.advanceTimersByTimeAsync(3000);
+    await failure;
+    expect(restNotificationByIdMock).toHaveBeenCalledTimes(3);
+
+    const notification = createMockNotification({ id: 'push-1' });
+    restNotificationByIdMock.mockResolvedValue(
+      ok({ ...notification, owner_id: 'owner-1' })
+    );
+    await expect(getNotificationById('push-1')).resolves.toEqual(notification);
+    expect(restNotificationByIdMock).toHaveBeenCalledTimes(4);
+  });
+});
 
 function seedQueryCache(pages: GetAllUserNotificationsResponse[], limit = 20) {
   const queryKey = notificationKeys.user({ limit }).queryKey;

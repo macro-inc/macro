@@ -16,6 +16,7 @@ import type {
   SplitEventWithType,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
+import { toast } from '@core/component/Toast/Toast';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -29,6 +30,7 @@ type OpenAttempt = {
   canOpen: () => boolean;
   onApplied: VoidFunction;
   succeed: VoidFunction;
+  fail: (error: { tag: 'NotificationLookupError' }) => void;
 };
 
 function managerHarness(initiallyReady = false) {
@@ -76,8 +78,8 @@ describe('usePendingNotificationNavigationEffect', () => {
         _source: NotificationSource,
         options: Pick<OpenAttempt, 'canOpen' | 'onApplied'>
       ) => ({
-        match: (onSuccess: VoidFunction) => {
-          attempts.push({ ...options, succeed: onSuccess });
+        match: (onSuccess: VoidFunction, onError: OpenAttempt['fail']) => {
+          attempts.push({ ...options, succeed: onSuccess, fail: onError });
         },
       })
     );
@@ -191,6 +193,24 @@ describe('usePendingNotificationNavigationEffect', () => {
     await Promise.resolve();
     expect(attempts).toHaveLength(2);
     attempts[1]?.succeed();
+    attempts[1]?.onApplied();
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+
+  it('releases a failed lookup so tapping the same notification can try again', async () => {
+    const host = managerHarness(true);
+    mount();
+    setGlobalSplitManager(host.manager);
+    setPendingNotificationNavigationId('notification-1');
+    await Promise.resolve();
+
+    attempts[0]?.fail({ tag: 'NotificationLookupError' });
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+    expect(toast.failure).toHaveBeenCalledWith('Failed to open notification.');
+
+    setPendingNotificationNavigationId('notification-1');
+    await Promise.resolve();
+    expect(attempts).toHaveLength(2);
     attempts[1]?.onApplied();
     expect(pendingNotificationNavigationId()).toBeUndefined();
   });

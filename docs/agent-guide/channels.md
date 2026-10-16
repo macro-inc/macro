@@ -590,6 +590,10 @@ thread with a reply hidden by the collapsed preview so opening only the channel
 or parent message cannot satisfy the check. See the
 [native notification regression procedure](../../apps/web/tests/native/ios/README.md#thread-reply-push-notifications)
 for simulator setup.
+Also test an uncached notification while the first lookup fails during resume:
+transient failures should retry even before the native online status updates.
+If all attempts fail, a failure toast should appear and tapping the same
+notification again should retry instead of leaving navigation stuck.
 
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.

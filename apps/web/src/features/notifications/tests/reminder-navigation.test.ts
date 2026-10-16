@@ -136,4 +136,24 @@ describe('reminder notification navigation', () => {
     });
     expect(openWithSplit).not.toHaveBeenCalled();
   });
+
+  it('returns a lookup failure through the navigation result instead of rejecting', async () => {
+    const cause = new Error('Network unavailable after resume');
+    getNotificationById.mockRejectedValue(cause);
+    const source = { notifications: () => [] } as unknown as NotificationSource;
+
+    const result = await openNotificationFromId(
+      'notification-1',
+      layout,
+      source
+    );
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({
+      tag: 'NotificationLookupError',
+      notificationId: 'notification-1',
+      cause,
+    });
+    expect(openWithSplit).not.toHaveBeenCalled();
+  });
 });

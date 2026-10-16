@@ -4,7 +4,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
-import { throwOnErr } from '@core/util/result';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import {
   nextNotificationState,
   notificationStatesForFilter,
@@ -903,14 +903,36 @@ export function applyNotificationStatusUpdate(
 export async function getNotificationById(
   notificationId: string
 ): Promise<UnifiedNotification | undefined> {
-  const res = await throwOnErr(async () => {
-    return await notificationServiceClient.getUserNotificationById(
-      notificationId
-    );
+  const notification = await queryClient.fetchQuery({
+    queryKey: notificationKeys.detail(notificationId).queryKey,
+    queryFn: async () => {
+      const result =
+        await notificationServiceClient.getUserNotificationById(notificationId);
+      if (result.isOk()) return stripOwnerId(result.value);
+      if (
+        result.error.some(({ code }) => code === 'NOT_FOUND' || code === 'GONE')
+      ) {
+        return null;
+      }
+      throw new ThrownResultError(result.error);
+    },
+    staleTime: 0,
+    // Notification taps can precede the native connectivity update on resume.
+    // Attempt the request (and retries) even if navigator.onLine is stale.
+    networkMode: 'always',
+    retry: (failureCount, error) =>
+      failureCount < 2 &&
+      error instanceof ThrownResultError &&
+      error.errors.some(({ code }) =>
+        [
+          'NETWORK_ERROR',
+          'SERVER_ERROR',
+          'HTTP_ERROR',
+          'UNKNOWN_ERROR',
+        ].includes(code)
+      ),
   });
-
-  if (!res) return undefined;
-  return stripOwnerId(res as NotificationItem);
+  return notification ?? undefined;
 }
 
 /**
