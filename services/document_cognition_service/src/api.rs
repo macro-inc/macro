@@ -163,7 +163,10 @@ fn api_router(api_context: ApiContext) -> Router {
     let app = Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
-        .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state));
+        .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
+        .merge(granola_sync::inbound::webhook_router(
+            api_context.granola_sync.clone(),
+        ));
 
     match api_context.config.pipedream_webhook_secret.value() {
         Some(secret) => app.merge(pipedream_mcp::inbound::pipedream_webhook_router(

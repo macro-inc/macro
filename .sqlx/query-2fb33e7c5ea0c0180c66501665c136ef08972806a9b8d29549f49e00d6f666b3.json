@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_object(\n    'entity', jsonb_build_object(\n        'id', c.id, 'userId', c.user_id, 'title', c.title, 'createdVia', c.created_via,\n        'startedAt', c.started_at, 'endedAt', c.ended_at, 'durationMs', c.duration_ms,\n        'channelId', c.channel_id, 'meetingId', c.meeting_id,\n        'createdAt', c.created_at, 'updatedAt', c.updated_at\n    ),\n    'sources', COALESCE((\n        SELECT jsonb_agg(jsonb_build_object(\n            'userId', s.user_id, 'namespace', s.namespace, 'provider', s.provider,\n            'objectType', s.object_type, 'externalId', s.external_id, 'externalUrl', s.external_url,\n            'externalUpdatedAt', s.external_updated_at, 'syncedAt', s.synced_at,\n            'metadata', s.metadata - 'participantIds' - 'transcriptId'\n        )) FROM call_entity_sources s WHERE s.call_id = c.id\n    ), '[]'::jsonb),\n    'participants', COALESCE((\n        SELECT jsonb_agg(jsonb_build_object(\n            'id', p.id, 'userId', p.user_id, 'displayName', p.display_name,\n            'email', p.email, 'phone', p.phone, 'externalId', p.external_id,\n            'attendance', COALESCE((SELECT jsonb_agg(jsonb_build_object(\n                'id', a.id, 'joinedAt', a.joined_at, 'leftAt', a.left_at\n            ) ORDER BY a.id) FROM call_entity_attendance a\n            WHERE a.call_id = p.call_id AND a.participant_id = p.id), '[]'::jsonb)\n        ) ORDER BY p.id) FROM call_entity_participants p WHERE p.call_id = c.id\n    ), '[]'::jsonb),\n    'recordings', COALESCE((SELECT jsonb_agg(jsonb_build_object(\n        'id', r.id, 'mediaType', r.media_type,\n        'location', jsonb_build_object(\n            'kind', CASE WHEN r.storage_key IS NOT NULL THEN 'storage_key' ELSE 'external_url' END,\n            'value', COALESCE(r.storage_key, r.external_url)),\n        'mimeType', r.mime_type, 'durationMs', r.duration_ms, 'startedAt', r.started_at\n    ) ORDER BY r.id) FROM call_entity_recordings r WHERE r.call_id = c.id), '[]'::jsonb),\n    'transcripts', COALESCE((\n        SELECT jsonb_agg(jsonb_build_object(\n            'id', t.id, 'recordingId', t.recording_id, 'language', t.language,\n            'provider', t.provider, 'startedAt', t.started_at,\n            'segments', COALESCE((\n                SELECT jsonb_agg(jsonb_build_object(\n                    'sequenceNum', s.sequence_num, 'participantId', s.participant_id,\n                    'speakerLabel', s.speaker_label, 'content', s.content,\n                    'startMs', s.start_ms, 'endMs', s.end_ms\n                ) ORDER BY s.sequence_num) FROM call_entity_transcript_segments s\n                WHERE s.call_id = t.call_id AND s.transcript_id = t.id\n            ), '[]'::jsonb)\n        ) ORDER BY t.id) FROM call_entity_transcripts t WHERE t.call_id = c.id\n    ), '[]'::jsonb)\n) AS \"record!\"\nFROM call_entities c\nWHERE c.user_id = $1 AND c.id = $2 AND c.created_via = 'import';\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2fb33e7c5ea0c0180c66501665c136ef08972806a9b8d29549f49e00d6f666b3"
+}

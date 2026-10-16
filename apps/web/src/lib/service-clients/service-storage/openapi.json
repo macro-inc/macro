@@ -20542,7 +20542,6 @@
         "description": "Full record of a call, unifying rows from `calls` (active) and\n`call_records` (archived) into a single response shape.",
         "required": [
           "callId",
-          "roomName",
           "createdBy",
           "startedAt",
           "shareWithTeam",
@@ -20620,12 +20619,23 @@
             "description": "Presigned URL for the call recording, if available."
           },
           "roomName": {
-            "type": "string",
-            "description": "The RTC room name."
+            "type": ["string", "null"],
+            "description": "The RTC room name. `None` for imported calls, which never had a room."
           },
           "shareWithTeam": {
             "type": "boolean",
             "description": "Whether the call is shared with the creator's team. While the call is\nlive this is the pending toggle applied at archive; afterwards it\nmirrors `team_share_access_level`."
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallRecordSource",
+                "description": "External provenance for calls imported from another provider; `None`\nfor calls recorded in Macro."
+              }
+            ]
           },
           "startedAt": {
             "type": "string",
@@ -20803,6 +20813,21 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started (created_at for active, started_at for archived)."
+          }
+        }
+      },
+      "CallRecordSource": {
+        "type": "object",
+        "description": "Where an imported call came from.",
+        "required": ["provider"],
+        "properties": {
+          "externalUrl": {
+            "type": ["string", "null"],
+            "description": "Link to the call in the provider's app, if it has one."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider slug, e.g. `granola`."
           }
         }
       },

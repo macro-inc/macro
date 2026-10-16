@@ -2410,12 +2410,33 @@ export const getCallRecordResponse = zod
       .string()
       .nullish()
       .describe('Presigned URL for the call recording, if available.'),
-    roomName: zod.string().describe('The RTC room name.'),
+    roomName: zod
+      .string()
+      .nullish()
+      .describe(
+        'The RTC room name. `None` for imported calls, which never had a room.'
+      ),
     shareWithTeam: zod
       .boolean()
       .describe(
         "Whether the call is shared with the creator's team. While the call is\nlive this is the pending toggle applied at archive; afterwards it\nmirrors `team_share_access_level`."
       ),
+    source: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            externalUrl: zod
+              .string()
+              .nullish()
+              .describe(
+                "Link to the call in the provider's app, if it has one."
+              ),
+            provider: zod.string().describe('Provider slug, e.g. `granola`.'),
+          })
+          .describe('Where an imported call came from.'),
+      ])
+      .optional(),
     startedAt: zod.iso
       .datetime({})
       .describe(

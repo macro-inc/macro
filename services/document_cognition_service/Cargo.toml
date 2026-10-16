@@ -44,7 +44,7 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
-call = { path = "../../crates/call", default-features = false, features = ["ports"] }
+call = { path = "../../crates/call", default-features = false, features = ["ports", "outbound"] }
 chat = { path = "../../crates/chat", features = ["attachment"] }
 channels = { path = "../../crates/channels", features = ["outbound", "attachment"] }
 chrono = { workspace = true }
@@ -100,6 +100,7 @@ import = { path = "../../crates/import" }
 mcp_client = { path = "../../crates/mcp_client" }
 mcp_select = { path = "../../crates/mcp_select" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
+granola_sync = { path = "../../crates/granola_sync" }
 model-error-response = { path = "../../crates/model-error-response" }
 memory = { path = "../../crates/memory" }
 onboarding = { path = "../../crates/onboarding" }

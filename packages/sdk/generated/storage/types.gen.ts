@@ -1936,15 +1936,16 @@ export type CallRecord = {
      */
     recordingUrl?: string | null;
     /**
-     * The RTC room name.
+     * The RTC room name. `None` for imported calls, which never had a room.
      */
-    roomName: string;
+    roomName?: string | null;
     /**
      * Whether the call is shared with the creator's team. While the call is
      * live this is the pending toggle applied at archive; afterwards it
      * mirrors `team_share_access_level`.
      */
     shareWithTeam: boolean;
+    source?: null | CallRecordSource;
     /**
      * When the call started (created_at for active, started_at for archived).
      */
@@ -2051,6 +2052,20 @@ export type CallRecordPreviewData = {
      * When the call started (created_at for active, started_at for archived).
      */
     startedAt: string;
+};
+
+/**
+ * Where an imported call came from.
+ */
+export type CallRecordSource = {
+    /**
+     * Link to the call in the provider's app, if it has one.
+     */
+    externalUrl?: string | null;
+    /**
+     * Provider slug, e.g. `granola`.
+     */
+    provider: string;
 };
 
 /**

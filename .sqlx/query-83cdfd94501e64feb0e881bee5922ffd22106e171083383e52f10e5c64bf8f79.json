@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_entity_sources (call_id,user_id,namespace,provider,object_type,external_id,external_url,external_updated_at,synced_at,metadata)\n            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),$9)\n            ON CONFLICT (user_id,namespace,provider,object_type,external_id) DO UPDATE SET\n                external_url = EXCLUDED.external_url, external_updated_at = EXCLUDED.external_updated_at,\n                synced_at = now(), metadata = EXCLUDED.metadata",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "83cdfd94501e64feb0e881bee5922ffd22106e171083383e52f10e5c64bf8f79"
+}

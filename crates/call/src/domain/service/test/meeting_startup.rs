@@ -363,11 +363,11 @@ async fn recording_webhook_can_link_before_the_startup_response() {
         let mut record = standalone_record(false);
         let call_id = record.call_id;
         let room_name = call_id.to_string();
-        record.room_name = if correct_room {
+        record.room_name = Some(if correct_room {
             room_name.clone()
         } else {
             "different-room".to_string()
-        };
+        });
         let mut repo = MockCallRepository::new();
         repo.expect_get_call_record_by_call_id()
             .times(1)

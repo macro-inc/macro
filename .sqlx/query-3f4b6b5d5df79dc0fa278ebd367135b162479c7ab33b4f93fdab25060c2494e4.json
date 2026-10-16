@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT p.call_id, p.id, p.display_name, p.email,\n               COALESCE(ce.started_at, ce.created_at) AS \"joined_at!\",\n               ce.ended_at\n        FROM call_entity_participants p\n        JOIN call_entities ce ON ce.id = p.call_id\n        WHERE p.call_id = ANY($1)\n        ORDER BY p.call_id, p.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "joined_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      null,
+      true
+    ]
+  },
+  "hash": "3f4b6b5d5df79dc0fa278ebd367135b162479c7ab33b4f93fdab25060c2494e4"
+}

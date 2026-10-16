@@ -5,6 +5,7 @@ import { Button } from '@ui';
 import { Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
 import { GitHubCard } from './GitHub';
+import { GranolaCard } from './Granola';
 import {
   SettingsCard,
   SettingsPage,
@@ -30,6 +31,9 @@ export function ConnectedAccounts() {
           </Show>
           <Suspense>
             <GitHubCard />
+          </Suspense>
+          <Suspense>
+            <GranolaCard />
           </Suspense>
         </div>
       </SettingsSection>
