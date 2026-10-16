@@ -18,9 +18,9 @@ use properties::EntityPropertyInfo;
 use rootcause::Report;
 use system_properties::SystemPropertyKey;
 use trigger_context::{
-    CallSnapshot, CallStartedSnapshot, ChannelType, ContextMessage, ContextPerson, ContextThread,
-    DiscussionContext, DiscussionSurface, DocumentSnapshot, EmailSnapshot, ReplyTarget,
-    RoutineEvent, TaskSnapshot, TranscriptLine,
+    CallSnapshot, CallStartedSnapshot, ChannelType, ContextAttachment, ContextMessage,
+    ContextPerson, ContextThread, DiscussionContext, DiscussionSurface, DocumentSnapshot,
+    EmailSnapshot, ReplyTarget, RoutineEvent, TaskSnapshot, TranscriptLine,
 };
 
 use super::{
@@ -396,6 +396,14 @@ fn context_message(message: &Message) -> ContextMessage {
         author: author(message),
         content: truncate(&message.content),
         posted_at: message.created_at,
+        attachments: message
+            .attachments
+            .iter()
+            .map(|attachment| ContextAttachment {
+                entity_type: attachment.entity_type.clone(),
+                entity_id: attachment.entity_id.clone(),
+            })
+            .collect(),
     }
 }
 

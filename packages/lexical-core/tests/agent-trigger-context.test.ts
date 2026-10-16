@@ -95,6 +95,83 @@ describe('composeAgentContextPrompt with a trigger', () => {
     );
   });
 
+  it('lists a thread-root image on its message so the agent can fetch it', () => {
+    const fileId = '9ec21122-4bd8-473f-bfb0-21d2e6e5f03b';
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'see screenshot and create a task',
+      trigger: {
+        kind: 'mentioned',
+        surface: {
+          type: 'channel',
+          id: 'c1',
+          name: 'eng',
+          channel_type: 'public',
+        },
+        prompt_message_id: 'm2',
+        sender: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        reply_target: { kind: 'thread', root_id: 'm1' },
+        thread: {
+          root_id: 'm1',
+          messages: [
+            {
+              id: 'm1',
+              author: {
+                id: 'macro|teo@example.com',
+                name: 'Teo',
+                email: 'teo@example.com',
+              },
+              content: 'We need agent templates',
+              posted_at: '2026-10-08T14:00:00Z',
+              attachments: [
+                { entity_type: 'static/image', entity_id: fileId },
+                { entity_type: 'document', entity_id: 'doc-1' },
+              ],
+            },
+            {
+              id: 'm2',
+              author: {
+                id: 'macro|julia@example.com',
+                name: 'Julia',
+                email: 'julia@example.com',
+              },
+              content: 'see screenshot and create a task',
+              posted_at: '2026-10-08T14:02:00Z',
+            },
+          ],
+          messages_omitted: false,
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="mentioned">',
+        '  <note>Julia mentioned you, and that mention opened this session. Their message is the prompt.</note>',
+        '  <discussion>',
+        '    <channel id="c1" name="eng" type="public"/>',
+        '    <origin>This prompt was posted in a channel thread, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.</origin>',
+        '    <sender name="Julia" email="julia@example.com" id="macro|julia@example.com"/>',
+        '    <reply_target kind="thread" thread="m1">',
+        '      <note>The prompt was posted as a reply in the thread below. It is about that thread.</note>',
+        '    </reply_target>',
+        '    <note>Attachments are listed on each message and can be fetched by their url.</note>',
+        '    <thread root="m1">',
+        `      <message id="m1" author="Teo" author_email="teo@example.com" author_id="macro|teo@example.com" at="2026-10-08T14:00:00Z">We need agent templates`,
+        `        <attachment type="static/image" id="${fileId}" url="https://static-file-service.macro.com/file/${fileId}"/>`,
+        '        <attachment type="document" id="doc-1"/>',
+        '      </message>',
+        '      <message id="m2" author="Julia" author_email="julia@example.com" author_id="macro|julia@example.com" at="2026-10-08T14:02:00Z" mentioned_you="true">see screenshot and create a task</message>',
+        '    </thread>',
+        '  </discussion>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
   it('renders an inferred follow-up after the session block and warns the inference can be wrong', () => {
     const markdown = composeAgentContextPrompt({
       promptMarkdown: 'and the popover one too',

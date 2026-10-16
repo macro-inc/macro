@@ -15,8 +15,9 @@ use macro_uuid::Uuid;
 use messages::domain::events::MessagePostedMetadata;
 use messages::domain::models::MessageParent;
 use trigger_context::{
-    AddressedBy, ContextPerson, DiscussionContext, DiscussionSurface, FollowUpContext, ReplyTarget,
-    TaskAssignedContext, TaskSnapshot, TriggerContext,
+    AddressedBy, ContextAttachment, ContextMessage, ContextPerson, ContextThread,
+    DiscussionContext, DiscussionSurface, FollowUpContext, ReplyTarget, TaskAssignedContext,
+    TaskSnapshot, TriggerContext,
 };
 
 use super::*;
@@ -572,6 +573,65 @@ fn message_with_files(sender: ChannelSender<'static>) -> ChannelMessagePostedMet
     }
 }
 
+fn julia() -> ContextPerson {
+    ContextPerson {
+        id: "macro|julia@example.com".to_owned(),
+        name: "Julia".to_owned(),
+        email: Some("julia@example.com".to_owned()),
+    }
+}
+
+fn context_message(id: u128, content: &str, attachments: Vec<ContextAttachment>) -> ContextMessage {
+    ContextMessage {
+        id: Uuid::from_u128(id),
+        author: julia(),
+        content: content.to_owned(),
+        posted_at: Utc::now(),
+        attachments,
+    }
+}
+
+fn image_attachment(entity_id: &str) -> ContextAttachment {
+    ContextAttachment {
+        entity_type: "static/image".to_owned(),
+        entity_id: entity_id.to_owned(),
+    }
+}
+
+/// A mention whose own message has no files, on a thread whose root does.
+fn thread_root_image_context(root_file: &str) -> TriggerContext {
+    TriggerContext::Mentioned(DiscussionContext {
+        surface: DiscussionSurface::Channel {
+            id: Uuid::from_u128(1),
+            name: Some("eng".to_owned()),
+            channel_type: trigger_context::ChannelType::Public,
+        },
+        prompt_message_id: Uuid::from_u128(2),
+        sender: julia(),
+        reply_target: ReplyTarget::Thread {
+            root_id: Uuid::from_u128(1),
+        },
+        thread: Some(ContextThread {
+            root_id: Uuid::from_u128(1),
+            messages: vec![
+                context_message(
+                    1,
+                    "We need agent templates",
+                    vec![image_attachment(root_file)],
+                ),
+                context_message(2, "@cursor look", vec![]),
+            ],
+            messages_omitted: false,
+        }),
+        channel: Vec::new(),
+    })
+}
+
+fn image_link(entity_id: Uuid) -> PromptAttachment {
+    PromptAttachment::new(format!("https://static.example/file/{entity_id}"), "image")
+        .mime_type("image/*")
+}
+
 /// The files a message carries reach the agent with its words - as links
 /// it can fetch, since the static file service is where the bytes live.
 #[test]
@@ -633,6 +693,112 @@ fn a_managed_channel_message_with_files_delivers_them_as_prompt_attachments() {
 }
 
 #[test]
+fn a_mention_without_files_still_carries_the_thread_root_image() {
+    const ROOT_FILE: &str = "9ec21122-4bd8-473f-bfb0-21d2e6e5f03b";
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+        AgentBotMentionedEvent {
+            bot_id: BotId::TEST_A,
+            message: message(ChannelSender::new_from_user(user())),
+            context: Some(thread_root_image_context(ROOT_FILE)),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::InMemory), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
+        panic!("a new-session event should open");
+    };
+    assert_eq!(
+        mention_origin(&open).attachments,
+        vec![
+            PromptAttachment::new(format!("https://static.example/file/{ROOT_FILE}"), "image",)
+                .mime_type("image/*")
+        ]
+    );
+}
+
+#[test]
+fn a_mention_image_is_listed_before_the_thread_root_and_deduped() {
+    let mention_id = Uuid::from_u128(0x10);
+    let root_id = Uuid::from_u128(0x20);
+    let mut posted = message_with_files(ChannelSender::new_from_user(user()));
+    posted.attachments.truncate(1);
+    let mut context = thread_root_image_context(&root_id.to_string());
+    if let TriggerContext::Mentioned(discussion) = &mut context {
+        discussion.thread.as_mut().unwrap().messages[1]
+            .attachments
+            .push(image_attachment(&mention_id.to_string()));
+    }
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+        AgentBotMentionedEvent {
+            bot_id: BotId::TEST_A,
+            message: posted,
+            context: Some(context),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::InMemory), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
+        panic!("a new-session event should open");
+    };
+    assert_eq!(
+        mention_origin(&open).attachments,
+        vec![image_link(mention_id), image_link(root_id)]
+    );
+}
+
+#[test]
+fn a_follow_up_delivers_thread_root_files_with_the_prompt() {
+    const ROOT_FILE: &str = "9ec21122-4bd8-473f-bfb0-21d2e6e5f03b";
+    let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+        ChannelEventMetadata {
+            bot_id: MACRO_CODER_BOT_ID,
+            session_id: AgentSessionId::TEST_A,
+            kind: ThreadMessageKind::MentionThread,
+            message: message(ChannelSender::new_from_user(user())),
+            context: Some(thread_root_image_context(ROOT_FILE)),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::SandboxedCoder), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::Deliver(deliver)) = routed else {
+        panic!("a managed existing-session event should deliver");
+    };
+    let AgentAction::Prompt(prompt) = deliver.action else {
+        panic!("a channel message becomes a prompt");
+    };
+    assert_eq!(
+        prompt.attachments,
+        vec![
+            PromptAttachment::new(format!("https://static.example/file/{ROOT_FILE}"), "image",)
+                .mime_type("image/*")
+        ]
+    );
+}
+
+#[test]
+fn thread_files_on_a_prompt_cap_at_eight() {
+    let mut context = thread_root_image_context(&Uuid::from_u128(0).to_string());
+    if let TriggerContext::Mentioned(discussion) = &mut context {
+        discussion.thread.as_mut().unwrap().messages[0].attachments = (0..10)
+            .map(|index| image_attachment(&Uuid::from_u128(index).to_string()))
+            .collect();
+    }
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+        AgentBotMentionedEvent {
+            bot_id: BotId::TEST_A,
+            message: message(ChannelSender::new_from_user(user())),
+            context: Some(context),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::InMemory), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
+        panic!("a new-session event should open");
+    };
+    assert_eq!(mention_origin(&open).attachments.len(), 8);
+    assert_eq!(
+        mention_origin(&open).attachments[0].uri,
+        format!("https://static.example/file/{}", Uuid::from_u128(0))
+    );
+}
+
+#[test]
 fn conversation_messages_route_to_every_configured_runtime() {
     let session_id = AgentSessionId::TEST_A;
     let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::ConversationMessage(
@@ -659,4 +825,29 @@ fn conversation_messages_route_to_every_configured_runtime() {
         assert_eq!(id, session_id);
         assert_eq!(open.runtime.kind, kind);
     }
+}
+
+#[test]
+fn a_conversation_message_without_files_still_carries_the_thread_root_image() {
+    const ROOT_FILE: &str = "9ec21122-4bd8-473f-bfb0-21d2e6e5f03b";
+    let session_id = AgentSessionId::TEST_A;
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::ConversationMessage(
+        AgentConversationMessageEvent {
+            bot_id: BotId::TEST_A,
+            session_id,
+            message: document_message(ChannelSender::new_from_user(user())),
+            context: Some(thread_root_image_context(ROOT_FILE)),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::InMemory), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::ConversationMessage(open)) = routed else {
+        panic!("a conversation message should reach its reserved session");
+    };
+    assert_eq!(
+        mention_origin(&open).attachments,
+        vec![
+            PromptAttachment::new(format!("https://static.example/file/{ROOT_FILE}"), "image")
+                .mime_type("image/*")
+        ]
+    );
 }
