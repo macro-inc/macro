@@ -137,7 +137,8 @@ impl MacroApi {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Identity {
-    /// Whether the next pairing may enable permission bypass. Requires web approval.
+    /// Whether this machine's operator allows permission bypass. Reported on
+    /// every connect; bypass also needs the harness owner's consent in Macro.
     #[serde(default)]
     pub allow_permission_bypass: bool,
     /// Requested harness display name; the approving user may rename it.
