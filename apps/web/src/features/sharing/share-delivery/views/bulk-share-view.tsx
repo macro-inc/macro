@@ -21,6 +21,7 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
   recipientField: JSX.Element;
   messageField: JSX.Element;
   recipientName: (recipient: Recipient) => string;
+  onSubmitted: () => void;
   onFinish: () => void;
   onCancel: () => void;
   ref?: (handle: BulkShareHandle) => void;
@@ -53,7 +54,9 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
 
   async function share() {
     const result = await props.form.submit();
-    if (!result?.outcome.complete) return;
+    if (!result) return;
+    props.onSubmitted();
+    if (!result.outcome.complete) return;
     const { outcome, open } = result;
     const [only, ...others] = outcome.recipients;
     toast.success(

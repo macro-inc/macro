@@ -4,6 +4,7 @@ import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -79,6 +80,7 @@ export function BulkShare(props: {
         </div>
       }
       recipientName={recipientName}
+      onSubmitted={refetchDocumentShareButtonResource}
       onFinish={props.onFinish}
       onCancel={props.onCancel}
       ref={props.ref}

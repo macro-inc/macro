@@ -94,6 +94,7 @@ function setup(
     ),
     track: vi.fn<ShareDeliveryContext['track']>(),
   } satisfies ShareDeliveryContext;
+  const onSubmitted = vi.fn();
   const onFinish = vi.fn();
   const onCancel = vi.fn();
   let handle: BulkShareHandle | undefined;
@@ -116,6 +117,7 @@ function setup(
         recipientField={null}
         messageField={null}
         recipientName={(recipient) => NAMES[recipient.id] ?? recipient.id}
+        onSubmitted={onSubmitted}
         onFinish={onFinish}
         onCancel={onCancel}
         ref={(registered) => {
@@ -129,6 +131,7 @@ function setup(
     failingChannels,
     grantErrors,
     opened,
+    onSubmitted,
     onFinish,
     onCancel,
     dismiss: () => handle?.dismiss(),
@@ -160,7 +163,7 @@ describe('BulkShareView', () => {
   });
 
   it('reports a partial failure, locks the share, and retries only what failed', async () => {
-    const { context, failingChannels, onFinish } = setup(
+    const { context, failingChannels, onSubmitted, onFinish } = setup(
       [item('document', 'Spec'), item('chat', 'Notes')],
       [channel('general'), channel('design')]
     );
@@ -174,6 +177,7 @@ describe('BulkShareView', () => {
       )
     ).toBeTruthy();
     expect(button('Permission')).toHaveProperty('disabled', true);
+    expect(onSubmitted).toHaveBeenCalledOnce();
     expect(onFinish).not.toHaveBeenCalled();
 
     failingChannels.delete('design');
@@ -181,6 +185,7 @@ describe('BulkShareView', () => {
     expect(screen.getByText('Design did not get Spec and Notes.')).toBeTruthy();
     await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
 
+    expect(onSubmitted).toHaveBeenCalledTimes(2);
     expect(
       context.send.mock.calls.map(([message]) => message.channelId)
     ).toEqual(['general', 'design', 'design']);
