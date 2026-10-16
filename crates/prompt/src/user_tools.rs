@@ -14,7 +14,8 @@
 //! that has nothing to review in - a channel or document thread - and the
 //! toolset is the same everywhere, so each section says when they are the
 //! right tools: in the session prompt, when the context block names a thread
-//! as the prompt's origin; in chat, never.
+//! as the prompt's origin or the user approves a draft they have already
+//! seen; in chat, never.
 
 use crate::types::StaticPrompt;
 
@@ -104,7 +105,12 @@ static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `Cr
   event, or "Rejected". Nothing is pending afterwards and there is no chat composer; do not tell
   the user to confirm anything, and do not ask for confirmation in prose before calling the tool -
   the review card is the confirmation.
-  `SendConfirmedEmail` and `CreateConfirmedCalendarEvent` are never right here.
+
+- The review card is the default, not the only way. When the user has already seen a specific
+  email or event - in a review card or written out in your reply - and replies approving it in
+  their own words ("yes, send it", "just send it"), call `SendConfirmedEmail` or
+  `CreateConfirmedCalendarEvent` with that same draft and their reply quoted verbatim in
+  `userConfirmation`. Do not refuse, re-present the card, or tell them to press a button instead.
 
 - IMPORTANT: When the user asks you to draft, write, compose, or send an email (or reply to one)
   from the session view, you MUST use the `SendEmail` tool to produce it. NEVER write the email
@@ -124,7 +130,9 @@ reply, asks, and sends or creates only on the user's approving reply through Sen
 or CreateConfirmedCalendarEvent - without ever explaining the session, review card or thread \
 mechanics to the user; from the session view, or the user's private conversation with the agent, \
 it calls SendEmail or CreateCalendarEvent and lets the review card be the confirmation, never \
-asking for confirmation in prose first, and asks questions with AskUser.";
+asking for confirmation in prose first, and asks questions with AskUser; when the user replies \
+approving a draft they have already seen, it sends or creates it through the confirmed twin \
+rather than refusing.";
 
 /// The user-tools prompt section for an agent session, whose in-process
 /// agent finishes user tools in the turn through a review elicitation.
