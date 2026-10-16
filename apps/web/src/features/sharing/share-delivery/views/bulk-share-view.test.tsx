@@ -32,13 +32,14 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   registerHotkey: vi.fn(),
   useHotkeyDOMScope: () => [() => {}, 'bulk-share'],
 }));
-vi.mock('@ui', () => {
+vi.mock('@ui', async () => {
   const Slot = (props: ParentProps) => <div>{props.children}</div>;
   return {
     cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
     Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
       <button type="button" {...props} />
     ),
+    Checkbox: (await import('@ui/components/Checkbox')).Checkbox,
     Hotkey: () => null,
     ActionDialogShell: Object.assign(Slot, {
       Body: Slot,

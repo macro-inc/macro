@@ -1,6 +1,4 @@
-import CheckIcon from '@phosphor/check.svg?component-solid';
-import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { Checkbox, cn } from '@ui';
 
 export function SendAsGroupToggle(props: {
   on: boolean;
@@ -8,41 +6,23 @@ export function SendAsGroupToggle(props: {
   onChange: (on: boolean) => void;
 }) {
   return (
-    <label
+    <Checkbox
+      checked={props.on}
+      disabled={props.locked}
+      onChange={props.onChange}
       class={cn(
-        'flex items-start gap-2',
+        'items-start',
         props.locked ? 'cursor-not-allowed' : 'cursor-default'
       )}
     >
-      <div class="relative mt-0.5">
-        <input
-          onChange={(event) => props.onChange(event.currentTarget.checked)}
-          checked={props.on}
-          disabled={props.locked}
-          class="peer sr-only"
-          type="checkbox"
-        />
-        <div
-          class={cn(
-            'size-4 border',
-            props.locked
-              ? 'border-edge peer-checked:bg-surface/20'
-              : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
-          )}
+      <Checkbox.Control class="mt-0.5" />
+      <div class="flex flex-col text-sm">
+        <Checkbox.Label
+          class={cn('font-medium', props.locked && 'text-ink-disabled/50')}
         >
-          <Show when={props.on}>
-            <CheckIcon class="size-full text-accent p-0.5" />
-          </Show>
-        </div>
-      </div>
-      <div
-        class={cn(
-          'flex flex-col text-sm',
-          props.locked && 'text-ink-disabled/50'
-        )}
-      >
-        <span class="font-medium">Send As Group Message</span>
-        <span
+          Send As Group Message
+        </Checkbox.Label>
+        <Checkbox.Description
           class={cn(
             'text-xs mt-0.5',
             props.locked ? 'text-ink-disabled/50' : 'text-ink-muted'
@@ -51,8 +31,8 @@ export function SendAsGroupToggle(props: {
           {props.on
             ? 'Creates a new group message with all recipients'
             : 'Send a message to each recipient'}
-        </span>
+        </Checkbox.Description>
       </div>
-    </label>
+    </Checkbox>
   );
 }

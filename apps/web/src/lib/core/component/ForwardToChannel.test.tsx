@@ -88,7 +88,7 @@ vi.mock('./Toast/Toast', () => ({
   toast: { success: mocks.success, failure: mocks.failure, alert: mocks.alert },
 }));
 vi.mock('./VerticalScrollIndicators', () => ({ ScrollIndicators: () => null }));
-vi.mock('@ui', () => ({
+vi.mock('@ui', async () => ({
   Button: (props: {
     children?: JSX.Element;
     disabled?: boolean;
@@ -98,6 +98,7 @@ vi.mock('@ui', () => ({
       {props.children}
     </button>
   ),
+  Checkbox: (await import('@ui/components/Checkbox')).Checkbox,
   Hotkey: () => null,
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
 }));
