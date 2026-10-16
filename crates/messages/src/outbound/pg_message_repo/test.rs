@@ -1675,3 +1675,43 @@ async fn retrying_first_call_message_cannot_append_it_twice(pool: PgPool) {
     assert!(deleted.deleted_at.is_some());
     assert!(deleted.content.is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn imported_call_discussion_needs_no_native_session(pool: PgPool) {
+    setup(&pool).await;
+    let call_id = Uuid::now_v7();
+    let permission_id = Uuid::now_v7().to_string();
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#,
+        permission_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO call_entities (id, user_id, created_via, share_permission_id) VALUES ($1, $2, 'import', $3)",
+        call_id,
+        USER,
+        permission_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::Call(call_id);
+    assert!(repo.parent_exists(&parent).await.unwrap());
+    repo.create(call_message(call_id, "Notes from an external call"))
+        .await
+        .unwrap();
+    repo.create(call_message(call_id, "Follow-up discussion"))
+        .await
+        .unwrap();
+    assert_eq!(repo.replies(&parent, call_id).await.unwrap().len(), 1);
+    sqlx::query!("DELETE FROM call_entities WHERE id = $1", call_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!repo.parent_exists(&parent).await.unwrap());
+    assert!(repo.get(&parent, call_id).await.unwrap().is_none());
+    assert!(repo.replies(&parent, call_id).await.unwrap().is_empty());
+}

@@ -321,8 +321,8 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
 
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
-    /// Checks both the `calls` table (active calls) and the `call_records` table
-    /// (archived calls). Returns `None` if the call does not exist in either table.
+    /// Resolves the durable identity for native and imported calls.
+    /// Returns `None` if the call entity does not exist.
     fn get_call_channel(
         &self,
         call_id: &Uuid,
@@ -571,7 +571,7 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
 
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
-    /// Checks both `calls` (active) and `call_records` (archived) tables.
+    /// Resolves the durable identity for native and imported calls.
     fn get_call_channel(
         &self,
         call_id: &Uuid,

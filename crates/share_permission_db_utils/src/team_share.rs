@@ -111,7 +111,7 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
 
 /// Load actual owner, current membership and canonical state under the shared guard.
 /// Threads and sessions without permissions read as NULL/revision zero without creating rows.
-/// Tasks and snippets use Document, and active calls take precedence during archive.
+/// Tasks and snippets use Document; calls resolve their durable entity.
 pub async fn load_facts(
     transaction: &mut Transaction<'_, Postgres>,
     entity: &Entity<'_>,
@@ -143,11 +143,8 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
             LEFT JOIN "EmailThreadPermission" tp ON tp."threadId" = t.id::text
             WHERE $2 = 'email_thread' AND t.id = $3
             UNION ALL
-            SELECT c.created_by, c.share_permission_id FROM calls c
+            SELECT c.user_id, c.share_permission_id FROM call_entities c
             WHERE $2 = 'call' AND c.id = $3
-            UNION ALL
-            SELECT c.created_by, c.share_permission_id FROM call_records c
-            WHERE $2 = 'call' AND c.id = $3 AND NOT EXISTS (SELECT 1 FROM calls WHERE id = $3)
             UNION ALL
             SELECT i.owner_user_id, i.share_permission_id FROM initiative i
             WHERE $2 = 'initiative' AND i.id = $3
