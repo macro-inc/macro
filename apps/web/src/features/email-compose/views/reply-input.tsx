@@ -33,6 +33,7 @@ import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { plainTextToHtml } from '../core/plain-text-to-html';
+import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
 import { createDraftSyncStatus } from '../primitives/draft-sync-status';
 import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
 import { ReplyEnvelope } from './reply-envelope';
@@ -278,6 +279,26 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
         runWithInputFocused: true,
         hotkeyToken: TOKENS.email.sendAndMarkDone,
         displayPriority: 10,
+      });
+
+      const recipients = state.recipients;
+      registerCcBccHotkeys({
+        scopeId: composeHotkeyScope,
+        disabled: recipients.disabled,
+        cc: {
+          reveal: () => {
+            recipients.setShowExpandedRecipients(true);
+            recipients.setShowCc(true);
+          },
+          input: recipients.ccRef,
+        },
+        bcc: {
+          reveal: () => {
+            recipients.setShowExpandedRecipients(true);
+            recipients.setShowBcc(true);
+          },
+          input: recipients.bccRef,
+        },
       });
 
       registerHotkey({

@@ -299,6 +299,12 @@ Standalone compose uses one right-aligned row inside its 16px content padding:
 delete, attach, format, schedule, and send. Touch compose uses its header toolbar.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
+In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
+reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
+collapsed reply header; inside a composer they never fall through to the
+thread's Copy link. `bunx playwright test --config
+src/features/email-compose/browser-test/playwright.app.config.ts` (from
+`apps/web`) checks both shortcuts in all four composers.
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
