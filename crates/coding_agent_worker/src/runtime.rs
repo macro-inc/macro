@@ -37,10 +37,12 @@ pub struct Runtime {
 impl Runtime {
     /// Start connecting with the given credentials and keep the harness
     /// available for model discovery and agent sessions until dropped.
+    /// Every dial reports `allow_permission_bypass`, the operator's consent.
     #[expect(clippy::too_many_arguments, reason = "the supervisor's whole input")]
     pub fn start(
         macro_api: &MacroApi,
         credentials: &HarnessCredentials,
+        allow_permission_bypass: bool,
         harness: Harness,
         cwd: &Path,
         tap: Option<LineTap>,
@@ -52,6 +54,7 @@ impl Runtime {
         let task = tokio::spawn(serve(
             macro_api.gateway_url(),
             credentials.token.clone(),
+            allow_permission_bypass,
             harness,
             cwd.to_owned(),
             tap,
@@ -93,6 +96,7 @@ impl Runtime {
 async fn serve(
     gateway_url: String,
     token: String,
+    allow_permission_bypass: bool,
     harness: Harness,
     cwd: PathBuf,
     tap: Option<LineTap>,
@@ -104,7 +108,7 @@ async fn serve(
     let mut backoff = reconnect_strategy();
     loop {
         let dialed = tokio::select! {
-            dialed = tokio::time::timeout(CONNECT_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
+            dialed = tokio::time::timeout(CONNECT_TIMEOUT, link::dial(&gateway_url, &token, allow_permission_bypass)) => dialed,
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;

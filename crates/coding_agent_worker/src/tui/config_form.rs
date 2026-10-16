@@ -39,7 +39,7 @@ pub enum Setting {
     Name,
     /// Private or team ownership requested during pairing.
     Scope,
-    /// Whether the next pairing may enable permission bypass.
+    /// Whether this machine's operator allows permission bypass.
     PermissionBypass,
     /// Native model override; empty uses the installed agent's default.
     HerdrModel,
@@ -197,9 +197,9 @@ impl ConfigForm {
                 .unwrap_or_else(|| "Hostname default".to_owned()),
             Setting::PermissionBypass => {
                 if config.identity.allow_permission_bypass {
-                    "Allowed at next pairing".to_owned()
+                    "Allowed".to_owned()
                 } else {
-                    "Always prompt at next pairing".to_owned()
+                    "Always prompt".to_owned()
                 }
             }
             Setting::Scope => match config.identity.scope {
@@ -369,7 +369,7 @@ impl ConfigForm {
         self.set_string("identity", "scope", scope);
     }
 
-    /// Set the permission bypass ceiling for the next pairing.
+    /// Set this machine's permission bypass consent.
     pub fn set_permission_bypass(&mut self, allowed: bool) {
         let identity = self.doc["identity"].or_insert(toml_edit::table());
         identity["allow_permission_bypass"] = value(allowed);

@@ -34,6 +34,7 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
     config.macro_api.api_url = format!("http://{}", gateway.local_addr().unwrap());
     config.macro_api.storage_url = format!("http://{}", storage.local_addr().unwrap());
     config.workspace.path = std::env::current_dir().unwrap();
+    config.identity.allow_permission_bypass = true;
     config.harness.command = "python3".to_owned();
     config.harness.args = vec!["-c".to_owned(), include_str!("test_acp.py").to_owned()];
     let credentials = HarnessCredentials {
@@ -60,6 +61,10 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
         |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
             assert_eq!(request.uri().path(), "/runtime/ws");
             assert_eq!(request.headers()["x-macro-harness-token"], "mhns_test");
+            assert_eq!(
+                request.headers()["x-macro-harness-operator-allows-bypass"],
+                "true"
+            );
             Ok(response)
         },
     )

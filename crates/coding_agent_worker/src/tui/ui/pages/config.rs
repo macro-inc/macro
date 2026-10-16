@@ -137,7 +137,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
     .areas(warnings);
     if bypass_warning {
         frame.render_widget(
-            Paragraph::new("Warning: agents can run commands and edit files without approval.\nApplies at next pairing.")
+            Paragraph::new("Warning: agents can run commands and edit files without approval.\nThe harness owner must also allow it in Macro's runtime settings.")
                 .style(Style::new().fg(WARN)),
             bypass_warning_area,
         );
