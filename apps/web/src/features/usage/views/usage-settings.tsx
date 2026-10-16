@@ -8,7 +8,9 @@ import {
 } from '../../settings/primitives';
 import { AutoReloadLimitNotice } from '../components/auto-reload-limit-notice';
 import { MonthlyLimit } from '../components/monthly-limit';
+import { UsageBreakdown } from '../components/usage-breakdown';
 import { UsageInfoDialog } from '../components/usage-info-dialog';
+import { UsageTips } from '../components/usage-tips';
 import type { UsageContext } from '../context/usage-context';
 import { formatCreditBalance } from '../core/usage';
 import { AutoReloadView } from './auto-reload';
@@ -125,6 +127,16 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                   </Show>
                 </div>
               </SettingsCard>
+
+              <SettingsSection title="Usage Details">
+                <SettingsCard>
+                  <div class="p-5">
+                    <UsageBreakdown summary={summary()} />
+                  </div>
+                </SettingsCard>
+                <UsageTips summary={summary()} />
+              </SettingsSection>
+
               <Show
                 when={
                   summary().billingAccess === 'free' &&
