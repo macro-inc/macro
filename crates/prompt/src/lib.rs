@@ -237,9 +237,11 @@ mod tests {
         assert!(session.contains("quoted verbatim"));
         assert!(session.contains("`userConfirmation`"));
         assert!(session.contains("`AskUser`"));
-        assert!(session.contains(
-            "`SendConfirmedEmail` and `CreateConfirmedCalendarEvent` are never right here"
-        ));
+
+        // In the session view the card is the default, but an approving
+        // reply to a draft the user has seen is sent, not refused.
+        assert!(session.contains("The review card is the default, not the only way"));
+        assert!(session.contains("Do not refuse, re-present the card"));
 
         // The thread rule is to restate what the tool would have done, whole,
         // so the user can approve it without opening the session - and it
