@@ -1106,7 +1106,10 @@ impl BotRepo for PgBotsRepo {
     ) -> Result<Option<HarnessFacts>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT owner_user_id, team_id, allow_permission_bypass
+            SELECT
+                owner_user_id, team_id,
+                allow_permission_bypass AND operator_allows_bypass IS NOT FALSE
+                    AS "allow_permission_bypass!"
             FROM harnesses
             WHERE id = $1 AND deleted_at IS NULL
             "#,
