@@ -115,3 +115,22 @@ fn a_user_cannot_supply_trigger_context() {
         Err(AgentSessionError::Forbidden)
     ));
 }
+
+#[test]
+fn public_controls_cannot_supply_internal_review_context() {
+    for principal in [
+        ControlPrincipal::User,
+        ControlPrincipal::Runtime(Some(user())),
+    ] {
+        assert!(matches!(
+            ControlEvent::authorized(
+                AgentAction::context_prompt("Claimed review outcomes"),
+                None,
+                None,
+                principal,
+                access(AccessLevel::Owner),
+            ),
+            Err(AgentSessionError::Forbidden)
+        ));
+    }
+}

@@ -1,3 +1,4 @@
+import { isNativeCallEnabled } from '@channel/Call/native-call-platform';
 import {
   registerPushRegistrationLifecycle,
   syncPushRegistrations,
@@ -88,7 +89,13 @@ function usePushNotifications(
       const recipient = await fetchRecipient();
       if (recipient === undefined) return 'denied';
       if (aborted(epoch)) return 'denied';
-      const res = await registerPushDevice({ deviceType, token });
+      const res = await registerPushDevice({
+        deviceType,
+        token,
+        ...(deviceType === 'android'
+          ? { nativeCallCapable: isNativeCallEnabled() }
+          : {}),
+      });
       if (res.isErr()) {
         // Transient failures must not erase a previously granted permission.
         console.error('failed to register device for push', res.error);

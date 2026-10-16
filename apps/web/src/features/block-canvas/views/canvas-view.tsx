@@ -29,13 +29,11 @@ import type { CanvasClipboard } from '../clipboard';
 import { ConnectorInspector } from '../components/connector-inspector';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
 import { EraserTrail } from '../components/eraser-trail';
+import { MediaUploadPreviews } from '../components/media-upload-previews';
 import { SelectionLayoutInspector } from '../components/selection-layout-inspector';
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
-import {
-  canEmbedDocument,
-  setDocumentDisplayCommand,
-} from '../core/document-display';
+import { setDocumentDisplayCommand } from '../core/document-display';
 import {
   selectionLayoutCommand,
   selectionLayoutInfo,
@@ -47,6 +45,7 @@ import type {
   CanvasState,
   CanvasTool,
 } from '../primitives/create-canvas-state';
+import type { CanvasInsertState } from '../primitives/create-insert-state';
 import { attachTextInput } from '../primitives/text-input';
 import { CanvasContextMenu } from './canvas-context-menu';
 import {
@@ -56,6 +55,7 @@ import {
 } from './canvas-toolbars';
 import { ConnectorTargets } from './connector-targets';
 import { CanvasDocumentView, CanvasMediaView } from './embedded-items';
+import { CanvasInsertMenu } from './insert-menu';
 import { CanvasTextContent } from './text-content';
 import { TextEditingView } from './text-editing-view';
 
@@ -66,6 +66,7 @@ export function CanvasView(props: {
   embedView: Component<CanvasEmbedViewProps>;
   clipboard: CanvasClipboard;
   assets: CanvasAssetState;
+  insert: CanvasInsertState;
   onViewport: (element: HTMLElement) => void;
   onOpenDocument: (geometry: DocumentGeometry) => void;
   attachScope: (element: Element) => void;
@@ -119,11 +120,9 @@ export function CanvasView(props: {
       endHead: shared('endHead'),
     };
   };
-  const inspectorWidth = () =>
-    Math.min(288, Math.max(0, host.clientWidth - 48));
   const fit = () => {
     editor.fitScene({
-      width: host.clientWidth - inspectorWidth(),
+      width: host.clientWidth,
       height: host.clientHeight,
     });
   };
@@ -134,12 +133,19 @@ export function CanvasView(props: {
   const zoom = (factor: number) =>
     editor.zoomAt(
       {
-        x: (host.clientWidth - inspectorWidth()) / 2,
+        x: host.clientWidth / 2,
         y: host.clientHeight / 2,
       },
       editor.getCamera().scale * factor
     );
-  registerCanvasZoomHotkeys(props.scopeId, state, zoom, fit);
+  const fitSelection = () =>
+    editor.fitSelection({
+      width: host.clientWidth,
+      height: host.clientHeight,
+    });
+  registerCanvasZoomHotkeys(props.scopeId, state, zoom, () =>
+    state.selection().length ? fitSelection() : fit()
+  );
   const exitEmbed = () => {
     state.embeds.exit();
     focus();
@@ -177,6 +183,7 @@ export function CanvasView(props: {
     });
     props.attachScope(root);
     props.onViewport(host);
+    onCleanup(props.insert.attach(host));
     droppable(host);
     onCleanup(props.clipboard.attach(root));
     onCleanup(attachTextInput(root, state));
@@ -217,6 +224,25 @@ export function CanvasView(props: {
       data-canvas-next
     >
       <main class="relative size-full overflow-hidden">
+        <Show when={props.insert.location()} keyed>
+          {(location) => (
+            <CanvasInsertMenu
+              location={location}
+              onClose={props.insert.close}
+              onRestoreFocus={focus}
+              onSelect={(asset, mode) => {
+                if (mode === 'media')
+                  void props.assets.media(asset, location.world);
+                else props.assets.document(asset, location.world, 'preview');
+                props.insert.close();
+              }}
+              onFiles={(files) => {
+                void props.assets.files(files, location.world);
+                props.insert.close();
+              }}
+            />
+          )}
+        </Show>
         <Show when={!sidePanel?.isOpen()}>
           <Layer depth={2}>
             <aside
@@ -240,6 +266,8 @@ export function CanvasView(props: {
                   onGrid={state.setGrid}
                   onZoom={zoom}
                   onFit={fit}
+                  hasSelection={state.selection().length > 0}
+                  onFitSelection={fitSelection}
                   snapMode={state.snapMode()}
                   onSnapMode={state.setSnapMode}
                 />
@@ -403,7 +431,7 @@ export function CanvasView(props: {
                         const item = selectedItem();
                         return (
                           item?.type === 'document' &&
-                          canEmbedDocument(item.geometry.fileType)
+                          item.geometry.display === 'embed'
                         );
                       })()}
                     >
@@ -416,20 +444,11 @@ export function CanvasView(props: {
                           state.embeds.exit();
                           editor.execute(setDocumentDisplayCommand, {
                             id: item.id,
-                            display:
-                              item.geometry.display === 'embed'
-                                ? 'preview'
-                                : 'embed',
+                            display: 'preview',
                           });
                         }}
                       >
-                        {(() => {
-                          const item = selectedItem();
-                          return item?.type === 'document' &&
-                            item.geometry.display === 'embed'
-                            ? 'Use preview card'
-                            : 'Use full embed';
-                        })()}
+                        Use preview card
                       </button>
                     </Show>
                   </Show>
@@ -538,12 +557,6 @@ export function CanvasView(props: {
                       embedView={props.embedView}
                       active={state.embeds.active() === itemProps.item.id}
                       onEnter={() => state.embeds.enter(itemProps.item.id)}
-                      onEmbed={() =>
-                        editor.execute(setDocumentDisplayCommand, {
-                          id: itemProps.item.id,
-                          display: 'embed',
-                        })
-                      }
                       onExit={exitEmbed}
                     />
                   ),
@@ -605,6 +618,10 @@ export function CanvasView(props: {
                 }
               >
                 <EraserTrail points={state.eraser.trail()} />
+                <MediaUploadPreviews
+                  previews={props.assets.previews()}
+                  camera={state.camera()}
+                />
                 <Show
                   when={
                     (state.isConnectorTool() || state.connector.gesture()) &&
@@ -638,6 +655,8 @@ export function CanvasView(props: {
           />
         </ContextMenu>
         <CanvasDrawingToolbar
+          onAttach={props.insert.openFromToolbar}
+          attachOpen={!!props.insert.location()}
           tool={state.tool()}
           onTool={(tool) => {
             state.chooseTool(tool);

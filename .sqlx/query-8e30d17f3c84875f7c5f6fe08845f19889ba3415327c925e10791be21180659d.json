@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id, device_endpoint, device_type as \"device_type: DbDeviceType\", native_call_capable\n            FROM notification_user_device_registration\n            WHERE user_id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "device_endpoint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "device_type: DbDeviceType",
+        "type_info": {
+          "Custom": {
+            "name": "notification_device_type_option",
+            "kind": {
+              "Enum": [
+                "ios",
+                "android",
+                "iosvoip"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "native_call_capable",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8e30d17f3c84875f7c5f6fe08845f19889ba3415327c925e10791be21180659d"
+}

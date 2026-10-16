@@ -361,3 +361,181 @@ fn missing_build_roots_leave_cache_contents_untouched() {
     assert!(!fixture.temp.path().join("planned-log").exists());
     assert!(!fixture.temp.path().join("copy-log").exists());
 }
+
+#[test]
+fn cloudkit_tcp_guard_is_wired_into_both_desktop_workflows() {
+    let workflows = [
+        super::build_dmg().to_string().expect("DMG workflow YAML"),
+        crate::workflows::build_desktop_on_tag::build_desktop_on_tag()
+            .to_string()
+            .expect("desktop workflow YAML"),
+    ];
+    for yaml in workflows {
+        let prepare = yaml
+            .find("- name: Prepare CloudKit TCP fallback")
+            .expect("embedded standalone helper step");
+        let notarize = yaml
+            .find("- name: Notarize and staple DMG")
+            .expect("notarization step");
+        assert!(prepare < notarize, "helper must be installed first");
+        assert_eq!(
+            yaml.matches("bash \"$RUNNER_TEMP/macro-cloudkit-tcp.sh\"")
+                .count(),
+            1,
+            "the stapler pair function must invoke the guard"
+        );
+        assert_eq!(
+            yaml.matches("run_stapler_pair ").count(),
+            2,
+            "both the DMG and updater app must use the guard"
+        );
+        assert_eq!(yaml.matches("xcrun notarytool submit").count(), 2);
+        let notarize_script = &yaml[notarize..];
+        let dmg_submit = notarize_script
+            .find("xcrun notarytool submit \"$dmg\"")
+            .unwrap();
+        let dmg_guard = notarize_script.find("run_stapler_pair \"$dmg\"").unwrap();
+        let app_submit = notarize_script
+            .find("xcrun notarytool submit \"$credentials_dir/updater-app.zip\"")
+            .unwrap();
+        let app_guard = notarize_script
+            .find("run_stapler_pair updater-app/Macro.app")
+            .unwrap();
+        assert!(dmg_submit < dmg_guard && dmg_guard < app_submit && app_submit < app_guard);
+    }
+}
+
+struct CloudKitFixture {
+    temp: TempDir,
+}
+
+impl CloudKitFixture {
+    fn new() -> Self {
+        let temp = tempfile::tempdir().expect("CloudKit fixture directory");
+        fs::create_dir(temp.path().join("bin")).expect("stub command directory");
+        fs::write(
+            temp.path().join("bin/sudo"),
+            "#!/usr/bin/env bash\n[[ \"$1\" == -n ]] || exit 2\nshift\nexec \"$@\"\n",
+        )
+        .expect("sudo stub");
+        fs::write(
+            temp.path().join("bin/pfctl"),
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  -s)
+    case "$2" in
+      info) echo 'Status: Enabled for 0 days' ;;
+      References) : ;;
+      *) exit 2 ;;
+    esac ;;
+  -sr) echo 'anchor "com.apple/*" all' ;;
+  -n) : ;;
+  -E) echo 'Token : 0x123' ;;
+  -X) [[ "$2" == 0x123 ]] && touch "$STUB_PF_DIR/token_released" ;;
+  -a)
+    case "$3" in
+      -f) touch "$STUB_PF_DIR/rules" "$STUB_PF_DIR/tables" ;;
+      -sr)
+        if [[ -e "$STUB_PF_DIR/rules" ]]; then
+          echo 'block return out quick inet proto udp from any to <__automatic_e874a65a_0> port = 443'
+          echo 'block return out quick inet6 proto udp from any to <__automatic_e874a65a_1> port = 443'
+        fi ;;
+      -vvsr) echo 'Packets: 2' ;;
+      -s) [[ "$4" == Tables ]] || exit 2
+        if [[ -e "$STUB_PF_DIR/tables" ]]; then
+          echo __automatic_e874a65a_0
+          echo __automatic_e874a65a_1
+        fi ;;
+      -F)
+        if [[ "${STUB_FAIL_FLUSH:-0}" == 1 ]]; then exit 1; fi
+        case "$4" in
+          rules) rm -f "$STUB_PF_DIR/rules" ;;
+          Tables) rm -f "$STUB_PF_DIR/tables" ;;
+          *) exit 2 ;;
+        esac ;;
+      *) exit 2 ;;
+    esac ;;
+  *) exit 2 ;;
+esac
+"#,
+        )
+        .expect("pfctl stub");
+        fs::write(
+            temp.path().join("bin/xcrun"),
+            r#"#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$STUB_STAPLER_CALLS"
+if [[ "${STUB_FAIL_VALIDATE:-0}" == 1 && "$2" == validate ]]; then exit 27; fi
+"#,
+        )
+        .expect("xcrun stub");
+        for command in ["sudo", "pfctl", "xcrun"] {
+            fs::set_permissions(
+                temp.path().join("bin").join(command),
+                fs::Permissions::from_mode(0o755),
+            )
+            .expect("executable stub");
+        }
+        Self { temp }
+    }
+
+    fn run(&self, fail_validate: bool, fail_flush: bool) -> Output {
+        let path = format!(
+            "{}:/usr/bin:/bin:/usr/sbin:/sbin",
+            self.temp.path().join("bin").display(),
+        );
+        Command::new("bash")
+            .arg(
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("src/workflows/scripts/cloudkit_tcp.sh"),
+            )
+            .arg("already-stapled.dmg")
+            .env("PATH", path)
+            .env("RUNNER_TEMP", self.temp.path())
+            .env("STUB_PF_DIR", self.temp.path())
+            .env("STUB_STAPLER_CALLS", self.temp.path().join("stapler.calls"))
+            .env("STUB_FAIL_VALIDATE", if fail_validate { "1" } else { "0" })
+            .env("STUB_FAIL_FLUSH", if fail_flush { "1" } else { "0" })
+            .output()
+            .expect("run CloudKit helper with stub commands")
+    }
+}
+
+#[test]
+fn cloudkit_tcp_guard_releases_its_anchor_after_stapling() {
+    let fixture = CloudKitFixture::new();
+    let output = fixture.run(false, false);
+    assert!(
+        output.status.success(),
+        "CloudKit helper failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.temp.path().join("stapler.calls")).expect("stapler calls"),
+        "stapler staple -v already-stapled.dmg\nstapler validate -v already-stapled.dmg\n"
+    );
+    assert!(fixture.temp.path().join("token_released").exists());
+    assert!(!fixture.temp.path().join("rules").exists());
+    assert!(!fixture.temp.path().join("tables").exists());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("blocked packets=2"));
+}
+
+#[test]
+fn cloudkit_tcp_guard_cleans_up_on_stapler_failure_but_keeps_reference_if_flush_fails() {
+    let fixture = CloudKitFixture::new();
+    let output = fixture.run(true, false);
+    assert_eq!(output.status.code(), Some(27));
+    assert!(fixture.temp.path().join("token_released").exists());
+    assert!(!fixture.temp.path().join("rules").exists());
+    assert!(!fixture.temp.path().join("tables").exists());
+
+    let fixture = CloudKitFixture::new();
+    let output = fixture.run(false, true);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(!fixture.temp.path().join("token_released").exists());
+    assert!(fixture.temp.path().join("rules").exists());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("discard this runner"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

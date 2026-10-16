@@ -5651,6 +5651,17 @@ export type DocumentTeamShareResponse = {
 };
 
 /**
+ * Text representation when the document supports one. Other file formats
+ * retain their existing download/export behavior.
+ */
+export type DocumentTextContent = {
+    /**
+     * Current Markdown, or extracted PDF/Word text. Null means use file export.
+     */
+    text: string | null;
+};
+
+/**
  * Events that can be published to [`MacroDocumentsTopic`].
  */
 export type DocumentTopicEvent = {
@@ -19432,6 +19443,43 @@ export type SetDocumentTeamShareResponses = {
 };
 
 export type SetDocumentTeamShareResponse = SetDocumentTeamShareResponses[keyof SetDocumentTeamShareResponses];
+
+export type GetDocumentTextContentData = {
+    body?: never;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/text-content';
+};
+
+export type GetDocumentTextContentErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document access denied
+     */
+    403: unknown;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * Document text unavailable
+     */
+    500: unknown;
+};
+
+export type GetDocumentTextContentResponses = {
+    200: DocumentTextContent;
+};
+
+export type GetDocumentTextContentResponse = GetDocumentTextContentResponses[keyof GetDocumentTextContentResponses];
 
 export type GetDocumentViewsHandlerData = {
     body?: never;

@@ -3,10 +3,106 @@ use super::*;
 use crate::api::context::test::{
     ADMISSION_TEST_USER, TestAdmission, admission_errors, authorized_request, test_api_context,
 };
+use crate::service::structured_completion::{
+    ToolFreeCompletion, ToolFreeCompletionError, ToolFreeRequest,
+};
 use axum::{Router, routing::post};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
+use std::sync::Mutex;
 use tower::ServiceExt;
+
+#[derive(Default)]
+struct OneShot(Mutex<Vec<(String, String)>>);
+
+#[async_trait::async_trait]
+impl ToolFreeCompletion for OneShot {
+    async fn complete(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        request: ToolFreeRequest,
+    ) -> Result<serde_json::Value, ToolFreeCompletionError> {
+        assert_eq!(request.model, chat::domain::models::FREE_MODEL);
+        assert_eq!(request.schema.name, "Answer");
+        assert!(request.system_prompt.ends_with("Be brief."));
+        self.0
+            .lock()
+            .unwrap()
+            .push((owner.to_string(), request.prompt));
+        Ok(json!({"answer": "hello"}))
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn tool_free_requests_call_one_completion_without_an_agent_or_discovery(pool: sqlx::PgPool) {
+    let mut state = (*test_api_context(pool).await).clone();
+    let one_shot = Arc::new(OneShot::default());
+    state.tool_free_completions = one_shot.clone();
+    let admission = Arc::new(TestAdmission {
+        result: Ok(()),
+        calls: Default::default(),
+    });
+    state.ai_admission = admission.clone();
+    let router = Router::new()
+        .route("/", post(structured_completion))
+        .with_state(state);
+    let mut body = request_body();
+    body["additional_instructions"] = json!("Be brief.");
+    let response = router.oneshot(authorized_request("/", body)).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+        json!({
+            "outcome": {"status": "completed", "result": {"answer": "hello"}},
+            "toolActivity": []
+        })
+    );
+    assert_eq!(
+        *one_shot.0.lock().unwrap(),
+        [(ADMISSION_TEST_USER.into(), "hello".into())]
+    );
+    assert_eq!(
+        *admission.calls.lock().unwrap(),
+        [(
+            ADMISSION_TEST_USER.into(),
+            ai_usage::AiFeature::DynamicCompletionsApi
+        )]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn invalid_schema_is_a_client_error_before_admission_for_every_toolset(pool: sqlx::PgPool) {
+    let mut state = (*test_api_context(pool).await).clone();
+    let admission = TestAdmission::rejecting(ai_billing::AiAdmissionError::Unavailable);
+    let one_shot = Arc::new(OneShot::default());
+    state.ai_admission = admission.clone();
+    state.tool_free_completions = one_shot.clone();
+    let router = Router::new()
+        .route("/", post(structured_completion))
+        .with_state(state);
+    for selection in ["none", "all", "databases", "databases_read_only"] {
+        let mut body = request_body();
+        body["toolset"]["type"] = json!(selection);
+        body["output_schema"]["schema"] = json!({"type": "not-a-json-type"});
+        let response = router
+            .clone()
+            .oneshot(authorized_request("/", body))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let error: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(error["code"], "invalid_output_schema");
+    }
+    assert!(admission.calls.lock().unwrap().is_empty());
+    assert!(one_shot.0.lock().unwrap().is_empty());
+}
 
 #[test]
 fn completion_failure_after_committed_changes_is_interrupted() {

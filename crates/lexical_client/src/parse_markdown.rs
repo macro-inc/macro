@@ -720,7 +720,9 @@ impl LexicalClient {
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
-        let response = check_response(self.client.get(url).send().await?).await?;
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = check_response(self.client.get(url).headers(headers).send().await?).await?;
         response.json().await.context("unexpected response")
     }
 }

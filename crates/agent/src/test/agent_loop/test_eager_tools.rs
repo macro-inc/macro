@@ -167,11 +167,11 @@ async fn gated_tool_yields_call_first_then_response_once_released() {
 
     let mut response = None;
     while let Some(part) = util::next_within(&mut stream, GRACE).await {
-        if let StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) = &part {
-            if *id == call_id {
-                response = Some(json.clone());
-                break;
-            }
+        if let StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) = &part
+            && *id == call_id
+        {
+            response = Some(json.clone());
+            break;
         }
     }
     assert_eq!(

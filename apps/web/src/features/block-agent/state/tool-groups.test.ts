@@ -438,3 +438,59 @@ describe.each(['GenerateImage', 'DispatchCodingAgent'])(
     });
   }
 );
+
+it('keeps trusted code executions visible so their inner views stay outside collapsed groups', () => {
+  const execution = tool({
+    name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+    detail: {
+      kind: 'other',
+      input: null,
+      output: null,
+      result: null,
+      error: null,
+      acpKind: 'other',
+    },
+  });
+  expect(rendersOwnView(execution)).toBe(true);
+  expect(segmentParts([tool(), execution, tool()])).toEqual([
+    { kind: 'tools', start: 0, end: 1 },
+    { kind: 'part', start: 1, end: 2 },
+    { kind: 'tools', start: 2, end: 3 },
+  ]);
+  execution.name = { kind: 'mcp', server: 'external', tool: 'ExecuteCode' };
+  expect(rendersOwnView(execution)).toBe(false);
+});
+
+describe('persistent review presentation', () => {
+  const id = '019a0000-0000-7000-8000-000000000005';
+  const presentation = (
+    server = 'macro_internal',
+    callId = `review_${id}`
+  ): ToolUsePart =>
+    tool({
+      id: callId,
+      name: { kind: 'mcp', server, tool: 'PresentReview' },
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        input: { reviewId: id, kind: 'email', title: 'Drafts' },
+        output: null,
+        result: { reviewId: id, message: 'Presented to the user' },
+        error: null,
+      },
+    });
+  it('keeps a completed presentation visible outside collapsed tool groups', () => {
+    expect(rendersOwnView(presentation())).toBe(true);
+    expect(segmentParts([tool(), presentation(), tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
+  });
+  it('does not turn the native invocation receipt or an external tool into another card', () => {
+    expect(
+      rendersOwnView(presentation('macro_internal', 'ordinary-call'))
+    ).toBe(false);
+    expect(rendersOwnView(presentation('untrusted'))).toBe(false);
+  });
+});

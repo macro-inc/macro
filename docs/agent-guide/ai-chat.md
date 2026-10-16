@@ -754,6 +754,127 @@ hosted AI spending, intercept only the tested AI request in Chrome DevTools and
 return the matching 402 body; restore the response afterward. Backend admission
 and settlement tests still require the isolated backend fixtures above.
 
+## Code mode in agent sessions
+
+When the harness has its local Deno runtime configured, the session's `macro_internal`
+server exposes `DescribeCodeTools` and `ExecuteCode`. The in-process agent sees
+both schemas on its first model call, without `SearchTools` or `LoadTools`.
+For Macro's in-process agent, the backend evaluates the session owner's
+`ai-code-mode` flag once per conversational turn. Enabled users get a smaller
+direct toolset: SDK-supported searches, reads, listing, and data operations run
+through the SDK. Document editing keeps the direct `EditDocument` tool, and
+`DisplayResults` remains available for rendering results. Workspace feeds use
+`macro.workspace.page` or the lazy `macro.workspace.list` iterator with type,
+time, tag, property, and mailbox filters. Direct `ListEntities` is absent even
+from lazy discovery; `ContentSearch` remains for query scopes not supported by
+SDK search, such as session history. Methods
+routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
+they remain discoverable through `DescribeCodeTools`. User-review
+tools, `AskUser`, connector discovery, tool loading for connected apps, subagents,
+and explicit provider code execution retain their direct lifecycle. Connected
+third-party MCP tools remain available.
+
+Disabled/missing flags, failed flag evaluation, unconfigured PostHog, or missing
+code-mode MCP tools retain the standard toolset. Summary/compaction calls do not
+load flags or advertise tools. Flag changes apply on the next conversational
+turn, without changing an in-flight turn's tools. The flag controls presentation,
+not authorization; SDK requests retain normal user permissions, and issuing the run credential requires execution approval.
+External coding harnesses keep their own tool selection. A runner that fails
+after its tools were advertised still produces an execution failure, not an
+automatic retry through a direct tool.
+
+Ask the agent to discover SDK entities and write a JavaScript module exporting
+`async function main({macro, session, execution})`. These are actual public SDK
+handles; for example, `macro.documents.search(...)` is an async iterator and
+`await document.content()` fetches a document. `macro.workspace.list(...)` browses
+workspace entities with type, time, task, tag, mailbox, and sorting filters;
+`macro.workspace.page(...)` exposes an explicit page and continuation cursor.
+The direct `ListEntities` tool is absent for code-mode users. Return plain JSON
+in `{data}`. The optional `reviews` array contains saved review references and
+defaults to `[]` when omitted. Loops, early breaks and bounded parallel
+promises are supported. Preserve the user's source filters, source IDs, errors,
+and coverage limits; stopping a paginated iterator does not prove exhaustiveness.
+
+Code execution hides program source and raw returned JSON. Observed SDK operations
+use the same compact tool rows as ordinary tools, with an icon, operation name,
+and right-aligned completed, running, failed, or unknown counts. Repeated operations
+share a row; there is no separate API-call count wrapper once activity is available.
+Activity refreshes about once per second while a run is active, survives reload,
+and is capped at the first 128 requests. These are advisory observations, not
+confirmation that a user approved an action. Results appear in the agent's answer
+or dedicated review components. Desktop email drafts keep Cc/Bcc controls beside To;
+the sender row appears only when it has a sender address, inbox picker, or notice.
+Inline email drafts on phones use normal card padding without reserving a page-header gap.
+Source remains in saved execution records and
+local DevTools for debugging. Pure JavaScript, template rendering, raw fetches,
+and ongoing SSE messages do not produce generated SDK operation events.
+
+For turns prompted by someone other than the session owner, the existing
+owner-approval card asks to “run potentially sensitive tools with your access.”
+It offers Approve, Decline and, for a named requester, Always allow; the card
+does not display source code. Owner-prompted turns do not need this approval.
+
+Every code-mode turn receives a compact entity index. Jev can expand relevant
+entity declarations before generation, with a one-second deadline and index-only
+fallback. Compact namespace references include their linked local options and
+enum types. For workspace overviews, the agent samples relevant categories in
+parallel; it reports sampled coverage rather than treating a mixed recent page
+as the whole workspace. `DescribeCodeTools` takes entity names (such as `documents`, `email`,
+`ai`, `agentSessions`) and guide topics (`examples`, `search`, `ai`, `templates`).
+Expanded API references are already loaded: the agent should execute directly when
+they cover the task and request only missing details. The compact index alone
+is not a method reference. There is no runtime `sdk.help` or
+`sdk.ToolName` proxy. The actual SDK exposes `macro.ai.structuredCompletion` and
+`macro.ai.decide`; Handlebars is imported from `handlebars`. Use the direct
+`EditDocument` tool for AI document edits.
+
+The harness spawns a fresh Deno process for each execution. Dependencies are
+bundled at build time; no TypeScript compilation or package downloads happen
+in a run. The process receives a short-lived normal user token after the session
+owner's execution approval. SDK methods make HTTP requests to configured Macro
+service hosts using normal API authorization. There is no runner service,
+WebSocket bridge, or per-API-call approval callback. Eight executions may run
+per harness process. Network hosts, process lifetime, output and memory are
+bounded; filesystem writes, arbitrary imports and subprocesses are denied.
+The token expires after issuance; process exit does not revoke it early.
+
+The transcript shows **Run code** while execution is in flight. Expand it to
+inspect the submitted source and final returned JSON or error. Code that creates
+a saved review immediately emits a separate completed **PresentReview** ACP call.
+Its card can appear before the program finishes and stays editable afterwards.
+Presentation means “Presented to the user,” not approved or sent. There is no
+individual live progress stream or saved response journal for arbitrary SDK HTTP
+calls. The execution journal retains source, status and final JSON/error;
+completed API writes are not rolled back after failure or cancellation.
+If a reused execution ID refers to different source, the card reports that tool
+results are unavailable and does not display the other program's saved results.
+An unfinished saved record is explicitly labeled as an unconfirmed outcome on
+reads and retries. It may still be running or have been interrupted; reading or
+retrying its ID does not replay the program or infer which writes completed.
+
+In a local development build, open Browser DevTools → Console and filter for
+`[Code mode]`. Each displayed execution logs its source and session/execution IDs
+once the full call input arrives. Reopening a session may log historical code
+again. Production builds do not print these console entries. Never log or return
+the execution's token.
+
+For local verification, enable backend `ai-code-mode` for the test owner with a
+configured Deno runner. Compare enabled and disabled owners' tools. Supported
+operations should move to code while unsupported creation, skill discovery,
+editing and interactive tools remain direct. Ask for a document lookup without
+mentioning tools; inspect its source and result, reload, and verify persistence.
+Then create an email draft stack without sending
+mail. Verify the card arrives before a deliberately delayed program returns,
+that chat remains usable, and that edits survive navigation and reload. Submit
+a question and confirm its outcome enters the existing session queue. Stop an
+execution and verify its saved status does not claim unfinished work succeeded.
+
+For AI and templates, use the documented actual SDK methods with supplied fixture
+text, bounded parallel Jev classifications and a local Handlebars import. Check
+probabilities and per-item errors rather than assuming every branch succeeded.
+Use the direct `EditDocument` card in a separate editing check. Already dispatched
+provider usage and completed writes may remain after cancellation.
+
 ## Start a doc-scoped chat
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens an agent session with the
@@ -1710,6 +1831,65 @@ All AI hosts, including MCP, also provide:
 
 These tools use the same domain permissions and booking lifecycle as the UI.
 
+### Shared AI tools inside code mode
+
+`GenerateObject` generates structured data from supplied context; `Decide` returns
+named yes/no probabilities. Both can appear as ordinary expandable tool rows;
+open the row to inspect the generated object or estimates. In code mode, the
+same services are available through `macro.ai.structuredCompletion` and
+`macro.ai.decide`. The program chooses what evidence to include in its final result.
+Generation and classification do not edit a document. Use the existing
+`EditDocument` tool for an AI edit.
+
+### Code-mode review stacks
+
+A completed `PresentReview` ACP call shows saved email and calendar
+reviews as their own visible cards in every agent chain, including Macro and
+Cursor. The presentation returns “Presented to the user” immediately; it does
+not wait for a response. Code and native tools use the same presentation path. These cards do not block the
+chat composer. Their status is read from the session's review API, not reconstructed
+from text claimed by the model.
+
+With `ai-code-mode` enabled, the blocking `SendEmail` and `CreateCalendarEvent`
+tools are not advertised or available through lazy discovery. Email and calendar
+drafts use these saved reviews instead. Presenting a draft must not produce an
+`elicitation/create` request or leave the session blocked waiting for approval.
+An already-running turn from before this change can still have an old elicitation;
+changing the tool list does not resolve that existing request.
+
+Only the session owner can edit or submit a review. For an email stack, edit the
+visible email, use **Next** / **Previous** to inspect other drafts, and choose
+**Send** for the current draft or **Send all** for every pending draft.
+**Send all** and **Create all** first show a confirmation with the selected count;
+Cancel leaves the drafts unchanged. Confirming submits only that selected batch.
+Multiple drafts appear as a deck with subtle card edges behind the active composer.
+The position button opens a searchable list of recipients/subjects or event
+titles/times. Only the active composer is mounted. A single email or event has no
+deck header, position counter, navigation, or batch action.
+Navigation and batch submission save the visible editor first. Completed and
+dismissed items stay in the stack, with their saved state. Calendar cards reuse
+the existing event composer and offer **Create all** for a batch. Questions keep
+the existing ACP `AskUser` interaction. Batch submission checks every selected
+draft before starting any sends/creates, and waits for attachments still
+uploading in the active email.
+Invalid drafts remain editable; navigation opens the first draft needing attention.
+
+A revision conflict or uncertain request shows **Reload saved review**. Reload
+reads the saved version and discards the local edit; it never retries an external
+send automatically. If the outcome is unknown, check the inbox/calendar before
+attempting another send elsewhere. A completed review queues bounded outcome
+context for the agent through the normal session queue, without interrupting its
+current turn. The existing context
+control exposes this metadata on demand; individual outcomes remain on the review
+card instead of appearing as a long user message. Questions and their answers use
+the existing ACP question tool; they are not saved reviews.
+
+For browser verification, inspect email stacks without clicking Send, or dismiss
+a harmless draft to verify outcome context without sending. Confirm edits survive
+navigation and page reload,
+that a single draft has no stack controls, that a batch's picker finds drafts,
+that chat remains usable, and that a non-owner cannot submit. Sending an email or
+creating an event is a real action, including from a local app connected to dev.
 ## Agent reasoning effort
 
 Open the model selector and hover a model to choose its reasoning effort in the

@@ -114,6 +114,18 @@ fn typecheck_runs_lexical_service_check_and_tests() {
 }
 
 #[test]
+fn sdk_and_documentation_changes_run_their_checks() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let (should_run, _) = filters(&yaml);
+    assert!(should_run.contains("packages/sdk/**"));
+    assert!(should_run.contains("packages/sdk-docs/**"));
+    let typescript = job(&yaml, "typescript", "generated-code");
+    assert!(typescript.contains("name: Install SDK Documentation Dependencies"));
+    assert!(typescript.contains("name: Check SDK Documentation"));
+    assert!(typescript.contains("working-directory: packages/sdk-docs"));
+}
+
+#[test]
 fn typecheck_compiles_no_rust() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let typescript = job(&yaml, "typescript", "generated-code");

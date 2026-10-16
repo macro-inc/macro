@@ -3,7 +3,7 @@ import type { CallTokenResponse } from '@service-call/client';
 import type { NativeCallState } from './native-call-state';
 import {
   endCallKitCall,
-  isNativeIosCallKitEnabled,
+  isNativeCallEnabled,
   startNativeCallKitOutgoingCall,
   syncNativeCallStateAfterLeave,
 } from './use-callkit';
@@ -60,7 +60,7 @@ export function createCallSessionController(
   options: CallSessionControllerOptions
 ): CallSessionController {
   const browser = createJsLivekitSessionController(options);
-  if (isNativeIosCallKitEnabled()) {
+  if (isNativeCallEnabled()) {
     if (!options.nativeCall) {
       throw new Error(
         'Native call state is required for iOS CallKit call sessions'

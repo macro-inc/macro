@@ -97,6 +97,7 @@ macro_middleware = { path = "../../crates/macro_middleware", default-features = 
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 import = { path = "../../crates/import" }
+jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
 mcp_client = { path = "../../crates/mcp_client" }
 mcp_select = { path = "../../crates/mcp_select" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
@@ -164,6 +165,7 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }

@@ -153,6 +153,10 @@ pub struct ApiContext {
     pub ai_billing: Arc<DcsAiBillingService>,
     /// Shared admission for new AI operations, after authorization.
     pub ai_admission: Arc<dyn ai_billing::AiAdmissionService>,
+    /// General named decisions, with admission and metering in the Jev domain.
+    pub decisions: Arc<dyn jev::domain::decisions::DecisionService>,
+    /// Bounded, one-call completions without discovery or an agent loop.
+    pub tool_free_completions: Arc<dyn crate::service::structured_completion::ToolFreeCompletion>,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub notification_ingress_service: Arc<NotificationIngressType>,

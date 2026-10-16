@@ -83,6 +83,8 @@ export const authExcluded = [
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
   'getTeamInvites',
+  // Introductory offers belong to the app's subscription checkout flow.
+  'getTrialEligibility',
   'getUserInvites',
   'getUserLinkExists',
   'getUserName',
@@ -199,7 +201,6 @@ export const cognitionBacklog = [
   'getUsageHandler',
   'sendChatMessage',
   'stopChatStream',
-  'structuredCompletion',
 ] as const satisfies readonly (keyof CognitionSdk)[];
 
 export const connectionExcluded = [
@@ -388,7 +389,6 @@ export const storageExcluded = [
   'mentionPreviews',
   'patchViewHandler',
   'postItemsSoup',
-  'postItemsSoupAst',
   'postItemsSoupAstGrouped',
   'removeBotFromChannelByBot',
   // Storage for the web app's saved questions, not a user-facing surface.

@@ -17,6 +17,7 @@ name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+async-trait.workspace = true
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
@@ -34,6 +35,8 @@ ai_tools = { path = "../../crates/ai_tools" }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
 agent_session = { path = "../../crates/agent_session", features = ["ai_tools"] }
 agent_session_realtime = { path = "../../crates/agent_session_realtime" }
+agent_code_mode = { path = "../../crates/agent_code_mode" }
+code_execution = { path = "../../crates/code_execution" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 rmcp = { workspace = true }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
@@ -54,6 +57,9 @@ entity_access = { path = "../../crates/entity_access" }
 entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
 entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 futures = { workspace = true }
+feature_flags = { path = "../../crates/feature_flags" }
+http-body-util = { workspace = true }
+tempfile.workspace = true
 github = { path = "../../crates/github", default-features = false, features = [
   "outbound",
   "ports",
@@ -123,6 +129,9 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 agent = { path = "../../crates/agent" }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+mcp_select = { path = "../../crates/mcp_select" }
+schemars.workspace = true
 agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 async-trait = { workspace = true }

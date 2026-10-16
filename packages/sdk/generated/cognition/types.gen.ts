@@ -490,6 +490,49 @@ export type DatabaseChange = {
     kind: 'rows';
 };
 
+/**
+ * Sanitized, machine-readable failure of a decision request.
+ */
+export type DecisionErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation without provider credentials or diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Named yes/no questions to evaluate against one arbitrary JSON input.
+ */
+export type DecisionRequest = {
+    /**
+     * Data to classify. The entire compact request must fit in 64 KiB.
+     */
+    input: unknown;
+    /**
+     * One to 32 questions, each at most 500 characters. Keys must be nonblank
+     * and at most 80 UTF-8 bytes; they are preserved in the response.
+     */
+    questions: {
+        [key: string]: string;
+    };
+};
+
+/**
+ * The probability of yes for every requested question, under its original key.
+ */
+export type DecisionResponse = {
+    /**
+     * Probabilities between zero and one, inclusive; not boolean decisions.
+     */
+    probabilities: {
+        [key: string]: number;
+    };
+};
+
 export type DocumentCognitionServiceApiVersion = 'v1' | 'v2';
 
 export type DocumentReference = UserPdfRect & {
@@ -2308,6 +2351,59 @@ export type GetCitationHandlerResponses = {
 
 export type GetCitationHandlerResponse = GetCitationHandlerResponses[keyof GetCitationHandlerResponses];
 
+export type DecisionsData = {
+    body: DecisionRequest;
+    path?: never;
+    query?: never;
+    url: '/decisions';
+};
+
+export type DecisionsErrors = {
+    /**
+     * Invalid or oversized compact request
+     */
+    400: DecisionErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: DecisionErrorBody;
+    /**
+     * HTTP body exceeds 128 KiB
+     */
+    413: unknown;
+    /**
+     * Decision task failed
+     */
+    500: DecisionErrorBody;
+    /**
+     * Classifier could not produce a valid result
+     */
+    502: DecisionErrorBody;
+    /**
+     * Decision capacity, provider, or usage validation unavailable
+     */
+    503: DecisionErrorBody;
+    /**
+     * Decision deadline exceeded
+     */
+    504: DecisionErrorBody;
+};
+
+export type DecisionsError = DecisionsErrors[keyof DecisionsErrors];
+
+export type DecisionsResponses = {
+    /**
+     * Probability of yes for each named question
+     */
+    200: DecisionResponse;
+};
+
+export type DecisionsResponse = DecisionsResponses[keyof DecisionsResponses];
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;
@@ -2973,6 +3069,10 @@ export type StructuredCompletionErrors = {
      * AI usage validation unavailable — retry later
      */
     503: StructuredCompletionError;
+    /**
+     * Tool-free completion deadline exceeded
+     */
+    504: StructuredCompletionError;
 };
 
 export type StructuredCompletionError2 = StructuredCompletionErrors[keyof StructuredCompletionErrors];

@@ -26,6 +26,8 @@ import { useCompose } from '../context/compose-context';
 export function EmailComposeToolbar(props: {
   editor?: () => LexicalEditor | undefined;
   status?: JSX.Element;
+  /** Embedded drafts keep their controls in the card on phones too. */
+  inline?: boolean;
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
@@ -70,7 +72,7 @@ export function EmailComposeToolbar(props: {
 
   return (
     <Show
-      when={!ctx.isMobile()}
+      when={props.inline || !ctx.isMobile()}
       fallback={
         <MobileToolbar
           handleAddAttachments={handleAddAttachments}

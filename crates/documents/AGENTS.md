@@ -16,7 +16,9 @@ word docs, Illustrator/Photoshop files).
   Office formats, S3 locations).
 - `src/inbound/toolset.rs`: one submodule per AI document tool (`create_document`,
   `edit_document`, `word_document`, `spreadsheet`, `presentation`, ...).
-- `src/inbound/axum_router.rs`: the HTTP surface.
+- `src/inbound/axum_router.rs`: the HTTP surface; `axum_router/get_text.rs`
+  serves `/text-content` through `src/domain/text.rs`. Native Markdown comes
+  from live collaborative storage, not the legacy S3 export.
 
 ## Scope
 

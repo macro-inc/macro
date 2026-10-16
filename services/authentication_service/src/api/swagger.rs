@@ -147,6 +147,7 @@ use model::user::{
                 user::stripe::create_portal_session::create_portal_session,
                 user::stripe::change_plan::change_plan,
                 user::stripe::subscription_status::subscription_status,
+                user::stripe::trial_eligibility::trial_eligibility,
 
                 /// /ai-billing
                 ai_billing::inbound::axum_router::get_summary_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,

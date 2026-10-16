@@ -78,6 +78,9 @@ pub struct Config {
     /// service's own policy decides whether it does.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
+    /// Optional TypeSafe credential for named yes/no decisions. Without it,
+    /// the decisions endpoint remains available but responds with 503.
+    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -202,6 +205,7 @@ impl Config {
         Config {
             enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement::Disabled,
             enable_ai_usage_billing: ai_billing::AiUsageBilling::Disabled,
+            typesafe_api_key: jev::outbound::TypesafeApiKey::Unset,
             ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents::new(500)
                 .unwrap(),
             ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents::new(2_000)

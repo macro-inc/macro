@@ -55,6 +55,11 @@ export type DatabaseSchemaChange<Value = void> = ResultAsync<
   DatabaseOpsError
 >;
 
+/** Announces the new column as soon as it can be edited, before persistence finishes. */
+export type CreateDatabaseColumn = (
+  onCreated?: (columnId: string) => void
+) => DatabaseSchemaChange<string>;
+
 /** What the grid says when the service refused a schema change. */
 export function columnSchemaMessage(error: DatabaseOpsError): string {
   return match(error)

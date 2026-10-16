@@ -131,6 +131,7 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
     githubPullRequestPatchBucketArn,
   ],
   containerEnvVars: [
+    { name: 'DENO_BINARY', value: '/usr/local/bin/deno' },
     {
       name: 'CODEX_OAUTH_KMS_KEY_ID',
       value: CODEX_OAUTH_KMS_ALIAS,

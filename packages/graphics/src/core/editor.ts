@@ -1,3 +1,4 @@
+import { enclosing } from './affine';
 import type { GraphicsBackend } from './backend';
 import {
   fitImageCamera,
@@ -36,6 +37,7 @@ import {
   freezeDocument,
   groupNodes,
   hitTest,
+  nodeBoundsPoints,
   reparent,
   ungroupNode,
   worldBounds,
@@ -227,6 +229,34 @@ function createEditor(
     for (const listener of listeners) listener(camera);
   }
 
+  function fitBounds(
+    bounds: Bounds,
+    viewport: { width: number; height: number }
+  ) {
+    if (
+      (bounds.width <= 0 && bounds.height <= 0) ||
+      ![viewport.width, viewport.height].every(
+        (size) => Number.isFinite(size) && size > 0
+      )
+    )
+      return;
+    // Screen-space margins; leave usable room even in a small embedded view.
+    const padding = Math.min(100, viewport.width / 4, viewport.height / 4);
+    const scale = Math.max(
+      MIN_SCALE,
+      Math.min(
+        MAX_SCALE,
+        (viewport.width - padding * 2) / bounds.width,
+        (viewport.height - padding * 2) / bounds.height
+      )
+    );
+    publish({
+      scale,
+      x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale,
+      y: (viewport.height - bounds.height * scale) / 2 - bounds.y * scale,
+    });
+  }
+
   function beginShape(kind: DrawingKind, point: DrawingSample) {
     if (disposed || !Number.isFinite(point.x) || !Number.isFinite(point.y))
       return false;
@@ -394,29 +424,13 @@ function createEditor(
     },
     fitScene(viewport: { width: number; height: number }) {
       const bounds = worldBounds(document, document.rootId);
-      if (
-        bounds.width <= 0 ||
-        bounds.height <= 0 ||
-        ![viewport.width, viewport.height].every(
-          (size) => Number.isFinite(size) && size > 0
-        )
-      )
-        return;
-      // Screen-space margins; leave usable room even in a small embedded view.
-      const padding = Math.min(100, viewport.width / 4, viewport.height / 4);
-      const scale = Math.max(
-        MIN_SCALE,
-        Math.min(
-          MAX_SCALE,
-          (viewport.width - padding * 2) / bounds.width,
-          (viewport.height - padding * 2) / bounds.height
-        )
-      );
-      publish({
-        scale,
-        x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale,
-        y: (viewport.height - bounds.height * scale) / 2 - bounds.y * scale,
-      });
+      fitBounds(bounds, viewport);
+    },
+    fitSelection(viewport: { width: number; height: number }) {
+      const points = selection
+        .getState()
+        .selectedIds.flatMap((id) => nodeBoundsPoints(document, id));
+      if (points.length) fitBounds(enclosing(points), viewport);
     },
     fitImage(viewport: { width: number; height: number }) {
       if (document.surface) publish(fitImageCamera(document.surface, viewport));

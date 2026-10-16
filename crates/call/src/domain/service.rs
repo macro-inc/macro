@@ -971,9 +971,8 @@ impl<
                                 .flatten()
                                 .unwrap_or_else(|| user_id.email_str().to_string());
 
-                            // Send VoIP push for the native iOS incoming-call sheet first.
-                            // Recipients with successful VoIP delivery do not need the regular
-                            // APNS alert banner as well.
+                            // Try native call pushes first; ordinary alerts remain fallbacks
+                            // independently for iOS and Android.
 
                             // Resolve VoIP endpoints before minting tokens:
                             // users without PushKit endpoints should not get
@@ -1045,15 +1044,16 @@ impl<
                                 })
                                 .collect();
 
-                            let voip_recipient_ids =
+                            let native_delivery =
                                 self.voip_push_sender.send_voip_pushes(pushes).await;
 
-                            let apns_recipient_ids =
-                                exclude_voip_recipients(recipient_ids, &voip_recipient_ids);
+                            let apns_recipient_ids = exclude_voip_recipients(
+                                recipient_ids,
+                                &native_delivery.fully_delivered,
+                            );
 
-                            // APNS is the fallback/default path. Recipients
-                            // with a successful VoIP delivery skip the regular
-                            // alert to avoid duplicate incoming-call UI. One
+                            // Persist and alert only recipients with an unhandled platform.
+                            // Suppress ordinary alerts on platforms reached natively. One
                             // request per distinct channel name, so the alert
                             // title and stored metadata match what each
                             // recipient calls the channel.
@@ -1075,7 +1075,8 @@ impl<
                                     recipient_ids: apns_group_recipients,
                                 }
                                 .into_request()
-                                .with_apns();
+                                .with_apns()
+                                .with_mobile_push_exclusions(native_delivery.delivered.clone());
 
                                 self.notification_ingress
                                     .send_notification(req)

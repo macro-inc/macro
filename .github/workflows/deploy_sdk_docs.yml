@@ -1,0 +1,47 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_sdk_docs.rs
+name: Deploy SDK Docs
+'on':
+  push:
+    branches:
+    - main
+    paths:
+    - '.github/workflows/deploy_sdk_docs.yml'
+    - packages/sdk/**
+    - packages/sdk-docs/**
+    - bun.lock
+    - package.json
+  workflow_dispatch: {}
+jobs:
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    name: Deploy SDK documentation
+    runs-on: namespace-profile-linux-small
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Install dependencies
+      run: bun install --frozen-lockfile
+    - name: Verify documentation
+      run: bun run type-check && bun run test
+      working-directory: packages/sdk-docs
+    - name: Deploy with wrangler
+      run: bun run docs:deploy
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      working-directory: packages/sdk-docs
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false

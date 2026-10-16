@@ -22,10 +22,12 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  CreateReview,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
   EditQueuedActionRequest,
   EmptyRequest,
+  ExecutionRecord,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
@@ -37,6 +39,8 @@ import type {
   PullRequestUrls,
   RenameAgentSessionRequest,
   RetryAgentConversationTurnRequest,
+  ReviewDecision,
+  ReviewRecord,
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
@@ -1538,6 +1542,132 @@ export const refreshAgentSessionChanges = async (
 };
 
 /**
+ * @summary Fetch one execution only after the caller has obtained view access to its session.
+ */
+export type getCodeExecutionResponse200 = {
+  data: ExecutionRecord;
+  status: 200;
+};
+
+export type getCodeExecutionResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getCodeExecutionResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getCodeExecutionResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getCodeExecutionResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type getCodeExecutionResponseSuccess = getCodeExecutionResponse200 & {
+  headers: Headers;
+};
+export type getCodeExecutionResponseError = (
+  | getCodeExecutionResponse401
+  | getCodeExecutionResponse403
+  | getCodeExecutionResponse404
+  | getCodeExecutionResponse500
+) & {
+  headers: Headers;
+};
+
+export type getCodeExecutionResponse =
+  | getCodeExecutionResponseSuccess
+  | getCodeExecutionResponseError;
+
+export const getGetCodeExecutionUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}`;
+};
+
+export const getCodeExecution = async (
+  sessionId: string,
+  executionId: string,
+  options?: RequestInit
+): Promise<getCodeExecutionResponse> => {
+  const res = await fetch(getGetCodeExecutionUrl(sessionId, executionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCodeExecutionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getCodeExecutionResponse;
+};
+
+/**
+ * @summary List blocks created during an execution, including interrupted executions.
+ */
+export type listExecutionReviewsResponse200 = {
+  data: ReviewRecord[];
+  status: 200;
+};
+
+export type listExecutionReviewsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listExecutionReviewsResponseSuccess =
+  listExecutionReviewsResponse200 & {
+    headers: Headers;
+  };
+export type listExecutionReviewsResponseError =
+  listExecutionReviewsResponse403 & {
+    headers: Headers;
+  };
+
+export type listExecutionReviewsResponse =
+  | listExecutionReviewsResponseSuccess
+  | listExecutionReviewsResponseError;
+
+export const getListExecutionReviewsUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}/reviews`;
+};
+
+export const listExecutionReviews = async (
+  sessionId: string,
+  executionId: string,
+  options?: RequestInit
+): Promise<listExecutionReviewsResponse> => {
+  const res = await fetch(getListExecutionReviewsUrl(sessionId, executionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listExecutionReviewsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listExecutionReviewsResponse;
+};
+
+/**
  * Edit access suffices: whoever can prompt the bot through its thread can
 prompt it here.
 
@@ -2421,6 +2551,188 @@ export const steerQueuedAction = async (
     status: res.status,
     headers: res.headers,
   } as steerQueuedActionResponse;
+};
+
+/**
+ * @summary Persist a review without keeping the agent turn blocked.
+ */
+export type createSessionReviewResponse200 = {
+  data: ReviewRecord;
+  status: 200;
+};
+
+export type createSessionReviewResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type createSessionReviewResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type createSessionReviewResponseSuccess =
+  createSessionReviewResponse200 & {
+    headers: Headers;
+  };
+export type createSessionReviewResponseError = (
+  | createSessionReviewResponse400
+  | createSessionReviewResponse403
+) & {
+  headers: Headers;
+};
+
+export type createSessionReviewResponse =
+  | createSessionReviewResponseSuccess
+  | createSessionReviewResponseError;
+
+export const getCreateSessionReviewUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/reviews`;
+};
+
+export const createSessionReview = async (
+  sessionId: string,
+  createReview: CreateReview,
+  options?: RequestInit
+): Promise<createSessionReviewResponse> => {
+  const res = await fetch(getCreateSessionReviewUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createReview),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createSessionReviewResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createSessionReviewResponse;
+};
+
+/**
+ * @summary Read a persisted interactive block.
+ */
+export type getSessionReviewResponse200 = {
+  data: ReviewRecord;
+  status: 200;
+};
+
+export type getSessionReviewResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getSessionReviewResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getSessionReviewResponseSuccess = getSessionReviewResponse200 & {
+  headers: Headers;
+};
+export type getSessionReviewResponseError = (
+  | getSessionReviewResponse403
+  | getSessionReviewResponse404
+) & {
+  headers: Headers;
+};
+
+export type getSessionReviewResponse =
+  | getSessionReviewResponseSuccess
+  | getSessionReviewResponseError;
+
+export const getGetSessionReviewUrl = (sessionId: string, reviewId: string) => {
+  return `/agent-sessions/${sessionId}/reviews/${reviewId}`;
+};
+
+export const getSessionReview = async (
+  sessionId: string,
+  reviewId: string,
+  options?: RequestInit
+): Promise<getSessionReviewResponse> => {
+  const res = await fetch(getGetSessionReviewUrl(sessionId, reviewId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSessionReviewResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSessionReviewResponse;
+};
+
+/**
+ * @summary Save edits or atomically claim the exact draft revision the user submitted.
+ */
+export type decideSessionReviewResponse200 = {
+  data: ReviewRecord;
+  status: 200;
+};
+
+export type decideSessionReviewResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type decideSessionReviewResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type decideSessionReviewResponseSuccess =
+  decideSessionReviewResponse200 & {
+    headers: Headers;
+  };
+export type decideSessionReviewResponseError = (
+  | decideSessionReviewResponse403
+  | decideSessionReviewResponse409
+) & {
+  headers: Headers;
+};
+
+export type decideSessionReviewResponse =
+  | decideSessionReviewResponseSuccess
+  | decideSessionReviewResponseError;
+
+export const getDecideSessionReviewUrl = (
+  sessionId: string,
+  reviewId: string
+) => {
+  return `/agent-sessions/${sessionId}/reviews/${reviewId}`;
+};
+
+export const decideSessionReview = async (
+  sessionId: string,
+  reviewId: string,
+  reviewDecision: ReviewDecision,
+  options?: RequestInit
+): Promise<decideSessionReviewResponse> => {
+  const res = await fetch(getDecideSessionReviewUrl(sessionId, reviewId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewDecision),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: decideSessionReviewResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as decideSessionReviewResponse;
 };
 
 /**

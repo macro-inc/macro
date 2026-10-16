@@ -701,3 +701,16 @@ pub struct HistoryBoundary {
     /// Initialization row in this session's log.
     pub initialization_log_id: Uuid,
 }
+
+/// A durable, nonblocking tool card supplied by a trusted session capability.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SessionToolPresentation {
+    /// Stable identity used to complete interrupted presentations without duplicates.
+    pub tool_call_id: String,
+    /// Tool name rendered by the ordinary ACP component router.
+    pub title: String,
+    /// Component input; never a request for the runtime to execute a tool.
+    pub raw_input: serde_json::Value,
+    /// Immediate presentation receipt, independent of any later user decision.
+    pub raw_output: serde_json::Value,
+}

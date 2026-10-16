@@ -5,7 +5,7 @@
   "version": "2.5.0",
   "bundle": {
     "android": {
-      "versionCode": 3
+      "versionCode": 4
     }
   },
   "plugins": {

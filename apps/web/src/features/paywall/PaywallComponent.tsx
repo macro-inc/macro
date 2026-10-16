@@ -4,7 +4,11 @@ import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
-import { useAiBillingSummaryQuery } from '@queries/auth';
+import {
+  useAiBillingSummaryQuery,
+  useTrialEligibilityQuery,
+} from '@queries/auth';
+import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { getBillingState } from '../settings/core/billing-state';
 import { PaywallView } from './components/paywall-view';
@@ -22,6 +26,9 @@ const PaywallComponent = (props: PaywallProps) => {
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
+  const trialEligibility = useTrialEligibilityQuery({
+    enabled: () => !hasPaid(),
+  });
   const availability = () =>
     team.isPending || summary.isPending
       ? 'loading'
@@ -47,6 +54,10 @@ const PaywallComponent = (props: PaywallProps) => {
         : undefined,
       aiUsageEnabled: aiUsageBilling().enabled,
       pending: false,
+      trialEligible:
+        trialEligibility.isSuccess && queryReadyGate(trialEligibility)
+          ? trialEligibility.data.eligible
+          : undefined,
     });
   };
 

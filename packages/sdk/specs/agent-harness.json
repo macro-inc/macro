@@ -1223,6 +1223,104 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Fetch one execution only after the caller has obtained view access to its session.",
+        "operationId": "get_code_execution",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owning session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "description": "Execution receipt identity",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionRecord"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}/reviews": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "List blocks created during an execution, including interrupted executions.",
+        "operationId": "list_execution_reviews",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewRecord"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/control": {
       "post": {
         "tags": ["agent-sessions"],
@@ -2107,6 +2205,150 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/reviews": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Persist a review without keeping the agent turn blocked.",
+        "operationId": "create_session_review",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/reviews/{review_id}": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read a persisted interactive block.",
+        "operationId": "get_session_review",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRecord"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Save edits or atomically claim the exact draft revision the user submitted.",
+        "operationId": "decide_session_review",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "review_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRecord"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
           }
         }
       }
@@ -3682,6 +3924,38 @@
           }
         }
       },
+      "CreateReview": {
+        "type": "object",
+        "description": "Review creation. Drafts are validated by the action's owning adapter.",
+        "required": ["kind", "title", "drafts"],
+        "properties": {
+          "drafts": {
+            "type": "array",
+            "items": {},
+            "description": "One to one hundred independent drafts. Email: {subject, body: Markdown,\nto: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],\nreplyingToId?, attachments?: [{documentId}]}. Calendar: {title,\ntime: {kind: \"timed\", startsAt: ISO datetime, endsAt: ISO datetime,\ntimeZone?: IANA zone} or {kind: \"allDay\", startDate: ISO date,\nendDate: exclusive ISO date}, description?, location?, attendees?:\n[{email, isOptional?}]}.\nCreating any review only presents these drafts; the user acts separately."
+          },
+          "executionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionId",
+                "description": "Optional code execution that prepared these drafts."
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReviewKind",
+            "description": "Existing UI and action to use."
+          },
+          "title": {
+            "type": "string",
+            "description": "Stack label."
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateSessionThread": {
         "type": "object",
         "description": "The triggering mention on a create request.\n\nClients serialize this, so both derives are used.",
@@ -3869,6 +4143,81 @@
         "type": "object",
         "description": "A JSON body is required on writes, including start/disconnect (no form-based CSRF).",
         "additionalProperties": false
+      },
+      "ExecutionActivity": {
+        "type": "object",
+        "description": "A bounded SDK operation observed during execution; not an authorization or write receipt.",
+        "required": ["id", "label", "status"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Request identity within the execution.",
+            "minimum": 0
+          },
+          "label": {
+            "type": "string",
+            "description": "Server-selected label from the generated operation catalog."
+          },
+          "status": {
+            "$ref": "#/components/schemas/RecordedCallStatus",
+            "description": "Observed request state; unfinished operations have unknown outcomes."
+          }
+        }
+      },
+      "ExecutionId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Caller-selected UUID persisted in tool input before execution begins."
+      },
+      "ExecutionRecord": {
+        "type": "object",
+        "description": "Durable source and final outcome, with historical bridge calls when present.\nThe full journal is not included in the model's tool result.",
+        "required": ["executionId", "source", "status", "calls"],
+        "properties": {
+          "activity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExecutionActivity"
+            },
+            "description": "Advisory SDK operation activity, without arguments or response contents."
+          },
+          "activityTruncated": {
+            "type": "boolean",
+            "description": "Additional request activity was omitted at the bounded observation limit."
+          },
+          "calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecordedToolCall"
+            },
+            "description": "Historical bridge calls. Direct HTTP executions leave this empty."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Safe execution failure text."
+          },
+          "executionId": {
+            "$ref": "#/components/schemas/ExecutionId",
+            "description": "Execution identity."
+          },
+          "result": {
+            "description": "JSON returned by the program, if successful."
+          },
+          "source": {
+            "type": "string",
+            "description": "The submitted JavaScript module."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatus",
+            "description": "Overall execution state."
+          }
+        }
+      },
+      "ExecutionStatus": {
+        "type": "string",
+        "description": "The recorded outcome of a program.",
+        "enum": ["running", "succeeded", "failed", "cancelled", "timed_out"]
       },
       "ExternalSessionResponse": {
         "type": "object",
@@ -4308,6 +4657,44 @@
           }
         }
       },
+      "RecordedCallStatus": {
+        "type": "string",
+        "description": "A dispatch result; unfinished work is never reported as success.",
+        "enum": ["running", "completed", "failed", "unknown"]
+      },
+      "RecordedToolCall": {
+        "type": "object",
+        "description": "A real inner call, recorded by trusted dispatch for the existing renderers.",
+        "required": ["id", "name", "input", "outputOmitted", "status"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "Safe tool failure, if one was returned."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable, execution-scoped component identity."
+          },
+          "input": {
+            "description": "Arguments passed to the actual tool."
+          },
+          "name": {
+            "type": "string",
+            "description": "Canonical Macro tool name from the allowlisted registry."
+          },
+          "output": {
+            "description": "Original tool output, retained independently of the program's return value."
+          },
+          "outputOmitted": {
+            "type": "boolean",
+            "description": "Whether the response was omitted to keep the durable journal bounded."
+          },
+          "status": {
+            "$ref": "#/components/schemas/RecordedCallStatus",
+            "description": "A started call that never replied has an unknown side-effect outcome."
+          }
+        }
+      },
       "RenameAgentSessionRequest": {
         "type": "object",
         "description": "Request body for renaming an agent session.",
@@ -4328,6 +4715,199 @@
             "type": "string",
             "format": "uuid",
             "description": "Current failed attempt identity."
+          }
+        }
+      },
+      "ReviewDecision": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Save one edited draft.",
+            "required": ["revision", "item", "draft", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["edit"]
+              },
+              "draft": {
+                "description": "Replacement action arguments."
+              },
+              "item": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Pending item to update."
+              },
+              "revision": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Revision displayed by the caller."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Send/create selected items, or all pending items when empty.",
+            "required": ["revision", "items", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["submit"]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "Pending items, or an empty list to select all pending items."
+              },
+              "revision": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Revision displayed by the caller."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Dismiss selected pending items, or all pending items when empty.",
+            "required": ["revision", "items", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["dismiss"]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "Pending items, or an empty list to select all pending items."
+              },
+              "revision": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Revision displayed by the caller."
+              }
+            }
+          }
+        ],
+        "description": "One atomic user decision against the displayed revision."
+      },
+      "ReviewId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Persisted review identity."
+      },
+      "ReviewItem": {
+        "type": "object",
+        "description": "One editable item and its durable outcome.",
+        "required": ["id", "draft", "status"],
+        "properties": {
+          "draft": {
+            "description": "Validated arguments for the existing composer/action."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Failure or uncertainty description."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable item identity across stack navigation and edits."
+          },
+          "result": {
+            "description": "Actual backend response, never a model assertion."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReviewItemStatus",
+            "description": "Current outcome."
+          }
+        }
+      },
+      "ReviewItemStatus": {
+        "type": "string",
+        "description": "A review item never retries an ambiguous external result automatically.",
+        "enum": ["pending", "submitting", "completed", "dismissed", "unknown"]
+      },
+      "ReviewKind": {
+        "type": "string",
+        "description": "The component and action used to finish a review.",
+        "enum": ["email", "calendar"]
+      },
+      "ReviewRecord": {
+        "type": "object",
+        "description": "Full UI record, fetched outside the model context.",
+        "required": [
+          "id",
+          "sessionId",
+          "kind",
+          "title",
+          "revision",
+          "updatedAt",
+          "items"
+        ],
+        "properties": {
+          "executionId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExecutionId",
+                "description": "Originating code execution, absent for directly presented reviews."
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/ReviewId",
+            "description": "Review identity."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewItem"
+            },
+            "description": "Drafts and per-item outcomes."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ReviewKind",
+            "description": "Component kind."
+          },
+          "notificationAttemptAt": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Most recent delivery claim, allowing retry after a replica stops."
+          },
+          "notificationId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Stable queued-action identity until the outcome has reached the session.\nA failed notification may be retried without repeating external actions."
+          },
+          "presentedAt": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Durable presentation acknowledgment, separate from user decisions."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Compare-and-swap revision for edits and submissions."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning session."
+          },
+          "title": {
+            "type": "string",
+            "description": "Stack label."
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Milliseconds since epoch of the last state change."
           }
         }
       },

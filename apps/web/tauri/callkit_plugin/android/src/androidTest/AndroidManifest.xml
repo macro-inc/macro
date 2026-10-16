@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only the instrumentation APK may connect to the local development server. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

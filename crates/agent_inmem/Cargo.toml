@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+agent_code_mode = { path = "../agent_code_mode" }
 ai_billing = { path = "../ai_billing" }
 agent = { path = "../agent" }
 # The egress proxy's domain service, driven in-process: the same verification,
@@ -25,6 +26,7 @@ bot_id = { path = "../bot_id" }
 chat = { path = "../chat", default-features = false }
 dashmap = { workspace = true }
 futures = { workspace = true }
+feature_flags = { path = "../feature_flags" }
 genai_telemetry = { path = "../genai_telemetry" }
 macro_user_id = { path = "../macro_user_id" }
 model_owner = { path = "../model_owner" }

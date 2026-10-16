@@ -108,6 +108,8 @@ export type MacroAuth =
 
 /** Options passed to `new Macro(opts)` and stored on `MacroClient`. */
 export interface MacroOpts {
+  /** Optional generated API operation events; excludes arguments, URLs and response data. */
+  onRequest?: (event: import('./utils/activity').RequestActivity) => void;
   /** How to authenticate. Takes precedence over `token`. Falls back to
    * `MACRO_API_KEY` (a user API key or bearer token) or `MACRO_BOT_TOKEN`
    * (bot). */

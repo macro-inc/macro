@@ -201,68 +201,52 @@ export function ComposeLayout(props: {
       )}
     >
       <div class="pb-1 w-full h-max shrink-0">
-        <div
-          class="min-h-12 flex items-center justify-between gap-2 border-b border-edge-muted"
-          classList={{ hidden: ctx.isMobile() && !props.header }}
-        >
+        <Suspense fallback={<CircleSpinner class="size-4 animate-spin" />}>
           <Show
-            when={props.header}
-            fallback={
-              <Suspense
+            when={
+              props.header ||
+              (!ctx.isMobile() &&
+                (ctx.fromInboxes?.().length || ctx.fromAddress?.()))
+            }
+          >
+            <div
+              role="group"
+              aria-label="Sending inbox"
+              class="min-h-12 flex items-center gap-2 border-b border-edge-muted"
+            >
+              <Show
+                when={props.header}
                 fallback={
-                  <div class="flex gap-1 items-center py-3">
-                    <CircleSpinner class="size-4 animate-spin" />
-                    <span class="text-ink-placeholder text-sm">
-                      Processing...
-                    </span>
-                  </div>
-                }
-              >
-                <Show when={ctx.fromInboxes?.().length}>
                   <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
                     <span class="w-14 shrink-0 text-sm text-ink-placeholder">
                       From
                     </span>
-                    <FromInboxSelector
-                      pill
-                      class="min-w-0"
-                      disabled={ctx.disabled()}
-                      links={ctx.fromInboxes?.() ?? []}
-                      activeInboxId={ctx.selectedInboxId?.()}
-                      activeEmail={ctx.fromAddress?.()}
-                      onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
-                    />
+                    <Show
+                      when={ctx.fromInboxes?.().length}
+                      fallback={
+                        <span class="truncate text-sm">
+                          {ctx.fromAddress?.()}
+                        </span>
+                      }
+                    >
+                      <FromInboxSelector
+                        pill
+                        class="min-w-0"
+                        disabled={ctx.disabled()}
+                        links={ctx.fromInboxes?.() ?? []}
+                        activeInboxId={ctx.selectedInboxId?.()}
+                        activeEmail={ctx.fromAddress?.()}
+                        onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
+                      />
+                    </Show>
                   </div>
-                </Show>
-              </Suspense>
-            }
-          >
-            {props.header}
+                }
+              >
+                {props.header}
+              </Show>
+            </div>
           </Show>
-          <div
-            class="flex items-center ml-auto shrink-0"
-            classList={{ hidden: ctx.isMobile() }}
-          >
-            <Show when={!isCcVisible()}>
-              <Button
-                size="sm"
-                onClick={() => setShowCc(true)}
-                disabled={ctx.disabled()}
-              >
-                Cc
-              </Button>
-            </Show>
-            <Show when={!isBccVisible()}>
-              <Button
-                size="sm"
-                onClick={() => setShowBcc(true)}
-                disabled={ctx.disabled()}
-              >
-                Bcc
-              </Button>
-            </Show>
-          </div>
-        </div>
+        </Suspense>
 
         <Show when={ctx.validationError('no_link')}>
           {(error) => (
@@ -285,6 +269,30 @@ export function ComposeLayout(props: {
           showBcc={showBcc}
           setShowBcc={setShowBcc}
           onToRowFocusIn={collapseCcBccIfEmpty}
+          actions={
+            <Show when={!ctx.isMobile()}>
+              <div class="flex shrink-0 items-center">
+                <Show when={!isCcVisible()}>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowCc(true)}
+                    disabled={ctx.disabled()}
+                  >
+                    Cc
+                  </Button>
+                </Show>
+                <Show when={!isBccVisible()}>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowBcc(true)}
+                    disabled={ctx.disabled()}
+                  >
+                    Bcc
+                  </Button>
+                </Show>
+              </div>
+            </Show>
+          }
         />
 
         <div onFocusIn={collapseCcBccIfEmpty}>

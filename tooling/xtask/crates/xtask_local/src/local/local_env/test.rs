@@ -268,8 +268,21 @@ fn emits_in_network_service_url_overrides() {
             "http://document-storage-service:8080",
         ),
         (
+            "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
+            "http://document-cognition-service:8080",
+        ),
+        (
+            "OVERRIDE_NOTIFICATION_SERVICE_URL",
+            "http://notification-service:8080",
+        ),
+        (
+            "OVERRIDE_CONTACTS_SERVICE_URL",
+            "http://contacts-service:8080",
+        ),
+        ("OVERRIDE_UNFURL_SERVICE_URL", "http://unfurl-service:8080"),
+        (
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
-            "http://agent-harness-service:8101",
+            "http://agent-harness-service:8080",
         ),
         (
             "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",

@@ -1678,6 +1678,10 @@
             "$ref": "#/components/schemas/DeviceType",
             "description": "The device platform type (iOS or Android)."
           },
+          "nativeCallCapable": {
+            "type": "boolean",
+            "description": "Whether this Android binary supports native Telecom incoming calls."
+          },
           "token": {
             "type": "string",
             "description": "The device push notification token."

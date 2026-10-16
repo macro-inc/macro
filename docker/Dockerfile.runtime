@@ -7,6 +7,7 @@
 # /app/out by the generated compose override, so this image never needs
 # rebuilding when Rust code changes. This is the `base` stage of docker/Dockerfile.dev
 # with the in-Docker `cargo build` and binary COPY removed.
+FROM denoland/deno:2.9.6 AS deno
 FROM debian:trixie-slim
 # docker-cli, for the agent harness's local container provider: it drives the
 # host's daemon over the socket the compose file mounts, so sandboxes are this
@@ -15,6 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates dumb-init curl docker-cli \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+COPY --from=deno /usr/bin/deno /usr/local/bin/deno
+ENV DENO_BINARY=/usr/local/bin/deno
 ENV PORT=8080
 EXPOSE 8080
 # No CMD: the generated compose override supplies `command: ["/app/out/<bin>"]`

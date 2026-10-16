@@ -325,10 +325,25 @@ See [Billing Lab setup and boundaries](../../apps/web/src/features/billing-lab/R
 
 `Billing` shows the current plan and `Manage`. Free users see separate Pro
 (`Get Pro`) and Max (`Get Max`) cards, side by side when the panel is wide enough
-and stacked on narrow panels. The Pro card shows `Free for one month!` for Free
-users. `Get Pro` requests the same server-validated 30-day first-subscription
-trial as onboarding; checkout redirects only after the server confirms the trial.
-Ineligible accounts see the rejection reason and are not silently charged.
+and stacked on narrow panels. The Pro card shows `Free for one month!` only after
+`GET /user/stripe/trial_eligibility` confirms eligibility. Eligible customers get
+the server-validated 30-day first-subscription trial; returning customers see
+paid terms and `Get Pro` opens ordinary paid checkout. Eligibility loading
+disables Pro checkout without showing a trial offer; a failed lookup adds
+`Try again`. Checkout revalidates eligibility, and a stale trial offer reports
+the server rejection rather than silently switching to an immediate charge.
+Returning to the tab or reconnecting refreshes the offer. Accounts with an
+existing recoverable subscription see `Manage` and payment-management guidance
+instead of new checkout cards, even when their access is Free. A failed background
+eligibility refresh preserves known subscription management but hides trial
+claims. Management remains available if team lookup fails; plan changes wait for
+team data. Checkout rejection clears the offer until eligibility refreshes. Retries reuse the
+same open offer; changing plans invalidates the old link first. Competing tabs
+can show a retryable checkout conflict without creating two payable sessions.
+Reference captures from the isolated billing fixture: [returning customer](media/billing/returning-customer.png)
+and [subscription recovery](media/billing/subscription-recovery.png). These show
+phone-width layouts; payment-provider interactions are covered separately.
+
 `Get Max` keeps standard paid terms. Prices read `/ month` for solo users and
 `per seat / month` for team accounts. Each card puts its button beside the price when wide enough and below
 the price when narrow. Free lists 2 connected email accounts; Pro and Max list
@@ -351,8 +366,8 @@ lookup; failed lookups show `Try again` rather than guessed upgrade options.
 On a local HMR dev server, `Preview billing & paywall` opens an opt-in preview in
 Billing. Choose Solo, a team-paid member, a self-paying member, or a team owner,
 and Free, Pro, or Max. `Permissions, loading, and feature states` exposes the
-billing summary status, billing permission, active/trialing license, AI usage
-flag, and pending plan actions. The preview uses the real Billing UI with local
+billing summary status, billing permission, active/trialing license, Pro trial
+eligibility, AI usage flag, and pending plan actions. The preview uses the real Billing UI with local
 fixtures; checkout, plan changes, Manage, and Team settings only show preview
 status messages. `Preview paywall` opens the same modal for the selected state,
 without developer controls inside it. Dismissing the modal returns to Billing

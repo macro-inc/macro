@@ -240,9 +240,16 @@ impl NotificationRepository for SandboxNotificationRepository {
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         self.inner
-            .upsert_device(user_id, device_token, device_endpoint, device_type)
+            .upsert_device(
+                user_id,
+                device_token,
+                device_endpoint,
+                device_type,
+                native_call_capable,
+            )
             .await
     }
 

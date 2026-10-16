@@ -9,7 +9,7 @@ const native = vi.hoisted(() => ({
   end: vi.fn(async () => undefined),
 }));
 vi.mock('../use-callkit', () => ({
-  isNativeIosCallKitEnabled: () => native.enabled,
+  isNativeCallEnabled: () => native.enabled,
   startNativeCallKitOutgoingCall: native.start,
   endCallKitCall: native.end,
   syncNativeCallStateAfterLeave: vi.fn(async () => undefined),

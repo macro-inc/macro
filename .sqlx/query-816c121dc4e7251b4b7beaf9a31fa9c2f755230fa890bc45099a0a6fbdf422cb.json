@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session SET turn_state = 'running', is_archived = true WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "816c121dc4e7251b4b7beaf9a31fa9c2f755230fa890bc45099a0a6fbdf422cb"
+}

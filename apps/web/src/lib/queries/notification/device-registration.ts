@@ -1,7 +1,10 @@
 import { notificationServiceClient } from '@service-notification/client';
+import type { DeviceRequest } from '@service-notification/generated/schemas/deviceRequest';
 import { fetchUserInfo } from '../auth/user-info';
 
-type Device = { deviceType: 'android' | 'ios'; token: string };
+type Device = DeviceRequest & {
+  deviceType: 'android' | 'ios';
+};
 
 export function registerPushDevice(device: Device) {
   return notificationServiceClient.registerDevice(device);

@@ -40,6 +40,7 @@ use tracing::Instrument as _;
 
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
+use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[path = "outbound/rig_engine/opener.rs"]
@@ -56,11 +57,24 @@ mod measure_prompt_cache;
 /// slow consumer from buffering a whole turn.
 const PART_BUFFER: usize = 256;
 
+const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
+    "mcp__macro_internal__PresentReview",
+    "mcp__macro_internal__ExecuteCode",
+    "mcp__macro_internal__DescribeCodeTools",
+];
+
+const CODE_MODE_MCP_TOOLS: &[&str] = &[
+    "mcp__macro_internal__ExecuteCode",
+    "mcp__macro_internal__DescribeCodeTools",
+];
+
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
 /// [`ai_tools::tools_for`].
 pub struct RigTurnEngine {
     memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
     native_tools: Arc<NativeTools>,
+    code_mode_tools: Arc<NativeTools>,
+    tool_mode: Arc<dyn ToolModeSelector>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -78,6 +92,11 @@ impl RigTurnEngine {
                 tools_for(AiHost::Chat),
             )),
             native_tools: Arc::new(NativeTools::new()),
+            code_mode_tools: Arc::new(NativeTools::from_factory(
+                ai_tools::tools_for_agent_code_mode,
+                true,
+            )),
+            tool_mode: Arc::new(StandardTools),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -87,6 +106,13 @@ impl RigTurnEngine {
     #[must_use]
     pub fn with_gate(mut self, gate: Arc<dyn NativeToolGate>) -> Self {
         self.gate = gate;
+        self
+    }
+
+    /// Select the owner's tool presentation once per conversational turn.
+    #[must_use]
+    pub fn with_tool_mode(mut self, selector: Arc<dyn ToolModeSelector>) -> Self {
+        self.tool_mode = selector;
         self
     }
 }
@@ -190,6 +216,7 @@ struct NativeTools {
     with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     prompt: String,
+    code_mode: bool,
     deferred: Arc<[ai_toolset::SearchableTool]>,
     /// Every native tool's name, for the opening line's model to guess the
     /// direction a reply will take.
@@ -198,10 +225,14 @@ struct NativeTools {
 
 impl NativeTools {
     fn new() -> Self {
-        let tools = tools_for(AiHost::AgentSession);
+        Self::from_factory(|| tools_for(AiHost::AgentSession), false)
+    }
+
+    fn from_factory(build: impl Fn() -> ai_tools::ToolSetWithPrompt, code_mode: bool) -> Self {
+        let tools = build();
         let base_tools = Arc::into_inner(tools.toolset)
             .expect("tools_for should return a fresh, uniquely owned collection");
-        let other_tools = Arc::into_inner(tools_for(AiHost::AgentSession).toolset)
+        let other_tools = Arc::into_inner(build().toolset)
             .expect("tools_for should return a fresh, uniquely owned collection");
         let with_user_input = tools_for_turn(base_tools, true);
         let tool_names = with_user_input
@@ -214,6 +245,7 @@ impl NativeTools {
         Self {
             with_user_input: Arc::new(with_user_input),
             without_user_input: Arc::new(tools_for_turn(other_tools, false)),
+            code_mode,
             prompt: tools.prompt.to_string(),
             deferred: tools.deferred,
             tool_names,
@@ -238,11 +270,21 @@ impl TurnEngine for RigTurnEngine {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let memory = Arc::clone(&self.memory);
         let native_tools = Arc::clone(&self.native_tools);
+        let code_mode_tools = Arc::clone(&self.code_mode_tools);
+        let tool_mode = Arc::clone(&self.tool_mode);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
         tokio::spawn(
             agent::MeteringContext::carry(metering, async move {
+                let Some(selected) = select_tool_mode(tool_mode.as_ref(), &request).await else {
+                    return;
+                };
+                let native_tools = match selected {
+                    ToolMode::Standard => native_tools,
+                    ToolMode::Code => code_mode_tools,
+                };
+                tracing::debug!(?selected, "selected agent tool presentation");
                 // The product toolset makes this future large. Keep its state
                 // on the heap when adding the panic boundary, including in
                 // unoptimized local builds with Tokio's default worker stack.
@@ -278,6 +320,32 @@ async fn forward_turn_result(
         });
     if let Err(error) = result {
         let _ = parts.send(Err(error)).await;
+    }
+}
+
+// A failed/missing code-mode MCP connection must never leave a turn with only the
+// small direct set. Summaries neither evaluate flags nor advertise tools.
+async fn select_tool_mode(
+    selector: &dyn ToolModeSelector,
+    request: &TurnRequest,
+) -> Option<ToolMode> {
+    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
+        return Some(ToolMode::Standard);
+    }
+    let (Owner::User(owner), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
+        return Some(ToolMode::Standard);
+    };
+    let catalog = mcp.searchable_catalog();
+    if !CODE_MODE_MCP_TOOLS
+        .iter()
+        .all(|name| catalog.iter().any(|tool| tool.name == *name))
+    {
+        return Some(ToolMode::Standard);
+    }
+    tokio::select! {
+        biased;
+        _ = request.cancel.cancelled() => None,
+        mode = selector.select(owner) => Some(mode),
     }
 }
 
@@ -378,9 +446,29 @@ async fn drive_turn(
             Arc::from(Vec::new()),
         )
     } else {
-        let user_memory = fetch_user_memory(memory, &owner).await;
+        let requested = messages
+            .iter()
+            .rev()
+            .find(|message| message.role == agent::types::Role::User)
+            .and_then(|message| message.content.user_message_text())
+            .unwrap_or_default();
+        let docs = async {
+            if native_tools.code_mode {
+                agent_code_mode::domain::select_documentation(
+                    &owner,
+                    &requested,
+                    base_context.cognition_tool_context.service.as_ref(),
+                    &cancel,
+                )
+                .await
+            } else {
+                String::new()
+            }
+        };
+        let (user_memory, sdk_docs) = tokio::join!(fetch_user_memory(memory, &owner), docs);
+        let tools_prompt = format!("{}{}", native_tools.prompt, sdk_docs);
         let prompt = system_prompt(
-            &native_tools.prompt,
+            &tools_prompt,
             session_id,
             identity.as_ref(),
             instructions.as_deref(),
@@ -434,7 +522,10 @@ async fn drive_turn(
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
-        Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(toolset, mcp)),
+        Some(mcp) => Arc::new(
+            mcp_select::CombinedToolSet::new(toolset, mcp)
+                .with_eager_mcp_tools(EAGER_INTERNAL_MCP_TOOLS),
+        ),
         None => toolset,
     };
     // Most of Macro's tools go out by name only; the model loads the rest.
@@ -643,7 +734,7 @@ fn system_prompt(
         "\n<agent_session>\nThis conversation is agent session {session_id}. Once it grows \
          long, its earlier part is summarized to keep it within your context. To find the exact \
          words of anything said earlier, summarized or not, run ContentSearch with \
-         agentSessionIds [\"{session_id}\"].\n</agent_session>"
+         agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
     ));
     if let Some(memory) = user_memory {
         rest.push_str("\n<user_memory>\n");

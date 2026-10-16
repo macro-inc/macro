@@ -80,6 +80,7 @@ export default function CanvasNextDocument(
       <Show when={!savedLocation.loading}>
         <CanvasAncestry.Provider value={[...ancestors, documentId]}>
           <CanvasNextEditor
+            documentId={documentId}
             initial={initial}
             canEdit={props.canEdit}
             isEmbedded={props.isNested}
@@ -89,7 +90,7 @@ export default function CanvasNextDocument(
               const saving = createDocumentPersistence(
                 current,
                 initial,
-                canvasDocumentSource(documentId, canEdit)
+                canvasDocumentSource(documentId, canEdit, initial)
               );
               setPersistence(saving);
               props.registerMethods?.({

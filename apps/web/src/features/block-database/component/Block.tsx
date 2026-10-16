@@ -5,10 +5,8 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   returnSplitToRecentListView,
-  useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
 import { DATABASE_MODEL, modelsForPlan } from '@core/component/AI/constant';
@@ -76,8 +74,6 @@ const Block: Component = () => {
   const { replaceOrInsertSplit } = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   let requestedRecord: DatabaseRelatedDestination | undefined;
-  const canAutofocus = useCanAutofocusSplitContent();
-  const { navigatedFromJK } = useNavigatedFromJK();
   const userId = useUserId();
   const storage = createUserScopedStorage(
     `database-view-selection:${databaseId}`
@@ -91,7 +87,6 @@ const Block: Component = () => {
   let gridEntry:
     | {
         tableId: string;
-        focus: () => Promise<void>;
         openRecord: (rowId: string) => void;
       }
     | undefined;
@@ -142,15 +137,6 @@ const Block: Component = () => {
         });
     },
   });
-  let requestedGridEntry = false;
-  const enterFirstCell = () => {
-    if (!gridEntry || gridEntry.tableId !== activeTableId()) {
-      requestedGridEntry = true;
-      return;
-    }
-    requestedGridEntry = false;
-    void gridEntry.focus();
-  };
   const [openingChat, setOpeningChat] = createSignal(false);
   const hasPaidAccess = useHasPaidAccess();
   const { showPaywall } = usePaywallState();
@@ -332,12 +318,6 @@ const Block: Component = () => {
           detail={detail()}
           canEdit={canEdit()}
           activeTable={activeTable()}
-          autoFocusTitle={
-            canAutofocus &&
-            !navigatedFromJK() &&
-            detail()?.database.name === 'Untitled database'
-          }
-          onTitleConfirm={enterFirstCell}
           onSelectTable={(tableId) =>
             setSelection((current) => ({ ...current, tableId }))
           }
@@ -466,11 +446,9 @@ const Block: Component = () => {
                             actionsRef={(actions) => {
                               gridEntry = {
                                 tableId: table().table.id,
-                                focus: actions.focusFirstCell,
                                 openRecord: actions.openRecord,
                               };
                               openRequestedRecord();
-                              if (requestedGridEntry) enterFirstCell();
                             }}
                             renderToolbar={(actions) => (
                               <DatabaseToolbar

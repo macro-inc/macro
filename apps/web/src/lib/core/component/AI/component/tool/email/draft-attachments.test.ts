@@ -203,3 +203,31 @@ describe('createDraftAttachments', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe('batch attachment preparation', () => {
+  it('waits until an attachment is included in the tool arguments', async () => {
+    const upload = Promise.withResolvers<{ documentId: string }>();
+    const { attachments } = setup({ upload: () => upload.promise });
+    attachments.add([{ type: 'local', file: new File(['x'], 'waiting.txt') }]);
+    let settled = false;
+    const waiting = (async () => {
+      const ok = await attachments.waitForUploads();
+      settled = true;
+      return ok;
+    })();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    upload.resolve({ documentId: 'uploaded' });
+    expect(await waiting).toBe(true);
+    expect(attachments.toToolArgs()).toEqual([{ documentId: 'uploaded' }]);
+  });
+  it('does not silently submit a batch when its pending upload fails', async () => {
+    const upload = Promise.withResolvers<{ documentId: string } | undefined>();
+    const { attachments } = setup({ upload: () => upload.promise });
+    attachments.add([{ type: 'local', file: new File(['x'], 'broken.txt') }]);
+    const waiting = attachments.waitForUploads();
+    upload.resolve(undefined);
+    expect(await waiting).toBe(false);
+    expect(attachments.uploading()).toBe(false);
+  });
+});

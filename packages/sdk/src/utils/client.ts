@@ -24,6 +24,7 @@ import { BotsNamespace } from '../entities/bots/namespace';
 import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
 import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
+import { observeSdk } from './activity';
 
 const USER_API_KEY_HEADER = 'x-macro-user-api-key';
 const USER_API_KEY_PREFIX = 'mak_';
@@ -140,28 +141,68 @@ export class MacroClient {
     }
     this.wsVerify = opts.wsVerify;
 
-    this.agentHarness = new AgentHarnessSdk({
-      client: this.makeClient(hosts['agent-harness']),
-    });
-    this.auth = new AuthSdk({ client: this.makeClient(hosts.auth) });
-    this.calendar = new CalendarSdk({
-      client: this.makeClient(hosts.calendar),
-    });
-    this.cognition = new CognitionSdk({
-      client: this.makeClient(hosts.cognition),
-    });
-    this.contacts = new ContactsSdk({
-      client: this.makeClient(hosts.contacts),
-    });
-    this.email = new EmailSdk({ client: this.makeClient(hosts.email) });
-    this.notification = new NotificationSdk({
-      client: this.makeClient(hosts.notification),
-    });
-    this.properties = new PropertiesSdk({
-      client: this.makeClient(hosts.properties),
-    });
-    this.search = new SearchSdk({ client: this.makeClient(hosts.search) });
-    this.storage = new StorageSdk({ client: this.makeClient(hosts.storage) });
+    this.agentHarness = observeSdk(
+      new AgentHarnessSdk({
+        client: this.makeClient(hosts['agent-harness']),
+      }),
+      'agent-harness',
+      opts.onRequest,
+    );
+    this.auth = observeSdk(
+      new AuthSdk({ client: this.makeClient(hosts.auth) }),
+      'auth',
+      opts.onRequest,
+    );
+    this.calendar = observeSdk(
+      new CalendarSdk({
+        client: this.makeClient(hosts.calendar),
+      }),
+      'calendar',
+      opts.onRequest,
+    );
+    this.cognition = observeSdk(
+      new CognitionSdk({
+        client: this.makeClient(hosts.cognition),
+      }),
+      'cognition',
+      opts.onRequest,
+    );
+    this.contacts = observeSdk(
+      new ContactsSdk({
+        client: this.makeClient(hosts.contacts),
+      }),
+      'contacts',
+      opts.onRequest,
+    );
+    this.email = observeSdk(
+      new EmailSdk({ client: this.makeClient(hosts.email) }),
+      'email',
+      opts.onRequest,
+    );
+    this.notification = observeSdk(
+      new NotificationSdk({
+        client: this.makeClient(hosts.notification),
+      }),
+      'notification',
+      opts.onRequest,
+    );
+    this.properties = observeSdk(
+      new PropertiesSdk({
+        client: this.makeClient(hosts.properties),
+      }),
+      'properties',
+      opts.onRequest,
+    );
+    this.search = observeSdk(
+      new SearchSdk({ client: this.makeClient(hosts.search) }),
+      'search',
+      opts.onRequest,
+    );
+    this.storage = observeSdk(
+      new StorageSdk({ client: this.makeClient(hosts.storage) }),
+      'storage',
+      opts.onRequest,
+    );
 
     const envWebhookSecret =
       typeof process !== 'undefined'

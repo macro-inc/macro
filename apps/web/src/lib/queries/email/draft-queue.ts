@@ -328,9 +328,6 @@ export async function saveEmailDraftQueued(input: {
         reportError
       );
     }
-    void queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(outcome.threadId).queryKey,
-    });
   } catch (error) {
     reportError(error);
   }

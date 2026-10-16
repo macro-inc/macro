@@ -62,10 +62,24 @@ pub(crate) struct SessionCommand {
 /// What reaches a session's actor through its command channel. One channel,
 /// so a server change and the prompt behind it arrive in the order sent.
 pub(crate) enum SessionMessage {
+    /// Persist a tool card without waiting for the current turn to complete.
+    PresentTool {
+        presentation: crate::domain::model::SessionToolPresentation,
+        completed: oneshot::Sender<Result<()>>,
+    },
     /// Deliver an action.
     Action(SessionCommand),
     /// Hand the agent these MCP servers from now on.
     ReplaceMcpServers(Vec<McpServer>),
+}
+
+/// An actor-owned operation or an input to the runtime protocol machine.
+pub(crate) enum ActorInput {
+    Protocol(Input<SessionCompletion>),
+    PresentTool {
+        presentation: crate::domain::model::SessionToolPresentation,
+        completed: oneshot::Sender<Result<()>>,
+    },
 }
 
 pub(crate) struct SessionCompletion {
@@ -209,7 +223,7 @@ where
     /// Wait for the next input without mutating protocol state. Keeping this
     /// separate from dispatch lets shutdown cancel the wait, never an effect
     /// batch after the machine has already advanced.
-    pub(crate) async fn next_input(&mut self) -> Input<SessionCompletion> {
+    pub(crate) async fn next_input(&mut self) -> ActorInput {
         loop {
             let handshake_deadline = self.handshake_deadline;
             let handshake_timeout = async {
@@ -246,6 +260,9 @@ where
                 }
             },
             command = self.commands.recv() => match command {
+                Some(SessionMessage::PresentTool { presentation, completed }) => {
+                    return ActorInput::PresentTool { presentation, completed };
+                },
                 Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
                 Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
@@ -283,7 +300,34 @@ where
                 }
             },
             };
-            return input;
+            return ActorInput::Protocol(input);
+        }
+    }
+
+    /// Complete actor-owned writes outside the cancellable input wait.
+    pub(crate) async fn dispatch_input(&mut self, input: ActorInput) -> Stepped {
+        match input {
+            ActorInput::Protocol(input) => self.dispatch(input).await,
+            ActorInput::PresentTool {
+                presentation,
+                completed,
+            } => {
+                let RuntimeStatus::Live { session_id, .. } = self.machine.status() else {
+                    let _ = completed.send(Err(AgentSessionError::Disconnected(self.machine.id())));
+                    return Stepped::Continue;
+                };
+                let result = self
+                    .logs
+                    .present_tool(self.machine.id(), session_id, presentation)
+                    .await;
+                let failed = result.is_err();
+                let _ = completed.send(result);
+                if failed {
+                    self.dispatch(Input::Closed(CloseReason::LogFailed)).await
+                } else {
+                    Stepped::Continue
+                }
+            }
         }
     }
 

@@ -24,8 +24,9 @@ use agent_egress::domain::model::{
 use agent_egress::domain::service::EgressService;
 use bytes::Bytes;
 use futures::StreamExt as _;
+use futures::future::BoxFuture;
 use futures::stream::BoxStream;
-use http::header::{ACCEPT, CONTENT_TYPE};
+use http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HOST};
 use http::{HeaderName, HeaderValue, Method, StatusCode};
 use http_body_util::{BodyExt as _, Empty, Full};
 use rmcp::model::{ClientJsonRpcMessage, JsonRpcMessage, ServerJsonRpcMessage};
@@ -59,6 +60,11 @@ pub enum EgressCallError {
 
 type CallError = StreamableHttpError<EgressCallError>;
 
+/// The authenticated internal MCP HTTP handler, supplied by the composition root.
+/// It must enforce the same session authentication as the network listener.
+pub type InternalMcpHandler =
+    Arc<dyn Fn(ProxyRequest) -> BoxFuture<'static, ProxyResponse> + Send + Sync>;
+
 /// A [`StreamableHttpClient`] that calls the egress service directly.
 ///
 /// One `Arc` shared with the proxy's own listener, so the two are the same
@@ -66,6 +72,7 @@ type CallError = StreamableHttpError<EgressCallError>;
 pub struct EgressMcpClient<Egress> {
     egress: Arc<Egress>,
     base_url: String,
+    internal_mcp: Option<InternalMcpHandler>,
 }
 
 impl<Egress> EgressMcpClient<Egress> {
@@ -80,7 +87,15 @@ impl<Egress> EgressMcpClient<Egress> {
         Self {
             egress,
             base_url: base_url.trim_end_matches('/').to_owned(),
+            internal_mcp: None,
         }
+    }
+
+    /// Route the internal endpoint through its authenticated HTTP handler.
+    /// Ordinary workspace/app requests continue through the egress service.
+    pub fn with_internal_mcp(mut self, handler: InternalMcpHandler) -> Self {
+        self.internal_mcp = Some(handler);
+        self
     }
 }
 
@@ -90,7 +105,42 @@ impl<Egress> Clone for EgressMcpClient<Egress> {
         Self {
             egress: Arc::clone(&self.egress),
             base_url: self.base_url.clone(),
+            internal_mcp: self.internal_mcp.clone(),
         }
+    }
+}
+
+impl<Egress: EgressService + 'static> EgressMcpClient<Egress> {
+    async fn proxy(
+        &self,
+        uri: &str,
+        auth_header: Option<String>,
+        mut request: ProxyRequest,
+    ) -> Result<ProxyResponse, CallError> {
+        if uri.strip_prefix(&self.base_url) == Some("/mcp/internal") {
+            let handler = self
+                .internal_mcp
+                .as_ref()
+                .ok_or_else(|| not_an_egress_url(uri))?;
+            let token =
+                auth_header.ok_or(StreamableHttpError::Client(EgressCallError::NoSessionToken))?;
+            let authorization = HeaderValue::from_str(&format!("Bearer {token}"))
+                .map_err(|_| StreamableHttpError::Client(EgressCallError::NoSessionToken))?;
+            let host = request
+                .uri()
+                .authority()
+                .and_then(|authority| HeaderValue::from_str(authority.as_str()).ok())
+                .ok_or_else(|| not_an_egress_url(uri))?;
+            request.headers_mut().insert(AUTHORIZATION, authorization);
+            request.headers_mut().insert(HOST, host);
+            *request.uri_mut() = http::Uri::from_static("/mcp/internal");
+            return Ok(handler(request).await);
+        }
+        let Addressed { token, target } = address(&self.base_url, uri, auth_header)?;
+        self.egress
+            .proxy(&token, target, request)
+            .await
+            .map_err(|error| StreamableHttpError::Client(EgressCallError::Egress(error)))
     }
 }
 
@@ -213,7 +263,6 @@ where
         auth_header: Option<String>,
         custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<StreamableHttpPostResponse, CallError> {
-        let Addressed { token, target } = address(&self.base_url, &uri, auth_header)?;
         let body = serde_json::to_vec(&message)?;
         let mut request = build_request(
             Method::POST,
@@ -226,11 +275,7 @@ where
             .headers_mut()
             .insert(CONTENT_TYPE, HeaderValue::from_static(JSON_MIME_TYPE));
 
-        let response = self
-            .egress
-            .proxy(&token, target, request)
-            .await
-            .map_err(|error| StreamableHttpError::Client(EgressCallError::Egress(error)))?;
+        let response = self.proxy(&uri, auth_header, request).await?;
 
         let status = response.status();
         if matches!(status, StatusCode::ACCEPTED | StatusCode::NO_CONTENT) {
@@ -283,7 +328,6 @@ where
         auth_header: Option<String>,
         custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<(), CallError> {
-        let Addressed { token, target } = address(&self.base_url, &uri, auth_header)?;
         let request = build_request(
             Method::DELETE,
             &uri,
@@ -291,11 +335,7 @@ where
             custom_headers,
             empty_body(),
         )?;
-        let response = self
-            .egress
-            .proxy(&token, target, request)
-            .await
-            .map_err(|error| StreamableHttpError::Client(EgressCallError::Egress(error)))?;
+        let response = self.proxy(&uri, auth_header, request).await?;
         let status = response.status();
         if status == StatusCode::METHOD_NOT_ALLOWED {
             tracing::debug!("the MCP server does not support deleting a session");
@@ -317,7 +357,6 @@ where
         auth_header: Option<String>,
         custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<BoxStream<'static, Result<Sse, SseError>>, CallError> {
-        let Addressed { token, target } = address(&self.base_url, &uri, auth_header)?;
         let mut request = build_request(
             Method::GET,
             &uri,
@@ -333,11 +372,7 @@ where
                 .headers_mut()
                 .insert(HeaderName::from_static(HEADER_LAST_EVENT_ID), value);
         }
-        let response = self
-            .egress
-            .proxy(&token, target, request)
-            .await
-            .map_err(|error| StreamableHttpError::Client(EgressCallError::Egress(error)))?;
+        let response = self.proxy(&uri, auth_header, request).await?;
         let status = response.status();
         if status == StatusCode::METHOD_NOT_ALLOWED {
             return Err(StreamableHttpError::ServerDoesNotSupportSse);

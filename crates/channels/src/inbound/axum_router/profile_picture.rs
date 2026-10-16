@@ -1,5 +1,5 @@
 use super::*;
-use entity_access::domain::models::AdminParticipantRole;
+use entity_access::domain::models::MemberParticipantRole;
 
 /// Replace a channel's picture, or remove it by sending a null file id.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -8,7 +8,7 @@ pub struct SetChannelPictureRequest {
     pub profile_picture_id: Option<Uuid>,
 }
 
-/// Set a channel or group chat profile picture. Requires channel admin or owner access.
+/// Set a channel or group chat profile picture. Requires channel participation.
 #[utoipa::path(
     put,
     path = "/channels/{channel_id}/profile_picture",
@@ -31,7 +31,7 @@ pub async fn set_channel_picture_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<ChannelsRouterState<S, Svc, Auth>>,
-    access: ChannelAccessLevelExtractor<AdminParticipantRole, Svc, Auth>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
     Json(request): Json<SetChannelPictureRequest>,
 ) -> Result<StatusCode, ChannelsHandlerErr> {
     state

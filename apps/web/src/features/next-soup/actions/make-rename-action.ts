@@ -1,6 +1,6 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@entity';
+import { canEditChannelIdentity, type EntityData } from '@entity/types/entity';
 import { restoreSoupFocus } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
 
@@ -24,10 +24,7 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
     }
     if (entity.type === 'foreign') return false;
 
-    if (entity.type === 'channel') {
-      if (entity.channelType === 'direct_message') return false;
-      return entity.isParticipant !== false;
-    }
+    if (entity.type === 'channel') return canEditChannelIdentity(entity);
 
     return entity.ownerId === userId();
   };

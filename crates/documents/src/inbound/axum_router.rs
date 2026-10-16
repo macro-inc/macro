@@ -39,6 +39,7 @@ pub mod get_github_pull_request_tasks;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
+pub mod get_text;
 pub mod put_interaction;
 pub mod put_snapshot;
 pub mod sync_content_updated;
@@ -62,6 +63,8 @@ use lexical_client::LexicalClient;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
+// Existing router composition state; the text handler uses domain services, never SQL.
+// ast-grep-ignore: rust-no-sqlx-in-inbound
 use sqlx::PgPool;
 use task_dedup::PgTaskDedupService;
 
@@ -243,6 +246,10 @@ where
             axum::routing::get(get_document_handler::<T, Svc, Auth>)
                 .patch(edit_document_handler::<T, Svc, Auth>)
                 .delete(delete_document_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/text-content",
+            axum::routing::get(get_text::get_text_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/location_v3",

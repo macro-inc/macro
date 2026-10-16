@@ -1,4 +1,5 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import { Button } from '@ui';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ContinueButton } from '../components/controls';
@@ -34,15 +35,23 @@ export function PlanStep(props: {
     onConfirmed: props.onPremiumPaid,
   });
   const offer = context.createInviteOffer();
+  const trial = context.createTrialEligibility();
+  const trialEligible = () => {
+    const eligibility = trial.eligibility();
+    return eligibility.t === 'ready' && eligibility.value;
+  };
   // An invite's free months beat the trial, which would replace them.
   const inviteOffer = () => {
     const state = offer();
-    return plan.state().t === 'offer' && state.t === 'ready'
+    return trial.eligibility().t === 'ready' &&
+      !trial.existingSubscription() &&
+      plan.state().t === 'offer' &&
+      state.t === 'ready'
       ? state.value
       : null;
   };
 
-  const trialOffer = () => (
+  const subscriptionOffer = () => (
     <section class="mx-auto flex w-full max-w-lg flex-col py-2 sm:py-4">
       <header class="text-center">
         <h1
@@ -50,12 +59,20 @@ export function PlanStep(props: {
           class="font-[Roboto_Slab_Variable] text-[clamp(1.75rem,8vw,3rem)] font-[315] leading-[1.12] tracking-tight outline-none text-balance"
         >
           {plan.state().t === 'offer'
-            ? 'Free Claude & GPT for 30 days.'
+            ? trial.existingSubscription()
+              ? 'Manage your subscription.'
+              : trialEligible()
+                ? 'Free Claude & GPT for 30 days.'
+                : 'Get more with Pro.'
             : 'Your workspace is ready.'}
         </h1>
         <p class="mx-auto mt-6 max-w-[400px] text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
           {plan.state().t === 'offer'
-            ? 'Every feature, every AI model and 1 TB of storage. Your first 30 days are on us, then $40/user/month.'
+            ? trial.existingSubscription()
+              ? 'You have an existing subscription. Review your subscription and payment details to restore access.'
+              : trialEligible()
+                ? 'Every feature, every AI model and 1 TB of storage. Your first 30 days are on us, then $40/user/month.'
+                : 'Every feature, every AI model and 1 TB of storage. $40/user/month.'
             : "We're confirming your access so you can continue to your workspace."}
         </p>
       </header>
@@ -79,32 +96,64 @@ export function PlanStep(props: {
                 ? 'Opening your workspace…'
                 : state.t === 'continue'
                   ? 'Continue to workspace'
-                  : 'Start 30 day trial'
+                  : trial.existingSubscription()
+                    ? 'Manage subscription'
+                    : trial.eligibility().t === 'loading'
+                      ? 'Loading your Pro offer…'
+                      : trialEligible()
+                        ? 'Start 30 day trial'
+                        : 'Get Pro'
             )}
           // Until the invite lookup settles, starting a trial could skip it.
           disabled={
             plan.state().t === 'confirming' ||
             props.finishing ||
-            (plan.state().t === 'offer' && offer().t === 'loading')
+            trial.managing() ||
+            (plan.state().t === 'offer' &&
+              !trial.existingSubscription() &&
+              (offer().t === 'loading' || trial.eligibility().t !== 'ready'))
           }
           onClick={() =>
             plan.state().t === 'offer'
-              ? props.onStartCheckout('premium', 'trial')
+              ? trial.existingSubscription()
+                ? void trial.manage()
+                : props.onStartCheckout(
+                    'premium',
+                    trialEligible() ? 'trial' : 'standard'
+                  )
               : void plan.confirm()
           }
         />
       </div>
-      <Show when={plan.state().t === 'offer'}>
+      <Show when={plan.state().t === 'offer' && !trial.existingSubscription()}>
         <p class="mx-auto mt-3 max-w-52 text-center text-xs leading-5 text-ink-extra-muted">
           <span class="block">$40/user/month, billed monthly</span>
-          <span class="block">after the trial. Cancel anytime.</span>
+          <span class="block">
+            {trialEligible()
+              ? 'after the trial. Cancel anytime.'
+              : 'Cancel anytime.'}
+          </span>
         </p>
+      </Show>
+      <Show
+        when={
+          plan.state().t === 'offer' &&
+          !trial.existingSubscription() &&
+          trial.eligibility().t === 'error'
+        }
+      >
+        <div role="alert" class="mt-4 text-center text-sm text-ink-muted">
+          <p>Couldn't confirm your Pro offer.</p>
+          <Button variant="ghost" size="sm" onClick={trial.retry}>
+            Try again
+          </Button>
+        </div>
       </Show>
     </section>
   );
 
   return (
-    <Show when={inviteOffer()} keyed fallback={trialOffer()}>
+    <Show when={inviteOffer()} keyed fallback={subscriptionOffer()}>
       {(invite) =>
         props.renderInviteOffer(invite, {
           finishing: () => props.finishing,

@@ -101,3 +101,27 @@ describe('credit checkout', () => {
     }
   );
 });
+
+describe('subscription checkout conflicts', () => {
+  test.each([
+    ['The 30-day trial is only available for your first Premium subscription'],
+    ['User already has an active subscription'],
+  ])('preserves the actionable server explanation: %s', async (message) => {
+    fetchCheckout.mockImplementationOnce(
+      async (_input: RequestInfo, init: FetchWithTokenInit) => {
+        const error = await init.errorResponseHandler?.(
+          new Response(JSON.stringify({ message }), { status: 409 })
+        );
+        if (!error) throw new Error('Expected a checkout error handler');
+        return err([error]);
+      }
+    );
+    const result = await authServiceClient.createCheckoutSessionV2({
+      plan: 'premium',
+      onboardingTrial: true,
+      successUrl: 'https://macro.com/app',
+      cancelUrl: 'https://macro.com/app',
+    });
+    expect(result._unsafeUnwrapErr()[0]).toEqual({ code: 'CONFLICT', message });
+  });
+});

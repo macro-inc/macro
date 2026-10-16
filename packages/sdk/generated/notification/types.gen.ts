@@ -486,6 +486,10 @@ export type DeviceRequest = {
      */
     deviceType: DeviceType;
     /**
+     * Whether this Android binary supports native Telecom incoming calls.
+     */
+    nativeCallCapable?: boolean;
+    /**
      * The device push notification token.
      */
     token: string;

@@ -47,6 +47,10 @@ fn router_with_auth() -> Router<ApiContext> {
         .route("/ai_consent", patch(patch_ai_consent::handler))
         .route("/quota", get(get_user_quota::handler))
         .route(
+            "/stripe/trial_eligibility",
+            get(stripe::trial_eligibility::trial_eligibility),
+        )
+        .route(
             "/stripe/checkoutv2",
             post(
                 stripe::create_checkout_session_v2::create_checkout_session::<

@@ -15,6 +15,9 @@ import type {
   ChatMessageError,
   CompleteOnboardingRequest,
   CreateChatRequest,
+  DecisionErrorBody,
+  DecisionRequest,
+  DecisionResponse,
   DeleteMcpServerParams,
   DeletePipedreamMcpConnectionParams,
   DocumentTextPart,
@@ -1182,6 +1185,96 @@ export const getCitationHandler = async (
     status: res.status,
     headers: res.headers,
   } as getCitationHandlerResponse;
+};
+
+export type decisionsResponse200 = {
+  data: DecisionResponse;
+  status: 200;
+};
+
+export type decisionsResponse400 = {
+  data: DecisionErrorBody;
+  status: 400;
+};
+
+export type decisionsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type decisionsResponse402 = {
+  data: DecisionErrorBody;
+  status: 402;
+};
+
+export type decisionsResponse413 = {
+  data: void;
+  status: 413;
+};
+
+export type decisionsResponse500 = {
+  data: DecisionErrorBody;
+  status: 500;
+};
+
+export type decisionsResponse502 = {
+  data: DecisionErrorBody;
+  status: 502;
+};
+
+export type decisionsResponse503 = {
+  data: DecisionErrorBody;
+  status: 503;
+};
+
+export type decisionsResponse504 = {
+  data: DecisionErrorBody;
+  status: 504;
+};
+
+export type decisionsResponseSuccess = decisionsResponse200 & {
+  headers: Headers;
+};
+export type decisionsResponseError = (
+  | decisionsResponse400
+  | decisionsResponse401
+  | decisionsResponse402
+  | decisionsResponse413
+  | decisionsResponse500
+  | decisionsResponse502
+  | decisionsResponse503
+  | decisionsResponse504
+) & {
+  headers: Headers;
+};
+
+export type decisionsResponse =
+  | decisionsResponseSuccess
+  | decisionsResponseError;
+
+export const getDecisionsUrl = () => {
+  return `/decisions`;
+};
+
+export const decisions = async (
+  decisionRequest: DecisionRequest,
+  options?: RequestInit
+): Promise<decisionsResponse> => {
+  const res = await fetch(getDecisionsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(decisionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: decisionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as decisionsResponse;
 };
 
 /**
@@ -2639,6 +2732,11 @@ export type structuredCompletionResponse503 = {
   status: 503;
 };
 
+export type structuredCompletionResponse504 = {
+  data: StructuredCompletionError;
+  status: 504;
+};
+
 export type structuredCompletionResponseSuccess =
   structuredCompletionResponse200 & {
     headers: Headers;
@@ -2650,6 +2748,7 @@ export type structuredCompletionResponseError = (
   | structuredCompletionResponse403
   | structuredCompletionResponse500
   | structuredCompletionResponse503
+  | structuredCompletionResponse504
 ) & {
   headers: Headers;
 };

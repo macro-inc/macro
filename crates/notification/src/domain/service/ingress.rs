@@ -18,8 +18,9 @@ use crate::domain::models::request::{
     UpdateNotificationsRequest,
 };
 use crate::domain::models::{
-    DeviceEndpoint, DisabledNotificationType, Notification, NotificationResult,
-    NotificationStatusPayload, NotificationTypeName, PatchDelete, UserNotificationRow,
+    DeviceEndpoint, DisabledNotificationType, MobilePushRecipients, Notification,
+    NotificationResult, NotificationStatusPayload, NotificationTypeName, PatchDelete,
+    UserNotificationRow,
 };
 use crate::domain::ports::{
     NoopNotificationRealtimePublisher, NotificationIngressQueue, NotificationQueue,
@@ -133,6 +134,7 @@ pub trait NotificationReader: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
     /// Unregister the user's device from push notifications.
@@ -384,7 +386,8 @@ where
                 .await
                 .context(SendNotificationError::Other)?;
 
-            let mobile_endpoints = group_mobile_endpoints(device_endpoints);
+            let mobile_endpoints =
+                group_mobile_endpoints(device_endpoints, &notification.mobile_push_exclusions);
 
             if !mobile_endpoints.is_empty() {
                 let BuildApnsOutput { notif, attr } = build_apns;
@@ -560,7 +563,8 @@ where
             .get_device_endpoints(&[req.user_id.copied()])
             .await?;
 
-        let mobile_endpoints = group_mobile_endpoints(device_endpoints);
+        let mobile_endpoints =
+            group_mobile_endpoints(device_endpoints, &MobilePushRecipients::default());
 
         if mobile_endpoints.is_empty() {
             return deserialize_updated_notifications(changed);
@@ -613,6 +617,7 @@ where
 /// no push-capable device. VoIP endpoints are delivered separately.
 fn group_mobile_endpoints(
     device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
+    exclusions: &MobilePushRecipients,
 ) -> HashMap<MacroUserIdStr<'static>, UserApnsEndpoints> {
     device_endpoints
         .into_iter()
@@ -623,8 +628,17 @@ fn group_mobile_endpoints(
                 match endpoint {
                     DeviceEndpoint::Ios(arn) => ios.push(arn),
                     DeviceEndpoint::Android(arn) => android.push(arn),
+                    DeviceEndpoint::AndroidNativeCall(arn)
+                        if !exclusions.android.contains(&user_id) =>
+                    {
+                        android.push(arn)
+                    }
+                    DeviceEndpoint::AndroidNativeCall(_) => {}
                     DeviceEndpoint::IosVoip(_) => {}
                 }
+            }
+            if exclusions.ios.contains(&user_id) {
+                ios.clear();
             }
             if ios.is_empty() && android.is_empty() {
                 return None;
@@ -843,6 +857,7 @@ where
         user_id: MacroUserIdStr<'_>,
         device_token: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         let platform_arn: &str = match device_type {
             DeviceType::Ios => self.platform_config.apns_platform_arn.as_str(),
@@ -892,7 +907,13 @@ where
         };
 
         self.repository
-            .upsert_device(user_id, device_token, &endpoint, device_type)
+            .upsert_device(
+                user_id,
+                device_token,
+                &endpoint,
+                device_type,
+                native_call_capable && matches!(device_type, DeviceType::Android),
+            )
             .await?;
 
         // A device token must map to a single registration. When SNS minted a

@@ -37,6 +37,7 @@ import type {
   DatabaseEntityType,
 } from '../core/column-inference';
 import type {
+  CreateDatabaseColumn,
   DatabaseColumnCastsSource,
   DatabaseColumnConversion,
   DatabaseColumnTypeChange,
@@ -139,7 +140,7 @@ export type DatabaseRecordsViewProps = {
   actionsRef?: (actions: DatabaseRecordsActions) => void;
   renderToolbar?: (actions: DatabaseRecordsActions) => JSX.Element;
   /** Create a new column at the end of the table and return its id. */
-  createColumn?: () => DatabaseSchemaChange<string>;
+  createColumn?: CreateDatabaseColumn;
   addColumn?: (
     label?: string,
     onCreated?: (columnId: string) => boolean
@@ -293,7 +294,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
           <GridCell
             {...options}
             column={column()}
-            emptyLabel={isTitle() ? 'Unnamed' : undefined}
+            emptyLabel=""
             value={rowValue(row(), column().id)}
             canEdit={props.canEdit}
             renderTextEditor={props.renderTextEditor}

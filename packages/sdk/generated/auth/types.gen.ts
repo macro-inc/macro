@@ -1695,6 +1695,20 @@ export type ToggleNonAdminInvitesResponse = {
 };
 
 /**
+ * Whether the authenticated customer can receive the introductory Pro trial.
+ */
+export type TrialEligibility = {
+    /**
+     * Confirmed against the same subscription history used during checkout.
+     */
+    eligible: boolean;
+    /**
+     * An existing subscription requires management instead of a new checkout.
+     */
+    existingSubscription: boolean;
+};
+
+/**
  * Request body for [`update_auto_reload_handler`].
  */
 export type UpdateAutoReloadRequest = {
@@ -4010,6 +4024,27 @@ export type CreatePortalSessionResponses = {
 };
 
 export type CreatePortalSessionResponse = CreatePortalSessionResponses[keyof CreatePortalSessionResponses];
+
+export type GetTrialEligibilityData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/stripe/trial_eligibility';
+};
+
+export type GetTrialEligibilityErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTrialEligibilityError = GetTrialEligibilityErrors[keyof GetTrialEligibilityErrors];
+
+export type GetTrialEligibilityResponses = {
+    200: TrialEligibility;
+};
+
+export type GetTrialEligibilityResponse = GetTrialEligibilityResponses[keyof GetTrialEligibilityResponses];
 
 export type PatchUserTutorialData = {
     body: PatchUserTutorialRequest;

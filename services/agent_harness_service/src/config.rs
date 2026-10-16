@@ -44,6 +44,10 @@ macro_env_var::env_vars!(
 );
 
 macro_env_var::maybe_env_vars!(
+    /// PostHog project token. Absent deployments retain standard agent tools.
+    pub struct PosthogApiKey;
+    /// Regional PostHog ingestion origin; defaults to the US origin.
+    pub struct PosthogHost;
     /// KMS key for encrypted per-owner Claude OAuth connections.
     pub struct ClaudeOauthKmsKeyId;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
@@ -73,6 +77,12 @@ pub struct Config {
     /// replicas use the independent for_warming lifecycle marker.
     #[macro_config_default(false)]
     pub hide_agent_dm_sessions: bool,
+    /// Backend feature flags, evaluated using the authenticated session owner.
+    pub posthog_api_key: PosthogApiKey,
+    /// Same regional origin as the frontend's PostHog project.
+    pub posthog_host: PosthogHost,
+    /// Pinned Deno executable. Unset hosts do not advertise code execution.
+    pub deno_binary: Option<String>,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,

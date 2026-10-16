@@ -9,6 +9,7 @@ members = [
   "crates/agent_harness",
   "crates/trigger_context",
   "crates/agent_preview",
+  "crates/agent_code_mode",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
@@ -28,6 +29,8 @@ members = [
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
   "crates/coding_agent_worker",
+  "crates/code_execution",
+  "crates/cognition",
   "crates/codex_cloud_agents",
   "crates/codex_connection",
   "crates/collab_surface",
@@ -272,6 +275,7 @@ infer = "0.19.0"
 indoc = "2"
 inquire = "0.7"
 itertools = "0.14"
+jsonschema = { version = "0.58.6", default-features = false }
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
   "rust_crypto",
 ] }
@@ -435,7 +439,7 @@ worker = "0.8.1"
 async-stripe = { version = "0.41", default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper-rustls-webpki",
+  "runtime-tokio-hyper",
 ] }
 axum-macros = "0.5"
 bytes = "1.11.1"

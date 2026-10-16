@@ -161,6 +161,8 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
             )),
             Arc::new(tasks.clone()),
             "localhost".into(),
+            None,
+            Arc::new(OnceLock::new()),
         );
         assert_eq!(
             rpc(app.clone(), None, "tools/list", serde_json::json!({}))
@@ -212,7 +214,29 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         names.sort_unstable();
         assert_eq!(
             names,
-            ["link_task", "set_pull_request", "task_pull_requests"]
+            [
+                "PresentReview",
+                "link_task",
+                "set_pull_request",
+                "task_pull_requests"
+            ]
+        );
+        // The presentation tool is advertised without code mode, but startup
+        // wiring must be complete before a call can create a saved review.
+        let (_, unavailable) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "PresentReview", "arguments": {
+                    "kind": "email", "title": "Draft", "drafts": [{"subject":"Review", "body":"Draft body", "to":[{"email":"preview@example.test"}]}]
+                },
+            }),
+        )
+        .await;
+        assert_eq!(
+            unavailable["error"]["message"],
+            "Review service is unavailable"
         );
         let (_, linked) = rpc(
             app.clone(),
@@ -310,3 +334,5 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         );
     }
 }
+
+mod code_mode;

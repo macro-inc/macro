@@ -24,6 +24,7 @@ use tokio::sync::Notify;
 use tracing::instrument::WithSubscriber as _;
 
 mod first_output;
+mod presentation;
 
 struct Fixture {
     service: AgentSessionServiceImpl<
@@ -1852,8 +1853,11 @@ async fn shared_transport_copies_durable_initialization_before_load() {
         Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     let ready = actor.next_input().await;
-    assert!(matches!(ready, Input::SharedReady { .. }));
-    actor.dispatch(ready).await;
+    assert!(matches!(
+        ready,
+        ActorInput::Protocol(Input::SharedReady { .. })
+    ));
+    actor.dispatch_input(ready).await;
     let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
         received.recv().await.unwrap()
     else {
@@ -1970,8 +1974,11 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
         .await
         .unwrap();
     let queued = actor.next_input().await;
-    assert!(matches!(queued, Input::Command { .. }));
-    assert_eq!(actor.dispatch(queued).await, Stepped::Continue);
+    assert!(matches!(
+        queued,
+        ActorInput::Protocol(Input::Command { .. })
+    ));
+    assert_eq!(actor.dispatch_input(queued).await, Stepped::Continue);
     assert!(received.try_recv().is_err());
 
     let init_id = RequestId::Str("shared-transport-initialization".into());
@@ -2002,8 +2009,11 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
         })
         .unwrap();
     let ready = actor.next_input().await;
-    assert!(matches!(ready, Input::SharedReady { .. }));
-    let step = actor.dispatch(ready).await;
+    assert!(matches!(
+        ready,
+        ActorInput::Protocol(Input::SharedReady { .. })
+    ));
+    let step = actor.dispatch_input(ready).await;
     let mut failed_response_id = None;
     if matches!(failure, RestoreLogFailure::LoadResponse) {
         assert_eq!(step, Stepped::Continue);

@@ -4754,7 +4754,7 @@
     "/channels/{channel_id}/profile_picture": {
       "put": {
         "tags": ["channels::inbound::axum_router::profile_picture"],
-        "summary": "Set a channel or group chat profile picture. Requires channel admin or owner access.",
+        "summary": "Set a channel or group chat profile picture. Requires channel participation.",
         "operationId": "set_channel_picture",
         "parameters": [
           {
@@ -10936,6 +10936,48 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/text-content": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Read current Markdown or extracted file text with the document's view receipt.",
+        "operationId": "get_document_text_content",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTextContent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "500": {
+            "description": "Document text unavailable"
           }
         }
       }
@@ -26636,6 +26678,17 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The owner's team the document is (or would be) shared with. `None` when\nthe owner does not belong to a team."
+          }
+        }
+      },
+      "DocumentTextContent": {
+        "type": "object",
+        "description": "Text representation when the document supports one. Other file formats\nretain their existing download/export behavior.",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": ["string", "null"],
+            "description": "Current Markdown, or extracted PDF/Word text. Null means use file export."
           }
         }
       },

@@ -1046,6 +1046,100 @@
         }
       }
     },
+    "/decisions": {
+      "post": {
+        "tags": ["decisions"],
+        "operationId": "decisions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Probability of yes for each named question",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or oversized compact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionErrorBody"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "HTTP body exceeds 128 KiB"
+          },
+          "500": {
+            "description": "Decision task failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Classifier could not produce a valid result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Decision capacity, provider, or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionErrorBody"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Decision deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -2210,6 +2304,16 @@
                 }
               }
             }
+          },
+          "504": {
+            "description": "Tool-free completion deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
           }
         }
       }
@@ -3060,6 +3164,60 @@
           }
         ],
         "description": "What a successful tool call committed to the user's databases."
+      },
+      "DecisionErrorBody": {
+        "type": "object",
+        "description": "Sanitized, machine-readable failure of a decision request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation without provider credentials or diagnostics."
+          }
+        }
+      },
+      "DecisionRequest": {
+        "type": "object",
+        "description": "Named yes/no questions to evaluate against one arbitrary JSON input.",
+        "required": ["input", "questions"],
+        "properties": {
+          "input": {
+            "description": "Data to classify. The entire compact request must fit in 64 KiB."
+          },
+          "questions": {
+            "type": "object",
+            "description": "One to 32 questions, each at most 500 characters. Keys must be nonblank\nand at most 80 UTF-8 bytes; they are preserved in the response.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DecisionResponse": {
+        "type": "object",
+        "description": "The probability of yes for every requested question, under its original key.",
+        "required": ["probabilities"],
+        "properties": {
+          "probabilities": {
+            "type": "object",
+            "description": "Probabilities between zero and one, inclusive; not boolean decisions.",
+            "additionalProperties": {
+              "type": "number",
+              "format": "float"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
       },
       "DocumentCognitionServiceApiVersion": {
         "type": "string",

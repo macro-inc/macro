@@ -60,7 +60,7 @@ anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
   "billing",
   "checkout",
-  "runtime-tokio-hyper-rustls-webpki",
+  "runtime-tokio-hyper",
 ] }
 async-trait = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }

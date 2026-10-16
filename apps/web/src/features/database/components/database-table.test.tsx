@@ -865,39 +865,61 @@ describe('sort and column widths', () => {
   });
 });
 
-it('selects a rectangle with Shift-click, announces both corners and clears the cells together', async () => {
-  const { onClearCells, onCellFocus, onWrite } = setup();
-  const first = document.querySelector<HTMLElement>(
-    '[data-grid-row-id="one"] [data-grid-column="1"]'
-  )!;
-  const last = document.querySelector<HTMLElement>(
-    '[data-grid-row-id="two"] [data-grid-column="3"]'
-  )!;
-  first.dispatchEvent(
-    new MouseEvent('pointerdown', { bubbles: true, button: 0 })
-  );
-  document.dispatchEvent(
-    new MouseEvent('pointerup', { bubbles: true, button: 0 })
-  );
-  last.dispatchEvent(
-    new MouseEvent('pointerdown', { bubbles: true, button: 0, shiftKey: true })
-  );
-  expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(6);
-  expect(onCellFocus).toHaveBeenLastCalledWith({
-    rowId: 'one',
-    columnId: 'name',
-    endRowId: 'two',
-    endColumnId: 'notes',
-    editing: false,
-  });
-  fireEvent.keyDown(last, { key: 'Delete' });
-  await waitFor(() =>
-    expect(onClearCells).toHaveBeenCalledExactlyOnceWith(
-      ['one', 'two'],
-      ['name', 'computed', 'notes']
-    )
-  );
-  expect(onWrite).not.toHaveBeenCalled();
-  fireEvent.keyDown(last, { key: 'Escape' });
-  expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(0);
-});
+it.each(['Delete', 'Backspace'])(
+  'selects a rectangle with Shift-click and clears it with %s',
+  async (key) => {
+    const { onClearCells, onCellFocus, onWrite } = setup();
+    const first = document.querySelector<HTMLElement>(
+      '[data-grid-row-id="one"] [data-grid-column="1"]'
+    )!;
+    const last = document.querySelector<HTMLElement>(
+      '[data-grid-row-id="two"] [data-grid-column="3"]'
+    )!;
+    first.dispatchEvent(
+      new MouseEvent('pointerdown', { bubbles: true, button: 0 })
+    );
+    document.dispatchEvent(
+      new MouseEvent('pointerup', { bubbles: true, button: 0 })
+    );
+    last.dispatchEvent(
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        shiftKey: true,
+      })
+    );
+    expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(6);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'one',
+      columnId: 'name',
+      endRowId: 'two',
+      endColumnId: 'notes',
+      editing: false,
+    });
+    fireEvent.keyDown(last, { key });
+    await waitFor(() =>
+      expect(onClearCells).toHaveBeenCalledExactlyOnceWith(
+        ['one', 'two'],
+        ['name', 'computed', 'notes']
+      )
+    );
+    expect(onWrite).not.toHaveBeenCalled();
+    fireEvent.keyDown(last, { key: 'Escape' });
+    expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(0);
+  }
+);
+
+it.each(['Delete', 'Backspace'])(
+  'clears the focused grid cell with %s',
+  async (key) => {
+    const { onClearCells } = setup();
+    const cell = document.querySelector<HTMLElement>(
+      '[data-grid-row-id="one"] [data-grid-column="1"]'
+    )!;
+    cell.focus();
+    fireEvent.keyDown(cell, { key });
+    await waitFor(() =>
+      expect(onClearCells).toHaveBeenCalledExactlyOnceWith(['one'], ['name'])
+    );
+  }
+);

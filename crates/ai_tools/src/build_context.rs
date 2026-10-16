@@ -50,6 +50,7 @@ use notification::domain::service::{NotificationReaderService, PlatformArnConfig
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::repository::DbNotificationRepository;
 use readonly_pool::ReadOnlyPool;
+use rootcause::compat::anyhow1::IntoAnyhow;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::{SecretManager, SecretsManager};
 use soup::domain::service::SoupImpl;
@@ -102,6 +103,20 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
             Arc::new(UnconfiguredImageGenerator)
         }
     }
+}
+
+/// Compose shared AI generation and decisions using existing service credentials.
+/// The cognition service owns admission, model access, and usage recording.
+pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionToolContext> {
+    let client = cognition::outbound::CognitionClient::new(
+        macro_service_urls::DocumentCognitionServiceUrl::new()?.as_ref(),
+        &macro_auth::InternalApiKey::new()?,
+        chat::domain::models::FREE_MODEL,
+    )
+    .map_err(rootcause::Report::into_anyhow)?;
+    Ok(crate::ToolCognitionToolContext {
+        service: Some(Arc::new(client)),
+    })
 }
 
 /// Builds a [`ToolServiceContext`] by reading the required environment
@@ -607,6 +622,7 @@ pub async fn build_tool_service_context_from_env(
             build_image_generator_from_env(),
             recorder.clone(),
         )?,
+        cognition_tool_context: build_cognition_tool_context()?,
         document_tool_context,
         properties_tool_context,
         email_tool_context,

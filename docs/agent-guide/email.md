@@ -316,6 +316,13 @@ and press Enter or Space. Removal is a separate button named `Remove <filename>`
 Removing a forwarded file keeps the received original.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
+In a long thread, scroll away from the bottom while a draft save is pending.
+After repeated saves, the scroll position, editor selection, and received-message
+DOM must remain stable on desktop and mobile. Reopening must show the saved body.
+Repeat with a save completing after the thread closes; reopening must still
+load the latest saved draft.
+Ordinary queued saves must not request another `EmailThreadPage`; a missing
+thread snapshot or a move between inboxes still requires reconciliation.
 AI email tool drafts persist body-only edits; changing recipients or the subject
 is not required to save the body.
 

@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the abort_join command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-abort-join",
+          "markdownDescription": "Enables the abort_join command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the abort_join command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-abort-join",
+          "markdownDescription": "Denies the abort_join command without any pre-configured scope."
+        },
+        {
           "description": "Enables the end_active_call command without any pre-configured scope.",
           "type": "string",
           "const": "allow-end-active-call",
@@ -341,6 +353,18 @@
           "type": "string",
           "const": "deny-get-voip-token",
           "markdownDescription": "Denies the get_voip_token command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the prepare_join command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-prepare-join",
+          "markdownDescription": "Enables the prepare_join command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the prepare_join command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-prepare-join",
+          "markdownDescription": "Denies the prepare_join command without any pre-configured scope."
         },
         {
           "description": "Enables the register_listener command without any pre-configured scope.",

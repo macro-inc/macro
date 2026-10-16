@@ -220,6 +220,7 @@ pub fn run() {
             .plugin(tauri_plugin_android_auth::init())
             .plugin(tauri_plugin_android_mobile::init())
             .plugin(tauri_plugin_android_push::init())
+            .plugin(tauri_plugin_call_kit::init())
             .plugin(tauri_plugin_network_status::init());
     }
 

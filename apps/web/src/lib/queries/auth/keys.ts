@@ -4,6 +4,7 @@ export const authKeys = createQueryKeys('auth', {
   aiBillingPlans: null,
   aiBillingSummary: null,
   subscriptionStatus: null,
+  trialEligibility: null,
   codexStatus: null,
   codexEnvironments: null,
   codexLogin: (attemptId: string) => ({ queryKey: [attemptId] }),

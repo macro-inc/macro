@@ -1,6 +1,19 @@
 use super::compute_body_replyless;
 
 #[test]
+fn reply_html_preserves_attribute_order_across_thread_reads() {
+    let html = r#"<div dir="ltr" class="reply" style="color: blue"><a href="https://example.com" title="A &amp; B" target="_blank">Reply</a></div><blockquote>Older message</blockquote>"#;
+    let expected = r#"<div dir="ltr" class="reply" style="color: blue"><a href="https://example.com" title="A &amp; B" target="_blank">Reply</a></div>"#;
+
+    for _ in 0..32 {
+        assert_eq!(
+            compute_body_replyless(None, Some(html), None).as_deref(),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
 fn test_extract_message_reply_outlook_test_1() {
     let full_email = include_str!("testdata/outlook-test-1/full.html");
     let expected_reply = include_str!("testdata/outlook-test-1/body_replyless.html");

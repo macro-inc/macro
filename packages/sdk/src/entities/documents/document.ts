@@ -191,10 +191,16 @@ export class Document
   readonly deletedAt = this.field('deletedAt');
 
   /**
-   * The document's raw content (markdown source for markdown documents),
-   * downloaded via a presigned export URL.
+   * Current Markdown for native documents, extracted text for PDF/Word,
+   * or raw file content for other formats. Native reads include live edits.
    */
   async content(): Promise<string> {
+    const { text } = unwrap(
+      await this.client.storage.getDocumentTextContent({
+        path: { document_id: this.id },
+      }),
+    );
+    if (text !== null) return text;
     const { presigned_url } = unwrap(
       await this.client.storage.exportDocument({
         path: { document_id: this.id },

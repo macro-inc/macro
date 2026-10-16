@@ -1,3 +1,4 @@
+import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import { cn } from '@ui';
 import type { Accessor, ParentProps } from 'solid-js';
 import { Show } from 'solid-js';
@@ -48,7 +49,8 @@ export function ItemBin(
         <Show when={showViewAllButton()}>
           <button
             type="button"
-            class="text-xs font-medium hover:text-ink hover:underline flex items-center gap-1"
+            class="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-normal text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-1 focus-visible:ring-ink/30"
+            aria-keyshortcuts={props.isSelected ? 'ArrowRight' : undefined}
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -59,12 +61,10 @@ export function ItemBin(
               props.onViewAll?.(props.binType);
             }}
           >
-            <Show when={props.isSelected && showViewAllButton()}>
-              <div class="p-0.5 px-1 -my-2 bg-surface text-ink border border-edge-muted rounded-xs text-xs">
-                →
-              </div>
-            </Show>
             {viewAllText()}
+            <Show when={props.isSelected}>
+              <ArrowRightIcon class="size-3 text-ink-extra-muted" />
+            </Show>
           </button>
         </Show>
       </div>

@@ -8,6 +8,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import { createSignal, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CellMentionEditor } from '../../../components/cell-text-editor/CellMentionEditor';
 import type { DatabaseMention } from '../core/column-inference';
 import type {
   DatabaseCellValue,
@@ -119,6 +120,96 @@ describe('grid cell', () => {
       fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
     }
   );
+  it('keeps the active text editor and draft when an earlier save infers the column type', () => {
+    const [schema, setSchema] = createSignal({ ...column, inferType: true });
+    const onWrite = vi.fn(async () => true);
+    const onNavigate = vi.fn(() => true);
+    render(() => (
+      <GridCell
+        column={schema()}
+        value={null}
+        canEdit
+        renderTextEditor={(props) => (
+          <CellMentionEditor
+            {...props}
+            convertPaste={(text) => text}
+            renderMenu={() => null}
+          />
+        )}
+        onWrite={onWrite}
+        onAddOption={vi.fn(async () => true)}
+        onNavigate={onNavigate}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
+    const editor = screen.getByRole('textbox', { name: 'Edit Name' });
+    editor.textContent = '456';
+    fireEvent.input(editor);
+    setSchema({ ...column, dataType: 'NUMBER', inferType: false });
+    expect(screen.getByRole('textbox', { name: 'Edit Name' })).toBe(editor);
+    expect(document.activeElement).toBe(editor);
+    expect(editor.textContent).toBe('456');
+    fireEvent.keyDown(editor, { key: 'Tab' });
+    expect(onWrite).toHaveBeenCalledExactlyOnceWith(456);
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith(1);
+  });
+  it.each(['STRING', 'NUMBER', 'BOOLEAN', 'SELECT_STRING'] as const)(
+    'clears a selected %s cell with either Delete key',
+    async (dataType) => {
+      const onWrite = vi.fn(async () => true);
+      render(() => (
+        <GridCell
+          column={{
+            ...column,
+            dataType,
+            options: [{ id: 'open', label: 'Open', color: null }],
+          }}
+          value={
+            dataType === 'STRING' || dataType === 'SELECT_STRING' ? 'Open' : 12
+          }
+          canEdit
+          onWrite={onWrite}
+          onAddOption={vi.fn(async () => true)}
+        />
+      ));
+      const trigger =
+        dataType === 'BOOLEAN'
+          ? screen.getByRole('checkbox')
+          : screen.getByRole('button');
+      trigger.focus();
+      for (const key of ['Delete', 'Backspace']) {
+        fireEvent.keyDown(trigger, { key });
+        await waitFor(() => expect(onWrite).toHaveBeenLastCalledWith(null));
+      }
+      expect(onWrite).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole('textbox')).toBeNull();
+    }
+  );
+
+  it('keeps an empty cell visually blank when the host supplies no placeholder', () => {
+    const onWrite = vi.fn(async () => true);
+    render(() => (
+      <GridCell
+        column={column}
+        value={null}
+        emptyLabel=""
+        canEdit
+        onWrite={onWrite}
+        onAddOption={vi.fn(async () => true)}
+      />
+    ));
+    const cell = screen.getByRole('button', {
+      name: 'Name: Empty. Click to edit',
+    });
+    expect(cell.textContent).toBe('');
+    fireEvent.click(cell);
+    const input = screen.getByRole('textbox', {
+      name: 'Edit Name',
+    }) as HTMLInputElement;
+    expect(input.placeholder).toBe('');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onWrite).not.toHaveBeenCalled();
+  });
   it.each(['STRING', 'SELECT_STRING'] as const)(
     'lets Tab leave a %s editor at a grid boundary',
     async (dataType) => {

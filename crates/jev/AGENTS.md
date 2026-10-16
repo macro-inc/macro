@@ -4,12 +4,15 @@
 
 Belongs to automations: yes/no classification of arbitrary JSON against a
 list of questions, backed by TypeSafe's Jev model, with usage metering built
-in — used to gate scheduled-action triggers on a condition.
+in — used to gate scheduled-action triggers and to serve authenticated
+named decisions through cognition.
 
 ## Start here
 
 - `src/domain/service.rs`: `JevClassifier` — the metered classification use
   case; wraps a `JevProvider` and records token usage on every call.
+- `src/domain/decisions.rs`: named decision admission, capacity, deadline and
+  cancellation-safe metering (`decisions` feature).
 - `src/domain/ports.rs`: `JevProvider` / `YesNoClassifier` port traits.
 - `src/outbound/typesafe.rs`: the TypeSafe HTTP adapter (feature `outbound`).
 
@@ -18,17 +21,18 @@ in — used to gate scheduled-action triggers on a condition.
 - Owns: the question/probability value objects, the `MAX_QUESTIONS` guard,
   and metering every classification call through `ai_usage::UsageRecorder`.
 - Not here: the TypeSafe API contract itself, or deciding what questions to
-  ask — that's the caller's (`scheduled_action`'s trigger-gating logic).
+  ask — that belongs to the caller (trigger logic or an API request).
 
 ## Boundaries
 
 - Depends on: `ai_usage` (usage metering); `outbound` feature adds
   `macro_env_var`, `reqwest`, `tokio`.
-- Used by: `scheduled_action` (gates event triggers on yes/no conditions).
+- Used by: `scheduled_action` (trigger conditions),
+  `document_cognition_service` (the `/decisions` endpoint).
 
 ## Checks
 
-- `cargo test -p jev` (`SQLX_OFFLINE` unset).
+- `cargo test -p jev --all-features` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

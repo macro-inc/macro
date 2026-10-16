@@ -364,6 +364,16 @@ pub trait SessionOpener: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AgentSessionId>>> + Send;
 }
 
+/// The turn currently allowed to initiate work, from shared durable state.
+/// Stopping, ended, archived, and deleted sessions have no active turn.
+pub trait ActiveSessionTurn: Send + Sync + 'static {
+    /// Resolve the starting, running, or blocked turn independently of replica ownership.
+    fn active_turn(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<agent_runtime_protocol::domain::action::AgentActionId>>> + Send;
+}
+
 /// `Send + Sync + 'static` with `Send` futures because callers drive sessions
 /// from spawned tasks - a Kafka consumer hands each message to its own task,
 /// and a repo whose futures are not `Send` cannot be used there.
@@ -837,6 +847,19 @@ pub struct Appended {
 /// and [`flush_deadline`](Self::flush_deadline) tells the owning actor when
 /// the buffer must next be forced out with [`flush`](Self::flush).
 pub trait AgentSessionLogWriter: Send + 'static {
+    /// Persist the missing frames of a stable presentation and flush before acknowledging.
+    fn present_tool(
+        &mut self,
+        id: AgentSessionId,
+        acp_id: agent_client_protocol::schema::v1::SessionId,
+        presentation: super::model::SessionToolPresentation,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            let _ = (acp_id, presentation);
+            Err(AgentSessionError::Disconnected(id))
+        }
+    }
+
     /// Persist and fold one frame into this connection's live projection.
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Appended>> + Send {
         self.append_with_boundary(log, None)
@@ -1173,6 +1196,19 @@ pub struct QueuedControl {
 /// control routes can be mounted against it without knowing what a harness is.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
+    /// Persist a nonblocking tool presentation through the owning session actor.
+    fn present_tool(
+        &self,
+        id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        presentation: super::model::SessionToolPresentation,
+    ) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            let _ = (actor, presentation);
+            Err(AgentSessionError::Disconnected(id))
+        }
+    }
+
     /// Release and delete every session owned by a user before account deletion.
     /// Internal account lifecycle only; shared sessions owned by others are untouched.
     fn delete_user_sessions(

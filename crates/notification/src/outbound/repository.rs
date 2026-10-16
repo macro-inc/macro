@@ -644,7 +644,7 @@ impl NotificationDbOps for PgPool {
 
         let rows = sqlx::query!(
             r#"
-            SELECT user_id, device_endpoint, device_type as "device_type: DbDeviceType"
+            SELECT user_id, device_endpoint, device_type as "device_type: DbDeviceType", native_call_capable
             FROM notification_user_device_registration
             WHERE user_id = ANY($1)
             "#,
@@ -662,6 +662,9 @@ impl NotificationDbOps for PgPool {
 
             let device = match row.device_type {
                 DbDeviceType::Ios => DeviceEndpoint::Ios(row.device_endpoint),
+                DbDeviceType::Android if row.native_call_capable => {
+                    DeviceEndpoint::AndroidNativeCall(row.device_endpoint)
+                }
                 DbDeviceType::Android => DeviceEndpoint::Android(row.device_endpoint),
                 DbDeviceType::IosVoip => DeviceEndpoint::IosVoip(row.device_endpoint),
             };
@@ -1847,9 +1850,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         self.db
-            .upsert_device(user_id, device_token, device_endpoint, device_type)
+            .upsert_device(
+                user_id,
+                device_token,
+                device_endpoint,
+                device_type,
+                native_call_capable,
+            )
             .await
     }
 

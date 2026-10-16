@@ -31,6 +31,10 @@ impl ControlEvent {
         principal: ControlPrincipal,
         access: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<Self> {
+        // Private context is authored inside the harness, never by API callers.
+        if matches!(&action, AgentAction::Prompt(prompt) if prompt.private_context.is_some()) {
+            return Err(AgentSessionError::Forbidden);
+        }
         let actor = match principal {
             ControlPrincipal::User if context.is_some() => {
                 return Err(AgentSessionError::Forbidden);

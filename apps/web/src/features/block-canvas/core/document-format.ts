@@ -1,10 +1,12 @@
 import { freezeDocument, type GraphicsDocument } from '@macro-inc/graphics';
+import type { CanvasReferenceTracking } from './references';
 import { validCanvasTextDocument } from './text-codec';
 
 export const CANVAS_VERSION = 2;
 export type CanvasFile = Readonly<{
   version: typeof CANVAS_VERSION;
   document: GraphicsDocument;
+  referenceTracking?: CanvasReferenceTracking;
   /** Original input is retained for recovery; it is never replayed over edits. */
   legacy?: Readonly<{
     version: 1;
@@ -46,6 +48,25 @@ export function readCanvasFile(value: unknown): CanvasFile {
       !value.legacy.notes.every((note) => typeof note === 'string'))
   )
     throw new Error('Invalid canvas migration metadata');
+  const tracking = value.referenceTracking;
+  if (
+    tracking !== undefined &&
+    (!isRecord(tracking) ||
+      typeof tracking.sourceId !== 'string' ||
+      !tracking.sourceId ||
+      !Array.isArray(tracking.mentions) ||
+      !tracking.mentions.every(
+        (mention) =>
+          isRecord(mention) &&
+          typeof mention.targetId === 'string' &&
+          !!mention.targetId &&
+          typeof mention.mentionId === 'string' &&
+          !!mention.mentionId
+      ) ||
+      !Array.isArray(tracking.pendingRemoval) ||
+      !tracking.pendingRemoval.every((id) => typeof id === 'string' && !!id))
+  )
+    throw new Error('Invalid canvas reference tracking metadata');
   // Retain same-version extension fields rather than stripping them on save.
   return { ...value, version: CANVAS_VERSION, document } as CanvasFile;
 }

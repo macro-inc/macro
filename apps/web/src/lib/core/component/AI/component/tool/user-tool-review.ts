@@ -21,8 +21,8 @@ export type UserToolReviewSink<T> = {
    */
   lockedNotice: Accessor<string | undefined>;
   /**
-   * An edit in progress. Chat persists these so a reload keeps them; a
-   * session has nowhere to put them until submit, so it leaves this out.
+   * An edit in progress. Chat and saved-review hosts persist these; the
+   * blocking elicitation host may omit this callback.
    */
   onEdit?: (args: T) => void;
   /**

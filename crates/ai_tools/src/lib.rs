@@ -35,6 +35,7 @@ use calendar_scheduling::inbound::toolset::{
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
+use cognition::inbound::toolset::cognition_toolset;
 use crm::inbound::toolset::{crm_toolset, pipelines::pipeline_toolset};
 use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
 use databases_sql::toolset::{QueryDatabase, databases_sql_toolset};
@@ -59,7 +60,7 @@ use teams::inbound::toolset::team_toolset;
 #[cfg(any(test, feature = "test-support"))]
 pub use build_context::build_anthropic_tool_context_test;
 pub use build_context::{
-    build_anthropic_tool_context, build_image_generator_from_env,
+    build_anthropic_tool_context, build_cognition_tool_context, build_image_generator_from_env,
     build_tool_service_context_from_env,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
@@ -75,9 +76,9 @@ pub use tool_context::{
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMediaUploadToolContext, ToolChannelMessagesService,
     ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext,
-    ToolCommsService, ToolCrmService, ToolCrmToolContext, ToolDatabasesService,
-    ToolDatabasesSqlToolContext, ToolDatabasesToolContext, ToolDocumentService,
-    ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolCognitionToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
+    ToolDatabasesService, ToolDatabasesSqlToolContext, ToolDatabasesToolContext,
+    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
     ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
     ToolFavoritesService, ToolFavoritesToolContext, ToolForeignEntityService, ToolFormsToolContext,
     ToolFrecencyService, ToolGithubPullRequestService, ToolImageGenerationToolContext,
@@ -157,6 +158,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolImageGenerationToolContext>(
             image_generation::inbound::toolset::image_generation_toolset(),
         )
+        .add_subtoolset::<ToolCognitionToolContext>(cognition_toolset())
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())
         .add_subtoolset::<ToolFavoritesToolContext>(favorites_toolset())
         .add_subtoolset::<ToolInitiativeToolContext>(initiative_toolset())
@@ -244,6 +246,22 @@ pub const EAGER_TOOLS: &[&str] = &[
 /// Assemble the toolset and tool-use prompt for a host. These are actually
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
+    tools_for_inner(host, false)
+}
+
+/// Direct tools retained when an agent can use the full Macro SDK through code.
+/// Filtering happens before discovery and prompt construction, so lazy loading
+/// cannot reintroduce the hidden SDK methods as direct tools.
+pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
+    tools_for_inner(AiHost::AgentSession, true)
+}
+
+/// Existing agent-session tools exposed through the code-mode capability policy.
+pub fn code_mode_tools() -> Arc<AiToolSet> {
+    tools_for(AiHost::AgentSession).toolset
+}
+
+fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
@@ -298,6 +316,18 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         >(),
         AiHost::Chat | AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
+    let mut toolset = toolset;
+    if code_mode_direct {
+        // Review submission still needs these user-tool implementations internally,
+        // but advertising their blocking agent calls would reintroduce elicitation.
+        toolset.tools.retain(|name, _| {
+            !matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent")
+                && !agent_code_mode::domain::covered_by_code_sdk(
+                    name,
+                    toolset.user_tools.contains_key(name),
+                )
+        });
+    }
     // External MCP clients have no `LoadTools`, so they get every schema.
     let deferred = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => {
@@ -307,12 +337,20 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
         AiHost::Chat => Box::new(prompt::TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT)),
+        AiHost::AgentSession if code_mode_direct => Box::new(
+            prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT),
+        ),
         AiHost::AgentSession => {
             Box::new(prompt::SESSION_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
         }
         AiHost::ChannelBot | AiHost::Mcp => {
             Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
         }
+    };
+    let prompt: Box<dyn std::fmt::Display + Send + Sync> = if code_mode_direct {
+        Box::new(format!("{prompt}{}", prompt::tool_usage::CODE_MODE_ROUTING))
+    } else {
+        prompt
     };
     let catalog: Vec<(&str, &str)> = deferred
         .iter()
@@ -337,6 +375,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::AgentSession))
+        .merge(&agent_code_mode::inbound::toolset::toolset())
         .merge(&read::read_thread())
         .build()
 }

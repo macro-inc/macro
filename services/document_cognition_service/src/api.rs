@@ -15,6 +15,7 @@ use utoipa_swagger_ui::SwaggerUi;
 mod citations;
 mod completions;
 pub mod context;
+mod decisions;
 mod health;
 mod id_mapping;
 mod preview;
@@ -116,6 +117,7 @@ fn api_router(api_context: ApiContext) -> Router {
             "/structured-completion",
             post(structured_completion::structured_completion),
         )
+        .route("/decisions", decisions::route())
         .route("/chat/completions", post(completions::handler))
         .nest("/attachments", attachments::router())
         .nest("/citations", citations::router())

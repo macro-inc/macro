@@ -65,9 +65,8 @@ export function msg(
   for (const [i, string] of strings.entries()) {
     content += string;
 
-    if (i >= values.length) continue;
-
     const value = values[i];
+    if (value === undefined) continue;
     if (isMentionable(value)) {
       const part = value.toMention();
       content += part.tag;

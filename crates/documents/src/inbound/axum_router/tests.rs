@@ -144,6 +144,8 @@ struct FakeDocumentService {
     team_slug_calls: Mutex<Vec<TeamSlugCall>>,
     team_slug_result: Mutex<Option<TeamSlugResult>>,
     get_document_calls: Mutex<Vec<String>>,
+    get_text_calls: Mutex<Vec<String>>,
+    document_owner: Mutex<Option<Owner>>,
     copy_calls: Mutex<Vec<CreationPrincipal>>,
 }
 
@@ -225,7 +227,14 @@ impl DocumentService for FakeDocumentService {
         Ok(DocumentBasic {
             document_id: document_id.to_string(),
             document_name: "test document".to_string(),
-            owner: Owner::from_principal_str(JWT_USER_ID).expect("test user id should be valid"),
+            owner: self
+                .document_owner
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| {
+                    Owner::from_principal_str(JWT_USER_ID).expect("test user id should be valid")
+                }),
             file_type: Some("pdf".to_string()),
             sub_type: None,
             branched_from_id: None,
@@ -308,9 +317,13 @@ impl DocumentService for FakeDocumentService {
 
     async fn get_document_text(
         &self,
-        _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
     ) -> Result<String, DocumentError> {
-        panic!("unexpected get_document_text call")
+        self.get_text_calls
+            .lock()
+            .unwrap()
+            .push(entity_access_receipt.entity().entity_id.clone());
+        Ok("Extracted PDF text".into())
     }
 
     async fn create_document(
@@ -737,6 +750,9 @@ impl EntityAccessService for FakeEntityAccessService {
                     entity_id: entity_id.to_string(),
                     entity_type,
                 });
+        }
+        if *self.deny_document_access.lock().unwrap() {
+            return Ok(None);
         }
         Ok(Some(AccessLevel::Owner))
     }
@@ -1617,4 +1633,97 @@ async fn internal_create_rejects_bots() {
         );
     }
     assert!(document_service.create_calls().is_empty());
+}
+
+#[tokio::test]
+async fn document_text_endpoint_uses_the_authenticated_view_capability() {
+    let (router, documents, access, _) = test_router();
+    *documents.document_owner.lock().unwrap() =
+        Some(Owner::from_principal_str("macro|different-owner@example.com").unwrap());
+    let request = with_jwt(Request::get("/text-document/text-content"))
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        send(&router, request).await,
+        (StatusCode::OK, json!({"text":"Extracted PDF text"}))
+    );
+    assert_eq!(*documents.get_text_calls.lock().unwrap(), ["text-document"]);
+    assert_eq!(access.document_access_calls()[0].entity_id, "text-document");
+}
+
+#[tokio::test]
+async fn document_text_endpoint_does_not_read_when_view_access_is_denied() {
+    let (router, documents, access, _) = test_router();
+    *documents.document_owner.lock().unwrap() =
+        Some(Owner::from_principal_str("macro|different-owner@example.com").unwrap());
+    access.deny_document_access();
+    let request = with_jwt(Request::get("/text-document/text-content"))
+        .body(Body::empty())
+        .unwrap();
+    assert!(send_status(&router, request).await.is_client_error());
+    assert!(documents.get_text_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn document_text_reads_live_markdown_and_propagates_live_source_failures() {
+    use crate::domain::text::{LiveMarkdownReader, read_text};
+    struct LiveReader(bool);
+    impl LiveMarkdownReader for LiveReader {
+        async fn markdown(&self, document_id: &str) -> Result<String, DocumentError> {
+            assert_eq!(document_id, "live-document");
+            if self.0 {
+                Ok("# Latest collaborative edit".into())
+            } else {
+                Err(DocumentError::Gone)
+            }
+        }
+    }
+    let documents = FakeDocumentService::default();
+    let mut document = documents
+        .internal_get_basic_document("live-document")
+        .await
+        .unwrap();
+    document.file_type = Some("md".into());
+    let receipt = || {
+        EntityAccessReceipt::dangerously_assert_authenticated_user(
+            user(JWT_USER_ID),
+            "live-document",
+            EntityType::Document,
+        )
+    };
+    let result = read_text(&documents, &LiveReader(true), receipt(), &document)
+        .await
+        .unwrap();
+    assert_eq!(result.text.as_deref(), Some("# Latest collaborative edit"));
+    assert!(matches!(
+        read_text(&documents, &LiveReader(false), receipt(), &document).await,
+        Err(DocumentError::Gone)
+    ));
+    assert!(documents.get_text_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn document_text_content_route_coexists_with_legacy_extracted_text_route() {
+    let (router, _, _, _) = test_router();
+    // DSS merges its existing extracted-text router with the documents domain router.
+    // A duplicate GET path panics during merge, before the service can start.
+    let legacy = Router::new().route(
+        "/{document_id}/text",
+        axum::routing::get(|| async { axum::Json(json!({"text": "legacy extracted text"})) }),
+    );
+    let merged = legacy.merge(router);
+    let legacy_request = Request::get("/text-document/text")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        send(&merged, legacy_request).await,
+        (StatusCode::OK, json!({"text":"legacy extracted text"}))
+    );
+    let current_request = with_jwt(Request::get("/text-document/text-content"))
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        send(&merged, current_request).await,
+        (StatusCode::OK, json!({"text":"Extracted PDF text"}))
+    );
 }

@@ -59,6 +59,12 @@ export function CanvasContextMenu(props: {
           onClick={() => void props.clipboard.paste()}
         />
         <MenuItem
+          text="Paste in place"
+          icon={Clipboard}
+          shortcut="shift+cmd+v"
+          onClick={() => void props.clipboard.paste(true)}
+        />
+        <MenuItem
           text="Duplicate"
           icon={Copy}
           shortcut="cmd+d"

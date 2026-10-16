@@ -45,6 +45,12 @@ export type CalendarDraftComposerProps = {
   initialData: CreateCalendarEvent;
   /** Where edits, the confirmation and the rejection go. */
   sink: UserToolReviewSink<CreateCalendarEvent>;
+  /** Capture edits before a surrounding stack navigates or submits. */
+  registerDraftReader?: (reader: () => CreateCalendarEvent | undefined) => void;
+  /** The same validated form snapshot used by individual creation. */
+  registerSubmitReader?: (
+    reader: () => Promise<CreateCalendarEvent | undefined>
+  ) => void;
   /** A key for the preview's synthetic event; the call's id in practice. */
   previewKey: string;
   /** Show the calendar preview under the form. On by default. */
@@ -179,6 +185,9 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
       ? editorSubmitValuesToCreateCalendarEvent(values, props.initialData)
       : undefined;
   }
+
+  props.registerDraftReader?.(currentArgs);
+  props.registerSubmitReader?.(async () => currentArgs());
 
   async function handleCreate(values: EventEditorSubmitValues) {
     if (interactionLocked()) return;

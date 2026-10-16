@@ -93,6 +93,7 @@ import type {
   TeamWithMembers,
   ToggleAutoJoinDomainResponse,
   ToggleNonAdminInvitesResponse,
+  TrialEligibility,
   UpdateAutoReloadRequest,
   UpdateOverageRequest,
   UsageSnapshot,
@@ -5929,6 +5930,69 @@ export const createPortalSession = async (
     status: res.status,
     headers: res.headers,
   } as createPortalSessionResponse;
+};
+
+/**
+ * @summary Read the caller's eligibility; checkout revalidates before granting a trial.
+ */
+export type getTrialEligibilityResponse200 = {
+  data: TrialEligibility;
+  status: 200;
+};
+
+export type getTrialEligibilityResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTrialEligibilityResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTrialEligibilityResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTrialEligibilityResponseSuccess =
+  getTrialEligibilityResponse200 & {
+    headers: Headers;
+  };
+export type getTrialEligibilityResponseError = (
+  | getTrialEligibilityResponse400
+  | getTrialEligibilityResponse401
+  | getTrialEligibilityResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTrialEligibilityResponse =
+  | getTrialEligibilityResponseSuccess
+  | getTrialEligibilityResponseError;
+
+export const getGetTrialEligibilityUrl = () => {
+  return `/user/stripe/trial_eligibility`;
+};
+
+export const getTrialEligibility = async (
+  options?: RequestInit
+): Promise<getTrialEligibilityResponse> => {
+  const res = await fetch(getGetTrialEligibilityUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTrialEligibilityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTrialEligibilityResponse;
 };
 
 /**

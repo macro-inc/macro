@@ -182,6 +182,7 @@ impl NotificationReader for AuthenticationTestService {
         _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_type: &DeviceType,
+        _native_call_capable: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { unreachable!("should not be called") }
     }
@@ -667,6 +668,7 @@ impl NotificationReader for PresignedTestService {
         _user_id: MacroUserIdStr<'_>,
         _device_token: &str,
         _device_type: &DeviceType,
+        _native_call_capable: bool,
     ) -> impl Future<Output = Result<(), Report>> + Send {
         async { unreachable!() }
     }

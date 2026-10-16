@@ -15,6 +15,8 @@ export function BillingSettingsView(props: {
   scheduledChange?: { plan: 'free' | 'premium' | 'max'; effectiveAt: string };
   subscriptionStatusFailed?: boolean;
   onRefreshStatus?: () => void;
+  trialEligibilityFailed?: boolean;
+  onRefreshTrialEligibility?: () => void;
   onKeepPlan?: (plan: PaidPlanTier) => void;
   teamSeatDescription?: string;
   onManage: () => void;
@@ -129,7 +131,12 @@ export function BillingSettingsView(props: {
                 </Show>
               </div>
 
-              <Show when={props.state.canChangePlan && props.state.hasPaid}>
+              <Show
+                when={
+                  props.state.canManageBilling &&
+                  (props.state.hasPaid || props.state.existingSubscription)
+                }
+              >
                 <Button
                   class="ml-auto bg-active"
                   size="sm"
@@ -141,6 +148,18 @@ export function BillingSettingsView(props: {
                 </Button>
               </Show>
             </header>
+            <Show
+              when={
+                props.state.canManageBilling &&
+                props.state.existingSubscription &&
+                !props.state.hasPaid
+              }
+            >
+              <p role="status" class="text-sm text-ink-muted">
+                You have an existing subscription. Use Manage to review your
+                subscription and payment details.
+              </p>
+            </Show>
             <ul class="border-t border-t-edge-muted pt-4 flex flex-wrap gap-4 text-sm text-ink-muted">
               <PlanFeatures
                 tier={props.state.tier}
@@ -195,7 +214,13 @@ export function BillingSettingsView(props: {
         </Show>
       </section>
 
-      <Show when={props.state.canChangePlan && props.state.tier !== 'max'}>
+      <Show
+        when={
+          props.state.canChangePlan &&
+          props.state.tier !== 'max' &&
+          (props.state.hasPaid || !props.state.existingSubscription)
+        }
+      >
         <section
           data-settings-target="upgrade"
           tabIndex={-1}
@@ -206,6 +231,21 @@ export function BillingSettingsView(props: {
               ? 'Need more AI?'
               : 'Upgrade'}
           </h2>
+          <Show when={props.trialEligibilityFailed}>
+            <div
+              role="alert"
+              class="flex flex-wrap items-center gap-3 text-sm text-ink-muted"
+            >
+              <p>Couldn't confirm your Pro offer. Please try again.</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={props.onRefreshTrialEligibility}
+              >
+                Try again
+              </Button>
+            </div>
+          </Show>
           <div
             class="grid grid-cols-1 gap-6"
             classList={{

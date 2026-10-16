@@ -5,6 +5,7 @@
 mod chat_reply;
 mod coding_preferences;
 mod owned_purge;
+mod presentation;
 mod quota;
 mod user_cleanup;
 mod warm;
@@ -4992,5 +4993,46 @@ async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
         Some(RequestPermissionOutcome::Selected(
             SelectedPermissionOutcome::new("once")
         ))
+    );
+}
+
+#[tokio::test]
+async fn review_outcome_context_is_composed_privately_on_follow_up_and_first_turn() {
+    let composer = PromptComposerMock::default();
+    let (service, repo, _containers, _announcer, _runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
+    let id = AgentSessionId::new();
+    let mut session = agent_session::testing::test_agent_session(id);
+    session.instructions = Some("Session instructions".to_owned());
+    repo.insert_session(session);
+    for first_turn in [false, true] {
+        let mut action = AgentAction::context_prompt("100 outcome unconfirmed");
+        service
+            .inner
+            .compose_action(id, &mut action, None, None, None, first_turn)
+            .await
+            .unwrap();
+        let AgentAction::Prompt(prompt) = action else {
+            panic!("expected prompt");
+        };
+        assert!(
+            prompt.prompt.is_empty(),
+            "the mock leaves visible text unchanged"
+        );
+    }
+    assert_eq!(
+        composer.calls(),
+        vec![
+            (
+                String::new(),
+                Some("100 outcome unconfirmed".to_owned()),
+                None
+            ),
+            (
+                String::new(),
+                Some("Session instructions\n\n100 outcome unconfirmed".to_owned()),
+                None
+            ),
+        ]
     );
 }

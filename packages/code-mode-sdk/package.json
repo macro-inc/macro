@@ -1,0 +1,25 @@
+{
+	"name": "@macro-inc/code-mode-sdk",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"generate": "bun scripts/generate.ts",
+		"check:generated": "bun scripts/generate.ts --check",
+		"test": "bun run check:generated && vitest run",
+		"type-check": "tsc --noEmit --project tsconfig.json"
+	},
+	"dependencies": {
+		"handlebars": "4.7.9"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.3",
+		"bun-types": "^1.3.14",
+		"typescript": "^5.9.3",
+		"vitest": "5.0.1",
+		"@macro-inc/sdk-docs": "workspace:*"
+	}
+}

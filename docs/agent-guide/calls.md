@@ -176,3 +176,17 @@ Standalone instant and scheduled calls are excluded from team memory. They have 
 `Share with team` or `Team access` controls during the call or on the saved recording.
 Signed-in participants keep direct access to their recordings, transcripts, and summaries;
 joining a standalone call never makes its content available to the wider team.
+
+### Android native channel calls
+
+Android channel calls use a native call activity rather than browser media.
+After joining, the themed drawer shows a large participant tile and a horizontally
+scrolling participant strip; tap a strip tile to make it primary. Speaker toggles
+speaker mode (hold it for headset/Bluetooth routing), Mute and Video control capture, and **Leave** ends the call.
+The local primary video tile exposes Switch camera. Swipe the drawer handle down,
+tap outside the drawer, or use Back to enter PiP on supported devices; **Open call
+controls** in the web call controls restores the native surface. Leaving the channel does
+not end the call. Incoming calls expose Answer/Decline in the **Calls** notification
+channel, including while locked/backgrounded. PiP is a native, device-dependent
+flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
+follow the hardware matrix in [Android development](../development/android.md#native-calling).

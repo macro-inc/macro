@@ -40,6 +40,7 @@ import type {
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
+  TrialEligibility,
   UserQuota,
 } from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
@@ -712,6 +713,13 @@ export const authServiceClient = {
   },
 
   // Stripe HTTP methods (replacing RPC calls)
+  async getTrialEligibility() {
+    return await fetchWithAuth<TrialEligibility>(
+      `${authHost}/user/stripe/trial_eligibility`,
+      { method: 'GET' }
+    );
+  },
+
   async createCheckoutSessionV2(args: {
     successUrl: string;
     cancelUrl: string;
@@ -738,6 +746,22 @@ export const authServiceClient = {
           plan: args.plan,
           onboardingTrial: args.onboardingTrial,
         }),
+        errorResponseHandler: async (response) => {
+          if (response.status === 409) {
+            const body: unknown = await response.json().catch(() => null);
+            return {
+              code: 'CONFLICT',
+              message:
+                body &&
+                typeof body === 'object' &&
+                'message' in body &&
+                typeof body.message === 'string'
+                  ? body.message
+                  : 'Your subscription status changed. Please refresh your plans.',
+            };
+          }
+          return statusError(response.status);
+        },
       }
     );
   },

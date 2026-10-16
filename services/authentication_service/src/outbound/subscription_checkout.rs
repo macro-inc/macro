@@ -4,9 +4,11 @@ use std::sync::Arc;
 
 use gtm_invite::domain::{models::GtmInviteError, ports::GtmInviteService};
 use macro_user_id::user_id::MacroUserIdStr;
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use teams::domain::model::{CustomerError, SeatPrices};
 use thiserror::Error;
+use tracing::Instrument;
 
 use crate::service::subscription_checkout::{
     CheckoutGateway, CheckoutRequest, CheckoutTerms, ONBOARDING_TRIAL_DAYS, SubscriptionHistory,
@@ -14,7 +16,7 @@ use crate::service::subscription_checkout::{
 
 const TRIAL_SESSION_MARKER: &str = "onboarding_trial";
 
-enum TrialSessionAttempt {
+enum SessionAttempt {
     Reuse(String),
     Create(String),
 }
@@ -43,6 +45,18 @@ pub enum StripeCheckoutError {
     /// Stripe returned an invalid URL.
     #[error(transparent)]
     Url(#[from] url::ParseError),
+    /// Checkout terms could not be serialized.
+    #[error(transparent)]
+    Serialization(#[from] serde_json::Error),
+    /// A subscription completed while checkout was being prepared.
+    #[error("You already have a subscription. Open Manage in Settings → Billing to update it.")]
+    ExistingSubscription,
+    /// Subscription history changed after the introductory offer was approved.
+    #[error("The 30-day trial is only available for your first Premium subscription")]
+    TrialUnavailable,
+    /// Another request is preparing different checkout terms.
+    #[error("Checkout changed in another tab. Please try again.")]
+    CheckoutConflict,
     /// Stripe omitted data needed to complete the operation safely.
     #[error("Unexpected Stripe response")]
     UnexpectedResponse,
@@ -72,69 +86,169 @@ impl<I> StripeCheckoutGateway<I> {
         }
     }
 
-    // Reuse an open attempt. Anchor Stripe's idempotency key to the previous
-    // expired attempt so concurrent tabs cannot stockpile usable trial links,
-    // while an abandoned/expired checkout remains retryable.
-    async fn trial_attempt(
+    // One generation key is shared across all plans and terms. Stripe atomically
+    // replays identical creates and rejects competing parameters. Advance only
+    // after every older payable link has been conclusively invalidated.
+    #[tracing::instrument(name = "billing.checkout.prepare", skip_all, fields(stripe_customer_id = %customer, ?terms), err)]
+    async fn session_attempt(
         &self,
         customer: &stripe::CustomerId,
-        request: &CheckoutRequest<'_>,
-    ) -> Result<TrialSessionAttempt, StripeCheckoutError> {
+        fingerprint: &str,
+        terms: CheckoutTerms,
+    ) -> Result<SessionAttempt, StripeCheckoutError> {
         let mut params = stripe::ListCheckoutSessions::new();
         params.customer = Some(customer.clone());
         params.limit = Some(100);
+        let mut sessions = Vec::new();
         loop {
-            let page = stripe::CheckoutSession::list(&self.stripe, &params).await?;
-            if let Some(session) = page.data.iter().find(|session| {
-                session
-                    .metadata
-                    .as_ref()
-                    .is_some_and(|metadata| metadata.contains_key(TRIAL_SESSION_MARKER))
-            }) {
-                return match session.status {
-                    Some(stripe::CheckoutSessionStatus::Open)
-                        if trial_session_matches(session, request) =>
+            let page = stripe::CheckoutSession::list(&self.stripe, &params)
+                .instrument(tracing::info_span!("stripe.checkout.list"))
+                .await?;
+            let next = page.data.last().map(|session| session.id.clone());
+            sessions.extend(
+                page.data
+                    .into_iter()
+                    .filter(|session| session.mode == stripe::CheckoutSessionMode::Subscription),
+            );
+            if !page.has_more {
+                break;
+            }
+            params.starting_after = Some(next.ok_or(StripeCheckoutError::UnexpectedResponse)?);
+        }
+        let mut reusable = None;
+        for session in &sessions {
+            match session.status {
+                Some(stripe::CheckoutSessionStatus::Open) => {
+                    if reusable.is_none()
+                        && session
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.get("checkout_terms"))
+                            .is_some_and(|value| value == fingerprint)
                     {
-                        Ok(TrialSessionAttempt::Reuse(
+                        tracing::info!(checkout_session_id = %session.id, outcome = "reuse", "matched checkout offer");
+                        reusable = Some(
                             session
                                 .url
                                 .clone()
                                 .ok_or(StripeCheckoutError::UnexpectedResponse)?,
-                        ))
+                        );
+                    } else {
+                        // A failure may mean completion raced expiration. Never create
+                        // or return another payable link after an ambiguous expiration.
+                        let expired =
+                            stripe::CheckoutSession::expire(&self.stripe, &session.id)
+                            .instrument(tracing::info_span!("stripe.checkout.expire", checkout_session_id = %session.id))
+                            .await?;
+                        if expired.status != Some(stripe::CheckoutSessionStatus::Expired) {
+                            return Err(StripeCheckoutError::UnexpectedResponse);
+                        }
                     }
-                    Some(stripe::CheckoutSessionStatus::Open) => {
-                        // A changed team or return destination needs fresh metadata.
-                        stripe::CheckoutSession::expire(&self.stripe, &session.id).await?;
-                        Ok(TrialSessionAttempt::Create(format!(
-                            "onboarding-trial-{customer}-after-{}",
-                            session.id
-                        )))
+                }
+                Some(stripe::CheckoutSessionStatus::Complete)
+                    if sessions
+                        .first()
+                        .is_some_and(|latest| latest.id == session.id) =>
+                {
+                    // A list/history race must not turn a completed checkout into
+                    // permission to subscribe again. Read its subscription directly.
+                    let subscription = session
+                        .subscription
+                        .as_ref()
+                        .ok_or(StripeCheckoutError::UnexpectedResponse)?;
+                    let subscription =
+                        stripe::Subscription::retrieve(&self.stripe, &subscription.id(), &[])
+                            .instrument(tracing::info_span!("stripe.subscription.retrieve", subscription_id = %subscription.id()))
+                            .await?;
+                    if !subscription_terminal(subscription.status) {
+                        return Err(StripeCheckoutError::ExistingSubscription);
                     }
-                    Some(stripe::CheckoutSessionStatus::Expired) => {
-                        Ok(TrialSessionAttempt::Create(format!(
-                            "onboarding-trial-{customer}-after-{}",
-                            session.id
-                        )))
-                    }
-                    // The customer finished checkout between history lookup and
-                    // this read. Do not create a second subscription in that race.
-                    _ => Err(StripeCheckoutError::UnexpectedResponse),
-                };
+                }
+                Some(
+                    stripe::CheckoutSessionStatus::Expired
+                    | stripe::CheckoutSessionStatus::Complete,
+                ) => {}
+                None => return Err(StripeCheckoutError::UnexpectedResponse),
             }
-            if !page.has_more {
-                break;
-            }
-            params.starting_after = Some(
-                page.data
-                    .last()
-                    .ok_or(StripeCheckoutError::UnexpectedResponse)?
-                    .id
-                    .clone(),
-            );
         }
-        Ok(TrialSessionAttempt::Create(format!(
-            "onboarding-trial-{customer}-first"
-        )))
+        let history = subscription_history(&self.stripe, customer).await?;
+        if history.has_existing_subscription {
+            return Err(StripeCheckoutError::ExistingSubscription);
+        }
+        if terms == CheckoutTerms::Trial && !history.trial_eligible() {
+            return Err(StripeCheckoutError::TrialUnavailable);
+        }
+        if let Some(url) = reusable {
+            return Ok(SessionAttempt::Reuse(url));
+        }
+        Ok(SessionAttempt::Create(match sessions.first() {
+            Some(session) => format!("subscription-checkout-{customer}-after-{}", session.id),
+            None => format!("subscription-checkout-{customer}-first"),
+        }))
+    }
+
+    #[tracing::instrument(name = "billing.checkout", skip_all, fields(stripe_customer_id = %customer, ?terms), err)]
+    async fn checkout(
+        &self,
+        customer: stripe::CustomerId,
+        request: CheckoutRequest<'_>,
+        terms: CheckoutTerms,
+        promotion: Option<stripe::PromotionCodeId>,
+    ) -> Result<String, StripeCheckoutError> {
+        let mut params = checkout_params(
+            customer.clone(),
+            &request,
+            self.prices.price_id(request.plan)?,
+            terms,
+            promotion,
+        );
+        // Sort nested metadata too: HashMap iteration order changes between requests.
+        let mut payload = serde_json::to_value(&params)?;
+        payload.sort_all_objects();
+        let payload = serde_json::to_vec(&payload)?;
+        let fingerprint = format!("{:x}", Sha256::digest(payload));
+        params
+            .metadata
+            .get_or_insert_default()
+            .insert("checkout_terms".into(), fingerprint.clone());
+        let key = match self.session_attempt(&customer, &fingerprint, terms).await? {
+            SessionAttempt::Reuse(url) => {
+                url::Url::parse(&url)?;
+                return Ok(url);
+            }
+            SessionAttempt::Create(key) => key,
+        };
+        tracing::info!(idempotency_key = %key, outcome = "create", "creating checkout offer");
+        let stripe = self
+            .stripe
+            .as_ref()
+            .clone()
+            .with_strategy(stripe::RequestStrategy::Idempotent(key));
+        let session = stripe::CheckoutSession::create(&stripe, params)
+            .instrument(tracing::info_span!("stripe.checkout.create"))
+            .await
+            .map_err(|error| match &error {
+                stripe::StripeError::Stripe(error)
+                    if error.http_status == 409
+                        || error.error_type == stripe::ErrorType::IdempotencyError =>
+                {
+                    StripeCheckoutError::CheckoutConflict
+                }
+                _ => StripeCheckoutError::Stripe(error),
+            })?;
+        // An idempotency replay contains the original response, even if another
+        // tab has since expired that session. Never redirect to that stale URL.
+        let session = stripe::CheckoutSession::retrieve(&self.stripe, &session.id, &[])
+            .instrument(
+                tracing::info_span!("stripe.checkout.retrieve", checkout_session_id = %session.id),
+            )
+            .await?;
+        if session.status != Some(stripe::CheckoutSessionStatus::Open) {
+            return Err(StripeCheckoutError::CheckoutConflict);
+        }
+        let url = session.url.ok_or(StripeCheckoutError::UnexpectedResponse)?;
+        url::Url::parse(&url)?;
+        Ok(url)
     }
 }
 
@@ -188,32 +302,7 @@ impl<I: GtmInviteService> CheckoutGateway for StripeCheckoutGateway<I> {
         terms: CheckoutTerms,
         promotion: Option<Self::Promotion>,
     ) -> Result<String, Self::Error> {
-        let stripe = match terms {
-            CheckoutTerms::Paid => self.stripe.as_ref().clone(),
-            CheckoutTerms::Trial => match self.trial_attempt(&customer, &request).await? {
-                TrialSessionAttempt::Reuse(url) => {
-                    url::Url::parse(&url)?;
-                    return Ok(url);
-                }
-                TrialSessionAttempt::Create(key) => self
-                    .stripe
-                    .as_ref()
-                    .clone()
-                    .with_strategy(stripe::RequestStrategy::Idempotent(key)),
-            },
-        };
-        let params = checkout_params(
-            customer,
-            &request,
-            self.prices.price_id(request.plan)?,
-            terms,
-            promotion,
-        );
-        let session = stripe::CheckoutSession::create(&stripe, params).await?;
-        let url = session.url.ok_or(StripeCheckoutError::UnexpectedResponse)?;
-        // Preserve the exact signed/opaque URL returned by Stripe.
-        url::Url::parse(&url)?;
-        Ok(url)
+        self.checkout(customer, request, terms, promotion).await
     }
 }
 
@@ -260,18 +349,14 @@ fn checkout_params<'a>(
     }
 }
 
-fn trial_session_matches(session: &stripe::CheckoutSession, request: &CheckoutRequest<'_>) -> bool {
-    session.success_url.as_deref() == Some(request.success_url.as_str())
-        && session.cancel_url.as_deref() == Some(request.cancel_url.as_str())
-        && ["team_id", "owner_id"].iter().all(|key| {
-            session
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.get(*key))
-                == request.metadata.get(*key)
-        })
+fn subscription_terminal(status: stripe::SubscriptionStatus) -> bool {
+    matches!(
+        status,
+        stripe::SubscriptionStatus::Canceled | stripe::SubscriptionStatus::IncompleteExpired
+    )
 }
 
+#[tracing::instrument(skip_all, fields(stripe_customer_id = %customer), err, ret)]
 async fn subscription_history(
     stripe_client: &stripe::Client,
     customer: &stripe::CustomerId,
@@ -284,12 +369,10 @@ async fn subscription_history(
     loop {
         let page = stripe::Subscription::list(stripe_client, &params).await?;
         history.has_previous_subscription |= !page.data.is_empty();
-        history.has_active_subscription |= page.data.iter().any(|sub| {
-            matches!(
-                sub.status,
-                stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing
-            )
-        });
+        history.has_existing_subscription |= page
+            .data
+            .iter()
+            .any(|sub| !subscription_terminal(sub.status));
         if !page.has_more {
             break;
         }

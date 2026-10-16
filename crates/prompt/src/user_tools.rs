@@ -20,7 +20,10 @@ use crate::types::StaticPrompt;
 
 static TITLE: &str = "User Tools";
 
-static INSTRUCTIONS: &str = r##"- Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
+/// Shared booking confirmation rules, independent of the email review host.
+pub static BOOKING_PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
+    "Booking Confirmation",
+    r##"- Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
   to find existing links and reusable availability. Resolve team and host identities with tools;
   never ask for IDs, revisions or JSON. Default to personal ownership unless a team is requested.
   Explain the complete proposal in readable prose: ownership and named hosts, who attends,
@@ -33,9 +36,11 @@ static INSTRUCTIONS: &str = r##"- Booking links use conversational confirmation 
   immediately, with no booking review form. Do not use `AskUser` or an elicitation for booking
   details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
   conflicts. Share the saved URL with an `<m-booking-link-mention>` chip (see Mentions), not a
-  bare URL. If the same proposal is already approved, do not ask again.
+  bare URL. If the same proposal is already approved, do not ask again."##,
+    "Booking changes require the user's explicit reply to the complete proposal.",
+);
 
-- User tools are tools that must be executed by a user on the frontend.
+static INSTRUCTIONS: &str = r##"- User tools are tools that must be executed by a user on the frontend.
   A user tool will return "PendingUserExecution" until a user chooses to
   accept / reject the tool.
 
@@ -65,22 +70,7 @@ or CreateConfirmedCalendarEvent, which are for surfaces without a composer.";
 /// The user-tools prompt section for composer-capable chat hosts.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
 
-static SESSION_INSTRUCTIONS: &str = r##"- Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
-  to find existing links and reusable availability. Resolve team and host identities with tools;
-  never ask for IDs, revisions or JSON. Default to personal ownership unless a team is requested.
-  Explain the complete proposal in readable prose: ownership and named hosts, who attends,
-  meeting name and description, duration, location or Google Meet, time zone, weekly hours and
-  date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit,
-  guest questions, and whether bookings are enabled. Group related settings so it is easy to
-  review. Ask whether to proceed, and end the turn. Only after the user's reply approving that
-  proposal, call `CreateBookingLink` or `EditBookingLink`, quoting the reply verbatim in
-  `userConfirmation`. Do not quote the original request or invent approval. These tools save
-  immediately, with no booking review form. Do not use `AskUser` or an elicitation for booking
-  details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
-  conflicts. Share the saved URL with an `<m-booking-link-mention>` chip (see Mentions), not a
-  bare URL. If the same proposal is already approved, do not ask again.
-
-- Before reaching for `SendEmail` or `CreateCalendarEvent`, look at where the newest prompt came
+static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `CreateCalendarEvent`, look at where the newest prompt came
   from. The context block names a conversation parent when that prompt was posted in a
   channel or document thread instead of typed in the agent session view. It is decided per
   prompt, not per session: the same session can be driven from both places, so check the
@@ -140,6 +130,13 @@ asking for confirmation in prose first, and asks questions with AskUser.";
 /// agent finishes user tools in the turn through a review elicitation.
 pub static SESSION_PROMPT: StaticPrompt<'static> =
     StaticPrompt::borrowed(TITLE, SESSION_INSTRUCTIONS, SESSION_INTENT);
+
+/// Saved reviews return immediately instead of holding an elicitation open.
+pub static CODE_MODE_SESSION_PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
+    TITLE,
+    include_str!("user_tools/code_mode.md"),
+    "Present editable drafts without blocking the conversation; user actions arrive separately.",
+);
 
 #[cfg(test)]
 mod test;

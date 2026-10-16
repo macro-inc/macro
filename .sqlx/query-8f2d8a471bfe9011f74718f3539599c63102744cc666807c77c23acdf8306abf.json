@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session_review SET record = $4, revision = $5 WHERE id = $1 AND agent_session_id = $2 AND revision = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f2d8a471bfe9011f74718f3539599c63102744cc666807c77c23acdf8306abf"
+}

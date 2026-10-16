@@ -12,6 +12,7 @@ export {
 } from './entity-action-context';
 export { makeAddTagAction } from './make-add-tag-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
+export { makeChannelPictureAction } from './make-channel-picture-action';
 export { makeCopyAction } from './make-copy-action';
 export { makeCopyBranchNameAction } from './make-copy-branch-name-action';
 export { makeCopyEntityIdAction } from './make-copy-entity-id-action';

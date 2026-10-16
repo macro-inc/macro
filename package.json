@@ -69,6 +69,7 @@
 			"apps/web",
 			"apps/marketing",
 			"packages/observability",
+			"packages/code-mode-sdk",
 			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/machine",
@@ -80,7 +81,8 @@
 			"services/bots/stripe-payment-bot",
 			"services/lexical-service",
 			"packages/spreadsheet",
-			"vendor/ironcalc/pkg"
+			"vendor/ironcalc/pkg",
+			"packages/sdk-docs"
 		],
 		"catalog": {
 			"loro-crdt": "1.16.3"

@@ -1,3 +1,4 @@
+mod concurrency;
 use super::*;
 use axum::{
     Json, Router,
@@ -43,26 +44,6 @@ fn trial_payload_requires_no_coupon_and_works_without_metadata() {
     assert_eq!(json["line_items"][0]["quantity"], 1);
     assert_eq!(json["success_url"], input.success_url);
     assert_eq!(json["cancel_url"], input.cancel_url);
-}
-
-#[test]
-fn an_open_trial_is_reused_only_for_the_same_team_and_return_destinations() {
-    let mut input = request();
-    input.metadata.insert("team_id".into(), "team-first".into());
-    let session = stripe::CheckoutSession {
-        success_url: Some(input.success_url.clone()),
-        cancel_url: Some(input.cancel_url.clone()),
-        metadata: Some(input.metadata.clone()),
-        ..Default::default()
-    };
-    assert!(trial_session_matches(&session, &input));
-    input
-        .metadata
-        .insert("team_id".into(), "team-second".into());
-    assert!(!trial_session_matches(&session, &input));
-    input.metadata.insert("team_id".into(), "team-first".into());
-    input.success_url = "https://dev.macro.com/app/onboarding?subscriptionSuccess=true".into();
-    assert!(!trial_session_matches(&session, &input));
 }
 
 #[test]
@@ -172,7 +153,8 @@ fn existing_session(status: stripe::CheckoutSessionStatus) -> stripe::CheckoutSe
         url: Some("https://checkout.stripe.com/existing".into()),
         success_url: Some(input.success_url),
         cancel_url: Some(input.cancel_url),
-        metadata: Some([(TRIAL_SESSION_MARKER.into(), "30".into())].into()),
+        metadata: Some([("checkout_terms".into(), "same-terms".into())].into()),
+        mode: stripe::CheckoutSessionMode::Subscription,
         ..Default::default()
     }
 }
@@ -183,54 +165,114 @@ fn page(sessions: Vec<stripe::CheckoutSession>, more: bool) -> serde_json::Value
 
 #[tokio::test]
 async fn reopening_checkout_reuses_the_existing_trial_link() {
-    let (gateway, stub, task) = stub_gateway(vec![page(
-        vec![existing_session(stripe::CheckoutSessionStatus::Open)],
-        false,
-    )])
+    let (gateway, stub, task) = stub_gateway(vec![
+        page(
+            vec![existing_session(stripe::CheckoutSessionStatus::Open)],
+            false,
+        ),
+        empty_history(),
+    ])
     .await;
     let attempt = gateway
-        .trial_attempt(&"cus_test".parse().unwrap(), &request())
+        .session_attempt(
+            &"cus_test".parse().unwrap(),
+            "same-terms",
+            CheckoutTerms::Trial,
+        )
         .await
         .unwrap();
     task.abort();
     assert!(
-        matches!(attempt, TrialSessionAttempt::Reuse(url) if url == "https://checkout.stripe.com/existing")
+        matches!(attempt, SessionAttempt::Reuse(url) if url == "https://checkout.stripe.com/existing")
     );
-    assert_eq!(stub.requests.lock().unwrap().len(), 1);
+    assert_eq!(stub.requests.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
 async fn expired_checkout_has_a_stable_new_idempotency_key() {
-    let (gateway, _, task) = stub_gateway(vec![page(
-        vec![existing_session(stripe::CheckoutSessionStatus::Expired)],
-        false,
-    )])
+    let (gateway, _, task) = stub_gateway(vec![
+        page(
+            vec![existing_session(stripe::CheckoutSessionStatus::Expired)],
+            false,
+        ),
+        empty_history(),
+    ])
     .await;
     let attempt = gateway
-        .trial_attempt(&"cus_test".parse().unwrap(), &request())
+        .session_attempt(
+            &"cus_test".parse().unwrap(),
+            "same-terms",
+            CheckoutTerms::Trial,
+        )
         .await
         .unwrap();
     task.abort();
     assert!(
-        matches!(attempt, TrialSessionAttempt::Create(key) if key == "onboarding-trial-cus_test-after-cs_test_existing")
+        matches!(attempt, SessionAttempt::Create(key) if key == "subscription-checkout-cus_test-after-cs_test_existing")
     );
 }
 
 #[tokio::test]
-async fn checkout_completed_during_history_lookup_cannot_be_created_again() {
-    let (gateway, _, task) = stub_gateway(vec![page(
-        vec![existing_session(stripe::CheckoutSessionStatus::Complete)],
-        false,
-    )])
-    .await;
-    let attempt = gateway
-        .trial_attempt(&"cus_test".parse().unwrap(), &request())
-        .await;
-    task.abort();
+async fn completed_checkout_must_have_a_terminal_subscription_before_paid_replacement() {
+    for (status, blocked) in [
+        (stripe::SubscriptionStatus::Active, true),
+        (stripe::SubscriptionStatus::PastDue, true),
+        (stripe::SubscriptionStatus::Canceled, false),
+        (stripe::SubscriptionStatus::IncompleteExpired, false),
+    ] {
+        let subscription = stripe::Subscription {
+            id: "sub_existing".parse().unwrap(),
+            customer: stripe::Expandable::Id("cus_test".parse().unwrap()),
+            status,
+            ..Default::default()
+        };
+        let mut session = existing_session(stripe::CheckoutSessionStatus::Complete);
+        session.subscription = Some(stripe::Expandable::Id(subscription.id.clone()));
+        let (gateway, stub, task) = stub_gateway(vec![
+            page(vec![session], false),
+            serde_json::to_value(&subscription).unwrap(),
+            serde_json::json!({"object":"list", "url":"/v1/subscriptions", "data":[subscription], "has_more":false}),
+        ]).await;
+        let attempt = gateway
+            .session_attempt(&"cus_test".parse().unwrap(), "paid", CheckoutTerms::Paid)
+            .await;
+        if blocked {
+            assert!(matches!(
+                attempt,
+                Err(StripeCheckoutError::ExistingSubscription)
+            ));
+        } else {
+            assert!(
+                matches!(attempt, Ok(SessionAttempt::Create(key)) if key == "subscription-checkout-cus_test-after-cs_test_existing")
+            );
+        }
+        assert!(stub.requests.lock().unwrap()[1].starts_with("GET /v1/subscriptions/sub_existing"));
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn a_new_trial_is_rejected_if_another_checkout_completed_and_canceled_during_validation() {
+    let subscription = stripe::Subscription {
+        id: "sub_existing".parse().unwrap(),
+        customer: stripe::Expandable::Id("cus_test".parse().unwrap()),
+        status: stripe::SubscriptionStatus::Canceled,
+        ..Default::default()
+    };
+    let mut session = existing_session(stripe::CheckoutSessionStatus::Complete);
+    session.subscription = Some(stripe::Expandable::Id(subscription.id.clone()));
+    let (gateway, _, task) = stub_gateway(vec![
+        page(vec![session], false),
+        serde_json::to_value(&subscription).unwrap(),
+        serde_json::json!({"object":"list", "url":"/v1/subscriptions", "data":[subscription], "has_more":false}),
+    ]).await;
     assert!(matches!(
-        attempt,
-        Err(StripeCheckoutError::UnexpectedResponse)
+        gateway
+            .session_attempt(&"cus_test".parse().unwrap(), "trial", CheckoutTerms::Trial)
+            .await,
+        Err(StripeCheckoutError::TrialUnavailable)
     ));
+    task.abort();
 }
 
 #[tokio::test]
@@ -240,16 +282,19 @@ async fn changed_team_expires_the_old_trial_before_creating_another() {
     let (gateway, stub, task) = stub_gateway(vec![
         page(vec![session], false),
         serde_json::to_value(expired).unwrap(),
+        empty_history(),
     ])
     .await;
-    let mut input = request();
-    input.metadata.insert("team_id".into(), "new-team".into());
     let attempt = gateway
-        .trial_attempt(&"cus_test".parse().unwrap(), &input)
+        .session_attempt(
+            &"cus_test".parse().unwrap(),
+            "different-terms",
+            CheckoutTerms::Trial,
+        )
         .await
         .unwrap();
     task.abort();
-    assert!(matches!(attempt, TrialSessionAttempt::Create(_)));
+    assert!(matches!(attempt, SessionAttempt::Create(_)));
     assert_eq!(
         stub.requests.lock().unwrap()[1],
         "POST /v1/checkout/sessions/cs_test_existing/expire"
@@ -268,14 +313,19 @@ async fn trial_lookup_reads_past_a_page_of_unrelated_checkouts() {
             vec![existing_session(stripe::CheckoutSessionStatus::Open)],
             false,
         ),
+        empty_history(),
     ])
     .await;
     let attempt = gateway
-        .trial_attempt(&"cus_test".parse().unwrap(), &request())
+        .session_attempt(
+            &"cus_test".parse().unwrap(),
+            "same-terms",
+            CheckoutTerms::Trial,
+        )
         .await
         .unwrap();
     task.abort();
-    assert!(matches!(attempt, TrialSessionAttempt::Reuse(_)));
+    assert!(matches!(attempt, SessionAttempt::Reuse(_)));
     assert!(stub.requests.lock().unwrap()[1].contains("starting_after=cs_test_unrelated"));
 }
 
@@ -302,7 +352,7 @@ async fn history_includes_canceled_subscriptions_and_every_page() {
         .unwrap();
     task.abort();
     assert!(history.has_previous_subscription);
-    assert!(history.has_active_subscription);
+    assert!(history.has_existing_subscription);
     let requests = stub.requests.lock().unwrap();
     assert!(
         requests
@@ -310,4 +360,72 @@ async fn history_includes_canceled_subscriptions_and_every_page() {
             .all(|request| request.contains("status=all"))
     );
     assert!(requests[1].contains("starting_after=sub_canceled"));
+}
+
+fn empty_history() -> serde_json::Value {
+    serde_json::json!({"object":"list", "url":"/v1/subscriptions", "data":[], "has_more":false})
+}
+
+#[tokio::test]
+async fn only_terminal_subscriptions_allow_a_replacement() {
+    for (status, blocked) in [
+        (stripe::SubscriptionStatus::Active, true),
+        (stripe::SubscriptionStatus::Trialing, true),
+        (stripe::SubscriptionStatus::PastDue, true),
+        (stripe::SubscriptionStatus::Unpaid, true),
+        (stripe::SubscriptionStatus::Paused, true),
+        (stripe::SubscriptionStatus::Incomplete, true),
+        (stripe::SubscriptionStatus::Canceled, false),
+        (stripe::SubscriptionStatus::IncompleteExpired, false),
+    ] {
+        let subscription = stripe::Subscription {
+            id: "sub_test".parse().unwrap(),
+            customer: stripe::Expandable::Id("cus_test".parse().unwrap()),
+            status,
+            ..Default::default()
+        };
+        let (gateway, _, task) = stub_gateway(vec![serde_json::json!({
+            "object":"list", "url":"/v1/subscriptions", "data":[subscription], "has_more":false
+        })])
+        .await;
+        let history = subscription_history(&gateway.stripe, &"cus_test".parse().unwrap())
+            .await
+            .unwrap();
+        task.abort();
+        assert_eq!(history.has_existing_subscription, blocked, "{status:?}");
+        assert!(history.has_previous_subscription);
+    }
+}
+
+#[tokio::test]
+async fn legacy_open_sessions_on_later_pages_are_expired_before_reusing_the_current_offer() {
+    let matching = existing_session(stripe::CheckoutSessionStatus::Open);
+    let mut legacy = existing_session(stripe::CheckoutSessionStatus::Open);
+    legacy.id = "cs_test_legacy".parse().unwrap();
+    legacy.metadata = None;
+    let mut expired = legacy.clone();
+    expired.status = Some(stripe::CheckoutSessionStatus::Expired);
+    let (gateway, stub, task) = stub_gateway(vec![
+        page(vec![matching], true),
+        page(vec![legacy], false),
+        serde_json::to_value(expired).unwrap(),
+        empty_history(),
+    ])
+    .await;
+    assert!(matches!(
+        gateway
+            .session_attempt(
+                &"cus_test".parse().unwrap(),
+                "same-terms",
+                CheckoutTerms::Paid
+            )
+            .await
+            .unwrap(),
+        SessionAttempt::Reuse(_)
+    ));
+    assert_eq!(
+        stub.requests.lock().unwrap()[2],
+        "POST /v1/checkout/sessions/cs_test_legacy/expire"
+    );
+    task.abort();
 }

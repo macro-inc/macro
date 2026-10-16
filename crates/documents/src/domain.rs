@@ -66,3 +66,7 @@ pub mod service;
 
 #[cfg(feature = "ports")]
 pub mod purge;
+
+/// Current Markdown and extracted text, authorized by document view capability.
+#[cfg(feature = "ports")]
+pub mod text;

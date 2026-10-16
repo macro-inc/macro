@@ -43,6 +43,8 @@ export type FakeOnboardingWorld = {
   connectionFailures: ('pipedream' | 'native' | 'github')[];
   githubStars: number | undefined;
   inviteOffer: InviteOffer | null;
+  trialEligible: boolean;
+  existingSubscription: boolean;
   planCatalog: AiPlanCatalog;
   /** License refreshes left before the Stripe webhook lands; undefined when none is pending. */
   webhookPollsRemaining: number | undefined;
@@ -58,6 +60,7 @@ export type FakeOnboardingWorld = {
       | 'createTeam'
       | 'joinTeam'
       | 'planCatalog'
+      | 'trialEligibility'
       | 'checkout'
       | 'completion',
       string
@@ -96,6 +99,8 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     connectionFailures: [],
     githubStars: 12_345,
     inviteOffer: null,
+    trialEligible: true,
+    existingSubscription: false,
     planCatalog: {
       plans: [
         {
@@ -317,6 +322,16 @@ export function createFakeOnboarding(
       });
     },
     createInviteOffer: () => () => ({ t: 'ready', value: world.inviteOffer }),
+    createTrialEligibility: () => ({
+      eligibility: () =>
+        loadable('trialEligibility', () => world.trialEligible),
+      existingSubscription: () => world.existingSubscription,
+      managing: () => false,
+      manage: async () => {
+        call('manageSubscription');
+      },
+      retry: () => call('retryTrialEligibility'),
+    }),
     createPlanCatalog: () => ({
       catalog: () => loadable('planCatalog', () => world.planCatalog),
       retry: () => call('retryPlanCatalog'),

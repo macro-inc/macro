@@ -444,6 +444,7 @@ where
             | HarnessCommand::ConversationMessage(_)
             | HarnessCommand::Turn(_)
             | HarnessCommand::ToolApproval(_)
+            | HarnessCommand::PresentTool { .. }
             | HarnessCommand::SessionStopped { .. }
             | HarnessCommand::Delete => {}
             HarnessCommand::SetSandboxSize(_) => {
@@ -742,6 +743,15 @@ where
                     })
                 })
                 .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::PresentTool {
+                actor,
+                presentation,
+            } => {
+                self.sessions
+                    .present_tool(session_id, actor, presentation)
+                    .await?;
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::ToolApproval(change) => {

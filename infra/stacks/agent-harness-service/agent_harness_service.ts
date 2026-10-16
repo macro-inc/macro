@@ -371,8 +371,9 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               // Daytona cleanup can make two 30-second stop attempts. Give the
               // singleton time to release sandbox capacity before ECS kills it.
               stopTimeout: 120,
-              cpu: 1024,
-              memory: 2048,
+              // Shared by the harness and up to eight restricted Deno children.
+              cpu: 2048,
+              memory: 4096,
               environment: [
                 ...containerEnvVars,
                 { name: 'CLAUDE_OAUTH_KMS_KEY_ID', value: claudeOauthKey.arn },

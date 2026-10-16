@@ -246,9 +246,19 @@ impl MacroApiTokenSigner {
     }
 }
 
-impl MacroApiTokens for MacroApiTokenSigner {
+impl MacroApiTokenSigner {
+    /// Mint a fresh owner token with a bounded lifetime for a short execution.
     #[tracing::instrument(skip_all, err, fields(%owner))]
-    async fn mint(&self, owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
+    pub async fn mint_for(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        lifetime_seconds: usize,
+    ) -> Result<String, EgressError> {
+        if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
+            return Err(EgressError::Internal(rootcause::report!(
+                "invalid token lifetime"
+            )));
+        }
         // The claims name the owner three ways - the FusionAuth root id, the
         // Macro user id, and their organization - and the session row only
         // carries the second, so the rest is read off their `User` row. An
@@ -282,12 +292,18 @@ impl MacroApiTokens for MacroApiTokenSigner {
             organization_id,
             issuer: self.issuer.clone(),
             private_key: self.private_key.clone(),
-            expiry_seconds: MINTED_TOKEN_LIFETIME_SECONDS,
+            expiry_seconds: lifetime_seconds,
         })
         .map_err(|error| {
             EgressError::Internal(rootcause::report!(
                 "could not sign a Macro API token: {error}"
             ))
         })
+    }
+}
+
+impl MacroApiTokens for MacroApiTokenSigner {
+    async fn mint(&self, owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
+        self.mint_for(owner, MINTED_TOKEN_LIFETIME_SECONDS).await
     }
 }

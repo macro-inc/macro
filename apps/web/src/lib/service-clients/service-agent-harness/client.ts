@@ -21,6 +21,7 @@ import type {
   CreateAgentSessionResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
+  ExecutionRecord,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
@@ -321,6 +322,13 @@ export const agentHarnessServiceClient = {
    * The session's latest captured changes: changed files with statuses and
    * line counts, plus how the latest capture attempt went.
    */
+  getCodeExecution(sessionId: string, executionId: string) {
+    return fetchWithToken<ExecutionRecord>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/code-executions/${executionId}`,
+      { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
   getChanges(sessionId: string) {
     return fetchWithToken<AgentSessionChangesResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/changes`,

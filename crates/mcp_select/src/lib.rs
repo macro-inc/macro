@@ -352,6 +352,7 @@ where
 pub struct CombinedToolSet<T, Mcp = UserMcpTools> {
     static_tools: Arc<AsyncToolCollection<T>>,
     mcp_tools: Mcp,
+    eager_mcp_tools: Vec<String>,
 }
 
 impl<T, Mcp> CombinedToolSet<T, Mcp> {
@@ -360,7 +361,19 @@ impl<T, Mcp> CombinedToolSet<T, Mcp> {
         Self {
             static_tools,
             mcp_tools,
+            eager_mcp_tools: Vec::new(),
         }
+    }
+
+    /// Advertise these exact MCP names on the first model request when the
+    /// connected servers provide them. All other MCP tools remain searchable.
+    pub fn with_eager_mcp_tools(mut self, names: &[&str]) -> Self {
+        self.eager_mcp_tools = names.iter().map(|name| (*name).to_owned()).collect();
+        self
+    }
+
+    fn is_eager(&self, name: &str) -> bool {
+        self.eager_mcp_tools.iter().any(|eager| eager == name)
     }
 }
 
@@ -384,15 +397,31 @@ impl<T: Send + Sync + 'static, Mcp: ToolSet<T>> ToolSet<T> for CombinedToolSet<T
     }
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {
-        // Only the static (first-party) tools are sent on every request. MCP
-        // tools are loaded on demand via the `SearchTools` tool — they are
-        // surfaced through `searchable_catalog`, not here — so a large or
-        // growing MCP catalog never bloats the request.
-        self.static_tools.request_schemas()
+        if self.eager_mcp_tools.is_empty() {
+            return self.static_tools.request_schemas();
+        }
+        let mut schemas = self.static_tools.request_schemas().unwrap_or_default();
+        schemas.extend(
+            self.mcp_tools
+                .searchable_catalog()
+                .into_iter()
+                .filter(|tool| self.is_eager(&tool.name))
+                .map(|tool| RequestSchema {
+                    name: tool.name,
+                    description: tool.description,
+                    schema: tool.schema,
+                }),
+        );
+        (!schemas.is_empty()).then_some(schemas)
     }
 
     fn searchable_catalog(&self) -> Vec<SearchableTool> {
         ToolSet::<T>::searchable_catalog(&self.mcp_tools)
+            .into_iter()
+            // Catalog entries are deferred by providers that use tool search,
+            // even when their schemas are also present in request_schemas.
+            .filter(|tool| !self.is_eager(&tool.name))
+            .collect()
     }
 
     fn searchable_toolset_names(&self) -> Vec<String> {

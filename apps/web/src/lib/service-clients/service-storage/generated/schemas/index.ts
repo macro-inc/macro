@@ -749,6 +749,8 @@ export * from './documentSyncEditor';
 export * from './documentSyncEditorOnBehalfOf';
 export * from './documentTeamShareResponse';
 export * from './documentTeamShareResponseTeamId';
+export * from './documentTextContent';
+export * from './documentTextContentText';
 export * from './editAnchorRequest';
 export * from './editAnchorRequestOneOf';
 export * from './editAnchorRequestOneOfAllOf';

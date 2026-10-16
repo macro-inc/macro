@@ -62,10 +62,12 @@ import {
   renameChannelHandler,
   shareWithChannelHandler,
 } from './ChannelMutations';
+import { describeCodeToolsHandler, executeCodeHandler } from './CodeMode';
 import {
   dispatchCodingAgentHandler,
   listCodingAgentsHandler,
 } from './CodingAgents';
+import { decideHandler, generateObjectHandler } from './Cognition';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createSkillHandler } from './CreateSkill';
@@ -187,6 +189,8 @@ import {
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
+  ExecuteCode: executeCodeHandler,
+  DescribeCodeTools: describeCodeToolsHandler,
   DispatchCodingAgent: dispatchCodingAgentHandler,
   ListCodingAgents: listCodingAgentsHandler,
   ReadSpreadsheet: readSpreadsheetHandler,
@@ -272,6 +276,8 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateSkill: createSkillHandler,
   UploadFile: uploadFileHandler,
   GenerateImage: generateImageHandler,
+  GenerateObject: generateObjectHandler,
+  Decide: decideHandler,
   CreateProject: createProjectHandler,
   CreateTag: createTagHandler,
   DeleteTag: deleteTagHandler,

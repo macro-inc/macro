@@ -1,8 +1,10 @@
-use super::*;
-
 #[test]
 fn booking_links_require_a_reply_to_the_proposal_in_chat_and_sessions() {
-    for instructions in [INSTRUCTIONS, SESSION_INSTRUCTIONS] {
+    for instructions in [
+        crate::TOOL_USE_PROMPT.to_string(),
+        crate::SESSION_TOOL_USE_PROMPT.to_string(),
+        crate::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
+    ] {
         for rule in [
             "Booking links use conversational confirmation",
             "never ask for IDs, revisions or JSON",
@@ -16,4 +18,12 @@ fn booking_links_require_a_reply_to_the_proposal_in_chat_and_sessions() {
             assert!(instructions.contains(rule), "Missing booking rule: {rule}");
         }
     }
+}
+
+#[test]
+fn code_mode_reviews_leave_questions_on_acp() {
+    let instructions = crate::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+    assert!(instructions.contains("existing ACP question interaction (`AskUser` in Macro)"));
+    assert!(instructions.contains("not a saved review"));
+    assert!(instructions.contains("email drafts and calendar proposals"));
 }

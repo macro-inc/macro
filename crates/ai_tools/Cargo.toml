@@ -12,6 +12,7 @@ favorites = { path = "../favorites", features = ["ai_tools", "postgres"] }
 forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling"] }
 routines = { path = "../routines" }
 macro_auth = { path = "../macro_auth" }
+agent_code_mode = { path = "../agent_code_mode" }
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
@@ -36,6 +37,7 @@ calendar_events = { path = "../calendar_events", features = ["ai_tools", "call-m
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 channels = { path = "../channels", features = ["ai_tools", "outbound"] }
+cognition = { path = "../cognition" }
 chrono.workspace = true
 dateparser.workspace = true
 connection = { path = "../connection", default-features = false, features = [

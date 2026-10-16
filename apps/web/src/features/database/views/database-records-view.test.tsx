@@ -310,7 +310,7 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
       />
     ));
-    fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
     const input = screen.getByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(input, { target: { value: 'Saved once' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -887,7 +887,7 @@ describe('database table view', () => {
           boardPositions={unplacedCards}
         />
       ));
-      fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
       const name = screen.getByRole('textbox', { name: 'Edit Name' });
       fireEvent.input(name, { target: { value: 'Created from draft' } });
       fireEvent.keyDown(name, { key: 'Enter' });
@@ -982,7 +982,7 @@ describe('database table view', () => {
         boardPositions={unplacedCards}
       />
     ));
-    fireEvent.click(screen.getByRole('button', { name: /Name: Unnamed/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
     const name = screen.getByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(name, { target: { value: 'Created from draft' } });
     fireEvent.keyDown(name, { key: 'Enter' });
@@ -1442,7 +1442,7 @@ describe('database table view', () => {
       />
     ));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Name: Unnamed. Click to edit' })
+      screen.getByRole('button', { name: 'Name: Empty. Click to edit' })
     );
     const draft = await screen.findByRole('textbox', { name: 'Edit Name' });
     fireEvent.input(draft, { target: { value: 'Outside view' } });
@@ -2439,7 +2439,7 @@ describe('database table view', () => {
     fireEvent.click(
       within(screen.getByRole('grid', { name: 'Playground' })).getByRole(
         'button',
-        { name: 'Name: Unnamed. Click to edit' }
+        { name: 'Name: Empty. Click to edit' }
       )
     );
     const name = await screen.findByRole('textbox', { name: 'Edit Name' });
@@ -2457,9 +2457,9 @@ describe('database table view', () => {
         screen.getAllByRole('button', { name: /Name: First record/ })
       ).toHaveLength(1)
     );
-    expect(
-      screen.getByRole('button', { name: 'Name: Unnamed. Click to edit' })
-    ).toBeTruthy();
+    const next = screen.getByRole('textbox', { name: 'Edit Name' });
+    expect(document.activeElement).toBe(next);
+    expect((next as HTMLInputElement).value).toBe('');
     expect(fixture.source.write).toHaveBeenCalledExactlyOnceWith(
       { kind: 'create', values: { title: 'First record' } },
       1,

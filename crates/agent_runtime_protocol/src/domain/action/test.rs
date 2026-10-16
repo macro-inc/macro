@@ -547,3 +547,26 @@ fn a_compact_command_with_attachments_is_still_a_plain_prompt() {
     // control carries text and nothing else.
     assert_eq!(AgentAction::control_from_runtime(&message), None);
 }
+
+#[test]
+fn context_prompt_survives_queue_persistence_without_becoming_visible_text() {
+    let original = AgentAction::context_prompt("100 outcome unconfirmed; review saved.");
+    let persisted = serde_json::to_value(&original).unwrap();
+    let restored: AgentAction = serde_json::from_value(persisted).unwrap();
+    assert_eq!(original, restored);
+    assert!(restored.occupies_turn());
+    let AgentAction::Prompt(prompt) = restored else {
+        panic!("expected prompt");
+    };
+    assert!(prompt.prompt.is_empty());
+    assert_eq!(
+        prompt.private_context.as_deref(),
+        Some("100 outcome unconfirmed; review saved.")
+    );
+    let legacy: AgentAction =
+        serde_json::from_value(serde_json::json!({"type":"prompt", "prompt":"hello"})).unwrap();
+    let AgentAction::Prompt(prompt) = legacy else {
+        panic!("expected prompt");
+    };
+    assert!(prompt.private_context.is_none());
+}

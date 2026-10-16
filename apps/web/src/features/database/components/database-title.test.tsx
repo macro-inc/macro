@@ -4,16 +4,31 @@ import { DatabaseTitle } from './database-title';
 
 afterEach(cleanup);
 
+function setup(name = 'Untitled database', canEdit = true) {
+  let edit: (() => void) | undefined;
+  const rename = vi.fn();
+  render(() => (
+    <DatabaseTitle
+      name={name}
+      canEdit={canEdit}
+      onRename={rename}
+      onEditReady={(start) => (edit = start)}
+    />
+  ));
+  return { rename, edit: () => edit?.() };
+}
+
 describe('database title', () => {
-  it('focuses and selects a new database title without another click', () => {
-    render(() => (
-      <DatabaseTitle
-        name="Untitled database"
-        canEdit
-        autoFocus
-        onRename={vi.fn()}
-      />
-    ));
+  it('shows a static title without taking focus on open', () => {
+    setup();
+    expect(screen.getByText('Untitled database')).toBeTruthy();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('focuses and selects the title only when Rename is requested', () => {
+    const { edit } = setup();
+    edit();
     const input = screen.getByRole('textbox', {
       name: 'Database name',
     }) as HTMLInputElement;
@@ -22,91 +37,45 @@ describe('database title', () => {
     expect(input.selectionEnd).toBe('Untitled database'.length);
   });
 
-  it('saves on Enter and then enters the grid', async () => {
-    const rename = vi.fn();
-    const enterGrid = vi.fn();
-    render(() => (
-      <DatabaseTitle
-        name="Untitled database"
-        canEdit
-        autoFocus
-        onRename={rename}
-        onConfirm={enterGrid}
-      />
-    ));
+  it('saves on Enter and returns to a static label', () => {
+    const { rename, edit } = setup();
+    edit();
     const input = screen.getByRole('textbox', { name: 'Database name' });
     fireEvent.input(input, { target: { value: ' Summer offsite ' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(rename).toHaveBeenCalledExactlyOnceWith('Summer offsite');
-    await Promise.resolve();
-    expect(enterGrid).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('textbox')).toBeNull();
   });
 
   it('does not save Enter while composing the title', () => {
-    const rename = vi.fn();
-    const enterGrid = vi.fn();
-    render(() => (
-      <DatabaseTitle
-        name="Untitled database"
-        canEdit
-        autoFocus
-        onRename={rename}
-        onConfirm={enterGrid}
-      />
-    ));
+    const { rename, edit } = setup();
+    edit();
     const input = screen.getByRole('textbox', { name: 'Database name' });
     fireEvent.input(input, { target: { value: '計画' } });
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
     expect(rename).not.toHaveBeenCalled();
-    expect(enterGrid).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(input);
   });
 
-  it('discards the draft on Escape without entering the grid', async () => {
-    const rename = vi.fn();
-    const enterGrid = vi.fn();
-    render(() => (
-      <DatabaseTitle
-        name="Projects"
-        canEdit
-        autoFocus
-        onRename={rename}
-        onConfirm={enterGrid}
-      />
-    ));
-    const input = screen.getByRole('textbox') as HTMLInputElement;
+  it('discards the draft on Escape and can reopen Rename', () => {
+    const { rename, edit } = setup('Projects');
+    edit();
+    const input = screen.getByRole('textbox');
     fireEvent.input(input, { target: { value: 'Draft title' } });
     fireEvent.keyDown(input, { key: 'Escape' });
-    await Promise.resolve();
     expect(rename).not.toHaveBeenCalled();
-    expect(enterGrid).not.toHaveBeenCalled();
-    expect(input.value).toBe('Projects');
-  });
-
-  it('focuses the title when the host asks to rename', () => {
-    let edit: (() => void) | undefined;
-    render(() => (
-      <DatabaseTitle
-        name="Projects"
-        canEdit
-        onRename={vi.fn()}
-        onEditReady={(start) => (edit = start)}
-      />
-    ));
-    edit?.();
-    expect(document.activeElement).toBe(
-      screen.getByRole('textbox', { name: 'Database name' })
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.getByText('Projects')).toBeTruthy();
+    edit();
+    expect(document.activeElement).toBe(screen.getByRole('textbox'));
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
+      'Projects'
     );
   });
 
-  it('shows a plain name without edit access', () => {
-    render(() => (
-      <DatabaseTitle
-        name="Shared database"
-        canEdit={false}
-        onRename={vi.fn()}
-      />
-    ));
+  it('keeps the title read-only without edit access', () => {
+    const { edit } = setup('Shared database', false);
+    edit();
     expect(screen.getByText('Shared database')).toBeTruthy();
     expect(screen.queryByRole('textbox')).toBeNull();
   });

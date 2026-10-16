@@ -589,3 +589,97 @@ fn booking_management_has_mcp_and_chat_parity() {
         }
     }
 }
+
+#[test]
+fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery() {
+    let standard = tools_for(AiHost::AgentSession);
+    let direct = tools_for_agent_code_mode();
+    let sdk = code_mode_tools();
+    assert!(direct.toolset.tools.len() < standard.toolset.tools.len());
+    for name in ["NameSearch", "ReadContent", "ListEntities"] {
+        assert!(standard.toolset.tools.contains_key(name), "{name}");
+        assert!(sdk.tools.contains_key(name), "{name}");
+        assert!(!direct.toolset.tools.contains_key(name), "{name}");
+        assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
+    }
+    for name in [
+        "DisplayResults",
+        "ContentSearch",
+        "CreateDocument",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
+        "GenerateImage",
+        "CreateRoutine",
+        "EditSpreadsheet",
+        "EditPresentation",
+        "EditDocument",
+        "Subagent",
+        "DispatchCodingAgent",
+        "SearchTools",
+        "LoadTools",
+        "DiscoverConnectors",
+        "BashCodeExecution",
+        "TextEditorCodeExecution",
+    ] {
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
+    }
+    for name in standard.toolset.user_tools.keys() {
+        assert!(direct.toolset.user_tools.contains_key(name), "{name}");
+        if matches!(name.as_str(), "SendEmail" | "CreateCalendarEvent") {
+            assert!(!direct.toolset.tools.contains_key(name), "{name}");
+            assert!(
+                !direct.deferred.iter().any(|tool| tool.name == *name),
+                "{name}"
+            );
+        } else {
+            assert!(direct.toolset.tools.contains_key(name), "{name}");
+        }
+    }
+    let standard_deferred =
+        DeferredToolSet::new(standard.toolset.clone(), standard.deferred.clone());
+    assert!(
+        standard_deferred
+            .request_schemas()
+            .unwrap()
+            .iter()
+            .any(|schema| schema.name == "ListEntities")
+    );
+    let deferred = DeferredToolSet::new(direct.toolset.clone(), direct.deferred.clone());
+    let eager = deferred.request_schemas().unwrap();
+    assert!(!eager.iter().any(|schema| schema.name == "ListEntities"));
+    for name in ["ContentSearch", "EditDocument"] {
+        assert!(eager.iter().any(|schema| schema.name == name), "{name}");
+    }
+    assert!(
+        deferred
+            .searchable_catalog()
+            .iter()
+            .all(|tool| tool.name != "ListEntities")
+    );
+    assert!(deferred.routing_description("ListEntities").is_none());
+    assert!(deferred.routing_description("NameSearch").is_none());
+    assert!(
+        deferred
+            .searchable_catalog()
+            .iter()
+            .all(|t| t.name != "NameSearch")
+    );
+    for name in ["SendEmail", "CreateCalendarEvent"] {
+        assert!(standard.toolset.tools.contains_key(name));
+        assert!(sdk.tools.contains_key(name));
+        assert!(!eager.iter().any(|tool| tool.name == name));
+        assert!(deferred.routing_description(name).is_none());
+    }
+    let prompt = direct.prompt.to_string();
+    assert!(!prompt.contains("the turn waits while the user"));
+    assert!(!prompt.contains("you MUST use the `SendEmail` tool"));
+    assert!(prompt.contains("Do not wait for the user to act on a saved review"));
+    assert!(!prompt.contains("- ReadMetadata:"));
+    let routing = prompt::tool_usage::CODE_MODE_ROUTING.to_string();
+    assert!(prompt.contains(&routing));
+    assert!(!standard.prompt.to_string().contains(&routing));
+    for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
+        assert!(!tools_for(host).prompt.to_string().contains(&routing));
+    }
+}

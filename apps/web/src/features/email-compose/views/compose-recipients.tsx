@@ -21,6 +21,7 @@ type RowFocusHandlers = {
 function ComposeFieldRow(props: {
   label: string;
   children: JSX.Element;
+  trailing?: JSX.Element;
   fieldId?: RecipientFieldId;
   dragState?: () => DragState | null;
   onRecipientDrop?: (
@@ -75,6 +76,7 @@ function ComposeFieldRow(props: {
         {props.label}
       </div>
       <div class="flex-1 min-w-0">{props.children}</div>
+      {props.trailing}
     </div>
   );
 }
@@ -90,6 +92,7 @@ function recipientName(recipient: EmailRecipient) {
 }
 
 export function ComposeRecipients(props: {
+  actions?: JSX.Element;
   toRef?: (el: HTMLElement) => void;
   ccRef?: (el: HTMLElement) => void;
   bccRef?: (el: HTMLElement) => void;
@@ -261,6 +264,7 @@ export function ComposeRecipients(props: {
     <ComposeFieldRow
       label={label}
       fieldId={field}
+      trailing={field === 'to' ? props.actions : undefined}
       dragState={recipientDragState}
       onRecipientDrop={(recipient, sourceField) =>
         handleRecipientDrop(field, recipient, sourceField)

@@ -56,7 +56,8 @@ export function createInlineRename<Target, Failure>(options: {
     cancel: (restoreFocus: boolean) => {
       if (!pending()) finish(restoreFocus);
     },
-    save: async (restoreFocus: boolean) => {
+    /** With onSubmit, close and hand off focus as soon as validation passes. */
+    save: async (restoreFocus: boolean, onSubmit?: () => void) => {
       const current = target();
       if (current === undefined || pending()) return;
       const name = draft().trim();
@@ -72,17 +73,24 @@ export function createInlineRename<Target, Failure>(options: {
         return;
       }
       if (name === options.name(current)) {
-        finish(restoreFocus);
+        finish(onSubmit ? false : restoreFocus);
+        onSubmit?.();
         return;
       }
       const renaming = options.rename(current, name);
       setPending(true);
       setError('');
+      if (onSubmit) {
+        finish(false);
+        onSubmit();
+      }
       const renamed = await renaming;
       if (disposed) return;
       setPending(false);
       renamed.match(
-        () => finish(restoreFocus),
+        () => {
+          if (!onSubmit) finish(restoreFocus);
+        },
         (failure) => setError(options.failureMessage(failure))
       );
     },

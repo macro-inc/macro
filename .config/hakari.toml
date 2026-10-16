@@ -43,8 +43,6 @@ workspace-members = [
     # Standalone protocol library. Until a deployable service consumes it,
     # ACP's schema features must not alter unrelated service build/codegen closures.
     "agent_runtime_protocol",
-    # No deployable consumer yet; integrate with workspace-hack when service wiring lands.
-    "feature_flags",
     "xtask",
     # xtask command crates: dev-only automation split out of xtask so each
     # `cargo x <cmd>` compiles only its own dependency set.

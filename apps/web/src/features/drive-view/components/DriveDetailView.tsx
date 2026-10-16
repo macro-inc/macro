@@ -21,12 +21,12 @@ import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
 import { useDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
+import { FileDetailBreadcrumbItem } from '../views/FileDetailBreadcrumbItem';
 import {
   MarkdownDetail,
   MarkdownDetailBodyState,
 } from '../views/MarkdownDetail';
 import { DriveBreadcrumbsOutlet } from './DriveBreadcrumbs';
-import { FileDetailBreadcrumbItem } from './FileDetailBreadcrumbItem';
 
 function DriveDetailAncestorBreadcrumbs(props: { orderOffset: number }) {
   const navigationStack = useDriveDetailNavigation();

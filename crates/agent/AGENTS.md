@@ -18,8 +18,8 @@ and usage metering.
 - `src/stream.rs`: `StreamPart`/`ChatCompletionStream`, the wire shape
   callers consume.
 - `src/completion.rs`: one-shot, non-looping completions (no tools).
-- `src/structured_output.rs`: prompted JSON generation for schema-conforming
-  output, used where providers don't support native structured output.
+- `src/structured_output.rs`: prompted JSON generation with offline schema
+  preflight and result validation; external schema references are rejected.
 
 ## Scope
 

@@ -33,6 +33,7 @@ export {
   type CreateCheckoutSessionArgs,
   useCreateBillingPortalMutation,
   useCreateCheckoutSessionMutation,
+  useTrialEligibilityQuery,
 } from './stripe-checkout';
 export type { UserInfoData } from './user-info';
 export {

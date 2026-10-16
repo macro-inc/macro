@@ -20,6 +20,14 @@ export function CanvasReadOnlyView(props: {
 }) {
   const [tool, setTool] = createSignal<'select' | 'pan'>('select');
   const [scale, setScale] = createSignal(props.editor.getCamera().scale);
+  const [hasSelection, setHasSelection] = createSignal(
+    props.editor.getSession().selectedIds.length > 0
+  );
+  onCleanup(
+    props.editor.subscribeSession((session) =>
+      setHasSelection(session.selectedIds.length > 0)
+    )
+  );
   onCleanup(props.editor.subscribeCamera((camera) => setScale(camera.scale)));
   let host!: HTMLDivElement;
   const zoom = (factor: number) =>
@@ -33,6 +41,11 @@ export function CanvasReadOnlyView(props: {
       ?.focus({ preventScroll: true });
   const fit = () =>
     props.editor.fitScene({
+      width: host.clientWidth,
+      height: host.clientHeight,
+    });
+  const fitSelection = () =>
+    props.editor.fitSelection({
       width: host.clientWidth,
       height: host.clientHeight,
     });
@@ -65,8 +78,10 @@ export function CanvasReadOnlyView(props: {
           return;
         }
         if (event.shiftKey) return;
-        if (event.key === '.') fit();
-        else if (event.key.toLowerCase() === 'v') setTool('select');
+        if (event.key === '.') {
+          if (hasSelection()) fitSelection();
+          else fit();
+        } else if (event.key.toLowerCase() === 'v') setTool('select');
         else if (event.key.toLowerCase() === 'h') setTool('pan');
         else return;
         event.preventDefault();
@@ -114,7 +129,13 @@ export function CanvasReadOnlyView(props: {
           focus();
         }}
       />
-      <CanvasZoomToolbar scale={scale()} onZoom={zoom} onFit={fit} />
+      <CanvasZoomToolbar
+        scale={scale()}
+        onZoom={zoom}
+        onFit={fit}
+        hasSelection={hasSelection()}
+        onFitSelection={fitSelection}
+      />
     </div>
   );
 }

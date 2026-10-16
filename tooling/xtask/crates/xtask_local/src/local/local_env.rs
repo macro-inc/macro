@@ -278,16 +278,34 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Shared AI tools call cognition from other service containers.
+        env.insert(
+            "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL".into(),
+            "http://document-cognition-service:8080".into(),
+        );
         // Historical indexing calls the processing service's scoped backfill API,
         // not the search query service. Both run on the local Compose network.
         env.insert(
             "OVERRIDE_SEARCH_PROCESSING_SERVICE_URL".into(),
             "http://search-processing-service:8080".into(),
         );
+        // The SDK also reaches these APIs from inside service containers.
+        env.insert(
+            "OVERRIDE_NOTIFICATION_SERVICE_URL".into(),
+            "http://notification-service:8080".into(),
+        );
+        env.insert(
+            "OVERRIDE_CONTACTS_SERVICE_URL".into(),
+            "http://contacts-service:8080".into(),
+        );
+        env.insert(
+            "OVERRIDE_UNFURL_SERVICE_URL".into(),
+            "http://unfurl-service:8080".into(),
+        );
         // Account deletion awaits both owning services from the auth container.
         env.insert(
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
-            "http://agent-harness-service:8101".into(),
+            "http://agent-harness-service:8080".into(),
         );
         env.insert(
             "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),

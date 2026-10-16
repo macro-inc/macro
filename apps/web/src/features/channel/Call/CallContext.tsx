@@ -57,7 +57,8 @@ import {
   useMaybeNativeCallState,
 } from './native-call-state';
 import {
-  isNativeIosCallKitEnabled,
+  isNativeCallEnabled,
+  prepareNativeCallJoin,
   registerCallKitCallEndedHandler,
 } from './use-callkit';
 
@@ -1576,6 +1577,7 @@ function createCallState() {
 
   const lifecycle = createCallLifecycle({
     shouldRequestToken: callSession.shouldRequestToken,
+    prepareToken: prepareNativeCallJoin,
     requestToken: requestCallToken,
     connect: (token) =>
       callSession.connectWithToken(token, {
@@ -1649,7 +1651,7 @@ function createCallState() {
   });
 
   const unsubscribeNative =
-    isNativeIosCallKitEnabled() && nativeCall
+    isNativeCallEnabled() && nativeCall
       ? bindNativeCallLifecycle(nativeCall, lifecycle)
       : undefined;
 

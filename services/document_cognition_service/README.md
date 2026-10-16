@@ -1,5 +1,18 @@
 # Document Cognition Service 
 
+## SDK AI endpoints
+
+Authenticated callers can use `/structured-completion` with `toolset: {type:
+"none"}` for bounded, metered generation without tool discovery. `/decisions`
+classifies supplied input against named yes/no questions through Jev. Both use
+the authenticated user's existing AI admission and usage metering.
+
+Decisions use the existing optional `TYPESAFE_API_KEY` configuration type. When
+it is unset, the service still starts and `/decisions` returns HTTP 503 without
+starting provider work. To enable decisions for a deployment, configure that
+existing key in the cognition service's Doppler configuration. Deploying this
+code does not provision the credential.
+
 ## Running locally
 
 ### Prerequisites

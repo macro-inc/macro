@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+FROM denoland/deno:2.9.6 AS deno
 FROM rust:latest AS chef
 ENV SQLX_OFFLINE=true
 ENV CARGO_PROFILE_DEV_DEBUG=0
@@ -52,6 +53,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates dumb-init curl docker-cli \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+COPY --from=deno /usr/bin/deno /usr/local/bin/deno
+ENV DENO_BINARY=/usr/local/bin/deno
 ENV PORT=8080
 EXPOSE 8080
 

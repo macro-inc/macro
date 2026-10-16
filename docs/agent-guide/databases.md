@@ -1,8 +1,8 @@
 # Databases
 
 Choose **Create → Database** to create a database and its first table with a Name
-column. **C → L** opens a new database with its title selected and ready to type.
-Enter saves the title and focuses A1, ready to type without another click.
+column. **C → L** opens a new database with the normal static split-header title;
+opening or creating it does not start renaming or move focus into a cell.
 Opening **Ctrl-K** refreshes database discovery so a database created by AI or
 another client appears without reloading. **All** and **Documents** categories
 match its name, including databases with no view history.
@@ -19,8 +19,9 @@ Databases open at
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
 A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is an
-inline input for editors: click it to rename. Enter or leaving it saves; Escape
-cancels, and a failed rename shows a toast. Viewers without edit access see the
+static label, matching other blocks. Choose **Rename** in Database actions to
+edit it. Enter or leaving the input saves and closes it; Escape cancels. Saving
+a title does not enter the grid, and a failed rename shows a toast. Viewers without edit access see the
 split header's `viewer` badge instead.
 
 Reopening a loaded table or view shows its cached rows while a background read
@@ -140,7 +141,11 @@ editing still works. The standalone database app keeps its full column controls.
 
 Use **Add column** immediately after the table’s headers. It creates an **Unnamed**
 Text column (**Unnamed 2**, and so on if that name exists), selects its name in the
-header, and lets you type immediately. Enter saves; Escape keeps the default name.
+header, and lets you type immediately while creation saves in the background.
+Renaming or editing the new column waits for creation to finish; a refused
+creation removes the preview and shows an error. Enter saves the name and immediately
+puts the typing cursor in that column's first cell, without waiting for creation
+or renaming to finish. Escape keeps the default name.
 There is no creation dialog. Double-click a header, press F2 while it is focused,
 or choose **Rename column** from its arrow or right-click menu to rename it later.
 Its type icon stays in place while editing. SQL refers to tables and columns by
@@ -183,6 +188,8 @@ is refused ("Total's formula uses Quantity; change that formula first").
 **Delete column** opens a confirmation;
 it removes this table’s column and values while preserving other tables.
 Drag a column header left or right to reorder it, or use **Move left / Move right**.
+Holding or dragging a column menu item, including a type choice, does not move
+the column; a drag must start on the header itself.
 To add a column next to another, right-click its header and choose **Insert left** or
 **Insert right**: a Text column appears on that side with its name selected for
 editing, and its type is inferred from what you type.
@@ -253,13 +260,21 @@ An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
 Click a cell to edit, or focus it with the arrow keys and start typing. Enter
-saves and keeps that cell selected; Down then selects the same column in the
-next row, ready to type. Arrow keys inside a text editor keep their native cursor
+saves and immediately edits the same column in the next row, including the empty
+new-record row. Typing there starts the next record without waiting for the
+previous save. Shift+Enter moves up. Both place the typing cursor at the end of
+the destination cell's text, ready to type. The active cell has one subtle outline,
+with no additional border around its editor. Arrow keys inside a text editor keep their native cursor
 behavior. Escape cancels. Tab saves and immediately edits the next writable cell;
 Shift+Tab moves backward, and both wrap between rows. Read-only columns are
-skipped. Select values open the option picker; checkboxes change
+skipped. If a pending save infers a column's type, the cell currently being typed
+in keeps its editor, draft and focus until it is committed or canceled.
+Select values open the option picker; checkboxes change
 directly. Type on a selected select cell to search its options; Enter chooses a
 match, and Tab chooses the highlighted option or typed match before moving on.
+Blank cells stay visually blank; no `Unnamed` placeholder is inserted. Delete
+and Backspace both clear a selected cell immediately, including select and
+checkbox cells. While editing text, they retain their normal text-editing behavior.
 Number cells display thousands separators (for example, `100,000`); opening an
 editor shows the raw number for editing. Invalid numbers and integers outside the
 safe integer range stay in the editor with a failure outline instead of saving a

@@ -1,6 +1,7 @@
 use crate::api::context::{ApiContext, DcsAuthorizationService, DcsChatModelAccess};
 use crate::api::tool_selection::{service_tools, structured_completion_prompt};
 use crate::model::stream::ToolSet;
+use crate::service::structured_completion::{ToolFreeCompletionError, ToolFreeRequest};
 use agent::structured_output::DynamicSchema;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, StreamAccumulator};
@@ -85,6 +86,7 @@ impl IntoResponse for StructuredCompletionError {
         (status = 403, description = "No access to the requested model", body = StructuredCompletionError),
         (status = 500, description = "Internal error", body = StructuredCompletionError),
         (status = 503, description = "AI usage validation unavailable — retry later", body = StructuredCompletionError),
+        (status = 504, description = "Tool-free completion deadline exceeded", body = StructuredCompletionError),
     )
 )]
 #[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %user.authorization.user.macro_user_id), err)]
@@ -102,6 +104,13 @@ pub async fn structured_completion(
             code: None,
         });
     }
+    agent::structured_output::validate_schema(&request.output_schema).map_err(|error| {
+        StructuredCompletionError {
+            error: error.to_string(),
+            status: StatusCode::BAD_REQUEST,
+            code: Some("invalid_output_schema".into()),
+        }
+    })?;
     let model = request.model.clone();
 
     let user_id = user.authorization.user.macro_user_id.clone();
@@ -116,9 +125,41 @@ pub async fn structured_completion(
             code: Some(error.code().to_string()),
         })?;
 
-    // Tool-free completions (for example, query proposals) must not discover
-    // connectors or execute built-in tools. Omitting the tool prompt alone
-    // does not remove the agent's capabilities.
+    if matches!(request.toolset, ToolSet::None) {
+        let system_prompt = structured_completion_prompt(
+            &request.toolset,
+            &*ctx.all_tools_prompt,
+            request.additional_instructions.as_deref(),
+            &[],
+        );
+        let result = ctx
+            .tool_free_completions
+            .complete(
+                user_id,
+                ToolFreeRequest {
+                    model,
+                    system_prompt,
+                    prompt: request.prompt,
+                    schema: request.output_schema,
+                },
+            )
+            .await
+            .map_err(|error| StructuredCompletionError {
+                status: match &error {
+                    ToolFreeCompletionError::Busy => StatusCode::SERVICE_UNAVAILABLE,
+                    ToolFreeCompletionError::Timeout => StatusCode::GATEWAY_TIMEOUT,
+                    ToolFreeCompletionError::Failed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                },
+                code: None,
+                error: error.to_string(),
+            })?;
+        return Ok(Json(StructuredCompletionResponse {
+            outcome: StructuredCompletionOutcome::Completed { result },
+            tool_activity: Vec::new(),
+        }));
+    }
+
+    // Tool-enabled requests retain their discovery and final formatting phases.
     let toolset = service_tools(
         &request.toolset,
         ctx.all_tools.clone(),

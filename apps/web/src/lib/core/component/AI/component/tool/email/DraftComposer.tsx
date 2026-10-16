@@ -58,6 +58,10 @@ export type EmailDraftComposerProps = {
   initialData: SendEmail;
   /** Where edits, the send and the rejection go. */
   sink: UserToolReviewSink<SendEmail>;
+  /** Allow a surrounding stack to capture the latest edit before navigation or sending all. */
+  registerDraftReader?: (reader: () => SendEmail | undefined) => void;
+  /** Prepare the current editor for a batch, waiting for uploads and validation. */
+  registerSubmitReader?: (reader: () => Promise<SendEmail | undefined>) => void;
   /** Extra recipients to offer in the pickers. */
   recipientOptions?: EmailRecipient[];
   /** Shown above the form; the sink's locked notice takes precedence. */
@@ -164,6 +168,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   const [subject, setSubject] = createSignal(props.initialData.subject ?? '');
   const [isSending, setIsSending] = createSignal(false);
   const [editor, setEditor] = createSignal<LexicalEditor>();
+  const [bodyInitialized, setBodyInitialized] = createSignal(false);
   const [validationErrors, setValidationErrors] = createSignal<
     ComposeValidationError[]
   >([]);
@@ -199,13 +204,29 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
       cc: fromEmailRecipients(recipients().cc),
       bcc: fromEmailRecipients(recipients().bcc),
       subject: subject(),
-      body: prepareEmailBody(editor())?.bodyHtml ?? '',
+      body: bodyInitialized()
+        ? (prepareEmailBody(editor())?.bodyHtml ?? props.initialData.body)
+        : props.initialData.body,
       replyingToId: props.initialData.replyingToId,
       // Omit to use the backend default policy; false only when dismissed.
       includeSignature: includeSignature() ? undefined : false,
       attachments: attachments.toToolArgs(),
     };
   }
+
+  props.registerDraftReader?.(() =>
+    !bodyInitialized() || attachments.uploading() ? undefined : collectArgs()
+  );
+  props.registerSubmitReader?.(async () => {
+    if (
+      !bodyInitialized() ||
+      !(await attachments.waitForUploads()) ||
+      !validate()
+    )
+      return;
+    debouncedEdit.clear();
+    return collectArgs();
+  });
 
   function validate(): boolean {
     const errors: ComposeValidationError[] = [];
@@ -304,6 +325,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     },
     captureEditor: setEditor,
     onEditorInitialized: (editor) => {
+      setBodyInitialized(true);
       props.onBodyInitialized?.(prepareEmailBody(editor)?.bodyHtml ?? '');
     },
     onSend: handleSend,
@@ -362,7 +384,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
           as={DraftComposerSurface}
           bodyDebugName={`chat-compose:${props.debugName}`}
           class={cn(
-            'relative flex flex-col w-full text-xs p-4',
+            'relative flex flex-col w-full text-xs p-4 touch:pt-4',
             isTouchDevice() && 'rounded-lg bg-surface',
             uiDisabled() &&
               '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
@@ -370,7 +392,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
           header={header()}
           toolbar={
             props.readOnly === true ? undefined : (
-              <EmailComposeToolbar editor={editor} />
+              <EmailComposeToolbar editor={editor} inline />
             )
           }
         />

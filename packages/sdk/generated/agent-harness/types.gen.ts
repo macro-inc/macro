@@ -960,6 +960,32 @@ export type CreateAgentSessionResponse = {
 };
 
 /**
+ * Review creation. Drafts are validated by the action's owning adapter.
+ */
+export type CreateReview = {
+    /**
+     * One to one hundred independent drafts. Email: {subject, body: Markdown,
+     * to: [{email, name?}], cc?: [{email, name?}], bcc?: [{email, name?}],
+     * replyingToId?, attachments?: [{documentId}]}. Calendar: {title,
+     * time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
+     * timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
+     * endDate: exclusive ISO date}, description?, location?, attendees?:
+     * [{email, isOptional?}]}.
+     * Creating any review only presents these drafts; the user acts separately.
+     */
+    drafts: Array<unknown>;
+    executionId?: null | ExecutionId;
+    /**
+     * Existing UI and action to use.
+     */
+    kind: ReviewKind;
+    /**
+     * Stack label.
+     */
+    title: string;
+};
+
+/**
  * The triggering mention on a create request.
  *
  * Clients serialize this, so both derives are used.
@@ -1081,6 +1107,73 @@ export type ElicitationRequestId = number | string;
 export type EmptyRequest = {
     [key: string]: never;
 };
+
+/**
+ * A bounded SDK operation observed during execution; not an authorization or write receipt.
+ */
+export type ExecutionActivity = {
+    /**
+     * Request identity within the execution.
+     */
+    id: number;
+    /**
+     * Server-selected label from the generated operation catalog.
+     */
+    label: string;
+    /**
+     * Observed request state; unfinished operations have unknown outcomes.
+     */
+    status: RecordedCallStatus;
+};
+
+/**
+ * Caller-selected UUID persisted in tool input before execution begins.
+ */
+export type ExecutionId = string;
+
+/**
+ * Durable source and final outcome, with historical bridge calls when present.
+ * The full journal is not included in the model's tool result.
+ */
+export type ExecutionRecord = {
+    /**
+     * Advisory SDK operation activity, without arguments or response contents.
+     */
+    activity?: Array<ExecutionActivity>;
+    /**
+     * Additional request activity was omitted at the bounded observation limit.
+     */
+    activityTruncated?: boolean;
+    /**
+     * Historical bridge calls. Direct HTTP executions leave this empty.
+     */
+    calls: Array<RecordedToolCall>;
+    /**
+     * Safe execution failure text.
+     */
+    error?: string | null;
+    /**
+     * Execution identity.
+     */
+    executionId: ExecutionId;
+    /**
+     * JSON returned by the program, if successful.
+     */
+    result?: unknown;
+    /**
+     * The submitted JavaScript module.
+     */
+    source: string;
+    /**
+     * Overall execution state.
+     */
+    status: ExecutionStatus;
+};
+
+/**
+ * The recorded outcome of a program.
+ */
+export type ExecutionStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
 
 /**
  * The provider-side identity of an externally-served session.
@@ -1418,6 +1511,45 @@ export type QueuedActionDto = {
 };
 
 /**
+ * A dispatch result; unfinished work is never reported as success.
+ */
+export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+
+/**
+ * A real inner call, recorded by trusted dispatch for the existing renderers.
+ */
+export type RecordedToolCall = {
+    /**
+     * Safe tool failure, if one was returned.
+     */
+    error?: string | null;
+    /**
+     * Stable, execution-scoped component identity.
+     */
+    id: string;
+    /**
+     * Arguments passed to the actual tool.
+     */
+    input: unknown;
+    /**
+     * Canonical Macro tool name from the allowlisted registry.
+     */
+    name: string;
+    /**
+     * Original tool output, retained independently of the program's return value.
+     */
+    output?: unknown;
+    /**
+     * Whether the response was omitted to keep the durable journal bounded.
+     */
+    outputOmitted: boolean;
+    /**
+     * A started call that never replied has an unknown side-effect outcome.
+     */
+    status: RecordedCallStatus;
+};
+
+/**
  * Request body for renaming an agent session.
  */
 export type RenameAgentSessionRequest = {
@@ -1435,6 +1567,134 @@ export type RetryAgentConversationTurnRequest = {
      * Current failed attempt identity.
      */
     actionId: string;
+};
+
+/**
+ * One atomic user decision against the displayed revision.
+ */
+export type ReviewDecision = {
+    action: 'edit';
+    /**
+     * Replacement action arguments.
+     */
+    draft: unknown;
+    /**
+     * Pending item to update.
+     */
+    item: string;
+    /**
+     * Revision displayed by the caller.
+     */
+    revision: number;
+} | {
+    action: 'submit';
+    /**
+     * Pending items, or an empty list to select all pending items.
+     */
+    items: Array<string>;
+    /**
+     * Revision displayed by the caller.
+     */
+    revision: number;
+} | {
+    action: 'dismiss';
+    /**
+     * Pending items, or an empty list to select all pending items.
+     */
+    items: Array<string>;
+    /**
+     * Revision displayed by the caller.
+     */
+    revision: number;
+};
+
+/**
+ * Persisted review identity.
+ */
+export type ReviewId = string;
+
+/**
+ * One editable item and its durable outcome.
+ */
+export type ReviewItem = {
+    /**
+     * Validated arguments for the existing composer/action.
+     */
+    draft: unknown;
+    /**
+     * Failure or uncertainty description.
+     */
+    error?: string | null;
+    /**
+     * Stable item identity across stack navigation and edits.
+     */
+    id: string;
+    /**
+     * Actual backend response, never a model assertion.
+     */
+    result?: unknown;
+    /**
+     * Current outcome.
+     */
+    status: ReviewItemStatus;
+};
+
+/**
+ * A review item never retries an ambiguous external result automatically.
+ */
+export type ReviewItemStatus = 'pending' | 'submitting' | 'completed' | 'dismissed' | 'unknown';
+
+/**
+ * The component and action used to finish a review.
+ */
+export type ReviewKind = 'email' | 'calendar';
+
+/**
+ * Full UI record, fetched outside the model context.
+ */
+export type ReviewRecord = {
+    executionId?: null | ExecutionId;
+    /**
+     * Review identity.
+     */
+    id: ReviewId;
+    /**
+     * Drafts and per-item outcomes.
+     */
+    items: Array<ReviewItem>;
+    /**
+     * Component kind.
+     */
+    kind: ReviewKind;
+    /**
+     * Most recent delivery claim, allowing retry after a replica stops.
+     */
+    notificationAttemptAt?: number | null;
+    /**
+     * Stable queued-action identity until the outcome has reached the session.
+     * A failed notification may be retried without repeating external actions.
+     */
+    notificationId?: string | null;
+    /**
+     * Durable presentation acknowledgment, separate from user decisions.
+     */
+    presentedAt?: number | null;
+    /**
+     * Compare-and-swap revision for edits and submissions.
+     */
+    revision: number;
+    /**
+     * Owning session.
+     */
+    sessionId: string;
+    /**
+     * Stack label.
+     */
+    title: string;
+    /**
+     * Milliseconds since epoch of the last state change.
+     */
+    updatedAt: number;
 };
 
 /**
@@ -2279,6 +2539,55 @@ export type RefreshAgentSessionChangesResponses = {
 
 export type RefreshAgentSessionChangesResponse = RefreshAgentSessionChangesResponses[keyof RefreshAgentSessionChangesResponses];
 
+export type GetCodeExecutionData = {
+    body?: never;
+    path: {
+        /**
+         * Owning session
+         */
+        session_id: string;
+        /**
+         * Execution receipt identity
+         */
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}';
+};
+
+export type GetCodeExecutionErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+    500: unknown;
+};
+
+export type GetCodeExecutionResponses = {
+    200: ExecutionRecord;
+};
+
+export type GetCodeExecutionResponse = GetCodeExecutionResponses[keyof GetCodeExecutionResponses];
+
+export type ListExecutionReviewsData = {
+    body?: never;
+    path: {
+        session_id: string;
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/reviews';
+};
+
+export type ListExecutionReviewsErrors = {
+    403: unknown;
+};
+
+export type ListExecutionReviewsResponses = {
+    200: Array<ReviewRecord>;
+};
+
+export type ListExecutionReviewsResponse = ListExecutionReviewsResponses[keyof ListExecutionReviewsResponses];
+
 export type ControlAgentSessionData = {
     body: ControlRequest;
     path: {
@@ -2642,6 +2951,68 @@ export type SteerQueuedActionResponses = {
 };
 
 export type SteerQueuedActionResponse = SteerQueuedActionResponses[keyof SteerQueuedActionResponses];
+
+export type CreateSessionReviewData = {
+    body: CreateReview;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/reviews';
+};
+
+export type CreateSessionReviewErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type CreateSessionReviewResponses = {
+    200: ReviewRecord;
+};
+
+export type CreateSessionReviewResponse = CreateSessionReviewResponses[keyof CreateSessionReviewResponses];
+
+export type GetSessionReviewData = {
+    body?: never;
+    path: {
+        session_id: string;
+        review_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/reviews/{review_id}';
+};
+
+export type GetSessionReviewErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type GetSessionReviewResponses = {
+    200: ReviewRecord;
+};
+
+export type GetSessionReviewResponse = GetSessionReviewResponses[keyof GetSessionReviewResponses];
+
+export type DecideSessionReviewData = {
+    body: ReviewDecision;
+    path: {
+        session_id: string;
+        review_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/reviews/{review_id}';
+};
+
+export type DecideSessionReviewErrors = {
+    403: unknown;
+    409: unknown;
+};
+
+export type DecideSessionReviewResponses = {
+    200: ReviewRecord;
+};
+
+export type DecideSessionReviewResponse = DecideSessionReviewResponses[keyof DecideSessionReviewResponses];
 
 export type PutAgentSessionSandboxSizeData = {
     body: SandboxSizeBody;

@@ -313,7 +313,11 @@ async function writeNavigation(navPages: string[]) {
 
 async function main() {
   const file = await loadSchemas();
-  const tools = resolveTools(file).sort((a, b) => a.name.localeCompare(b.name));
+  // The shared frontend schemas also include tools from the private agent
+  // session endpoint. They are unavailable through the public MCP server.
+  const tools = resolveTools(file)
+    .filter((tool) => !['DescribeCodeTools', 'ExecuteCode'].includes(tool.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   await resetGeneratedPages();
 

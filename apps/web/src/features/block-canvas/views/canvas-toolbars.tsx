@@ -9,6 +9,7 @@ import Cursor from '@phosphor/cursor.svg';
 import Eraser from '@phosphor/eraser.svg';
 import Hand from '@phosphor/hand.svg';
 import Minus from '@phosphor/minus.svg';
+import Paperclip from '@phosphor/paperclip.svg';
 import Pencil from '@phosphor/pencil-simple.svg';
 import Plus from '@phosphor/plus.svg';
 import Rectangle from '@phosphor/rectangle.svg';
@@ -37,6 +38,8 @@ export function CanvasDrawingToolbar(props: {
   tool: CanvasTool;
   onTool: (tool: CanvasTool) => void;
   readOnly?: boolean;
+  onAttach?: (anchor: { x: number; y: number }) => void;
+  attachOpen?: boolean;
 }) {
   return (
     <div class="pointer-events-none absolute bottom-4 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
@@ -68,6 +71,22 @@ export function CanvasDrawingToolbar(props: {
             )}
           </For>
         </Toolbar.Group>
+        <Show when={!props.readOnly && props.onAttach}>
+          <Toolbar.Divider />
+          <Toolbar.Button
+            label="Attach"
+            shortcut="i"
+            tooltipDisabled={props.attachOpen}
+            aria-expanded={props.attachOpen ?? false}
+            aria-haspopup="menu"
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              props.onAttach?.({ x: rect.left + rect.width / 2, y: rect.top });
+            }}
+          >
+            <Paperclip />
+          </Toolbar.Button>
+        </Show>
       </Toolbar>
     </div>
   );
@@ -132,6 +151,8 @@ type CanvasZoomProps = {
   scale: number;
   onZoom: (factor: number) => void;
   onFit: () => void;
+  hasSelection: boolean;
+  onFitSelection: () => void;
 };
 
 function CanvasZoomMenu(props: ParentProps<CanvasZoomProps>) {
@@ -160,7 +181,18 @@ function CanvasZoomMenu(props: ParentProps<CanvasZoomProps>) {
           </Dropdown.Item>
           <Dropdown.Item onSelect={props.onFit}>
             <span class="flex-1">Zoom to fit</span>
-            <Hotkey token={TOKENS.canvas.zoomFit} theme="subtle" />
+            <Show when={!props.hasSelection}>
+              <Hotkey token={TOKENS.canvas.zoomFit} theme="subtle" />
+            </Show>
+          </Dropdown.Item>
+          <Dropdown.Item
+            disabled={!props.hasSelection}
+            onSelect={props.onFitSelection}
+          >
+            <span class="flex-1">Zoom to fit selection</span>
+            <Show when={props.hasSelection}>
+              <Hotkey token={TOKENS.canvas.zoomFit} theme="subtle" />
+            </Show>
           </Dropdown.Item>
         </Dropdown.Group>
         <Dropdown.Group>
@@ -216,6 +248,8 @@ export function CanvasViewControls(
       scale={props.scale}
       onZoom={props.onZoom}
       onFit={props.onFit}
+      hasSelection={props.hasSelection}
+      onFitSelection={props.onFitSelection}
     >
       <Dropdown.Group>
         <CanvasViewCheckboxItem checked={props.grid} onChange={props.onGrid}>

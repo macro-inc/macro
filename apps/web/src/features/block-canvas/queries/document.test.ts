@@ -11,7 +11,10 @@ afterEach(() => vi.clearAllMocks());
 
 it('surfaces rejected JSON saves so the session can retry', async () => {
   const editor = createGraphicsEditor();
-  const source = canvasDocumentSource('canvas-id', () => true);
+  const source = canvasDocumentSource('canvas-id', () => true, {
+    version: 2,
+    document: editor.document,
+  });
   simpleSave
     .mockResolvedValueOnce(err('offline'))
     .mockResolvedValueOnce(ok({}));
@@ -28,7 +31,10 @@ it('surfaces rejected JSON saves so the session can retry', async () => {
 it('never submits a read-only document', async () => {
   const editor = createGraphicsEditor();
   await expect(
-    canvasDocumentSource('viewer', () => false).save({
+    canvasDocumentSource('viewer', () => false, {
+      version: 2,
+      document: editor.document,
+    }).save({
       version: 2,
       document: editor.document,
     })

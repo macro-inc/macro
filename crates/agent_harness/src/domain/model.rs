@@ -525,6 +525,13 @@ pub struct DeliverAction {
 pub enum HarnessCommand {
     /// Open or continue the durably reserved session of an agent's conversation.
     ConversationMessage(OpenSession),
+    /// Persist a nonblocking tool card on the replica owning this session.
+    PresentTool {
+        /// Authenticated session owner.
+        actor: MacroUserIdStr<'static>,
+        /// Stable component identity and presentation payload.
+        presentation: agent_session::domain::model::SessionToolPresentation,
+    },
     /// Open a new session.
     Open(OpenSession),
     /// Act on a session that already exists.

@@ -240,8 +240,8 @@ function optimisticDraftEntity(
  * full message entity spliced into the thread page's message list — so a
  * reopened composer (or a relaunched app) sees the draft through the
  * ordinary thread read. On commit the layer is replaced by the server's
- * records, and the persisted thread-page revalidation reconciles list
- * membership and any attachment state this record cannot know.
+ * records. Soup revalidation reconciles list membership; the thread page
+ * only needs a separate read when its message list cannot be patched.
  */
 export async function executeGraphqlSaveEmailDraft(
   client: Client,
@@ -350,10 +350,17 @@ export async function executeGraphqlSaveEmailDraft(
         : [],
       revalidations: [
         ...getActiveGraphqlSoupRevalidations(),
-        {
-          document: EmailThreadPageDocument,
-          variables: threadPageVariables,
-        },
+        // Ordinary autosaves already return the draft and thread records.
+        // Refetch only when a missing snapshot or inbox move prevents the
+        // message-list patch; otherwise a save can reset the open thread.
+        ...(canPatchThread
+          ? []
+          : [
+              {
+                document: EmailThreadPageDocument,
+                variables: threadPageVariables,
+              },
+            ]),
       ],
     }
   ).toPromise();

@@ -91,6 +91,7 @@ type ToolParserMap = {
   CreateRoutine: { call: types.CreateRoutine; response: types.RoutineInfo };
   CreateSkill: { call: types.CreateSkill; response: types.CreateSkillResponse };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  Decide: { call: types.Decide; response: types.DecisionResponse };
   DeleteBot: { call: types.DeleteBot; response: types.DeleteBotResponse };
   DeleteCalendarEvent: {
     call: types.DeleteCalendarEvent;
@@ -122,6 +123,10 @@ type ToolParserMap = {
   };
   DeleteRoutine: { call: types.DeleteRoutine; response: types.DeletedRoutine };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
+  DescribeCodeTools: {
+    call: types.DescribeCodeTools;
+    response: types.CodeToolsDescription;
+  };
   DescribeDatabase: {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
@@ -176,6 +181,7 @@ type ToolParserMap = {
     call: types.EditWordDocument;
     response: types.WordDocumentResponse;
   };
+  ExecuteCode: { call: types.ExecuteCode; response: types.ExecutionReceipt };
   FindPipelineEntries: {
     call: types.FindPipelineEntries;
     response: types.FindPipelineEntriesResponse;
@@ -183,6 +189,10 @@ type ToolParserMap = {
   GenerateImage: {
     call: types.GenerateImage;
     response: types.GenerateImageResponse;
+  };
+  GenerateObject: {
+    call: types.GenerateObject;
+    response: types.GenerateObjectResponse;
   };
   GetBookingInsights: {
     call: types.GetBookingInsights;
@@ -564,6 +574,7 @@ const toolParserMap = {
     response: schemas.CreateSkillResponse,
   },
   CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
+  Decide: { call: schemas.Decide, response: schemas.DecisionResponse },
   DeleteBot: { call: schemas.DeleteBot, response: schemas.DeleteBotResponse },
   DeleteCalendarEvent: {
     call: schemas.DeleteCalendarEvent,
@@ -598,6 +609,10 @@ const toolParserMap = {
     response: schemas.DeletedRoutine,
   },
   DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
+  DescribeCodeTools: {
+    call: schemas.DescribeCodeTools,
+    response: schemas.CodeToolsDescription,
+  },
   DescribeDatabase: {
     call: schemas.DescribeDatabase,
     response: schemas.ToolDatabaseSchema,
@@ -652,6 +667,10 @@ const toolParserMap = {
     call: schemas.EditWordDocument,
     response: schemas.WordDocumentResponse,
   },
+  ExecuteCode: {
+    call: schemas.ExecuteCode,
+    response: schemas.ExecutionReceipt,
+  },
   FindPipelineEntries: {
     call: schemas.FindPipelineEntries,
     response: schemas.FindPipelineEntriesResponse,
@@ -659,6 +678,10 @@ const toolParserMap = {
   GenerateImage: {
     call: schemas.GenerateImage,
     response: schemas.GenerateImageResponse,
+  },
+  GenerateObject: {
+    call: schemas.GenerateObject,
+    response: schemas.GenerateObjectResponse,
   },
   GetBookingInsights: {
     call: schemas.GetBookingInsights,
@@ -1093,6 +1116,7 @@ type ToolDataMap = {
   CreateRoutine: { call: types.CreateRoutine; response: types.RoutineInfo };
   CreateSkill: { call: types.CreateSkill; response: types.CreateSkillResponse };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  Decide: { call: types.Decide; response: types.DecisionResponse };
   DeleteBot: { call: types.DeleteBot; response: types.DeleteBotResponse };
   DeleteCalendarEvent: {
     call: types.DeleteCalendarEvent;
@@ -1124,6 +1148,10 @@ type ToolDataMap = {
   };
   DeleteRoutine: { call: types.DeleteRoutine; response: types.DeletedRoutine };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
+  DescribeCodeTools: {
+    call: types.DescribeCodeTools;
+    response: types.CodeToolsDescription;
+  };
   DescribeDatabase: {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
@@ -1178,6 +1206,7 @@ type ToolDataMap = {
     call: types.EditWordDocument;
     response: types.WordDocumentResponse;
   };
+  ExecuteCode: { call: types.ExecuteCode; response: types.ExecutionReceipt };
   FindPipelineEntries: {
     call: types.FindPipelineEntries;
     response: types.FindPipelineEntriesResponse;
@@ -1185,6 +1214,10 @@ type ToolDataMap = {
   GenerateImage: {
     call: types.GenerateImage;
     response: types.GenerateImageResponse;
+  };
+  GenerateObject: {
+    call: types.GenerateObject;
+    response: types.GenerateObjectResponse;
   };
   GetBookingInsights: {
     call: types.GetBookingInsights;

@@ -99,8 +99,7 @@ These are the mistakes past flagged launches had to fix:
 - **Per-user remote flags** use `crates/feature_flags` (read its `README.md`):
   construct `PostHogFeatureFlags` once at the composition root, load one
   `FlagSnapshot` per authenticated user id, and read it synchronously. A failed
-  load returns `Err`; the caller decides the fallback, explicitly. The crate has
-  no callers yet, so the first one also wires the adapter and its config.
+  load returns `Err`; the caller decides the fallback, explicitly. Wire the adapter and its config at the consuming service composition root.
 - **Deployment switches** (on for an environment, not per user) are
   `MacroConfig` bools with a default, configured in Doppler (see the config
   rule), not PostHog.

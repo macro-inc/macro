@@ -1,12 +1,23 @@
 import type { DatabaseOp } from '@core/database-sql/generated/types';
-import { errAsync, ok } from 'neverthrow';
-import type { Accessor } from 'solid-js';
+import { errAsync, ok, ResultAsync } from 'neverthrow';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 import type { FormulaEditing } from '../context/formula-editing';
 import type { OptionEditing } from '../context/option-editing';
 import type { DatabaseApi, DatabaseCapabilities } from '../core/api';
 import { mergeDatabaseColumnOrder } from '../core/column-order';
-import type { DatabaseColumnTypeChange } from '../core/column-schema';
+import type {
+  CreateDatabaseColumn,
+  DatabaseColumnTypeChange,
+  DatabaseSchemaChange,
+} from '../core/column-schema';
+import type { DatabaseViewColumn } from '../core/database-view';
 import { defaultDatabaseColumnName } from '../core/property-creation';
 import type { DatabaseDataSource } from '../queries/api-source';
 
@@ -19,6 +30,56 @@ export function createDatabaseController(args: {
   inferNewColumns?: boolean;
 }) {
   const { api, data, tableId } = args;
+  const [createdColumns, setCreatedColumns] = createSignal<
+    DatabaseViewColumn[]
+  >([]);
+  const creating = new Map<string, DatabaseSchemaChange<string>>();
+  const columns = createMemo(() => {
+    const read = data.rows.columns();
+    const added = createdColumns().filter(
+      (column) => !read.some((received) => received.id === column.id)
+    );
+    return added.length ? [...read, ...added] : read;
+  });
+  // Drop local previews once the external schema acknowledges them, so a
+  // subsequent deletion cannot resurrect a column from the preview.
+  createEffect(
+    on(data.rows.columns, (received) => {
+      setCreatedColumns((columns) =>
+        columns.filter(
+          (column) => !received.some((read) => read.id === column.id)
+        )
+      );
+    })
+  );
+  const ready = () =>
+    ResultAsync.combine([...creating.values()]).map(() => undefined);
+  const shownData: DatabaseDataSource = {
+    table: () => {
+      const table = data.table();
+      return table ? { ...table, columns: columns() } : undefined;
+    },
+    rows: {
+      ...data.rows,
+      columns,
+      write: (mutation, baseVersion, createOptions) => {
+        const waitingForColumn = creating.size > 0;
+        return ready()
+          .mapErr((error) => ({ kind: 'ops' as const, error }))
+          .andThen(() =>
+            data.rows.write(
+              mutation,
+              waitingForColumn
+                ? (data.table()?.version ?? baseVersion)
+                : baseVersion,
+              createOptions
+            )
+          );
+      },
+      addOption: (columnId, label) =>
+        ready().andThen(() => data.rows.addOption(columnId, label)),
+    },
+  };
   const apply = (ops: DatabaseOp[], baseVersion?: number) =>
     api
       .applyOps({
@@ -35,7 +96,7 @@ export function createDatabaseController(args: {
       );
   const schemaApply: typeof apply = (ops, version) =>
     args.capabilities().editColumns
-      ? apply(ops, version)
+      ? ready().andThen(() => apply(ops, version))
       : errAsync({
           code: 'FORBIDDEN',
           refusal: null,
@@ -51,20 +112,54 @@ export function createDatabaseController(args: {
       version
     ).map(() => undefined);
   const schemaEditing = {
-    createDefaultColumn: () => {
+    createDefaultColumn: ((onCreated?: (columnId: string) => void) => {
+      if (!args.capabilities().editColumns)
+        return errAsync({
+          code: 'FORBIDDEN',
+          refusal: null,
+          message: 'You cannot edit columns.',
+        });
       const column = uuidv7();
-      return change(column, {
+      const name = defaultDatabaseColumnName(
+        columns().map((column) => column.name)
+      );
+      const inferType = args.inferNewColumns ?? false;
+      setCreatedColumns((columns) => [
+        ...columns,
+        {
+          id: column,
+          name,
+          dataType: 'STRING',
+          writable: true,
+          isMultiSelect: false,
+          options: [],
+          inferType,
+        },
+      ]);
+      const created = change(column, {
         kind: 'create',
         definition: {
           source: 'new',
-          name: defaultDatabaseColumnName(
-            data.rows.columns().map((column) => column.name)
-          ),
+          name,
           type: { type: 'text' },
-          inferType: args.inferNewColumns ?? false,
+          inferType,
         },
-      }).map(() => column);
-    },
+      })
+        .map(() => {
+          creating.delete(column);
+          return column;
+        })
+        .mapErr((error) => {
+          creating.delete(column);
+          setCreatedColumns((columns) =>
+            columns.filter((current) => current.id !== column)
+          );
+          return error;
+        });
+      creating.set(column, created);
+      onCreated?.(column);
+      return created;
+    }) satisfies CreateDatabaseColumn,
     rename: (column: string, name: string, previousName: string) =>
       change(column, { kind: 'rename', name, previousName }),
     remove: (column: string) =>
@@ -158,7 +253,7 @@ export function createDatabaseController(args: {
       })),
   };
   return {
-    data,
+    data: shownData,
     optionEditing: () =>
       args.capabilities().editColumns ? optionEditing : undefined,
     formulaEditing: () =>

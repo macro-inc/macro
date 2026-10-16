@@ -26,6 +26,7 @@ use channels::outbound::{
 use chat::domain::service::ChatServiceImpl;
 use chat::inbound::toolset::ChatToolContext;
 use chat::outbound::postgres::PgChatRepo;
+pub use cognition::inbound::toolset::CognitionToolContext as ToolCognitionToolContext;
 use connection::domain::ports::ConnectionService;
 use connection_gateway_client::ConnectionGatewayClient;
 use contacts::domain::service::{ContactsDomainService, SqsContactsIngress};
@@ -1763,6 +1764,8 @@ pub struct ToolServiceContext {
     #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
     pub image_generation_tool_context: ToolImageGenerationToolContext,
+    /// Shared cognition-backed generation and decisions, attributed per request.
+    pub cognition_tool_context: ToolCognitionToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,

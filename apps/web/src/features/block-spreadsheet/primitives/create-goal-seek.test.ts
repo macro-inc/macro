@@ -47,6 +47,7 @@ function setup(options?: {
       seek,
       apply: (sheetId, address, value) => {
         applied.push({ sheetId, address, value });
+        return undefined;
       },
       select: (sheetId, address) => {
         selected.push({ sheetId, address });

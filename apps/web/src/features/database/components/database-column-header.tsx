@@ -50,6 +50,8 @@ import { OptionPill } from './select-pill';
 export type DatabaseColumnHeaderProps = {
   column: DatabaseViewColumn;
   registerRename?: (rename: (() => void) | undefined) => void;
+  /** Enter accepts the name and starts editing this column's first cell. */
+  onEnter?: () => void;
   onChangeType?: (
     columnId: string,
     change: DatabaseColumnTypeChange
@@ -136,13 +138,21 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
   const error = columnRename.error;
   const setError = columnRename.setError;
   const pending = () => operating() || columnRename.pending();
+  const columnName = () =>
+    columnRename.pending() && !columnRename.target()
+      ? columnRename.draft().trim()
+      : props.column.name;
   const rename = () => {
     if (!canRename() || pending()) return;
     setMenuOpen(false);
     columnRename.begin({ id: props.column.id, name: props.column.name });
   };
   const save = (restoreFocus: boolean) => {
-    if (canRename()) void columnRename.save(restoreFocus);
+    if (canRename())
+      void columnRename.save(
+        restoreFocus,
+        restoreFocus ? props.onEnter : undefined
+      );
   };
   props.registerRename?.(rename);
   async function changeType(change: DatabaseColumnTypeChange) {
@@ -314,7 +324,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
             'opacity-40': props.dragging,
           }}
           role="columnheader"
-          aria-label={props.column.name}
+          aria-label={columnName()}
           aria-sort={match(props.sortDirection)
             .with('asc', () => 'ascending' as const)
             .with('desc', () => 'descending' as const)
@@ -378,7 +388,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                   type={props.column.dataType}
                   entityType={props.column.specificEntityType}
                 />
-                <span class="min-w-0 flex-1 truncate">{props.column.name}</span>
+                <span class="min-w-0 flex-1 truncate">{columnName()}</span>
                 <Show when={props.sortDirection}>
                   <Show
                     when={props.sortDirection === 'asc'}
@@ -393,7 +403,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                   <Dropdown.Trigger
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`${props.column.name} column menu`}
+                    aria-label={`${columnName()} column menu`}
                   >
                     <CaretDownIcon class="size-3" />
                   </Dropdown.Trigger>

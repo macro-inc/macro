@@ -93,7 +93,10 @@ vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
   ),
 }));
 
-import { CalendarDraftComposer } from './DraftComposer';
+import {
+  CalendarDraftComposer,
+  type CalendarDraftComposerProps,
+} from './DraftComposer';
 
 const link = (id: string, overrides: Partial<Link> = {}): Link =>
   ({
@@ -119,7 +122,8 @@ const calendar = (id: string): VisibleCalendar => ({
 
 function showDraft(
   calendarId?: string,
-  overrides: Partial<CreateCalendarEvent> = {}
+  overrides: Partial<CreateCalendarEvent> = {},
+  registerSubmitReader?: CalendarDraftComposerProps['registerSubmitReader']
 ) {
   const draft = {
     title: 'Customer demo',
@@ -135,6 +139,7 @@ function showDraft(
     <CalendarDraftComposer
       initialData={draft}
       previewKey="test"
+      registerSubmitReader={registerSubmitReader}
       showPreview={false}
       sink={{
         canAct: () => true,
@@ -303,5 +308,29 @@ describe('AI calendar draft Macro calls', () => {
         attendees: [{ email: 'guest@example.com' }],
       })
     );
+  });
+});
+
+describe('calendar batch preparation', () => {
+  it('captures the same validated snapshot without creating an event', async () => {
+    let read: (() => Promise<CreateCalendarEvent | undefined>) | undefined;
+    showDraft(undefined, {}, (reader) => {
+      read = reader;
+    });
+    expect(read).toBeDefined();
+    expect(await read?.()).toMatchObject({
+      title: 'Customer demo',
+      time: { kind: 'timed' },
+    });
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+  it('cannot prepare an event on an unavailable calendar', async () => {
+    let read: (() => Promise<CreateCalendarEvent | undefined>) | undefined;
+    showDraft('deleted-calendar', {}, (reader) => {
+      read = reader;
+    });
+    expect(read).toBeDefined();
+    expect(await read?.()).toBeUndefined();
+    expect(mocks.execute).not.toHaveBeenCalled();
   });
 });

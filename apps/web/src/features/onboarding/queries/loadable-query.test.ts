@@ -35,6 +35,16 @@ describe('onboarding query sources', () => {
     ).toEqual({ t: 'error' });
   });
 
+  it('can reject a retained trial offer after its eligibility refresh fails', () => {
+    expect(
+      loadableQuery(
+        { isPending: false, isError: true, data: { eligible: true } },
+        (data) => data.eligible,
+        { retainDataOnError: false }
+      )
+    ).toEqual({ t: 'error' });
+  });
+
   it('treats a loaded null offer as ready', () => {
     expect(
       loadableQuery(

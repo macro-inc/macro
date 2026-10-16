@@ -202,12 +202,22 @@ where
             })
             .and_then(|session| session.instructions.as_deref())
             .filter(|instructions| !instructions.trim().is_empty());
+        let instructions = instructions
+            .into_iter()
+            .chain(prompt.private_context.as_deref())
+            .collect::<Vec<_>>()
+            .join("\n\n");
         if let Some(origin) = announce {
             self.authorize_prompt_origin(origin, actor).await?;
         }
         prompt.prompt = self
             .prompt_composer
-            .compose(&raw_prompt, instructions, people.as_ref(), context)
+            .compose(
+                &raw_prompt,
+                (!instructions.is_empty()).then_some(instructions.as_str()),
+                people.as_ref(),
+                context,
+            )
             .await?;
         prompt.set_name_source(raw_prompt);
         Ok(())

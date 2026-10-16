@@ -518,6 +518,7 @@ impl NotificationRepository for MockRepository {
         _device_token: &str,
         _device_endpoint: &str,
         _device_type: &DeviceType,
+        _native_call_capable: bool,
     ) -> Result<(), Report> {
         Ok(())
     }
@@ -777,9 +778,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         device_token: &str,
         device_endpoint: &str,
         device_type: &DeviceType,
+        native_call_capable: bool,
     ) -> Result<(), Report> {
         (**self)
-            .upsert_device(user_id, device_token, device_endpoint, device_type)
+            .upsert_device(
+                user_id,
+                device_token,
+                device_endpoint,
+                device_type,
+                native_call_capable,
+            )
             .await
     }
 

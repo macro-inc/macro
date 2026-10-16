@@ -124,6 +124,26 @@ fn typescript() -> Job {
         .add_step(check_collaboration_types())
         .add_step(check_lexical_service_types())
         .add_step(test_lexical_service())
+        .add_step(
+            Step::new("Install SDK Documentation Dependencies")
+                .run("bun install --frozen-lockfile")
+                .working_directory(xtask_paths::repo_dir!("packages/sdk")),
+        )
+        .add_step(
+            Step::new("Check SDK Documentation")
+                .run("bun run type-check && bun run test")
+                .working_directory(xtask_paths::repo_dir!("packages/sdk-docs")),
+        )
+        .add_step(
+            Step::new("Check Editing Worker")
+                .run("bun run type-check")
+                .working_directory(xtask_paths::repo_dir!("services/ai-editing-worker")),
+        )
+        .add_step(
+            Step::new("Check Code Mode SDK")
+                .run("bun run type-check && bun run test")
+                .working_directory(xtask_paths::repo_dir!("packages/code-mode-sdk")),
+        )
         .add_step(steps::teardown_nix())
 }
 
@@ -293,7 +313,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/code_execution/src/outbound/deno/*.mjs'\n  - 'crates/agent_code_mode/src/domain/documentation.json'\n  - 'crates/agent_code_mode/SKILL.md'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\ncodegen_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\n"
             ),
         ))
 }

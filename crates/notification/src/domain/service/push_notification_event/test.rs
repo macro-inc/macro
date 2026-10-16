@@ -221,6 +221,7 @@ impl NotificationRepository for MockNotifRepo {
         _: &str,
         _: &str,
         _: &crate::domain::models::device::DeviceType,
+        _native_call_capable: bool,
     ) -> Result<(), Report> {
         unimplemented!()
     }

@@ -10,6 +10,32 @@
 <tr>
 <td>
 
+`call-kit:allow-abort-join`
+
+</td>
+<td>
+
+Enables the abort_join command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-abort-join`
+
+</td>
+<td>
+
+Denies the abort_join command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-end-active-call`
 
 </td>
@@ -107,6 +133,32 @@ Enables the get_voip_token command without any pre-configured scope.
 <td>
 
 Denies the get_voip_token command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-prepare-join`
+
+</td>
+<td>
+
+Enables the prepare_join command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-prepare-join`
+
+</td>
+<td>
+
+Denies the prepare_join command without any pre-configured scope.
 
 </td>
 </tr>

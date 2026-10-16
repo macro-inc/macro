@@ -32,6 +32,7 @@ mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_on_push;
 mod deploy_preview;
+mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
@@ -221,6 +222,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "deploy_cla_worker",
         file_name: "deploy_cla_worker.yml",
         render_yaml: || render_gh_workflow(deploy_cla_worker::deploy_cla_worker)(),
+    },
+    WorkflowFile {
+        slug: "deploy_sdk_docs",
+        file_name: "deploy_sdk_docs.yml",
+        render_yaml: || render_gh_workflow(deploy_sdk_docs::deploy_sdk_docs)(),
     },
     WorkflowFile {
         slug: "deploy_on_push",

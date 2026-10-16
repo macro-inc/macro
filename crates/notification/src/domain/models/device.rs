@@ -28,4 +28,7 @@ pub struct DeviceRequest {
     pub device_type: DeviceType,
     /// The device push notification token.
     pub token: String,
+    /// Whether this Android binary supports native Telecom incoming calls.
+    #[serde(default)]
+    pub native_call_capable: bool,
 }

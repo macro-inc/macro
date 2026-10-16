@@ -34,3 +34,10 @@ export const agentSessionPullRequestKeys = createQueryKeys(
 export const agentSessionWarmKeys = createQueryKeys('agentSessionWarm', {
   owner: (userId: string | undefined) => ({ queryKey: [userId] }),
 });
+
+/** Durable code-mode records, scoped to their owning session. */
+export const agentCodeExecutionKeys = createQueryKeys('agentCodeExecution', {
+  detail: (sessionId: string, executionId: string) => ({
+    queryKey: [sessionId, executionId],
+  }),
+});

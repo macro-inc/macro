@@ -187,23 +187,28 @@ The confirmed tutorial save updates the session cache before leaving. A successf
 finish must not show "Couldn't finish setup — please try again", including when
 a background session refresh overlaps it.
 
-The final screen keeps the “Free Claude & GPT for 30 days” headline and trial
-button above the fold. The “See more” scroll cue opens the pricing grid
+The final screen shows “Free Claude & GPT for 30 days” and the trial button
+only after the server confirms first-subscription eligibility. Returning
+customers without an existing subscription see “Get more with Pro.” and
+`Get Pro` with paid monthly terms. Existing subscribers see `Manage subscription`
+to review their subscription and payment details. The “See more” scroll cue opens the pricing grid
 below, comparing Free, Pro, and Max. The grid loads monthly subscription prices
 from the billing catalog and describes Max as 10× Pro usage, without displaying
 dollar-denominated included AI allowances. Monthly prices use the compact
 `/usr/mo` unit on one line; Free email branding reads “Sent with Macro”.
 Free completes onboarding without a
-card. Pro returns to the trial offer; Max starts standard paid checkout.
+card. Pro returns to the account-specific Pro offer; Max starts standard paid checkout.
 The trial button requests 30 days free through Stripe Checkout, with no coupon
 required. Stripe collects the payment method for billing after the trial. Only a
 customer's first subscription qualifies, including canceled subscriptions in that
-check. Ineligible requests show an error instead of opening an immediately paid
-checkout. Invite promotions retain their own offer and terms.
+check. Eligibility loading or failure disables Pro checkout without advertising
+a trial; a failed lookup offers `Try again`. A trial rejected at checkout
+shows the server explanation and refreshes eligibility, without automatically
+retrying as a paid purchase. Invite promotions retain their own offer and terms.
 Cancellation returns to this step. A successful return polls the server's license
 state, completes onboarding, and enters the app without an extra confirmation
 click. A pending webhook shows a retryable confirmation state. If the catalog
-cannot load, Free remains available, Pro still returns to the trial offer, and
+cannot load, Free remains available, Pro still returns to its offer, and
 Max checkout stays disabled until prices can be loaded with the retry action.
 Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume.
@@ -216,7 +221,7 @@ with no plan header or divider. The card scrolls internally at a maximum of
 360px or half the viewport height. Entering at least 15 digits in the local
 preview input reveals expiration, security code, country, and ZIP previews;
 clearing it hides them again. Use a test number such as `4242 4242 4242 4242`.
-The primary CTA reads `Start 30 day trial`, with the billing and cancellation
+For eligible customers, the primary CTA reads `Start 30 day trial`, with the billing and cancellation
 note immediately below it. The quiet `Continue as Guest` scroll cue beneath it
 moves focus to the below-fold Guest and Pro comparison,
 using the same layout as the security details. The table includes email account

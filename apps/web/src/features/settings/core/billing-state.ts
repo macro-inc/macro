@@ -3,11 +3,15 @@ import type { PaidPlanTier, PlanTier } from '@app/features/paywall/plans';
 export type BillingInput = {
   hasPaid: boolean;
   canManageSubscription: boolean;
+  teamReady?: boolean;
   teamRole?: 'owner' | 'member';
   teamPlans?: readonly PaidPlanTier[];
   summary?: { tier: PlanTier; canManageBilling: boolean };
   aiUsageEnabled: boolean;
   pending: boolean;
+  /** Undefined until the server confirms eligibility; never advertise a trial then. */
+  trialEligible?: boolean;
+  existingSubscription?: boolean;
 };
 
 /** The billing summary's tier wins; without it, paid access implies Pro. */
@@ -30,15 +34,20 @@ export function getBillingState(input: BillingInput) {
     ...input,
     tier,
     billedThroughTeam,
-    canChangePlan: input.canManageSubscription && isOwnerOrSolo,
+    canManageBilling: input.canManageSubscription && isOwnerOrSolo,
+    canChangePlan:
+      input.teamReady !== false && input.canManageSubscription && isOwnerOrSolo,
   };
 }
 
 export type BillingState = ReturnType<typeof getBillingState>;
 
-/** Free accounts get the same server-validated Pro trial as onboarding. */
-export function getFreePlanCheckoutRequest(plan: PaidPlanTier) {
-  return { plan, onboardingTrial: plan === 'premium' };
+/** Returning customers buy on paid terms; only confirmed first-time customers get a trial. */
+export function getFreePlanCheckoutRequest(
+  plan: PaidPlanTier,
+  trialEligible: boolean
+) {
+  return { plan, onboardingTrial: plan === 'premium' && trialEligible };
 }
 
 export function describeSeatPlans(plans: readonly PaidPlanTier[]): string {

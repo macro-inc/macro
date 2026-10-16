@@ -176,6 +176,11 @@ impl PromptAttachment {
 pub struct AgentPromptAction {
     /// What to tell the agent.
     pub prompt: String,
+    /// Internal context persisted in the queue and rendered through the harness
+    /// context block, not chat text. Not accepted from the public control API.
+    #[cfg_attr(feature = "utoipa", schema(ignore))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_context: Option<String>,
     /// Files the prompt refers to, in the order the user attached them.
     /// Delivered after the text as one `resource_link` block each.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -462,8 +467,18 @@ impl AgentAction {
         Self::Prompt(AgentPromptAction {
             prompt: prompt.into(),
             attachments,
+            private_context: None,
             name_source: None,
         })
+    }
+
+    /// Start a normal queued turn with private context and no visible prompt text.
+    pub fn context_prompt(context: impl Into<String>) -> Self {
+        let mut action = Self::prompt("");
+        if let Self::Prompt(prompt) = &mut action {
+            prompt.private_context = Some(context.into());
+        }
+        action
     }
 
     /// Ask the agent to switch models.

@@ -3703,7 +3703,7 @@ export const removeParticipantsBody = zod
   .describe('Request to remove participants.');
 
 /**
- * @summary Set a channel or group chat profile picture. Requires channel admin or owner access.
+ * @summary Set a channel or group chat profile picture. Requires channel participation.
  */
 export const setChannelPictureParams = zod.object({
   channel_id: zod.uuid().describe('Channel ID'),
@@ -18035,6 +18035,26 @@ export const setDocumentTeamShareResponse = zod
   })
   .describe(
     "The team-share state of a document. The team is resolved from the document\nowner's team membership."
+  );
+
+/**
+ * @summary Read current Markdown or extracted file text with the document's view receipt.
+ */
+export const getDocumentTextContentParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const getDocumentTextContentResponse = zod
+  .object({
+    text: zod
+      .string()
+      .nullable()
+      .describe(
+        'Current Markdown, or extracted PDF\/Word text. Null means use file export.'
+      ),
+  })
+  .describe(
+    'Text representation when the document supports one. Other file formats\nretain their existing download\/export behavior.'
   );
 
 /**
