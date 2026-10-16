@@ -64,6 +64,7 @@ export function createInputView(options: CreateInputViewOptions): InputView {
     showFormatRibbon: showFormatRibbon(),
     hasPendingAttachments:
       isSending() || options.attachmentTracker.hasPending(),
+    sendQueued: options.attachmentTracker.sendQueued(),
     attachments: options.attachmentTracker.attachments(),
   }));
 

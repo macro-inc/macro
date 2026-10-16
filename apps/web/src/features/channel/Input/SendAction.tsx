@@ -18,12 +18,17 @@ export function SendAction(props: SendActionProps) {
     'tooltip',
     'hidden',
   ]);
-  const isBlockedByPending = () => !!input().hasPendingAttachments;
+  const hasUploadsInProgress = () =>
+    !!input().hasPendingAttachments && !input().sendQueued;
+  const isSendQueued = () => !!input().sendQueued;
   const isBlockedByEmptyInput = () => !hasSendableInputContent(input());
-  const isDisabled = () =>
-    !!local.disabled || isBlockedByPending() || isBlockedByEmptyInput();
+  // Allow clicking send while uploads are in progress — it queues the send
+  const isDisabled = () => !!local.disabled || isBlockedByEmptyInput();
 
-  const tooltipText = () => local.tooltip ?? 'Send message';
+  const tooltipText = () => {
+    if (isSendQueued()) return 'Sending when upload completes…';
+    return local.tooltip ?? 'Send message';
+  };
 
   return (
     <SendButton
@@ -32,7 +37,7 @@ export function SendAction(props: SendActionProps) {
       shortcut="enter"
       aria-label={tooltipText()}
       data-input-action="send"
-      pending={isBlockedByPending()}
+      pending={hasUploadsInProgress() || isSendQueued()}
       disabled={isDisabled()}
       hidden={isMobile() && isBlockedByEmptyInput()}
       // Full-frame mobile/tablet: pill rounding to match the dock/accessory islands.

@@ -708,7 +708,7 @@ describe('Input slots', () => {
     expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
   });
 
-  it('disables send while attachments are pending', () => {
+  it('enables send while attachments are pending to queue the send', () => {
     render(() =>
       (() => {
         const attachmentTracker = createInputAttachmentTracker({
@@ -731,10 +731,10 @@ describe('Input slots', () => {
       })()
     );
 
-    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
-      'disabled',
-      true
-    );
+    const sendButton = screen.getByRole('button', { name: 'Send message' });
+    // Send is enabled so user can queue the message while uploads complete
+    // (there's an attachment, so the message has sendable content)
+    expect(sendButton).toHaveProperty('disabled', false);
   });
 
   it('disables send when the input is empty', () => {

@@ -38,4 +38,59 @@ describe('input attachment tracker', () => {
       dispose();
     });
   });
+
+  it('tracks sendQueued state', () => {
+    createRoot((dispose) => {
+      const tracker = createInputAttachmentTracker();
+      expect(tracker.sendQueued()).toBe(false);
+
+      tracker.setSendQueued(true);
+      expect(tracker.sendQueued()).toBe(true);
+
+      tracker.setSendQueued(false);
+      expect(tracker.sendQueued()).toBe(false);
+
+      dispose();
+    });
+  });
+
+  it('clears sendQueued when an attachment is removed', () => {
+    createRoot((dispose) => {
+      const tracker = createInputAttachmentTracker();
+
+      tracker.addAttachment({
+        id: 'a1',
+        kind: 'image',
+        name: 'a.png',
+        pending: true,
+      });
+      tracker.setSendQueued(true);
+      expect(tracker.sendQueued()).toBe(true);
+
+      tracker.removeAttachment('a1');
+      expect(tracker.sendQueued()).toBe(false);
+
+      dispose();
+    });
+  });
+
+  it('clears sendQueued when attachments are cleared', () => {
+    createRoot((dispose) => {
+      const tracker = createInputAttachmentTracker();
+
+      tracker.addAttachment({
+        id: 'a1',
+        kind: 'image',
+        name: 'a.png',
+        pending: true,
+      });
+      tracker.setSendQueued(true);
+      expect(tracker.sendQueued()).toBe(true);
+
+      tracker.clearAttachments();
+      expect(tracker.sendQueued()).toBe(false);
+
+      dispose();
+    });
+  });
 });

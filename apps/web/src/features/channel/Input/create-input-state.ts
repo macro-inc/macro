@@ -1,5 +1,5 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect, on } from 'solid-js';
 import { createInputCommands } from './create-input-commands';
 import { createInputView } from './create-input-view';
 import type {
@@ -10,6 +10,7 @@ import type {
   InputPersistenceKey,
   InputSnapshot,
 } from './types';
+import { hasSendableInputContent } from './utils/sendable-content';
 
 type CreateInputStateOptions = {
   initialInput: InputData;
@@ -43,6 +44,7 @@ export function createInputState(options: CreateInputStateOptions): InputState {
   const commands = createInputCommands({
     view: view.view,
     snapshot: view.snapshot,
+    attachmentTracker: options.attachmentTracker,
     setIsSending: view.setIsSending,
     setShowFormatRibbon: view.setShowFormatRibbon,
     // Sending/closing clears the editor once, through the focus-preserving path.
@@ -53,6 +55,24 @@ export function createInputState(options: CreateInputStateOptions): InputState {
     attachFiles: options.attachFiles,
     callbacks: options.callbacks,
   });
+
+  // Auto-send when uploads complete and a send was queued
+  createEffect(
+    on(
+      () => options.attachmentTracker.hasPending(),
+      (hasPending) => {
+        if (hasPending) return;
+        if (!options.attachmentTracker.sendQueued()) return;
+        // Uploads finished and send was queued — send now if still valid
+        const current = view.snapshot();
+        if (!hasSendableInputContent(current)) {
+          options.attachmentTracker.setSendQueued(false);
+          return;
+        }
+        void commands.send();
+      }
+    )
+  );
 
   return {
     view: view.view,

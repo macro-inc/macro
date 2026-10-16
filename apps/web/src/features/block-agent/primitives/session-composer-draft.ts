@@ -171,6 +171,7 @@ export function createSessionAttachmentTracker(
   return {
     attachments: tracker.attachments,
     hasPending: tracker.hasPending,
+    sendQueued: tracker.sendQueued,
     addAttachment: (attachment) => {
       tracker.addAttachment(attachment);
       persist();
@@ -191,5 +192,6 @@ export function createSessionAttachmentTracker(
       tracker.clearAttachments();
       persist();
     },
+    setSendQueued: tracker.setSendQueued,
   };
 }

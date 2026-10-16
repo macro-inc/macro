@@ -2,9 +2,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { createInputCommands } from '../create-input-commands';
 import type { InputSnapshot } from '../types';
 
+function createMockAttachmentTracker(options?: {
+  hasPending?: boolean;
+  sendQueued?: boolean;
+}) {
+  return {
+    attachments: () => [],
+    hasPending: () => options?.hasPending ?? false,
+    sendQueued: () => options?.sendQueued ?? false,
+    setSendQueued: vi.fn(),
+    addAttachment: vi.fn(),
+    removeAttachment: vi.fn(),
+    setAttachmentPending: vi.fn(),
+    setAttachments: vi.fn(),
+    clearAttachments: vi.fn(),
+  };
+}
+
 describe('createInputCommands', () => {
   it('does not send an empty message', async () => {
     const onSend = vi.fn();
+    const tracker = createMockAttachmentTracker();
 
     const commands = createInputCommands({
       view: () => ({
@@ -16,6 +34,7 @@ describe('createInputCommands', () => {
         mentions: [],
         attachments: [],
       }),
+      attachmentTracker: tracker,
       setIsSending: vi.fn(),
       setShowFormatRibbon: vi.fn(),
       reset: vi.fn(),
@@ -33,6 +52,7 @@ describe('createInputCommands', () => {
     const onSend = vi.fn();
     const reset = vi.fn();
     const clearComposer = vi.fn();
+    const tracker = createMockAttachmentTracker();
     const snapshot: InputSnapshot = {
       value: '   ',
       mentions: [],
@@ -51,6 +71,7 @@ describe('createInputCommands', () => {
         hasPendingAttachments: false,
       }),
       snapshot: () => snapshot,
+      attachmentTracker: tracker,
       setIsSending: vi.fn(),
       setShowFormatRibbon: vi.fn(),
       reset,
@@ -69,6 +90,7 @@ describe('createInputCommands', () => {
 
   it('resets before invoking onClose', () => {
     const events: string[] = [];
+    const tracker = createMockAttachmentTracker();
     const snapshot: InputSnapshot = {
       value: 'reply',
       mentions: [],
@@ -81,6 +103,7 @@ describe('createInputCommands', () => {
         hasPendingAttachments: false,
       }),
       snapshot: () => snapshot,
+      attachmentTracker: tracker,
       setIsSending: vi.fn(),
       setShowFormatRibbon: vi.fn(),
       reset: () => {
@@ -97,5 +120,61 @@ describe('createInputCommands', () => {
     commands.close();
 
     expect(events).toEqual(['reset', 'onClose']);
+  });
+
+  it('queues send when attachments are pending instead of blocking', async () => {
+    const onSend = vi.fn();
+    const tracker = createMockAttachmentTracker({ hasPending: true });
+    const snapshot: InputSnapshot = {
+      value: 'hello',
+      mentions: [],
+      attachments: [{ id: '1', name: 'img.png', kind: 'image', pending: true }],
+    };
+
+    const commands = createInputCommands({
+      view: () => ({
+        mode: 'channel',
+        hasPendingAttachments: true,
+      }),
+      snapshot: () => snapshot,
+      attachmentTracker: tracker,
+      setIsSending: vi.fn(),
+      setShowFormatRibbon: vi.fn(),
+      reset: vi.fn(),
+      removeTrackedAttachment: vi.fn(),
+      callbacks: { onSend },
+    });
+
+    await expect(commands.send()).resolves.toBe(false);
+    expect(tracker.setSendQueued).toHaveBeenCalledWith(true);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('clears queued state when send completes', async () => {
+    const onSend = vi.fn();
+    const tracker = createMockAttachmentTracker({ hasPending: false });
+    const snapshot: InputSnapshot = {
+      value: 'hello',
+      mentions: [],
+      attachments: [{ id: '1', name: 'img.png', kind: 'image' }],
+    };
+
+    const commands = createInputCommands({
+      view: () => ({
+        mode: 'channel',
+        hasPendingAttachments: false,
+      }),
+      snapshot: () => snapshot,
+      attachmentTracker: tracker,
+      setIsSending: vi.fn(),
+      setShowFormatRibbon: vi.fn(),
+      reset: vi.fn(),
+      removeTrackedAttachment: vi.fn(),
+      callbacks: { onSend },
+    });
+
+    await commands.send();
+    expect(tracker.setSendQueued).toHaveBeenCalledWith(false);
+    expect(onSend).toHaveBeenCalledWith(snapshot);
   });
 });

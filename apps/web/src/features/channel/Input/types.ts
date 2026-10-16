@@ -35,6 +35,8 @@ type InputDataBase = {
   isDraggedOver?: boolean;
   showFormatRibbon?: boolean;
   hasPendingAttachments?: boolean;
+  /** True when the user clicked send while uploads were pending. */
+  sendQueued?: boolean;
   attachments?: InputAttachmentData[];
 };
 
