@@ -41,6 +41,8 @@ function context(
     editorOpen: () => false,
     openEditor: vi.fn(),
     closeEditor: vi.fn(),
+    initialSearchQuery: () => '',
+    consumeInitialSearchQuery: () => '',
   };
 }
 

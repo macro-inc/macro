@@ -30,10 +30,14 @@ export type UseDropdownSearchOptions = {
   onSelect: (index: number, event?: KeyboardEvent) => void;
   onClose: () => void;
   enableNumericHotkeys?: boolean;
+  /** Initial search query for typeahead. */
+  initialQuery?: string;
 };
 
 export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchQuery, setSearchQuery] = createSignal(
+    options.initialQuery ?? ''
+  );
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const keyboardMode = useKeyPressed(100);
 
@@ -163,6 +167,8 @@ type SelectOptionsProps = {
   /** When provided, renders a "no value" item at the top of the list. */
   clearOption?: { label: string; onClear: () => void };
   onClose?: () => void;
+  /** Initial search query for typeahead (e.g. when user typed on trigger). */
+  initialQuery?: string;
 };
 
 type SelectableItem =
@@ -226,6 +232,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     onClose: () => {
       if (props.onClose) props.onClose();
     },
+    initialQuery: props.initialQuery,
   });
 
   const hasExactMatch = createMemo(() => {

@@ -52,6 +52,8 @@ type EntityInputProps = {
   ) => void;
   onClose?: () => void;
   pinnedOptions?: PinnedOption[];
+  /** Initial search query for typeahead (e.g. when user typed on trigger). */
+  initialQuery?: string;
 };
 
 function getEntityTypePluralLabel(
@@ -111,8 +113,10 @@ function getEntityName(entity: CombinedEntity): string {
 const MAX_LIST_HEIGHT = 192;
 
 export function PropertyEntitySelector(props: EntityInputProps) {
-  const [inputValue, setInputValue] = createSignal('');
-  const [searchTerm, setSearchTerm] = createSignal('');
+  const [inputValue, setInputValue] = createSignal(props.initialQuery ?? '');
+  const [searchTerm, setSearchTerm] = createSignal(
+    (props.initialQuery ?? '').toLowerCase()
+  );
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const keyboardMode = useKeyPressed(100);
 

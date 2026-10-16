@@ -20,8 +20,13 @@ export interface PropertyRootContextValue {
   // to openEditor is recorded internally by <Property.Root> and used by the
   // Kobalte popper via getAnchorRect — callers don't read it back.
   editorOpen: Accessor<boolean>;
-  openEditor: (anchor?: HTMLElement) => void;
+  openEditor: (anchor?: HTMLElement, initialQuery?: string) => void;
   closeEditor: () => void;
+
+  // Initial search query for typeahead. Set when user types on the closed
+  // trigger; consumed once by the editor on open.
+  initialSearchQuery: Accessor<string>;
+  consumeInitialSearchQuery: () => string;
 }
 
 export const PropertyRootContext = createContext<PropertyRootContextValue>();

@@ -24,6 +24,9 @@ function DateEditorBody() {
   const ctx = useProperty();
   const property = ctx.property() as DateProperty;
 
+  // Consume initial search query for typeahead (set when user typed on trigger)
+  const initialQuery = ctx.consumeInitialSearchQuery();
+
   const [selectedDate, setSelectedDate] = createSignal<Date | null>(
     property.value != null ? new Date(property.value) : null
   );
@@ -47,6 +50,7 @@ function DateEditorBody() {
           commit(date);
         }}
         onClose={() => ctx.closeEditor()}
+        initialQuery={initialQuery}
       />
     </EditorPopover>
   );
