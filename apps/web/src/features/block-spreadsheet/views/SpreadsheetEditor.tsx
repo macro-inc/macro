@@ -28,7 +28,10 @@ import {
   DropdownDialog,
   type DropdownDialogState,
 } from '../components/DropdownDialog';
-import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
+import {
+  SpreadsheetFileMenu,
+  SpreadsheetImportButton,
+} from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import {
   SpreadsheetFindDialog,
@@ -1344,7 +1347,13 @@ export function SpreadsheetEditor(props: {
             </span>
           </Show>
         </div>
-        <div class="shrink-0 border-l border-edge-muted pl-1 max-sm:order-1">
+        <div class="flex shrink-0 items-center gap-0.5 border-l border-edge-muted pl-1 max-sm:order-1">
+          <SpreadsheetImportButton
+            disabled={
+              !editable() || actions.pending() || !!workbookActions.busy()
+            }
+            onCommand={menuCommand}
+          />
           <SpreadsheetFileMenu
             readonly={
               !editable() || actions.pending() || !!workbookActions.busy()
