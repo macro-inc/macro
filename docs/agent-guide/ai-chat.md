@@ -1916,9 +1916,15 @@ must stay hidden; subsequent live messages must still appear.
   default. Quickstart and Config give Full Access a bordered, three-line control
   labeled `Suggested`, without enabling it. On short terminals, Config scrolls to
   the selected setting and keeps consent warnings below it; Quickstart keeps its
-  submit button visible. The choice applies at the next pairing:
+  submit button visible. At pairing,
   off disables bypass in the pairing page; on preselects bypass with a warning,
-  and the approving user can turn it off. Older daemons leave this choice to the pairing page.
+  and the approving user can turn it off. After pairing, toggling `Full Access`
+  restarts macrod, which reports it on every reconnect, and each paired runtime
+  under Runtimes has its own `Allow bypassing permission requests` switch.
+  Enabling it confirms first and is disabled until macrod reports `Full Access`
+  on; turning either side off stops bypass from each live session's next
+  prompt. Older daemons that never report it keep the bypass granted at pairing
+  but cannot have it newly enabled.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
   and `Always bypass` only for local macrod harnesses. The larger `Always bypass`
   choice is labeled `Suggested`; the label does not select it. Macrod defaults to
