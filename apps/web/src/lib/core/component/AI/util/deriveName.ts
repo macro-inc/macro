@@ -1,6 +1,6 @@
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 
-const MAX_LENGTH = 80;
+const MAX_LENGTH = 50;
 
 export function deriveChatName(userQuery: string): string | undefined {
   const plainText = markdownToPlainText(userQuery);
