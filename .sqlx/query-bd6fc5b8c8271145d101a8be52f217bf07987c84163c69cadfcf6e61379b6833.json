@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_address_book_sources SET photo_url = $6,photo_hash = $7,photo_due_at = now() + interval '1 day',photo_lease_id = NULL,photo_lease_until = NULL\n            WHERE link_id = $1 AND folder_id = $2 AND provider_id = $3 AND revision = $4 AND photo_lease_id = $5 AND photo_lease_until > now() AND deleted_at IS NULL RETURNING emails",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "emails",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bd6fc5b8c8271145d101a8be52f217bf07987c84163c69cadfcf6e61379b6833"
+}

@@ -1,0 +1,1 @@
+DROP TABLE email_mailbox_settings_work;

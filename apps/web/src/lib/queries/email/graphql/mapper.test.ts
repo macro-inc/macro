@@ -7,6 +7,7 @@ import { mapGraphqlEmailThreadPage } from './mapper';
 
 const message: EmailThreadMessageFieldsFragment = {
   __typename: 'GraphqlSoupEmailMessage',
+  operationStatus: null,
   calendarInvitations: [],
   id: 'message-1',
   providerId: 'provider-message-1',
@@ -42,10 +43,14 @@ const message: EmailThreadMessageFieldsFragment = {
       sizeBytes: 10,
       sfsId: 'sfs-1',
       contentId: 'cid-1',
+      referenceUrl: 'https://outlook.office.com/mail/message',
     },
   ],
   attachmentsDraft: [
     {
+      uploadPending: false,
+      contentId: null,
+      isInline: false,
       __typename: 'GraphqlSoupEmailDraftAttachment',
       id: 'draft-attachment-1',
       draftId: 'message-1',
@@ -164,6 +169,7 @@ describe('mapGraphqlEmailThreadPage', () => {
           db_id: 'attachment-1',
           sfs_id: 'sfs-1',
           content_id: 'cid-1',
+          reference_url: 'https://outlook.office.com/mail/message',
         },
       ],
       attachments_draft: [{ id: 'draft-attachment-1', s3_key: 'draft-key' }],

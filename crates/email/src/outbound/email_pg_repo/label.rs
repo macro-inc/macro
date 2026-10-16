@@ -121,7 +121,8 @@ pub(crate) async fn list_labels_by_link_id(
             label_list_visibility as "label_list_visibility: _",
             type as "type_: _"
         FROM email_labels
-        WHERE link_id = $1
+        WHERE link_id = $1 AND NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work w WHERE w.link_id=email_labels.link_id
+            AND w.kind='delete_label' AND w.resource_key=email_labels.provider_label_id AND w.completed_revision<w.revision)
         ORDER BY name
         "#,
         link_id

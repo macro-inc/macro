@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT (l.macro_id = $4 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $4)) AS \"authorized!\"\n            FROM email_mailbox_drafts d JOIN email_links l ON l.id = d.link_id\n            WHERE d.message_id = $1 AND d.lease_id = $2 AND d.lease_until > now() AND d.state = 'running'\n                AND l.is_sync_active AND l.sync_generation = d.generation AND l.grant_generation = $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "authorized!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "082469ec52f2ca9100be48ad77df987d32bc7235a1808681c4a27667c8925bff"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT resource_key FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='create_label' AND completed_revision<revision",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "resource_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "50ca1a5f7e38be777334408bb8ca0f79ed17c81f4d223e5a71c65bc40d577fab"
+}

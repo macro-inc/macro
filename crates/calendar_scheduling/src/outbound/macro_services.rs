@@ -290,7 +290,7 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: Meetin
             transparency: None,
             reminders: None,
             conference: (!event.macro_call && event.google_meet)
-                .then_some(ConferenceChange::GoogleMeet),
+                .then_some(ConferenceChange::ProviderDefault),
             out_of_office: None,
         };
         if event.macro_call {

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET state='deleted',delete_requested=true,checkpoint=NULL,lease_id=NULL,lease_until=NULL,updated_at=now() WHERE message_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "994e780facb1e3b5e9c96b8c7921f89081154cc751c9bd29577eee37ffb6b495"
+}

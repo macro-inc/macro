@@ -52,6 +52,10 @@ queries used across Rust services.
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
+- Keep concurrent index migrations to one statement with `-- no-transaction`;
+  build replacement indexes before dropping old constraints, and validate large
+  table checks in a later transaction. See the Outlook rollout notes in
+  `docs/design/outlook-email-support.md` for failure recovery and deployment order.
 - Quote and alias camelCase columns to Rust field names
   (`SELECT "userId" AS user_id`); don't guess spelling — check `migrations/`.
 

@@ -139,13 +139,13 @@ pub async fn fetch_inboxes_for_macro_id(
         FROM (
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
-                   el.last_sync_error_at, el.created_at, el.updated_at
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
             FROM email_links el
             WHERE el.macro_id = $1
             UNION
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
-                   el.last_sync_error_at, el.created_at, el.updated_at
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
             FROM email_links el
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1
@@ -173,9 +173,9 @@ pub struct InboxDetails {
     pub settings: service::settings::Settings,
     pub latest_backfill_status: Option<service::backfill::BackfillJobStatus>,
     pub photo_url: Option<String>,
-    /// The Google OAuth scopes recorded for the link's grant. An empty vector
+    /// The provider OAuth scopes recorded for the link's grant. An empty vector
     /// represents either an absent grant-state row or the initial version-0 state.
-    pub google_granted_scopes: Vec<String>,
+    pub provider_granted_scopes: Vec<String>,
     /// Whether the user turned the calendar capability off for this inbox.
     /// Distinguishes a deliberate opt-out from a grant that never carried the
     /// calendar scopes, which read identically from the scopes alone.
@@ -202,7 +202,7 @@ struct DbInboxDetailsRow {
     signature_on_replies_forwards: Option<bool>,
     signature: Option<String>,
     latest_backfill_status: Option<db::backfill::BackfillJobStatus>,
-    google_granted_scopes: Vec<String>,
+    provider_granted_scopes: Vec<String>,
     calendar_disabled: bool,
     has_calendar_data: bool,
     photo_url: Option<String>,
@@ -234,28 +234,36 @@ pub async fn fetch_inbox_details_for_macro_id(
                l.updated_at as "updated_at!",
                s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
-               bj.status as "latest_backfill_status?: _",
+               CASE WHEN l.provider = 'OUTLOOK' THEN
+                   CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
+                       THEN 'Init'::email_backfill_job_status
+                   WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
+                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import)
+                       THEN 'InProgress'::email_backfill_job_status
+                   ELSE 'Complete'::email_backfill_job_status END
+               ELSE bj.status END as "latest_backfill_status?: _",
                c.sfs_photo_url as "photo_url?",
-               COALESCE(g.granted_scopes, '{}') AS "google_granted_scopes!",
-               (g.calendar_disabled_at IS NOT NULL) AS "calendar_disabled!",
+               CASE WHEN l.provider = 'OUTLOOK' THEN COALESCE(ms.granted_scopes, '{}') ELSE COALESCE(g.granted_scopes, '{}') END AS "provider_granted_scopes!",
+               (CASE WHEN l.provider = 'OUTLOOK' THEN ms.calendar_disabled_at ELSE g.calendar_disabled_at END IS NOT NULL) AS "calendar_disabled!",
                EXISTS (
                    SELECT 1 FROM calendar_accounts ca WHERE ca.email_link_id = l.id
                ) AS "has_calendar_data!"
         FROM (
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
-                   el.last_sync_error_at, el.created_at, el.updated_at
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
             FROM email_links el
             WHERE el.macro_id = $1
             UNION
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
-                   el.last_sync_error_at, el.created_at, el.updated_at
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
             FROM email_links el
             JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1
         ) l
         LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+        LEFT JOIN email_link_microsoft_scopes ms ON ms.link_id = l.id AND ms.grant_generation = l.grant_generation
         LEFT JOIN email_settings s ON s.link_id = l.id
         LEFT JOIN LATERAL (
             SELECT status FROM email_backfill_jobs
@@ -298,7 +306,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                 settings,
                 latest_backfill_status: row.latest_backfill_status.map(Into::into),
                 photo_url: row.photo_url,
-                google_granted_scopes: row.google_granted_scopes,
+                provider_granted_scopes: row.provider_granted_scopes,
                 calendar_disabled: row.calendar_disabled,
                 has_calendar_data: row.has_calendar_data,
             })

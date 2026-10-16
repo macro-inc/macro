@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT m.thread_id FROM email_messages m\n            LEFT JOIN email_message_recipients r ON r.message_id = m.id\n            WHERE m.link_id = $1 AND (m.from_contact_id = ANY($2) OR r.contact_id = ANY($2))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a6fa14c96403454c11bae9ddaed614aabb43e197002dcfd920e5d3c7c75189fb"
+}

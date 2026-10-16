@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.updated_at,m.provider_id,m.thread_id,\n        CASE WHEN l.provider='OUTLOOK' THEN COALESCE(d.checkpoint->'draft'->>'version',m.provider_version,d.base_version) ELSE m.provider_history_id END AS version,\n        m.is_draft,m.is_sent,\n        (COALESCE(d.delete_requested,false) OR EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')) AS \"retired!\",\n        (EXISTS(SELECT 1 FROM email_scheduled_messages s WHERE s.message_id=m.id)\n            OR EXISTS(SELECT 1 FROM email_attachments_drafts a WHERE a.draft_id=m.id AND a.upload_pending)\n            OR COALESCE(d.lease_until>now(),false) OR COALESCE(d.state IN ('conflict','unknown'),false)\n            OR COALESCE(d.checkpoint->>'stage' NOT IN ('inspect','ready'),false)) AS \"busy!\",\n        EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.destination_id=m.id AND t.state NOT IN ('ready','retained')) AS \"predecessor!\",\n        jsonb_build_object('db_id',m.id,'thread_db_id',m.thread_id,'subject',COALESCE(m.subject,''),'replying_to_id',m.replying_to_id,\n            'body_text',m.body_text,'body_html',m.body_html_sanitized,'body_macro',m.body_macro,'headers_json',m.headers_jsonb,\n            'to',COALESCE(recipients.to_addresses,'[]'::jsonb),'cc',COALESCE(recipients.cc_addresses,'[]'::jsonb),'bcc',COALESCE(recipients.bcc_addresses,'[]'::jsonb)) AS \"content!\"\n        FROM email_messages m JOIN email_links l ON l.id=m.link_id LEFT JOIN email_mailbox_drafts d ON d.message_id=m.id\n        CROSS JOIN LATERAL (SELECT jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='TO') AS to_addresses,\n            jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='CC') AS cc_addresses,\n            jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER(WHERE r.recipient_type='BCC') AS bcc_addresses\n            FROM email_message_recipients r JOIN email_contacts c ON c.id=r.contact_id WHERE r.message_id=m.id) recipients\n        WHERE m.id=$1 AND m.link_id=$2 FOR UPDATE OF m",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "retired!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "busy!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "predecessor!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "content!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      null,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "971a825044153a72c2aa1316b951eda3ca16849422e86c61e90fe210d312a34b"
+}

@@ -22,15 +22,6 @@ pub(crate) async fn all_mail_preview_cursor(
     sqlx::query_as!(
         ThreadPreviewCursorDbRow,
         r#"
-        WITH spam_labels AS (
-            SELECT id, link_id FROM email_labels WHERE link_id = ANY($1) AND name = 'SPAM'
-        ),
-        trash_labels AS (
-            SELECT id, link_id FROM email_labels WHERE link_id = ANY($1) AND name = 'TRASH'
-        ),
-        important_labels AS (
-            SELECT id, link_id FROM email_labels WHERE link_id = ANY($1) AND name = 'IMPORTANT'
-        )
         SELECT
             t.id,
             t.provider_id,
@@ -48,9 +39,8 @@ pub(crate) async fn all_mail_preview_cursor(
             EXISTS (
                 SELECT 1
                 FROM email_messages m_imp
-                JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                JOIN important_labels il ON ml.label_id = il.id
-                WHERE m_imp.thread_id = t.id
+                    JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
+                    WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
             ) AS "is_important!",
             c.email_address AS "sender_email?",
             COALESCE(lmp.from_name, c.name) AS "sender_name?",
@@ -104,16 +94,8 @@ pub(crate) async fn all_mail_preview_cursor(
                 m.from_name
             FROM email_messages m
             WHERE m.thread_id = t.id
-              AND NOT EXISTS (
-                  SELECT 1 FROM email_message_labels ml
-                  JOIN spam_labels sl ON ml.label_id = sl.id
-                  WHERE ml.message_id = m.id
-              )
-              AND NOT EXISTS (
-                  SELECT 1 FROM email_message_labels ml
-                  JOIN trash_labels tl ON ml.label_id = tl.id
-                  WHERE ml.message_id = m.id
-              )
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_junk)
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
             ORDER BY m.internal_date_ts DESC
             LIMIT 1
         ) AS lmp

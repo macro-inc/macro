@@ -16,8 +16,28 @@ and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
 `Archived` / `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
-shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
-connected account. Search is `Ctrl+F` within the surface.
+shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
+use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface.
+
+Outlook connections support personal Outlook.com and individual Microsoft 365
+inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
+same thread, search, Signal/Noise, draft, and schedule surfaces apply to both
+providers. Shared/delegated Microsoft mailboxes are outside this account scope;
+sharing an inbox or thread inside Macro remains available.
+
+For Outlook writes, distinguish acceptance from provider confirmation. Thread
+organization notices and inbox settings show pending or failed changes. A saved
+draft can show a conflict or an uncertain delivery: use its recovery actions and
+check the provider copy before choosing an explicit resend. Switching the sender
+inbox copies the draft and attachments into the destination; wait for completion
+before sending. If the copy is interrupted, use retry or keep the original.
+
+Imported Outlook attachments keep their provider identity, including inline
+images. Cloud-reference attachment chips open the original Outlook message.
+Forwarding a message with cloud references shows a notice to share those links
+from Outlook; they are not downloadable files. Verify a native draft attachment
+replacement, removal of the final attachment, and moving a populated folder into
+and out of Deleted Items when exercising sync.
 
 Sender names use each message's `From` display name, falling back to the
 address-book name when it is absent. Multiple people or bots sending through

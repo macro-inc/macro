@@ -1,0 +1,1 @@
+DROP VIEW email_message_mailbox_facts;

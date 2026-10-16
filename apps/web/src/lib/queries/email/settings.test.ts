@@ -51,6 +51,7 @@ function accounts(signature: string, replySignature = true): MailAccountsQuery {
       emailLinks: [
         {
           id: 'inbox-1',
+          provider: 'GMAIL',
           macroId: 'macro|self@example.com',
           emailAddress: 'self@example.com',
           photoUrl: null,

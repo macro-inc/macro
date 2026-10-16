@@ -151,7 +151,7 @@ export function EventEditor(props: {
                     draft().macroCall
                       ? 'A Macro call is created when someone books and added to the calendar invitation.'
                       : draft().googleMeet
-                        ? 'A Google Meet link is created when someone books.'
+                        ? 'A video meeting link is created when someone books.'
                         : 'Guests only see the location you enter.'
                   }
                 >
@@ -166,7 +166,7 @@ export function EventEditor(props: {
                     }
                     options={[
                       { value: 'macro', label: 'Macro call' },
-                      { value: 'google_meet', label: 'Google Meet' },
+                      { value: 'google_meet', label: 'Video meeting' },
                       { value: 'none', label: 'No video link' },
                     ]}
                     onChange={(value) =>

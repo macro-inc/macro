@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET has_attachments=EXISTS(SELECT 1 FROM email_attachments_drafts WHERE draft_id=$1) WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b8bbe4694f01253ece81a199cbaf70126f77eaac17e929c0830644fd6e27e89"
+}

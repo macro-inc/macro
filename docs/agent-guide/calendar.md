@@ -2,6 +2,15 @@
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+Microsoft calendars use the same editor and calendar views after calendar consent.
+Conference choices follow the selected calendar's capabilities: Microsoft Teams
+where supported and Google Meet for Google calendars. Selecting a calendar that
+cannot create a requested conference shows an error until the request is resolved;
+editing an existing meeting preserves its conference. Email reminders are sent to
+the connected calendar mailbox. Outlook out-of-office automatic replies show an
+uncertainty notice if a provider response cannot be confirmed; a reconnect must
+not resend an already attempted automatic reply.
+
 Event composer dropdown triggers and date/time inputs use the theme control
 surface, so they blend with the dialog instead of using the darker page fill.
 Their menus stay inside the composer's portal scope. Verify that calendar,
@@ -505,3 +514,16 @@ action is unavailable.
 focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
 and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
+
+For a writable Outlook event you organize, the editor's `Replace event…` action
+can reset guest RSVPs or remove its online meeting. Save or discard ordinary edits
+first. Choose the entire series or only this occurrence, review the saved event,
+and check the cancellation/reinvitation acknowledgement before `Replace event`.
+The old invitation is cancelled after the replacement is prepared; guests receive
+a new invitation and must respond again. `Check progress` and `Continue replacement`
+resume that saved operation after an interrupted response. Recovery continues when
+the dialog closes. A conflict offers links to review both copies in Outlook; do
+not create another copy while the existing operation is unresolved. Events with
+native details that cannot be safely copied are rejected before any invitations.
+For an Outlook invitation you attend, `Open in Outlook` below the RSVP controls
+opens the actual occurrence so you can clear your own response there.

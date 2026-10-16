@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_sync_streams s SET position = NULL,initial_complete = false,attachments_rechecked = false,next_run_at = now(),lease_id = NULL,lease_until = NULL\n            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3\n                AND s.lease_until > now() AND l.id = s.link_id AND l.sync_generation = s.generation\n                AND l.is_sync_active AND l.grant_generation = $4\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c45ee166e48f428f4bb52c103d25dc608bc44343a782124eefcd9b127630fd73"
+}

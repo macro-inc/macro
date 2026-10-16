@@ -4,6 +4,7 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AddDraftAttachmentRequestUploadId } from './addDraftAttachmentRequestUploadId';
 
 /**
  * The request passed to send a message
@@ -15,4 +16,6 @@ export interface AddDraftAttachmentRequest {
   sha: string;
   /** The size of the file in bytes. */
   size: number;
+  /** Stable client upload identifier. Retry the same file with the same ID. */
+  upload_id?: AddDraftAttachmentRequestUploadId;
 }

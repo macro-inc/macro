@@ -108,6 +108,15 @@ fragment CalendarFields on GraphqlCalendar {
 	id
 	linkId
 	emailAddress
+	provider
+	capabilities {
+		autoDecline
+		conferenceProvider
+		customRecurrence
+		emailReminders
+		removeConference
+		resetRsvp
+	}
 	name
 	color
 	isPrimary

@@ -97,6 +97,7 @@ fn signing_keys() -> oauth::MicrosoftSigningKeys {
             kty: "RSA".into(),
             n: TEST_MODULUS.into(),
             e: "AQAB".into(),
+            issuer: None,
         }],
     }
 }
@@ -161,10 +162,7 @@ fn authorize_url_uses_configured_tenant_and_secondary_account_parameters() {
         "https://auth.example.com/oauth2/microsoft/callback"
     );
     assert_eq!(query.get("response_type").unwrap(), "code");
-    assert_eq!(
-        query.get("scope").unwrap(),
-        "openid email offline_access profile Mail.ReadWrite Mail.Send"
-    );
+    assert_eq!(query.get("scope").unwrap(), oauth::MICROSOFT_SCOPES);
     assert_eq!(query.get("prompt").unwrap(), "select_account");
 }
 
@@ -220,7 +218,7 @@ fn id_token_claims_are_validated_and_email_is_preferred() {
     let user = decode_id_token(&token).unwrap();
 
     assert_eq!(user.sub, "microsoft-user-id");
-    assert_eq!(user.email, "email@example.com");
+    assert_eq!(user.email.as_deref(), Some("email@example.com"));
 }
 
 #[test]
@@ -232,7 +230,7 @@ fn id_token_uses_preferred_username_when_email_is_absent() {
 
     let user = decode_id_token(&token).unwrap();
 
-    assert_eq!(user.email, "username@example.com");
+    assert_eq!(user.email.as_deref(), Some("username@example.com"));
 }
 
 #[test]
@@ -242,7 +240,6 @@ fn id_token_rejects_invalid_claims() {
         ("aud", serde_json::json!("another-client")),
         ("tid", serde_json::json!("another-tenant")),
         ("sub", serde_json::json!("")),
-        ("email", serde_json::Value::Null),
         ("exp", serde_json::json!(now() - 3600)),
         ("exp", serde_json::Value::Null),
         ("nbf", serde_json::json!(now() + 3600)),
@@ -373,4 +370,146 @@ async fn signing_key_fetch_rejects_an_empty_key_set() {
             .to_string()
             .contains("did not contain any signing keys")
     );
+}
+
+#[test]
+fn bound_authorization_preserves_opaque_state_pkce_and_nonce() {
+    let state = "eyJwcm92aWRlciI6Im1pY3Jvc29mdCJ9.c2lnbmF0dXJl+/=&?%20";
+    let redirect_uri = "https://auth.example.com/callback";
+    for calendar in [false, true] {
+        let url = microsoft_client()
+            .construct_bound_microsoft_authorize_url(
+                redirect_uri,
+                state,
+                "challenge",
+                "nonce",
+                calendar,
+            )
+            .unwrap();
+        let url = reqwest::Url::parse(&url).unwrap();
+        let values: HashMap<_, _> = url.query_pairs().into_owned().collect();
+        assert_eq!(url.query_pairs().count(), values.len());
+        assert_eq!(values["state"], state);
+        assert_eq!(values["redirect_uri"], redirect_uri);
+        assert_eq!(values["code_challenge_method"], "S256");
+        assert_eq!(values["code_challenge"], "challenge");
+        assert_eq!(values["nonce"], "nonce");
+    }
+}
+
+#[test]
+fn common_authority_validates_tenant_issuer_key_scope_and_nonce() {
+    let tenant = "9188040d-6c67-4c5b-b112-36a304b66dad";
+    let mut keys = signing_keys();
+    keys.issuer = "https://login.microsoftonline.com/{tenantid}/v2.0".into();
+    keys.keys[0].issuer = Some(keys.issuer.clone());
+    let mut claims = valid_claims();
+    claims["tid"] = tenant.into();
+    claims["iss"] = format!("https://login.microsoftonline.com/{tenant}/v2.0").into();
+    claims["nonce"] = "bound-nonce".into();
+    let token = signed_id_token(TEST_PRIVATE_KEY, TEST_KEY_ID, &claims);
+    assert!(
+        oauth::decode_bound_microsoft_id_token(
+            &token,
+            &keys,
+            "microsoft-client-id",
+            "common",
+            Some("bound-nonce")
+        )
+        .is_ok()
+    );
+    assert!(
+        oauth::decode_bound_microsoft_id_token(
+            &token,
+            &keys,
+            "microsoft-client-id",
+            "common",
+            Some("another-nonce")
+        )
+        .is_err()
+    );
+    assert!(
+        oauth::decode_bound_microsoft_id_token(
+            &token,
+            &keys,
+            "microsoft-client-id",
+            "organizations",
+            Some("bound-nonce")
+        )
+        .is_err()
+    );
+    keys.keys[0].issuer = Some("https://login.microsoftonline.com/another-tenant/v2.0".into());
+    assert!(
+        oauth::decode_bound_microsoft_id_token(
+            &token,
+            &keys,
+            "microsoft-client-id",
+            "common",
+            Some("bound-nonce")
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn common_authority_rejects_signature_valid_token_with_mismatched_issuer() {
+    let mut keys = signing_keys();
+    keys.issuer = "https://login.microsoftonline.com/{tenantid}/v2.0".into();
+    keys.keys[0].issuer = Some(keys.issuer.clone());
+    let mut claims = valid_claims();
+    claims["tid"] = "9188040d-6c67-4c5b-b112-36a304b66dad".into();
+    let token = signed_id_token(TEST_PRIVATE_KEY, TEST_KEY_ID, &claims);
+    assert!(
+        oauth::decode_bound_microsoft_id_token(
+            &token,
+            &keys,
+            "microsoft-client-id",
+            "common",
+            None
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn calendar_consent_is_opt_in_and_contacts_are_read_only() {
+    for calendar in [false, true] {
+        let url = microsoft_client()
+            .construct_bound_microsoft_authorize_url(
+                "https://auth.example.com/callback",
+                "state",
+                "challenge",
+                "nonce",
+                calendar,
+            )
+            .unwrap();
+        let url = reqwest::Url::parse(&url).unwrap();
+        let scopes = url
+            .query_pairs()
+            .find(|(key, _)| key == "scope")
+            .unwrap()
+            .1
+            .into_owned();
+        assert_eq!(
+            scopes
+                .split_whitespace()
+                .any(|scope| scope == "Calendars.ReadWrite"),
+            calendar
+        );
+        assert!(
+            scopes
+                .split_whitespace()
+                .any(|scope| scope == "Contacts.Read")
+        );
+        assert!(!scopes.contains("Contacts.ReadWrite"));
+    }
+}
+
+#[test]
+fn id_token_without_email_is_usable_for_verified_graph_identity() {
+    let mut claims = valid_claims();
+    claims["email"] = serde_json::Value::Null;
+    claims["preferred_username"] = serde_json::Value::Null;
+    let token = signed_id_token(TEST_PRIVATE_KEY, TEST_KEY_ID, &claims);
+    assert_eq!(decode_id_token(&token).unwrap().email, None);
 }

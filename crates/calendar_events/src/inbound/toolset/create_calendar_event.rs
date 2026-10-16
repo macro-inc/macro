@@ -26,10 +26,10 @@ use crate::domain::{
 #[schemars(
     title = "CreateCalendarEvent",
     description = "\
-Prepare an event on the user's calendar, inviting any listed attendees through Google \
-Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and \
+Prepare an event on the user's calendar, inviting any listed attendees through its connected \
+provider. In Macro chat this tool opens an inline composer so the user can review, edit, and \
 confirm the event; use the tool to present the proposal instead of asking for a redundant \
-confirmation in prose. When the pending call is executed, the event is written to Google \
+confirmation in prose. When the pending call is executed, the event is written to the calendar provider \
 immediately and attendees receive invitations. Other clients should confirm attendee events \
 before executing the call. Do NOT use it for a prompt that came from a channel or document \
 thread — the context block names a conversation parent when it did, and there is no surface \
@@ -42,7 +42,7 @@ targets another one. For recurring events pass RFC 5545 lines in `recurrenceLine
 updates or deletion. Fails if the user has no writable calendar connected.\n\
 \n\
 For video conferencing pick at most one of `addMacroCall` (a Macro meeting link, the \
-default choice for a Macro user's meeting) or `addGoogleMeet` (a Google Meet conference). \
+default choice for a Macro user's meeting) or `addConference` (Google Meet or Microsoft Teams, per calendar capabilities). \
 A Macro call is created for the user, scheduled to the event's times, and its join link is \
 appended to the event's description so every attendee's invitation carries it; it also \
 becomes the event's `location` unless a physical `location` was supplied. The returned \
@@ -51,7 +51,7 @@ event's `macroCallUrl` holds the link.\n\
 Set `eventType` to \"out_of_office\" to mark the user as out of office (e.g. \"mark me out \
 of office Thursday\"). Out-of-office events must land on the user's primary calendar (omit \
 `calendarId`), must be timed rather than all-day, and take no attendees or video \
-conferencing (leave `addMacroCall` and `addGoogleMeet` false); use `outOfOffice` to control \
+conferencing (leave `addMacroCall` and `addConference` false); use `outOfOffice` to control \
 whether conflicting meetings are auto-declined. The type cannot be changed afterward."
 )]
 pub struct CreateCalendarEvent {
@@ -79,7 +79,7 @@ pub struct CreateCalendarEvent {
 
     /// Attendees to invite.
     #[schemars(
-        description = "Attendees to invite by email. They are notified by Google Calendar as \
+        description = "Attendees to invite by email. They are notified by the calendar provider as \
                        soon as the event is created. Omit for a solo event."
     )]
     #[serde(default)]
@@ -112,18 +112,17 @@ pub struct CreateCalendarEvent {
     #[schemars(
         description = "Attach a freshly created Macro call to the event: a Macro meeting link \
                        scheduled to the event's times, written into the event's location and \
-                       description. Mutually exclusive with `addGoogleMeet`."
+                       description. Mutually exclusive with `addConference`."
     )]
     #[serde(default)]
     pub add_macro_call: bool,
 
-    /// Whether to attach a Google Meet conference.
+    /// Whether to attach the calendar provider's meeting conference.
     #[schemars(
-        description = "Attach a freshly generated Google Meet video conference to the event. \
-                       Mutually exclusive with `addMacroCall`."
+        description = "Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first."
     )]
-    #[serde(default)]
-    pub add_google_meet: bool,
+    #[serde(default, alias = "addGoogleMeet")]
+    pub add_conference: bool,
 
     /// Kind of event to create.
     #[schemars(
@@ -139,7 +138,7 @@ pub struct CreateCalendarEvent {
         description = "Out-of-office decline behavior, used only when eventType is \
                        \"out_of_office\". Omit to just block the time; set \
                        `autoDeclineMode` to \"decline_all\" or \"decline_new_only\" to have \
-                       Google decline conflicting meetings, optionally with a `declineMessage`."
+                       the calendar integration decline conflicting meetings, optionally with a `declineMessage`."
     )]
     #[serde(default)]
     pub out_of_office: Option<OutOfOfficeInput>,
@@ -168,18 +167,18 @@ where
         tracing::info!(
             calendar_id=?self.calendar_id,
             attendee_count = self.attendees.len(),
+            add_conference = self.add_conference,
             add_macro_call = self.add_macro_call,
-            add_google_meet = self.add_google_meet,
             "Create calendar event"
         );
 
-        if self.add_macro_call && self.add_google_meet {
+        if self.add_macro_call && self.add_conference {
             return Err(ToolCallError {
-                description: "`addMacroCall` and `addGoogleMeet` are mutually exclusive; pick \
+                description: "`addMacroCall` and `addConference` are mutually exclusive; pick \
                               one kind of video conferencing."
                     .to_string(),
                 internal_error: anyhow::Error::from_boxed(
-                    rootcause::report!("both Macro call and Google Meet requested")
+                    rootcause::report!("both Macro call and provider conference requested")
                         .into_boxed_error(),
                 ),
             });
@@ -216,7 +215,9 @@ where
             visibility: None,
             transparency: None,
             reminders: self.reminders.clone().map(Into::into),
-            conference: self.add_google_meet.then_some(ConferenceChange::GoogleMeet),
+            conference: self
+                .add_conference
+                .then_some(ConferenceChange::ProviderDefault),
             out_of_office,
         };
 

@@ -112,7 +112,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     const event = props.event();
     if (event) {
       const calendarId = event.calendarId ?? event.calendar.id;
-      const calendars = calendarsQuery.data ?? [];
+      const calendars = calendarsQuery.isSuccess ? calendarsQuery.data : [];
       const calendar = calendars.find(
         (candidate) => candidate.id === calendarId
       );
@@ -122,6 +122,8 @@ export function useEventEditor(props: UseEventEditorProps) {
       return [
         {
           id: calendarId,
+          provider: calendar?.provider ?? event.calendar.provider,
+          capabilities: calendar?.capabilities ?? event.calendar.capabilities,
           label: event.calendar.name || 'Calendar',
           color: event.calendar.color,
           defaultReminders: reminderCalendar?.defaultReminders,
@@ -132,6 +134,8 @@ export function useEventEditor(props: UseEventEditorProps) {
 
     return writableCalendars().map((calendar) => ({
       id: calendar.id,
+      provider: calendar.provider,
+      capabilities: calendar.capabilities,
       label: calendarDisplayLabel(calendar, spansInboxes()),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,

@@ -1,0 +1,106 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS(SELECT w.id FROM calendar_outlook_work w JOIN calendar_accounts a ON a.id=w.account_id\n            JOIN email_links l ON l.id=a.email_link_id JOIN email_link_microsoft_scopes s ON s.link_id=l.id AND s.grant_generation=l.grant_generation\n            LEFT JOIN calendars c ON c.id=w.calendar_id\n            WHERE l.is_sync_active AND a.provider='outlook' AND a.sync_status NOT IN ('disabled','reauth_required') AND s.calendar_disabled_at IS NULL AND s.granted_scopes @> ARRAY['Calendars.ReadWrite']::text[]\n              AND(w.calendar_id IS NULL OR NOT c.is_deleted) AND w.next_run_at<=now() AND(w.lease_until IS NULL OR w.lease_until<now())\n            ORDER BY w.next_run_at,w.calendar_id NULLS FIRST LIMIT 1 FOR UPDATE OF w SKIP LOCKED)\n            UPDATE calendar_outlook_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'\n            FROM candidate,calendar_accounts a,email_links l WHERE w.id=candidate.id AND a.id=w.account_id AND l.id=a.email_link_id\n            RETURNING w.id,w.account_id,w.calendar_id,w.sync_generation,w.grant_generation,w.cursor,w.starts_at,w.ends_at,w.pending_ids,w.page_loaded,w.page_cursor,a.owner_id,l.id AS link_id,l.email_address::text AS \"email_address!\",l.fusionauth_user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "calendar_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "pending_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "page_loaded",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "page_cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "email_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "affc5f1a41b8f5b01043aa4270410f1918f0535deb2c02f63b5bde9a4e26d32d"
+}

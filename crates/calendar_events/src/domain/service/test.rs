@@ -5,15 +5,15 @@ use crate::domain::{
         AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
         CalendarCreationTarget, CalendarEvent, CalendarEventMutationTarget, CalendarEventSource,
-        CalendarOccurrence, CalendarSyncStatus, DisconnectedGoogleCalendar, EventReminders,
-        EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
-        GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport,
-        GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel,
-        GoogleWatchConfig, ProviderCalendar, StoredGoogleCalendar,
+        CalendarOccurrence, CalendarSyncStatus, DisconnectedCalendar, EventReminders, EventStatus,
+        EventTime, EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE,
+        GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
+        GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar,
+        ProviderEventSource, StoredGoogleCalendar,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarReauthNotifier, CalendarRepository,
-        GoogleCalendarProvider, GoogleEventSyncContext, GoogleProviderError,
+        CalendarBackfillRepository, CalendarEventWrite, CalendarProviderError,
+        CalendarReauthNotifier, CalendarRepository, GoogleCalendarProvider, GoogleEventSyncContext,
     },
 };
 use chrono::{Duration, TimeZone, Utc};
@@ -47,11 +47,11 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
-    async fn disconnect_google_calendar(
+    async fn disconnect_provider_calendar(
         &self,
         _requester_id: &str,
         _email_link_id: Uuid,
-    ) -> Result<Option<DisconnectedGoogleCalendar>, Report> {
+    ) -> Result<Option<DisconnectedCalendar>, Report> {
         unreachable!()
     }
 
@@ -60,6 +60,8 @@ impl CalendarRepository for FakeRepo {
         write: CalendarEventWrite,
     ) -> Result<CalendarEventWriteOutcome, Report> {
         let upsert = match write {
+            #[cfg(feature = "outlook")]
+            CalendarEventWrite::OutlookSync { upsert, .. } => upsert,
             CalendarEventWrite::GoogleBackfill { upsert, .. }
             | CalendarEventWrite::UserMutation(upsert)
             | CalendarEventWrite::Fixture(upsert) => upsert,
@@ -157,7 +159,7 @@ impl CalendarRepository for FakeRepo {
         Ok(Vec::new())
     }
 
-    async fn remove_google_source(
+    async fn remove_provider_source(
         &self,
         _account_id: Uuid,
         _calendar_id: Uuid,
@@ -329,7 +331,9 @@ fn valid_upsert() -> CalendarEventUpsert {
             created_at: starts_at,
             updated_at: starts_at,
         },
-        source: CalendarEventSource::Google(GoogleEventSource {
+        source: CalendarEventSource::Google(ProviderEventSource {
+            automatic_decline: None,
+            binding: None,
             observed_access_role: Some("owner".to_owned()),
             email_link_id: Uuid::now_v7(),
             account_id: Uuid::now_v7(),
@@ -425,7 +429,7 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(Vec::new())
     }
 
@@ -433,7 +437,7 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
         &self,
         _access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         Ok(GoogleEventSyncBatch {
             upserts: Vec::new(),
             observed_provider_event_ids: Some(Vec::new()),
@@ -450,7 +454,7 @@ impl GoogleCalendarProvider for FakeGoogleProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -463,9 +467,9 @@ impl GoogleCalendarProvider for ReauthGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
-        Err(GoogleProviderError::new(
-            GoogleProviderErrorKind::ReauthRequired,
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
+        Err(CalendarProviderError::new(
+            CalendarProviderErrorKind::ReauthRequired,
             "insufficient permissions",
         ))
     }
@@ -474,7 +478,7 @@ impl GoogleCalendarProvider for ReauthGoogleProvider {
         &self,
         _access_token: &str,
         _context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         unreachable!("calendar listing fails first")
     }
 
@@ -485,7 +489,7 @@ impl GoogleCalendarProvider for ReauthGoogleProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -590,7 +594,7 @@ impl GoogleCalendarProvider for PartialFailureGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(two_calendars())
     }
 
@@ -598,15 +602,15 @@ impl GoogleCalendarProvider for PartialFailureGoogleProvider {
         &self,
         _access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         if context.target.provider_calendar_id == "team" {
-            return Err(GoogleProviderError::new(
-                GoogleProviderErrorKind::Transient,
+            return Err(CalendarProviderError::new(
+                CalendarProviderErrorKind::Transient,
                 "the second calendar's poll failed",
             ));
         }
         let mut upsert = valid_upsert();
-        let CalendarEventSource::Google(source) = &mut upsert.source;
+        let source = upsert.source.details_mut();
         source.calendar_id = Uuid::nil();
         Ok(GoogleEventSyncBatch {
             upserts: vec![upsert],
@@ -624,7 +628,7 @@ impl GoogleCalendarProvider for PartialFailureGoogleProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -640,7 +644,7 @@ impl GoogleCalendarProvider for ChangedCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(vec![provider_calendar("primary", true)])
     }
 
@@ -648,7 +652,7 @@ impl GoogleCalendarProvider for ChangedCalendarProvider {
         &self,
         access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         let mut batch = PartialFailureGoogleProvider
             .sync_events(access_token, context)
             .await?;
@@ -665,7 +669,7 @@ impl GoogleCalendarProvider for ChangedCalendarProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -718,7 +722,7 @@ impl GoogleCalendarProvider for TotalFailureGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(two_calendars())
     }
 
@@ -726,9 +730,9 @@ impl GoogleCalendarProvider for TotalFailureGoogleProvider {
         &self,
         _access_token: &str,
         _context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
-        Err(GoogleProviderError::new(
-            GoogleProviderErrorKind::Transient,
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
+        Err(CalendarProviderError::new(
+            CalendarProviderErrorKind::Transient,
             "every calendar's poll failed",
         ))
     }
@@ -740,7 +744,7 @@ impl GoogleCalendarProvider for TotalFailureGoogleProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -756,7 +760,7 @@ impl GoogleCalendarProvider for ReauthOnColleagueCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(two_calendars())
     }
 
@@ -764,15 +768,15 @@ impl GoogleCalendarProvider for ReauthOnColleagueCalendarProvider {
         &self,
         _access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         if context.target.provider_calendar_id == "team" {
-            return Err(GoogleProviderError::new(
-                GoogleProviderErrorKind::ReauthRequired,
+            return Err(CalendarProviderError::new(
+                CalendarProviderErrorKind::ReauthRequired,
                 "insufficient permissions",
             ));
         }
         let mut upsert = valid_upsert();
-        let CalendarEventSource::Google(source) = &mut upsert.source;
+        let source = upsert.source.details_mut();
         source.calendar_id = Uuid::nil();
         Ok(GoogleEventSyncBatch {
             upserts: vec![upsert],
@@ -790,7 +794,7 @@ impl GoogleCalendarProvider for ReauthOnColleagueCalendarProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -804,7 +808,7 @@ impl GoogleCalendarProvider for MixedTotalFailureGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(two_calendars())
     }
 
@@ -812,15 +816,15 @@ impl GoogleCalendarProvider for MixedTotalFailureGoogleProvider {
         &self,
         _access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         // The transient failure comes first, so last-write-wins would surface
         // the permanent one and fail the assertion.
         let kind = if context.target.provider_calendar_id == "primary" {
-            GoogleProviderErrorKind::Transient
+            CalendarProviderErrorKind::Transient
         } else {
-            GoogleProviderErrorKind::Permanent
+            CalendarProviderErrorKind::Permanent
         };
-        Err(GoogleProviderError::new(kind, "failed"))
+        Err(CalendarProviderError::new(kind, "failed"))
     }
 
     async fn watch_calendar(
@@ -830,7 +834,7 @@ impl GoogleCalendarProvider for MixedTotalFailureGoogleProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -846,7 +850,7 @@ impl GoogleCalendarProvider for PushUnsupportedGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(vec![provider_calendar("holidays", false)])
     }
 
@@ -854,7 +858,7 @@ impl GoogleCalendarProvider for PushUnsupportedGoogleProvider {
         &self,
         access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         FakeGoogleProvider.sync_events(access_token, context).await
     }
 
@@ -865,10 +869,10 @@ impl GoogleCalendarProvider for PushUnsupportedGoogleProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         *self.watch_calls.lock().unwrap() += 1;
-        Err(GoogleProviderError::new(
-            GoogleProviderErrorKind::PushUnsupported,
+        Err(CalendarProviderError::new(
+            CalendarProviderErrorKind::PushUnsupported,
             "Push notifications are not supported by this resource.",
         ))
     }
@@ -1174,7 +1178,7 @@ impl GoogleCalendarProvider for CancellingCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(vec![ProviderCalendar {
             provider_calendar_id: "primary".to_string(),
             name: "Calendar".to_string(),
@@ -1192,7 +1196,7 @@ impl GoogleCalendarProvider for CancellingCalendarProvider {
         &self,
         _access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         Ok(GoogleEventSyncBatch {
             upserts: Vec::new(),
             observed_provider_event_ids: Some(Vec::new()),
@@ -1209,7 +1213,7 @@ impl GoogleCalendarProvider for CancellingCalendarProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -1297,7 +1301,7 @@ impl GoogleCalendarProvider for SystemCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(vec![ProviderCalendar {
             provider_calendar_id: "en.usa#holiday@group.v.calendar.google.com".to_string(),
             name: "Holidays in United States".to_string(),
@@ -1315,7 +1319,7 @@ impl GoogleCalendarProvider for SystemCalendarProvider {
         &self,
         _access_token: &str,
         _context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         unreachable!("freshly synced system calendars must not sync")
     }
 
@@ -1326,7 +1330,7 @@ impl GoogleCalendarProvider for SystemCalendarProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -1375,7 +1379,7 @@ impl GoogleCalendarProvider for FailingPrimaryBesideSystemCalendarProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(vec![
             provider_calendar("primary", true),
             provider_calendar("en.usa#holiday@group.v.calendar.google.com", false),
@@ -1386,12 +1390,12 @@ impl GoogleCalendarProvider for FailingPrimaryBesideSystemCalendarProvider {
         &self,
         _access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         if context.target.provider_calendar_id != "primary" {
             unreachable!("freshly synced system calendars must not sync")
         }
-        Err(GoogleProviderError::new(
-            GoogleProviderErrorKind::Transient,
+        Err(CalendarProviderError::new(
+            CalendarProviderErrorKind::Transient,
             "the primary calendar's poll failed",
         ))
     }
@@ -1403,7 +1407,7 @@ impl GoogleCalendarProvider for FailingPrimaryBesideSystemCalendarProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -1462,7 +1466,7 @@ impl GoogleCalendarProvider for HangingGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         std::future::pending().await
     }
 
@@ -1470,7 +1474,7 @@ impl GoogleCalendarProvider for HangingGoogleProvider {
         &self,
         _access_token: &str,
         _context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         unreachable!("provider hangs before syncing events")
     }
 
@@ -1481,7 +1485,7 @@ impl GoogleCalendarProvider for HangingGoogleProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }
@@ -1693,7 +1697,7 @@ impl GoogleCalendarProvider for InvalidNormalizedGoogleProvider {
         &self,
         _access_token: &str,
         _email_link_id: Uuid,
-    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
         Ok(two_calendars())
     }
 
@@ -1701,9 +1705,9 @@ impl GoogleCalendarProvider for InvalidNormalizedGoogleProvider {
         &self,
         _access_token: &str,
         context: GoogleEventSyncContext,
-    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
         let mut valid = valid_upsert();
-        let CalendarEventSource::Google(source) = &mut valid.source;
+        let source = valid.source.details_mut();
         source.calendar_id = context.target.calendar_id;
         let mut upserts = vec![valid.clone()];
         if context.target.provider_calendar_id == "team" {
@@ -1731,7 +1735,7 @@ impl GoogleCalendarProvider for InvalidNormalizedGoogleProvider {
         _provider_calendar_id: &str,
         _channel_id: Uuid,
         _config: &GoogleWatchConfig,
-    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
         unreachable!("watch is disabled in these tests")
     }
 }

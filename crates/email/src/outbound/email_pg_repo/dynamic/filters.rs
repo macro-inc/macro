@@ -425,29 +425,11 @@ fn build_address_message_predicate(
     })
 }
 
-/// Builds the `NOT EXISTS (… TRASH …)` fragment used inside the candidate
-/// subquery. Uses `ml.label_id = ANY($trash_label_ids)` so the probe
-/// excludes TRASH messages across every link in scope (one link for
-/// per-mailbox queries, all team links for team-scoped queries).
-/// Returns `TRUE` (no exclusion) when no in-scope link has a TRASH label —
-/// callers must always pre-resolve via `resolve_filters`, and an empty set
-/// means no message can be trashed in the first place.
-fn build_trash_check(resolved: &ResolvedFilters) -> SqlFragment {
-    let ids = resolved.trash_label_ids();
-    if ids.is_empty() {
-        return SqlFragment::raw("TRUE");
-    }
-    let mut f = SqlFragment::raw(
-        r#"NOT EXISTS (
-                  SELECT 1 FROM email_message_labels ml
-                  WHERE ml.message_id = m.id AND ml.label_id = ANY("#,
-    );
-    f.extend(SqlFragment::bind_uuid_array(ids.to_vec()));
-    f.push_raw(
-        r#")
-              )"#,
-    );
-    f
+/// Exclude physical trash and confirmed absent messages across all providers.
+fn build_trash_check(_resolved: &ResolvedFilters) -> SqlFragment {
+    SqlFragment::raw(
+        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)",
+    )
 }
 
 /// True when the AST contains at least one pure-address top-level
@@ -1048,27 +1030,18 @@ pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
             r#" AND (
                     m.is_draft = TRUE
                     OR EXISTS (
-                        SELECT 1 FROM email_message_labels ml
-                        JOIN email_labels l ON ml.label_id = l.id
-                        WHERE ml.message_id = m.id
-                        AND l.name = 'IMPORTANT'
-                        AND l.link_id = t.link_id
+                        SELECT 1 FROM email_message_mailbox_facts mf
+                        WHERE mf.id = m.id AND mf.provider_is_important
                     )
                 )"#,
         ),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => SqlFragment::raw(
-            r#" AND NOT EXISTS (
-                    SELECT 1 FROM email_message_labels ml
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE ml.message_id = m.id
-                    AND l.name IN ('IMPORTANT', 'CATEGORY_PERSONAL')
-                    AND l.link_id = t.link_id
-                )"#,
+            r#" AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.provider_is_other)"#,
         ),
         PreviewView::UserLabel(label_name) => {
             let mut f = SqlFragment::raw(
                 r#" AND EXISTS (
-                    SELECT 1 FROM email_message_labels ml
+                    SELECT 1 FROM email_effective_message_labels ml
                     JOIN email_labels l ON ml.label_id = l.id
                     WHERE ml.message_id = m.id
                     AND l.name = "#,
@@ -1097,25 +1070,7 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
     }
 }
 
-/// Builds the LATERAL's TRASH-exclusion fragment using the resolved label id
-/// when available. Returns `TRUE` (no exclusion) when the link has no TRASH
-/// label — same rationale as `build_trash_check`: a missing TRASH label
-/// means no message can be trashed. Anchored on `m.id` inside the LATERAL,
-/// so callers shouldn't add their own AND prefix.
+/// Use the same visibility rule for the candidate and its displayed preview.
 pub(super) fn build_lateral_trash_exclusion(resolved: &ResolvedFilters) -> SqlFragment {
-    let ids = resolved.trash_label_ids();
-    if ids.is_empty() {
-        return SqlFragment::raw("TRUE");
-    }
-    let mut f = SqlFragment::raw(
-        r#"NOT EXISTS (
-            SELECT 1 FROM email_message_labels ml
-            WHERE ml.message_id = m.id AND ml.label_id = ANY("#,
-    );
-    f.extend(SqlFragment::bind_uuid_array(ids.to_vec()));
-    f.push_raw(
-        r#")
-          )"#,
-    );
-    f
+    build_trash_check(resolved)
 }

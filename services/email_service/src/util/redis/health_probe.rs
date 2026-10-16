@@ -3,12 +3,21 @@ use std::time::Duration;
 use uuid::Uuid;
 
 impl RedisClient {
+    /// An enqueue failure must not suppress health checks for the next 15 minutes.
+    pub async fn cancel_health_probe(&self, link_id: Uuid) {
+        if let Ok(mut con) = self.inner.get_multiplexed_async_connection().await {
+            let _: redis::RedisResult<usize> = redis::cmd("DEL")
+                .arg(format!("health_probe:{link_id}"))
+                .query_async(&mut con)
+                .await;
+        }
+    }
+
     /// Claims a per-link probe window with `SET health_probe:{link_id} 1 NX EX ttl`.
     ///
     /// Returns `true` when this caller acquired the window and should run a probe, and
-    /// `false` when a probe already ran within `ttl`. The key is never deleted — it
-    /// expires with its TTL, so the window stands for the full duration regardless of
-    /// how the probe itself fares. Keying on `link_id` (not the caller) means every
+    /// `false` when a probe already ran within `ttl`. The key expires with its TTL after publication; an enqueue
+    /// failure releases the window so a later request can retry. Keying on `link_id` (not the caller) means every
     /// sharer of a shared link draws from one window.
     ///
     /// Redis errors fail open (returns `true`): a cache outage must not suppress

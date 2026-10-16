@@ -18,8 +18,10 @@ import {
 } from '../components/email-schedule-summary';
 import type { EmailScheduleState } from '../primitives/email-send-schedule';
 import { AndroidBackFixture } from './android-back-fixture';
+import { CalendarReplacementFixture } from './calendar-replacement-fixture';
 import { DraftOwnerFixture } from './draft-owner-fixture';
 import { DraftRecoveryFixture } from './draft-recovery-fixture';
+import { OutlookRecoveryFixture } from './outlook-recovery-fixture';
 import { SenderFixture } from './sender-fixture';
 
 type ScheduledItem = {
@@ -336,7 +338,11 @@ const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
 render(
   () =>
-    new URLSearchParams(location.search).has('senders') ? (
+    new URLSearchParams(location.search).has('calendar-replacement') ? (
+      <CalendarReplacementFixture />
+    ) : new URLSearchParams(location.search).has('outlook-recovery') ? (
+      <OutlookRecoveryFixture />
+    ) : new URLSearchParams(location.search).has('senders') ? (
       <SenderFixture />
     ) : new URLSearchParams(location.search).has('draft-owner') ? (
       <DraftOwnerFixture />

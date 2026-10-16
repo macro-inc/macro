@@ -27,7 +27,7 @@ macro_rules! define_attachment_filters {
 
         /// SQL filter for document attachments.
         pub const ATTACHMENT_MIME_TYPE_FILTERS: &str = concat!(
-            "\n    AND (\n",
+            "\n    AND a.reference_url IS NULL AND (\n",
             "        a.mime_type IN (\n",
             $("            '", $document_mime_type, "',\n",)*
             "            '", $last_document_mime_type, "'\n",
@@ -43,7 +43,7 @@ macro_rules! define_attachment_filters {
 
         /// SQL filter for media attachments.
         pub const ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA: &str = concat!(
-            "\n    (a.mime_type LIKE '", $first_media_prefix, "%'",
+            "\n    a.reference_url IS NULL AND (a.mime_type LIKE '", $first_media_prefix, "%'",
             $(" OR a.mime_type LIKE '", $media_prefix, "%'",)*
             ")\n",
         );

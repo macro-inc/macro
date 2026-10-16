@@ -48,6 +48,42 @@ class UploadDraftAttachmentError extends Error {
   }
 }
 
+// A retried reservation must converge even when its first response was lost.
+const uploadIds = new WeakMap<File, Map<string, string>>();
+function uploadId(file: File, draft: string): string {
+  let drafts = uploadIds.get(file);
+  if (!drafts) {
+    drafts = new Map();
+    uploadIds.set(file, drafts);
+  }
+  let id = drafts.get(draft);
+  if (!id) {
+    id = crypto.randomUUID();
+    drafts.set(draft, id);
+  }
+  return id;
+}
+
+export async function completeDraftAttachment(input: {
+  draftId: string;
+  attachmentId: string;
+  inboxId?: string;
+}): Promise<void> {
+  try {
+    await throwOnErr(() =>
+      emailClient.completeDraftAttachment(
+        { draftID: input.draftId, attachmentID: input.attachmentId },
+        input.inboxId
+      )
+    );
+  } catch (error) {
+    toast.failure(
+      'Attachment upload is unfinished. Retry the upload or remove the file.'
+    );
+    throw error;
+  }
+}
+
 export const useUploadDraftAttachmentsMutation = (
   callbacks?: MutationCallbacks<void, Error, UploadDraftAttachmentsParams>
 ) => {
@@ -62,6 +98,7 @@ export const useUploadDraftAttachmentsMutation = (
               {
                 draftID: params.draftID,
                 attachment: {
+                  upload_id: uploadId(attachment, params.draftID),
                   file_name: attachment.name,
                   size: source.size,
                   sha: source.sha,
@@ -106,6 +143,11 @@ export const useUploadDraftAttachmentsMutation = (
               );
             }
           }
+          await completeDraftAttachment({
+            draftId: params.draftID,
+            attachmentId: result.attachment_id,
+            inboxId: params.linkId,
+          });
         } catch (cause) {
           if (cause instanceof UploadDraftAttachmentError) throw cause;
           throw new UploadDraftAttachmentError(
@@ -133,6 +175,7 @@ export const useUploadDraftAttachmentsMutation = (
                     variables.linkId
                   )
               );
+              uploadIds.delete(error.context.file);
               variables.onAttachmentUploadFailed?.(error.context.file);
             } catch {
               console.error('Unable to remove draft attachment after failure');
@@ -249,3 +292,13 @@ export const useRemoveForwardedAttachmentMutation = (
     ),
   }));
 };
+
+/** Resolve a fresh authorized URL; provider IDs and storage keys stay server-side. */
+export async function getEmailAttachmentDownloadUrl(
+  id: string
+): Promise<string> {
+  const response = await throwOnErr(() => emailClient.getAttachmentUrl({ id }));
+  const url = response.attachment.data_url;
+  if (!url) throw new Error('Attachment download is unavailable');
+  return url;
+}

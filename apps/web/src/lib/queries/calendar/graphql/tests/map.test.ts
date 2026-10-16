@@ -133,12 +133,48 @@ describe('mapCalendarOccurrence', () => {
 });
 
 describe('mapVisibleCalendar', () => {
-  it('maps the link id to the REST field name', () => {
-    expect(
-      mapVisibleCalendar({
-        __typename: 'GraphqlCalendar',
+  it.each([
+    ['GOOGLE', 'google', 'GOOGLE_MEET', 'google_meet', true],
+    ['OUTLOOK', 'outlook', 'MICROSOFT_TEAMS', 'microsoft_teams', false],
+    ['OUTLOOK', 'outlook', null, null, false],
+  ] as const)(
+    'maps %s calendars with %s provider and %s conferencing',
+    (provider, restProvider, conferenceProvider, restConferenceProvider, supported) => {
+      expect(
+        mapVisibleCalendar({
+          __typename: 'GraphqlCalendar',
+          provider,
+          capabilities: {
+            autoDecline: supported,
+            conferenceProvider,
+            customRecurrence: supported,
+            emailReminders: supported,
+            removeConference: supported,
+            resetRsvp: supported,
+          },
+          id: 'calendar-1',
+          linkId: 'link-1',
+          emailAddress: 'me@example.com',
+          name: 'Me',
+          color: '#ff0000',
+          isPrimary: true,
+          isWritable: true,
+          isSubscription: false,
+          syncError: null,
+          defaultReminders: [{ method: 'popup', minutes: 30 }],
+        })
+      ).toEqual({
         id: 'calendar-1',
-        linkId: 'link-1',
+        emailLinkId: 'link-1',
+        provider: restProvider,
+        capabilities: {
+          autoDecline: supported,
+          conferenceProvider: restConferenceProvider,
+          customRecurrence: supported,
+          emailReminders: supported,
+          removeConference: supported,
+          resetRsvp: supported,
+        },
         emailAddress: 'me@example.com',
         name: 'Me',
         color: '#ff0000',
@@ -147,18 +183,7 @@ describe('mapVisibleCalendar', () => {
         isSubscription: false,
         syncError: null,
         defaultReminders: [{ method: 'popup', minutes: 30 }],
-      })
-    ).toEqual({
-      id: 'calendar-1',
-      emailLinkId: 'link-1',
-      emailAddress: 'me@example.com',
-      name: 'Me',
-      color: '#ff0000',
-      isPrimary: true,
-      isWritable: true,
-      isSubscription: false,
-      syncError: null,
-      defaultReminders: [{ method: 'popup', minutes: 30 }],
-    });
-  });
+      });
+    }
+  );
 });

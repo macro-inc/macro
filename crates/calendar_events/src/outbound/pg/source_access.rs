@@ -3,7 +3,7 @@
 use rootcause::Report;
 use sqlx::{Postgres, Transaction};
 
-use crate::domain::models::GoogleEventSource;
+use crate::domain::models::ProviderEventSource;
 
 use super::report;
 
@@ -29,7 +29,7 @@ pub(super) async fn invalidate_account_freshness(
 /// A delayed response must never upgrade itself to a newer stored role.
 pub(super) async fn verify_source_access(
     tx: &mut Transaction<'_, Postgres>,
-    source: &GoogleEventSource,
+    source: &ProviderEventSource,
 ) -> Result<(), Report> {
     sqlx::query!(
         r#"

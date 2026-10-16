@@ -1,6 +1,6 @@
 //! Process-level adapters backing the calendar application services.
 
-use calendar_events::domain::ports::{GoogleProviderError, GoogleProviderErrorKind};
+use calendar_events::domain::ports::{CalendarProviderError, CalendarProviderErrorKind};
 use calendar_events::outbound::google::GoogleRequestGate;
 use uuid::Uuid;
 
@@ -20,10 +20,10 @@ impl RedisCalendarRequestGate {
 }
 
 impl GoogleRequestGate for RedisCalendarRequestGate {
-    async fn acquire(&self, email_link_id: Uuid) -> Result<(), GoogleProviderError> {
+    async fn acquire(&self, email_link_id: Uuid) -> Result<(), CalendarProviderError> {
         if self.limiter.is_calendar_rate_limited(email_link_id).await {
-            return Err(GoogleProviderError::new(
-                GoogleProviderErrorKind::Transient,
+            return Err(CalendarProviderError::new(
+                CalendarProviderErrorKind::Transient,
                 "Google Calendar API rate limit reached for this inbox",
             ));
         }

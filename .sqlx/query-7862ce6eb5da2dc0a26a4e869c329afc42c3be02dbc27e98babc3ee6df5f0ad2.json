@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendar_event_reminder_deliveries\n            SET sent_at = now()\n            WHERE event_id = $1\n              AND occurrence_key = $2\n              AND minutes_before = $3\n              AND fire_at = $4\n              AND method = $5\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7862ce6eb5da2dc0a26a4e869c329afc42c3be02dbc27e98babc3ee6df5f0ad2"
+}

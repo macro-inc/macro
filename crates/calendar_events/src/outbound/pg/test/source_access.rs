@@ -105,8 +105,7 @@ async fn role_change_requires_a_new_snapshot_without_changing_event_identity(poo
 
     // The provider can return the same content and sequence under the new
     // role. Verification must work through the no-op fast path too.
-    let CalendarEventSource::Google(source) = &mut original.source;
-    source.observed_access_role = Some("reader".to_owned());
+    original.source.details_mut().observed_access_role = Some("reader".to_owned());
     assert_eq!(repo.upsert_event_fixture(original).await.unwrap(), event_id);
     let verified = sqlx::query_scalar!(
         "SELECT provider_access_role FROM calendar_event_sources WHERE event_id = $1",
@@ -145,7 +144,7 @@ async fn provider_redaction_replaces_details_even_without_a_sequence_change(pool
     snapshot.event.title.clear();
     snapshot.event.description = None;
     snapshot.event.attendees.clear();
-    let CalendarEventSource::Google(source) = &mut snapshot.source;
+    let source = snapshot.source.details_mut();
     source.observed_access_role = Some("reader".to_owned());
     assert_eq!(repo.upsert_event_fixture(snapshot).await.unwrap(), event_id);
     let redacted = sqlx::query!(
@@ -177,7 +176,7 @@ async fn delayed_mutation_echo_cannot_verify_content_under_a_new_role(pool: PgPo
     .unwrap();
     let mut redacted = original.clone();
     redacted.event.title.clear();
-    let CalendarEventSource::Google(source) = &mut redacted.source;
+    let source = redacted.source.details_mut();
     source.observed_access_role = Some("reader".to_owned());
     repo.upsert_event_fixture(redacted.clone()).await.unwrap();
     repo.upsert_event(CalendarEventWrite::UserMutation(original.clone()))
@@ -299,8 +298,7 @@ async fn ordinary_mutation_preserves_incremental_sync_and_verified_access(pool: 
     original.event.title = "After".to_owned();
     original.event.sequence += 1;
     original.event.updated_at += Duration::minutes(1);
-    let CalendarEventSource::Google(source) = &mut original.source;
-    source.observed_access_role = target.observed_access_role;
+    original.source.details_mut().observed_access_role = target.observed_access_role;
     repo.upsert_event(CalendarEventWrite::UserMutation(original))
         .await
         .unwrap();

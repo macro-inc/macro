@@ -19,6 +19,7 @@ fn uuid(n: u8) -> Uuid {
 
 fn firing(n: u8) -> CalendarReminderFiring {
     CalendarReminderFiring {
+        method: crate::domain::models::ReminderDeliveryMethod::Popup,
         event_id: uuid(n),
         occurrence_key: "2026-08-10T12:10:00+00:00".to_string(),
         minutes_before: 10,
@@ -28,6 +29,7 @@ fn firing(n: u8) -> CalendarReminderFiring {
 
 fn due(n: u8, declined: bool) -> DueCalendarReminder {
     DueCalendarReminder {
+        email_address: "calendar-mailbox@example.com".into(),
         firing: firing(n),
         owner_id: "macro|owner@macro.com".to_string(),
         title: "Team sync".to_string(),
@@ -68,6 +70,7 @@ impl CalendarReminderDispatchRepo for FakeRepo {
                 firing.event_id,
                 firing.minutes_before,
                 firing.occurrence_key.clone(),
+                firing.method,
             )
         };
         let mut scheduled = self.0.lock().unwrap().scheduled.clone();
@@ -205,6 +208,7 @@ async fn sweep_drains_a_backlog_larger_than_one_page() {
     let repo = FakeRepo::default();
     repo.0.lock().unwrap().scheduled = (0..count)
         .map(|n| CalendarReminderFiring {
+            method: crate::domain::models::ReminderDeliveryMethod::Popup,
             event_id: uuid(u8::try_from(n % 251).unwrap()),
             occurrence_key: format!("2026-08-10T12:{:02}:00+00:00[{n}]", n % 60),
             minutes_before: i32::try_from(n).unwrap(),

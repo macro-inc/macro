@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useInitGmailLink } from '@queries/auth';
+import { useInitOutlookLink } from '@queries/auth/outlook-link';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
@@ -21,8 +22,9 @@ import type {
 } from '@service-email/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, getOwner } from 'solid-js';
 import { inboxAuthorizationUrl } from './consent';
+import { selectEmailProvider } from './ProviderDialog';
 import { rememberInboxLinkReturn } from './return-layout';
 import { requestShareInboxConfirmation } from './share-conflict';
 
@@ -45,6 +47,7 @@ export function useEmailLinksStatus() {
 }
 
 type EmailInitError =
+  | { tag: 'PaymentRequired' }
   /** The email link has already been initialized*/
   | { tag: 'AlreadyInitialized' }
   /** No Gmail grant to provision from — scope declined at consent or grant removed. */
@@ -91,6 +94,8 @@ function initEmailLink(args?: {
     emailClient.init({ linkId: args?.linkId, forceShare: args?.forceShare })
   ).andThen((initResult) => {
     if (initResult.isErr()) {
+      if (isPaymentRequired(initResult.error))
+        return err<void, EmailInitError>({ tag: 'PaymentRequired' });
       const conflict = initResult.error.find(
         (e) => e.code === SHARED_INBOX_CONFLICT_CODE
       );
@@ -235,7 +240,9 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * and the callback restores it. Native mobile needs no stash: its layout never unmounts.
  */
 export function useAddInboxFlow() {
+  const owner = getOwner();
   const initGmailLink = useInitGmailLink();
+  const initOutlookLink = useInitOutlookLink();
   const { query, initEmailLink } = useEmailLinks();
   const { showPaywall } = usePaywallState();
 
@@ -246,6 +253,10 @@ export function useAddInboxFlow() {
         toast.success('Account connected');
       },
       async (error) => {
+        if (error.tag === 'PaymentRequired') {
+          showPaywall(PaywallKey.MULTI_INBOX);
+          return;
+        }
         if (error.tag === 'AlreadyInitialized') {
           await query.refetch();
           return;
@@ -263,15 +274,33 @@ export function useAddInboxFlow() {
     );
   };
 
+  const initialize = (
+    originalUrl: string,
+    scopes: ConsentScopes,
+    provider: 'GMAIL' | 'OUTLOOK',
+    reconnectLinkId?: string
+  ) =>
+    provider === 'OUTLOOK'
+      ? initOutlookLink.mutateAsync({
+          originalUrl,
+          calendar: scopes !== 'gmail',
+          reconnectLinkId,
+        })
+      : initGmailLink.mutateAsync({ originalUrl, scopes, reconnectLinkId });
+
   const startNativeFlow = async (
     scopes: ConsentScopes,
+    provider: 'GMAIL' | 'OUTLOOK',
+    reconnectLinkId?: string,
     emailAddress?: string
   ) => {
     const session = createNativeAuthSession('inbox-link-callback');
-    const result = await initGmailLink.mutateAsync({
-      originalUrl: session.callbackUrl,
+    const result = await initialize(
+      session.callbackUrl,
       scopes,
-    });
+      provider,
+      reconnectLinkId
+    );
     if (result.isErr()) {
       if (isPaymentRequired(result.error)) {
         showPaywall(PaywallKey.MULTI_INBOX);
@@ -281,7 +310,7 @@ export function useAddInboxFlow() {
         toast.failure(TOO_MANY_PENDING_LINKS_MESSAGE);
         return;
       }
-      toast.failure('Failed to start Gmail link flow');
+      toast.failure('Failed to start inbox connection');
       return;
     }
 
@@ -300,21 +329,32 @@ export function useAddInboxFlow() {
 
   return async (options?: {
     scopes?: ConsentScopes;
+    provider?: 'GMAIL' | 'OUTLOOK';
+    reconnectLinkId?: string;
     emailAddress?: string;
   }) => {
     const scopes = options?.scopes ?? 'gmail';
+    const provider = options?.provider ?? (await selectEmailProvider(owner));
+    if (!provider) return;
     if (isNativeMobilePlatform()) {
-      await startNativeFlow(scopes, options?.emailAddress);
+      await startNativeFlow(
+        scopes,
+        provider,
+        options?.reconnectLinkId,
+        options?.emailAddress
+      );
       return;
     }
 
     const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
-    const result = await initGmailLink.mutateAsync({
-      originalUrl: callbackUrl,
+    const result = await initialize(
+      callbackUrl,
       scopes,
-    });
+      provider,
+      options?.reconnectLinkId
+    );
     if (result.isOk()) {
-      // Leaving for Google unloads the app, and the split layout only lives in
+      // Leaving for consent unloads the app, and the split layout only lives in
       // the URL — stash it so the callback can put it back rather than landing
       // everyone on a default layout.
       rememberInboxLinkReturn(result.value.link_id, {
@@ -329,7 +369,7 @@ export function useAddInboxFlow() {
     } else if (isTooManyPendingLinks(result.error)) {
       toast.failure(TOO_MANY_PENDING_LINKS_MESSAGE);
     } else {
-      toast.failure('Failed to start Gmail link flow');
+      toast.failure('Failed to start inbox connection');
     }
   };
 }

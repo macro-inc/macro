@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_labels(id,link_id,provider_label_id,name,type)\n        VALUES($1,$2,$3,$4,'User') ON CONFLICT(link_id,provider_label_id) DO UPDATE SET name=EXCLUDED.name RETURNING id,created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9f9502a291063494c75fad2ffe724c8e902a97c57d58ed94918f08461aa19f02"
+}

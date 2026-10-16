@@ -475,52 +475,57 @@ describe('executeGraphqlDelete', () => {
 describe('executeGraphqlCreate', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows the event at once under its idempotency key', async () => {
-    const { calls, client } = fakeClient('committed', {
-      event: graphqlEvent({ id: 'server-1', title: 'Lunch' }),
-    });
+  it.each(['google_meet', 'microsoft_teams'] as const)(
+    'shows a %s event at once under its idempotency key',
+    async (conference) => {
+      const { calls, client } = fakeClient('committed', {
+        event: graphqlEvent({ id: 'server-1', title: 'Lunch' }),
+      });
 
-    const { event } = await executeGraphqlCreate(
-      {
-        title: 'Lunch',
-        time: {
-          kind: 'timed',
-          startsAt: '2026-10-07T12:00:00Z',
-          endsAt: '2026-10-07T13:00:00Z',
+      const { event } = await executeGraphqlCreate(
+        {
+          title: 'Lunch',
+          conference,
+          time: {
+            kind: 'timed',
+            startsAt: '2026-10-07T12:00:00Z',
+            endsAt: '2026-10-07T13:00:00Z',
+          },
+          attendees: [{ email: 'guest@example.com' }],
         },
-        attendees: [{ email: 'guest@example.com' }],
-      },
-      client
-    );
+        client
+      );
 
-    const [call] = calls;
-    const clientId = call?.optimistic.uuid;
-    expect(call?.variables.input.idempotencyKey).toBe(clientId);
-    const optimistic = response(call!);
-    expect(optimistic.event).toMatchObject({
-      id: clientId,
-      linkId: 'link-1',
-      calendarId: 'calendar-1',
-      title: 'Lunch',
-      status: 'CONFIRMED',
-    });
-    expect(optimistic.occurrences).toEqual([
-      expect.objectContaining({
-        id: `${clientId}:2026-10-07T12:00:00+00:00`,
-        eventId: clientId,
+      const [call] = calls;
+      const clientId = call?.optimistic.uuid;
+      expect(call?.variables.input.idempotencyKey).toBe(clientId);
+      expect(call?.variables.input.conference).toBe(conference.toUpperCase());
+      const optimistic = response(call!);
+      expect(optimistic.event).toMatchObject({
+        id: clientId,
         linkId: 'link-1',
-        isCancelled: false,
-      }),
-    ]);
-    expect(call?.optimistic.identityBindings).toEqual([
-      {
-        localKey: `GraphqlCalendarEvent:${clientId}`,
-        responsePath: ['createCalendarEvent', 'event'],
-        referenceFields: ['GraphqlCalendarOccurrence.eventId'],
-      },
-    ]);
-    expect(event.id).toBe('server-1');
-  });
+        calendarId: 'calendar-1',
+        title: 'Lunch',
+        status: 'CONFIRMED',
+      });
+      expect(optimistic.occurrences).toEqual([
+        expect.objectContaining({
+          id: `${clientId}:2026-10-07T12:00:00+00:00`,
+          eventId: clientId,
+          linkId: 'link-1',
+          isCancelled: false,
+        }),
+      ]);
+      expect(call?.optimistic.identityBindings).toEqual([
+        {
+          localKey: `GraphqlCalendarEvent:${clientId}`,
+          responsePath: ['createCalendarEvent', 'event'],
+          referenceFields: ['GraphqlCalendarOccurrence.eventId'],
+        },
+      ]);
+      expect(event.id).toBe('server-1');
+    }
+  );
 
   it('marks a recurring create uncertain', async () => {
     const { calls, client } = fakeClient('committed', {

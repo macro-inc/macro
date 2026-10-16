@@ -47,7 +47,7 @@ fn the_form_shows_a_tools_flat_arguments_prefilled_and_leaves_the_rest_to_the_dr
         "time": {"kind": "timed", "startsAt": "2026-08-20T17:00:00Z", "endsAt": "2026-08-20T17:30:00Z"},
         "location": "Room 4",
         "attendees": [{"email": "alice@example.com"}],
-        "addGoogleMeet": true,
+        "addConference": true,
     });
     let form = project_form(Some("Create calendar event".to_owned()), &schema, &draft);
 
@@ -68,7 +68,7 @@ fn the_form_shows_a_tools_flat_arguments_prefilled_and_leaves_the_rest_to_the_dr
         "an optional string reads through its nullable wrapper"
     );
     assert_eq!(
-        field(&form, "addGoogleMeet").kind,
+        field(&form, "addConference").kind,
         ReviewFieldKind::Boolean {
             default: Some(true)
         }
@@ -113,11 +113,11 @@ fn the_answer_is_applied_over_the_draft_and_a_whole_draft_wins() {
     // Flat fields replace the arguments of the same name; the rest stays.
     let flat = BTreeMap::from([
         ("title".to_owned(), json!("Q3 planning")),
-        ("addGoogleMeet".to_owned(), json!(true)),
+        ("addConference".to_owned(), json!(true)),
     ]);
     assert_eq!(
         apply_review(&draft, &flat),
-        json!({"title": "Q3 planning", "location": "Room 4", "time": {"kind": "allDay"}, "addGoogleMeet": true})
+        json!({"title": "Q3 planning", "location": "Room 4", "time": {"kind": "allDay"}, "addConference": true})
     );
 
     // A whole draft, as the JSON string a composer sends, replaces everything.

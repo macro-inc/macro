@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_pending_mailbox_state WHERE command_id=$1 AND message_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e950fe1ee95fb098d3190d840c3eb32f814e67e9c2377b60967c268640cff3a"
+}

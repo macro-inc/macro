@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO in_progress_user_link (id, macro_user_id, email_provider)\n            SELECT $1, $2, 'OUTLOOK'\n            WHERE (SELECT count(*) FROM in_progress_user_link\n                WHERE macro_user_id = $2 AND created_at > now() - interval '24 hours') < 5\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8359ab1227236dd959fb4bd18d28cb1a24842afc20fc711f743e3551814d6509"
+}

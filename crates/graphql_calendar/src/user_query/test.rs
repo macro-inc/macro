@@ -7,8 +7,9 @@ use calendar_events::domain::{
         CalendarLinkWatermark, CalendarWatermark, EventOccurrence,
     },
     models::{
-        CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrenceCursor,
-        CalendarSyncStatus, OccurrenceListing, OccurrenceRange, TeamOutOfOffice, VisibleCalendar,
+        CalendarCapabilities, CalendarMentionPreview, CalendarMentionRequestItem,
+        CalendarOccurrenceCursor, CalendarProvider, CalendarSyncStatus, OccurrenceListing,
+        OccurrenceRange, TeamOutOfOffice, VisibleCalendar,
     },
     ports::CalendarOccurrenceService,
     service::CalendarValidationError,
@@ -239,6 +240,8 @@ async fn calendars_are_listed_for_the_viewer() {
             is_writable: true,
             is_subscription: false,
             sync_error: None,
+            provider: CalendarProvider::Google,
+            capabilities: CalendarCapabilities::google(),
             default_reminders: Vec::new(),
         }],
         ..Default::default()
@@ -255,6 +258,96 @@ async fn calendars_are_listed_for_the_viewer() {
     assert_eq!(data["calendars"][0]["__typename"], "GraphqlCalendar");
     assert_eq!(data["calendars"][0]["linkId"], LINK_ID.to_string());
     assert_eq!(reads.requests.lock().unwrap()[0].0, VIEWER);
+}
+
+#[tokio::test]
+async fn calendar_lists_and_deltas_preserve_actual_provider_capabilities() {
+    let cases = [
+        (
+            CalendarProvider::Google,
+            CalendarCapabilities::google(),
+            "GOOGLE",
+            Some("GOOGLE_MEET"),
+        ),
+        (
+            CalendarProvider::Outlook,
+            CalendarCapabilities::outlook(true),
+            "OUTLOOK",
+            Some("MICROSOFT_TEAMS"),
+        ),
+        (
+            CalendarProvider::Outlook,
+            CalendarCapabilities::outlook(false),
+            "OUTLOOK",
+            None,
+        ),
+        (
+            CalendarProvider::Outlook,
+            CalendarCapabilities {
+                auto_decline: false,
+                email_reminders: false,
+                ..CalendarCapabilities::outlook(false)
+            },
+            "OUTLOOK",
+            None,
+        ),
+    ];
+    let calendars: Vec<_> = cases
+        .iter()
+        .enumerate()
+        .map(|(index, (provider, capabilities, _, _))| VisibleCalendar {
+            id: uuid::Uuid::from_u128(index as u128 + 1),
+            email_link_id: LINK_ID,
+            email_address: "viewer@example.com".to_owned(),
+            name: "Work".to_owned(),
+            color: None,
+            is_primary: true,
+            is_writable: true,
+            is_subscription: false,
+            sync_error: None,
+            provider: *provider,
+            capabilities: capabilities.clone(),
+            default_reminders: Vec::new(),
+        })
+        .collect();
+    let reads = Arc::new(FakeReads {
+        calendars: calendars.clone(),
+        changes: CalendarChangesPage {
+            calendars,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    let response = execute(reads, r#"{
+        calendars { ...ProviderFields }
+        calendarChanges(input: { since: [] }) { calendars { ...ProviderFields } }
+    }
+    fragment ProviderFields on GraphqlCalendar {
+        id provider capabilities {
+            autoDecline conferenceProvider customRecurrence emailReminders removeConference resetRsvp
+        }
+    }"#).await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["calendars"], data["calendarChanges"]["calendars"]);
+    for (calendar, (_, capabilities, provider, conference)) in
+        data["calendars"].as_array().unwrap().iter().zip(cases)
+    {
+        assert_eq!(calendar["provider"], provider);
+        assert_eq!(
+            calendar["capabilities"],
+            serde_json::json!({
+                "autoDecline": capabilities.auto_decline,
+                "conferenceProvider": conference,
+                "customRecurrence": capabilities.custom_recurrence,
+                "emailReminders": capabilities.email_reminders,
+                "removeConference": capabilities.remove_conference,
+                "resetRsvp": capabilities.reset_rsvp,
+            })
+        );
+    }
 }
 
 #[tokio::test]

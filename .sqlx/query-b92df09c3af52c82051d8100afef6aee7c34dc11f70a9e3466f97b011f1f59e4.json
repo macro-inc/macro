@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.provider_id,\n            m.id,\n            m.link_id,\n            m.thread_id,\n            m.provider_thread_id,\n            m.headers_jsonb,\n            m.is_sent,\n            m.is_draft\n        FROM email_messages m\n        WHERE m.link_id = $1\n          AND m.is_draft = true\n          AND NOT m.is_sent\n          AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean,false)\n          AND NOT EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=m.id AND d.delete_requested)\n          AND NOT EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')\n          AND (m.replying_to_id=$2::uuid OR jsonb_path_exists(\n              m.headers_jsonb,\n              '$[*] ? (@.\"Macro-In-Reply-To\" == $macro_uuid)'::jsonpath,\n              jsonb_build_object('macro_uuid', $2::uuid::text)\n          ))\n        ORDER BY m.created_at DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "provider_thread_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "headers_jsonb",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_draft",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b92df09c3af52c82051d8100afef6aee7c34dc11f70a9e3466f97b011f1f59e4"
+}

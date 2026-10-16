@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT s.id FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id\n                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation\n                    AND s.kind = 'folder_catalog' AND s.next_run_at <= now()\n                    AND (s.lease_until IS NULL OR s.lease_until < now())\n                ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED\n            )\n            UPDATE email_sync_streams s SET lease_id = $1, lease_until = now() + interval '3 minutes', lease_started_at = clock_timestamp(), fence = fence + 1\n            FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id\n            RETURNING s.id,s.link_id,s.generation,l.grant_generation,s.fence\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "fence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1547bc0f82313a058615d33f3abb4f17a0c4549c10d1f19dc51b3e839610bb96"
+}

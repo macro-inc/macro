@@ -229,6 +229,16 @@ async fn schema_has_no_plaintext_secret_columns(pool: Pool<Postgres>) -> anyhow:
             "created_at",
             "updated_at",
             "last_refreshed_at",
+            "grant_id",
+            "generation",
+            "revision",
+            "tenant_id",
+            "subject_id",
+            "mailbox_id",
+            "scopes",
+            "revoked_at",
+            "refresh_lease_id",
+            "refresh_lease_until",
         ]
     );
     assert!(!columns.iter().any(|column| {

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT w.link_id FROM email_mailbox_watch_work w JOIN email_links l ON l.id=w.link_id\n        WHERE w.link_id=$1 AND w.lease_id=$2 AND w.lease_until>now() AND l.sync_generation=$3 AND l.grant_generation=$4 AND l.is_sync_active\n        FOR UPDATE OF l,w",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "505266158fbcffaa3290b69051a25d4b52f0f353496915dff9be68a55b4d7248"
+}

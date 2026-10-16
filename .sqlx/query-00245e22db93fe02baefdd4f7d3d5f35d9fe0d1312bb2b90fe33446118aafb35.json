@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_messages SET provider_folder_id = $3,provider_version = $4,mailbox_state = $5,\n                remote_draft_revision = CASE WHEN body_macro IS NULL THEN $4 ELSE remote_draft_revision END,\n                is_read = COALESCE((SELECT (desired #>> '{}')::boolean FROM email_pending_mailbox_state p WHERE p.message_id = email_messages.id AND p.attribute = 'is_read'),is_read),\n                is_starred = COALESCE((SELECT (desired #>> '{}')::boolean FROM email_pending_mailbox_state p WHERE p.message_id = email_messages.id AND p.attribute = 'is_flagged'),is_starred)\n            WHERE link_id = $1 AND provider_id = $2 RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "00245e22db93fe02baefdd4f7d3d5f35d9fe0d1312bb2b90fe33446118aafb35"
+}

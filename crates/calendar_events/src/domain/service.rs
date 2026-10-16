@@ -17,9 +17,10 @@ use super::{
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
-        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarReauthNotifier,
-        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind, RetiredCalendarEvent,
+        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarProviderError,
+        CalendarProviderErrorKind, CalendarReauthNotifier, CalendarRepository,
+        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
+        RetiredCalendarEvent,
     },
 };
 
@@ -505,18 +506,18 @@ where
             Err(error) => {
                 let provider_error = error
                     .as_ref()
-                    .downcast_current_context::<GoogleProviderError>();
-                let disposition = match provider_error.map(GoogleProviderError::kind) {
-                    Some(GoogleProviderErrorKind::ReauthRequired) => {
+                    .downcast_current_context::<CalendarProviderError>();
+                let disposition = match provider_error.map(CalendarProviderError::kind) {
+                    Some(CalendarProviderErrorKind::ReauthRequired) => {
                         CalendarBackfillFailureDisposition::CalendarPermissionRequired
                     }
                     Some(
-                        GoogleProviderErrorKind::Permanent
-                        | GoogleProviderErrorKind::PushUnsupported,
+                        CalendarProviderErrorKind::Permanent
+                        | CalendarProviderErrorKind::PushUnsupported,
                     ) => CalendarBackfillFailureDisposition::Permanent,
                     Some(
-                        GoogleProviderErrorKind::Transient
-                        | GoogleProviderErrorKind::SyncTokenExpired,
+                        CalendarProviderErrorKind::Transient
+                        | CalendarProviderErrorKind::SyncTokenExpired,
                     )
                     | None => CalendarBackfillFailureDisposition::Retry,
                 };
@@ -733,7 +734,7 @@ where
         // so the coordinator can still classify a wholesale outage.
         let mut any_calendar_healthy = false;
         let mut isolated_failures: Vec<(Uuid, String)> = Vec::new();
-        let mut last_isolated_error: Option<GoogleProviderError> = None;
+        let mut last_isolated_error: Option<CalendarProviderError> = None;
 
         for provider_calendar in calendars {
             let provider_calendar_id = provider_calendar.provider_calendar_id.clone();
@@ -764,7 +765,9 @@ where
                 .sync_events(
                     access_token,
                     GoogleEventSyncContext {
-                        target: super::models::GoogleCalendarTarget {
+                        target: super::models::ProviderCalendarTarget {
+                            binding: None,
+                            provider: super::models::CalendarProvider::Google,
                             owner_id: owner_id.to_string(),
                             email_link_id: key.email_link_id,
                             account_id,
@@ -791,8 +794,8 @@ where
                                 ical_uid=%upsert.event.ical_uid,
                                 "rejecting incomplete normalized Google Calendar batch"
                             );
-                            GoogleProviderError::new(
-                                GoogleProviderErrorKind::Transient,
+                            CalendarProviderError::new(
+                                CalendarProviderErrorKind::Transient,
                                 "Google Calendar returned an invalid normalized event",
                             )
                         })?;
@@ -805,7 +808,7 @@ where
                     // calendar-local: surface it immediately so the coordinator
                     // prompts reauthorization rather than marking the account
                     // ready off the calendars that happened to sync.
-                    if error.kind() == GoogleProviderErrorKind::ReauthRequired {
+                    if error.kind() == CalendarProviderErrorKind::ReauthRequired {
                         return Err(rootcause::report!(error).into());
                     }
                     tracing::warn!(
@@ -818,7 +821,9 @@ where
                     // A retryable failure outranks a permanent one so a total
                     // failure still surfaces as retryable.
                     last_isolated_error = Some(match last_isolated_error {
-                        Some(previous) if previous.kind() != GoogleProviderErrorKind::Permanent => {
+                        Some(previous)
+                            if previous.kind() != CalendarProviderErrorKind::Permanent =>
+                        {
                             previous
                         }
                         _ => error,
@@ -829,7 +834,7 @@ where
             any_calendar_healthy = true;
             let mut calendar_count = 0;
             for upsert in batch.upserts {
-                let super::models::CalendarEventSource::Google(source) = &upsert.source;
+                let source = upsert.source.details();
                 debug_assert_eq!(source.calendar_id, calendar_id);
                 let outcome = self
                     .repository
@@ -913,7 +918,7 @@ where
                             })
                             .ok();
                     }
-                    Err(error) if error.kind() == GoogleProviderErrorKind::PushUnsupported => {
+                    Err(error) if error.kind() == CalendarProviderErrorKind::PushUnsupported => {
                         tracing::info!(
                             calendar_id=%calendar_id,
                             "Google Calendar does not support push for this calendar; relying on polling"

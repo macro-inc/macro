@@ -153,7 +153,7 @@ where
             .collect();
         let draft_message_ids: Vec<Uuid> = message_rows
             .iter()
-            .filter(|message| message.provider_id.is_none())
+            .filter(|message| !message.is_sent)
             .map(|message| message.db_id)
             .collect();
 
@@ -163,6 +163,7 @@ where
             mut draft_attachments,
             mut forwarded_attachments,
             mut calendar_invitations,
+            mut operations,
         ) = tokio::try_join!(
             async {
                 self.email_repo
@@ -194,11 +195,18 @@ where
                     .await
                     .map_err(anyhow::Error::from)
             },
+            async {
+                self.email_repo
+                    .message_operation_facts(&message_ids)
+                    .await
+                    .map_err(anyhow::Error::from)
+            },
         )?;
 
         Ok(message_rows
             .into_iter()
             .map(|row| {
+                let operation_status = operations.remove(&row.db_id).map(Into::into);
                 let sender = senders.remove(&row.db_id);
                 let recipient_list = recipients.remove(&row.db_id).unwrap_or_default();
                 let scheduled_send_time = scheduled.remove(&row.db_id);
@@ -218,7 +226,7 @@ where
                     row.body_text.as_deref(),
                 );
 
-                message_from_row(
+                let mut message = message_from_row(
                     row,
                     sender,
                     to,
@@ -231,7 +239,9 @@ where
                     scheduled_send_time,
                     body_replyless,
                     message_calendar_invitations,
-                )
+                );
+                message.operation_status = operation_status;
+                message
             })
             .collect())
     }

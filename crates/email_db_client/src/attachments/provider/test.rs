@@ -218,6 +218,7 @@ fn service_attachment(
         db_id: Uuid::new_v4(),
         provider_id: Some(provider_id.to_string()),
         data_url: None,
+        reference_url: None,
         filename: Some(filename.to_string()),
         mime_type: Some(mime_type.to_string()),
         size_bytes: Some(1024),

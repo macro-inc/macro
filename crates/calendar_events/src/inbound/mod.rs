@@ -22,3 +22,7 @@ pub mod toolset;
 /// AI adapter for coverage-aware team calendar availability.
 #[cfg(feature = "ai_tools")]
 pub mod team_toolset;
+
+#[cfg(feature = "inbound")]
+/// Confirmed replacement HTTP operations.
+pub mod replacement_router;

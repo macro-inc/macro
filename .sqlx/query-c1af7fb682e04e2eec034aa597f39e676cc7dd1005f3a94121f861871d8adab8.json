@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_labels l WHERE l.link_id=$1 AND l.type='User' AND NOT(l.provider_label_id=ANY($2))\n            AND NOT EXISTS(SELECT 1 FROM email_message_labels m WHERE m.label_id=l.id)\n            AND NOT(l.provider_label_id=ANY($3))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c1af7fb682e04e2eec034aa597f39e676cc7dd1005f3a94121f861871d8adab8"
+}

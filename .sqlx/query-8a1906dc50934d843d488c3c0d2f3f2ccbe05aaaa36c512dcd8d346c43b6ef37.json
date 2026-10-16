@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_address_book_sources SET deleted_at = now(),revision = revision + 1,photo_lease_id = NULL,photo_lease_until = NULL WHERE link_id = $1 AND folder_id = $2 AND deleted_at IS NULL RETURNING emails",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "emails",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8a1906dc50934d843d488c3c0d2f3f2ccbe05aaaa36c512dcd8d346c43b6ef37"
+}

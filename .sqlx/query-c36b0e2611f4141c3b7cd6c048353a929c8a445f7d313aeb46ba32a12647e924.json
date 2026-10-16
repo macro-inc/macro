@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_draft_transfers SET state='cleanup',revision=revision+1,updated_at=now() WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c36b0e2611f4141c3b7cd6c048353a929c8a445f7d313aeb46ba32a12647e924"
+}

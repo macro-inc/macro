@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_projection_outbox(id,link_id,generation,payload)\n            SELECT gen_random_uuid(),m.link_id,$2,jsonb_build_object('kind','attachment_recheck','message_id',m.id)\n            FROM email_messages m WHERE m.link_id=$1 AND m.provider_id IS NOT NULL AND NOT m.is_draft\n                AND EXISTS(SELECT 1 FROM email_attachments a WHERE a.message_id=m.id AND a.reference_url IS NULL)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "91d7badfc9cd004327cba280d60690632c8f3c4c802f2b8b385c72413b55e210"
+}

@@ -49,16 +49,16 @@ export function outOfOfficeNoticeFor(
     .with(
       'decline_all_conflicting_invitations',
       () =>
-        'Google will show you as away and automatically decline all conflicting invitations.'
+        'Your calendar will show you as away and automatically decline all conflicting invitations.'
     )
     .with(
       'decline_only_new_conflicting_invitations',
       () =>
-        'Google will show you as away and automatically decline newly received conflicting invitations.'
+        'Your calendar will show you as away and automatically decline newly received conflicting invitations.'
     )
     .otherwise(
       () =>
-        'Google will show you as away for this time; conflicting invitations are left untouched.'
+        'Your calendar will show you as away for this time; conflicting invitations are left untouched.'
     );
   return { effect, declineMessage: declineMessage?.trim() || undefined };
 }

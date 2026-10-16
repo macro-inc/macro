@@ -157,6 +157,25 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
 }
 
 impl<'a, T: NotificationExtEmail, U> SendNotificationRequest<'a, T, U> {
+    /// Deliver one user's notification to a connected address verified by the
+    /// producing domain. Recipient preference/access filtering still uses the
+    /// actual Macro user. Multi-recipient redirection is deliberately rejected.
+    pub fn with_email_destination(
+        mut self,
+        owner: &MacroUserIdStr<'_>,
+        destination: MacroUserIdStr<'static>,
+    ) -> Result<Self, rootcause::Report> {
+        if self.req.recipient_ids.len() != 1 || !self.req.recipient_ids.contains(owner) {
+            return Err(rootcause::report!(
+                "An email destination requires one matching notification recipient"
+            ));
+        }
+        self.build_email = Some(
+            EmailCreateBundle::new(&self.req.notification.content).with_destination(destination),
+        );
+        Ok(self)
+    }
+
     /// Add a custom email content builder.
     pub fn with_email(mut self) -> Self {
         self.build_email = Some(EmailCreateBundle::new(&self.req.notification.content));

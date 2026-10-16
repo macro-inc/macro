@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT unnest(emails) AS \"email!\" FROM email_address_book_sources\n            WHERE link_id = $1 AND folder_id <> '' AND NOT(folder_id = ANY($2)) AND deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "67ee24c2d721264dde8110387382094360d008b4357ae90ea1d0ef717b7d53bd"
+}

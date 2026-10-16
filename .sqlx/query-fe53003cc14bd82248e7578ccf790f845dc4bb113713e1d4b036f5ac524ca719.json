@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO microsoft_link_attempts\n                (id, identity_provider_id, redirect_uri, return_uri, pkce_verifier, oidc_nonce, expires_at, calendar_requested)\n            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe53003cc14bd82248e7578ccf790f845dc4bb113713e1d4b036f5ac524ca719"
+}

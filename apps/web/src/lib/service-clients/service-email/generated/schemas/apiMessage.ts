@@ -17,6 +17,7 @@ import type { ApiMessageFrom } from './apiMessageFrom';
 import type { ApiMessageGlobalId } from './apiMessageGlobalId';
 import type { ApiMessageInternalDateTs } from './apiMessageInternalDateTs';
 import type { ApiMessageLabel } from './apiMessageLabel';
+import type { ApiMessageOperationStatus } from './apiMessageOperationStatus';
 import type { ApiMessageProviderHistoryId } from './apiMessageProviderHistoryId';
 import type { ApiMessageProviderId } from './apiMessageProviderId';
 import type { ApiMessageProviderThreadId } from './apiMessageProviderThreadId';
@@ -55,6 +56,7 @@ export interface ApiMessage {
   is_starred: boolean;
   labels: ApiMessageLabel[];
   link_id: string;
+  operation_status?: ApiMessageOperationStatus;
   provider_history_id?: ApiMessageProviderHistoryId;
   provider_id?: ApiMessageProviderId;
   provider_thread_id?: ApiMessageProviderThreadId;

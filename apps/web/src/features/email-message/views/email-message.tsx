@@ -24,6 +24,7 @@ export interface EmailMessageViewProps {
     message: EmailMessage,
     invitation: CalendarInvitation
   ) => JSX.Element;
+  renderOperation?: (message: EmailMessage) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
   viewerEmail?: string;
   isTouch: boolean;
@@ -154,6 +155,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               </div>
             }
           />
+          {props.renderOperation?.(props.message)}
           {/* Keyed by component so thread refreshes keep each card's state. */}
           <Key each={invitationGroups()} by={(group) => group.primary.id}>
             {(group) => {

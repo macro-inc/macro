@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT thread_id,is_draft,is_sent,\n            EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id) AS \"scheduled!\",\n            (EXISTS (SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id = m.id AND d.delete_requested) OR EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')) AS \"deleted!\"\n            FROM email_messages m WHERE id = $1 AND link_id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "scheduled!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "deleted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "f3e09de8f4ad7935f854a301671166d3158463023632e571fcc590fc36b1a5ed"
+}

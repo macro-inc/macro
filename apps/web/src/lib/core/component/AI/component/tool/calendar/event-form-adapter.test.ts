@@ -51,7 +51,7 @@ describe('createCalendarEventToEditorInitialValues', () => {
         .conference
     ).toBe('macro');
     expect(
-      createCalendarEventToEditorInitialValues(event({ addGoogleMeet: true }))
+      createCalendarEventToEditorInitialValues(event({ addConference: true }))
         .conference
     ).toBe('google_meet');
   });
@@ -102,14 +102,14 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
           declineMessage: 'On vacation',
         },
       }),
-      event({ addGoogleMeet: true })
+      event({ addConference: true })
     );
     expect(merged.eventType).toBe('out_of_office');
     expect(merged.outOfOffice).toEqual({
       autoDeclineMode: 'decline_new_only',
       declineMessage: 'On vacation',
     });
-    expect(merged.addGoogleMeet).toBe(false);
+    expect(merged.addConference).toBe(false);
   });
 
   it('drops the decline message when it is blank', () => {
@@ -146,10 +146,10 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
   it('turns the conferencing choice into exactly one tool flag', () => {
     const macro = editorSubmitValuesToCreateCalendarEvent(
       submitValues({ conferenceChoice: 'macro' }),
-      event({ addGoogleMeet: true })
+      event({ addConference: true })
     );
     expect(macro.addMacroCall).toBe(true);
-    expect(macro.addGoogleMeet).toBe(false);
+    expect(macro.addConference).toBe(false);
 
     const meet = editorSubmitValuesToCreateCalendarEvent(
       submitValues({
@@ -159,14 +159,25 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
       event({ addMacroCall: true })
     );
     expect(meet.addMacroCall).toBe(false);
-    expect(meet.addGoogleMeet).toBe(true);
+    expect(meet.addConference).toBe(true);
+
+    const teams = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({
+        conferenceChoice: 'microsoft_teams',
+        conference: 'microsoft_teams',
+      }),
+      event({ addMacroCall: true })
+    );
+    expect(teams.addMacroCall).toBe(false);
+    expect(teams.addConference).toBe(true);
+    expect(teams).not.toHaveProperty('addGoogleMeet');
 
     const none = editorSubmitValuesToCreateCalendarEvent(
       submitValues({ conferenceChoice: 'none' }),
       event({ addMacroCall: true })
     );
     expect(none.addMacroCall).toBe(false);
-    expect(none.addGoogleMeet).toBe(false);
+    expect(none.addConference).toBe(false);
   });
 
   it('drops the Macro call from an out-of-office event', () => {
@@ -178,6 +189,19 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
       event({ addMacroCall: true })
     );
     expect(merged.addMacroCall).toBe(false);
-    expect(merged.addGoogleMeet).toBe(false);
+    expect(merged.addConference).toBe(false);
   });
+});
+
+it('preserves a pending legacy conference request and emits only the generic field', () => {
+  const legacy = { ...event({}), addGoogleMeet: true };
+  expect(createCalendarEventToEditorInitialValues(legacy).conference).toBe(
+    'google_meet'
+  );
+  const updated = editorSubmitValuesToCreateCalendarEvent(
+    submitValues({ conferenceChoice: 'google_meet' }),
+    legacy
+  );
+  expect(updated.addConference).toBe(true);
+  expect(updated).not.toHaveProperty('addGoogleMeet');
 });

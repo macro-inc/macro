@@ -14,6 +14,8 @@ export type ConferenceChange =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ConferenceChange = {
+  provider_default: 'provider_default',
+  microsoft_teams: 'microsoft_teams',
   google_meet: 'google_meet',
   none: 'none',
 } as const;

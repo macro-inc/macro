@@ -89,6 +89,7 @@ impl ProviderTokenSource for EmailServiceTokenSource {
         link: &Link,
         freshness: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
+        require_gmail(link)?;
         // Deliberately bypasses record_token_health: teardown must neither
         // set needs_reauth nor enqueue a reauth notification.
         self.fetch_token(link, freshness)
@@ -105,6 +106,7 @@ impl EmailServiceTokenSource {
         freshness: TokenFreshness,
         row_may_need_reauth: bool,
     ) -> Result<AccessToken, TokenError> {
+        require_gmail(link)?;
         let result = self.fetch_token(link, freshness).await;
         let result = self
             .record_token_health(link, result, row_may_need_reauth)
@@ -184,6 +186,15 @@ impl EmailServiceTokenSource {
             }
         }
     }
+}
+
+fn require_gmail(link: &Link) -> Result<(), TokenError> {
+    if link.provider != models_email::service::link::UserProvider::Gmail {
+        return Err(TokenError::Permanent {
+            message: "mailbox provider does not match Gmail credentials".into(),
+        });
+    }
+    Ok(())
 }
 
 /// The health side effect implied by a token acquisition outcome.

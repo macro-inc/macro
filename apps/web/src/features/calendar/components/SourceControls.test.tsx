@@ -191,7 +191,7 @@ describe('SourceControls', () => {
     const { expandAccount, container } = renderControls();
     expandAccount('gabtest1@macro.com');
     const badge = container.querySelector(
-      '[title="Sync failed: Precondition check failed."]'
+      '[title="Calendar needs attention: Precondition check failed."]'
     );
     expect(badge).toBeTruthy();
   });
@@ -199,7 +199,9 @@ describe('SourceControls', () => {
   it('leaves a healthy calendar unbadged', () => {
     const { expandAccount, container } = renderControls();
     expandAccount('gab@macro.com');
-    expect(container.querySelector('[title^="Sync failed:"]')).toBeNull();
+    expect(
+      container.querySelector('[title^="Calendar needs attention:"]')
+    ).toBeNull();
   });
 
   it('collapses an account again to hide its calendars', () => {

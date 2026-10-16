@@ -79,9 +79,18 @@ function visibleCalendarsQueryOptions(enabled: boolean) {
     queryKey: calendarKeys.visibleCalendars.queryKey,
     queryFn: listCalendars,
     staleTime: CALENDAR_LIST_STALE_TIME,
+    refetchInterval: outlookCalendarRefetchInterval,
     enabled,
     placeholderData: keepPreviousData,
   };
+}
+
+function outlookCalendarRefetchInterval(query: {
+  state: { data: VisibleCalendar[] | undefined };
+}): number | false {
+  return query.state.data?.some((calendar) => calendar.provider === 'outlook')
+    ? 30_000
+    : false;
 }
 
 async function listCalendars() {

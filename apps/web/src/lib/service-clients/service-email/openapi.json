@@ -430,7 +430,7 @@
     "/email/contacts/block": {
       "post": {
         "tags": ["Contacts"],
-        "summary": "Block a sender by creating a Gmail filter that sends their emails to trash.\nThe actual Gmail API call is performed asynchronously by the gmail_ops worker.",
+        "summary": "Durably block a sender in the selected inbox.",
         "operationId": "block_sender",
         "requestBody": {
           "content": {
@@ -561,7 +561,7 @@
     "/email/contacts/unblock": {
       "post": {
         "tags": ["Contacts"],
-        "summary": "Unblock a sender by removing their block filter from Gmail.\nThe actual Gmail API call is performed asynchronously by the gmail_ops worker.",
+        "summary": "Durably remove Macro-managed sender blocking in the selected inbox.",
         "operationId": "unblock_sender",
         "requestBody": {
           "content": {
@@ -606,6 +606,41 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/email/draft-transfers/{id}/recover": {
+      "post": {
+        "tags": ["Drafts"],
+        "operationId": "recover_draft_transfer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferRecoveryResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
           }
         }
       }
@@ -1140,6 +1175,53 @@
         }
       }
     },
+    "/email/drafts/{id}/attachments/{attachment_id}/complete": {
+      "post": {
+        "tags": ["Drafts"],
+        "summary": "Confirm an uploaded attachment before it becomes part of a sendable draft.",
+        "operationId": "complete_draft_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/email/drafts/{id}/forwarded-attachments": {
       "post": {
         "tags": ["Drafts"],
@@ -1251,6 +1333,182 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/email/drafts/{id}/operation": {
+      "get": {
+        "tags": ["Drafts"],
+        "summary": "The same provider-neutral state returned on fully hydrated email messages.",
+        "operationId": "message_operation_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Message ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOperationResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/{id}/resolve": {
+      "post": {
+        "tags": ["Drafts"],
+        "summary": "Resolve an observed draft conflict or uncertain provider operation.",
+        "operationId": "resolve_message_operation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Message ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveMessageOperationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/{id}/transfer": {
+      "post": {
+        "tags": ["Drafts"],
+        "operationId": "transfer_draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferDraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferDraftResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
           }
         }
       }
@@ -1453,6 +1711,16 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
             "description": "",
             "content": {
               "application/json": {
@@ -1755,7 +2023,7 @@
       "post": {
         "tags": ["Links"],
         "summary": "Probes the live auth state of each of the caller's inboxes (owned and delegated)\nagainst the auth service and records the result on each link. A grant that died\nwhile the caller was inactive is detected here within minutes instead of waiting on\nthe daily refresh sweep; the side effects (clearing or setting the reauth flag, and\nthe one-time reauth fan-out) are handled by the email service token source.",
-        "description": "Probes run in the background and the response returns immediately to stay off the\nload path; each persisted flag is picked up by the next links read. Probes are\nthrottled per link in Redis so frequent calls — and many sharers of a shared inbox —\ncollapse to one refresh per window.",
+        "description": "Probes are durably queued and the response returns immediately to stay off the\nload path; each persisted flag is picked up by the next links read. Probes are\nthrottled per link in Redis so frequent calls — and many sharers of a shared inbox —\ncollapse to one refresh per window.",
         "operationId": "health_check_links",
         "responses": {
           "202": {
@@ -2349,6 +2617,28 @@
         }
       }
     },
+    "/email/settings/operations": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Accepted label and sender-policy changes awaiting provider confirmation.",
+        "operationId": "mailbox_settings_operations",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MailboxSettingsOperation"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/sync": {
       "delete": {
         "tags": ["Sync"],
@@ -2730,6 +3020,50 @@
         }
       }
     },
+    "/email/threads/{id}/operations": {
+      "get": {
+        "tags": ["Threads"],
+        "summary": "Fetch the latest organization action outcomes without provider-specific status strings.",
+        "operationId": "thread_operations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Thread ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MailboxOperation"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/threads/{id}/seen": {
       "post": {
         "tags": ["Threads"],
@@ -2779,6 +3113,80 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/threads/{id}/state": {
+      "patch": {
+        "tags": ["Threads"],
+        "summary": "Set mailbox state without client-side provider label lookup.",
+        "operationId": "update_thread_state",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Thread ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateThreadStateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -3037,6 +3445,11 @@
             "type": "integer",
             "format": "int32",
             "description": "The size of the file in bytes."
+          },
+          "upload_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Stable client upload identifier. Retry the same file with the same ID."
           }
         }
       },
@@ -3138,9 +3551,14 @@
           "content_type",
           "sha",
           "size",
-          "s3_key"
+          "s3_key",
+          "upload_pending",
+          "is_inline"
         ],
         "properties": {
+          "content_id": {
+            "type": ["string", "null"]
+          },
           "content_type": {
             "type": "string"
           },
@@ -3155,6 +3573,9 @@
             "type": "string",
             "format": "uuid"
           },
+          "is_inline": {
+            "type": "boolean"
+          },
           "s3_key": {
             "type": "string"
           },
@@ -3164,6 +3585,9 @@
           "size": {
             "type": "integer",
             "format": "int32"
+          },
+          "upload_pending": {
+            "type": "boolean"
           }
         }
       },
@@ -3622,6 +4046,16 @@
             "type": "string",
             "format": "uuid"
           },
+          "operation_status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiMessageOperation"
+              }
+            ]
+          },
           "provider_history_id": {
             "type": ["string", "null"]
           },
@@ -3693,6 +4127,9 @@
           "provider_id": {
             "type": ["string", "null"]
           },
+          "reference_url": {
+            "type": ["string", "null"]
+          },
           "sfs_id": {
             "type": ["string", "null"],
             "format": "uuid"
@@ -3761,6 +4198,78 @@
       "ApiMessageListVisibility": {
         "type": "string",
         "enum": ["Show", "Hide"]
+      },
+      "ApiMessageOperation": {
+        "type": "object",
+        "description": "Versions are opaque decimal strings so clients never truncate an i64.",
+        "required": ["state", "revision"],
+        "properties": {
+          "issue": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiMessageOperationIssue"
+              }
+            ]
+          },
+          "remote_version": {
+            "type": ["string", "null"]
+          },
+          "revision": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ApiMessageOperationState"
+          }
+        }
+      },
+      "ApiMessageOperationIssue": {
+        "type": "string",
+        "description": "Provider-neutral state exposed to clients.",
+        "enum": [
+          "ACCEPTING_REMOTE",
+          "DRAFT_CONFLICT",
+          "CREATION_UNKNOWN",
+          "ATTACHMENT_UNKNOWN",
+          "SEND_UNKNOWN",
+          "SEND_REJECTED",
+          "ACCESS_REVOKED",
+          "INVALID_CONTENT",
+          "MOVE_PENDING",
+          "MOVE_CONFLICT",
+          "MOVE_SOURCE_SENT",
+          "MOVE_REAUTHORIZATION",
+          "MOVE_ORIGINAL_REMAINS"
+        ]
+      },
+      "ApiMessageOperationState": {
+        "type": "string",
+        "description": "Provider-neutral state exposed to clients.",
+        "enum": [
+          "PENDING",
+          "SYNCHRONIZED",
+          "CONFLICT",
+          "UNCERTAIN",
+          "SUBMITTING",
+          "CONFIRMING",
+          "SENT",
+          "DELETED",
+          "CANCELLED",
+          "FAILED"
+        ]
+      },
+      "ApiMessageResolutionAction": {
+        "type": "string",
+        "description": "A deliberate resolution of a particular observed operation version.",
+        "enum": [
+          "keep_local",
+          "use_provider",
+          "recheck",
+          "retry_send",
+          "keep_original"
+        ]
       },
       "ApiPaginatedThreadCursor": {
         "type": "object",
@@ -3989,6 +4498,10 @@
           "provider_id": {
             "type": ["string", "null"]
           },
+          "reference_url": {
+            "type": ["string", "null"],
+            "description": "Cloud reference: open this provider page instead of downloading bytes."
+          },
           "sfs_id": {
             "type": ["string", "null"],
             "format": "uuid"
@@ -4011,6 +4524,10 @@
           "s3_key"
         ],
         "properties": {
+          "content_id": {
+            "type": ["string", "null"],
+            "description": "Original Content-ID retained when transferring a provider attachment."
+          },
           "content_type": {
             "type": "string",
             "description": "MIME type of the attachment (e.g., \"application/pdf\", \"image/png\")."
@@ -4029,6 +4546,10 @@
             "format": "uuid",
             "description": "Unique identifier for the attachment."
           },
+          "is_inline": {
+            "type": "boolean",
+            "description": "Whether the attachment is referenced inline by the message body."
+          },
           "s3_key": {
             "type": "string",
             "description": "S3 object key where the attachment content is stored."
@@ -4041,6 +4562,10 @@
             "type": "integer",
             "format": "int32",
             "description": "File size in bytes."
+          },
+          "upload_pending": {
+            "type": "boolean",
+            "description": "Bytes have not yet been verified; sending must wait for completion."
           }
         }
       },
@@ -4556,8 +5081,8 @@
       },
       "ConferenceProvider": {
         "type": "string",
-        "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
-        "enum": ["google_meet", "other"]
+        "description": "The conferencing system backing an event's join URL.\n\nCalendars can create Google Meet or Microsoft Teams according to their\ncapabilities. Imported third-party conferences are labeled separately.\nOmitting a conference change preserves the current conference; explicit\nchanges still require provider and calendar capability validation.",
+        "enum": ["microsoft_teams", "google_meet", "other"]
       },
       "Contact": {
         "type": "object",
@@ -4678,7 +5203,7 @@
         "properties": {
           "label": {
             "$ref": "#/components/schemas/Label",
-            "description": "the thread, with messages inside"
+            "description": "Local label. Pending provider creation is reported by settings operations."
           }
         }
       },
@@ -5365,6 +5890,162 @@
           }
         }
       },
+      "MailboxAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Mark correspondence read or unread.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["read"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "Mark correspondence read or unread."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Set the follow-up star.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["flagged"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "Set the follow-up star."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Archive inbox messages, or restore received correspondence to the inbox.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["archived"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "Archive inbox messages, or restore received correspondence to the inbox."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Move to recoverable trash, or restore correspondence to Inbox (drafts to Drafts).",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["trashed"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "Move to recoverable trash, or restore correspondence to Inbox (drafts to Drafts)."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Move to junk, or restore to the inbox.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["junk"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "Move to junk, or restore to the inbox."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Add/remove a category while preserving other provider assignments.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["category"]
+              },
+              "value": {
+                "type": "object",
+                "description": "Add/remove a category while preserving other provider assignments.",
+                "required": ["name", "present"],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "present": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "Desired organization state. Categories never stand in for folders or flags."
+      },
+      "MailboxOperation": {
+        "type": "object",
+        "description": "Durable outcome of an accepted organization action.",
+        "required": ["id", "action", "state", "updated_at"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/MailboxAction"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MailboxOperationState"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MailboxOperationState": {
+        "type": "string",
+        "enum": ["pending", "applied", "failed", "cancelled"]
+      },
+      "MailboxSettingsChange": {
+        "type": "string",
+        "enum": ["create_label", "delete_label", "sender_block"]
+      },
+      "MailboxSettingsOperation": {
+        "type": "object",
+        "description": "An accepted inbox configuration change awaiting provider confirmation.",
+        "required": ["id", "kind", "resource", "enabled", "needs_attention"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MailboxSettingsChange"
+          },
+          "needs_attention": {
+            "type": "boolean"
+          },
+          "resource": {
+            "type": "string"
+          }
+        }
+      },
       "Message": {
         "type": "object",
         "required": [
@@ -5539,6 +6220,22 @@
       "MessageListVisibility": {
         "type": "string",
         "enum": ["Show", "Hide"]
+      },
+      "MessageOperationResponse": {
+        "type": "object",
+        "description": "Authorized polling response. Gmail has no asynchronous draft operation.",
+        "properties": {
+          "operation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ApiMessageOperation"
+              }
+            ]
+          }
+        }
       },
       "ParsedMessage": {
         "type": "object",
@@ -5791,6 +6488,25 @@
         ],
         "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."
       },
+      "ResolveMessageOperationRequest": {
+        "type": "object",
+        "description": "Stale versions fail without altering the current operation.",
+        "required": ["revision", "action"],
+        "properties": {
+          "accept_duplicate_risk": {
+            "type": "boolean"
+          },
+          "action": {
+            "$ref": "#/components/schemas/ApiMessageResolutionAction"
+          },
+          "remote_version": {
+            "type": ["string", "null"]
+          },
+          "revision": {
+            "type": "string"
+          }
+        }
+      },
       "ResyncResponse": {
         "type": "object",
         "description": "The response returned from the resync endpoint.",
@@ -5803,7 +6519,7 @@
           "backfill_job_id": {
             "type": "string",
             "format": "uuid",
-            "description": "The backfill job driving the (re-)sync. Either the freshly enqueued job or\nthe one already in progress."
+            "description": "Opaque ID of the backfill job or provider sync stream driving the resync.\nthe one already in progress."
           }
         }
       },
@@ -6026,12 +6742,83 @@
           }
         }
       },
+      "ThreadStateField": {
+        "type": "string",
+        "description": "Semantic mailbox facts, independent of folder/category names.",
+        "enum": ["read", "starred", "trashed", "junk"]
+      },
       "ThreadSummary": {
         "type": "object",
         "required": ["provider_id"],
         "properties": {
           "provider_id": {
             "type": "string"
+          }
+        }
+      },
+      "TransferDraftRequest": {
+        "type": "object",
+        "description": "Reuse the same operation ID when retrying after a lost response.",
+        "required": ["operation_id", "destination_link_id"],
+        "properties": {
+          "destination_link_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "TransferDraftResponse": {
+        "type": "object",
+        "description": "A new identity prevents delayed writes from mutating the moved copy.",
+        "required": [
+          "message_id",
+          "thread_id",
+          "source_id",
+          "source_thread_id",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiAttachmentDraft"
+            }
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_thread_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "TransferRecoveryResponse": {
+        "type": "object",
+        "description": "A null result confirms that the move cannot commit, even if its request was delayed.",
+        "properties": {
+          "committed": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TransferDraftResponse"
+              }
+            ]
           }
         }
       },
@@ -6160,6 +6947,19 @@
           }
         }
       },
+      "UpdateThreadStateRequest": {
+        "type": "object",
+        "description": "Desired state for every applicable message in an authorized thread.",
+        "required": ["field", "value"],
+        "properties": {
+          "field": {
+            "$ref": "#/components/schemas/ThreadStateField"
+          },
+          "value": {
+            "type": "boolean"
+          }
+        }
+      },
       "UpsertEmailFilterRequest": {
         "type": "object",
         "description": "Request body for creating or updating an email filter.",
@@ -6220,7 +7020,7 @@
       },
       "UserProvider": {
         "type": "string",
-        "enum": ["GMAIL"]
+        "enum": ["GMAIL", "OUTLOOK"]
       },
       "Value": {}
     }

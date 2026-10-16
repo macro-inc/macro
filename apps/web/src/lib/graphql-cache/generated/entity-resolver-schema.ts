@@ -14,7 +14,15 @@ export const entityResolverSchema = {
       targets: ['GraphqlChannelActivity'],
       argumentPaths: [['input', 'channelId']],
     },
+    resolveEmailMessageOperation: {
+      targets: ['GraphqlSoupEmailThread'],
+      argumentPaths: [['input', 'messageId']],
+    },
     setEmailThreadArchived: {
+      targets: ['GraphqlSoupEmailThread'],
+      argumentPaths: [['input', 'threadId']],
+    },
+    setEmailThreadState: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
     },
@@ -65,6 +73,7 @@ export type GeneratedEntityResolverArgumentPath =
   | readonly ['initiativeId']
   | readonly ['input', 'channelId']
   | readonly ['input', 'labelId']
+  | readonly ['input', 'messageId']
   | readonly ['input', 'propertyDefinitionId']
   | readonly ['input', 'threadId']
   | readonly ['input', 'value', 'entityReference', 'specificMessageId']

@@ -2,6 +2,8 @@ import type {
   ApiContactInfo,
   ApiDraftContactInfo,
   GetThreadResponses,
+  MailboxOperation,
+  UpdateThreadStateRequest,
 } from '../../../generated/email/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -171,6 +173,20 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
         path: { id: this.id },
         body: { value: archived },
       }),
+    );
+  }
+
+  /** Update provider-neutral read, trash, spam, or star state. */
+  async updateState(request: UpdateThreadStateRequest): Promise<void> {
+    await this.mutate((c) =>
+      c.email.updateThreadState({ path: { id: this.id }, body: request }),
+    );
+  }
+
+  /** Read pending or failed mailbox changes without initiating a retry. */
+  async operations(): Promise<MailboxOperation[]> {
+    return unwrap(
+      await this.client.email.threadOperations({ path: { id: this.id } }),
     );
   }
 

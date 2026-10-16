@@ -4,6 +4,8 @@ import {
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
 import { TZDateMini } from '@date-fns/tz';
+import type { CalendarCapabilities } from '@service-calendar/generated/schemas/calendarCapabilities';
+import type { CalendarProvider } from '@service-calendar/generated/schemas/calendarProvider';
 import type { ConferenceChange } from '@service-calendar/generated/schemas/conferenceChange';
 import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
@@ -70,6 +72,7 @@ export type EventEditorConferenceChoice =
   | 'none'
   | 'macro'
   | 'google_meet'
+  | 'microsoft_teams'
   | 'existing';
 
 /** Values used to initialize the shared event editor form. */
@@ -105,6 +108,8 @@ export interface EventEditorInitialValues {
 
 /** Calendar option displayed by the event editor. */
 export interface EventEditorCalendarOption {
+  provider?: CalendarProvider;
+  capabilities?: CalendarCapabilities;
   id: string;
   label: string;
   color: string;
@@ -213,8 +218,9 @@ function initialConferenceChoice(
 ): EventEditorConferenceChoice {
   if (calendarMacroCallUrl(event)) return 'macro';
   if (!event.conferenceUrl) return 'none';
-  return event.conferenceProvider === 'google_meet'
-    ? 'google_meet'
+  return event.conferenceProvider === 'google_meet' ||
+    event.conferenceProvider === 'microsoft_teams'
+    ? event.conferenceProvider
     : 'existing';
 }
 

@@ -13,6 +13,10 @@ import type { EmailAttachment } from './core/email-message';
 export function createEmailAttachmentOpener() {
   const { openWithSplit } = useSplitLayout();
   const openAttachment = async (attachment: EmailAttachment) => {
+    if (attachment.reference_url) {
+      window.open(attachment.reference_url, '_blank', 'noopener,noreferrer');
+      return;
+    }
     const dbId = attachment.db_id;
     if (!dbId) return;
     const response = await getEmailAttachmentDocument(dbId);

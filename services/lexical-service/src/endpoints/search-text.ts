@@ -2,18 +2,18 @@ import { OpenAPIRoute } from 'chanfana';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { toSearchText } from '../lib/convsersions';
-import { createSyncClient } from '../lib/sync-service';
 import {
-  handleEndpointError,
-  createSyncError,
-  validateEnvironment,
   ConversionError,
+  createSyncError,
+  handleEndpointError,
+  validateEnvironment,
 } from '../lib/error-handler';
 import {
-  standardErrorResponses,
   docIdParam,
   searchableNodeSchema,
+  standardErrorResponses,
 } from '../lib/schemas';
+import { createSyncClient } from '../lib/sync-service';
 
 export class SearchTextEndpoint extends OpenAPIRoute {
   schema = {

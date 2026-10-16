@@ -75,6 +75,15 @@ function deferred<T>() {
 }
 
 const calendar: VisibleCalendar = {
+  provider: 'google',
+  capabilities: {
+    autoDecline: true,
+    conferenceProvider: 'google_meet',
+    customRecurrence: true,
+    emailReminders: true,
+    removeConference: true,
+    resetRsvp: true,
+  },
   id: 'primary',
   name: 'My calendar',
   color: '#dc2127',

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE((SELECT sum(size)::bigint FROM email_attachments_drafts WHERE draft_id = $1),0)\n                + COALESCE((SELECT sum(a.size_bytes)::bigint FROM email_attachments_fwd f JOIN email_attachments a ON a.id = f.attachment_id WHERE f.message_id = $1),0)\n                + COALESCE((SELECT sum(a.size_bytes)::bigint FROM email_attachments a WHERE a.message_id = $1\n                    AND NOT EXISTS (SELECT 1 FROM email_draft_attachment_removals r WHERE r.message_id = $1 AND (r.provider_id = a.provider_attachment_id OR trim(both '<>' from r.content_id) = trim(both '<>' from a.content_id)))\n                    AND NOT EXISTS (SELECT 1 FROM email_attachments_drafts d WHERE d.draft_id = $1 AND trim(both '<>' from a.content_id) = COALESCE(trim(both '<>' from d.content_id),d.id::text || '@attachments.macro.com'))\n                    AND NOT EXISTS (SELECT 1 FROM email_attachments_fwd f JOIN email_attachments original ON original.id=f.attachment_id WHERE f.message_id = $1 AND (trim(both '<>' from a.content_id) = f.attachment_id::text || '@attachments.macro.com' OR trim(both '<>' from a.content_id)=trim(both '<>' from original.content_id)))),0) AS \"total!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "70c69f6108a8e6ccdac8c09c5b734ecc6019d811470521c3293fc60a12154e25"
+}

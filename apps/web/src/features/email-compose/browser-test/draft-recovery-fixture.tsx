@@ -18,6 +18,11 @@ function RecoveryEditor() {
   const editor = createEmailEditor();
   const state = createEmailComposer({
     drafts: {
+      transferDraft: async () => ({
+        draftId: 'moved-draft',
+        threadId: 'moved-thread',
+        attachments: [],
+      }),
       readDraft: async () => undefined,
       watchDrafts: (callback) => {
         changed = callback;
@@ -40,6 +45,7 @@ function RecoveryEditor() {
     attachmentStorage: {
       uploadAttachments: async () => {},
       addForwardedAttachments: async () => {},
+      completeAttachment: async () => {},
       removeAttachment: async () => {},
       removeForwardedAttachment: async () => {},
     },

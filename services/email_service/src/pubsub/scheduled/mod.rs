@@ -1,3 +1,3 @@
-pub(crate) mod context;
+pub mod context;
 pub(crate) mod process;
 pub mod worker;

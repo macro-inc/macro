@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_draft_transfer_cancellations(id,actor_id) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET id=EXCLUDED.id RETURNING actor_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "actor_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f9225d9f879d1ab1a4a68833e1425fb24d4ed7001e84d86392ac62e1afc00284"
+}

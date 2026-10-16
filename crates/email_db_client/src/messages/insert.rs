@@ -52,9 +52,7 @@ pub async fn insert_message_with_tx(
         .await?;
     }
 
-    if !message.attachments.is_empty() {
-        provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
-    }
+    provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
 
     if update_thread_metadata {
         threads::update::update_thread_metadata(tx, thread_db_id, link_id).await?;

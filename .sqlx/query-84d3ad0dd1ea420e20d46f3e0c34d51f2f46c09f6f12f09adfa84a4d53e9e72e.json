@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_event_replacements SET command=NULL,updated_at=now() WHERE id=$1 AND next_step=0 AND result IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "84d3ad0dd1ea420e20d46f3e0c34d51f2f46c09f6f12f09adfa84a4d53e9e72e"
+}

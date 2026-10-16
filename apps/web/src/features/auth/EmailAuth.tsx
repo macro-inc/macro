@@ -201,6 +201,13 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
             });
             return;
           }
+          if (err.tag === 'PaymentRequired') {
+            toast.failure(
+              'A professional subscription is required to add another inbox.'
+            );
+            navigateAfterLink(linkId);
+            return;
+          }
           if (err.tag === 'NoGmailGrant') {
             toast.failure(
               'Gmail access was not granted. Please allow all requested permissions and try again.'

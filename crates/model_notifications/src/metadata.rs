@@ -1690,6 +1690,39 @@ impl NotificationTitle for CalendarEventReminderMetadata {
     }
 }
 
+impl notification::domain::models::NotificationExtEmail for CalendarEventReminderMetadata {
+    fn format_email(&self) -> notification::domain::models::queue_message::EmailContent {
+        let title = self
+            .format_title(None)
+            .unwrap_or_else(|_| "Calendar reminder".into());
+        let when = self.format_body(None).unwrap_or_default();
+        notification::domain::models::queue_message::EmailContent {
+            subject: format!("Reminder: {}", title.replace(['\r', '\n'], " ")),
+            body: format!(
+                "<p>{}</p><p>{}</p><p>Calendar reminder from Macro.</p>",
+                html_escape::encode_text(&title),
+                html_escape::encode_text(&when)
+            ),
+        }
+    }
+    fn rate_limit_config() -> notification::domain::models::RateLimitConfig {
+        notification::domain::models::RateLimitConfig {
+            max_count: 1,
+            window: std::time::Duration::from_secs(86400),
+        }
+    }
+    fn rate_limit_key(&self) -> notification::domain::models::RateLimitKey {
+        notification::domain::models::RateLimitKey::from_str_hashed(&format!(
+            "calendar-reminder:{}:{}:{}:{:?}:{:?}",
+            self.event_id,
+            self.occurrence_key,
+            self.minutes_before,
+            self.starts_at,
+            self.start_date
+        ))
+    }
+}
+
 impl NotificationExtIos for CalendarEventReminderMetadata {
     type NotifData = PushNotificationData;
 

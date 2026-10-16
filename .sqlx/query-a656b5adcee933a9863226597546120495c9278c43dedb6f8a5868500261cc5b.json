@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT resource_key FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='delete_label' AND completed_revision<revision",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "resource_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a656b5adcee933a9863226597546120495c9278c43dedb6f8a5868500261cc5b"
+}

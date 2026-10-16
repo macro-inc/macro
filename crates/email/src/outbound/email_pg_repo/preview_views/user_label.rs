@@ -40,11 +40,8 @@ pub(crate) async fn user_label_preview_cursor(
                 SELECT EXISTS (
                     SELECT 1
                     FROM email_messages m_imp
-                    JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE m_imp.thread_id = t.id
-                      AND l.link_id = t.link_id
-                      AND l.name = 'IMPORTANT'
+                    JOIN email_message_mailbox_facts mf ON mf.id = m_imp.id
+                    WHERE m_imp.thread_id = t.id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
                 )
             ) AS "is_important!",
             c.email_address AS "sender_email?",
@@ -78,14 +75,10 @@ pub(crate) async fn user_label_preview_cursor(
                     m.thread_id,
                     MAX(m.internal_date_ts) as latest_labeled_ts
                 FROM email_messages m
-                JOIN email_message_labels ml ON m.id = ml.message_id
+                JOIN email_effective_message_labels ml ON m.id = ml.message_id
                 JOIN email_labels l ON ml.label_id = l.id
                 WHERE m.link_id = ANY($1) AND l.name = $5
-                  AND NOT EXISTS (
-                      SELECT 1 FROM email_message_labels ml2
-                      JOIN email_labels l2 ON ml2.label_id = l2.id
-                      WHERE ml2.message_id = m.id AND l2.name = 'TRASH' AND l2.link_id = m.link_id
-                  )
+                  AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
                 GROUP BY m.thread_id
             ) llpt
             JOIN email_threads t ON llpt.thread_id = t.id
@@ -110,14 +103,10 @@ pub(crate) async fn user_label_preview_cursor(
                    m.from_name,
                    m.is_draft
             FROM email_messages m
-            JOIN email_message_labels ml ON m.id = ml.message_id
+            JOIN email_effective_message_labels ml ON m.id = ml.message_id
             JOIN email_labels l ON ml.label_id = l.id
             WHERE m.thread_id = t.id AND m.is_draft = FALSE AND l.link_id = t.link_id AND l.name = $5
-              AND NOT EXISTS (
-                  SELECT 1 FROM email_message_labels ml2
-                  JOIN email_labels l2 ON ml2.label_id = l2.id
-                  WHERE ml2.message_id = m.id AND l2.name = 'TRASH' AND l2.link_id = t.link_id
-              )
+              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
             ORDER BY m.internal_date_ts DESC
             LIMIT 1
         ) AS lmp

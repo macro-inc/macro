@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE microsoft_oauth_grant_versions g SET refresh_lease_id = $4, refresh_lease_until = now() + interval '3 minutes'\n            WHERE grant_id = $1 AND generation = $2 AND revision = $3 AND revoked_at IS NULL\n                AND (refresh_lease_until IS NULL OR refresh_lease_until < now())\n                AND EXISTS(SELECT 1 FROM email_links l WHERE l.grant_id=g.grant_id AND l.grant_generation=g.generation\n                    AND l.fusionauth_user_id=g.fusionauth_user_id AND lower(l.email_address)=g.email_address\n                    AND l.provider='OUTLOOK' AND (l.is_sync_active OR l.disconnect_requested_at IS NOT NULL))\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "91bc95c00338871c657076c9f29441a353121f47a590f5a86b0b6f9a56aac90e"
+}

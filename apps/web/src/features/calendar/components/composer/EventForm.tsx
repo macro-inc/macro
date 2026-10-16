@@ -94,6 +94,13 @@ export function EventForm(props: EventFormProps) {
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
     formIsDisabled() || fieldIsReadOnly(field);
 
+  const capabilities = () => controller.selectedCalendarOption()?.capabilities;
+  const conferenceLocked = () =>
+    isEdit() &&
+    capabilities()?.removeConference === false &&
+    ['microsoft_teams', 'existing'].includes(
+      controller.initialConferenceChoice()
+    );
   const isOutOfOffice = () => controller.isOutOfOffice();
   // The decline settings of an edited event are unknown until picked, and the
   // disclosure must not claim behavior nobody chose.
@@ -264,6 +271,7 @@ export function EventForm(props: EventFormProps) {
               />
               <EventComposerConferencePill
                 value={state().conference}
+                provider={capabilities()?.conferenceProvider}
                 macroCallsEnabled={props.macroCallsEnabled}
                 canKeepExisting={
                   controller.initialConferenceChoice() === 'existing'
@@ -271,7 +279,7 @@ export function EventForm(props: EventFormProps) {
                 onChange={(conference) =>
                   controller.setField('conference', conference)
                 }
-                disabled={fieldIsDisabled('conference')}
+                disabled={fieldIsDisabled('conference') || conferenceLocked()}
               />
               <EventComposerLocationPill
                 value={state().location}
@@ -282,11 +290,21 @@ export function EventForm(props: EventFormProps) {
               />
             </Show>
             <Show when={isOutOfOffice()}>
-              <EventComposerDeclinePill
-                value={state().outOfOffice}
-                onChange={controller.setOutOfOffice}
-                disabled={formIsDisabled()}
-              />
+              <Show
+                when={capabilities()?.autoDecline !== false}
+                fallback={
+                  <span class="text-xs text-ink-muted">
+                    Outlook blocks this time. Configure automatic declines in
+                    Outlook.
+                  </span>
+                }
+              >
+                <EventComposerDeclinePill
+                  value={state().outOfOffice}
+                  onChange={controller.setOutOfOffice}
+                  disabled={formIsDisabled()}
+                />
+              </Show>
               <Show
                 when={
                   state().outOfOffice &&
@@ -318,6 +336,20 @@ export function EventForm(props: EventFormProps) {
             />
           </div>
 
+          <Show when={conferenceLocked()}>
+            <p class="text-xs text-ink-muted">
+              Microsoft keeps the online meeting link on an existing event. To
+              remove it, use “Replace event” after saving or discarding your
+              edits without a meeting link.
+            </p>
+          </Show>
+          <Show when={controller.conferenceError()}>
+            {(error) => (
+              <p role="alert" class="text-sm text-warning">
+                {error()}
+              </p>
+            )}
+          </Show>
           <Show when={outOfOfficeNotice()}>
             {(notice) => (
               <div
@@ -327,6 +359,19 @@ export function EventForm(props: EventFormProps) {
               >
                 <span class="font-medium">Out-of-office event</span>
                 <span>{notice().effect}</span>
+                <Show
+                  when={
+                    controller.selectedCalendarOption()?.provider ===
+                      'outlook' &&
+                    state().outOfOffice?.autoDeclineMode !== 'decline_none'
+                  }
+                >
+                  <span>
+                    Macro checks for conflicts in the background while this
+                    calendar is connected. Replies already sent cannot be undone
+                    by changing this event.
+                  </span>
+                </Show>
                 <Show when={notice().declineMessage}>
                   {(message) => (
                     <span class="italic">

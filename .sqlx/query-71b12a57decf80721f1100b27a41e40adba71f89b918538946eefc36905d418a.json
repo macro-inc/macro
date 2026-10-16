@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id AS \"id!\" FROM email_attachments a WHERE a.message_id=$1\n            AND NOT EXISTS(SELECT 1 FROM email_draft_attachment_removals r WHERE r.message_id=$1 AND (r.provider_id=a.provider_attachment_id OR trim(both '<>' from r.content_id)=trim(both '<>' from a.content_id)))\n            AND NOT EXISTS(SELECT 1 FROM email_attachments_drafts u WHERE u.draft_id=$1 AND trim(both '<>' from a.content_id)=COALESCE(trim(both '<>' from u.content_id),u.id::text||'@attachments.macro.com'))\n            AND NOT EXISTS(SELECT 1 FROM email_attachments_fwd f JOIN email_attachments original ON original.id=f.attachment_id WHERE f.message_id=$1 AND (trim(both '<>' from a.content_id)=trim(both '<>' from original.content_id) OR trim(both '<>' from a.content_id)=f.attachment_id::text||'@attachments.macro.com'))\n            UNION SELECT attachment_id FROM email_attachments_fwd WHERE message_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "71b12a57decf80721f1100b27a41e40adba71f89b918538946eefc36905d418a"
+}

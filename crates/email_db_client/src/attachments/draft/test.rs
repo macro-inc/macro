@@ -180,6 +180,9 @@ async fn insert_draft_attachment_creates_new_attachment(pool: Pool<Postgres>) ->
     let attachment_id = Uuid::parse_str("00000000-0000-0000-0000-0000000da099")?;
 
     let attachment = service::attachment::AttachmentDraft {
+        upload_pending: false,
+        content_id: None,
+        is_inline: false,
         id: attachment_id,
         draft_id,
         file_name: "new_attachment.pdf".to_string(),
@@ -216,6 +219,9 @@ async fn insert_draft_attachment_does_nothing_for_wrong_link_id(
     let attachment_id = Uuid::parse_str("00000000-0000-0000-0000-0000000da098")?;
 
     let attachment = service::attachment::AttachmentDraft {
+        upload_pending: false,
+        content_id: None,
+        is_inline: false,
         id: attachment_id,
         draft_id,
         file_name: "should_not_insert.pdf".to_string(),

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM calendar_outlook_declines WHERE id=$1 AND mailbox_key=calendar_outlook_mailbox_key($2) AND confirmed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "af486befae5b643605c05d017bab317ffec6a645293e19b639c47f429c99d8e0"
+}

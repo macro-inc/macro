@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.id,l.sync_generation,l.grant_generation FROM email_links l\n            WHERE l.id=$1 AND l.is_sync_active AND (l.macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$2))\n              AND EXISTS(SELECT 1 FROM email_links target WHERE target.id=$3 AND (target.macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=target.id AND u.primary_macro_id=$2)))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ecd4b2f12f9f0eae1c40aaadfbf4413d4da12149b25139dbb2a3cb5fc12b8692"
+}

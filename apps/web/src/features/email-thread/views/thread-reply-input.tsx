@@ -101,6 +101,10 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
           <Layer depth={props.mobileDrawer ? 0 : 2}>
             <ReplyInputView
               context={viewContext.compose}
+              onReloadDraft={() => {
+                setEngaged(false);
+                void ctx.query.refetch();
+              }}
               host={viewContext.composeHost}
               session={{
                 thread: ctx.thread,

@@ -372,6 +372,10 @@ const GOOGLE_MEET_OPTION: EventComposerConferenceOption = {
   value: 'google_meet',
   label: 'Google Meet',
 };
+const MICROSOFT_TEAMS_OPTION: EventComposerConferenceOption = {
+  value: 'microsoft_teams',
+  label: 'Microsoft Teams',
+};
 const MACRO_CALL_OPTION: EventComposerConferenceOption = {
   value: 'macro',
   label: 'Macro call',
@@ -386,6 +390,7 @@ const EXISTING_CONFERENCING_OPTION: EventComposerConferenceOption = {
 };
 
 export interface EventComposerConferencePillProps {
+  provider?: 'google_meet' | 'microsoft_teams' | 'other' | null;
   value: EventEditorConferenceChoice;
   canKeepExisting: boolean;
   macroCallsEnabled: boolean;
@@ -402,7 +407,11 @@ export function EventComposerConferencePill(
   );
   const options = createMemo(() => [
     ...(includesMacroCall() ? [MACRO_CALL_OPTION] : []),
-    GOOGLE_MEET_OPTION,
+    ...(props.provider === 'microsoft_teams'
+      ? [MICROSOFT_TEAMS_OPTION]
+      : props.provider === null || props.provider === 'other'
+        ? []
+        : [GOOGLE_MEET_OPTION]),
     ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
     NO_CONFERENCING_OPTION,
   ]);

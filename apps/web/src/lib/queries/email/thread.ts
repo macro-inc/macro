@@ -37,7 +37,7 @@ import {
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import { updateEmailThreadLabel } from './cache-cleanup';
+import { updateEmailThreadState } from './cache-cleanup';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
@@ -375,34 +375,9 @@ export function useMarkThreadAsSeenMutation(
 
 type MarkThreadAsUnreadParams = {
   threadId: string;
-  /** The inbox (email_links row) the thread belongs to; selects that inbox's
-   *  UNREAD label for multi-inbox users. */
+  /** Owning inbox, retained for callers that also update their local views. */
   linkId?: string;
 };
-
-/**
- * Resolve an inbox's UNREAD system label from the cached labels list (the
- * endpoint returns every inbox's labels; mirrors trashEmails' TRASH lookup).
- */
-async function fetchUnreadLabelId(linkId?: string): Promise<string> {
-  const labelsData = await queryClient.fetchQuery({
-    queryKey: emailKeys.labels.queryKey,
-    queryFn: async () =>
-      throwOnErr(async () => await emailClient.getUserLabels()),
-    staleTime: 5 * 60 * 1000,
-  });
-  const labels = labelsData?.labels ?? [];
-  const unreadLabel =
-    (linkId
-      ? labels.find(
-          (l) => l.providerLabelId === 'UNREAD' && l.linkId === linkId
-        )
-      : undefined) ?? labels.find((l) => l.providerLabelId === 'UNREAD');
-  if (!unreadLabel) {
-    throw new Error('UNREAD label not found');
-  }
-  return unreadLabel.id;
-}
 
 /**
  * Optimistically flip the soup row to unread. The thread messages cache is
@@ -419,8 +394,7 @@ function threadUnreadOnMutate(params: MarkThreadAsUnreadParams): void {
 }
 
 /**
- * Mutation to mark a thread as unread: adds the UNREAD label to all its
- * messages — the backend also flips the thread-level flag and syncs Gmail.
+ * Mark a thread unread through the shared mailbox-state contract.
  */
 export function useMarkThreadAsUnreadMutation(
   callbacks?: MutationCallbacks<void, Error, MarkThreadAsUnreadParams>
@@ -437,12 +411,11 @@ export function useMarkThreadAsUnreadMutation(
           await refreshActiveGraphqlSoupQueries();
         return;
       }
-      const labelId = await fetchUnreadLabelId(params.linkId);
       await throwOnErr(() =>
-        updateEmailThreadLabel({
+        updateEmailThreadState({
           thread_id: params.threadId,
-          label_id: labelId,
-          value: true,
+          field: 'read',
+          value: false,
         })
       );
     },
@@ -808,8 +781,8 @@ export async function blockSenderWithToast(
     return;
   }
 
-  toast.success('Sender blocked', {
-    subtext: `All new messages will be trashed for ${senderEmail}`,
+  toast.success('Sender block queued', {
+    subtext: `Applying the rule for ${senderEmail}`,
     actions: [
       {
         label: 'Undo',
@@ -824,7 +797,7 @@ export async function blockSenderWithToast(
           if (undoResult.isErr()) {
             toast.failure('Failed to unblock sender', { subtext: senderEmail });
           } else {
-            toast.success('Sender unblocked');
+            toast.success('Sender unblock queued');
           }
         },
       },

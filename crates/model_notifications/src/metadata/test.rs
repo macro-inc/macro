@@ -1225,3 +1225,27 @@ fn agent_excerpt_flattens_whitespace_and_truncates() {
     assert_eq!(excerpt.chars().count(), AGENT_EXCERPT_MAX_CHARS);
     assert!(excerpt.ends_with('…'));
 }
+
+#[test]
+fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
+    use notification::domain::models::NotificationExtEmail;
+    let metadata = CalendarEventReminderMetadata {
+        event_id: Uuid::now_v7(),
+        occurrence_key: "one".into(),
+        title: "<img src=x> & Planning\r\nMeeting".into(),
+        starts_at: None,
+        ends_at: None,
+        start_date: Some(chrono::NaiveDate::from_ymd_opt(2026, 10, 5).unwrap()),
+        time_zone: Some("UTC".into()),
+        minutes_before: 10,
+    };
+    let email = metadata.format_email();
+    assert!(!email.body.contains("<img"));
+    assert!(email.body.contains("&lt;img"));
+    assert!(!email.subject.contains(['\r', '\n']));
+    assert!(email.body.contains("All day"));
+    let first = metadata.rate_limit_key();
+    let mut second = metadata.clone();
+    second.minutes_before = 5;
+    assert_ne!(first.as_bytes(), second.rate_limit_key().as_bytes());
+}

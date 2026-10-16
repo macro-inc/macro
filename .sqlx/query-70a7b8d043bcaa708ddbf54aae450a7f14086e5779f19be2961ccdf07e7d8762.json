@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_address_book_sources SET deleted_at = now(),revision = revision + 1,photo_lease_id = NULL,photo_lease_until = NULL\n            WHERE link_id = $1 AND folder_id <> '' AND NOT(folder_id = ANY($2)) AND deleted_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "70a7b8d043bcaa708ddbf54aae450a7f14086e5779f19be2961ccdf07e7d8762"
+}

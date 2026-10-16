@@ -153,6 +153,8 @@ impl ThreadPreviewCursorDbRow {
 #[dg(forward = crate::domain::models::UserProvider)]
 pub enum DbUserProvider {
     Gmail,
+    /// Microsoft Outlook and Microsoft 365.
+    Outlook,
 }
 
 #[derive(Debug, Clone)]
@@ -304,6 +306,7 @@ impl From<DbMessageLabelRow> for (uuid::Uuid, MessageLabel) {
 
 /// DB row for a provider attachment, including the message_id for grouping.
 pub struct DbMessageAttachmentRow {
+    pub reference_url: Option<String>,
     pub message_id: uuid::Uuid,
     pub id: uuid::Uuid,
     pub provider_attachment_id: Option<String>,
@@ -317,6 +320,7 @@ pub struct DbMessageAttachmentRow {
 impl From<DbMessageAttachmentRow> for (uuid::Uuid, MessageAttachment) {
     fn from(row: DbMessageAttachmentRow) -> Self {
         let att = MessageAttachment {
+            reference_url: row.reference_url,
             db_id: row.id,
             provider_id: row.provider_attachment_id,
             filename: row.filename,
@@ -338,6 +342,9 @@ pub struct DbDraftAttachmentRow {
     pub sha: String,
     pub size: i32,
     pub s3_key: String,
+    pub upload_pending: bool,
+    pub content_id: Option<String>,
+    pub is_inline: bool,
 }
 
 impl From<DbDraftAttachmentRow> for (uuid::Uuid, AttachmentDraft) {
@@ -350,6 +357,9 @@ impl From<DbDraftAttachmentRow> for (uuid::Uuid, AttachmentDraft) {
             sha: row.sha,
             size: row.size,
             s3_key: row.s3_key,
+            upload_pending: row.upload_pending,
+            content_id: row.content_id,
+            is_inline: row.is_inline,
         };
         (row.draft_id, att)
     }
@@ -448,6 +458,7 @@ impl From<DbRecipientRow> for (uuid::Uuid, ContactInfo, RecipientType) {
 
 /// DB row for a simplified message used in draft validation queries.
 pub(crate) struct DbSimpleMessageRow {
+    pub provider_id: Option<String>,
     pub id: Uuid,
     pub link_id: Uuid,
     pub thread_id: Uuid,
@@ -460,6 +471,7 @@ pub(crate) struct DbSimpleMessageRow {
 impl From<DbSimpleMessageRow> for SimpleMessageInfo {
     fn from(row: DbSimpleMessageRow) -> Self {
         Self {
+            provider_id: row.provider_id,
             db_id: row.id,
             link_id: row.link_id,
             thread_db_id: row.thread_id,

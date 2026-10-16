@@ -13,9 +13,11 @@ export function useInitGmailLink() {
     mutationFn: async (params: {
       originalUrl: string;
       scopes?: ConsentScopes;
+      reconnectLinkId?: string;
     }) => {
       return authServiceClient.initGmailLink(params.originalUrl, {
         scopes: params.scopes,
+        reconnectLinkId: params.reconnectLinkId,
       });
     },
   }));

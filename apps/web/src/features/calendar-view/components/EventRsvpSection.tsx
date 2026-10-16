@@ -1,4 +1,5 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { OutlookRsvpAction } from '@app/features/calendar/views/event-replacement';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
@@ -78,6 +79,20 @@ export function EventRsvpSection(props: {
       <p role="status" aria-live="polite" class="text-xs text-ink-muted">
         {rsvp.pending() ? 'Saving response…' : rsvp.error()}
       </p>
+      <Show
+        when={
+          props.event.calendar.provider === 'outlook' &&
+          !selfAttendee()?.isOrganizer
+        }
+      >
+        <OutlookRsvpAction
+          target={{
+            eventId: props.event.eventId,
+            calendarId: props.event.calendarId,
+            recurrenceId: props.event.recurrenceId,
+          }}
+        />
+      </Show>
       <EventRsvpScopeDialog
         open={rsvp.scopeOpen()}
         scope={rsvp.scope()}

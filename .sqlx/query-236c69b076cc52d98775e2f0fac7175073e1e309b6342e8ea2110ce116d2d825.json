@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_draft_attachment_removals r WHERE r.message_id=$1 AND\n                    (trim(both '<>' from r.content_id)=$2 OR trim(both '<>' from r.content_id)=(SELECT trim(both '<>' from content_id) FROM email_attachments WHERE id=$3))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "236c69b076cc52d98775e2f0fac7175073e1e309b6342e8ea2110ce116d2d825"
+}

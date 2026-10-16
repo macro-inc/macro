@@ -29,6 +29,9 @@ function MobileComposePanel(props: { onLeave: () => void }) {
   const editor = createEmailEditor();
   const state = createEmailComposer({
     drafts: {
+      transferDraft: async () => {
+        throw new Error('Inbox transfers are unavailable in this fixture');
+      },
       saveDraft: async (input) => ({
         draftId: input.clientHandles?.draftId ?? 'draft',
         threadId: input.clientHandles?.threadId ?? 'thread',
@@ -38,6 +41,7 @@ function MobileComposePanel(props: { onLeave: () => void }) {
       restoreDraft: async () => {},
     },
     attachmentStorage: {
+      completeAttachment: async () => {},
       uploadAttachments: async () => {},
       addForwardedAttachments: async () => {},
       removeAttachment: async () => {},

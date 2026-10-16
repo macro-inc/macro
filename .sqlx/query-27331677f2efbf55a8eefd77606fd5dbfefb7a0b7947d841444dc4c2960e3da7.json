@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (\n            SELECT s.id FROM email_links l JOIN email_mailbox_settings_work s ON s.link_id=l.id\n            WHERE (l.provider<>'OUTLOOK' OR (s.kind='catalog' AND $2) OR (s.kind<>'catalog' AND $3))\n            AND l.is_sync_active AND l.disconnect_requested_at IS NULL AND s.next_run_at<=now() AND (s.kind='catalog' OR s.revision>s.completed_revision)\n            AND (s.lease_until IS NULL OR s.lease_until<now())\n            AND (s.kind<>'delete_label' OR NOT EXISTS(SELECT 1 FROM email_mailbox_commands c\n                WHERE c.link_id=s.link_id AND c.generation=l.sync_generation AND c.status IN ('pending','running','confirming')\n                AND c.intent->>'kind'='category' AND c.intent->'value'->>'name'=s.resource_key))\n            AND NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work busy WHERE busy.link_id=l.id AND busy.lease_until>now())\n            ORDER BY s.next_run_at,s.id LIMIT 1 FOR UPDATE OF l,s SKIP LOCKED\n        ) UPDATE email_mailbox_settings_work s SET lease_id=$1,lease_until=now()+interval '3 minutes',attempts=attempts+1\n        FROM candidate c,email_links l WHERE s.id=c.id AND l.id=s.link_id\n        RETURNING s.id,s.link_id,s.revision,s.kind,s.resource_key,s.desired,l.sync_generation,l.grant_generation,l.provider::text AS \"provider!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "resource_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "desired",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "provider!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "27331677f2efbf55a8eefd77606fd5dbfefb7a0b7947d841444dc4c2960e3da7"
+}

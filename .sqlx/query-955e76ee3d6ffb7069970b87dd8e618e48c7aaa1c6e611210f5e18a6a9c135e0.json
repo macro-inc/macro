@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_messages m SET\n                is_read = COALESCE((SELECT (desired #>> '{}')::boolean FROM email_pending_mailbox_state WHERE message_id = m.id AND attribute = 'is_read'),(m.mailbox_state->>'is_read')::boolean,m.is_read),\n                is_starred = COALESCE((SELECT (desired #>> '{}')::boolean FROM email_pending_mailbox_state WHERE message_id = m.id AND attribute = 'is_flagged'),(m.mailbox_state->>'is_flagged')::boolean,m.is_starred)\n            WHERE m.id = $1 AND m.link_id = $2 RETURNING m.thread_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "955e76ee3d6ffb7069970b87dd8e618e48c7aaa1c6e611210f5e18a6a9c135e0"
+}

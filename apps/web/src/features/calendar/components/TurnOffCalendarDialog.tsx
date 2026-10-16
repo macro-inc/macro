@@ -55,8 +55,8 @@ export function TurnOffCalendarDialog(props: {
             Turn off calendar for{' '}
             <span class="text-ink">{props.target?.emailAddress}</span>? Macro
             deletes its copy of these events and gives up calendar access. Your
-            Google Calendar is untouched and email keeps syncing, but turning
-            calendar back on means granting access again.
+            Your calendar at the provider is untouched and email keeps syncing,
+            but turning calendar back on means granting access again.
           </Dialog.Description>
           <Show when={disableCalendar.isPending}>
             <p role="status" class="text-sm text-ink-muted">

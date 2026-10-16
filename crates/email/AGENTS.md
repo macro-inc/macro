@@ -55,6 +55,8 @@ tools — hexagonal, heavily feature-gated.
   dependency belongs under before wiring it in.
 - `domain/ports.rs` defines the traits adapters implement — call through the
   domain service, never an outbound adapter directly from another crate.
+- Sender discovery authorizes the inbox first. Gmail aliases use the sender
+  provider; Outlook exposes its verified primary address without a Gmail lookup.
 
 ## Related
 

@@ -104,7 +104,7 @@ pub async fn fetch_draft_attachments_by_draft_id(
     let db_attachments = sqlx::query_as!(
         db::attachment::AttachmentDraft,
         r#"
-            SELECT ead.id, ead.draft_id, ead.file_name, ead.content_type, ead.sha, ead.size, ead.s3_key
+            SELECT ead.id, ead.draft_id, ead.file_name, ead.content_type, ead.sha, ead.size, ead.s3_key, ead.upload_pending, ead.content_id, ead.is_inline
             FROM email_attachments_drafts ead
             JOIN email_messages m ON ead.draft_id = m.id
             WHERE ead.draft_id = $1 AND m.link_id = $2
@@ -137,7 +137,7 @@ pub async fn fetch_db_draft_attachments_in_bulk(
     let results = sqlx::query_as!(
         db::attachment::AttachmentDraft,
         r#"
-            SELECT id, draft_id, file_name, content_type, sha, size, s3_key
+            SELECT id, draft_id, file_name, content_type, sha, size, s3_key, upload_pending, content_id, is_inline
             FROM email_attachments_drafts
             WHERE draft_id = ANY($1)
             ORDER BY draft_id, file_name ASC

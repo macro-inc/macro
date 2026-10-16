@@ -366,7 +366,27 @@ export function createCalendarEventFormController(
   const setField = <Key extends keyof EventEditorInitialValues>(
     field: Key,
     next: EventEditorInitialValues[Key]
-  ) => replaceState({ ...state(), [field]: next });
+  ) => {
+    const value = { ...state(), [field]: next };
+    if (field === 'calendarId') {
+      const capabilities = calendarOptionFor(value.calendarId)?.capabilities;
+      if (
+        capabilities &&
+        (value.conference === 'google_meet' ||
+          value.conference === 'microsoft_teams')
+      ) {
+        const provider = capabilities.conferenceProvider;
+        if (provider === 'google_meet' || provider === 'microsoft_teams')
+          value.conference = provider;
+      }
+      if (capabilities?.autoDecline === false && value.outOfOffice)
+        value.outOfOffice = {
+          autoDeclineMode: 'decline_none',
+          declineMessage: '',
+        };
+    }
+    replaceState(value);
+  };
 
   const setStart = (start: string) =>
     replaceState(
@@ -452,8 +472,29 @@ export function createCalendarEventFormController(
     };
   };
 
+  const conferenceError = () => {
+    const requested = state().conference;
+    if (
+      options.isEdit &&
+      requested === initialValue().conference &&
+      effectiveCalendarId() === calendarOptionFor(initialValue().calendarId)?.id
+    )
+      return undefined;
+    const capabilities = selectedCalendarOption()?.capabilities;
+    if (
+      !isOutOfOffice() &&
+      capabilities &&
+      (requested === 'google_meet' || requested === 'microsoft_teams') &&
+      capabilities.conferenceProvider !== requested
+    ) {
+      return 'This calendar cannot create the selected meeting link. Choose another calendar or remove the conference.';
+    }
+    return undefined;
+  };
+
   const canSave = () =>
     recurrence.canSave() &&
+    !conferenceError() &&
     (!options.defaultCalendarId ||
       availableCalendarOptions().some(
         (option) => option.id === effectiveCalendarId()
@@ -543,6 +584,7 @@ export function createCalendarEventFormController(
     dateRangeError: recurrence.dateRangeError,
     pastEventWarning,
     eventTime: recurrence.eventTime,
+    conferenceError,
     canSave,
     snapshot,
     isDirty,

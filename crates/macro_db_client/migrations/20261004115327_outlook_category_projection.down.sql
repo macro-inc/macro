@@ -1,0 +1,2 @@
+DROP VIEW email_effective_message_labels;
+DROP INDEX email_mailbox_command_targets_message;

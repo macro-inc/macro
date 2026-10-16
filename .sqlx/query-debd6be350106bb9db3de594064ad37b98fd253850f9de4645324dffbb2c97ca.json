@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.link_id AS \"link_id!\",c.actor_id AS \"actor_id!\" FROM email_mailbox_custodians c WHERE c.fusionauth_user_id = $1\n            UNION SELECT l.id AS link_id,l.macro_id AS actor_id FROM email_links l WHERE l.fusionauth_user_id = $1\n                AND NOT EXISTS(SELECT 1 FROM promoted_shared_mailboxes p WHERE p.macro_id = l.macro_id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "debd6be350106bb9db3de594064ad37b98fd253850f9de4645324dffbb2c97ca"
+}

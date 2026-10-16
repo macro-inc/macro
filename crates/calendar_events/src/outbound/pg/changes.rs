@@ -185,6 +185,7 @@ impl CalendarChangeRepository for PgCalendarRepository {
                 override.description AS override_description,
                 override.location AS override_location,
                 override.status AS override_status,
+                override.reminders AS override_reminders,
                 event.owner_id,
                 event.ical_uid,
                 event.title,
@@ -316,7 +317,16 @@ impl CalendarChangeRepository for PgCalendarRepository {
                 calendar.provider_calendar_id,
                 calendar.default_reminders,
                 calendar.last_sync_error,
-                calendar.consecutive_sync_failures
+                EXISTS(
+                    SELECT 1 FROM calendar_outlook_declines d
+                    WHERE d.mailbox_key = calendar_outlook_mailbox_key(link.id)
+                      AND d.provider_calendar_id = calendar.provider_calendar_id
+                      AND d.confirmed_at IS NULL
+                      AND d.submitted_at < now() - interval '5 minutes'
+                ) AS "unconfirmed_reply!",
+                calendar.consecutive_sync_failures,
+                account.provider,
+                calendar.online_meeting_providers
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
