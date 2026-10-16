@@ -179,6 +179,14 @@
             "type": ["string", "null"],
             "description": "The page description (from `og:description`), if any."
           },
+          "embed_type": {
+            "$ref": "#/components/schemas/UnfurlEmbedType",
+            "description": "The type of embeddable content, if the URL supports iframe embedding."
+          },
+          "embed_url": {
+            "type": ["string", "null"],
+            "description": "The iframe-embeddable URL for services like Loom or Supercut."
+          },
           "favicon_url": {
             "type": ["string", "null"],
             "description": "The page's favicon URL, if any."
@@ -206,6 +214,11 @@
           }
         }
       },
+      "UnfurlEmbedType": {
+        "type": "string",
+        "description": "The type of embeddable content for services that support iframe embedding.",
+        "enum": ["None", "Video"]
+      },
       "Vec": {
         "type": "array",
         "items": {
@@ -221,6 +234,14 @@
                 "description": {
                   "type": ["string", "null"],
                   "description": "The page description (from `og:description`), if any."
+                },
+                "embed_type": {
+                  "$ref": "#/components/schemas/UnfurlEmbedType",
+                  "description": "The type of embeddable content, if the URL supports iframe embedding."
+                },
+                "embed_url": {
+                  "type": ["string", "null"],
+                  "description": "The iframe-embeddable URL for services like Loom or Supercut."
                 },
                 "favicon_url": {
                   "type": ["string", "null"],

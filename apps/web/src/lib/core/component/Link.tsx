@@ -2,6 +2,7 @@ import { openExternalUrl } from '@core/util/url';
 import LinkIcon from '@phosphor/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
+import { UnfurlEmbedType } from '@service-unfurl/generated/schemas/unfurlEmbedType';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -26,42 +27,75 @@ type LinkHoverCardProps = {
 };
 
 /**
+ * Video embed component for services like Loom and Supercut.
+ */
+function VideoEmbed(props: { embedUrl: string; title: string }) {
+  return (
+    <div class="w-80 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl glass bg-menu-glass">
+      <div class="relative aspect-video w-full">
+        <iframe
+          src={props.embedUrl}
+          class="absolute inset-0 size-full rounded-t-xl"
+          allow="clipboard-write; encrypted-media; picture-in-picture; fullscreen"
+          allowfullscreen
+          title={props.title}
+        />
+      </div>
+      <div class="px-2 py-1.5">
+        <div class="truncate text-xs font-medium text-ink">{props.title}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The shared card shown when hovering a link in rendered or editable Markdown.
+ * For embeddable video content (Loom, Supercut), renders an iframe player.
  */
 export function LinkHoverCard(props: LinkHoverCardProps) {
   const domain = extractDomain(props.unfurled.url);
   const title = () => props.unfurled.title || domain;
 
   return (
-    <div class="flex w-80 max-w-[calc(100vw-1rem)] items-start gap-1 rounded-xl glass bg-menu-glass p-2 text-left">
-      <div class="flex size-6 shrink-0 items-center justify-center">
-        <Show
-          when={props.unfurled.favicon_url}
-          fallback={<LinkIcon class="size-4 text-ink-muted" />}
-        >
-          {(icon) => (
+    <Show
+      when={
+        props.unfurled.embed_type === UnfurlEmbedType.Video &&
+        props.unfurled.embed_url
+      }
+      fallback={
+        <div class="flex w-80 max-w-[calc(100vw-1rem)] items-start gap-1 rounded-xl glass bg-menu-glass p-2 text-left">
+          <div class="flex size-6 shrink-0 items-center justify-center">
             <Show
-              when={!badLinks[icon()]}
+              when={props.unfurled.favicon_url}
               fallback={<LinkIcon class="size-4 text-ink-muted" />}
             >
-              <img
-                src={proxyResource(icon())}
-                class="size-5 rounded-md object-cover"
-                crossorigin="anonymous"
-                alt=""
-                on:error={() => {
-                  setBadLinks(icon(), true);
-                }}
-              />
+              {(icon) => (
+                <Show
+                  when={!badLinks[icon()]}
+                  fallback={<LinkIcon class="size-4 text-ink-muted" />}
+                >
+                  <img
+                    src={proxyResource(icon())}
+                    class="size-5 rounded-md object-cover"
+                    crossorigin="anonymous"
+                    alt=""
+                    on:error={() => {
+                      setBadLinks(icon(), true);
+                    }}
+                  />
+                </Show>
+              )}
             </Show>
-          )}
-        </Show>
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="truncate text-sm/6 font-medium text-ink">{title()}</div>
-        <div class="truncate text-xs text-ink-muted">{domain}</div>
-      </div>
-    </div>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm/6 font-medium text-ink">{title()}</div>
+            <div class="truncate text-xs text-ink-muted">{domain}</div>
+          </div>
+        </div>
+      }
+    >
+      <VideoEmbed embedUrl={props.unfurled.embed_url!} title={title()} />
+    </Show>
   );
 }
 

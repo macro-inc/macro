@@ -33,6 +33,14 @@ export type GetUnfurlResponse = {
      */
     description?: string | null;
     /**
+     * The type of embeddable content, if the URL supports iframe embedding.
+     */
+    embed_type?: UnfurlEmbedType;
+    /**
+     * The iframe-embeddable URL for services like Loom or Supercut.
+     */
+    embed_url?: string | null;
+    /**
      * The page's favicon URL, if any.
      */
     favicon_url?: string | null;
@@ -54,11 +62,24 @@ export type ProxyParams = {
     url: string;
 };
 
+/**
+ * The type of embeddable content for services that support iframe embedding.
+ */
+export type UnfurlEmbedType = 'None' | 'Video';
+
 export type Vec = Array<null | {
     /**
      * The page description (from `og:description`), if any.
      */
     description?: string | null;
+    /**
+     * The type of embeddable content, if the URL supports iframe embedding.
+     */
+    embed_type?: UnfurlEmbedType;
+    /**
+     * The iframe-embeddable URL for services like Loom or Supercut.
+     */
+    embed_url?: string | null;
     /**
      * The page's favicon URL, if any.
      */
