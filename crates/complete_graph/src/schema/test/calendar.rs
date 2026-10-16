@@ -289,6 +289,19 @@ impl calendar_events::domain::ports::CalendarMutationService for RecordingCalend
     }
 }
 
+impl calendar_events::domain::ports::CalendarMacroCallService for RecordingCalendarMutations {
+    async fn create_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
+        _draft: calendar_events::domain::models::CalendarEventDraft,
+    ) -> Result<CalendarEvent, calendar_events::domain::meeting_links::CreateEventWithMacroCallError>
+    {
+        unreachable!("only deletion is exercised")
+    }
+}
+
 #[tokio::test]
 async fn calendar_mutations_run_for_the_authenticated_viewer() {
     let harness = harness();

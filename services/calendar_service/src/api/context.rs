@@ -59,4 +59,6 @@ pub struct ApiContext {
     pub calendar_team_service: Arc<CalendarTeamSvc>,
     /// Personal and team scheduling service.
     pub scheduling_service: Arc<SchedulingService>,
+    /// Meeting-link client minting the Macro calls new events carry.
+    pub meeting_links: Arc<calendar_scheduling::outbound::meeting_links::HttpMeetingLinks>,
 }

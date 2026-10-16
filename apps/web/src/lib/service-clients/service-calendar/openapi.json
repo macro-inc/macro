@@ -153,7 +153,7 @@
             }
           },
           "503": {
-            "description": "Transient provider failure",
+            "description": "Transient provider failure, or the Macro call could not be created",
             "content": {
               "application/json": {
                 "schema": {
@@ -860,7 +860,8 @@
           "reauth_required",
           "provider_rejected",
           "retryable",
-          "persist_failed"
+          "persist_failed",
+          "macro_call_failed"
         ]
       },
       "CalendarRsvpScopeParam": {
@@ -928,6 +929,10 @@
           "location": {
             "type": ["string", "null"],
             "description": "Optional location label."
+          },
+          "macroCall": {
+            "type": "boolean",
+            "description": "Mint a Macro call and write its join link into the description and\nlocation before creating the event, so the invitation carries it.\nCannot be combined with `conference`."
           },
           "outOfOffice": {
             "oneOf": [

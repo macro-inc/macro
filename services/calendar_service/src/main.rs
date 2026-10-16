@@ -214,18 +214,19 @@ async fn main() -> anyhow::Result<()> {
         ),
     ));
 
+    let meeting_links = Arc::new(
+        calendar_scheduling::outbound::meeting_links::HttpMeetingLinks::new(
+            DocumentStorageServiceUrl::new()?.as_str(),
+            AppServiceUrl::new()?.as_str(),
+            config.internal_api_key.to_string(),
+        ),
+    );
     let scheduling_service = Arc::new(calendar_scheduling::domain::service::Service::new(
         calendar_scheduling::outbound::postgres::PostgresRepository::new(db.clone()),
         calendar_scheduling::outbound::macro_services::MacroCalendars::with_meeting_links(
             calendar_service.clone(),
             calendar_mutation_service.clone(),
-            Arc::new(
-                calendar_scheduling::outbound::meeting_links::HttpMeetingLinks::new(
-                    DocumentStorageServiceUrl::new()?.as_str(),
-                    AppServiceUrl::new()?.as_str(),
-                    config.internal_api_key.to_string(),
-                ),
-            ),
+            meeting_links.clone(),
             match config.environment {
                 Environment::Production => Some("https://macro.com".into()),
                 Environment::Develop => Some("https://dev.macro.com".into()),
@@ -249,6 +250,7 @@ async fn main() -> anyhow::Result<()> {
         calendar_mutation_service,
         calendar_team_service,
         scheduling_service,
+        meeting_links,
     })
     .await;
 

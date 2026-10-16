@@ -6,7 +6,9 @@ use chrono::{DateTime, Utc};
 use rootcause::Report;
 use uuid::Uuid;
 
-use super::meeting_links::{MeetingLink, MeetingLinkError, MeetingLinkRequest};
+use super::meeting_links::{
+    CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
+};
 use super::models::{
     ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
     CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
@@ -726,6 +728,26 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         requester_id: &str,
         email_link_id: Uuid,
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
+}
+
+/// Inbound service port creating events that carry a Macro call.
+///
+/// The meeting is minted before the calendar write, so the one invitation
+/// attendees receive already names the call, and its join link travels in
+/// the event's description and location. Hosts that mint meetings compose a
+/// [`CalendarMutationService`] with a [`MeetingLinkProvider`] through
+/// [`super::meeting_links::create_event_with_macro_call`]; hosts that are
+/// not the calendar write authority forward the request to the calendar
+/// service.
+pub trait CalendarMacroCallService: Send + Sync + 'static {
+    /// Mint a Macro call for `draft` and create the event carrying its link.
+    fn create_event_with_macro_call(
+        &self,
+        requester_id: &str,
+        email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
+        draft: CalendarEventDraft,
+    ) -> impl Future<Output = Result<CalendarEvent, CreateEventWithMacroCallError>> + Send;
 }
 
 /// Outbound port minting Macro meetings for calendar events.

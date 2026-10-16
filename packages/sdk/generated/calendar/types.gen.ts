@@ -298,7 +298,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed';
 
 /**
  * How much of a recurring series an RSVP applies to.
@@ -373,6 +373,12 @@ export type CreateCalendarEventRequest = {
      * Optional location label.
      */
     location?: string | null;
+    /**
+     * Mint a Macro call and write its join link into the description and
+     * location before creating the event, so the invitation carries it.
+     * Cannot be combined with `conference`.
+     */
+    macroCall?: boolean;
     outOfOffice?: null | OutOfOfficeProperties;
     /**
      * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
@@ -743,7 +749,7 @@ export type CreateCalendarEventErrors = {
      */
     409: CalendarMutationApiError;
     /**
-     * Transient provider failure
+     * Transient provider failure, or the Macro call could not be created
      */
     503: CalendarMutationApiError;
 };

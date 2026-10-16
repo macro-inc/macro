@@ -324,12 +324,15 @@ Failed calendar or account queries show `Could not load your calendars.` with
 `New event` opens the compact composer with All day in the date/time fields.
 The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting link`
 for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
-that selection creates and attaches a Macro call after the event saves. Selecting
+that selection creates the Macro call together with the event in one save, so the
+invitation attendees receive already carries the link; if the call cannot be
+created, nothing is saved and Save retries the whole create. Selecting
 `Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
 not create calls. There is no separate call toggle or Scheduled Call menu option.
 All-day events get an untimed call link, so setup does not display a misleading midnight time.
-A failed link attachment keeps the composer open with a retry message; Save reuses
-the saved event and call instead of creating duplicates. The invitation includes
+Adding a call to an existing event attaches it after the update; a failed
+attachment keeps the composer open with a retry message, and Save reuses the same
+call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.
 Event details show a plain icon row with a standard gray `Join Macro call` button
 and `Copy call link`, without an enclosing border or the full URL.

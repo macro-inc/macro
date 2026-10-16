@@ -83,6 +83,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
             )
             .merge(calendar_mutation_router(CalendarMutationRouterState::new(
                 state.calendar_mutation_service.clone(),
+                state.meeting_links.clone(),
                 state.authorization_state.clone(),
             )))
     } else {

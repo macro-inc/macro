@@ -522,6 +522,26 @@ describe('executeGraphqlCreate', () => {
     expect(event.id).toBe('server-1');
   });
 
+  it('asks the server for a Macro call only when the create requests one', async () => {
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-1', title: 'Lunch' }),
+    });
+    const time = {
+      kind: 'allDay' as const,
+      startDate: '2026-10-07',
+      endDate: '2026-10-08',
+    };
+
+    await executeGraphqlCreate(
+      { title: 'Lunch', time, macroCall: true },
+      client
+    );
+    await executeGraphqlCreate({ title: 'Lunch', time }, client);
+
+    expect(calls[0]?.variables.input.macroCall).toBe(true);
+    expect(calls[1]?.variables.input).not.toHaveProperty('macroCall');
+  });
+
   it('marks a recurring create uncertain', async () => {
     const { calls, client } = fakeClient('committed', {
       event: graphqlEvent({ id: 'server-1' }),

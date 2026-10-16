@@ -2,18 +2,19 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use calendar_events::domain::{
     changes::{CalendarChangeQueryService, CalendarEventChange},
+    meeting_links::CreateEventWithMacroCallError,
     models::{AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventPatch},
     ports::{
-        CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
-        CalendarUpdateScope,
+        CalendarDeletionScope, CalendarMacroCallService, CalendarMutationError,
+        CalendarMutationService, CalendarRsvpScope, CalendarUpdateScope,
     },
 };
 use uuid::Uuid;
 
 use crate::reads::ReadFuture;
 
-pub(crate) type WriteFuture<'a, T> =
-    Pin<Box<dyn Future<Output = Result<T, CalendarMutationError>> + Send + 'a>>;
+pub(crate) type WriteFuture<'a, T, E = CalendarMutationError> =
+    Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'a>>;
 
 /// Object-safe view of the calendar mutation service and the primary-pool
 /// read that answers each mutation with the event's committed state.
@@ -25,6 +26,14 @@ pub(crate) trait CalendarGraphqlWrites: Send + Sync {
         calendar_id: Option<Uuid>,
         draft: CalendarEventDraft,
     ) -> WriteFuture<'_, CalendarEvent>;
+
+    fn create_event_with_macro_call(
+        &self,
+        viewer: String,
+        email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
+        draft: CalendarEventDraft,
+    ) -> WriteFuture<'_, CalendarEvent, CreateEventWithMacroCallError>;
 
     fn update_event(
         &self,
@@ -72,7 +81,7 @@ impl CalendarGraphqlMutationContext {
     /// mutation answers with the state its write committed.
     pub fn new<M, C>(mutations: Arc<M>, committed_changes: Arc<C>) -> Self
     where
-        M: CalendarMutationService,
+        M: CalendarMutationService + CalendarMacroCallService,
         C: CalendarChangeQueryService,
     {
         Self {
@@ -91,7 +100,7 @@ struct ServiceWrites<M, C> {
 
 impl<M, C> CalendarGraphqlWrites for ServiceWrites<M, C>
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + CalendarMacroCallService,
     C: CalendarChangeQueryService,
 {
     fn create_event(
@@ -104,6 +113,20 @@ where
         Box::pin(async move {
             self.mutations
                 .create_event(&viewer, email_link_id, calendar_id, draft)
+                .await
+        })
+    }
+
+    fn create_event_with_macro_call(
+        &self,
+        viewer: String,
+        email_link_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
+        draft: CalendarEventDraft,
+    ) -> WriteFuture<'_, CalendarEvent, CreateEventWithMacroCallError> {
+        Box::pin(async move {
+            self.mutations
+                .create_event_with_macro_call(&viewer, email_link_id, calendar_id, draft)
                 .await
         })
     }

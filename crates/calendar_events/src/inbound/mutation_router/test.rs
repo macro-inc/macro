@@ -117,3 +117,56 @@ fn attendee_body_defaults_to_required_attendance() {
     assert!(!input.is_optional);
     assert_eq!(input.email, "a@b.com");
 }
+
+#[test]
+fn macro_call_failures_map_to_transport_semantics() {
+    let failed = CalendarMutationApiError::from(CreateEventWithMacroCallError::MeetingLink(
+        MeetingLinkError::Failed("call service at 10.0.0.9 returned 502".to_string()),
+    ));
+    assert_eq!(
+        (failed.status, failed.code),
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            CalendarMutationErrorCode::MacroCallFailed
+        )
+    );
+    assert!(!failed.message.contains("10.0.0.9"));
+
+    let invalid = CalendarMutationApiError::from(CreateEventWithMacroCallError::MeetingLink(
+        MeetingLinkError::InvalidInput("title too long".to_string()),
+    ));
+    assert_eq!(
+        (invalid.status, invalid.code),
+        (
+            StatusCode::BAD_REQUEST,
+            CalendarMutationErrorCode::InvalidInput
+        )
+    );
+    assert_eq!(invalid.message, "title too long");
+
+    let calendar = CalendarMutationApiError::from(CreateEventWithMacroCallError::Calendar(
+        CalendarMutationError::ReadOnly,
+    ));
+    assert_eq!(
+        (calendar.status, calendar.code),
+        (StatusCode::FORBIDDEN, CalendarMutationErrorCode::ReadOnly)
+    );
+}
+
+#[test]
+fn create_requests_carry_no_macro_call_unless_asked() {
+    let time = serde_json::to_value(EventTime::AllDay {
+        start_date: chrono::NaiveDate::from_ymd_opt(2026, 10, 6).unwrap(),
+        end_date: chrono::NaiveDate::from_ymd_opt(2026, 10, 7).unwrap(),
+    })
+    .unwrap();
+    let request: CreateCalendarEventRequest =
+        serde_json::from_value(serde_json::json!({ "title": "Lunch", "time": time })).unwrap();
+    assert!(!request.macro_call);
+
+    let request: CreateCalendarEventRequest = serde_json::from_value(
+        serde_json::json!({ "title": "Lunch", "time": time, "macroCall": true }),
+    )
+    .unwrap();
+    assert!(request.macro_call);
+}

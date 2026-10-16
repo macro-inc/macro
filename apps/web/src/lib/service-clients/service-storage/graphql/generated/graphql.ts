@@ -149,6 +149,12 @@ export type CreateCalendarEventInput = {
   /** Optional location label. */
   location?: string | null | undefined;
   /**
+   * Mint a Macro call and write its join link into the description and
+   * location before creating the event, so the invitation carries it.
+   * Cannot be combined with `conference`.
+   */
+  macroCall?: boolean;
+  /**
    * Present to create an out-of-office status event (primary calendar
    * only, timed, no attendees).
    */

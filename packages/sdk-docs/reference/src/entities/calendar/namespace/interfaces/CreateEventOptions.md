@@ -12,6 +12,7 @@ Fields for a new calendar event.
 | <a id="property-description"></a> `description?` | `string` | Optional event body. |
 | <a id="property-emaillink"></a> `emailLink?` | [`Link`](../../../email/link/classes/Link.md) | Connected inbox whose primary calendar receives the event; defaults to the requester's primary inbox. |
 | <a id="property-location"></a> `location?` | `string` | Optional location label. |
+| <a id="property-macrocall"></a> `macroCall?` | `boolean` | Mint a Macro call with the event; its join link lands in the description and location. Cannot be combined with `conference`. |
 | <a id="property-outofoffice"></a> `outOfOffice?` | [`OutOfOfficeProperties`](../../../../../generated/calendar/types.gen/type-aliases/OutOfOfficeProperties.md) | Out-of-office properties; present to create a Google out-of-office event. |
 | <a id="property-recurrencelines"></a> `recurrenceLines?` | `string`[] | Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`). |
 | <a id="property-reminders"></a> `reminders?` | [`EventReminders`](../../../../../generated/calendar/types.gen/type-aliases/EventReminders.md) | Reminder configuration; omit to keep the calendar defaults. |
