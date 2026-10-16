@@ -43,6 +43,7 @@
           "product/docs",
           "product/canvas",
           "product/tasks",
+          "product/databases",
           "product/snippets",
           "product/channels",
           "product/calls",
