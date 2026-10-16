@@ -361,9 +361,12 @@ vi.mock('@macro-inc/observability', () => ({
       }),
   },
 }));
-vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
-vi.mock('graphql-ws', () => ({
-  createClient: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
+vi.mock('@service-auth/fetch', () => ({
+  getMacroApiToken: vi.fn(),
+  resetMacroApiToken: vi.fn(),
+}));
+vi.mock('./graphql-soup-connection', () => ({
+  createGraphqlSoupConnection: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
 }));
 vi.mock('../../queries/optimistic-resolvers', () => ({
   soupOptimisticResolvers: [],
@@ -373,8 +376,6 @@ vi.mock('./graphql/generated/graphql', () => ({
   SoupDocument: {},
 }));
 vi.mock('./graphql-soup-websocket', () => ({
-  SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS: 0,
-  shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
   createGraphqlSoupWebSocketUrlResolver: () => () => 'ws://dss.test',
   createGraphqlSoupSubscriptionsLifecycle: () => ({

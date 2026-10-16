@@ -143,4 +143,40 @@ describe('getMacroApiToken', () => {
 
     expect(macroApiToken).toHaveBeenCalledTimes(2);
   });
+
+  test('does not reuse the previous account token after a session reset', async () => {
+    const previous = jwt(Math.floor(Date.now() / 1000) + 3600);
+    const fresh = jwt(Math.floor(Date.now() / 1000) + 7200);
+    macroApiToken
+      .mockResolvedValueOnce(ok({ macro_api_token: previous }))
+      .mockResolvedValueOnce(ok({ macro_api_token: fresh }));
+    const { getMacroApiToken, resetMacroApiToken } = await import('./fetch');
+    await expect(getMacroApiToken()).resolves.toBe(previous);
+    resetMacroApiToken();
+    await expect(getMacroApiToken()).resolves.toBe(fresh);
+  });
+
+  test('rejects old in-flight token results without clearing the new session token', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((done) => {
+      release = done;
+    });
+    const previous = jwt(Math.floor(Date.now() / 1000) + 3600);
+    const fresh = jwt(Math.floor(Date.now() / 1000) + 7200);
+    macroApiToken
+      .mockImplementationOnce(async () => {
+        await gate;
+        return ok({ macro_api_token: previous });
+      })
+      .mockResolvedValueOnce(ok({ macro_api_token: fresh }));
+    const { getMacroApiToken, resetMacroApiToken } = await import('./fetch');
+    const pending = getMacroApiToken();
+    const rejected = expect(pending).rejects.toThrow('previous session');
+    resetMacroApiToken();
+    await expect(getMacroApiToken()).resolves.toBe(fresh);
+    release();
+    await rejected;
+    await expect(getMacroApiToken()).resolves.toBe(fresh);
+    expect(macroApiToken).toHaveBeenCalledTimes(2);
+  });
 });

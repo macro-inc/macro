@@ -134,3 +134,12 @@ Realtime Soup batches coalesce repeated entity IDs (including entity type), keep
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
+
+## Connection recovery
+
+Transient live-update interruptions recover silently without a disconnected
+toast or page reload. Verify browser and native online signals, backgrounding
+and foregrounding the mobile app, and a temporarily failed authentication refresh.
+After reconnection, mounted lists and notification readers should refresh missed
+updates. A rejected login stays paused until a fresh session; logging out must
+retire old subscriptions before another account signs in.

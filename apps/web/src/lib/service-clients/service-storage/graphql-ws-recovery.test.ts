@@ -1,6 +1,14 @@
-import { createClient } from 'graphql-ws';
-import { err, ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { throwOnErr } from '@core/util/result';
+import { err, ok, type Result } from 'neverthrow';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createGraphqlSoupConnection } from './graphql-soup-connection';
+
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/native-network-status', () => ({
+  subscribeNativeNetworkStatus: () => () => {},
+}));
+const telemetry = vi.hoisted(() => vi.fn());
+vi.mock('@macro-inc/observability', () => ({ Telemetry: { info: telemetry } }));
 
 type ReplayEnvelope = { seq: number; message: { type: string; data: unknown } };
 type ConnectArgs = {
@@ -51,13 +59,9 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 import { TauriWebSocketWrapper } from '@macro-inc/collaboration/websocket/platform/tauri-websocket';
-import {
-  createGraphqlSoupWebSocketUrlResolver,
-  SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
-  shouldRetryGraphqlSoupWebSocket,
-} from './graphql-soup-websocket';
+import { createGraphqlSoupWebSocketUrlResolver } from './graphql-soup-websocket';
 
-function subscribeOnce(client: ReturnType<typeof createClient>) {
+function subscribeOnce(client: ReturnType<typeof createGraphqlSoupConnection>) {
   return new Promise<unknown[]>((resolve, reject) => {
     const values: unknown[] = [];
     client.subscribe(
@@ -68,57 +72,68 @@ function subscribeOnce(client: ReturnType<typeof createClient>) {
         complete: () => resolve(values),
       }
     );
-    // An unhandled url rejection used to leave the subscription pending.
-    setTimeout(() => reject(new Error('subscription stayed pending')), 1_000);
   });
 }
 
-function cookieClient(refreshCookieAuth: () => Promise<unknown>) {
-  return createClient({
-    url: createGraphqlSoupWebSocketUrlResolver({
+function cookieClient(
+  refreshCookieAuth: () => Promise<
+    Result<void, { code: string; message: string }[]>
+  >
+) {
+  return createGraphqlSoupConnection({
+    resolveUrl: createGraphqlSoupWebSocketUrlResolver({
       dssHost: 'https://dss.test',
       bearerTokenAuth: false,
       getApiToken: vi.fn(),
-      refreshCookieAuth: refreshCookieAuth as never,
+      refreshCookieAuth: () => throwOnErr(refreshCookieAuth),
     }),
     webSocketImpl: TauriWebSocketWrapper,
-    retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
-    retryWait: async () => {},
-    shouldRetry: shouldRetryGraphqlSoupWebSocket,
+    onConnected: () => {},
   });
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
   plugin.connects.length = 0;
   plugin.received.length = 0;
   vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
+afterEach(() => vi.useRealTimers());
+
 describe('GraphQL websocket auth recovery', () => {
   it('retries a cookie refresh that failed during an outage', async () => {
     const refresh = vi
       .fn()
-      .mockResolvedValueOnce(err([{ code: 'NETWORK_ERROR' }]))
+      .mockResolvedValueOnce(
+        err([{ code: 'NETWORK_ERROR', message: 'Network unavailable' }])
+      )
       .mockResolvedValue(ok(undefined));
     const client = cookieClient(refresh);
 
-    await expect(subscribeOnce(client)).resolves.toEqual([
-      { data: { ping: 1 } },
-    ]);
+    const result = subscribeOnce(client);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await expect(result).resolves.toEqual([{ data: { ping: 1 } }]);
     expect(refresh).toHaveBeenCalledTimes(2);
     await client.dispose();
   });
 
-  it('ends subscriptions when the session is rejected', async () => {
-    const client = cookieClient(
-      vi.fn().mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]))
-    );
-
-    await expect(subscribeOnce(client)).rejects.toThrow(
-      'GraphQL websocket session was rejected'
-    );
+  it('retains subscriptions during rejected auth until a fresh login', async () => {
+    const refresh = vi
+      .fn()
+      .mockResolvedValueOnce(
+        err([{ code: 'UNAUTHORIZED', message: 'Login required' }])
+      )
+      .mockResolvedValue(ok(undefined));
+    const client = cookieClient(refresh);
+    const result = subscribeOnce(client);
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(plugin.connects).toHaveLength(0);
-    await client.dispose();
+    expect(refresh).toHaveBeenCalledOnce();
+    client.restart();
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(result).resolves.toEqual([{ data: { ping: 1 } }]);
+    client.dispose();
   });
 });
 
@@ -126,9 +141,9 @@ describe('GraphQL websocket over the native transport', () => {
   it('negotiates graphql-transport-ws and runs a subscription', async () => {
     const client = cookieClient(vi.fn().mockResolvedValue(ok(undefined)));
 
-    await expect(subscribeOnce(client)).resolves.toEqual([
-      { data: { ping: 1 } },
-    ]);
+    const result = subscribeOnce(client);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await expect(result).resolves.toEqual([{ data: { ping: 1 } }]);
     expect(plugin.connects[0]?.url).toBe(
       'wss://dss.test/items/soup/graphql/ws'
     );
@@ -146,12 +161,14 @@ describe('GraphQL websocket over the native transport', () => {
   it('reconnects after the idle socket closes', async () => {
     const client = cookieClient(vi.fn().mockResolvedValue(ok(undefined)));
 
-    await subscribeOnce(client);
-    // The lazy client closed its idle socket; the next subscription must
+    const first = subscribeOnce(client);
+    await vi.advanceTimersByTimeAsync(0);
+    await first;
+    // The connection owner closed its idle socket; the next subscription must
     // open a new one rather than reuse the closed socket.
-    await expect(subscribeOnce(client)).resolves.toEqual([
-      { data: { ping: 2 } },
-    ]);
+    const result = subscribeOnce(client);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await expect(result).resolves.toEqual([{ data: { ping: 2 } }]);
     expect(plugin.connects).toHaveLength(2);
     await client.dispose();
   });
