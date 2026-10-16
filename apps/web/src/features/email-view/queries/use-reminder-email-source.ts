@@ -40,7 +40,7 @@ import type {
 /** Original email rows in reminder order, with membership and facets owned by the server. */
 export function useReminderEmailSource(
   state: EmailDataSourceInput,
-  options: UseEmailDataSourceOptions
+  options: Pick<UseEmailDataSourceOptions, 'tagSets' | 'tagSetsReady'>
 ): EmailDataSource {
   const userId = useUserId();
   const enabled = useFeatureFlag(enableReminders);

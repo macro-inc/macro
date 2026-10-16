@@ -38,9 +38,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             state.email_thread_state.clone(),
         );
 
+    let hex_bulk_thread_routes = email::inbound::axum::bulk_threads_router::bulk_threads_router::<
+        ApiContext,
+        crate::api::context::EmailSvc,
+        crate::api::context::AuthorizationService,
+    >();
+
     Router::new()
         .merge(routes)
         .merge(hex_thread_routes)
         .merge(hex_thread_labels_routes)
         .merge(hex_thread_project_routes)
+        .merge(hex_bulk_thread_routes)
 }

@@ -105,6 +105,35 @@ export type ApiAttachmentForwarded = {
     size_bytes?: number | null;
 };
 
+/**
+ * An action applied to every thread in a bulk request.
+ */
+export type ApiBulkThreadAction = 'archive' | 'unarchive' | 'mark_read' | 'mark_unread';
+
+/**
+ * A thread's position in a Mail view's order, echoed back to continue a listing.
+ */
+export type ApiBulkThreadCursor = {
+    sortTs: string;
+    threadId: string;
+};
+
+/**
+ * A thread a bulk action may change.
+ */
+export type ApiBulkThreadTarget = {
+    /**
+     * Mail Done: the thread is out of the inbox.
+     */
+    done: boolean;
+    id: string;
+    read: boolean;
+    /**
+     * The thread's position in the view; it moves when new mail arrives.
+     */
+    sortTs: string;
+};
+
 export type ApiContact = {
     emailAddress?: string | null;
     id: string;
@@ -415,6 +444,25 @@ export type ApiThreadPreviewCursorInner = {
     sortTs: string;
     updatedAt: string;
     viewedAt?: string | null;
+};
+
+/**
+ * Request body for applying one action to a batch of threads.
+ */
+export type ApplyBulkThreadActionRequest = {
+    action: ApiBulkThreadAction;
+    /**
+     * Between 1 and 100 threads.
+     */
+    threadIds: Array<string>;
+};
+
+/**
+ * Per-thread outcome of a bulk action, in request order.
+ */
+export type ApplyBulkThreadActionResponse = {
+    failedIds: Array<string>;
+    succeededIds: Array<string>;
 };
 
 export type ArchiveThreadRequest = {
@@ -1285,6 +1333,38 @@ export type ListBlockedResponse = {
      * List of email addresses that are currently blocked.
      */
     blocked_emails: Array<string>;
+};
+
+/**
+ * Request body for listing one page of a Mail view's threads.
+ */
+export type ListBulkThreadTargetsRequest = {
+    cursor?: null | ApiBulkThreadCursor;
+    /**
+     * The view's email filter tree, exactly as its list sends it to `/items/soup/ast`.
+     */
+    ef?: unknown;
+    /**
+     * The view's mailbox slice, exactly as its list sends it to `/items/soup/ast`.
+     */
+    emailView: string;
+    /**
+     * Start at this thread, inclusive ("select all below"). It must still
+     * match the view. Omit, with `cursor`, to start at the top.
+     */
+    fromThreadId?: string | null;
+    /**
+     * Threads per page, at most 500. Defaults to 500.
+     */
+    limit?: number | null;
+};
+
+/**
+ * One page of a Mail view's threads, in the list's order.
+ */
+export type ListBulkThreadTargetsResponse = {
+    nextCursor?: null | ApiBulkThreadCursor;
+    threads: Array<ApiBulkThreadTarget>;
 };
 
 export type ListContactsResponse = {
@@ -2562,6 +2642,52 @@ export type DisableSyncResponses = {
 };
 
 export type DisableSyncResponse = DisableSyncResponses[keyof DisableSyncResponses];
+
+export type ApplyBulkThreadActionData = {
+    body: ApplyBulkThreadActionRequest;
+    path?: never;
+    query?: never;
+    url: '/email/threads/bulk';
+};
+
+export type ApplyBulkThreadActionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ApplyBulkThreadActionError = ApplyBulkThreadActionErrors[keyof ApplyBulkThreadActionErrors];
+
+export type ApplyBulkThreadActionResponses = {
+    200: ApplyBulkThreadActionResponse;
+};
+
+export type ApplyBulkThreadActionResponse2 = ApplyBulkThreadActionResponses[keyof ApplyBulkThreadActionResponses];
+
+export type ListBulkThreadTargetsData = {
+    body: ListBulkThreadTargetsRequest;
+    path?: never;
+    query?: never;
+    url: '/email/threads/bulk/targets';
+};
+
+export type ListBulkThreadTargetsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * `fromThreadId` is no longer in the view
+     */
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListBulkThreadTargetsError = ListBulkThreadTargetsErrors[keyof ListBulkThreadTargetsErrors];
+
+export type ListBulkThreadTargetsResponses = {
+    200: ListBulkThreadTargetsResponse;
+};
+
+export type ListBulkThreadTargetsResponse2 = ListBulkThreadTargetsResponses[keyof ListBulkThreadTargetsResponses];
 
 export type PreviewsInboxCursorData = {
     body?: never;

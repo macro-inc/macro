@@ -44,7 +44,7 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import { DEFAULT_EMAIL_TAB } from './constants';
+import { DEFAULT_EMAIL_TAB, EMAIL_TABS } from './constants';
 import {
   emailDetailSearch,
   emailTabSearch,
@@ -52,6 +52,8 @@ import {
 } from './email-route';
 import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
+import { createEmailBulkOverlay } from './primitives/bulk-overlay';
+import type { EmailBulkSelection } from './primitives/bulk-selection';
 import { createInboxSelectionReconciliation } from './primitives/inbox-selection-reconciliation';
 import {
   type EmailDataSource,
@@ -64,6 +66,7 @@ import type {
   EmailViewState,
   EmailViewStateOptions,
 } from './types';
+import { useEmailBulkSelection } from './use-email-bulk-selection';
 
 type EmailViewProviderProps = ContextProviderProps & {
   initialState?: EmailViewStateOptions;
@@ -97,6 +100,8 @@ export type EmailViewContext = {
    */
   filterByTag: (optionId: string) => void;
   source: EmailDataSource;
+  /** A selection the server resolves, reaching rows the list never loaded. */
+  bulk: EmailBulkSelection;
   list: EmailListController;
   registerListActivationHandler: (
     handler: (
@@ -194,9 +199,16 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     }
   });
 
+  const bulkOverlay = createEmailBulkOverlay();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useEmailDataSource(state, { tagSets, tagSetsReady })
+    useEmailDataSource(state, { tagSets, tagSetsReady, bulkOverlay })
   );
+  const bulk = useEmailBulkSelection({
+    overlay: bulkOverlay,
+    query: source.bulkQuery,
+    viewLabel: () =>
+      EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email',
+  });
   withSplitPanelOwner(listOwnedSlotName('navigation-source'), () =>
     registerListNavigationSource(panel.handle, {
       viewId: 'mail',
@@ -428,6 +440,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     showTags,
     filterByTag,
     source,
+    bulk,
     list,
     registerListActivationHandler,
     selectedThread,

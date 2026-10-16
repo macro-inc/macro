@@ -153,6 +153,8 @@ export const TOKENS = {
     blockSender: 'email.blockSender',
     markSenderSignal: 'email.markSenderSignal',
     markSenderNoise: 'email.markSenderNoise',
+    selectAllBelow: 'email.selectAllBelow',
+    selectAllInView: 'email.selectAllInView',
     compose: {
       edit: {
         recipients: 'email.compose.edit.recipients',

@@ -96,6 +96,37 @@ Email Status and Done are single choices that close the menu; attachment filters
 stay open for multiple selections. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
+### Bulk selection
+
+On desktop, **Select all below** (`Shift+Cmd+↓`, or the row's context menu)
+selects the focused row and every older thread in the tab, including threads
+the list has not loaded. **Select all in Signal** (the context menu, the command
+menu, or the button the selection bar offers after `Cmd+A` selects every loaded
+row while more remain) selects the whole tab. Both are available in Signal,
+Noise, Calendar, Archived, and All when no search text, attachment filter, or
+tag filter is active; those refinements are not part of the server query.
+The server resolves the selection from the tab's own Soup email filter
+(`POST /email/threads/bulk/targets`, 500 threads per page), so the selection
+bar counts up while selecting and then reads, for example, `All 2,341
+conversations below selected`. Changing the tab, inbox, filters, or search,
+clicking a row, or `Escape` clears it.
+
+`E` (**Mark done**) and `Shift+U` (**Mark read**) act on the selection while it
+is active; other entity shortcuts stand down. Each asks for confirmation with
+the number of threads it will change (already done or read threads are not
+counted), then applies the action through `POST /email/threads/bulk` in batches
+of 100 while the bar shows progress. Rows leave Signal/Noise (or flip in other
+tabs) at once and stay that way across stale refetches until a fetched row
+agrees or newer mail moves the thread. Done also marks those threads'
+notifications done. The result toast and `Cmd+Z` undo exactly the threads that
+changed (restoring their notifications); threads that failed reappear and the
+toast reports a partial result. Touch devices keep row selection only.
+
+To verify, select below a row in a tab with more than one page of mail, check
+the count against the tab, confirm Done, and watch every loaded row below the
+anchor disappear while the rows above it stay. Undo, then reload: the same
+threads must be back in the tab.
+
 ### Read state and trash
 
 In the Email view, Status filters discovery on the server **before pagination**,

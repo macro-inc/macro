@@ -10,6 +10,8 @@ import type {
   AddForwardedAttachmentRequest,
   AddForwardedAttachmentResponse,
   ApiPaginatedThreadCursor,
+  ApplyBulkThreadActionRequest,
+  ApplyBulkThreadActionResponse,
   ArchiveThreadRequest,
   BlockSenderRequest,
   CancelBackfillParams,
@@ -34,6 +36,8 @@ import type {
   InitUserParams,
   ListBackfillJobsResponse,
   ListBlockedResponse,
+  ListBulkThreadTargetsRequest,
+  ListBulkThreadTargetsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -2546,6 +2550,147 @@ export const disableSync = async (
     status: res.status,
     headers: res.headers,
   } as disableSyncResponse;
+};
+
+/**
+ * @summary Apply one action to each of the caller's threads. Idempotent: a repeated
+request leaves threads as they are, and one failing thread never fails
+the others.
+ */
+export type applyBulkThreadActionResponse200 = {
+  data: ApplyBulkThreadActionResponse;
+  status: 200;
+};
+
+export type applyBulkThreadActionResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type applyBulkThreadActionResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type applyBulkThreadActionResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type applyBulkThreadActionResponseSuccess =
+  applyBulkThreadActionResponse200 & {
+    headers: Headers;
+  };
+export type applyBulkThreadActionResponseError = (
+  | applyBulkThreadActionResponse400
+  | applyBulkThreadActionResponse401
+  | applyBulkThreadActionResponse500
+) & {
+  headers: Headers;
+};
+
+export type applyBulkThreadActionResponse =
+  | applyBulkThreadActionResponseSuccess
+  | applyBulkThreadActionResponseError;
+
+export const getApplyBulkThreadActionUrl = () => {
+  return `/email/threads/bulk`;
+};
+
+export const applyBulkThreadAction = async (
+  applyBulkThreadActionRequest: ApplyBulkThreadActionRequest,
+  options?: RequestInit
+): Promise<applyBulkThreadActionResponse> => {
+  const res = await fetch(getApplyBulkThreadActionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(applyBulkThreadActionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: applyBulkThreadActionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as applyBulkThreadActionResponse;
+};
+
+/**
+ * @summary List one page of the caller's threads matching a Mail view's query, so a
+selection can include threads the client has not loaded.
+ */
+export type listBulkThreadTargetsResponse200 = {
+  data: ListBulkThreadTargetsResponse;
+  status: 200;
+};
+
+export type listBulkThreadTargetsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type listBulkThreadTargetsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listBulkThreadTargetsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type listBulkThreadTargetsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listBulkThreadTargetsResponseSuccess =
+  listBulkThreadTargetsResponse200 & {
+    headers: Headers;
+  };
+export type listBulkThreadTargetsResponseError = (
+  | listBulkThreadTargetsResponse400
+  | listBulkThreadTargetsResponse401
+  | listBulkThreadTargetsResponse404
+  | listBulkThreadTargetsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listBulkThreadTargetsResponse =
+  | listBulkThreadTargetsResponseSuccess
+  | listBulkThreadTargetsResponseError;
+
+export const getListBulkThreadTargetsUrl = () => {
+  return `/email/threads/bulk/targets`;
+};
+
+export const listBulkThreadTargets = async (
+  listBulkThreadTargetsRequest: ListBulkThreadTargetsRequest,
+  options?: RequestInit
+): Promise<listBulkThreadTargetsResponse> => {
+  const res = await fetch(getListBulkThreadTargetsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(listBulkThreadTargetsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listBulkThreadTargetsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listBulkThreadTargetsResponse;
 };
 
 /**

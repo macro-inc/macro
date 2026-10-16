@@ -1,5 +1,6 @@
 pub mod api_types;
 pub mod axum_impls;
+pub mod bulk_threads_router;
 pub mod draft_router;
 pub mod email_filter_router;
 pub mod get_thread_router;

@@ -21,6 +21,8 @@ import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiPaginatedThreadCursor,
+  ApplyBulkThreadActionRequest,
+  ApplyBulkThreadActionResponse,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
@@ -28,6 +30,8 @@ import type {
   GetScheduledResponse,
   GetThreadResponse,
   ListBackfillJobsResponse,
+  ListBulkThreadTargetsRequest,
+  ListBulkThreadTargetsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
   ListLabelsResponse,
@@ -275,6 +279,18 @@ export const emailClient = {
         body: JSON.stringify({ projectId }),
       }
     );
+  },
+  async listBulkThreadTargets(args: ListBulkThreadTargetsRequest) {
+    return emailFetch<ListBulkThreadTargetsResponse>(
+      '/email/threads/bulk/targets',
+      { method: 'POST', body: JSON.stringify(args) }
+    );
+  },
+  async applyBulkThreadAction(args: ApplyBulkThreadActionRequest) {
+    return emailFetch<ApplyBulkThreadActionResponse>('/email/threads/bulk', {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
   },
   async flagArchived(args: { value: boolean; id: string }, linkId?: string) {
     const { value, id } = args;
