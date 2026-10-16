@@ -7,7 +7,11 @@ import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCata
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
-import { claudeCloud, ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
+import {
+  claudeCloud,
+  ENABLE_AGENT_DMS,
+  enableAiBuddyMascot,
+} from '@core/constant/featureFlags';
 import {
   MACRO_AGENT_BOT_ID,
   MACRO_HARNESS_NAME,
@@ -65,6 +69,7 @@ import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { CodingPreferencesSetting } from './components/coding-preferences-setting';
 import { AgentInstructionsEditor } from './components/instructions-editor';
+import { MascotPicker } from './components/mascot-picker';
 import { SettingsSelect } from './components/settings-select';
 import { WhereItRunsOption } from './components/where-it-runs-option';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
@@ -598,6 +603,8 @@ function AgentEditorPage(props: {
     props.agent?.bot.avatar_url ?? undefined
   );
   const uploadAvatar = useUploadAgentAvatarMutation();
+  const mascotFlag = useFeatureFlag(enableAiBuddyMascot);
+  const [mascotOpen, setMascotOpen] = createSignal(false);
   const [uploadingAvatar, setUploadingAvatar] = createSignal(false);
   const busy = () => props.pending || uploadingAvatar();
   const [instructions, setInstructions] = createSignal(
@@ -970,7 +977,7 @@ function AgentEditorPage(props: {
                 title="Profile"
                 description="How this agent appears in channels and mentions."
               >
-                <div class="flex items-center gap-3 border-b border-edge-muted pb-4">
+                <div class="flex flex-wrap items-center gap-3 border-b border-edge-muted pb-4">
                   <button
                     type="button"
                     aria-label="Upload avatar"
@@ -992,7 +999,7 @@ function AgentEditorPage(props: {
                       }}
                     />
                   </button>
-                  <div class="min-w-0 flex-1">
+                  <div class="min-w-32 flex-1">
                     <div class="text-sm font-medium text-ink">Avatar</div>
                     <div class="mt-0.5 text-xs text-ink-muted">
                       Optional · square images work best
@@ -1008,17 +1015,39 @@ function AgentEditorPage(props: {
                       void handleAvatarInput(event.currentTarget.files?.[0])
                     }
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={busy()}
-                    onClick={() => avatarInputRef?.click()}
-                  >
-                    <UploadIcon />
-                    {uploadingAvatar() ? 'Uploading…' : 'Upload'}
-                  </Button>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy()}
+                      onClick={() => avatarInputRef?.click()}
+                    >
+                      <UploadIcon />
+                      {uploadingAvatar() ? 'Uploading…' : 'Upload'}
+                    </Button>
+                    <Show when={mascotFlag().enabled}>
+                      <Button
+                        type="button"
+                        variant="accent"
+                        size="sm"
+                        disabled={busy()}
+                        aria-expanded={mascotOpen()}
+                        onClick={() => setMascotOpen(!mascotOpen())}
+                      >
+                        {mascotOpen() ? 'Hide mascots' : 'Choose mascot'}
+                      </Button>
+                    </Show>
+                  </div>
                 </div>
+
+                <Show when={mascotFlag().enabled}>
+                  <MascotPicker
+                    open={mascotOpen()}
+                    disabled={busy()}
+                    onApply={handleAvatarInput}
+                  />
+                </Show>
 
                 <div class="mt-4 grid grid-cols-1 gap-3 @min-[440px]:grid-cols-2">
                   <label class="flex flex-col gap-1.5">

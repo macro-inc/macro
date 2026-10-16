@@ -12,6 +12,7 @@ interface ImportMetaEnv {
   readonly VITE_OTEL_ENV?: string;
   readonly VITE_ENABLE_BROWSER_OTEL?: string;
   readonly VITE_ENABLE_REMINDERS?: string;
+  readonly VITE_ENABLE_AI_BUDDY_MASCOT?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
 }
 

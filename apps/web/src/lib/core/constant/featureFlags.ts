@@ -729,6 +729,12 @@ export const enableChatV3Agents = defineFlag({
   default: onInDev,
 });
 
+// Preset mascots and recoloring in the agent profile editor. Off until enabled.
+export const enableAiBuddyMascot = defineFlag({
+  key: 'enable-ai-buddy-mascot',
+  env: 'ENABLE_AI_BUDDY_MASCOT',
+});
+
 // Private conversations with agent personas. Explicit environment opt-in;
 // this flag has no remote PostHog source. VITE_ENABLE_AGENT_DMS=true enables it.
 export const ENABLE_AGENT_DMS = defineFlag({

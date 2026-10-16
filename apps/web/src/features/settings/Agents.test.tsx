@@ -19,10 +19,12 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
+import type { renderMascot } from './mascot-image';
 import { chooseSelectOption, selectOptions } from './tests/select-helpers';
 
 const agentsPageProps = {
@@ -53,8 +55,10 @@ vi.mock('./components/coding-preferences-setting', () => ({
 }));
 
 const claudeFlag = vi.hoisted(() => ({ enabled: true }));
+const mascotFlag = vi.hoisted(() => ({ enabled: false }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => {
+    if (flag.key === 'enable-ai-buddy-mascot') return () => mascotFlag;
     expect(flag.key).toBe('claude-cloud');
     return () => ({ enabled: claudeFlag.enabled });
   },
@@ -112,6 +116,11 @@ const agentMocks = vi.hoisted(() => ({
 }));
 
 const avatarMocks = vi.hoisted(() => ({ upload: vi.fn() }));
+const mascotMocks = vi.hoisted(() => ({ render: vi.fn() }));
+vi.mock('./mascot-image', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./mascot-image')>()),
+  renderMascot: mascotMocks.render,
+}));
 vi.mock('@queries/agents/avatar', () => ({
   useUploadAgentAvatarMutation: () => ({ mutateAsync: avatarMocks.upload }),
 }));
@@ -301,6 +310,13 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  mascotFlag.enabled = false;
+  mascotMocks.render.mockReset();
+  mascotMocks.render.mockResolvedValue(
+    ok(new File(['mascot'], 'mascot.png', { type: 'image/png' }))
+  );
+  URL.createObjectURL = vi.fn(() => 'blob:mascot-preview');
+  URL.revokeObjectURL = vi.fn();
   avatarMocks.upload.mockReset();
   avatarMocks.upload.mockResolvedValue('https://static.example/avatar.png');
   updateSearchParams({ createAgent: undefined });
@@ -848,6 +864,141 @@ describe('Agents', () => {
     render(() => <Agents {...agentsPageProps} />);
 
     expect(screen.queryByText('Other Team Helper')).toBeNull();
+  });
+
+  it('keeps mascot customization hidden when its flag is off', () => {
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+    expect(screen.queryByRole('button', { name: 'Choose mascot' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Upload' })).toBeTruthy();
+    expect(mascotMocks.render).not.toHaveBeenCalled();
+  });
+
+  it('renders a chosen mascot and color, uploads its PNG and saves the durable URL', async () => {
+    mascotFlag.enabled = true;
+    const file = new File(['blue mascot'], 'mascot-blue.png', {
+      type: 'image/png',
+    });
+    mascotMocks.render.mockResolvedValue(ok(file));
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+    fireEvent.input(screen.getByLabelText('Name'), {
+      target: { value: 'Buddy' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Choose mascot' }));
+    expect(screen.getAllByRole('button', { name: /^Mascot \d$/ })).toHaveLength(
+      8
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Mascot 8' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Use mascot' })).toHaveProperty(
+        'disabled',
+        false
+      )
+    );
+    expect(mascotMocks.render).toHaveBeenLastCalledWith(
+      expect.stringContaining('008.png'),
+      { name: 'Blue', hex: '#619ce8' }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Use mascot' }));
+    await waitFor(() => expect(avatarMocks.upload).toHaveBeenCalledWith(file));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Create agent' })
+      ).toHaveProperty('disabled', false)
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    await waitFor(() =>
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          avatarUrl: 'https://static.example/avatar.png',
+        })
+      )
+    );
+  });
+
+  it('keeps the previous preview visible while a new color renders without allowing a stale upload', async () => {
+    mascotFlag.enabled = true;
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose mascot' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Use mascot' })).toHaveProperty(
+        'disabled',
+        false
+      )
+    );
+    const originalPreview = screen.getByRole('img', { name: 'Mascot preview' });
+    let finish!: (result: Awaited<ReturnType<typeof renderMascot>>) => void;
+    mascotMocks.render.mockImplementationOnce(
+      () =>
+        new Promise<Awaited<ReturnType<typeof renderMascot>>>((resolve) => {
+          finish = resolve;
+        })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'White' }));
+    expect(screen.getByRole('img', { name: 'Mascot preview' })).toBe(
+      originalPreview
+    );
+    expect(originalPreview.getAttribute('src')).toBe('blob:mascot-preview');
+    expect(screen.queryByText('Rendering…')).toBeNull();
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Use mascot' })).toHaveProperty(
+      'disabled',
+      true
+    );
+    expect(
+      within(
+        screen.getByRole('group', { name: 'Choose a color' })
+      ).getAllByRole('button')
+    ).toHaveLength(10);
+    const whiteFile = new File(['white'], 'mascot-white.png', {
+      type: 'image/png',
+    });
+    finish(ok(whiteFile));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Use mascot' })).toHaveProperty(
+        'disabled',
+        false
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Use mascot' }));
+    expect(avatarMocks.upload).toHaveBeenCalledWith(whiteFile);
+  });
+
+  it('ignores superseded renders and lets a failed preview retry', async () => {
+    mascotFlag.enabled = true;
+    let finishOld!: (result: Awaited<ReturnType<typeof renderMascot>>) => void;
+    mascotMocks.render.mockImplementationOnce(
+      () =>
+        new Promise<Awaited<ReturnType<typeof renderMascot>>>((resolve) => {
+          finishOld = resolve;
+        })
+    );
+    mascotMocks.render.mockResolvedValueOnce(
+      err([{ code: 'UNKNOWN', message: 'Image unavailable' }])
+    );
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose mascot' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Blue' }));
+    await screen.findByRole('alert');
+    finishOld(ok(new File(['old'], 'old.png')));
+    expect(screen.getByRole('button', { name: 'Use mascot' })).toHaveProperty(
+      'disabled',
+      true
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Retry preview' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Use mascot' })).toHaveProperty(
+        'disabled',
+        false
+      )
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide mascots' }));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mascot-preview');
   });
 
   it('uploads a team agent avatar before saving and retains it when reopened', async () => {

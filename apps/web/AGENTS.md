@@ -77,6 +77,8 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
 - When adding or changing a feature flag, follow the `feature-flags` skill.
+- Agent profile mascots use `enable-ai-buddy-mascot`; keep preview and upload
+  PNG bytes identical and reuse the static avatar upload in `queries/agents/avatar`.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
 ## Rules

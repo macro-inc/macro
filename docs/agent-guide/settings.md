@@ -411,6 +411,17 @@ the picture after reopening settings and after a page reload, then type `@` and
 the agent's name in a channel to check its mention-menu picture. Team agents
 available in all channels should refresh there without reloading the channel.
 
+With `enable-ai-buddy-mascot` enabled (local override:
+`VITE_ENABLE_AI_BUDDY_MASCOT=true`), the new/edit agent Profile section also has
+`Choose mascot` beside `Upload`, styled as an accent action. Pick one of eight shapes and one of ten colors (including black and white), check the
+recolored preview, then choose `Use mascot`. This uploads the preview PNG through
+the same static image storage and places its durable URL in the form; finish with
+`Create agent` or `Save changes` to persist it. The picker has the same options on
+phones; each picker stays on one horizontally scrolling row. The previous preview
+stays visible while a new selection renders, with no generating-text flash. White
+mascots have black eyes. Rendering failures offer `Retry preview`; upload failures retain the
+previous avatar. With the flag off, the existing Upload control is unchanged.
+
 With `pipedream-mcp` enabled, Connections (in Agents or Settings) has `Connected` and `Discover`
 tabs. Connected groups GitHub, Linear, Notion, and Slack tool grants by provider,
 lists other catalog connections alongside them, and puts custom MCP servers in

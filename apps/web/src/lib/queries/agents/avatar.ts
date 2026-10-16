@@ -1,5 +1,6 @@
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { uploadFile } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
 import { useMutation } from '@tanstack/solid-query';
 
 const MAX_AVATAR_SIZE = 16 * 1000 * 1000;
@@ -14,9 +15,16 @@ export function useUploadAgentAvatarMutation() {
       }
       // The shared pipeline converts HEIC photos and holds automatic reloads
       // while the image is being uploaded.
-      const result = await uploadFile(file, 'static');
-      if (result.failed) throw result.error;
-      return staticFileIdEndpoint(result.id);
+      return Telemetry.span('agent.avatar.upload', async (span) => {
+        span.setAttr('file.size', file.size);
+        const result = await uploadFile(file, 'static');
+        if (result.failed) {
+          span.error(result.error);
+          throw result.error;
+        }
+        span.setAttr('file.id', result.id);
+        return staticFileIdEndpoint(result.id);
+      });
     },
   }));
 }
