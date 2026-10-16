@@ -80,8 +80,8 @@ const githubKeyQuery = {
   },
 };
 const githubLinkStatusQuery = {
-  get isFetched() {
-    return true;
+  get isPending() {
+    return false;
   },
   get data() {
     return { status: githubLinkStatus() };
