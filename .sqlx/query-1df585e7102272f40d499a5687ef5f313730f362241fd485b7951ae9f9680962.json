@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_onboarding\n                (user_id, status, skipped, completed_at, agent_led_at, agent_client)\n            VALUES ($1, 'completed', FALSE, NOW(), NOW(), $2)\n            ON CONFLICT (user_id) DO UPDATE\n            SET status = 'completed',\n                completed_at = COALESCE(user_onboarding.completed_at, EXCLUDED.completed_at),\n                agent_led_at = COALESCE(user_onboarding.agent_led_at, EXCLUDED.agent_led_at),\n                agent_client = COALESCE(user_onboarding.agent_client, EXCLUDED.agent_client),\n                updated_at = NOW()\n            WHERE user_onboarding.status = 'active'\n               OR user_onboarding.agent_led_at IS NOT NULL\n            RETURNING status, skipped, started_at, completed_at, agent_led_at, agent_client\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "skipped",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "agent_led_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "agent_client",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1df585e7102272f40d499a5687ef5f313730f362241fd485b7951ae9f9680962"
+}

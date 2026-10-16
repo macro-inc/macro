@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO user_onboarding (user_id) VALUES ($1)\n            ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id\n            RETURNING status, skipped, started_at, completed_at\n            ",
+  "query": "\n            INSERT INTO user_onboarding (user_id) VALUES ($1)\n            ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id\n            RETURNING status, skipped, started_at, completed_at, agent_led_at, agent_client\n            ",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,16 @@
         "ordinal": 3,
         "name": "completed_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "agent_led_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "agent_client",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -33,8 +43,10 @@
       false,
       false,
       false,
+      true,
+      true,
       true
     ]
   },
-  "hash": "27116f1f2063eee335be586f808937c5077fba102e14e3966b0c5c2c403ebf7f"
+  "hash": "101b3d865c7b42177fb05504b6a823fcdea4d14479b8200698e2aaa6c9ef7ef1"
 }

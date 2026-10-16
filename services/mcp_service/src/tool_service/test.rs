@@ -9,6 +9,49 @@ fn empty_service() -> AuthenticatedToolService<()> {
         "https://macro.com".to_owned(),
         url::Url::parse("https://static-file-service.macro.com").unwrap(),
     )
+    .with_agent_setup(Arc::new(crate::setup_prompt::UnknownSetup))
+}
+
+/// The service as it runs while agent-led setup is switched off.
+fn service_without_setup() -> AuthenticatedToolService<()> {
+    AuthenticatedToolService::new(
+        Arc::new(AsyncToolCollection::new()),
+        (),
+        "https://macro.com".to_owned(),
+        url::Url::parse("https://static-file-service.macro.com").unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn with_setup_off_mcp_clients_get_exactly_what_they_got_before() {
+    let info = service_without_setup().get_info();
+
+    assert!(info.capabilities.prompts.is_none());
+    assert_eq!(
+        info.instructions.as_deref(),
+        Some(
+            format!(
+                "{LEGACY_INSTRUCTIONS_PREAMBLE}\n\n{}",
+                prompt::legacy_mcp_instructions("https://macro.com")
+            )
+            .as_str()
+        )
+    );
+    let instructions = info.instructions.unwrap_or_default();
+    assert!(instructions.starts_with("This server provides tools for interacting"));
+    assert!(!instructions.contains("SetupGetState"));
+}
+
+#[tokio::test]
+async fn with_setup_on_the_setup_prompt_is_offered() {
+    let info = empty_service().get_info();
+
+    assert!(info.capabilities.prompts.is_some());
+    assert!(
+        info.instructions
+            .unwrap_or_default()
+            .contains("SetupGetState")
+    );
 }
 
 #[tokio::test]
@@ -53,16 +96,15 @@ async fn server_instructions_describe_available_workflows() {
         .expect("server should provide MCP instructions");
 
     for expected_text in [
-        "Macro workspace",
+        "Macro is the person's work hub",
         "ContentSearch",
         "NameSearch",
         "ReadContent",
         "ReadMetadata",
-        "ReadThread",
         "ReadChannelMessages",
         "ReadChannelThread",
         "ReadChannelMessageContext",
-        "downloadable URLs",
+        "download URLs",
         "CreateDocument",
         "ListEntities",
         "ListSkills",
@@ -73,6 +115,17 @@ async fn server_instructions_describe_available_workflows() {
             "instructions should mention {expected_text}"
         );
     }
+}
+
+#[tokio::test]
+async fn server_instructions_only_name_tools_the_server_has() {
+    let instructions = empty_service()
+        .get_info()
+        .instructions
+        .expect("server should provide MCP instructions");
+
+    // MCP has no ReadThread tool; naming it sends agents to a dead end.
+    assert!(!instructions.contains("ReadThread"));
 }
 
 #[tokio::test]

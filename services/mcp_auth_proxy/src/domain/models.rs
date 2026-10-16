@@ -96,6 +96,22 @@ pub struct UpstreamTokens {
     pub expires_in: u64,
 }
 
+/// A person who just finished the upstream sign-in through an MCP client.
+///
+/// Observers use it for what the web login does at the same moment —
+/// provisioning the inbox, recording how the account was set up — and to
+/// attribute the account to the client that brought it in.
+#[derive(Debug, Clone)]
+pub struct SignIn {
+    /// The freshly issued upstream access token for the person.
+    pub access_token: AccessToken,
+    /// The registered client the person signed in through.
+    pub client_id: String,
+    /// The name that client registered under (e.g. `claude-code`), when its
+    /// registration could be read.
+    pub client_name: Option<String>,
+}
+
 /// An MCP client created through dynamic client registration.
 #[derive(Clone, Debug)]
 pub struct RegisteredClient {

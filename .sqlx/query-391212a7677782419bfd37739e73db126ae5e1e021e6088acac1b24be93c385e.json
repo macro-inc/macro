@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT status, skipped, started_at, completed_at\n            FROM user_onboarding\n            WHERE user_id = $1\n            ",
+  "query": "\n            SELECT status, skipped, started_at, completed_at, agent_led_at, agent_client\n            FROM user_onboarding\n            WHERE user_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,16 @@
         "ordinal": 3,
         "name": "completed_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "agent_led_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "agent_client",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -33,8 +43,10 @@
       false,
       false,
       false,
+      true,
+      true,
       true
     ]
   },
-  "hash": "f96c6a950d757c50ec8ee0c92782a6bb01202045d5af8aca519063adeb1b2d1c"
+  "hash": "391212a7677782419bfd37739e73db126ae5e1e021e6088acac1b24be93c385e"
 }

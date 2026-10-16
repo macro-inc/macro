@@ -778,6 +778,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_setup"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "import",
+ "macro_user_id",
+ "mcp_select",
+ "pipedream_mcp",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
@@ -1012,6 +1038,7 @@ dependencies = [
  "agent",
  "agent_code_mode",
  "agent_session",
+ "agent_setup",
  "ai_billing",
  "ai_toolset",
  "ai_usage",
@@ -1112,6 +1139,7 @@ dependencies = [
  "strum 0.27.2",
  "sync_service_client",
  "system_properties",
+ "system_skills",
  "teams",
  "thiserror 2.0.18",
  "tokio",
@@ -12354,10 +12382,12 @@ dependencies = [
 name = "mcp_service"
 version = "0.1.0"
 dependencies = [
+ "agent_setup",
  "ai_billing",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
+ "analytics_client",
  "anyhow",
  "async-trait",
  "attachment",
@@ -12365,10 +12395,12 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "base64 0.22.1",
  "bots",
  "call",
  "channels",
  "chat",
+ "chrono",
  "connection_gateway_client",
  "crm",
  "database_env_vars",
@@ -12389,9 +12421,11 @@ dependencies = [
  "http 1.4.0",
  "import",
  "lexical_client",
+ "lru 0.16.4",
  "macro_auth",
  "macro_aws_config",
  "macro_config",
+ "macro_db_client",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -12403,6 +12437,7 @@ dependencies = [
  "mcp_client",
  "mcp_select",
  "notification",
+ "onboarding",
  "pipedream_mcp",
  "prompt",
  "readonly_pool",
@@ -12410,18 +12445,23 @@ dependencies = [
  "reqwest 0.13.4",
  "rmcp",
  "roles_and_permissions",
+ "rootcause",
  "search_service_client",
  "secretsmanager_client",
+ "serde",
  "serde_json",
+ "sha2 0.10.9",
  "soup",
  "sqlx",
  "sqs_client",
  "sync_service_client",
+ "system_skills",
  "teams",
  "tokio",
  "tokio-util",
  "tracing",
  "url",
+ "uuid",
  "workspace-hack",
 ]
 

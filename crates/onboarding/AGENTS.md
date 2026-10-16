@@ -18,7 +18,9 @@ connectors authenticate during onboarding.
 ## Scope
 
 - Owns: the per-user onboarding flag/state and starting auto-import gathers
-  while onboarding is active.
+  while onboarding is active. For agent-led rows (`agent_led_at`, set when a
+  person's AI agent sets them up over MCP), gathers start with automatic
+  import off so the person's approved plan decides what comes in.
 - Not here: the import machinery itself (staging, dedup, gather/import jobs)
   → `import`.
 
@@ -26,7 +28,8 @@ connectors authenticate during onboarding.
 
 - Depends on: `import`, `mcp_client`, `mcp_select`, `generic_email_domains`,
   `macro_authorization`.
-- Used by: `services/document_cognition_service`,
+- Used by: `services/document_cognition_service`, `services/mcp_service`
+  (marks agent-led accounts),
   `services/authentication_service` (onboarding deletes its row during
   account deletion).
 

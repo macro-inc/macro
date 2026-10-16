@@ -794,6 +794,7 @@ pub async fn run() -> anyhow::Result<()> {
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),
+        agent_setup_tool_context: ai_tools::ToolAgentSetupToolContext::unavailable(),
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: ai_tools::build_channel_media_upload_tool_context()?,

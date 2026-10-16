@@ -137,6 +137,16 @@ export const mobileEmailSignupRoute = defineRoute({
   externalSearch: '*',
 });
 
+/**
+ * Connect one tool during agent-led setup: the link a person's own AI agent
+ * gives them from Macro's `SetupConnect` MCP tool.
+ */
+export const agentConnectRoute = defineRoute({
+  id: 'agent-connect',
+  path: 'connect/:app',
+  externalSearch: '*',
+});
+
 export const onboardingRoute = defineRoute({
   id: 'onboarding',
   path: 'onboarding',

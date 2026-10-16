@@ -45,6 +45,12 @@ execution, display) that don't belong to a single domain.
 - Add a cross-domain tool: new module in `src/` → register in
   `src/lib.rs`'s toolset assembly → regenerate schemas (see Checks).
 
+## Gotchas
+
+- `tools_for(AiHost::Mcp)` never includes the agent-led Setup tools;
+  `mcp_tools_with_agent_setup()` adds them, and `mcp_service` uses it only
+  while `ENABLE_AGENT_SETUP` is on.
+
 ## Checks
 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).

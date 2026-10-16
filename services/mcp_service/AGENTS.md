@@ -19,6 +19,12 @@ FusionAuth.
   including `DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS`.
 - `src/markdown_images.rs`: resolves markdown image references in tool output.
 - `src/tool_response.rs`: shapes tool results (incl. media) for MCP responses.
+- Agent-led setup (behind `ENABLE_AGENT_SETUP`, off by default):
+  `src/sign_in.rs` (sign-in hook), `src/agent_led.rs` (handover),
+  `src/setup_prompt.rs` (per-person setup hint, `setup` prompt),
+  `src/setup_ports.rs` (adapters for `crates/agent_setup`).
+- `src/telemetry.rs`, `src/request_observer.rs`, `src/client_attribution.rs`:
+  PostHog MCP analytics, active only when `POSTHOG_API_KEY` is set.
 
 ## Scope
 
@@ -50,6 +56,15 @@ FusionAuth.
 ## Checks
 
 - `cargo test -p mcp_service` (`SQLX_OFFLINE` unset).
+- Setup agent behaviour: `cargo run -p mcp_service --example setup_sim -- --port 8788`.
+
+## Gotchas
+
+- With `ENABLE_AGENT_SETUP` off, clients must get exactly the pre-setup
+  instructions (`LEGACY_INSTRUCTIONS_PREAMBLE` + `prompt::legacy_mcp_instructions`),
+  tools and capabilities; a test pins this.
+- Setup reaches only accounts an agent sign-in created (`NEW_ACCOUNT_WINDOW`);
+  existing accounts are never handed over or given setup-first instructions.
 
 ## Related
 

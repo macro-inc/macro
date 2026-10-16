@@ -171,6 +171,8 @@ export * from './notionDocMeta';
 export * from './notionDocMetaSummary';
 export * from './notionDocMetaUrl';
 export * from './onboardingRow';
+export * from './onboardingRowAgentClient';
+export * from './onboardingRowAgentLedAt';
 export * from './onboardingRowCompletedAt';
 export * from './onboardingState';
 export * from './onboardingStateSuggestedTeamDomain';

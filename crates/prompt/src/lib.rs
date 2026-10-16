@@ -20,6 +20,8 @@ pub mod document_content_links;
 pub mod email;
 pub mod math;
 pub mod mcp_item_links;
+pub mod mcp_setup;
+pub mod mcp_usage;
 pub mod mentions;
 pub mod pull_requests;
 pub mod skills;
@@ -99,43 +101,75 @@ pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&datab
 pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
     BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);
 
-/// Citation, do-not, Macro-terms, and document-content-linking rules surfaced
-/// to external MCP clients, composed together. These are static; the
-/// item-linking rules for the model's own replies are not, because they
-/// depend on the runtime app base URL — see [`mcp_instructions`].
+/// The static rules surfaced to external MCP clients, after the item-linking
+/// rules and the short "Using Macro" section — see [`mcp_instructions`].
 ///
 /// Deliberately omits the in-app [`mentions`] section (MCP clients cannot render
-/// `<m-document-mention>` tags in a chat reply) as well as chat tone/style and
-/// general tool-use instructions, which belong to the host client, not to Macro.
-/// [`document_content_links`] is the exception: it still applies over MCP
+/// `<m-document-mention>` tags in a chat reply), the in-app [`citations`] and
+/// [`do_not`] rules (`[[...]]` citation ids render as raw text in MCP clients),
+/// the in-app [`about_macro`] section (replaced by [`mcp_usage`]), and chat
+/// tone/style and general tool-use instructions, which belong to the host
+/// client, not to Macro. [`document_content_links`] still applies over MCP
 /// because it governs content written *into* a Markdown document (via
 /// `CreateDocument`/`EditDocument`), not the model's chat replies. See
 /// [`mentions`] for the full statement of which surfaces (replies, channel
 /// messages, email bodies, and Markdown documents) these Markdown/mention
 /// rules cover.
-static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
+static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = document_content_links::PROMPT
+    .compose(&databases::PROMPT)
+    .compose(&crm_pipelines::PROMPT);
+
+/// The static rules MCP clients got before agent-led setup. Served unchanged
+/// while setup is switched off, so turning it off changes nothing for anyone.
+static LEGACY_MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
     .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&document_content_links::PROMPT);
 
+/// The instructions MCP clients got before agent-led setup, served while it is
+/// switched off. See [`mcp_instructions_for`] for the current ones.
+pub fn legacy_mcp_instructions(base_url: &str) -> String {
+    format!(
+        "{}\n{LEGACY_MCP_STATIC_INSTRUCTIONS}",
+        mcp_item_links::render(base_url)
+    )
+}
+
+/// How many characters of server instructions Claude Code keeps. Everything an
+/// agent needs to act correctly by default sits before this point.
+pub const MCP_INSTRUCTIONS_VISIBLE_CHARS: usize = 4096;
+
 /// Builds the instructions surfaced to external MCP clients via the server
 /// `instructions` field.
 ///
-/// Carries the formatting/correctness rules Macro features depend on so that AI
-/// used through MCP produces valid output. Item links in the model's own chat
-/// replies are rendered as plain Markdown URLs (built from `base_url`, the
-/// runtime `APP_BASE_URL` value) and lists of items as Markdown tables — NOT
-/// the in-app `<m-document-mention>` markup, which MCP clients cannot render.
-/// Content the model writes *into* a Macro document via `CreateDocument` or
-/// `EditDocument` is the opposite: it must still use `<m-document-mention>`
-/// tags (see [`document_content_links`]), since the Macro app renders that
-/// content regardless of which surface created it. `base_url` should already
-/// have any trailing slash trimmed.
+/// Ordered by what an outside agent needs first, because clients truncate
+/// (Claude Code keeps [`MCP_INSTRUCTIONS_VISIBLE_CHARS`]) and weigh the start
+/// most: the setup flow, how to use Macro, how to link items in replies, the
+/// rules for content written into Macro, then the database and CRM
+/// references.
+///
+/// Item links in the model's own chat replies are rendered as plain Markdown
+/// URLs (built from `base_url`, the runtime `APP_BASE_URL` value) and lists of
+/// items as Markdown tables — NOT the in-app `<m-document-mention>` markup,
+/// which MCP clients cannot render. Content the model writes *into* a Macro
+/// document via `CreateDocument` or `EditDocument` is the opposite: it must
+/// still use `<m-document-mention>` tags (see [`document_content_links`]),
+/// since the Macro app renders that content regardless of which surface
+/// created it. `base_url` should already have any trailing slash trimmed.
 pub fn mcp_instructions(base_url: &str) -> String {
+    mcp_instructions_for(base_url, mcp_setup::SetupHint::Unknown)
+}
+
+/// [`mcp_instructions`] for a person whose setup state is known: the setup
+/// flow leads for a workspace that isn't set up, and shrinks to one line for
+/// one that is. See [`mcp_setup`].
+pub fn mcp_instructions_for(base_url: &str, setup: mcp_setup::SetupHint) -> String {
     format!(
-        "{}\n{MCP_STATIC_INSTRUCTIONS}",
+        "{}\n{}\n{}\n{MCP_STATIC_INSTRUCTIONS}",
+        mcp_setup::render(setup),
+        mcp_usage::render(),
         mcp_item_links::render(base_url)
     )
 }
@@ -395,5 +429,89 @@ mod tests {
         }
         assert!(in_app.contains("non-Markdown documents"));
         assert!(in_app.contains("apply to your own conversational replies only"));
+    }
+
+    /// The first `n` characters, as a client that cuts instructions keeps them.
+    fn first_chars(text: &str, n: usize) -> String {
+        text.chars().take(n).collect()
+    }
+
+    #[test]
+    fn legacy_instructions_are_the_ones_before_agent_led_setup() {
+        let legacy = legacy_mcp_instructions("https://macro.com");
+        assert!(legacy.starts_with(&mcp_item_links::render("https://macro.com")));
+        assert!(legacy.contains(&citations::PROMPT.to_string()));
+        assert!(!legacy.contains("SetupGetState"));
+        assert!(!legacy.contains("# Using Macro"));
+    }
+
+    #[test]
+    fn mcp_instructions_never_name_tools_mcp_does_not_have() {
+        let instructions = mcp_instructions("https://macro.com");
+        assert!(!instructions.contains("ReadThread"));
+    }
+
+    #[test]
+    fn mcp_instructions_drop_citation_ids_that_mcp_clients_cannot_render() {
+        let instructions = mcp_instructions("https://macro.com");
+        assert!(!instructions.contains("[[md;"));
+        assert!(instructions.contains("never `[[...]]` ids"));
+    }
+
+    #[test]
+    fn mcp_usage_and_reply_linking_survive_claude_code_truncation() {
+        let instructions = mcp_instructions("https://macro.com");
+        let visible = first_chars(&instructions, MCP_INSTRUCTIONS_VISIBLE_CHARS);
+        assert!(visible.contains("# Using Macro"));
+        assert!(visible.contains("SelfKnowledge"));
+        assert!(visible.contains("columns `number`, `name`, and `link`"));
+    }
+
+    #[test]
+    fn a_workspace_that_is_not_set_up_leads_with_the_setup_flow() {
+        let instructions =
+            mcp_instructions_for("https://macro.com", mcp_setup::SetupHint::NotSetUp);
+        // ChatGPT weighs roughly the first 512 characters.
+        let head = first_chars(&instructions, 512);
+        assert!(head.contains("Before anything else, call SetupGetState"));
+        for step in [
+            "SetupConnect",
+            "SetupDiscover",
+            "SetupProposePlan",
+            "SetupImport",
+            "SetupGetStatus",
+        ] {
+            assert!(instructions.contains(step), "the flow should name {step}");
+        }
+        assert!(instructions.contains("Never share, invite, send or pay"));
+    }
+
+    #[test]
+    fn a_set_up_workspace_gets_one_line_of_setup() {
+        let setup = mcp_setup::render(mcp_setup::SetupHint::SetUp);
+        let lines: Vec<&str> = setup
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .collect();
+        assert_eq!(lines.len(), 1);
+        assert!(!setup.contains("SetupConnect"));
+    }
+
+    #[test]
+    fn the_setup_flow_usage_and_reply_linking_fit_in_what_claude_code_keeps() {
+        for hint in [
+            mcp_setup::SetupHint::NotSetUp,
+            mcp_setup::SetupHint::SetUp,
+            mcp_setup::SetupHint::Unknown,
+        ] {
+            let instructions = mcp_instructions_for("https://macro.com", hint);
+            let visible = first_chars(&instructions, MCP_INSTRUCTIONS_VISIBLE_CHARS);
+            assert!(visible.contains("SetupGetState"), "{hint:?}");
+            assert!(visible.contains("# Using Macro"), "{hint:?}");
+            assert!(
+                visible.contains("columns `number`, `name`, and `link`"),
+                "{hint:?}: the item-linking rules must be visible"
+            );
+        }
     }
 }

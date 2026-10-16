@@ -2,7 +2,7 @@
 
 use std::{future::Future, pin::Pin};
 
-use super::models::{RefreshToken, RegisteredClient, UpstreamTokens};
+use super::models::{RefreshToken, RegisteredClient, SignIn, UpstreamTokens};
 
 /// Boxed future returning a token grant from the upstream provider.
 pub type UpstreamTokensFuture<'a> =
@@ -10,6 +10,9 @@ pub type UpstreamTokensFuture<'a> =
 
 /// Boxed future returning nothing on success.
 pub type StoreWriteFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>;
+
+/// Boxed future that resolves once an observer has taken note of an event.
+pub type ObserveFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 
 /// Boxed future returning a registered client, if one exists.
 pub type RegisteredClientFuture<'a> =
@@ -69,4 +72,24 @@ pub trait OAuthProvider: Send + Sync {
         &'a self,
         refresh_token: &'a RefreshToken,
     ) -> UpstreamTokensFuture<'a>;
+}
+
+/// Told about every successful sign-in, before the authorization code goes
+/// back to the client.
+///
+/// The person is waiting on the redirect, so an observer must not fail the
+/// flow or hold it up: it returns nothing and hands slow work to the
+/// background itself.
+pub trait SignInObserver: Send + Sync {
+    /// Takes note of a completed sign-in.
+    fn signed_in(&self, sign_in: SignIn) -> ObserveFuture<'_>;
+}
+
+/// A [`SignInObserver`] with no side effects, for hosts that need none.
+pub struct NoSignInObserver;
+
+impl SignInObserver for NoSignInObserver {
+    fn signed_in(&self, _sign_in: SignIn) -> ObserveFuture<'_> {
+        Box::pin(async {})
+    }
 }

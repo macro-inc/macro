@@ -45,6 +45,25 @@ pub trait OnboardingService: Send + Sync + 'static {
     /// outside onboarding must not start gathers.
     fn reconcile(&self, user: MacroUserIdStr<'static>) -> impl Future<Output = Result<()>> + Send;
 
+    /// The user's onboarding row, without creating one or starting anything.
+    /// `None` means the user never entered either flow.
+    fn row(
+        &self,
+        user: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<OnboardingRow>>> + Send;
+
+    /// Hand setup to the person's AI agent (see
+    /// [`OnboardingRepo::mark_agent_led`]): an account that has not finished
+    /// web onboarding is marked agent-led and its web flow is completed, so
+    /// nothing auto-imports behind the plan the agent agrees with the person.
+    /// Returns `None`, changing nothing, for an account that already finished
+    /// onboarding on the web.
+    fn mark_agent_led(
+        &self,
+        user: MacroUserIdStr<'static>,
+        client: Option<String>,
+    ) -> impl Future<Output = Result<Option<OnboardingRow>>> + Send;
+
     /// Finish the flow (`skipped` records how). Unreserved leftover
     /// onboarding-staged import candidates are deleted — never reviewed is
     /// not declined, so they stay re-stageable by later gathers or chat.
@@ -104,13 +123,15 @@ where
             .collect())
     }
 
-    /// Start an auto-importing gather run for every authenticated connector
-    /// that never had one. A failing source must not block the others (or
-    /// the read).
+    /// Start a gather run for every authenticated connector that never had
+    /// one: auto-importing for the web flow, staging only for agent-led setup,
+    /// where the person approves a plan first. A failing source must not
+    /// block the others (or the read).
     async fn start_due_gathers(
         &self,
         user: &MacroUserIdStr<'static>,
         _servers: &[ConnectedServer],
+        auto_import: bool,
     ) {
         for source in ImportSource::all() {
             // Which stack backs the connector is the selector's call
@@ -126,7 +147,11 @@ where
             if !connected {
                 continue;
             }
-            if let Err(e) = self.import.start_gather(user.clone(), source, true).await {
+            if let Err(e) = self
+                .import
+                .start_gather(user.clone(), source, auto_import)
+                .await
+            {
                 tracing::warn!(source = source.as_ref(), error = ?e, "failed to start gather run");
             }
         }
@@ -145,7 +170,8 @@ where
         let row = self.repo.ensure_row(&user).await?;
         let connected_servers = self.connected_servers(&user).await?;
         if row.status == OnboardingStatus::Active {
-            self.start_due_gathers(&user, &connected_servers).await;
+            self.start_due_gathers(&user, &connected_servers, true)
+                .await;
         }
         Ok(OnboardingState {
             row,
@@ -162,6 +188,15 @@ where
         let Some(row) = self.repo.get_row(&user).await? else {
             return Ok(());
         };
+        if row.is_agent_led() {
+            // Agent-led setup: Macro starts looking through a connector the
+            // moment it is connected, with automatic import off, so the
+            // person's approved plan decides what comes in. Candidates
+            // awaiting approval are never swept.
+            let servers = self.connected_servers(&user).await?;
+            self.start_due_gathers(&user, &servers, false).await;
+            return Ok(());
+        }
         if row.status != OnboardingStatus::Active {
             // Self-heal the completion race: a reconcile (or a gather
             // session it started) can outlive complete()'s cleanup and
@@ -177,8 +212,22 @@ where
             return Ok(());
         }
         let servers = self.connected_servers(&user).await?;
-        self.start_due_gathers(&user, &servers).await;
+        self.start_due_gathers(&user, &servers, true).await;
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn row(&self, user: MacroUserIdStr<'static>) -> Result<Option<OnboardingRow>> {
+        self.repo.get_row(&user).await
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn mark_agent_led(
+        &self,
+        user: MacroUserIdStr<'static>,
+        client: Option<String>,
+    ) -> Result<Option<OnboardingRow>> {
+        self.repo.mark_agent_led(&user, client.as_deref()).await
     }
 
     #[tracing::instrument(skip(self, user), err)]

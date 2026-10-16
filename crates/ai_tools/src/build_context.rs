@@ -650,6 +650,7 @@ pub async fn build_tool_service_context_from_env(
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context,
+        agent_setup_tool_context: crate::ToolAgentSetupToolContext::unavailable(),
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: crate::build_channel_media_upload_tool_context()?,

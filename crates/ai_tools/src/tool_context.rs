@@ -1706,6 +1706,9 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
 >;
 
+/// The agent-led setup tools' context: wired on MCP, unavailable elsewhere.
+pub type ToolAgentSetupToolContext = agent_setup::inbound::toolset::SetupToolContext;
+
 /// Type alias for the import tool context, wired by hosts with connector access.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
@@ -1783,6 +1786,9 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
+    /// Agent-led setup tools. Wired only where an outside agent drives setup
+    /// (MCP); `unavailable` everywhere else.
+    pub agent_setup_tool_context: ToolAgentSetupToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.

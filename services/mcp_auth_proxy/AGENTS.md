@@ -16,7 +16,9 @@ in front of FusionAuth, which doesn't support DCR itself.
   logic (registration, authorize, token/refresh).
 - `src/domain/redirect_uri.rs`: the redirect URI usability policy from the README.
 - `src/domain/ports.rs`: `ClientRegistrationStore`, `OAuthProvider`,
-  `RefreshTokenBindingStore` — the ports the service depends on.
+  `RefreshTokenBindingStore` — the ports the service depends on — and
+  `SignInObserver`, told after each sign-in (`mcp_service` hooks agent-led
+  setup in here).
 - `src/inbound/axum_router.rs`: HTTP routes; `src/inbound/middleware.rs`: auth.
 - `src/outbound/fusionauth.rs`, `src/outbound/redis.rs`: concrete adapters
   (gated behind the `outbound` feature; `inbound`/`outbound` are each optional).

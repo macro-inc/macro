@@ -18,6 +18,18 @@ fn active_row() -> OnboardingRow {
         skipped: false,
         started_at: chrono::Utc::now(),
         completed_at: None,
+        agent_led_at: None,
+        agent_client: None,
+    }
+}
+
+fn agent_led_row() -> OnboardingRow {
+    OnboardingRow {
+        status: OnboardingStatus::Completed,
+        completed_at: Some(chrono::Utc::now()),
+        agent_led_at: Some(chrono::Utc::now()),
+        agent_client: Some("claude-code".to_string()),
+        ..active_row()
     }
 }
 
@@ -25,7 +37,10 @@ struct MockRepo {
     status: OnboardingStatus,
     /// Whether a row exists at all (get_row returns None when false).
     exists: bool,
+    /// Whether the existing row is agent-led.
+    agent_led: bool,
     completions: Mutex<Vec<bool>>,
+    agent_markings: Mutex<Vec<Option<String>>>,
 }
 
 impl MockRepo {
@@ -33,7 +48,9 @@ impl MockRepo {
         Self {
             status,
             exists: true,
+            agent_led: false,
             completions: Mutex::new(Vec::new()),
+            agent_markings: Mutex::new(Vec::new()),
         }
     }
 
@@ -43,21 +60,33 @@ impl MockRepo {
             ..Self::new(OnboardingStatus::Active)
         }
     }
+
+    fn agent_led() -> Self {
+        Self {
+            agent_led: true,
+            ..Self::new(OnboardingStatus::Completed)
+        }
+    }
+
+    fn row(&self) -> OnboardingRow {
+        if self.agent_led {
+            agent_led_row()
+        } else {
+            OnboardingRow {
+                status: self.status,
+                ..active_row()
+            }
+        }
+    }
 }
 
 impl OnboardingRepo for MockRepo {
     async fn ensure_row(&self, _user: &MacroUserIdStr<'static>) -> Result<OnboardingRow> {
-        Ok(OnboardingRow {
-            status: self.status,
-            ..active_row()
-        })
+        Ok(self.row())
     }
 
     async fn get_row(&self, _user: &MacroUserIdStr<'static>) -> Result<Option<OnboardingRow>> {
-        Ok(self.exists.then(|| OnboardingRow {
-            status: self.status,
-            ..active_row()
-        }))
+        Ok(self.exists.then(|| self.row()))
     }
 
     async fn complete(
@@ -72,6 +101,19 @@ impl OnboardingRepo for MockRepo {
             completed_at: Some(chrono::Utc::now()),
             ..active_row()
         })
+    }
+
+    async fn mark_agent_led(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+        client: Option<&str>,
+    ) -> Result<Option<OnboardingRow>> {
+        self.agent_markings
+            .lock()
+            .unwrap()
+            .push(client.map(str::to_owned));
+        let eligible = !self.exists || self.status == OnboardingStatus::Active || self.agent_led;
+        Ok(eligible.then(agent_led_row))
     }
 
     async fn delete_row(&self, _user: &MacroUserIdStr<'static>) -> Result<()> {
@@ -354,4 +396,96 @@ async fn get_state_carries_the_suggested_team_domain() {
 
     let state = service.get_state(user()).await.expect("get_state");
     assert_eq!(state.suggested_team_domain.as_deref(), Some("macro.com"));
+}
+
+fn service_with_repo(
+    repo: MockRepo,
+    records: Vec<McpServerRecord>,
+) -> (
+    OnboardingServiceImpl<MockRepo, MockStore, MockImport, MockSelect>,
+    Arc<MockImport>,
+) {
+    let import = Arc::new(MockImport::default());
+    (
+        OnboardingServiceImpl::new(
+            repo,
+            Arc::new(MockStore {
+                records: records.clone(),
+            }),
+            import.clone(),
+            Arc::new(MockSelect {
+                store: Arc::new(MockStore { records }),
+            }),
+        ),
+        import,
+    )
+}
+
+#[tokio::test]
+async fn reconcile_starts_staging_only_gathers_for_agent_led_setups() {
+    // A connection made during agent-led setup starts Macro looking through
+    // the connector right away, with automatic import off: the person's
+    // approved plan decides what comes in. Nothing awaiting approval is swept.
+    let (service, import) = service_with_repo(
+        MockRepo::agent_led(),
+        vec![record("https://mcp.linear.app/mcp", true)],
+    );
+
+    service.reconcile(user()).await.expect("reconcile");
+
+    assert_eq!(
+        import.gathers.lock().unwrap().as_slice(),
+        &[(ImportSource::Linear, false)]
+    );
+    assert!(import.deletions.lock().unwrap().is_empty());
+    assert!(import.discards.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn reconcile_still_sweeps_web_completed_flows() {
+    let (service, import) = service(OnboardingStatus::Completed, Vec::new());
+
+    service.reconcile(user()).await.expect("reconcile");
+
+    assert_eq!(
+        import.deletions.lock().unwrap().as_slice(),
+        &[Initiator::Onboarding]
+    );
+}
+
+#[tokio::test]
+async fn mark_agent_led_hands_new_accounts_to_the_agent() {
+    let (service, _) = service_with_repo(MockRepo::missing(), Vec::new());
+
+    let row = service
+        .mark_agent_led(user(), Some("claude-code".to_string()))
+        .await
+        .expect("mark")
+        .expect("a new account is eligible");
+
+    assert!(row.is_agent_led());
+    assert_eq!(row.status, OnboardingStatus::Completed);
+}
+
+#[tokio::test]
+async fn mark_agent_led_leaves_web_onboarded_accounts_alone() {
+    let (service, _) = service(OnboardingStatus::Completed, Vec::new());
+
+    let row = service
+        .mark_agent_led(user(), Some("claude-code".to_string()))
+        .await
+        .expect("mark");
+
+    assert!(row.is_none());
+}
+
+#[tokio::test]
+async fn row_reads_without_creating_or_gathering() {
+    let (service, import) = service_with_repo(
+        MockRepo::missing(),
+        vec![record("https://mcp.linear.app/mcp", true)],
+    );
+
+    assert!(service.row(user()).await.expect("row").is_none());
+    assert!(import.gathers.lock().unwrap().is_empty());
 }

@@ -8,6 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+agent_setup = { path = "../agent_setup" }
 favorites = { path = "../favorites", features = ["ai_tools", "postgres"] }
 forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling"] }
 routines = { path = "../routines" }
@@ -124,6 +125,7 @@ macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+system_skills = { path = "../system_skills" }
 calendar_scheduling = { path = "../calendar_scheduling", features = ["inbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 model_user = { path = "../model_user" }

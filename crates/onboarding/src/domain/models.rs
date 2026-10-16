@@ -37,6 +37,20 @@ pub struct OnboardingRow {
     pub started_at: DateTime<Utc>,
     /// When the flow completed, if it has.
     pub completed_at: Option<DateTime<Utc>>,
+    /// When the person's own AI agent took over setup over MCP. `Some` means
+    /// the account is agent-led: it skips the web flow, and its first web
+    /// visit shows what the agent set up instead.
+    pub agent_led_at: Option<DateTime<Utc>>,
+    /// The MCP client that led setup (its registered name, e.g.
+    /// `claude-code`), when known.
+    pub agent_client: Option<String>,
+}
+
+impl OnboardingRow {
+    /// Whether the person's agent, not the web flow, set up this account.
+    pub fn is_agent_led(&self) -> bool {
+        self.agent_led_at.is_some()
+    }
 }
 
 /// One of the user's MCP server connections, as the setup page sees it.
