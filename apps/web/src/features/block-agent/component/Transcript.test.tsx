@@ -186,6 +186,54 @@ function mount(initial: FoldedMessage[]) {
   return { ...view, scroller, setMessages };
 }
 
+describe('Transcript private context', () => {
+  const context =
+    '<m-agent-context>{"version":1,"text":"Recorded review outcome: one email sent."}</m-agent-context>';
+  const completion: FoldedMessage = {
+    ...message(1, context),
+    author: { kind: 'user', userId: 'macro|me@macro.com' },
+    postedAt: '2026-10-16T20:00:00Z',
+  };
+
+  it('omits the whole context-only row and keeps the agent reply after hydration', async () => {
+    const view = mount([message(0), completion, message(1, 'Email sent.')]);
+    await settle();
+    expect(view.container.querySelector('[data-message="1:user"]')).toBeNull();
+    expect(
+      view.container.querySelector('[data-message="1:agent"]')
+    ).not.toBeNull();
+    view.setMessages([
+      message(0),
+      { ...completion },
+      message(1, 'Email sent.'),
+    ]);
+    await settle();
+    expect(view.container.querySelector('[data-message="1:user"]')).toBeNull();
+    expect(view.container.querySelectorAll('[data-index]')).toHaveLength(2);
+  });
+
+  it('still shows agent work when a hidden review completion starts a turn', async () => {
+    session.turn = () => 'running';
+    const view = mount([completion]);
+    await settle();
+    expect(view.container.querySelector('[data-message="1:user"]')).toBeNull();
+    expect(view.getByLabelText('Working')).toBeTruthy();
+  });
+
+  it('keeps a normal user prompt that also includes private context', async () => {
+    const view = mount([
+      {
+        ...completion,
+        parts: [{ kind: 'text', text: context + '\n\nSend the next one.' }],
+      },
+    ]);
+    await settle();
+    expect(
+      view.container.querySelector('[data-message="1:user"]')
+    ).not.toBeNull();
+  });
+});
+
 describe('Transcript live turn', () => {
   const inFlight = (view: { container: HTMLElement }) =>
     [...view.container.querySelectorAll<HTMLElement>('[data-message]')].map(

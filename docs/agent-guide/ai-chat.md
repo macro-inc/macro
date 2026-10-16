@@ -1876,14 +1876,15 @@ reads the saved version and discards the local edit; it never retries an externa
 send automatically. If the outcome is unknown, check the inbox/calendar before
 attempting another send elsewhere. A completed review queues bounded outcome
 context for the agent through the normal session queue, without interrupting its
-current turn. The existing context
-control exposes this metadata on demand; individual outcomes remain on the review
-card instead of appearing as a long user message. Questions and their answers use
-the existing ACP question tool; they are not saved reviews.
+current turn. A context-only completion creates no chat bubble, footer, or empty
+transcript row; the agent's reply still appears normally. Individual outcomes
+remain on the review card instead of appearing as a long user message. Questions
+and their answers use the existing ACP question tool; they are not saved reviews.
 
 For browser verification, inspect email stacks without clicking Send, or dismiss
-a harmless draft to verify outcome context without sending. Confirm edits survive
-navigation and page reload,
+a harmless draft to verify outcome context without sending. Confirm a single-item
+completion adds no empty user row while the agent can respond. Confirm edits
+survive navigation and page reload,
 that a single draft has no stack controls, that a batch's picker finds drafts,
 that chat remains usable, and that a non-owner cannot submit. Sending an email or
 creating an event is a real action, including from a local app connected to dev.

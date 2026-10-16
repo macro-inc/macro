@@ -19,6 +19,7 @@ import {
 import { match } from 'ts-pattern';
 import { useAgentSession } from '../context/AgentSessionContext';
 import type { AgentMessageTarget } from '../core/search-location';
+import { isContextOnlyMessage } from '../state/context-message';
 import { isLiveTurn, liveTurnMessage } from '../state/live-turn';
 import { WorkingLine } from '../ui/WorkingLine';
 import { Message } from './AgentMessage';
@@ -48,10 +49,12 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
   const messageById = createMemo(
     () =>
       new Map(
-        messages().map((message) => [
-          `${message.agentSessionId}:${message.turn}:${message.author.kind}`,
-          message,
-        ])
+        messages()
+          .filter((message) => !isContextOnlyMessage(message))
+          .map((message) => [
+            `${message.agentSessionId}:${message.turn}:${message.author.kind}`,
+            message,
+          ])
       )
   );
   // The turn is open and the agent has said nothing yet: the newest message
