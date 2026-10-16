@@ -1,9 +1,14 @@
 import { ROUTER_BASE_CONCAT, toBaseRelative } from '@app/constants/routerBase';
 import { updateUserAuth } from '@core/auth';
-import { createNativeAuthSession } from '@core/auth/native-auth';
+import {
+  createNativeAuthSession,
+  openDesktopAuthSession,
+} from '@core/auth/native-auth';
 import { toast } from '@core/component/Toast/Toast';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isPlatform } from '@core/util/platform';
+import { Telemetry } from '@macro-inc/observability';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
@@ -230,9 +235,10 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * shared-inbox conflict is surfaced through `requestShareInboxConfirmation`,
  * rendered by the globally mounted dialog.
  *
- * Everywhere else — web and desktop — the consent screen replaces the page, so
- * the layout the user was working in is stashed against the new link id first
- * and the callback restores it. Native mobile needs no stash: its layout never unmounts.
+ * Desktop opens consent in the system browser and returns through a macro:///
+ * deep link; web navigates the page. Both stash the current layout against the
+ * new link id so the callback restores it. Native mobile needs no stash: its
+ * layout never unmounts.
  */
 export function useAddInboxFlow() {
   const initGmailLink = useInitGmailLink();
@@ -308,22 +314,38 @@ export function useAddInboxFlow() {
       return;
     }
 
-    const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
+    const desktop = isPlatform('desktop');
+    const callbackUrl = desktop
+      ? 'macro:///inbox-link-callback'
+      : `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
     const result = await initGmailLink.mutateAsync({
       originalUrl: callbackUrl,
       scopes,
     });
     if (result.isOk()) {
-      // Leaving for Google unloads the app, and the split layout only lives in
-      // the URL — stash it so the callback can put it back rather than landing
-      // everyone on a default layout.
+      // Web consent unloads the app; the desktop deep link replaces its route.
+      // Preserve the layout so either callback can put it back.
       rememberInboxLinkReturn(result.value.link_id, {
         url: `${toBaseRelative(window.location.pathname)}${window.location.search}${window.location.hash}`,
       });
-      window.location.href = inboxAuthorizationUrl(
+      const authorizationUrl = inboxAuthorizationUrl(
         result.value.authorization_url,
         options?.emailAddress
       );
+      if (desktop) {
+        await Telemetry.span('email.link.open_browser', async (span) => {
+          span.setAttr('email.link.id', result.value.link_id);
+          const opened = await openDesktopAuthSession(authorizationUrl);
+          if (!opened.success) {
+            span.error('Unable to open account connection browser');
+            toast.failure(
+              'Failed to open the browser to connect your account. Please try again.'
+            );
+          }
+        });
+        return;
+      }
+      window.location.href = authorizationUrl;
     } else if (isPaymentRequired(result.error)) {
       showPaywall(PaywallKey.MULTI_INBOX);
     } else if (isTooManyPendingLinks(result.error)) {

@@ -67,6 +67,8 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 
 ### General
 - All API/network calls live in service-clients.
+- Keep desktop inbox consent in the system browser with a
+  `macro:///inbox-link-callback` return; webview origins are not desktop callbacks.
 - Draft autosaves preserve active email thread messages; evict inactive legacy
   caches on save and the active cache on thread exit. Revalidate GraphQL thread
   pages only when a save cannot patch the message list (missing snapshot or a

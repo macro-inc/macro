@@ -113,8 +113,8 @@ const POST_LINK_FALLBACK_ROUTE = `${DEFAULT_ROUTE}/~/settings/${settingsTabToSlu
  * inbox via /link/gmail. Reads `link_id` from the query string and invokes init to
  * provision the second `email_links` row. Falls back to a toast on failure.
  *
- * Consent runs as a full page navigation, so the split layout — which lives in
- * the URL — is gone by the time this mounts. The add-inbox flow stashed it
+ * Web consent navigates the page; desktop returns from the system browser via
+ * a deep link. Both replace the split layout URL. The add-inbox flow stashed it
  * against this `link_id`; restoring it is what keeps enabling calendar (or
  * adding an inbox) from clobbering whatever the user had open.
  */
@@ -139,8 +139,8 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const userInfoQuery = useUserInfoQuery();
 
   // Return to the layout the flow left from, if this callback belongs to a
-  // flow that stashed one. Consent replaced the page, so nothing in memory
-  // survived — the stash is the only record of what the user had open.
+  // flow that stashed one. The callback replaced the layout URL, so the stash
+  // records what the user had open before consent.
   // Reports true when it navigated, so callers can fall through otherwise.
   const restoreLayoutBeforeConsent = (linkId: string) => {
     const stored = consumeInboxLinkReturn(linkId);

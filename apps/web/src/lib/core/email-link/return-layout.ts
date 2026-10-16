@@ -15,8 +15,8 @@ type StoredInboxLinkReturn = InboxLinkReturn & { linkId: string };
 /**
  * Remember where to return once Gmail consent completes.
  *
- * On web and desktop the consent screen is a full page navigation, so the app
- * — split layout included — is torn down and rebuilt from the callback URL.
+ * Web consent is a full page navigation; desktop opens the system browser and
+ * its return deep link replaces the app route with the callback URL.
  * The layout lives in the URL, so stashing it here is what lets the callback
  * put the user back where they were instead of falling back to a default.
  *
