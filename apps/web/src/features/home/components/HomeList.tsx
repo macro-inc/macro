@@ -454,8 +454,15 @@ export function HomeList(props: HomeListProps) {
 
     if (list.focus.result()) return;
 
-    list.focus.restore(list.focus.requestedKey(), {
+    const restored = list.focus.restore(list.focus.requestedKey(), {
       retainUnavailable: false,
+    });
+    if (restored) return;
+    if (isTouchDevice()) return;
+
+    list.focus.first({
+      isNavigable: (row) => row.kind === 'entity',
+      reason: 'restore',
     });
   });
 
