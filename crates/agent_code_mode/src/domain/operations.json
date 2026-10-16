@@ -184,6 +184,8 @@
   "cognition.getMemoryHandler": "Get Memory",
   "cognition.getStateHandler2": "Get State Handler2",
   "cognition.completeHandler": "Complete",
+  "cognition.dismissedPromptsHandler": "Dismissed Prompts",
+  "cognition.dismissPromptHandler": "Dismiss Prompt",
   "cognition.browsePipedreamMcpCatalog": "Browse Pipedream Mcp Catalog",
   "cognition.completePipedreamMcpConnection": "Complete Pipedream Mcp Connection",
   "cognition.deletePipedreamMcpConnection": "Delete Pipedream Mcp Connection",

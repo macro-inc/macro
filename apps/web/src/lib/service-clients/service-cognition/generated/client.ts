@@ -20,6 +20,7 @@ import type {
   DecisionResponse,
   DeleteMcpServerParams,
   DeletePipedreamMcpConnectionParams,
+  DismissedPrompts,
   DocumentTextPart,
   ErrorBody,
   ErrorResponse,
@@ -2099,6 +2100,115 @@ export const completeHandler = async (
     status: res.status,
     headers: res.headers,
   } as completeHandlerResponse;
+};
+
+/**
+ * @summary List the sidebar prompts the authenticated user dismissed on any device.
+ */
+export type dismissedPromptsHandlerResponse200 = {
+  data: DismissedPrompts;
+  status: 200;
+};
+
+export type dismissedPromptsHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type dismissedPromptsHandlerResponseSuccess =
+  dismissedPromptsHandlerResponse200 & {
+    headers: Headers;
+  };
+export type dismissedPromptsHandlerResponseError =
+  dismissedPromptsHandlerResponse500 & {
+    headers: Headers;
+  };
+
+export type dismissedPromptsHandlerResponse =
+  | dismissedPromptsHandlerResponseSuccess
+  | dismissedPromptsHandlerResponseError;
+
+export const getDismissedPromptsHandlerUrl = () => {
+  return `/onboarding/prompts`;
+};
+
+export const dismissedPromptsHandler = async (
+  options?: RequestInit
+): Promise<dismissedPromptsHandlerResponse> => {
+  const res = await fetch(getDismissedPromptsHandlerUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: dismissedPromptsHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as dismissedPromptsHandlerResponse;
+};
+
+/**
+ * @summary Dismiss one sidebar prompt for the authenticated user, on every device.
+Idempotent.
+ */
+export type dismissPromptHandlerResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type dismissPromptHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type dismissPromptHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type dismissPromptHandlerResponseSuccess =
+  dismissPromptHandlerResponse204 & {
+    headers: Headers;
+  };
+export type dismissPromptHandlerResponseError = (
+  | dismissPromptHandlerResponse400
+  | dismissPromptHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type dismissPromptHandlerResponse =
+  | dismissPromptHandlerResponseSuccess
+  | dismissPromptHandlerResponseError;
+
+export const getDismissPromptHandlerUrl = (promptId: string) => {
+  return `/onboarding/prompts/${promptId}/dismiss`;
+};
+
+export const dismissPromptHandler = async (
+  promptId: string,
+  options?: RequestInit
+): Promise<dismissPromptHandlerResponse> => {
+  const res = await fetch(getDismissPromptHandlerUrl(promptId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: dismissPromptHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as dismissPromptHandlerResponse;
 };
 
 /**

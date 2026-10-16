@@ -120,8 +120,10 @@ fn contexts(
 
 #[tokio::test]
 async fn gather_policy_locks_source_and_initiator() {
-    let (service_context, request_context, stager) =
-        contexts(ToolPolicy::gather(ImportSource::Linear));
+    let (service_context, request_context, stager) = contexts(ToolPolicy::gather(
+        ImportSource::Linear,
+        Initiator::Onboarding,
+    ));
 
     // Wrong source is refused before touching the service.
     let err = CreateImportEntity {
@@ -170,6 +172,24 @@ async fn gather_policy_locks_source_and_initiator() {
             "ENG-1".to_string()
         )]
     );
+}
+
+#[tokio::test]
+async fn manual_gather_policy_records_manual_initiator() {
+    let (service_context, request_context, stager) =
+        contexts(ToolPolicy::gather(ImportSource::Notion, Initiator::Manual));
+
+    CreateImportEntity {
+        source: ImportSource::Notion,
+        foreign_id: "https://notion.so/Plan-0123456789abcdef0123456789abcdef".into(),
+        status: CreateImportStatus::Staged,
+        metadata: serde_json::json!({"title": "Plan"}),
+        entity_id: None,
+    }
+    .call(service_context, request_context)
+    .await
+    .expect("staging succeeds");
+    assert_eq!(stager.staged_calls.lock().unwrap()[0].0, Initiator::Manual);
 }
 
 #[tokio::test]

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT prompt_id\n            FROM user_dismissed_prompt\n            WHERE user_id = $1\n            ORDER BY dismissed_at, prompt_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "prompt_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e21945cccea90543a1f076d295ddc8d2a8e9bd20bd5871b4cfdba429cfc2dddd"
+}

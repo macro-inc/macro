@@ -197,7 +197,7 @@ pub async fn retry_gather_handler<T: ImportService, Auth: MacroAuthorizationServ
     params(("source" = String, Path, description = "Import source")),
     responses(
         (status = 204, description = "Discovery accepted (idempotent)"),
-        (status = 400, description = "Unknown import source or discovery not supported"),
+        (status = 400, description = "Unknown import source"),
         (status = 500, description = "Internal server error"),
     ),
     tag = "import"
@@ -216,9 +216,6 @@ pub async fn discover_handler<T: ImportService, Auth: MacroAuthorizationService>
         .await
     {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
-        Err(e @ ImportError::UnsupportedDiscovery(_)) => {
-            (StatusCode::BAD_REQUEST, e.to_string()).into_response()
-        }
         Err(e) => error_response(e),
     }
 }

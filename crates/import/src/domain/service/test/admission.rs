@@ -728,7 +728,13 @@ async fn slack_agent_fallback_still_requires_admission() {
         calls: AtomicUsize::new(0),
     });
     let error = service
-        .gather_agent_session(&user(), ImportSource::Slack, GATHER_MODEL, tools.clone())
+        .gather_agent_session(
+            &user(),
+            ImportSource::Slack,
+            GatherMode::Onboarding,
+            GATHER_MODEL,
+            tools.clone(),
+        )
         .await
         .unwrap_err();
     assert_eq!(error.downcast_ref::<AiAdmissionError>(), Some(&denied()));

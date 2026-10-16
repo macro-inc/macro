@@ -173,11 +173,9 @@ fn map_error(error: import::domain::ports::ImportError) -> rootcause::Report<Imp
         LedgerError::SourceConfirmationRequired => ImportError::InvalidInput,
         LedgerError::TargetConflict | LedgerError::TargetNotReserved => ImportError::Conflict,
         LedgerError::Db(_) | LedgerError::Other(_) => ImportError::Retryable,
-        // Canonical ledger operations do not perform discovery or AI work.
-        // These errors are unexpected adapter failures, not permission to proceed.
-        LedgerError::Admission(_)
-        | LedgerError::Metadata(_)
-        | LedgerError::UnsupportedDiscovery(_) => ImportError::Internal,
+        // Canonical ledger operations do not perform AI work. These errors
+        // are unexpected adapter failures, not permission to proceed.
+        LedgerError::Admission(_) | LedgerError::Metadata(_) => ImportError::Internal,
     };
     rootcause::Report::new(error).context(code)
 }

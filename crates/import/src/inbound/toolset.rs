@@ -52,10 +52,11 @@ impl ToolPolicy {
         }
     }
 
-    /// Policy for an onboarding gather job over one connector.
-    pub fn gather(source: ImportSource) -> Self {
+    /// Policy for a gather job over one connector, recording `initiator`
+    /// (onboarding suggestions or a user-started discovery).
+    pub fn gather(source: ImportSource, initiator: Initiator) -> Self {
         Self {
-            initiator: Initiator::Onboarding,
+            initiator,
             forced_source: Some(source),
             allow_imported: false,
         }

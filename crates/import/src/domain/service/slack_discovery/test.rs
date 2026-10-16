@@ -1,6 +1,5 @@
 use super::*;
 use crate::domain::models::{ImportStatus, RunStatus};
-use crate::domain::ports::ImportError;
 use crate::domain::service::test::admission::{Creator, NoConnector, Repo, user};
 use crate::domain::service::{ImportService, ImportStager, gather_timeout};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -755,20 +754,23 @@ async fn manual_without_tools_fails_readably() {
 }
 
 #[tokio::test]
-async fn manual_rejects_other_sources_and_does_not_restart_running_runs() {
+async fn manual_accepts_agent_sources_and_does_not_restart_running_runs() {
     let service = service(Repo::default(), Workspace::default());
-    let error = service
-        .start_discovery(user(), ImportSource::Linear)
-        .await
-        .unwrap_err();
-    assert!(matches!(
-        error,
-        ImportError::UnsupportedDiscovery(ImportSource::Linear)
-    ));
-    assert_eq!(
-        error.to_string(),
-        "manual discovery is not supported for linear"
+    assert!(
+        service
+            .start_discovery(user(), ImportSource::Linear)
+            .await
+            .unwrap()
     );
+    let linear = service
+        .repo
+        .list_runs(&user())
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|run| run.source == ImportSource::Linear)
+        .unwrap();
+    assert!(!linear.auto_import);
     service
         .repo
         .start_run(&user(), ImportSource::Slack, &[], true)
@@ -780,7 +782,15 @@ async fn manual_rejects_other_sources_and_does_not_restart_running_runs() {
             .await
             .unwrap()
     );
-    assert!(service.repo.list_runs(&user()).await.unwrap()[0].auto_import);
+    let slack = service
+        .repo
+        .list_runs(&user())
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|run| run.source == ImportSource::Slack)
+        .unwrap();
+    assert!(slack.auto_import);
     assert!(
         service
             .slack_source

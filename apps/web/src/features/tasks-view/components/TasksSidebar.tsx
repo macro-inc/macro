@@ -4,6 +4,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
+import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { openProject } from '@app/features/projects/open-project';
@@ -205,6 +206,7 @@ export function TasksSidebar() {
             }}
           />
         </Show>
+        <ConnectorImportSidebar category="tasks" class="mt-auto" />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

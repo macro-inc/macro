@@ -1212,7 +1212,7 @@
             "description": "Discovery accepted (idempotent)"
           },
           "400": {
-            "description": "Unknown import source or discovery not supported"
+            "description": "Unknown import source"
           },
           "500": {
             "description": "Internal server error"
@@ -1718,6 +1718,57 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/onboarding/prompts": {
+      "get": {
+        "tags": ["onboarding"],
+        "summary": "List the sidebar prompts the authenticated user dismissed on any device.",
+        "operationId": "dismissed_prompts_handler",
+        "responses": {
+          "200": {
+            "description": "Dismissed prompt ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DismissedPrompts"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/onboarding/prompts/{prompt_id}/dismiss": {
+      "post": {
+        "tags": ["onboarding"],
+        "summary": "Dismiss one sidebar prompt for the authenticated user, on every device.\nIdempotent.",
+        "operationId": "dismiss_prompt_handler",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "description": "Prompt id, e.g. `import:files`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dismissed"
+          },
+          "400": {
+            "description": "Malformed prompt id"
           },
           "500": {
             "description": "Internal server error"
@@ -3216,6 +3267,20 @@
             "propertyNames": {
               "type": "string"
             }
+          }
+        }
+      },
+      "DismissedPrompts": {
+        "type": "object",
+        "description": "The prompts the user dismissed, on any device.",
+        "required": ["dismissed"],
+        "properties": {
+          "dismissed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Dismissed prompt ids, oldest dismissal first."
           }
         }
       },

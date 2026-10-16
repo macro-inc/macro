@@ -22,6 +22,8 @@ export function CrmSidebar(props: {
   /** The highlighted record type, list, or pipeline. */
   active: string;
   pipelines?: JSX.Element;
+  /** Pinned to the bottom of the scrolling content, above the tools. */
+  promotion?: JSX.Element;
   lists: { id: string; name: string; count: number }[];
   listsEnabled: boolean;
   listsLoading: boolean;
@@ -153,6 +155,7 @@ export function CrmSidebar(props: {
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
         </Show>
+        {props.promotion}
       </ViewSidebar.Content>
       <ViewSidebar.Footer>
         <ViewSidebar.Nav aria-label="CRM tools">

@@ -533,6 +533,16 @@ export type DecisionResponse = {
     };
 };
 
+/**
+ * The prompts the user dismissed, on any device.
+ */
+export type DismissedPrompts = {
+    /**
+     * Dismissed prompt ids, oldest dismissal first.
+     */
+    dismissed: Array<string>;
+};
+
 export type DocumentCognitionServiceApiVersion = 'v1' | 'v2';
 
 export type DocumentReference = UserPdfRect & {
@@ -2457,7 +2467,7 @@ export type DiscoverHandlerData = {
 
 export type DiscoverHandlerErrors = {
     /**
-     * Unknown import source or discovery not supported
+     * Unknown import source
      */
     400: unknown;
     /**
@@ -2807,6 +2817,61 @@ export type CompleteHandlerResponses = {
 };
 
 export type CompleteHandlerResponse = CompleteHandlerResponses[keyof CompleteHandlerResponses];
+
+export type DismissedPromptsHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/onboarding/prompts';
+};
+
+export type DismissedPromptsHandlerErrors = {
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DismissedPromptsHandlerResponses = {
+    /**
+     * Dismissed prompt ids
+     */
+    200: DismissedPrompts;
+};
+
+export type DismissedPromptsHandlerResponse = DismissedPromptsHandlerResponses[keyof DismissedPromptsHandlerResponses];
+
+export type DismissPromptHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * Prompt id, e.g. `import:files`
+         */
+        prompt_id: string;
+    };
+    query?: never;
+    url: '/onboarding/prompts/{prompt_id}/dismiss';
+};
+
+export type DismissPromptHandlerErrors = {
+    /**
+     * Malformed prompt id
+     */
+    400: unknown;
+    /**
+     * Internal server error
+     */
+    500: unknown;
+};
+
+export type DismissPromptHandlerResponses = {
+    /**
+     * Dismissed
+     */
+    204: void;
+};
+
+export type DismissPromptHandlerResponse = DismissPromptHandlerResponses[keyof DismissPromptHandlerResponses];
 
 export type BrowsePipedreamMcpCatalogData = {
     body?: never;

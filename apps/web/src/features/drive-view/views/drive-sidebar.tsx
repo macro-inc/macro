@@ -3,11 +3,13 @@ import {
   SearchBar,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import UploadIcon from '@phosphor/upload-simple.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -196,6 +198,31 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
   );
 }
 
+/** The import card, offering local uploads beside connected apps. */
+function DriveImportPromotion() {
+  const { actions } = useDriveView();
+  return (
+    <ConnectorImportSidebar
+      category="files"
+      class="mt-auto"
+      alternatives={[
+        {
+          icon: UploadIcon,
+          label: 'Upload files',
+          description: 'Choose files from this computer.',
+          onSelect: actions.uploadFiles,
+        },
+        {
+          icon: FolderIcon,
+          label: 'Upload a folder',
+          description: 'Bring over a folder and everything in it.',
+          onSelect: actions.uploadFolder,
+        },
+      ]}
+    />
+  );
+}
+
 export function DriveSidebar() {
   return (
     <ViewSidebar.Root aria-label="Drive navigation">
@@ -210,6 +237,7 @@ export function DriveSidebar() {
       </ViewSidebar.Primary>
       <ViewSidebar.Content>
         <DriveSidebarContent />
+        <DriveImportPromotion />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_dismissed_prompt (user_id, prompt_id)\n            VALUES ($1, $2)\n            ON CONFLICT (user_id, prompt_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "69bb9bd03a7ca993e20eaf2df1334b7b508016c2f9fb75f933fd8048d9e9da52"
+}

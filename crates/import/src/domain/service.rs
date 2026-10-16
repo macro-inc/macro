@@ -181,8 +181,8 @@ pub trait ImportService: Send + Sync + 'static {
         auto_import: bool,
     ) -> impl Future<Output = Result<bool>> + Send;
 
-    /// User-triggered, non-auto-import gather that stages everything visible.
-    /// Only Slack is supported in this slice. Returns whether a run started.
+    /// User-triggered, non-auto-import gather that stages candidates for
+    /// explicit selection. Returns whether a run started.
     fn start_discovery(
         &self,
         user: MacroUserIdStr<'static>,
@@ -542,14 +542,14 @@ where
         // rerunning the whole session on the fallback model is safe even
         // when the primary died mid-way through staging.
         match self
-            .gather_agent_session(user, source, GATHER_MODEL, mcp_tools.clone())
+            .gather_agent_session(user, source, mode, GATHER_MODEL, mcp_tools.clone())
             .await
         {
             Ok(()) => Ok(()),
             Err(e) if e.is::<ai_billing::AiAdmissionError>() => Err(e),
             Err(e) => {
                 tracing::warn!(model = GATHER_MODEL, error = ?e, "gather session failed; retrying on the fallback model");
-                self.gather_agent_session(user, source, GATHER_FALLBACK_MODEL, mcp_tools)
+                self.gather_agent_session(user, source, mode, GATHER_FALLBACK_MODEL, mcp_tools)
                     .await
             }
         }
@@ -561,14 +561,19 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
+        mode: GatherMode,
         model: &str,
         mcp_tools: Arc<M>,
     ) -> anyhow::Result<()> {
         let native = gather_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
+        let initiator = match mode {
+            GatherMode::Onboarding => Initiator::Onboarding,
+            GatherMode::Manual => Initiator::Manual,
+        };
         let context = ImportToolContext {
             service: Some(Arc::new(self.clone())),
-            policy: ToolPolicy::gather(source),
+            policy: ToolPolicy::gather(source, initiator),
         };
 
         self.drive_session(
@@ -1039,9 +1044,6 @@ where
         user: MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> Result<bool> {
-        if source != ImportSource::Slack {
-            return Err(ImportError::UnsupportedDiscovery(source));
-        }
         let from = [
             RunStatus::Ready,
             RunStatus::Completed,

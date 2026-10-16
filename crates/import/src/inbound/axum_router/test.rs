@@ -149,24 +149,17 @@ async fn discovery_rejects_unknown_source_without_calling_service() {
 }
 
 #[tokio::test]
-async fn discovery_returns_unsupported_source_message() {
-    let (router, service) =
-        discovery_router(Err(ImportError::UnsupportedDiscovery(ImportSource::Linear)));
-    let response = router
-        .oneshot(discovery_request("linear", true))
-        .await
-        .unwrap();
+async fn discovery_accepts_agent_gathered_sources() {
+    for (path, source) in [
+        ("linear", ImportSource::Linear),
+        ("notion", ImportSource::Notion),
+    ] {
+        let (router, service) = discovery_router(Ok(true));
+        let response = router.oneshot(discovery_request(path, true)).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let body = axum::body::to_bytes(response.into_body(), 4096)
-        .await
-        .unwrap();
-    assert!(
-        std::str::from_utf8(&body)
-            .unwrap()
-            .contains("not supported")
-    );
-    assert_eq!(service.calls.lock().unwrap()[0].1, ImportSource::Linear);
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(service.calls.lock().unwrap()[0].1, source);
+    }
 }
 
 #[tokio::test]

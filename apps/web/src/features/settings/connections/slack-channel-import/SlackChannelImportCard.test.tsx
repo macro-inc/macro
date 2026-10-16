@@ -13,14 +13,8 @@ const mocks = vi.hoisted(() => ({
 const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
-vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({
-    isSuccess: true,
-    data: { team: { id: 'team' } },
-  }),
-}));
-vi.mock('@app/features/slack-import/primitives/promotion', () => ({
-  hideSlackImportPromotion: mocks.hidePromotion,
+vi.mock('@app/features/connector-import/primitives/promotion', () => ({
+  hideImportPromotion: mocks.hidePromotion,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
@@ -190,7 +184,7 @@ describe('Slack channel import card', () => {
         .getAttribute('href')
     ).toContain('/app/channel/macro-channel');
     expect(screen.getByText('by a teammate', { exact: false })).toBeTruthy();
-    expect(mocks.hidePromotion).toHaveBeenCalledWith('me', 'team');
+    expect(mocks.hidePromotion).toHaveBeenCalledWith('me', 'channels');
   });
 
   it('shows empty and failed discoveries with retry', () => {

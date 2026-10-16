@@ -1,4 +1,4 @@
-import { hideSlackImportPromotion } from '@app/features/slack-import/primitives/promotion';
+import { hideImportPromotion } from '@app/features/connector-import/primitives/promotion';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
@@ -9,7 +9,6 @@ import {
   useImportQuery,
   useRunImportMutation,
 } from '@queries/import';
-import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button } from '@ui';
 import {
   createEffect,
@@ -105,7 +104,6 @@ export function SlackChannelImportCard(
   props: { autoDiscover?: boolean } = {}
 ): JSX.Element {
   const userId = useUserId();
-  const team = useCurrentTeamQuery();
   const query = useImportQuery();
   const discover = useDiscoverMutation();
   const importChannels = useRunImportMutation();
@@ -118,12 +116,8 @@ export function SlackChannelImportCard(
   const rows = createMemo(() => buildRows(state(), userId()));
   // The run mutation only queues work; wait for a server-confirmed import.
   createEffect(() => {
-    if (
-      query.isSuccess &&
-      team.isSuccess &&
-      rows().some((row) => row.status === 'imported')
-    ) {
-      hideSlackImportPromotion(userId(), team.data?.team.id);
+    if (query.isSuccess && rows().some((row) => row.status === 'imported')) {
+      hideImportPromotion(userId(), 'channels');
     }
   });
   const visible = createMemo(() =>
