@@ -9083,7 +9083,8 @@ export type GuestPolicy = {
  */
 export type Harness = {
     /**
-     * Whether agents may bypass ACP permission requests on this harness.
+     * Whether the web owner lets agents bypass ACP permission requests on
+     * this harness. Takes effect only while the operator allows it too.
      */
     allow_permission_bypass?: boolean;
     /**
@@ -9114,6 +9115,11 @@ export type Harness = {
      * Display name.
      */
     name: string;
+    /**
+     * The machine operator's local consent to permission bypass, as the
+     * daemon last reported it on connect. `None` until a daemon reports it.
+     */
+    operator_allows_bypass?: boolean | null;
     /**
      * Owner.
      */
@@ -11138,6 +11144,17 @@ export type PatchChannelRequest = {
      * converts a team channel to a private channel.
      */
     convert_to_team_channel?: boolean | null;
+};
+
+/**
+ * Request to change a registered harness.
+ */
+export type PatchHarnessRequest = {
+    /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     * Enabling requires the machine operator's reported consent.
+     */
+    allow_permission_bypass?: boolean | null;
 };
 
 /**
@@ -22880,6 +22897,33 @@ export type DeleteHarnessResponses = {
 };
 
 export type DeleteHarnessResponse = DeleteHarnessResponses[keyof DeleteHarnessResponses];
+
+export type PatchHarnessData = {
+    body: PatchHarnessRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}';
+};
+
+export type PatchHarnessErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchHarnessError = PatchHarnessErrors[keyof PatchHarnessErrors];
+
+export type PatchHarnessResponses = {
+    200: Harness;
+};
+
+export type PatchHarnessResponse = PatchHarnessResponses[keyof PatchHarnessResponses];
 
 export type HealthHandlerData = {
     body?: never;
