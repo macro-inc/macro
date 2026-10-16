@@ -67,7 +67,7 @@ async fn subscription_responses_from(
     }
     drop(sender);
     let list_loader = graphql_soup::soup_item_loader(replica.clone(), Arc::new(NoOpEmailService));
-    let hydration_loader = graphql_soup::SoupUpdateHydrationLoader(graphql_soup::soup_item_loader(
+    let hydration_loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
         primary,
         Arc::new(NoOpEmailService),
     ));

@@ -847,7 +847,7 @@ pub(crate) struct ApiContext {
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
-    pub graphql_soup_update_hydration_loader: graphql_soup::SoupUpdateHydrationLoader,
+    pub graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader,
     pub databases_state: DssDatabasesState,
     pub database_webhooks_state: DssDatabaseWebhooksState,
     pub forms_state: DssFormsState,

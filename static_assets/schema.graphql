@@ -8485,6 +8485,11 @@ type GraphqlUser {
 	"""
 	agentSession(sessionId: ID!): GraphqlSoupAgentSession
 	"""
+	Fetch one accessible Soup entity, read from the primary so an entity
+	opened right after it is created or edited reflects that write.
+	"""
+	soupEntity(input: SoupEntityInput!): GraphqlSoupEntity
+	"""
 	Fetch Soup items nested into grouping bins.
 	"""
 	groupSoup(input: GroupedSoupInput!): GroupedSoup!
@@ -9143,6 +9148,20 @@ input SoupContinuationInput {
 	used or the continuation flips order mid-list.
 	"""
 	sortDirection: GraphqlSortDirection
+}
+
+"""
+Input for fetching one Soup entity by its type and identifier.
+"""
+input SoupEntityInput {
+	"""
+	The Soup type of the entity.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	The entity identifier.
+	"""
+	entityId: ID!
 }
 
 """

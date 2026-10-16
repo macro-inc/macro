@@ -50,8 +50,6 @@ import {
   refetchGraphqlInitiativeProperties,
 } from './entity';
 
-const NIL_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
-
 type ControlledRequest = {
   operation: Operation;
   next: (result?: Pick<OperationResult, 'data' | 'error'>) => void;
@@ -117,62 +115,37 @@ afterEach(() => {
 });
 
 const EMPTY_DATA = {
-  user: { id: 'user-1', soup: { items: [] } },
+  user: { id: 'user-1', soupEntity: null },
 };
-const NIL_FILTERS = {
-  calendarEventFilter: { literal: { id: NIL_ENTITY_ID } },
-  documentFilter: { literal: { id: NIL_ENTITY_ID } },
-  projectFilter: { literal: { projectIdSelf: NIL_ENTITY_ID } },
-  chatFilter: { literal: { chatId: NIL_ENTITY_ID } },
-  emailFilter: { tree: { literal: { threadId: NIL_ENTITY_ID } } },
-  channelFilter: { literal: { channelId: NIL_ENTITY_ID } },
-  channelThreadFilter: { literal: { threadId: NIL_ENTITY_ID } },
-  callFilter: { literal: { callId: NIL_ENTITY_ID } },
-  crmCompanyFilter: { literal: { id: NIL_ENTITY_ID } },
-  foreignEntityFilter: { literal: { id: NIL_ENTITY_ID } },
-};
-
-function initialInput(entityType: EntityType) {
-  const input = buildEntityPropertiesInput(entityType, 'entity-1');
-  if (!input || !('initial' in input) || !input.initial) {
-    throw new Error(`Expected an initial Soup input for ${entityType}`);
-  }
-  return input.initial;
-}
 
 describe('buildEntityPropertiesInput', () => {
   it.each([
-    ['DOCUMENT', 'documentFilter', { literal: { id: 'entity-1' } }],
-    ['TASK', 'documentFilter', { literal: { id: 'entity-1' } }],
-    ['INITIATIVE', 'initiativeFilter', { literal: { id: 'entity-1' } }],
-    ['PROJECT', 'projectFilter', { literal: { projectIdSelf: 'entity-1' } }],
-    ['CHAT', 'chatFilter', { literal: { chatId: 'entity-1' } }],
-    ['THREAD', 'emailFilter', { tree: { literal: { threadId: 'entity-1' } } }],
-    ['CHANNEL', 'channelFilter', { literal: { channelId: 'entity-1' } }],
-    ['CALL_RECORD', 'callFilter', { literal: { callId: 'entity-1' } }],
-    ['COMPANY', 'crmCompanyFilter', { literal: { id: 'entity-1' } }],
-    ['CALENDAR_EVENT', 'calendarEventFilter', { literal: { id: 'entity-1' } }],
-  ] as const)(
-    'targets one %s and excludes the other Soup branches',
-    (entityType, filterKey, expectedFilter) => {
-      const input = initialInput(entityType);
+    ['DOCUMENT', 'DOCUMENT'],
+    ['TASK', 'DOCUMENT'],
+    ['INITIATIVE', 'INITIATIVE'],
+    ['PROJECT', 'PROJECT'],
+    ['CHAT', 'CHAT'],
+    ['THREAD', 'EMAIL_THREAD'],
+    ['CHANNEL', 'CHANNEL'],
+    ['CALL_RECORD', 'CALL'],
+    ['COMPANY', 'CRM_COMPANY'],
+    ['CALENDAR_EVENT', 'CALENDAR_EVENT'],
+    ['DATABASE_ROW', 'DATABASE_ROW'],
+  ] as const)('reads one %s as a %s Soup entity', (entityType, soupType) => {
+    expect(buildEntityPropertiesInput(entityType, 'entity-1')).toEqual({
+      entityType: soupType,
+      entityId: 'entity-1',
+    });
+  });
 
-      expect(input).toMatchObject({
-        limit: 1,
-        expand: true,
-        sortMethod: 'UPDATED_AT',
-        emailView: 'ALL',
-      });
-      expect(input.filters).toEqual({
-        ...NIL_FILTERS,
-        [filterKey]: expectedFilter,
-      });
+  it.each(['USER', 'CONTACT'] as const)(
+    'returns undefined for %s, which carries no Soup properties',
+    (entityType) => {
+      expect(
+        buildEntityPropertiesInput(entityType, 'entity-1')
+      ).toBeUndefined();
     }
   );
-
-  it('returns undefined for USER because users are not represented in Soup', () => {
-    expect(buildEntityPropertiesInput('USER', 'user-1')).toBeUndefined();
-  });
 });
 
 describe('mapGraphqlEntityProperties', () => {
@@ -190,19 +163,10 @@ describe('mapGraphqlEntityProperties', () => {
         {
           user: {
             id: 'user-1',
-            soup: {
-              items: [
-                {
-                  __typename: 'GraphqlSoupDocument',
-                  id: 'other-entity',
-                  properties: [],
-                },
-                {
-                  __typename: 'GraphqlSoupDocument',
-                  id: 'entity-1',
-                  properties: [property],
-                },
-              ],
+            soupEntity: {
+              __typename: 'GraphqlSoupDocument',
+              id: 'entity-1',
+              properties: [property],
             },
           },
         } as never,
@@ -210,6 +174,26 @@ describe('mapGraphqlEntityProperties', () => {
       )
     ).toBe(mapped);
     expect(mapGraphqlPropertiesMock).toHaveBeenCalledWith([property]);
+  });
+
+  it('maps an entity the viewer cannot see, or a different entity, as no properties', () => {
+    mapGraphqlPropertiesMock.mockReturnValue([]);
+    const other = {
+      __typename: 'GraphqlSoupDocument',
+      id: 'other-entity',
+      properties: [{ id: 'property-1' }],
+    };
+
+    for (const soupEntity of [null, other]) {
+      expect(
+        mapGraphqlEntityProperties(
+          { user: { id: 'user-1', soupEntity } } as never,
+          'entity-1'
+        )
+      ).toEqual([]);
+    }
+    expect(mapGraphqlPropertiesMock).toHaveBeenNthCalledWith(1, []);
+    expect(mapGraphqlPropertiesMock).toHaveBeenNthCalledWith(2, []);
   });
 
   it('retains the not-yet-loaded distinction', () => {
@@ -991,14 +975,10 @@ describe('createGraphqlEntityPropertiesQuery', () => {
     requests[0].next({
       data: {
         user: {
-          soup: {
-            items: [
-              {
-                __typename: 'GraphqlSoupInitiative',
-                id: 'initiative-1',
-                properties: [],
-              },
-            ],
+          soupEntity: {
+            __typename: 'GraphqlSoupInitiative',
+            id: 'initiative-1',
+            properties: [],
           },
         },
       },
@@ -1013,14 +993,10 @@ describe('createGraphqlEntityPropertiesQuery', () => {
     requests[1].next({
       data: {
         user: {
-          soup: {
-            items: [
-              {
-                __typename: 'GraphqlSoupInitiative',
-                id: 'initiative-2',
-                properties: [],
-              },
-            ],
+          soupEntity: {
+            __typename: 'GraphqlSoupInitiative',
+            id: 'initiative-2',
+            properties: [],
           },
         },
       },
@@ -1042,14 +1018,10 @@ describe('createGraphqlEntityPropertiesQuery', () => {
     await vi.waitFor(() => expect(requests).toHaveLength(1));
     const data = {
       user: {
-        soup: {
-          items: [
-            {
-              __typename: 'GraphqlSoupInitiative',
-              id: 'initiative-1',
-              properties: [],
-            },
-          ],
+        soupEntity: {
+          __typename: 'GraphqlSoupInitiative',
+          id: 'initiative-1',
+          properties: [],
         },
       },
     };

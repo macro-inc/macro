@@ -29,6 +29,7 @@ import {
   SetEntityPropertyDocument,
   type SetEntityPropertyMutation,
   type SetEntityPropertyMutationVariables,
+  type SoupEntityInput,
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlCacheHost,
@@ -39,7 +40,6 @@ import { CombinedError, type OperationResult } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import { v5 as uuidv5 } from 'uuid';
-import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import {
   type buildOptimisticGroupedPropertyUpdates,
   createGroupedPropertyPreparation,
@@ -50,8 +50,28 @@ import { buildOptimisticSetEntityProperty } from '../graphql-optimistic';
 import { buildPropertyAssignmentLinks } from './assignment-links';
 import { observePropertyMutationSettlements } from './mutation-settlements';
 
-/** Builds the exact Soup input used to load one entity's properties. */
-export const buildEntityPropertiesInput = buildGraphqlEntitySoupInput;
+/** Builds the input used to load one entity's properties. */
+export function buildEntityPropertiesInput(
+  entityType: EntityType,
+  entityId: string
+): SoupEntityInput | undefined {
+  const soupEntityType = match(entityType)
+    .returnType<SoupEntityInput['entityType'] | undefined>()
+    .with('DOCUMENT', 'TASK', () => 'DOCUMENT')
+    .with('PROJECT', () => 'PROJECT')
+    .with('CHAT', () => 'CHAT')
+    .with('THREAD', () => 'EMAIL_THREAD')
+    .with('CHANNEL', () => 'CHANNEL')
+    .with('CALL_RECORD', () => 'CALL')
+    .with('COMPANY', () => 'CRM_COMPANY')
+    .with('CALENDAR_EVENT', () => 'CALENDAR_EVENT')
+    .with('INITIATIVE', () => 'INITIATIVE')
+    .with('DATABASE_ROW', () => 'DATABASE_ROW')
+    // Users and CRM contacts carry no Soup properties.
+    .with('USER', 'CONTACT', () => undefined)
+    .exhaustive();
+  return soupEntityType && { entityType: soupEntityType, entityId };
+}
 
 type GraphqlEntityPropertiesQueryOptions = {
   entityType: Accessor<EntityType>;
@@ -610,9 +630,7 @@ export function mapGraphqlEntityProperties(
   data: EntityPropertiesQuery | undefined,
   entityId: string
 ): SoupProperty[] | undefined {
-  if (!data) return undefined;
-  const items = data.user?.soup?.items;
-  if (!items) return undefined;
-  const item = items.find((candidate) => candidate.id === entityId);
-  return mapGraphqlProperties(item?.properties ?? []);
+  const entity = data?.user?.soupEntity;
+  if (entity === undefined) return undefined;
+  return mapGraphqlProperties(entity?.id === entityId ? entity.properties : []);
 }

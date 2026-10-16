@@ -378,12 +378,13 @@ impl SoupItemDataLoader {
 #[derive(Clone)]
 pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
 
-/// Primary-backed Soup reader for `soupUpdates` hydration. A patch announces a
-/// write that committed milliseconds earlier, before a replica has replayed
-/// it, so a replica read returns the pre-write row and the client caches it
-/// as current. Lists keep the replica-backed reader.
+/// Primary-backed Soup reader for reads that must see a write committed
+/// moments earlier, before a replica has replayed it: `soupUpdates`
+/// hydration, where a replica read returns the pre-write row and the client
+/// caches it as current, and `soupEntity`, which opens an entity right after
+/// it is created or edited. Lists keep the replica-backed reader.
 #[derive(Clone)]
-pub struct SoupUpdateHydrationLoader(pub SoupItemDataLoader);
+pub struct PrimarySoupItemLoader(pub SoupItemDataLoader);
 
 /// Build the realtime Soup DataLoader from the existing Soup and email services.
 pub fn soup_item_loader<S, E>(soup_service: S, email_service: Arc<E>) -> SoupItemDataLoader

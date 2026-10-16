@@ -22,6 +22,9 @@ import { fileURLToPath } from 'node:url';
  */
 export const MAX_ENTITY_RESOLVER_INPUT_DEPTH = 16;
 
+/** Biome's line width; longer target lists wrap the way Biome formats them. */
+const FORMATTER_LINE_WIDTH = 80;
+
 type FieldMetadata = {
   targets: string[];
   argumentPaths: string[][];
@@ -191,7 +194,16 @@ export function renderEntityResolverSchema(
         paths.set(JSON.stringify(path), path);
       }
       lines.push(`    ${fieldName}: {`);
-      lines.push(`      targets: [${field.targets.map(quote).join(', ')}],`);
+      const targetsLine = `      targets: [${field.targets.map(quote).join(', ')}],`;
+      if (targetsLine.length <= FORMATTER_LINE_WIDTH) {
+        lines.push(targetsLine);
+      } else {
+        lines.push('      targets: [');
+        for (const target of field.targets) {
+          lines.push(`        ${quote(target)},`);
+        }
+        lines.push('      ],');
+      }
       if (field.argumentPaths.length === 1) {
         lines.push(`      argumentPaths: [${tuple(field.argumentPaths[0] ?? [])}],`);
       } else {

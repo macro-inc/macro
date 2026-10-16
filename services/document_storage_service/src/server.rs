@@ -2077,7 +2077,7 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::new(email_service.clone()),
             ),
         ),
-        graphql_soup_update_hydration_loader: graphql_soup::SoupUpdateHydrationLoader(
+        graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader(
             graphql_soup::soup_item_loader_with_team_access(
                 primary_entity_soup,
                 Arc::new(email_service.clone()),

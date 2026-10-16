@@ -1275,6 +1275,12 @@ impl TestHarness {
                     Arc::new(self.email_service.clone()),
                 ),
             ))
+            .data(graphql_soup::PrimarySoupItemLoader(
+                graphql_soup::soup_item_loader(
+                    self.primary_soup_service.clone(),
+                    Arc::new(self.email_service.clone()),
+                ),
+            ))
             .data(graphql_properties::entity_properties_loader(
                 user_id.clone(),
                 NoOpEntityPropertyReader,
@@ -1315,7 +1321,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     let document_id = Uuid::from_u128(42);
     let deleted_document_id = Uuid::from_u128(43);
     soup_service.set_raw_response(vec![soup_document(document_id)]);
-    let loader = graphql_soup::SoupUpdateHydrationLoader(graphql_soup::soup_item_loader(
+    let loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
         soup_service.clone(),
         Arc::new(NoOpEmailService),
     ));
@@ -1415,6 +1421,49 @@ async fn agent_session_is_read_from_the_primary_not_the_list_replica() {
     let data = response.data.into_json().unwrap();
     assert_eq!(data["user"]["agentSession"]["id"], session_id.to_string());
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn soup_entity_is_read_from_the_primary_not_the_list_replica() {
+    let harness = harness();
+    let document_id = Uuid::from_u128(8);
+    // Just created: the replica behind Soup lists has not replayed the task yet.
+    harness.soup_service.set_raw_response(Vec::new());
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_document(document_id)]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ soupEntity(input: {{entityType: DOCUMENT, entityId: "{document_id}"}}) {{ __typename id }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["user"]["soupEntity"]["__typename"],
+        "GraphqlSoupDocument"
+    );
+    assert_eq!(data["user"]["soupEntity"]["id"], document_id.to_string());
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn soup_entity_is_null_when_the_viewer_cannot_see_it() {
+    let harness = harness();
+    harness.primary_soup_service.set_raw_response(Vec::new());
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ soupEntity(input: {{entityType: DOCUMENT, entityId: "{}"}}) {{ id }} }} }}"#,
+            Uuid::from_u128(9)
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert!(data["user"]["soupEntity"].is_null());
 }
 
 #[tokio::test]
