@@ -750,10 +750,10 @@ comes from the authenticated caller, never a model-supplied user ID.
 
 Opens a dialog with a focused `Search...` textbox and bubble-style category radios
 (All / Command / Agents / Files / Tasks / Projects / Channels / People). Type a name, press Enter to open
-the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
+the top hit. Also exposes commands: `Create`, `Set theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
-In `Change theme`, Up/Down previews the highlighted palette across the open app,
+In `Set theme`, Up/Down previews the highlighted palette across the open app,
 including channels and spreadsheets. Moving between rows preserves the original
 palette for cancellation without briefly restoring it between previews. Esc
 restores that palette (including unsaved edits); Enter commits the highlighted

@@ -231,7 +231,10 @@ preview** for the visual key map.
 Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
 The previews use the saved themes; System follows the device and exposes both
 per-mode theme selectors. Light or Dark shows its own theme selector. Each selector
-retains theme search, editing, copying, and custom theme creation.
+lists matching light or dark themes first, followed by the opposite appearance
+under **Other themes**. All themes remain selectable and searchable, with editing,
+copying, and custom theme creation available. The command menu exposes **Set
+theme**; per-mode defaults are configured here in Appearance.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
 `agent-connections` opens Agent connections, and `harness` aliases Runtimes.

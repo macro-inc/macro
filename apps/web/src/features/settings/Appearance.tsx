@@ -110,7 +110,7 @@ function ThemePillActions(props: {
 }
 
 /**
- * One per-mode theme picker row (Light or Dark): a full theme picker filtered to
+ * One per-mode theme picker row (Light or Dark): a full theme picker prioritizing
  * this mode's themes, with copy/edit/delete affordances and a "New theme"
  * action, plus its own inline theme editor that opens beneath the row. Picking a
  * theme sets this mode's stored theme; if the mode is currently active, the
@@ -228,7 +228,7 @@ function ThemeSelectorRow(props: {
   description?: string;
   value: () => string;
   onSelect: (id: string) => void;
-  filter: (theme: ThemeV3) => boolean;
+  preferredMode: ThemeV3['mode'];
 }) {
   const editor = createThemeEditorController(props.onSelect);
 
@@ -241,7 +241,7 @@ function ThemeSelectorRow(props: {
       >
         <InterfaceThemeSelect
           value={props.value}
-          filter={props.filter}
+          preferredMode={props.preferredMode}
           onPick={editor.chooseTheme}
           onEdit={editor.editTheme}
           onDelete={editor.deleteThemeById}
@@ -275,9 +275,8 @@ function InterfaceThemeSelect(props: {
   onEdit: (id: string) => void;
   onDelete: (theme: ThemeV3) => void;
   onNewTheme: () => void;
-  // Restricts the listed themes to this mode's themes (light or dark). The
-  // selected value's swatch is always shown, even if it falls outside the filter.
-  filter?: (theme: ThemeV3) => boolean;
+  // Matching themes come first; the opposite mode stays available below.
+  preferredMode?: ThemeV3['mode'];
   // Whether this selector's inline editor is open — makes the pill's edit button
   // a toggle that scraps edits and closes via onCloseEditor.
   editorOpen?: () => boolean;
@@ -289,10 +288,17 @@ function InterfaceThemeSelect(props: {
 
   const current = () => themes().find((theme) => theme.id === props.value());
   const matches = (theme: ThemeV3) =>
-    (props.filter?.(theme) ?? true) &&
     theme.name.toLowerCase().includes(filter().trim().toLowerCase());
-  const defaults = () => DEFAULT_THEMES.filter(matches);
-  const customs = () => userThemes().filter(matches);
+  const preferred = (theme: ThemeV3) =>
+    !props.preferredMode || theme.mode === props.preferredMode;
+  const defaults = () =>
+    DEFAULT_THEMES.filter((theme) => matches(theme) && preferred(theme));
+  const customs = () =>
+    userThemes().filter((theme) => matches(theme) && preferred(theme));
+  const otherThemes = () =>
+    [...DEFAULT_THEMES, ...userThemes()].filter(
+      (theme) => matches(theme) && !preferred(theme)
+    );
 
   // `editable` custom themes get an inline edit affordance that opens the
   // editor for that theme (saving writes back to it).
@@ -426,7 +432,26 @@ function InterfaceThemeSelect(props: {
                   </For>
                 </Dropdown.Group>
               </Show>
-              <Show when={defaults().length === 0 && customs().length === 0}>
+              <Show when={otherThemes().length > 0}>
+                <Dropdown.Group>
+                  <Dropdown.GroupLabel>Other themes</Dropdown.GroupLabel>
+                  <For each={otherThemes()}>
+                    {(theme) =>
+                      themeItem(
+                        theme,
+                        userThemes().some((t) => t.id === theme.id)
+                      )
+                    }
+                  </For>
+                </Dropdown.Group>
+              </Show>
+              <Show
+                when={
+                  defaults().length === 0 &&
+                  customs().length === 0 &&
+                  otherThemes().length === 0
+                }
+              >
                 <div class="px-3 py-4 text-center text-xs text-ink-muted">
                   No themes match “{filter()}”
                 </div>
@@ -505,7 +530,7 @@ export function Appearance() {
                       description="Colors and style for light mode."
                       value={lightModeTheme}
                       onSelect={setLightModeTheme}
-                      filter={(theme) => theme.mode === 'light'}
+                      preferredMode="light"
                     />
                   </Show>
                   <Show when={mode !== 'light'}>
@@ -514,7 +539,7 @@ export function Appearance() {
                       description="Colors and style for dark mode."
                       value={darkModeTheme}
                       onSelect={setDarkModeTheme}
-                      filter={(theme) => theme.mode === 'dark'}
+                      preferredMode="dark"
                     />
                   </Show>
                 </>

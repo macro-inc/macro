@@ -377,7 +377,7 @@ export default function GlobalShortcuts() {
 
   const setThemeScope = registerHotkey({
     scopeId: 'global',
-    description: 'Change theme',
+    description: 'Set theme',
     keyDownHandler: () => {
       return true;
     },
@@ -446,58 +446,6 @@ export default function GlobalShortcuts() {
         // static and system-driven theme modes.
         setVisibleTheme(theme.id);
         applyTheme(resolveActiveThemeId());
-        analytics.track('theme_changed', { themeId: theme.id });
-        return true;
-      },
-      runWithInputFocused: true,
-      displayComponent: () => <ThemeDisplay theme={theme} />,
-      onHighlight: () => previewTheme(theme.id),
-      onHighlightEnd: scheduleThemePreviewEnd,
-    });
-  });
-
-  const setPreferredLightScope = registerHotkey({
-    scopeId: 'global',
-    description: 'Set default light theme',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    runWithInputFocused: true,
-  });
-
-  themes().forEach((theme) => {
-    registerHotkey({
-      scopeId: setPreferredLightScope.commandScopeId,
-      description: `${theme.name}`,
-      keyDownHandler: () => {
-        setLightModeTheme(theme.id);
-        analytics.track('theme_changed', { themeId: theme.id });
-        return true;
-      },
-      runWithInputFocused: true,
-      displayComponent: () => <ThemeDisplay theme={theme} />,
-      onHighlight: () => previewTheme(theme.id),
-      onHighlightEnd: scheduleThemePreviewEnd,
-    });
-  });
-
-  const setPreferredDarkScope = registerHotkey({
-    scopeId: 'global',
-    description: 'Set default dark theme',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    runWithInputFocused: true,
-  });
-
-  themes().forEach((theme) => {
-    registerHotkey({
-      scopeId: setPreferredDarkScope.commandScopeId,
-      description: `${theme.name}`,
-      keyDownHandler: () => {
-        setDarkModeTheme(theme.id);
         analytics.track('theme_changed', { themeId: theme.id });
         return true;
       },
