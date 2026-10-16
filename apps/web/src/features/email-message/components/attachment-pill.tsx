@@ -9,6 +9,23 @@ const mimeToFileExtTypeMap = new Map<string, string>(
   Object.values(FileTypeMap).map((value) => [value.mime, value.extension])
 );
 
+function getFileTypeFromMimeOrFilename(
+  mimeType: string | undefined,
+  fileName: string
+): FileType | undefined {
+  if (mimeType) {
+    const fromMime = mimeToFileExtTypeMap.get(mimeType) as FileType | undefined;
+    if (fromMime) return fromMime;
+  }
+
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (ext && ext in FileTypeMap) {
+    return ext as FileType;
+  }
+
+  return undefined;
+}
+
 type EmailAttachmentPillProps = {
   attachment: { fileName: string; mimeType?: string };
   removable?: boolean;
@@ -20,9 +37,10 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
   let parentDiv!: HTMLDivElement;
 
   const fileType = () =>
-    props.attachment.mimeType
-      ? (mimeToFileExtTypeMap.get(props.attachment.mimeType) as FileType)
-      : undefined;
+    getFileTypeFromMimeOrFilename(
+      props.attachment.mimeType,
+      props.attachment.fileName
+    );
 
   return (
     <div
