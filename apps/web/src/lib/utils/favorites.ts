@@ -87,6 +87,7 @@ function favoritePreviewEntity(favorite: Favorite): ItemEntity | undefined {
     case 'project':
     case 'call':
     case 'crm_company':
+    case 'database':
       return { id: favorite.entityId, type: favorite.entityType };
     default:
       return undefined;

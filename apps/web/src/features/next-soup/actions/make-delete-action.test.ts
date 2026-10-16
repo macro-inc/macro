@@ -491,4 +491,10 @@ describe('makeDeleteAction.canExecute', () => {
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);
   });
+
+  it('only offers database deletion to its owner', () => {
+    expect(canExecute(entity('database', { grant: 'owner' }))).toBe(true);
+    expect(canExecute(entity('database', { grant: 'edit' }))).toBe(false);
+    expect(canExecute(entity('database', { grant: 'view' }))).toBe(false);
+  });
 });

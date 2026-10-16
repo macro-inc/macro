@@ -95,12 +95,14 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
   const canExecute = (entity: EntityData): boolean => {
     if (
-      entity.type === 'database' ||
       entity.type === 'form' ||
       entity.type === 'channel_message' ||
       entity.type === 'channel_thread'
     ) {
       return false;
+    }
+    if (entity.type === 'database') {
+      return entity.grant === 'owner';
     }
     if (entity.type === 'email') {
       return true;

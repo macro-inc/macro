@@ -9,6 +9,7 @@ describe('isShareableEntityType', () => {
     expect(isShareableEntityType('email')).toBe(true);
     expect(isShareableEntityType('agent_session')).toBe(true);
     expect(isShareableEntityType('form')).toBe(true);
+    expect(isShareableEntityType('database')).toBe(true);
   });
 
   it('rejects entity types with no share flow', () => {

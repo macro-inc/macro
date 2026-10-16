@@ -1,3 +1,4 @@
+import { renameDatabase } from '@block-database/queries/rename-database';
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -109,8 +110,8 @@ const getEntityRenameData = (
   // Reminders aren't either — the entity-mutation router rejects them, and a
   // reminder's name is its description, edited through the reminders API.
   // Calendar event titles are edited through the calendar mutation API.
-  // Databases are renamed by the database block's `renameDatabase`, which owns
-  // the schema cache it updates; forms by the form block's `renameForm`.
+  // Databases go through `renameDatabase` (not Soup optimism); forms through
+  // `renameForm` on the form block.
   if (
     entity.type === 'crm_company' ||
     entity.type === 'crm_contact' ||
@@ -130,6 +131,14 @@ const getEntityRenameData = (
 };
 
 const performEntityRename = async (operation: EntityRenameOperation) => {
+  if (operation.entity.type === 'database') {
+    const renamed = await renameDatabase(
+      getEntityGraphqlClient(),
+      operation.entity.id,
+      operation.newName
+    );
+    return { success: renamed.isOk() };
+  }
   const data = getEntityRenameData(operation);
   if (!data) return { success: false };
   if (data.itemType === 'agent_session') {
@@ -267,6 +276,7 @@ const validateEntityRename = (entity: RenamableEntity): void => {
     case 'chat':
     case 'project':
     case 'call':
+    case 'database':
       return;
     case 'foreign':
       throw new Error('Foreign entities do not support renaming');

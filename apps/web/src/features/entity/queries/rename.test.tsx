@@ -10,6 +10,7 @@ import {
   type Exchange,
   type Operation,
 } from '@urql/core';
+import { ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
 import { filter, map, pipe } from 'wonka';
@@ -23,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   history: vi.fn(),
   soup: vi.fn(),
   toast: vi.fn(),
+  renameDatabase: vi.fn(),
+}));
+vi.mock('@block-database/queries/rename-database', () => ({
+  renameDatabase: mocks.renameDatabase,
 }));
 vi.mock('@core/component/FileList/itemOperations', () => ({
   renameItem: vi.fn(),
@@ -150,3 +155,43 @@ it.each(['channel', 'call'] as const)(
     expect(listeners.size).toBe(0);
   }
 );
+
+it('renames databases through the database API instead of Soup rename', async () => {
+  cache = new QueryClient({
+    defaultOptions: { mutations: { retry: false } },
+  });
+  mocks.client = createClient({
+    url: 'http://test.invalid',
+    exchanges: [],
+  });
+  mocks.renameDatabase.mockResolvedValue(ok(undefined));
+  let mutation!: ReturnType<typeof createRenameDssEntityMutation>;
+  dispose = render(
+    () => (
+      <QueryClientProvider client={cache}>
+        {(() => {
+          mutation = createRenameDssEntityMutation();
+          return null;
+        })()}
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  const result = await mutation.mutateAsync({
+    entity: {
+      id: 'db-1',
+      type: 'database',
+      name: 'Before',
+      grant: 'owner',
+    },
+    newName: 'After',
+  });
+  expect(result).toEqual({ success: true });
+  expect(mocks.renameDatabase).toHaveBeenCalledWith(
+    mocks.client,
+    'db-1',
+    'After'
+  );
+  expect(mocks.preview).not.toHaveBeenCalled();
+  expect(mocks.soup).not.toHaveBeenCalled();
+});

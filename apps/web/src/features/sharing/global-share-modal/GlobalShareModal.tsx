@@ -1,4 +1,4 @@
-import { Permissions } from '@core/component/SharePermissions';
+import { getPermissions, Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { openShareModal } from '@core/component/TopBar/shareModal';
 import { itemToBlockName } from '@core/constant/allBlocks';
@@ -35,7 +35,12 @@ export const openGlobalShareModal = async (props: {
     blockAlias: itemToBlockName(entity) ?? 'unknown',
     itemType: entity.type,
     name: entity.name,
-    userPermissions: Permissions.OWNER,
+    // Databases carry grant on the list row; other types still open as owner
+    // and let the modal load the live permission set.
+    userPermissions:
+      entity.type === 'database'
+        ? getPermissions(entity.grant)
+        : Permissions.OWNER,
     owner: entity.ownerId,
   });
 };

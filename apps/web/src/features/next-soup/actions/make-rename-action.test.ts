@@ -33,8 +33,10 @@ const channel = (
 const { canExecute } = makeRenameAction({ userId: () => ME });
 
 describe('makeRenameAction.canExecute', () => {
-  it('leaves database renaming to the native database block', () => {
-    expect(canExecute(entity('database', { grant: 'owner' }))).toBe(false);
+  it('allows editors and owners to rename a database from the list', () => {
+    expect(canExecute(entity('database', { grant: 'owner' }))).toBe(true);
+    expect(canExecute(entity('database', { grant: 'edit' }))).toBe(true);
+    expect(canExecute(entity('database', { grant: 'view' }))).toBe(false);
   });
 
   it('allows the owner of a private channel to rename it', () => {

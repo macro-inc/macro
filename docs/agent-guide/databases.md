@@ -593,7 +593,9 @@ details**, and the server's summary on query tool rows.
 **Share** opens Macro's standard sharing dialog. The owner can share with people
 or channels and change or remove their access. Databases do not offer a public
 link. **Share** and viewer avatars (other people currently looking at the
-database) sit at the right of the split header, like other entities.
+database) sit at the right of the split header, like other entities. From Drive,
+the row context menu offers the same Share action, plus Rename, Favorite, Copy
+Link, and owner Delete.
 
 The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
 **Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline
