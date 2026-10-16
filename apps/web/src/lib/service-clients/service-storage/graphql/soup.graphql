@@ -197,6 +197,8 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		inboxVisible
 		linkId
 		latestInboundMessageTs
+		latestOutboundMessageTs
+		latestNonSpamMessageTs
 		reminderReturnedAt
 		mailDraftState @cacheOnly { ...EmailDraftStateFields }
         mailAllPreview @cacheOnly { ...MailPreviewFields }
@@ -212,7 +214,6 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		isImportant
 		isSignal
 		projectId
-		sortTs
 		createdAt
 		updatedAt
 		viewedAt

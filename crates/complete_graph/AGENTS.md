@@ -36,7 +36,13 @@ Clients key cache records by `__typename:id`. Consequences:
   edge it represents, never facts about an entity — entity facts belong on
   the entity record where every view shares them. Soup pages therefore
   return entities directly (there is no per-item wrapper type), and
-  per-view state is limited to list membership and order.
+  per-view state is limited to list membership and order. A value derived
+  per view (the Soup email thread's `sortTs`, which depends on the query's
+  `emailView`) is not an entity fact either: clients must not select it into
+  the shared record, because the last view to fetch the thread would win.
+  Expose the facts it derives from (`latestInboundMessageTs`,
+  `reminderReturnedAt`, `latestOutboundMessageTs`, `latestNonSpamMessageTs`)
+  and let each view recompute its key.
 - `id` fields must be exactly `ID!` (non-null, non-list); the cache build
   (`crates/client/cache-core/build.rs`) fails otherwise, and fails if
   the query root exposes an `id`.

@@ -257,8 +257,10 @@ email title menu: open the menu button beside the subject for **Ask AI**, **Crea
 Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and **Previous item** / **Next item** sit at the right of that header. The arrows
 follow the current filtered list and disable at its ends. Mark done advances in
-that list. Mark as unread (in the header or title menu) returns to the originating
-list with its tab, inbox, and filters preserved. Mark as not done and Mark as read
+that list. In a list, the Mark done, Mark as not done and Delete keys act once per
+press: a held key auto-repeats, and those repeats are ignored. Mark as unread (in
+the header or title menu) returns to the originating list with its tab, inbox, and
+filters preserved. Mark as not done and Mark as read
 stay on the current thread.
 Opening a saved draft from **Drafts** keeps the subject breadcrumb, title menu,
 and applicable header controls visible above the composer. Verify these remain

@@ -190,6 +190,38 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  it("hands the query's email view to the item mapper", async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { limit: 50, sortMethod: 'UPDATED_AT', emailView: 'INBOX' },
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ __typename: 'GraphqlSoupEmailThread', id: 'invite' }],
+          next_cursor: null,
+        })
+      );
+      expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+        'invite',
+      ]);
+      expect(mapGraphqlSoupItemMock).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'invite' }),
+        { emailView: 'INBOX' }
+      );
+    } finally {
+      dispose();
+    }
+  });
+
   it('owns fetching, continuation arguments, refresh and reset from a Soup declaration', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
@@ -1803,7 +1835,6 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             __typename: 'GraphqlSoupEmailThread',
             id: key.split(':')[1],
             name: key,
-            sortTs: 'wrong-view-timestamp',
             mailAllPreview: {
               id: `${key}-preview`,
               subject: key,
@@ -1863,10 +1894,6 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       ]);
       expect(query.hasNextPage()).toBe(false);
       expect(fake.executions).toHaveLength(1);
-      expect(
-        (query.data()?.entities[0] as unknown as { sortTs: string } | undefined)
-          ?.sortTs
-      ).toBe(ts);
       fake.executions[0].next(
         graphqlSoupPage({ items: [], next_cursor: 'server-cursor' }),
         { source: 'normalized-cache-hit', revision: REVISION_0 }
