@@ -1119,14 +1119,17 @@ In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
 and name, the same inset tab strip, live viewer avatars, and the `Call` and
-`Ask Macro` buttons. In Chat an ellipsis follows the name and opens the same
-entity actions as right-clicking the conversation's rail row — `Open in new
-split`, `Rename`, `Set channel picture`, `Remove channel picture` (only when the
-channel has one), `Favorite`/`Unfavorite`, `Remind me`, `Snooze notifications…`, `Mute
-notifications`, `Copy Link`, `Copy ID` — so a channel can be favorited or given
-a picture without finding its row. A channel inlined in
-another view's detail stack has no such menu. The split's own title `...` menu
-offers the same picture actions.
+`Ask Macro` buttons. An ellipsis follows the name — after the breadcrumb where
+the host supplies one, as in Home — and opens the same entity actions as
+right-clicking the conversation's rail row: `Rename`, `Set channel picture`,
+`Remove channel picture` (only when the channel has one),
+`Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute notifications`,
+`Remind me`, `Copy Link`, `Copy ID`. A channel can therefore be favorited or
+given a picture without finding its row, from Chat and from every view that
+opens one inline. The menu appears once the conversation itself has loaded,
+reusing a cached conversation without another activation fetch. Opening the
+conversation still refreshes its unread notifications. The split's own title
+`...` menu offers the same picture actions.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and

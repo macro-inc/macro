@@ -134,6 +134,9 @@ vi.mock('./components/ChannelsMobileView', () => ({
   ),
 }));
 vi.mock('./components/rail/ChannelsRail', () => ({ ChannelsRail: () => null }));
+vi.mock('@channel/Channel/channel-entity', () => ({
+  useChannelByIdQuery: mocks.selectedQuery,
+}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => mocks.mobileLayout(),
 }));
@@ -174,7 +177,6 @@ vi.mock('./queries', () => ({
     loaded: ChannelEntity[],
     fallback: ChannelEntity[] = []
   ) => [...loaded, ...fallback].find((channel) => channel.id === id),
-  useChannelByIdQuery: mocks.selectedQuery,
   useChannelsSources: () => ({
     channels: { items: () => mocks.rows() },
     direct_messages: { items: () => mocks.rows() },
