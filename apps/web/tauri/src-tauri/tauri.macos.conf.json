@@ -1,5 +1,25 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "title": "Macro",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "dragDropEnabled": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 20
+        },
+        "hiddenTitle": true,
+        "fullscreen": false,
+        "backgroundThrottling": "disabled"
+      }
+    ]
+  },
   "bundle": {
     "icon": [
       "icons/32x32.png",

@@ -715,6 +715,20 @@ client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
 
+## Desktop file drops
+
+In a rebuilt macOS desktop app, drag a PNG and a PDF from Finder into a
+disposable Markdown document, then into channel and AI chat attachment inputs.
+Check that each drop shows the upload feedback and adds each file once, with
+images rendered inline in Markdown and attachments visible in the composers.
+Try multiple files and a second drop after the first completes. Discard unsent
+drafts after checking. Also check that the file picker still attaches files.
+
+Use an actual Finder drag for this check: synthetic browser events bypass
+Tauri's native interception and cannot verify the desktop window configuration.
+The setting and native rebuild requirement are documented in the
+[web agent guide](../../apps/web/AGENTS.md#desktop-file-drops).
+
 ## Folder uploads
 
 Dropping a folder (or choosing one with the folder picker) zips it in the browser
