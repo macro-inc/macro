@@ -206,7 +206,7 @@ export type TargetWork = {
 };
 
 const mayRetry = (error: ChannelAccessError | undefined) =>
-  error === undefined || error === 'failed';
+  error === undefined || error.kind === 'failed';
 
 export function remainingWork(
   plan: SharePlan,
@@ -278,12 +278,12 @@ export function summarizeShare(
       .flatMap((message) => message.items);
     const accessIssues = messages.flatMap((message) =>
       [...message.grantFirst, ...message.grantAfter].flatMap(
-        ({ item, level }) => {
+        ({ item, level }): AccessIssue[] => {
           const id = itemKey(item);
           if (record?.granted.get(id) === level) return [];
           const error = record?.grantErrors.get(id);
           if (error === undefined && !isDelivered(message)) return [];
-          return [{ item, error: error ?? 'failed' }];
+          return [{ item, error: error ?? { kind: 'failed' } }];
         }
       )
     );

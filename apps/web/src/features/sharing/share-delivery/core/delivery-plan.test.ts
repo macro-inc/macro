@@ -171,8 +171,8 @@ describe('remainingWork', () => {
     const target = channel('channel-1');
     const share = plan();
     let ledger = deliver(emptyLedger, target, 'message-1');
-    ledger = grant(ledger, target, item('doc-1'), err('not-allowed'));
-    ledger = grant(ledger, target, item('doc-2'), err('failed'));
+    ledger = grant(ledger, target, item('doc-1'), err({ kind: 'not-allowed' }));
+    ledger = grant(ledger, target, item('doc-2'), err({ kind: 'failed' }));
     expect(remainingWork(share, ledger)).toEqual([
       {
         key: targetKey(target),
@@ -229,8 +229,13 @@ describe('remainingWork', () => {
     const project = item('initiative-1', { kind: 'initiative' });
     const target = channel('channel-1');
     const share = plan({ items: [project] });
-    const refused = grant(emptyLedger, target, project, err('not-allowed'));
-    const failed = grant(emptyLedger, target, project, err('failed'));
+    const refused = grant(
+      emptyLedger,
+      target,
+      project,
+      err({ kind: 'not-allowed' })
+    );
+    const failed = grant(emptyLedger, target, project, err({ kind: 'failed' }));
     expect(remainingWork(share, refused)).toEqual([]);
     expect(
       remainingWork(share, failed).map(({ unsentMessages }) =>
@@ -261,7 +266,7 @@ describe('remainingWork', () => {
       withGrant(emptyRecord('dm-1'), {
         item: item('doc-1'),
         level: 'view',
-        result: err('failed'),
+        result: err({ kind: 'failed' }),
       }),
       { item: item('doc-1'), level: 'view', result: ok(undefined) }
     );
@@ -361,7 +366,7 @@ describe('summarizeShare', () => {
     const target = channel('channel-1');
     const share = plan({ items: docs(1) });
     let ledger = deliver(emptyLedger, target, 'message-1');
-    ledger = grant(ledger, target, item('doc-1'), err('not-allowed'));
+    ledger = grant(ledger, target, item('doc-1'), err({ kind: 'not-allowed' }));
     expect(summarizeShare(share, ledger)).toEqual({
       complete: false,
       retryable: false,
@@ -371,7 +376,9 @@ describe('summarizeShare', () => {
           key: targetKey(target),
           target,
           unsent: [],
-          accessIssues: [{ item: item('doc-1'), error: 'not-allowed' }],
+          accessIssues: [
+            { item: item('doc-1'), error: { kind: 'not-allowed' } },
+          ],
         },
       ],
     });
@@ -381,7 +388,7 @@ describe('summarizeShare', () => {
     const project = item('initiative-1', { kind: 'initiative' });
     const target = channel('channel-1');
     const share = plan({ items: [project] });
-    const ledger = grant(emptyLedger, target, project, err('failed'));
+    const ledger = grant(emptyLedger, target, project, err({ kind: 'failed' }));
     expect(summarizeShare(share, ledger)).toEqual({
       complete: false,
       retryable: true,
@@ -391,7 +398,7 @@ describe('summarizeShare', () => {
           key: targetKey(target),
           target,
           unsent: [project],
-          accessIssues: [{ item: project, error: 'failed' }],
+          accessIssues: [{ item: project, error: { kind: 'failed' } }],
         },
       ],
     });

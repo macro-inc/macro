@@ -195,8 +195,8 @@ describe('BulkShareView', () => {
       [item('document', 'Spec'), item('chat', 'Notes')],
       [channel('general')]
     );
-    grantErrors.set('spec', 'not-allowed');
-    grantErrors.set('notes', 'not-allowed');
+    grantErrors.set('spec', { kind: 'not-allowed' });
+    grantErrors.set('notes', { kind: 'not-allowed' });
 
     fireEvent.click(button('Share'));
     await screen.findByText(

@@ -7,7 +7,7 @@ import { updateFormSharePermissions } from '@queries/storage/forms';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { UpdateChannelSharePermission } from '@service-storage/generated/schemas/updateChannelSharePermission';
-import { err, ok, type Result, type ResultAsync } from 'neverthrow';
+import { err, type Result, ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type {
   ChannelAccessChange,
@@ -88,23 +88,33 @@ function refused(errors: readonly ResultError[]) {
   );
 }
 
+const callClient = ResultAsync.fromThrowable(
+  async (
+    client: ChannelGrantClient,
+    id: string,
+    operation: UpdateChannelSharePermission
+  ) => await client(id, operation),
+  (thrown): ChannelAccessError => {
+    console.error('Failed to change channel access', thrown);
+    return { kind: 'failed' };
+  }
+);
+
 export async function changeChannelAccess(
   item: ShareItemRef,
   change: ChannelAccessChange
 ): Promise<Result<void, ChannelAccessError>> {
   const client: ChannelGrantClient | undefined =
     CHANNEL_GRANT_CLIENTS[item.kind];
-  if (!client) return err('unsupported');
+  if (!client) return err({ kind: 'unsupported' });
 
-  try {
-    const result = await client(item.id, toOperation(change));
-    if (result.isErr()) {
-      console.error('Failed to change channel access', result.error);
-      return err(refused(result.error) ? 'not-allowed' : 'failed');
-    }
-    return ok(undefined);
-  } catch (thrown) {
-    console.error('Failed to change channel access', thrown);
-    return err('failed');
-  }
+  return await callClient(client, item.id, toOperation(change)).andThen(
+    (result) =>
+      result
+        .map(() => undefined)
+        .mapErr((errors): ChannelAccessError => {
+          console.error('Failed to change channel access', errors);
+          return refused(errors) ? { kind: 'not-allowed' } : { kind: 'failed' };
+        })
+  );
 }

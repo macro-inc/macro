@@ -62,7 +62,9 @@ function setup(items: readonly ShareItem[]) {
       const error = grantErrors.get(ref.id);
       note(
         change.channelId,
-        error ? `grant ${ref.id} ${level} ${error}` : `grant ${ref.id} ${level}`
+        error
+          ? `grant ${ref.id} ${level} ${error.kind}`
+          : `grant ${ref.id} ${level}`
       );
       return error ? err(error) : ok(undefined);
     },
@@ -203,29 +205,29 @@ it('posts later messages and retries to the DM the first post resolved', async (
 
 it.each([
   {
-    error: 'failed',
+    kind: 'failed',
     retry: { 'dm:ana': ['grant roadmap view', 'post m1: roadmap'] },
   },
-  { error: 'not-allowed', retry: {} },
+  { kind: 'not-allowed', retry: {} },
 ] as const)(
-  'a $error before-send grant blocks the post',
-  async ({ error, retry }) => {
+  'a $kind before-send grant blocks the post',
+  async ({ kind, retry }) => {
     const roadmap = item('initiative', 'roadmap');
     const { form, takeLog, grantErrors } = setup([roadmap]);
     form.setRecipients([person('ana')]);
-    grantErrors.set('roadmap', error);
+    grantErrors.set('roadmap', { kind });
 
     const first = await form.submit();
 
     expect(takeLog()).toEqual({
-      'dm:ana': ['resolve', `grant roadmap view ${error}`],
+      'dm:ana': ['resolve', `grant roadmap view ${kind}`],
     });
     expect(first?.outcome.recipients).toEqual([
       {
         key: 'people:ana',
         target: { t: 'people', userIds: ['ana'] },
         unsent: [roadmap],
-        accessIssues: [{ item: roadmap, error }],
+        accessIssues: [{ item: roadmap, error: { kind } }],
       },
     ]);
 
@@ -241,8 +243,8 @@ it('retries a failed grant but never a refused one', async () => {
   const brief = item('document', 'brief');
   const { form, takeLog, grantErrors } = setup([spec, brief]);
   form.setRecipients([channel('design')]);
-  grantErrors.set('spec', 'not-allowed');
-  grantErrors.set('brief', 'failed');
+  grantErrors.set('spec', { kind: 'not-allowed' });
+  grantErrors.set('brief', { kind: 'failed' });
 
   await form.submit();
 
@@ -267,7 +269,7 @@ it('retries a failed grant but never a refused one', async () => {
         key: 'channel:design',
         target: { t: 'channel', channelId: 'design' },
         unsent: [],
-        accessIssues: [{ item: spec, error: 'not-allowed' }],
+        accessIssues: [{ item: spec, error: { kind: 'not-allowed' } }],
       },
     ],
   });

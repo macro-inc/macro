@@ -91,23 +91,23 @@ const ACCESS_PROBLEM = {
   failed: 'access was not updated',
   'not-allowed': 'only the owner can change access',
   unsupported: 'access cannot be changed here',
-} as const satisfies Record<ChannelAccessError, string>;
+} as const satisfies Record<ChannelAccessError['kind'], string>;
 
 function recipientLines(recipient: RecipientOutcome, name: string): string[] {
   const unsent = new Set(recipient.unsent.map(itemKey));
   const received = recipient.accessIssues.filter(
     ({ item }) => !unsent.has(itemKey(item))
   );
-  const errors = [...new Set(received.map(({ error }) => error))];
+  const kinds = [...new Set(received.map(({ error }) => error.kind))];
   return [
     ...(recipient.unsent.length > 0
       ? [`${name} did not get ${itemNames(recipient.unsent)}.`]
       : []),
-    ...errors.map((error) => {
+    ...kinds.map((kind) => {
       const items = received
-        .filter((issue) => issue.error === error)
+        .filter(({ error }) => error.kind === kind)
         .map(({ item }) => item);
-      return `${name} got ${itemNames(items)}, but ${ACCESS_PROBLEM[error]}.`;
+      return `${name} got ${itemNames(items)}, but ${ACCESS_PROBLEM[kind]}.`;
     }),
   ];
 }

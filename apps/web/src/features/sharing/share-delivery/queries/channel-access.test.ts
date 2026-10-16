@@ -201,7 +201,7 @@ describe('changeChannelAccess', () => {
       { t: 'set', channelId: 'channel-1', level: 'view' }
     );
 
-    expect(result).toEqual(err('unsupported'));
+    expect(result).toEqual(err({ kind: 'unsupported' }));
     expect(callsByClient()).toEqual({});
   });
 
@@ -215,7 +215,7 @@ describe('changeChannelAccess', () => {
         { t: 'set', channelId: 'channel-1', level: 'view' }
       );
 
-      expect(result).toEqual(err('not-allowed'));
+      expect(result).toEqual(err({ kind: 'not-allowed' }));
     }
   );
 
@@ -229,7 +229,7 @@ describe('changeChannelAccess', () => {
       { t: 'set', channelId: 'channel-1', level: 'view' }
     );
 
-    expect(result).toEqual(err('not-allowed'));
+    expect(result).toEqual(err({ kind: 'not-allowed' }));
   });
 
   it('reports any other error as failed and logs it once', async () => {
@@ -241,7 +241,7 @@ describe('changeChannelAccess', () => {
       { t: 'set', channelId: 'channel-1', level: 'view' }
     );
 
-    expect(result).toEqual(err('failed'));
+    expect(result).toEqual(err({ kind: 'failed' }));
     expect(logged.mock.calls).toEqual([
       ['Failed to change channel access', errors],
     ]);
@@ -256,7 +256,7 @@ describe('changeChannelAccess', () => {
       { t: 'set', channelId: 'channel-1', level: 'view' }
     );
 
-    expect(result).toEqual(err('failed'));
+    expect(result).toEqual(err({ kind: 'failed' }));
     expect(logged.mock.calls).toEqual([
       ['Failed to change channel access', thrown],
     ]);

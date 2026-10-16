@@ -44,7 +44,10 @@ export type ChannelAccessChange =
     }
   | { readonly t: 'remove'; readonly channelId: string };
 
-export type ChannelAccessError = 'not-allowed' | 'unsupported' | 'failed';
+export type ChannelAccessError =
+  | { readonly kind: 'not-allowed' }
+  | { readonly kind: 'unsupported' }
+  | { readonly kind: 'failed' };
 
 type KindPolicy = {
   readonly grant: 'after-send' | 'before-send' | 'message-only';
