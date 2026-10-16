@@ -978,10 +978,12 @@ opens `Share N items`. One item still opens the full Share dialog. Focus starts
 in `To: Email or group`, which lists people and channels with more than two
 members. With two or more people and no channel, `Send As Group Message` is on
 and sends one group message; turned off, each person gets their own message.
-`Recipients can` sets the access level for items you own and defaults to Edit
-for documents. Each recipient gets a message with the optional text above the
-item chips, and the items also appear under the channel's Attachments tab.
-Sharing sends real messages.
+`Recipients can` sets the access level for items you own. It starts at the
+lowest default among them: Edit for markdown documents, Comment for PDFs, and
+View for anything else, ignoring view-only items such as email threads. A
+selection that includes a form offers no Comment level. Each recipient gets a
+message with the optional text above the item chips, and the items also appear
+under the channel's Attachments tab. Sharing sends real messages.
 
 The first Share locks the form. If a message fails, the dialog stays open and
 names what each recipient missed, such as `jacob did not get Q3 launch plan and
