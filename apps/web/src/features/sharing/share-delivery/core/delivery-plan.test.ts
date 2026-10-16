@@ -119,7 +119,7 @@ describe('planShare', () => {
     ]);
   });
 
-  it('never attaches an owner-only item the sender does not own', () => {
+  it('never attaches a restricted item the sender cannot grant', () => {
     const session = item('session-1', {
       kind: 'agent_session',
       canGrant: false,
