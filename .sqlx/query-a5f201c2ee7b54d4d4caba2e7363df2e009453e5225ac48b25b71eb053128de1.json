@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_receipt SET lease_until = LEAST(now() + interval '5 minutes',created_at+interval '30 days') WHERE id = $1 AND lease_id = $2 AND lease_until > now() AND created_at>now()-interval '30 days' AND status = 'processing'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a5f201c2ee7b54d4d4caba2e7363df2e009453e5225ac48b25b71eb053128de1"
+}

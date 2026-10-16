@@ -2141,14 +2141,15 @@ async fn call_posts_use_the_canonical_thread_and_reject_another_root() {
             .await
             .unwrap();
     }
-    let creates = repo.creates.lock().unwrap();
-    assert_eq!(creates.len(), 2);
-    assert!(
-        creates
-            .iter()
-            .all(|command| command.canonical_root_id == Some(call_id))
-    );
-    drop(creates);
+    {
+        let creates = repo.creates.lock().unwrap();
+        assert_eq!(creates.len(), 2);
+        assert!(
+            creates
+                .iter()
+                .all(|command| command.canonical_root_id == Some(call_id))
+        );
+    }
     let mut input = post_input();
     input.thread_id = Some(Uuid::from_u128(11));
     assert!(matches!(

@@ -1,0 +1,7 @@
+DROP TABLE meta_messaging_media_copy;
+DROP INDEX meta_messaging_receipt_metadata_retention_idx;
+DROP INDEX meta_messaging_receipt_completed_retention_idx;
+DROP INDEX meta_messaging_receipt_retention_idx;
+ALTER TABLE meta_messaging_receipt DROP COLUMN payload_cleared_at, DROP COLUMN completed_at;
+DROP INDEX meta_messaging_send_expiry_idx;
+ALTER TABLE meta_messaging_send DROP COLUMN dispatch_started_at, DROP COLUMN tracked_lease_id;

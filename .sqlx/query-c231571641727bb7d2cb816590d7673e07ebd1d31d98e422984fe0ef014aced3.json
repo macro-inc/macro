@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import SET step=$3,cursor=$4,\n            contacts_request_id=CASE WHEN $3='messages' THEN $5 ELSE contacts_request_id END,\n            history_request_id=CASE WHEN $3='waiting' THEN COALESCE($5,history_request_id) ELSE history_request_id END,\n            updated_at=now() WHERE connection_id=$1 AND lease_id=$2 AND lease_until>now()\n                AND EXISTS(SELECT 1 FROM meta_messaging_connection c WHERE c.id=$1 AND c.connected_at=meta_messaging_history_import.connected_at AND c.status='connected')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c231571641727bb7d2cb816590d7673e07ebd1d31d98e422984fe0ef014aced3"
+}

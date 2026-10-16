@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_media_copy SET delete_after=now()-interval '1 second',available_at=now()-interval '1 second' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d9b280b5dd1d5b89b38c9ae0d79967e3939a954d66a9674149ef5bc8f12208a"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import SET lease_until=now()-interval '1 second' WHERE connection_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "acc2225c794f071cdcc4a7733b284803897421bad17fd8668d69a2bfe65a0420"
+}

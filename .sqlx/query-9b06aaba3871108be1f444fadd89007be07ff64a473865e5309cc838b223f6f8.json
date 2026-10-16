@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_attachment SET status='stored',lease_id=NULL,lease_until=NULL WHERE connection_id=$1 AND provider_message_id=$2 AND ordinal=$3 AND lease_id=$4 AND lease_until>now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9b06aaba3871108be1f444fadd89007be07ff64a473865e5309cc838b223f6f8"
+}

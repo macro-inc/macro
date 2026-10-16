@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send SET created_at=clock_timestamp()-interval '10 minutes'+interval '200 milliseconds' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "25d76089646e80e341837387e75d7efb072587c26506439caa73d727032c8149"
+}

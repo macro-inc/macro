@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_history_import h SET lease_until=now()+interval '5 minutes'\n            FROM meta_messaging_connection c WHERE h.connection_id=$1 AND h.lease_id=$2 AND h.lease_until>now()\n                AND c.id=h.connection_id AND c.connected_at=h.connected_at AND c.status='connected'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6eca16c9eeb569bcd1eda6e5610c6ffddd8ca960460514bf2e4d24fe419f8a0a"
+}

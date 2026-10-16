@@ -1431,6 +1431,19 @@ pub async fn run() -> anyhow::Result<()> {
         authorization_state: authorization_state.clone(),
     };
 
+    let meta_state = crate::native_messaging::build(crate::native_messaging::Dependencies {
+        pool: db.clone(),
+        access: entity_access_service.clone(),
+        authorization: authorization_state.clone(),
+        gateway: conn_gateway_client.clone(),
+        search: sqs_client.clone(),
+        environment: config.environment,
+        documents: document_service.clone(),
+        broker: macro_event_broker.clone(),
+        notifications: notification_ingress_service.clone(),
+    })
+    .await?;
+
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     // Additional connections for guards spanning email I/O. HTTP requests and
@@ -2060,6 +2073,7 @@ pub async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         slack_state,
+        meta_state,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),

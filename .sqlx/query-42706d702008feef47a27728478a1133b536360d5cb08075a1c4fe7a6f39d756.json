@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_receipt SET created_at=now()-interval '31 days',completed_at=now()-interval '8 days'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "42706d702008feef47a27728478a1133b536360d5cb08075a1c4fe7a6f39d756"
+}

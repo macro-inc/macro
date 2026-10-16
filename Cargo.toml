@@ -95,6 +95,7 @@ members = [
   "crates/maybe_send",
   "crates/memory",
   "crates/messages",
+  "crates/meta_messaging",
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",

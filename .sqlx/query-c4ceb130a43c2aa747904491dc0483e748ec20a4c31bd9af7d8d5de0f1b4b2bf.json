@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_receipt SET created_at=now()-interval '10 days' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c4ceb130a43c2aa747904491dc0483e748ec20a4c31bd9af7d8d5de0f1b4b2bf"
+}

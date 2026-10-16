@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_receipt SET attempts=20,lease_until=now()-interval '1 second' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fd22355c6e4b405bbb42c36ba6b1c631c807a726e4a378b2015a3bac91835485"
+}

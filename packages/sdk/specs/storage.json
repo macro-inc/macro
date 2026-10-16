@@ -15093,6 +15093,389 @@
         }
       }
     },
+    "/meta/authorize": {
+      "post": {
+        "tags": [],
+        "operationId": "meta_authorize",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaBeginAuthorization"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/authorize/complete": {
+      "post": {
+        "tags": [],
+        "operationId": "meta_authorize_complete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetaCompleteAuthorization"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaConnection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/channels/{channel_id}": {
+      "get": {
+        "tags": [],
+        "operationId": "meta_conversation",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaConversationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/channels/{channel_id}/attachments": {
+      "post": {
+        "tags": [],
+        "operationId": "meta_upload_attachment",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MetaUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaUploadedAttachment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/channels/{channel_id}/delivery": {
+      "post": {
+        "tags": [],
+        "operationId": "meta_message_delivery",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetaSendProgress"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/channels/{channel_id}/replies": {
+      "post": {
+        "tags": [],
+        "operationId": "meta_reply",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetaSendReply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaSendProgress"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/channels/{channel_id}/templates": {
+      "get": {
+        "tags": [],
+        "operationId": "meta_templates",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetaTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/configuration": {
+      "get": {
+        "tags": [],
+        "operationId": "meta_configuration",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaPublicConfiguration"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/connections": {
+      "get": {
+        "tags": [],
+        "operationId": "meta_connections",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetaConnection"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/connections/{connection_id}/disconnect": {
+      "post": {
+        "tags": [],
+        "operationId": "meta_disconnect",
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisconnectResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/connections/{connection_id}/history": {
+      "get": {
+        "tags": [],
+        "operationId": "meta_history",
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaHistoryImportView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [],
+        "operationId": "meta_import_history",
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaHistoryImportView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta/developer/whatsapp": {
+      "post": {
+        "tags": [],
+        "operationId": "meta_developer_whatsapp",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaConnection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -19658,6 +20041,22 @@
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
+      },
+      "BeginRequest": {
+        "type": "object",
+        "description": "Initiate a product-specific official login.",
+        "required": ["provider"],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/MetaProvider",
+            "description": "Product to connect."
+          },
+          "reconnect_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing connection identity, when reconnecting."
+          }
+        }
       },
       "BomPart": {
         "type": "object",
@@ -25099,6 +25498,21 @@
             }
           }
         ]
+      },
+      "DisconnectResult": {
+        "type": "object",
+        "description": "Disconnect outcome; removing one phone must preserve a shared WABA subscription.",
+        "required": ["remote_unsubscribed", "shared_subscription_kept"],
+        "properties": {
+          "remote_unsubscribed": {
+            "type": "boolean",
+            "description": "Meta confirmed removal of this app's subscription."
+          },
+          "shared_subscription_kept": {
+            "type": "boolean",
+            "description": "Another connected account still needs the same provider subscription."
+          }
+        }
       },
       "DocumentBasic": {
         "type": "object",
@@ -32482,6 +32896,725 @@
         ],
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
       },
+      "MetaBeginAuthorization": {
+        "type": "object",
+        "description": "Browser OAuth initiation result. State is scoped to the authenticated initiator.",
+        "required": ["state", "configuration"],
+        "properties": {
+          "browser_transaction": {
+            "type": ["string", "null"],
+            "description": "Secret proof retained only by the initiating Instagram window; never sent to Meta."
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/MetaPublicConfiguration",
+            "description": "Public SDK/login configuration."
+          },
+          "state": {
+            "type": "string",
+            "description": "Random anti-CSRF state echoed through the callback."
+          }
+        }
+      },
+      "MetaCompleteAuthorization": {
+        "type": "object",
+        "description": "Callback input. Tokens are always exchanged server-side.",
+        "required": ["state", "code"],
+        "properties": {
+          "browser_transaction": {
+            "type": ["string", "null"],
+            "description": "Proof returned at initiation; mandatory for Instagram, absent for WhatsApp."
+          },
+          "business_account_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MetaProviderId",
+                "description": "WhatsApp account selected in Embedded Signup; verified through Graph."
+              }
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "Single-use authorization code."
+          },
+          "phone_number_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MetaProviderId",
+                "description": "Phone-number selection; verified as belonging to the selected account."
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "description": "State returned by the server for this caller/team/provider."
+          }
+        }
+      },
+      "MetaConnection": {
+        "type": "object",
+        "description": "Public account health; never includes credentials.",
+        "required": [
+          "id",
+          "team_id",
+          "user_id",
+          "provider",
+          "account_id",
+          "display_name",
+          "status",
+          "human_agent_approved",
+          "developer_account",
+          "history_status"
+        ],
+        "properties": {
+          "account_id": {
+            "$ref": "#/components/schemas/MetaProviderId",
+            "description": "Connected phone-number ID or Instagram professional ID."
+          },
+          "business_account_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MetaProviderId",
+                "description": "WhatsApp messaging-account ID, absent for Instagram Login."
+              }
+            ]
+          },
+          "connected_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last successful connection time, not the start of imported history."
+          },
+          "credential_expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Expiry returned by the provider; absence does not mean irrevocable access."
+          },
+          "developer_account": {
+            "type": "boolean",
+            "description": "Development test number; never evidence of coexistence."
+          },
+          "display_name": {
+            "type": "string",
+            "description": "Display label returned by the provider."
+          },
+          "health_error": {
+            "type": ["string", "null"],
+            "description": "Sanitized operational error code."
+          },
+          "history_progress": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Latest provider-reported progress.",
+            "minimum": 0
+          },
+          "history_status": {
+            "$ref": "#/components/schemas/MetaHistoryStatus",
+            "description": "Provider history synchronization status."
+          },
+          "human_agent_approved": {
+            "type": "boolean",
+            "description": "Verified HUMAN_AGENT approval; false by default."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Macro connection identity, preserved through reconnect."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/MetaProvider",
+            "description": "Official API used by this connection."
+          },
+          "status": {
+            "$ref": "#/components/schemas/MetaConnectionStatus",
+            "description": "Current local connection health."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning Macro team."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Original administrator. New conversations start with explicit membership."
+          }
+        }
+      },
+      "MetaConnectionStatus": {
+        "type": "string",
+        "description": "Connection state transitions do not delete retained channels/content.",
+        "enum": ["connecting", "connected", "disconnected", "revoked", "error"]
+      },
+      "MetaConversation": {
+        "type": "object",
+        "description": "Native conversation metadata, available only after ordinary channel access.",
+        "required": ["channel_id", "connection_id", "customer_id"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Real Macro channel identity."
+          },
+          "connection_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning account's connection."
+          },
+          "customer_display_name": {
+            "type": ["string", "null"],
+            "description": "Account-scoped display label; never a Macro or CRM identity."
+          },
+          "customer_handle": {
+            "type": ["string", "null"],
+            "description": "Mutable handle for display only."
+          },
+          "customer_id": {
+            "$ref": "#/components/schemas/MetaProviderId",
+            "description": "Recipient's account-scoped identity."
+          },
+          "customer_phone": {
+            "type": ["string", "null"],
+            "description": "Verified phone, when present."
+          },
+          "last_customer_message_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Latest eligible inbound source timestamp."
+          },
+          "standard_window_until": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Standard reply window, including verified provider-specific extensions."
+          }
+        }
+      },
+      "MetaConversationResponse": {
+        "type": "object",
+        "description": "Optional messaging metadata for an ordinary native channel.",
+        "properties": {
+          "messaging": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MetaConversationView",
+                "description": "Absent for ordinary internal Macro channels."
+              }
+            ]
+          }
+        }
+      },
+      "MetaConversationView": {
+        "type": "object",
+        "description": "Metadata rendered with an authorized native channel, without management secrets.",
+        "required": [
+          "capabilities",
+          "eligibility",
+          "can_reply",
+          "text_limit",
+          "text_limit_in_bytes",
+          "media",
+          "conversation",
+          "provider",
+          "account_name",
+          "status",
+          "developer_account",
+          "human_agent_approved",
+          "sends"
+        ],
+        "properties": {
+          "account_name": {
+            "type": "string",
+            "description": "Business account shown beside the explicit send control."
+          },
+          "can_reply": {
+            "type": "boolean",
+            "description": "Current caller may deliberately reply through this account and channel."
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ReplyCapabilities",
+            "description": "Implemented send operations and content limits."
+          },
+          "conversation": {
+            "$ref": "#/components/schemas/MetaConversation",
+            "description": "Persisted account-scoped customer identity."
+          },
+          "developer_account": {
+            "type": "boolean",
+            "description": "Whether this connection uses an explicitly configured developer number."
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/ReplyEligibility",
+            "description": "Current account, user and provider eligibility, evaluated by the server."
+          },
+          "health_error": {
+            "type": ["string", "null"],
+            "description": "Sanitized account-health reason, so channel users see the correct recovery action."
+          },
+          "human_agent_approved": {
+            "type": "boolean",
+            "description": "Server-observed eligibility for Instagram's human-support mode."
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetaMediaCapability"
+            },
+            "description": "Supported attachment types and effective size limits."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/MetaProvider",
+            "description": "Connected provider."
+          },
+          "sends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetaSendProgress"
+            },
+            "description": "Durable outbound intents including pending, unknown and failed replies."
+          },
+          "status": {
+            "$ref": "#/components/schemas/MetaConnectionStatus",
+            "description": "Connected/disconnected/recovery state."
+          },
+          "text_limit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum text units, counted by the provider's rule below.",
+            "minimum": 0
+          },
+          "text_limit_in_bytes": {
+            "type": "boolean",
+            "description": "Instagram counts UTF-8 bytes; WhatsApp counts characters."
+          }
+        }
+      },
+      "MetaDeliveryState": {
+        "type": "string",
+        "description": "Observed outbound state. Unknown outcomes require reconciliation, not resend.",
+        "enum": [
+          "pending",
+          "sending",
+          "unknown",
+          "accepted",
+          "sent",
+          "delivered",
+          "read",
+          "failed"
+        ]
+      },
+      "MetaHistoryImport": {
+        "type": "object",
+        "description": "Durable import status safe to display in account settings.",
+        "required": ["requested_at", "status", "unavailable_media"],
+        "properties": {
+          "error_code": {
+            "type": ["string", "null"],
+            "description": "Sanitized, actionable recovery reason."
+          },
+          "progress": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Provider progress, when available.",
+            "minimum": 0
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Explicit consent time, independent of connection time."
+          },
+          "status": {
+            "$ref": "#/components/schemas/MetaHistoryStatus",
+            "description": "Current import outcome; acceptance is not completion."
+          },
+          "unavailable_media": {
+            "type": "boolean",
+            "description": "Some media was unavailable, with a notice retained in its channel."
+          }
+        }
+      },
+      "MetaHistoryImportView": {
+        "type": "object",
+        "description": "Server-authorized import affordance and current progress.",
+        "required": ["can_import"],
+        "properties": {
+          "can_import": {
+            "type": "boolean",
+            "description": "Whether the administrator may start or resume an import now."
+          },
+          "import": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MetaHistoryImport",
+                "description": "Only a job explicitly requested for this connection generation."
+              }
+            ]
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Explanation when unavailable; no credentials or provider response bodies."
+          }
+        }
+      },
+      "MetaHistoryStatus": {
+        "type": "string",
+        "description": "History progress is independent from live account health.",
+        "enum": [
+          "not_requested",
+          "pending",
+          "syncing",
+          "complete",
+          "declined",
+          "failed"
+        ]
+      },
+      "MetaMediaCapability": {
+        "type": "object",
+        "description": "One currently supported provider attachment category.",
+        "required": ["kind", "mime_types", "max_bytes"],
+        "properties": {
+          "caption_limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Maximum caption characters, absent when text must be sent separately.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MetaMediaKind",
+            "description": "Native attachment category."
+          },
+          "max_bytes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Effective provider and Macro byte limit.",
+            "minimum": 0
+          },
+          "mime_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Allowed MIME types for the selected account."
+          }
+        }
+      },
+      "MetaMediaKind": {
+        "type": "string",
+        "description": "Supported attachment categories; provider limits remain explicit in the sender.",
+        "enum": ["image", "audio", "video", "document"]
+      },
+      "MetaProvider": {
+        "type": "string",
+        "description": "The official API used for an account. Personal accounts are not supported.",
+        "enum": ["whatsapp", "instagram"]
+      },
+      "MetaProviderId": {
+        "type": "string",
+        "description": "Provider identifier, scoped separately by the persisted connection."
+      },
+      "MetaPublicConfiguration": {
+        "type": "object",
+        "description": "Public setup configuration, returned by the server rather than hardcoded in UI.",
+        "required": [
+          "instagram_human_agent_approved",
+          "whatsapp_developer_available",
+          "graph_version"
+        ],
+        "properties": {
+          "graph_version": {
+            "type": "string",
+            "description": "Explicitly supported Graph API version."
+          },
+          "instagram_app_id": {
+            "type": ["string", "null"],
+            "description": "Instagram app ID within the configured Meta business app."
+          },
+          "instagram_human_agent_approved": {
+            "type": "boolean",
+            "description": "Operator-confirmed Meta HUMAN_AGENT approval for the configured Instagram app."
+          },
+          "instagram_redirect_uri": {
+            "type": ["string", "null"],
+            "description": "Approved redirect URI for Instagram Login."
+          },
+          "whatsapp_app_id": {
+            "type": ["string", "null"],
+            "description": "Meta app ID used by WhatsApp Embedded Signup."
+          },
+          "whatsapp_configuration_id": {
+            "type": ["string", "null"],
+            "description": "Facebook Login for Business v4 configuration ID with coexistence enabled."
+          },
+          "whatsapp_developer_available": {
+            "type": "boolean",
+            "description": "A server-configured, recipient-restricted local WhatsApp test account exists."
+          }
+        }
+      },
+      "MetaReplyContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Free-form text.",
+            "required": ["text", "type"],
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "UTF-8 text, checked against the selected provider's limit."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["text"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Media loaded through an authorized Macro document.",
+            "required": ["document_id", "kind", "type"],
+            "properties": {
+              "caption": {
+                "type": ["string", "null"],
+                "description": "Optional caption, where the provider permits it."
+              },
+              "document_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Existing Macro document ID, authorized again by the worker."
+              },
+              "kind": {
+                "$ref": "#/components/schemas/MetaMediaKind",
+                "description": "Desired provider media category."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["media"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Approved WhatsApp template, resolved by ID against the sending account.",
+            "required": ["template_id", "language", "parameters", "type"],
+            "properties": {
+              "language": {
+                "type": "string",
+                "description": "Exact approved language."
+              },
+              "parameters": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Ordered text parameters for header/body. Buttons and media templates\nare validated separately and never passed through as raw provider JSON."
+              },
+              "template_id": {
+                "$ref": "#/components/schemas/MetaProviderId",
+                "description": "Account-scoped provider template identity."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["template"]
+              }
+            }
+          }
+        ],
+        "description": "Text, Macro-owned media or approved-template input. Remote arbitrary URLs are\nnot accepted from clients as attachments."
+      },
+      "MetaSendProgress": {
+        "type": "object",
+        "description": "Durable result of an intentional send; accepted does not mean delivered.",
+        "required": [
+          "user_id",
+          "payload",
+          "id",
+          "channel_id",
+          "state",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Native conversation."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Intent creation time."
+          },
+          "error_code": {
+            "type": ["string", "null"],
+            "description": "Sanitized rejection/recovery code."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable local intent ID."
+          },
+          "message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Linked native message, when created."
+          },
+          "payload": {
+            "$ref": "#/components/schemas/MetaSendReply",
+            "description": "Retained intent for recovering a failed draft without inventing content."
+          },
+          "state": {
+            "$ref": "#/components/schemas/MetaDeliveryState",
+            "description": "Current delivery observation."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Human who explicitly submitted this reply."
+          }
+        }
+      },
+      "MetaSendReply": {
+        "type": "object",
+        "description": "Explicit send action; ordinary channel posts never call this boundary.",
+        "required": ["idempotency_key", "message"],
+        "properties": {
+          "human_support": {
+            "type": "boolean",
+            "description": "Explicit human support action, never inferred from closing the window."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable client intent key. A changed payload with this key is a conflict."
+          },
+          "message": {
+            "$ref": "#/components/schemas/MetaReplyContent",
+            "description": "Message payload, subject to provider-specific validation."
+          },
+          "reply_to": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MetaProviderId",
+                "description": "Optional provider message target within this same conversation."
+              }
+            ]
+          }
+        }
+      },
+      "MetaTemplate": {
+        "type": "object",
+        "description": "An approved WhatsApp template returned from this connection's account.",
+        "required": [
+          "id",
+          "name",
+          "language",
+          "components",
+          "parameter_labels"
+        ],
+        "properties": {
+          "components": {
+            "description": "Approved components used for preview/parameter collection."
+          },
+          "id": {
+            "$ref": "#/components/schemas/MetaProviderId",
+            "description": "Provider template identity."
+          },
+          "language": {
+            "type": "string",
+            "description": "Exact approved language code."
+          },
+          "name": {
+            "type": "string",
+            "description": "Exact approved name."
+          },
+          "parameter_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ordered text inputs, including the component and any named variable."
+          },
+          "unsupported_reason": {
+            "type": ["string", "null"],
+            "description": "Nonempty when this approved template needs inputs this composer cannot supply."
+          }
+        }
+      },
+      "MetaUploadRequest": {
+        "type": "object",
+        "description": "Multipart private-file staging contract.",
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "One image, audio, video or PDF file."
+          }
+        }
+      },
+      "MetaUploadedAttachment": {
+        "type": "object",
+        "description": "A private file staged for an explicit customer reply; staging never sends it.",
+        "required": ["document_id", "filename", "kind"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Native Macro document, authorized again at send time."
+          },
+          "filename": {
+            "type": "string",
+            "description": "Original display filename."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MetaMediaKind",
+            "description": "Verified attachment category."
+          }
+        }
+      },
+      "ModeEligibility": {
+        "type": "object",
+        "description": "Current server decision for one implemented sending mode.",
+        "required": ["mode", "allowed"],
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "description": "True only when every current server-side condition is satisfied."
+          },
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "An allowed control may expire locally; the browser cannot extend permission."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ReplyMode",
+            "description": "Explicit operation whose eligibility was evaluated."
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReplyBlockReason",
+                "description": "Stable explanation when blocked."
+              }
+            ]
+          }
+        }
+      },
       "MyResponse": {
         "type": "object",
         "description": "A signed-in respondent's own response, with its answers as the row\nholds them now.",
@@ -34762,6 +35895,85 @@
             "description": "Stages first to last."
           }
         }
+      },
+      "ReplyBlockReason": {
+        "type": "string",
+        "description": "Stable reason a supported operation cannot run now.",
+        "enum": [
+          "forbidden",
+          "disconnected",
+          "window_closed",
+          "template_required",
+          "human_support_required",
+          "unsupported"
+        ]
+      },
+      "ReplyCapabilities": {
+        "type": "object",
+        "description": "Operations implemented by this integration, independently of current permission.",
+        "required": [
+          "modes",
+          "text_limit",
+          "text_limit_in_bytes",
+          "media",
+          "max_attachments"
+        ],
+        "properties": {
+          "max_attachments": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum files in one implemented send operation.",
+            "minimum": 0
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetaMediaCapability"
+            },
+            "description": "Supported private attachment categories and effective limits."
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplyMode"
+            },
+            "description": "Supported explicit sending modes."
+          },
+          "text_limit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum text units.",
+            "minimum": 0
+          },
+          "text_limit_in_bytes": {
+            "type": "boolean",
+            "description": "Whether text is counted in UTF-8 bytes instead of Unicode characters."
+          }
+        }
+      },
+      "ReplyEligibility": {
+        "type": "object",
+        "description": "Eligibility is a snapshot, re-evaluated before dispatch.",
+        "required": ["evaluated_at", "modes"],
+        "properties": {
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server time used to evaluate every mode in this response."
+          },
+          "modes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModeEligibility"
+            },
+            "description": "Current decisions, separate from static implemented support."
+          }
+        }
+      },
+      "ReplyMode": {
+        "type": "string",
+        "description": "Policy mode of the requested send.",
+        "enum": ["free_form", "approved_template", "human_support"]
       },
       "RequestedHarnessScope": {
         "type": "string",

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_connection SET developer_account=false,connected_at=now()-interval '25 hours' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f0dd52358fd48147bd6ec6a12aab8f179c2f6fb51770a93bbd1e760021eb8492"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send SET created_at=now()-interval '11 minutes',lease_until=now()-interval '1 second' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "739a37418f80ff533034736e79f8976732ef7b267b5b082be721d30cf6d72027"
+}

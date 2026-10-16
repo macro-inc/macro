@@ -1006,7 +1006,16 @@ use utoipa::OpenApi;
             (name = "macro cloud storage service", description = "Macro Cloud Storage Service")
     )
 )]
+pub struct BaseApiDoc;
+
 pub struct ApiDoc;
+impl utoipa::OpenApi for ApiDoc {
+    fn openapi() -> utoipa::openapi::OpenApi {
+        let mut document = BaseApiDoc::openapi();
+        document.merge(meta_messaging::inbound::router::MessagingApiDoc::openapi());
+        document
+    }
+}
 
 struct FormsApiAddon;
 

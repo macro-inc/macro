@@ -838,6 +838,7 @@ pub(crate) struct ApiContext {
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
     pub slack_state: DssSlackState,
+    pub meta_state: crate::native_messaging::State,
     pub initiative_state: DssInitiativeState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,

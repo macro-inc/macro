@@ -11,6 +11,8 @@ import { channelsSearch } from './channels-route';
 import { ChannelsView } from './channels-view';
 import { ChannelsViewSkeleton } from './channels-view-skeleton';
 
+export { ChannelDetailRouteView } from './channels-view';
+
 function ChannelsLegacyRouteView() {
   const params = useParams<{ channelId?: string }>();
   const [search] = createSearchParams(channelsSearch);

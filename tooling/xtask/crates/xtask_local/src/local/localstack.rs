@@ -77,6 +77,10 @@ async fn create_kms_keys(kms: &aws_sdk_kms::Client) -> Result<()> {
         .context("listing kms aliases")?;
     for (alias, description) in [
         (
+            resources::META_MESSAGING_KMS_ALIAS,
+            "Meta business messaging credential key (local)",
+        ),
+        (
             resources::CURSOR_API_KEY_KMS_ALIAS,
             "Cursor API key encryption key (local)",
         ),

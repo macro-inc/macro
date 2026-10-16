@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(s) AS \"data!\" FROM meta_messaging_message m JOIN meta_messaging_send s ON s.connection_id = m.connection_id AND s.provider_message_id = m.provider_message_id AND s.message_id = m.message_id WHERE s.channel_id = $1 AND m.message_id = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5a51d8a8809c3e4880632bc17dcdc7bda03644aa338ed4180ca0391800811571"
+}

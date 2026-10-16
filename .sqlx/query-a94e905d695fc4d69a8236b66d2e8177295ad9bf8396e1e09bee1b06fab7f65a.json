@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidates AS (\n            SELECT id,status FROM meta_messaging_receipt\n            WHERE payload_cleared_at IS NULL\n              AND NOT (status='processing' AND COALESCE(lease_until>now(),false))\n              AND ((NOT (status='complete' AND decode_failures=0) AND created_at<=now()-make_interval(days=>$2))\n                OR (status='complete' AND decode_failures=0 AND completed_at<=now()-make_interval(days=>$3)))\n            ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT $1\n        ) UPDATE meta_messaging_receipt r SET payload='null'::jsonb,payload_cleared_at=now(),\n            status=CASE WHEN c.status IN ('pending','processing') THEN 'failed' ELSE r.status END,\n            error_code=CASE WHEN c.status IN ('pending','processing') THEN 'receipt_retention_expired' ELSE r.error_code END,\n            lease_id=NULL,lease_until=NULL\n          FROM candidates c WHERE r.id=c.id\n          RETURNING c.status IN ('pending','processing') AS \"expired!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "expired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a94e905d695fc4d69a8236b66d2e8177295ad9bf8396e1e09bee1b06fab7f65a"
+}

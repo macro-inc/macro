@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_receipt SET decode_failures=GREATEST(decode_failures,$3) WHERE id=$1 AND lease_id=$2 AND lease_until>now() AND status='processing'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ae74920819eeaeb2f309ea7a20ce77624f08f74ddf710bcd3264940fd65f762"
+}

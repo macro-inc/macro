@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidates AS (\n            SELECT id FROM meta_messaging_media_copy WHERE delete_after<=now() AND available_at<=now()\n                AND (lease_until IS NULL OR lease_until<=now())\n            ORDER BY available_at,id FOR UPDATE SKIP LOCKED LIMIT 20\n        ) UPDATE meta_messaging_media_copy c SET lease_id=$1,lease_until=now()+interval '5 minutes'\n          FROM candidates w WHERE c.id=w.id RETURNING c.id,c.bucket",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "bucket",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6bd4e93341655bd01ba7983c3c3d3d67bf4f2822aeccab689c60869ab8f059b0"
+}

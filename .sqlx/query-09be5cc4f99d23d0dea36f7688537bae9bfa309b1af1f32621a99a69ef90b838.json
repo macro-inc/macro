@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT native_retry_at = 'infinity' AS \"retired!\" FROM meta_messaging_send WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "retired!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "09be5cc4f99d23d0dea36f7688537bae9bfa309b1af1f32621a99a69ef90b838"
+}

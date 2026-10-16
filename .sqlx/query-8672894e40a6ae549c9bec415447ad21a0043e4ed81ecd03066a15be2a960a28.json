@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET content=$6,updated_at=now()\n            WHERE id=$1 AND parent_entity_type='channel' AND parent_entity_id=$2\n            AND import_metadata->>'connection_id'=$3 AND import_metadata->>'provider_message_id'=$4\n            AND btrim(content,E' \\n\\r\\t')=ANY($5::text[]) AND content<>$6\n            AND deleted_at IS NULL AND edited_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8672894e40a6ae549c9bec415447ad21a0043e4ed81ecd03066a15be2a960a28"
+}

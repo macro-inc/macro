@@ -1,0 +1,11 @@
+{
+  "idempotency_key": "0198a9c0-0000-7000-8000-000000000001",
+  "message": {
+    "type": "template",
+    "template_id": "approved-template",
+    "language": "en_US",
+    "parameters": [
+      "Ada"
+    ]
+  }
+}

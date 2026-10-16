@@ -162,3 +162,10 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 3. **Run it on the device, not the Simulator**, with Safari Web Inspector attached (Develop → the iPhone → the Macro webview), filter the console by the prefix, reproduce, and read the order. A `mousedown` arriving after a `pointerdown` logged with `defaultPrevented: true`, followed by `focusout` whose `relatedTarget` is a container, is this bug.
 
 4. **Strip the instrumentation before committing.**
+
+## Instagram OAuth
+
+Keep `public/instagram-callback.html` standalone and free of app boot, telemetry,
+external assets and URL logging. Completion belongs to the initiating Settings
+window and uses the authenticated Meta query mutation with its in-memory proof.
+See `docs/META_MESSAGING.md` at repository root for the server boundary and setup.

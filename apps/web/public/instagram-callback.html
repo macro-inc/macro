@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>Return to Macro Settings</title>
+</head>
+<body>
+  <p id="status">Return to the Macro Settings window where you started this connection. If it is no longer open, start again there.</p>
+  <script>
+    // No app boot, analytics, network calls, storage, or third-party assets here.
+    // Clear sensitive parameters before handing the result to the opener.
+    const params = new URLSearchParams(location.search);
+    history.replaceState(null, '', location.pathname);
+    if (window.opener) {
+      window.opener.postMessage({
+        type: 'macro:instagram-callback',
+        state: params.get('state'),
+        code: params.get('code'),
+        cancelled: params.has('error'),
+      }, location.origin);
+    }
+  </script>
+</body>
+</html>

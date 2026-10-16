@@ -6,6 +6,8 @@ use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod external;
+pub use external::{ExternalMessageRevision, ExternalReplyAttribution};
 mod historical;
 mod timeline;
 

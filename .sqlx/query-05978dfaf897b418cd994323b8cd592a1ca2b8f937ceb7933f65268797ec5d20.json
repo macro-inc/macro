@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_media_copy SET lease_id=NULL,lease_until=NULL,available_at=now()+interval '30 seconds' WHERE id=$1 AND lease_id=$2 AND lease_until>now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "05978dfaf897b418cd994323b8cd592a1ca2b8f937ceb7933f65268797ec5d20"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_message SET media_state = 'pending' WHERE connection_id = $1 AND provider_message_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "839613b28736516461315e0afe8ab830199dd8d7418ef862505ad18bb988a285"
+}

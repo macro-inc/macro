@@ -6,9 +6,9 @@ import { parseActor } from '../core/actor';
 /**
  * The name an activity row shows for its actor. The viewer reads "You",
  * other users read their display name, bots read their bot name (the
- * system principal reads "System"), and ids the app cannot parse read
- * "Unknown". Resolvers are created lazily per actor kind so a user row
- * never subscribes to the bots list.
+ * system principal reads "System"), external actors read "External sender",
+ * and ids the app cannot parse read "Unknown". Resolvers are created lazily
+ * per actor kind so a user row never subscribes to the bots list.
  */
 export function createActorName(
   context: Pick<ActivityContext, 'currentUserId' | 'displayName' | 'botName'>,
@@ -26,6 +26,7 @@ export function createActorName(
         const remote = context.botName(() => actor.botId);
         return () => remote() ?? '';
       })
+      .with({ kind: 'external' }, () => () => 'External sender')
       .with({ kind: 'unknown' }, () => () => 'Unknown')
       .exhaustive();
   });

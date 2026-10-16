@@ -20,6 +20,8 @@ threads, pins, recents, notifications, folders, activity.
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through
   `connection_gateway` (feature-gated: `connection_gateway`).
+- `src/native_messaging/native/test/http/oauth.rs`: Instagram browser-proof,
+  user/team, admin, expiry, replay and reconnect HTTP/database regressions.
 - `README.md`: local setup (`just run_dbs`, `.env` from `.env.sample`).
 
 ## Scope

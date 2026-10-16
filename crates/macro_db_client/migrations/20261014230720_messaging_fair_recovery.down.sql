@@ -1,0 +1,4 @@
+DROP INDEX meta_messaging_send_active_lease_idx;
+DROP INDEX meta_messaging_send_conversation_order_idx;
+DROP INDEX meta_messaging_receipt_active_routing_idx;
+ALTER TABLE meta_messaging_receipt DROP COLUMN routing_keys;

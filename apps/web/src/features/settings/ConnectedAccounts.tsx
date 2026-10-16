@@ -1,6 +1,7 @@
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { Button } from '@ui';
 import { Show, Suspense } from 'solid-js';
 import { EmailCard } from './Email';
@@ -12,7 +13,12 @@ import {
   SettingsSection,
 } from './primitives';
 
-/** Personal account links. Agent MCP integrations live in Connections. */
+const BusinessMessagingSettings = lazyNamed(
+  () => import('../meta-messaging/views/account-settings'),
+  'BusinessMessagingSettings'
+);
+
+/** Account integrations. Agent tools live in Agent connections. */
 export function ConnectedAccounts() {
   const { openSettings } = useSettingsState();
   const isAvailable = useSettingsTabAvailable();
@@ -31,12 +37,12 @@ export function ConnectedAccounts() {
           <Suspense>
             <GitHubCard />
           </Suspense>
+          <Suspense>
+            <BusinessMessagingSettings />
+          </Suspense>
         </div>
       </SettingsSection>
-      <SettingsSection
-        title="Related settings"
-        description="Manage the same accounts where you use them."
-      >
+      <SettingsSection title="Related settings">
         <SettingsCard>
           <Show when={ENABLE_EMAIL}>
             <SettingsRow label="Email accounts and signatures">

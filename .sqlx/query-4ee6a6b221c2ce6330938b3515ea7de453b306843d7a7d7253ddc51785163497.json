@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.channel_id,m.message_id,r.content,r.edit_number,r.edited_at,r.deleted_at FROM meta_messaging_revision r JOIN meta_messaging_message m ON m.connection_id=r.connection_id AND m.customer_id=r.customer_id AND m.provider_message_id=r.provider_message_id AND m.direction=r.direction JOIN meta_messaging_conversation c ON c.connection_id=m.connection_id AND c.customer_id=m.customer_id WHERE r.connection_id=$1 AND r.customer_id=$2 AND r.provider_message_id=$3 AND r.direction=$4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "edit_number",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "edited_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "4ee6a6b221c2ce6330938b3515ea7de453b306843d7a7d7253ddc51785163497"
+}

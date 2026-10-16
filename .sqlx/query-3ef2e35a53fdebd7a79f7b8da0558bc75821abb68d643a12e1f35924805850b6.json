@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_oauth SET consumed_at = now() WHERE state_sha256 = $1 AND team_id = $2 AND user_id = $3 AND expires_at > now() AND consumed_at IS NULL RETURNING provider, reconnect_id, expires_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "reconnect_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "3ef2e35a53fdebd7a79f7b8da0558bc75821abb68d643a12e1f35924805850b6"
+}

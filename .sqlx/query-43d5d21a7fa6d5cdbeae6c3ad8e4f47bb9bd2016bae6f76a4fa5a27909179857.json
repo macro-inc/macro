@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_media_copy (id,bucket) VALUES ($1,$2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "43d5d21a7fa6d5cdbeae6c3ad8e4f47bb9bd2016bae6f76a4fa5a27909179857"
+}

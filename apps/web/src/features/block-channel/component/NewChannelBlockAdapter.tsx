@@ -4,6 +4,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { createChannelInteraction } from '@app/features/meta-messaging/queries/channel-messaging';
 import {
   makeRenameAction,
   useBlockEntityCommands,
@@ -130,6 +131,12 @@ function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
+  const messaging = createChannelInteraction({
+    channelId: () => props.channelId,
+    channelType,
+  });
+  const callsAllowed = () =>
+    messaging.interaction().kind === 'internal' && !channel()?.agent_dm;
   const channel = useChannel(props.channelId);
   const userId = useUserId();
   const renameAction = makeRenameAction({ userId });
@@ -282,9 +289,7 @@ function NewTop(props: { channelId: string }) {
         )}
       </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
-      <Show
-        when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
-      >
+      <Show when={ENABLE_CALLS && callsAllowed() && !call.isInThisChannel()}>
         <SplitHeaderRight>
           <HeaderIsland
             class={cn(
@@ -393,7 +398,15 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     !isOpenCallTabRequested(searchParams[CHANNEL_URL_PARAMS.openCallTab]) &&
     !hasInitialTargetRequest();
 
-  const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
+  const channelType = useChannelType(channelId);
+  const messaging = createChannelInteraction({
+    channelId: () => channelId,
+    channelType,
+  });
+  const callsAllowed = () =>
+    messaging.interaction().kind === 'internal' &&
+    !conversationChannel()?.agent_dm;
+  const [requestedTab, setActiveTabInternal] = createSignal<ChannelTabId>(
     initialChannelTab({
       wantsJoinCall,
       hasActiveCallHere,
@@ -402,14 +415,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         : undefined,
     })
   );
-  createComputed(() => {
-    if (
-      conversationChannel()?.agent_dm &&
-      ['call', 'calls', 'participants'].includes(activeTab())
-    )
-      setActiveTabInternal(DEFAULT_CHANNEL_TAB);
-  });
-  const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
+  const activeTab = () =>
+    conversationChannel()?.agent_dm &&
+    ['call', 'calls', 'participants'].includes(requestedTab())
+      ? DEFAULT_CHANNEL_TAB
+      : normalizeChannelTab(requestedTab(), callsAllowed());
+  const [joinRequested, setPendingJoinCall] = createSignal(wantsJoinCall);
+  const pendingJoinCall = () => callsAllowed() && joinRequested();
 
   // Navigation flows into the surface as state; the messages part navigates
   // whenever a fresh request lands, whether or not it was mounted at the time.

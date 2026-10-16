@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT customer_id,direction FROM meta_messaging_message WHERE connection_id=$1 AND provider_message_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "customer_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "direction",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d1a1652be75288c814da2ea8c34b8aa90ae8f602a6a56b457b5800b478faecc0"
+}

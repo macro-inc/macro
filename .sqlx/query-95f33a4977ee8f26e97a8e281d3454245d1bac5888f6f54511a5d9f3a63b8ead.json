@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_connection SET credential = $2, credential_expires_at = $3, checked_at = now(), updated_at = now() WHERE id = $1 AND connected_at IS NOT DISTINCT FROM $4 AND status = 'connected' AND credential IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "95f33a4977ee8f26e97a8e281d3454245d1bac5888f6f54511a5d9f3a63b8ead"
+}

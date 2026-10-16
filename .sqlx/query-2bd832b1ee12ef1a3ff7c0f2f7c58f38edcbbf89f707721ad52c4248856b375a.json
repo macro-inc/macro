@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_message SET event_published_at=now(),published_revision=$2 WHERE message_id=$1 AND effect_revision=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2bd832b1ee12ef1a3ff7c0f2f7c58f38edcbbf89f707721ad52c4248856b375a"
+}

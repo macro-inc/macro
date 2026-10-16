@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM meta_messaging_media_copy WHERE id=$1 AND lease_id=$2 AND lease_until>now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4891095bc9354e50aaa114a74ce837b5b40aef3afcd84108041f4e598e6f0964"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_media_copy SET lease_until=now()-interval '1 second' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f84ad2251d559edeffd409880be9c1e7b570c00a9dfd976a933a5584652e674"
+}

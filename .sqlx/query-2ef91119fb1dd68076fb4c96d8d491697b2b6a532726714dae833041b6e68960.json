@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidates AS (\n            SELECT id FROM meta_messaging_receipt WHERE status='complete' AND decode_failures=0\n                AND completed_at IS NULL AND payload_cleared_at IS NULL\n            ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT $1\n        ) UPDATE meta_messaging_receipt r SET completed_at=now() FROM candidates c WHERE r.id=c.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ef91119fb1dd68076fb4c96d8d491697b2b6a532726714dae833041b6e68960"
+}

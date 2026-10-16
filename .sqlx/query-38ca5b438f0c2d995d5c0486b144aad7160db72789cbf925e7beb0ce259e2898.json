@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_attachment SET lease_until=now()-interval '1 second' WHERE document_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "38ca5b438f0c2d995d5c0486b144aad7160db72789cbf925e7beb0ce259e2898"
+}

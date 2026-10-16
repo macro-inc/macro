@@ -5,6 +5,7 @@
 mod api;
 mod config;
 pub mod model;
+mod native_messaging;
 mod outbound;
 mod server;
 mod service;

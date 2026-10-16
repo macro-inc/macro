@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_history_import(connection_id,connected_at,user_id,status,step)\n            VALUES($1,$2,$3,'pending',$4)\n            ON CONFLICT(connection_id) DO UPDATE SET connected_at=EXCLUDED.connected_at,user_id=EXCLUDED.user_id,\n            requested_at=CASE WHEN meta_messaging_history_import.connected_at<>EXCLUDED.connected_at THEN now() ELSE meta_messaging_history_import.requested_at END,\n            status='pending',step=EXCLUDED.step,\n            cursor=CASE WHEN meta_messaging_history_import.connected_at=EXCLUDED.connected_at THEN meta_messaging_history_import.cursor ELSE NULL END,\n            contacts_request_id=NULL,history_request_id=NULL,progress=NULL,error_code=NULL,attempts=0,available_at=now(),lease_id=NULL,lease_until=NULL,updated_at=now()\n            WHERE meta_messaging_history_import.connected_at<>EXCLUDED.connected_at OR\n                ($4='instagram' AND meta_messaging_history_import.status='failed')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2698a24422a3b8ca5f030ec3905b8fd24486e79304f746d7343224dc180574c6"
+}

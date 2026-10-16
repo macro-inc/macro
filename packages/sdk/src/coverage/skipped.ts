@@ -309,6 +309,16 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Meta setup/import are browser-admin workflows. External replies require a
+  // deliberate user session; SDK API keys must not gain external-send authority.
+  'metaAuthorize',
+  'metaAuthorizeComplete',
+  'metaConfiguration',
+  'metaDeveloperWhatsapp',
+  'metaDisconnect',
+  'metaImportHistory',
+  'metaReply',
+  'metaUploadAttachment',
   // Browser Loro-session initialization/publication; SDK layout writes use putFormLayout.
   'collaborateForm',
   // Slack archive imports are browser-admin workflows, not SDK surface in v1.
@@ -407,6 +417,13 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  // Optional external-account metadata wrappers; native channel/message reads
+  // already use the existing SDK surfaces.
+  'metaConnections',
+  'metaConversation',
+  'metaHistory',
+  'metaMessageDelivery',
+  'metaTemplates',
   // Email follow-ups are available through the generated client.
   'getEmailFollowup',
   'setEmailFollowup',

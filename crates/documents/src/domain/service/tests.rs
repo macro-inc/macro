@@ -16,6 +16,7 @@ use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
 
 use super::*;
 
+mod received_file;
 mod sync_content;
 
 fn make_test_metadata() -> DocumentMetadata {

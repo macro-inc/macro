@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send SET native_retry_at=now() WHERE connection_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3853a9c7e40f9b6975ae6cf1119ad83438fe561a732ca1ae21c0fa44b698456e"
+}

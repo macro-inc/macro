@@ -110,6 +110,112 @@ succeeded, failed, stopped, and interrupted attempts. Check completion latency,
 failed/interrupted turns, queue age, and duplicate source admissions during
 internal rollout. Model usage continues through the existing session metering.
 
+## WhatsApp Business and Instagram customer channels
+
+Open **Settings → Integrations → Accounts**. WhatsApp Business and Instagram
+use the same compact rows as other accounts: provider logo, account name, and
+**Manage** (or **Connect** for a new account). **Manage** contains history import
+and an overflow menu for reconnect/disconnect. Disconnected accounts stay collapsed.
+Setup details appear in the dialog, and account errors remain visible on the row.
+A team owner or administrator connects the business account. Each customer gets
+one private native channel per connected account. The connecting administrator
+starts as its participant; use ordinary channel invitations for teammates.
+Connecting brings in new activity only. Past conversations are not automatically
+imported. The first new customer message or phone-app echo creates the channel;
+subsequent activity reuses it. To bring old conversations in, click **Import history**
+beside the connected account, review its limits, then **Import available history**.
+This imports all history available through Meta into the same private channels;
+there is no conversation picker or export-upload flow. WhatsApp coexistence offers
+up to six months during its 24-hour onboarding window (media: 14 days); test numbers
+do not support it. Instagram exposes up to the latest 20 messages per conversation
+and excludes message requests inactive over 30 days. The dialog shows progress,
+unavailable-account explanations and recovery. Import never sends a message or
+opens a reply window. New messages reuse imported channels and preserve renames.
+
+
+Account errors appear in both Settings and the customer composer. Follow the
+specific action: expired authorization needs reconnecting; Meta access blocks need
+Meta account confirmation/permission checks; lost Macro admin access needs a current
+admin to reconnect. Temporary failures are retried automatically. Disconnecting one
+WhatsApp number keeps the subscription required by other connected numbers; that
+is a successful disconnect, not a provider-removal failure.
+
+Customer channels have one composer that replies to the customer. There is no
+internal-note composer or destination switch. Click the send arrow or press
+**Enter** on desktop to send; **Shift+Enter** inserts a new line. Mobile Return
+keeps its native newline behavior. The composer uses the shared channel layout and send button. Ordinary Macro
+channels keep their existing composer. Agent work stays private and is never
+forwarded automatically. Native thread replies, reactions, edits, and deletes
+are hidden in customer channels because those actions do not reach the provider.
+Customer conversations also hide Call, the Call/Calls tabs, and the active-call
+join link. Saved or deep-linked call tabs resolve to Messages, and a customer
+join-call link cannot start a call. These controls stay unavailable while the
+conversation binding is loading or in error; ordinary channels retain calls.
+
+The title is the customer's full profile/display name, falling back to the
+WhatsApp phone number or Instagram handle. A small provider logo replaces the
+channel hash in the header. Click it for contact details and the connected
+business account. Sender names have no “sent via” suffix. Files selected in the
+composer are staged privately; selecting a file alone never sends it.
+
+New customer activity refreshes the server-owned reply window immediately;
+internal messages and older history do not trigger that refresh.
+The composer follows the server's implemented capabilities and current eligibility.
+Local expiry disables sending; it cannot grant permission. While a channel binding
+is unknown, loading or error states keep native mutations disabled. Once a channel
+is known to be internal, a messaging-metadata refresh failure keeps its normal
+composer usable. External drafts remain editable through connection errors.
+WhatsApp
+requires an approved template outside its standard window. Normal replies show no
+template controls; once the window closes, **Choose template** opens the picker,
+any typed text stays as a draft, and **Back to text reply** returns to it. Instagram's extended
+human-support mode is offered only with configured app approval and requires an
+explicit human-support selection. Unsupported template inputs are disabled.
+
+Successful replies show no sent/delivered/read markers. Replies appear immediately;
+**Still sending…** appears only after five seconds of pending delivery. Test-phone
+suffixes stay out of visible sender/account names. Failures and uncertain outcomes
+remain visible and actionable; provider status is still stored for recovery.
+Captionless attachments show only the native file card. Captions remain visible;
+loading and unavailable attachments keep an explicit progress/error notice.
+Failed or pending attempts remain in the timeline with their original text,
+author and time, even before a native sent message exists. These are local send
+attempts and have no native reply/edit/delete actions. They are replaced by the
+native message when sending succeeds; statuses also load when scrolling back
+through older messages.
+
+**Not sent** means the reply waited ten minutes without a dispatch attempt.
+Its **Edit and retry** action restores the original draft with a new intent key.
+An uncertain or provider-accepted attempt never receives this expiry label.
+**Couldn’t deliver** explains other definitive failures in plain language. **Edit and retry**
+restores the failed draft without sending it or
+overwriting an existing draft. **Delivery not confirmed** means the reply may
+have arrived: choose **Review reply**, check the original app, and explicitly
+acknowledge that check before resending. Reconnect accounts in Settings after
+revocation or expiry. Draft text remains editable while an account reconnects;
+external sending remains disabled until the server permits it.
+
+Verify both provider channels, the logo/details popover, a single customer composer,
+draft isolation and restoration when returning to a channel, attachment access and
+denied teammate access. New customer channels and updated sidebar activity should
+appear without reloading; a background tab refreshes when it becomes visible.
+Live customer notifications show the external customer identity. History imports,
+attachment updates and business replies remain quiet. Uncertain-reply acknowledgement
+must be checked again after leaving and returning to that composer.
+Local preview conversations contain sample data; their statuses are simulated.
+They do not verify live Meta delivery. See [setup and verification](../META_MESSAGING.md).
+
+Shared Instagram posts show the provider title and a native private attachment
+labelled as a preview, or an authentic supplied content link. A reel link does not
+promise in-app playback; a CDN preview does not imply a complete carousel. Story
+replies keep the customer text and story preview together. Unknown or unavailable
+parts have concise fallback text while supported parts remain visible. WhatsApp
+locations, contacts and selections use readable labels instead of provider JSON.
+Instagram edits update the original native message; unsends remove its visible
+body and attachment references. Neither is a new message or a new reply window.
+Reactions and provider quote composer actions remain deferred; ordinary Macro
+threads do not become external quoted replies. See [content coverage](../META_MESSAGE_CONTENT.md).
+
 ## Imported Slack history
 
 Import starts from the **Import from Slack** chip below the Chat sidebar tabs,
@@ -1237,3 +1343,9 @@ Markdown options before Query and Database. Typing `/query` filters to the Query
 action; `/database` creates a new database and inserts its editable card.
 
 When Databases is enabled, type `/query` in a channel message or thread reply and choose **Query** to insert a live question. Ask with Enter or the Ask button, then accept the answer before sending the message. Enter in the question box belongs to the question and must not send the channel draft. Recipients can read the live answer subject to their database access. Database @ mentions in message composers remain compact; **Expand** turns one into an editable database card.
+
+Customer-channel ownership follows ordinary private-channel sharing. Connecting
+an account does not make its conversations visible to the whole team, and
+reconnecting does not transfer existing channel or file ownership. Source unsends
+remove message content and attachment references; underlying files follow native
+sharing/deletion rules. There is no automatic-member list or ownership backfill.

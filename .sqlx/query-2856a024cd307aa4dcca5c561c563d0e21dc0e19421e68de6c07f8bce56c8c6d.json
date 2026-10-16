@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_message SET delivery_state = $3 WHERE connection_id = $1 AND provider_message_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2856a024cd307aa4dcca5c561c563d0e21dc0e19421e68de6c07f8bce56c8c6d"
+}

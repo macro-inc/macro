@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT r.id FROM meta_messaging_receipt r\n                WHERE (r.attempts < 20 OR r.error_code='account_state_changed')\n                  AND r.created_at > now() - interval '30 days' AND r.payload_cleared_at IS NULL\n                  AND r.available_at <= now()\n                  AND (r.status='pending' OR (r.status='processing' AND r.lease_until<now()))\n                  AND NOT EXISTS (\n                    SELECT 1 FROM unnest(COALESCE(NULLIF(r.routing_keys,'{}'), ARRAY[r.provider])) account\n                    WHERE (SELECT count(*) FROM meta_messaging_receipt busy\n                        WHERE busy.status='processing' AND busy.lease_until>now()\n                          AND COALESCE(NULLIF(busy.routing_keys,'{}'),ARRAY[busy.provider]) @> ARRAY[account]\n                    ) >= 2\n                  )\n                ORDER BY r.available_at,r.id FOR UPDATE SKIP LOCKED LIMIT 1\n            ) UPDATE meta_messaging_receipt r SET status='processing',lease_id=$1,\n                lease_until=LEAST(now()+interval '5 minutes',created_at+interval '30 days'),attempts=LEAST(20,attempts+1)\n              FROM candidate c WHERE r.id=c.id\n              RETURNING r.id,r.provider,r.payload,r.attempts,r.created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "attempts",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4e56dca30846e079fef42cc221b89de1e016f9447704438494ac5ec7b0aa811f"
+}

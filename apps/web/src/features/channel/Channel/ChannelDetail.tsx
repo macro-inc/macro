@@ -1,5 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
+import { createChannelInteraction } from '@app/features/meta-messaging/queries/channel-messaging';
+import { ChannelMessagingIdentity } from '@app/features/meta-messaging/views/channel-identity';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
@@ -106,11 +108,16 @@ export function ChannelDetailTitle(props: ChannelDetailHeaderProps) {
 
   return (
     <div class="ph-no-capture flex min-w-0 shrink items-center gap-2">
-      <ChannelTopIcon
+      <ChannelMessagingIdentity
         channelId={props.channelId}
         channelType={channelType()}
-        participants={participants()}
-      />
+      >
+        <ChannelTopIcon
+          channelId={props.channelId}
+          channelType={channelType()}
+          participants={participants()}
+        />
+      </ChannelMessagingIdentity>
       <span class="truncate text-sm font-semibold">
         {channelName() ?? 'New Channel'}
       </span>
@@ -151,6 +158,12 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
   const call = useCall(() => props.channelId);
+  const messaging = createChannelInteraction({
+    channelId: () => props.channelId,
+    channelType,
+  });
+  const callsAllowed = () =>
+    messaging.interaction().kind === 'internal' && !channel()?.agent_dm;
 
   // Seed for "Ask Macro": a new chat with this channel @mentioned.
   const askMacroEntity = () => {
@@ -176,9 +189,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           channelType={channelType()}
         />
       </DebugSuspense>
-      <Show
-        when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
-      >
+      <Show when={ENABLE_CALLS && callsAllowed() && !call.isInThisChannel()}>
         <DebugSuspense name="ChannelDetail.call-button">
           <ChannelCallButton channelId={props.channelId} />
         </DebugSuspense>
@@ -257,6 +268,14 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const conversationChannel = useChannel(channelId);
   const canCall = useChannelCanCall(channelId);
   const channelName = useChannelName(channelId, props.fallbackName);
+  const channelType = useChannelType(channelId);
+  const messaging = createChannelInteraction({
+    channelId: () => channelId,
+    channelType,
+  });
+  const callsAllowed = () =>
+    messaging.interaction().kind === 'internal' &&
+    !conversationChannel()?.agent_dm;
   useSplitDisplayName(() => channelName() ?? 'New Channel');
 
   const requestFromTarget = (
@@ -294,9 +313,14 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const hasActiveCallHere = !!(
     callCtx?.isInCall() && callCtx.activeChannelId() === channelId
   );
-  const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
+  const [requestedTab, setActiveTabInternal] = createSignal<ChannelTabId>(
     normalizeChannelTab(hasActiveCallHere ? 'call' : DEFAULT_CHANNEL_TAB)
   );
+  const activeTab = () =>
+    conversationChannel()?.agent_dm &&
+    ['call', 'calls', 'participants'].includes(requestedTab())
+      ? DEFAULT_CHANNEL_TAB
+      : normalizeChannelTab(requestedTab(), callsAllowed());
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(
       conversationChannel()?.agent_dm &&
@@ -305,14 +329,8 @@ function ChannelDetailContent(props: ChannelDetailProps) {
         : normalizeChannelTab(tab)
     );
   };
-  createComputed(() => {
-    if (
-      conversationChannel()?.agent_dm &&
-      ['call', 'calls', 'participants'].includes(activeTab())
-    )
-      setActiveTabInternal(DEFAULT_CHANNEL_TAB);
-  });
-  const [pendingJoinCall, setPendingJoinCall] = createSignal(false);
+  const [joinRequested, setPendingJoinCall] = createSignal(false);
+  const pendingJoinCall = () => callsAllowed() && joinRequested();
 
   // A new target within the already-mounted channel (a notification jump)
   // must land on the messages pane, whichever tab is open.

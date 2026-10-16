@@ -27,7 +27,6 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
-async-trait = { workspace = true }
 ai_billing = { path = "../../crates/ai_billing" }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
@@ -41,6 +40,10 @@ ai_tools = { path = "../../crates/ai_tools" }
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
+aws-sdk-kms = { workspace = true }
+channel_sender = { path = "../../crates/channel_sender" }
+meta_messaging = { path = "../../crates/meta_messaging", features = ["axum", "outbound"] }
 async-graphql = { workspace = true }
 async-graphql-axum = "7.0.17"
 aws-sdk-dynamodb = { workspace = true }
@@ -238,6 +241,7 @@ search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 slack_integration = { path = "../../crates/slack_integration", features = [
   "gateway",
   "inbound",
@@ -294,6 +298,9 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 
 [dev-dependencies]
+entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
+hmac = { workspace = true }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 cool_asserts = "2"
 flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }

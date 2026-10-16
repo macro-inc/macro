@@ -1,0 +1,23 @@
+{
+  "object": "instagram",
+  "entry": [{
+    "id": "business1",
+    "messaging": [{
+      "sender": {"id": "customer1"},
+      "recipient": {"id": "business1"},
+      "timestamp": 1791288000123,
+      "message": {
+        "mid": "shared-post-1",
+        "text": "Have a look",
+        "attachments": [{
+          "type": "ig_post",
+          "payload": {
+            "url": "https://lookaside.fbsbx.com/ig_messaging_cdn/sanitized-preview",
+            "title": "A caption with <markup> & [links]",
+            "ig_post_media_id": "18000000000000000"
+          }
+        }]
+      }
+    }]
+  }]
+}

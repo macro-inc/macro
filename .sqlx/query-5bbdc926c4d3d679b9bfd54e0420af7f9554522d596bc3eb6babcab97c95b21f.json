@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_message (connection_id,provider_message_id,message_id,customer_id,provenance,direction,provider_timestamp,reply_to_id,delivery_state,media_state,provider_type) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5bbdc926c4d3d679b9bfd54e0420af7f9554522d596bc3eb6babcab97c95b21f"
+}

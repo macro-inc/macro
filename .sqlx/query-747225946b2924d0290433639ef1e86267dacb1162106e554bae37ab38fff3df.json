@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_object('requested_at',requested_at,'status',status,'progress',progress,'error_code',error_code,'unavailable_media',unavailable_media) AS \"data!\"\n            FROM meta_messaging_history_import WHERE connection_id=$1 AND connected_at=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "747225946b2924d0290433639ef1e86267dacb1162106e554bae37ab38fff3df"
+}

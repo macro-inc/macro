@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET updated_at=GREATEST(updated_at,now()) WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d142bbcbbbd33e840b3d863e6f85917b7913d9b25e0774c724efabee7e19e6fb"
+}

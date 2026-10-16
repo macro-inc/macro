@@ -31,12 +31,19 @@ export const CalendarRouteView = lazyNamed(
   () => import('@app/features/calendar-view/route-views'),
   'CalendarRouteView'
 );
+// Parent and detail routes share one import promise, including on older Safari.
+const loadChannelViews = (() => {
+  let pending:
+    | Promise<typeof import('@app/features/channels-view/route-views')>
+    | undefined;
+  return () => (pending ??= import('@app/features/channels-view/route-views'));
+})();
 export const ChannelDetailRouteView = lazyNamed(
-  () => import('@app/features/channels-view/channels-view'),
+  loadChannelViews,
   'ChannelDetailRouteView'
 );
 export const ChannelsRouteView = lazyNamed(
-  () => import('@app/features/channels-view/route-views'),
+  loadChannelViews,
   'ChannelsRouteView'
 );
 export const CompaniesRouteView = lazyNamed(

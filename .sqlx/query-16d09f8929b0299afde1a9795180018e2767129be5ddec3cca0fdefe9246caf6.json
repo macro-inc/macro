@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payload,payload_cleared_at FROM meta_messaging_receipt WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "payload_cleared_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "16d09f8929b0299afde1a9795180018e2767129be5ddec3cca0fdefe9246caf6"
+}

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_status (connection_id,provider_message_id,state,occurred_at,error_code) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (connection_id,provider_message_id,state) DO UPDATE SET occurred_at = GREATEST(meta_messaging_status.occurred_at, EXCLUDED.occurred_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c5db8cdbdab61dabb98d199474bb6fadd2ec1df57aad34f7bc96e3ad3490c82"
+}

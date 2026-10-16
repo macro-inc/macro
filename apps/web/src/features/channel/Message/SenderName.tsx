@@ -1,3 +1,4 @@
+import { displayAuthorName } from '@core/messages/author-name';
 import type { MessageData } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { getBotDisplayName } from '@queries/messages/message-sender';
@@ -22,6 +23,18 @@ export function MessageSenderName(props: SenderNameProps) {
   );
 }
 
+/** External attribution never represents a signed-in Macro teammate. */
+export function ExternalBadge() {
+  const message = useMessage();
+  return (
+    <Show when={message().sender_id.startsWith('external|')}>
+      <span class="sr-only" title="Sent from a connected external account">
+        External
+      </span>
+    </Show>
+  );
+}
+
 export function SenderName(props: { message: MessageData }) {
   const macroId = () => tryMacroId(props.message.sender_id);
   const displayName = () => getDisplayName(macroId());
@@ -29,7 +42,7 @@ export function SenderName(props: { message: MessageData }) {
     getBotDisplayName(props.message.sender_id, props.message.sender);
   const importedName = () => {
     const name = props.message.imported_author?.name?.trim();
-    return name ? name : undefined;
+    return name ? displayAuthorName(name) : undefined;
   };
   return <>{importedName() ?? agentName() ?? displayName()}</>;
 }

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_channels SET name='Our important customer' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e4a7edd1e1e04663fa78ea7f05362b3620db8a389ff445ac6a26e59c33e89cf"
+}

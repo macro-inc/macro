@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_conversation SET last_customer_message_at = GREATEST(last_customer_message_at,$3),standard_window_until = GREATEST(standard_window_until,$4) WHERE connection_id = $1 AND customer_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0078587454f6bdd4b912f7f71b1c72e5c61dc256f3837f9262f0b2c438ea3e28"
+}

@@ -2,7 +2,7 @@ import { firstPartyBotMark } from '@core/component/firstPartyBotMark';
 import { UserIcon } from '@core/component/UserIcon';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { MessageSender } from '@service-storage/messages';
-import { cn } from '@ui';
+import { Avatar, cn } from '@ui';
 import { Show } from 'solid-js';
 import { BotIcon } from './BotIcon';
 import { useMessage } from './context';
@@ -34,7 +34,20 @@ export function SenderIcon(props: SenderIconProps) {
       {!props.hidden && (
         <Show
           when={botSender()}
-          fallback={<UserIcon id={message().sender_id} size="fill" />}
+          fallback={
+            <Show
+              when={message().imported_author?.name}
+              fallback={<UserIcon id={message().sender_id} size="fill" />}
+            >
+              {(name) => (
+                <Avatar size="fill">
+                  <Avatar.Fallback class="font-semibold">
+                    {name().trim().charAt(0).toUpperCase()}
+                  </Avatar.Fallback>
+                </Avatar>
+              )}
+            </Show>
+          }
         >
           {(bot) => (
             <BotIcon

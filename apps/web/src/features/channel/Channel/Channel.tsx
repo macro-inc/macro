@@ -6,6 +6,11 @@ import {
 import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import { createChannelMessaging } from '@app/features/meta-messaging/queries/channel-messaging';
+import {
+  MessageDelivery,
+  ReplyAttempt,
+} from '@app/features/meta-messaging/views/delivery-message';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -47,6 +52,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DateValue } from '@core/util/date';
+import { lazyNamed } from '@core/util/lazyNamed';
 import {
   extractUserMentions,
   trimEdgeUserMentions,
@@ -94,6 +100,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import {
@@ -148,6 +155,11 @@ import {
   type UnifiedReplyTargetSnapshot,
 } from './unified-input-manager';
 import type { UnreadThread } from './unread-thread-navigation';
+
+const ChannelMessagingComposer = lazyNamed(
+  () => import('../../meta-messaging/channel-messaging'),
+  'ChannelMessagingComposer'
+);
 
 export type ChannelProps = {
   channelId: string;
@@ -272,6 +284,23 @@ export function Channel(props: ChannelProps) {
   const messageById = () => messageIndex.byId;
   // Loaded messages, oldest first; activity rows are not unread targets.
   const messages = createMemo(() => [...messageIndex.byId.values()]);
+  const channelType = useChannelType(props.channelId);
+  const messaging = createChannelMessaging({
+    channelId: () => props.channelId,
+    channelType,
+    messages,
+    entries: () =>
+      messageIndex.entries.map((entry) => ({
+        key: timelineEntryKey(entry),
+        position:
+          entry.type === 'message'
+            ? { id: entry.message.id, createdAt: entry.message.created_at }
+            : { id: entry.activity.id, createdAt: entry.activity.occurred_at },
+      })),
+    includesLatest: () => !messagesQuery.hasPreviousPage,
+    visibleRange: () => threadListScrollState()?.visibleRange,
+  });
+  const internalInteraction = () => messaging.interaction().kind === 'internal';
   const unread = createChannelUnreadNavigation({
     channelId: props.channelId,
     messages,
@@ -387,7 +416,6 @@ export function Channel(props: ChannelProps) {
 
   const channelName = useChannelName(props.channelId);
   const channel = useChannel(props.channelId);
-  const channelType = useChannelType(props.channelId);
   const { popoverSplit } = useSplitLayout();
 
   // Placeholder name: channels render as "#name"; a 1:1 DM named "First Last"
@@ -475,7 +503,7 @@ export function Channel(props: ChannelProps) {
     deleteMessageMutation.mutate
   );
 
-  const getMessageActions = createChannelMessageActions({
+  const nativeMessageActions = createChannelMessageActions({
     parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
     userId,
     deleteMessage: deleteConfirmation.requestDelete,
@@ -512,6 +540,20 @@ export function Channel(props: ChannelProps) {
       openChatWithInput(`${buildChannelMessageMention(ctx.message)}\n\n`);
     },
   });
+  const getMessageActions = (message: MessageData) => {
+    const actions = nativeMessageActions(message);
+    // Customer conversations have one external composer. These native mutations
+    // would only change Macro, so do not present them as customer-facing actions.
+    return !internalInteraction()
+      ? {
+          ...actions,
+          onReply: undefined,
+          onEdit: undefined,
+          onDelete: undefined,
+          onReact: undefined,
+        }
+      : actions;
+  };
 
   const selection = createMessageSelection({
     keys: () => messageIndex.keys,
@@ -670,6 +712,7 @@ export function Channel(props: ChannelProps) {
   });
 
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
+    if (!internalInteraction()) return;
     const senderId = userId();
     if (!senderId) return;
     const payload = buildPostMessageSendPayload({
@@ -717,7 +760,6 @@ export function Channel(props: ChannelProps) {
   return (
     <AgentConversationsProvider
       channelId={props.channelId}
-      // Only an agent DM has a conversing agent so far.
       hasAgents={!!channel()?.agent_dm}
     >
       <EntityLoadGate
@@ -749,7 +791,7 @@ export function Channel(props: ChannelProps) {
                         direction="desc"
                       />
                     </Show>
-                    <Show when={messageIndex.entryKeys.length > 0}>
+                    <Show when={messaging.timelineKeys().length > 0}>
                       <div
                         class="relative flex-1 min-h-0"
                         ref={setThreadListContainerEl}
@@ -761,15 +803,12 @@ export function Channel(props: ChannelProps) {
                             container={threadListContainerEl}
                             triggerBehavior="spring-back"
                           >
-                            {/* The newest row shows the agents typing. Their
-                                rows are made once, here, so a live turn moves
-                                with that row instead of starting over in it. */}
                             <AgentTypingProvider
                               parent={{ type: 'channel', id: props.channelId }}
                               threadId={null}
                             >
                               <ThreadList
-                                keys={() => messageIndex.entryKeys}
+                                keys={messaging.timelineKeys}
                                 targetId={
                                   targetMessageController.hasPendingElementScroll()
                                     ? targetMessageController.activeTargetMessageId()
@@ -802,7 +841,7 @@ export function Channel(props: ChannelProps) {
                               >
                                 {(item) => {
                                   const isNewestRow = () =>
-                                    item.id === messageIndex.entryKeys.at(-1);
+                                    item.id === messaging.timelineKeys().at(-1);
                                   const activity = () =>
                                     messageIndex.activityByKey.get(item.id);
                                   const message = () =>
@@ -810,6 +849,27 @@ export function Channel(props: ChannelProps) {
 
                                   return (
                                     <Switch>
+                                      <Match
+                                        when={messaging
+                                          .attemptsByKey()
+                                          .get(item.id)}
+                                      >
+                                        {(send) => (
+                                          <ReplyAttempt
+                                            send={send()}
+                                            accountName={
+                                              messaging.account()?.account_name
+                                            }
+                                            provider={
+                                              messaging.account()?.provider ??
+                                              'whatsapp'
+                                            }
+                                            userId={userId()}
+                                            canRecover={messaging.canRecoverReply()}
+                                            onRecover={messaging.recoverReply}
+                                          />
+                                        )}
+                                      </Match>
                                       <Match when={activity()}>
                                         {(activity) => (
                                           <ThreadRow
@@ -858,6 +918,22 @@ export function Channel(props: ChannelProps) {
                                               hideTriggeredBy={
                                                 !!channel()?.agent_dm
                                               }
+                                              delivery={() => (
+                                                <MessageDelivery
+                                                  send={messaging
+                                                    .deliveryByMessage()
+                                                    .get(m().id)}
+                                                  provider={
+                                                    messaging.account()
+                                                      ?.provider ?? 'whatsapp'
+                                                  }
+                                                  userId={userId()}
+                                                  canRecover={messaging.canRecoverReply()}
+                                                  onRecover={
+                                                    messaging.recoverReply
+                                                  }
+                                                />
+                                              )}
                                               data={m}
                                               parent={() => ({
                                                 type: 'channel',
@@ -920,10 +996,14 @@ export function Channel(props: ChannelProps) {
                                               setIsExpanded={
                                                 state.setIsExpanded
                                               }
-                                              isReplying={state.isReplying}
-                                              setIsReplying={
-                                                state.setIsReplying
+                                              isReplying={() =>
+                                                internalInteraction() &&
+                                                state.isReplying()
                                               }
+                                              setIsReplying={(value) => {
+                                                if (internalInteraction())
+                                                  state.setIsReplying(value);
+                                              }}
                                               replyInputState={
                                                 state.replyInputState
                                               }
@@ -994,9 +1074,11 @@ export function Channel(props: ChannelProps) {
                         </MessageNotificationIndexContext.Provider>
                       </div>
                     </Show>
-                    <DebugSuspense name="Channel.active-call">
-                      <ActiveCallMessage channelId={props.channelId} />
-                    </DebugSuspense>
+                    <Show when={internalInteraction() && !channel()?.agent_dm}>
+                      <DebugSuspense name="Channel.active-call">
+                        <ActiveCallMessage channelId={props.channelId} />
+                      </DebugSuspense>
+                    </Show>
                   </div>
                   <DebugSuspense name="Channel.input">
                     <FloatRegionOrInline region="accessory">
@@ -1009,6 +1091,7 @@ export function Channel(props: ChannelProps) {
                         <Switch>
                           <Match
                             when={
+                              internalInteraction() &&
                               isUnifiedInputMode() &&
                               messageEditor.state()?.messageId
                             }
@@ -1029,6 +1112,7 @@ export function Channel(props: ChannelProps) {
                           </Match>
                           <Match
                             when={
+                              internalInteraction() &&
                               isUnifiedInputMode() &&
                               unifiedInput.replyTarget()?.threadId
                             }
@@ -1065,65 +1149,76 @@ export function Channel(props: ChannelProps) {
                             )}
                           </Match>
                           <Match when={true}>
-                            {/* An agent DM gates only a new message on its
-                                agent: editing and thread replies stay open. */}
-                            <AgentDmComposer
-                              channelId={props.channelId}
-                              botId={channel()?.agent_dm?.bot_id}
-                            >
-                              <ChannelInput
-                                autofocus={props.autofocus}
-                                collapsible
-                                input={{
-                                  mode: 'channel',
-                                  id: `channel-input-${props.channelId}`,
-                                  placeholder: inputPlaceholder(),
-                                }}
-                                participants={participants.users}
-                                bots={channelBotMentionUsers}
-                                attachmentTracker={attachmentTracker}
-                                persistenceKey={makeInputValuePersistenceKey({
-                                  channelId: props.channelId,
-                                })}
-                                onReady={(handle) => {
-                                  dragState.setAttachFilesToChannel(
-                                    handle.attachFiles
-                                  );
-                                  dragState.setEntityMentionInputHandlers(
-                                    handle
-                                  );
-                                  setChannelInputHandle(handle);
-                                }}
-                                onChange={(snapshot) =>
-                                  void setChannelInputSnapshot(snapshot)
-                                }
-                                onSend={onSend}
-                                onStartCall={
-                                  ENABLE_CALLS && !channelCall.isInThisChannel()
-                                    ? () => void channelCall.start()
-                                    : undefined
-                                }
-                                callInProgress={channelCall.isCallInProgress()}
-                                onStartTyping={() =>
-                                  typingMutation.mutate({
-                                    parent: {
-                                      type: 'channel',
-                                      id: props.channelId,
-                                    },
-                                    action: 'start',
-                                  })
-                                }
-                                onStopTyping={() =>
-                                  typingMutation.mutate({
-                                    parent: {
-                                      type: 'channel',
-                                      id: props.channelId,
-                                    },
-                                    action: 'stop',
-                                  })
-                                }
-                              />
-                            </AgentDmComposer>
+                            <Suspense>
+                              <ChannelMessagingComposer
+                                channelId={props.channelId}
+                                interaction={messaging.interaction()}
+                                onRefresh={messaging.refresh}
+                                onRecoverReady={messaging.registerRecovery}
+                              >
+                                <AgentDmComposer
+                                  channelId={props.channelId}
+                                  botId={channel()?.agent_dm?.bot_id}
+                                >
+                                  <ChannelInput
+                                    autofocus={props.autofocus}
+                                    collapsible
+                                    input={{
+                                      mode: 'channel',
+                                      id: `channel-input-${props.channelId}`,
+                                      placeholder: inputPlaceholder(),
+                                    }}
+                                    participants={participants.users}
+                                    bots={channelBotMentionUsers}
+                                    attachmentTracker={attachmentTracker}
+                                    persistenceKey={makeInputValuePersistenceKey(
+                                      {
+                                        channelId: props.channelId,
+                                      }
+                                    )}
+                                    onReady={(handle) => {
+                                      dragState.setAttachFilesToChannel(
+                                        handle.attachFiles
+                                      );
+                                      dragState.setEntityMentionInputHandlers(
+                                        handle
+                                      );
+                                      setChannelInputHandle(handle);
+                                    }}
+                                    onChange={(snapshot) =>
+                                      void setChannelInputSnapshot(snapshot)
+                                    }
+                                    onSend={onSend}
+                                    onStartCall={
+                                      ENABLE_CALLS &&
+                                      !channel()?.agent_dm &&
+                                      !channelCall.isInThisChannel()
+                                        ? () => void channelCall.start()
+                                        : undefined
+                                    }
+                                    callInProgress={channelCall.isCallInProgress()}
+                                    onStartTyping={() =>
+                                      typingMutation.mutate({
+                                        parent: {
+                                          type: 'channel',
+                                          id: props.channelId,
+                                        },
+                                        action: 'start',
+                                      })
+                                    }
+                                    onStopTyping={() =>
+                                      typingMutation.mutate({
+                                        parent: {
+                                          type: 'channel',
+                                          id: props.channelId,
+                                        },
+                                        action: 'stop',
+                                      })
+                                    }
+                                  />
+                                </AgentDmComposer>
+                              </ChannelMessagingComposer>
+                            </Suspense>
                           </Match>
                         </Switch>
                       </ChannelInputContainer>

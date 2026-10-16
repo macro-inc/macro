@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Document\" (id,owner,name,\"fileType\") VALUES ($1,$2,'Private file','pdf')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a2787d82f892174ac7706b8b1e5917ffe1937a7bfe84fe08e411b63a8eb2da8"
+}

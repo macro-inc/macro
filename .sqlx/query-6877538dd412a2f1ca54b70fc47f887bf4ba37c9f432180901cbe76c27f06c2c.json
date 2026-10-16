@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT COUNT(*) FROM comms_channels) AS \"channels!\", (SELECT COUNT(*) FROM comms_messages) AS \"messages!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channels!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "messages!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "6877538dd412a2f1ca54b70fc47f887bf4ba37c9f432180901cbe76c27f06c2c"
+}

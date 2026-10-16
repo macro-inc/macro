@@ -61,6 +61,7 @@ export type ThreadProps = {
   /** See `hideTriggeredBy` on the channel message. */
   hideTriggeredBy?: boolean;
   data: Accessor<MessageListItem>;
+  delivery?: () => JSX.Element;
   parent: Accessor<MessageParent>;
   /** The enclosing view owns a floating input only in unified mode. */
   inputMode?: 'inline' | 'unified';

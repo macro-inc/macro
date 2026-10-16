@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_oauth (state_sha256, team_id, user_id, provider, reconnect_id, expires_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (state_sha256) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a910d2f598828a0d5e58c4a29ab0d539acf4b5026a779acfdb644e0402bd0b1c"
+}

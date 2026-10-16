@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_send SET state = 'failed', error_code = 'account_disconnected', updated_at = now() WHERE connection_id = $1 AND state = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "26bb19a5a8b21de1f64abda3b9abd65efb10db39e97b5916c67e0cb5d46784db"
+}

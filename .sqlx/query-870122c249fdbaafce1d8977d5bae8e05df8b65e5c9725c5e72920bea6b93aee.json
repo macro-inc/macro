@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM meta_messaging_connection WHERE id=$1 AND team_id=$2 AND connected_at=$3 AND status='connected' FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "870122c249fdbaafce1d8977d5bae8e05df8b65e5c9725c5e72920bea6b93aee"
+}

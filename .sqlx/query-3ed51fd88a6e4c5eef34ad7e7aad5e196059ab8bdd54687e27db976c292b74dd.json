@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_attachments (id,message_id,entity_type,entity_id) SELECT $1::uuid,$2::uuid,'document',$3::text WHERE NOT EXISTS (SELECT 1 FROM comms_attachments WHERE message_id=$2 AND entity_type='document' AND entity_id=$3::text) ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ed51fd88a6e4c5eef34ad7e7aad5e196059ab8bdd54687e27db976c292b74dd"
+}

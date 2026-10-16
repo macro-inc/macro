@@ -1,6 +1,11 @@
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
-import { type Accessor, createComputed, type JSX } from 'solid-js';
+import {
+  type Accessor,
+  createComputed,
+  createSignal,
+  type JSX,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelTargetRequest } from '../ChannelSurface';
 import { useChannelTab } from '../ChannelTabContext';
@@ -11,8 +16,16 @@ const mocks = vi.hoisted(() => ({
   pass: (props: { children?: JSX.Element }) => props.children,
   requests: [] as (ChannelTargetRequest | undefined)[],
   joinRequested: false,
+  interactionKind: (() => 'internal') as Accessor<
+    'internal' | 'external' | 'loading' | 'error'
+  >,
 }));
 
+vi.mock('@app/features/meta-messaging/queries/channel-messaging', () => ({
+  createChannelInteraction: () => ({
+    interaction: () => ({ kind: mocks.interactionKind() }),
+  }),
+}));
 vi.mock('@channel/Channel/ChannelSurface', () => ({
   ChannelSurface: (props: {
     targetRequest?: ChannelTargetRequest;
@@ -96,13 +109,13 @@ vi.mock('@core/constant/allBlocks', () => ({
 vi.mock('../ChannelTopBarLiveIndicators', () => ({
   ChannelLiveIndicators: () => null,
 }));
-vi.mock('../use-channel-tab-items', () => ({
-  canUseInlineCallTab: () => false,
-  normalizeChannelTab: (tab: string) => tab,
+vi.mock('../use-channel-tab-items', async (original) => ({
+  ...(await original<typeof import('../use-channel-tab-items')>()),
   useChannelTabItems: () => () => [],
 }));
 
 import { ChannelDetail } from '../ChannelDetail';
+import { normalizeChannelTab } from '../use-channel-tab-items';
 
 const CHANNEL_ID = 'channel-1';
 
@@ -120,6 +133,7 @@ const messageRequests = () =>
 beforeEach(() => {
   mocks.requests.length = 0;
   mocks.joinRequested = false;
+  mocks.interactionKind = () => 'internal';
 });
 afterEach(cleanup);
 
@@ -207,5 +221,59 @@ describe('channel detail navigation', () => {
       kind: 'message',
       messageId: 'message-2',
     });
+  });
+});
+
+describe('customer call gating', () => {
+  it('normalizes both saved call tabs while the binding does not allow calls', () => {
+    expect(normalizeChannelTab('call', false)).toBe('messages');
+    expect(normalizeChannelTab('calls', false)).toBe('messages');
+    expect(normalizeChannelTab('attachments', false)).toBe('attachments');
+    expect(normalizeChannelTab('calls', true)).toBe('calls');
+  });
+
+  it('keeps deep-linked customer calls inactive through loading and errors', async () => {
+    const [kind, setKind] = createSignal<'loading' | 'external' | 'error'>(
+      'loading'
+    );
+    mocks.interactionKind = kind;
+    let active: Accessor<ChannelTabId> | undefined;
+    render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>
+        {() => {
+          active = useChannelTab().activeTab;
+          return null;
+        }}
+      </ChannelDetail>
+    ));
+    await navigate({ join_call: 'true' });
+    expect(active?.()).toBe('messages');
+    expect(mocks.joinRequested).toBe(false);
+    setKind('external');
+    expect(active?.()).toBe('messages');
+    expect(mocks.joinRequested).toBe(false);
+    setKind('error');
+    expect(active?.()).toBe('messages');
+    expect(mocks.joinRequested).toBe(false);
+  });
+
+  it('honors an ordinary call link after its binding resolves', async () => {
+    const [kind, setKind] = createSignal<'loading' | 'internal'>('loading');
+    mocks.interactionKind = kind;
+    let active: Accessor<ChannelTabId> | undefined;
+    render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>
+        {() => {
+          active = useChannelTab().activeTab;
+          return null;
+        }}
+      </ChannelDetail>
+    ));
+    await navigate({ join_call: 'true' });
+    expect(active?.()).toBe('messages');
+    expect(mocks.joinRequested).toBe(false);
+    setKind('internal');
+    expect(active?.()).toBe('call');
+    expect(mocks.joinRequested).toBe(true);
   });
 });

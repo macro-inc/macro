@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_receipt SET status='pending',attempts=0,available_at=now(),error_code=NULL,lease_id=NULL,lease_until=NULL\n            WHERE provider=$1 AND status='failed' AND error_code <> 'invalid_provider_payload' AND created_at>now()-interval '30 days' AND payload_cleared_at IS NULL AND\n            (payload @> jsonb_build_object('entry',jsonb_build_array(jsonb_build_object('id',$2::text))) OR\n             payload @> jsonb_build_object('entry',jsonb_build_array(jsonb_build_object('changes',jsonb_build_array(jsonb_build_object('value',jsonb_build_object('metadata',jsonb_build_object('phone_number_id',$2::text))))))))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d4de42d2fcb63ccd720ddd5551b0d18df986bca981029faad428184baa056cf"
+}

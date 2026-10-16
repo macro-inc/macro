@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meta_messaging_receipt (id, provider, body_sha256, payload, routing_keys)\n            VALUES ($1, $2, $3, $4, ARRAY(\n                SELECT DISTINCT $2 || ':' || (account #>> '{}')\n                FROM jsonb_path_query($4, CASE WHEN $2 = 'instagram'\n                    THEN '$.entry[*].id'::jsonpath\n                    ELSE '$.entry[*].changes[*].value.metadata.phone_number_id'::jsonpath END) account\n                WHERE jsonb_typeof(account) = 'string'\n            )) ON CONFLICT (provider, body_sha256) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bytea",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5d507903baad8a86353d845b9580e1c50c4bacfd2e1fe6841169d545f1745a87"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE meta_messaging_message SET native_retry_at=now()+interval '30 seconds' WHERE message_id=$1 AND effect_revision=$2 AND published_revision<$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "66f89c5da891f2d1011fb084679df6b3d571a890c285e2618fc263c3ed6365b5"
+}

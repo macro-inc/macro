@@ -1,3 +1,4 @@
+import { createChannelInteraction } from '@app/features/meta-messaging/queries/channel-messaging';
 import { useCall } from '@channel/Call/use-call';
 import { isNativeIosCallKitEnabled } from '@channel/Call/use-callkit';
 import type { TabItem } from '@core/component/Tabs';
@@ -19,7 +20,9 @@ export const canUseInlineCallTab = () => {
 
 // Native iOS CallKit owns the call surface, so the embedded Call tab should
 // never become the active channel tab on that platform.
-export const normalizeChannelTab = (tab: ChannelTabId) => {
+export const normalizeChannelTab = (tab: ChannelTabId, callsAllowed = true) => {
+  if (!callsAllowed && (tab === 'call' || tab === 'calls'))
+    return DEFAULT_CHANNEL_TAB;
   return tab === 'call' && !canUseInlineCallTab() ? DEFAULT_CHANNEL_TAB : tab;
 };
 
@@ -40,6 +43,12 @@ function CallTabLabel() {
 export function useChannelTabItems(channelId: string): Accessor<TabItem[]> {
   const { activeTab } = useChannelTab();
   const channelType = useChannelType(channelId);
+  const interaction = createChannelInteraction({
+    channelId: () => channelId,
+    channelType,
+  });
+  const callsAllowed = () =>
+    interaction.interaction().kind === 'internal' && !channel()?.agent_dm;
   const channel = useChannel(channelId);
   const call = useCall(() => channelId);
   const activeCallQuery = useActiveCallQuery(() => channelId);
@@ -48,17 +57,17 @@ export function useChannelTabItems(channelId: string): Accessor<TabItem[]> {
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS &&
-    !channel()?.agent_dm &&
+    callsAllowed() &&
     canUseInlineCallTab() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
       activeTab() === 'call' ||
-      !!activeCallQuery.data);
+      (activeCallQuery.isSuccess && !!activeCallQuery.data));
   const availableTabs = () => {
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelType.direct_message)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
-    if (!ENABLE_CALLS || channel()?.agent_dm)
+    if (!ENABLE_CALLS || !callsAllowed())
       filtered = filtered.filter((tab) => tab.value !== 'calls');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');

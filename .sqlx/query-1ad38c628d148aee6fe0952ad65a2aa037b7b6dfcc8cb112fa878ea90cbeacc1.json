@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_conversation (connection_id,customer_id,channel_id,external_sender_id,customer_display_name,customer_phone,customer_handle) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (connection_id,customer_id) DO UPDATE SET customer_display_name = COALESCE(EXCLUDED.customer_display_name,meta_messaging_conversation.customer_display_name),customer_handle=COALESCE(EXCLUDED.customer_handle,meta_messaging_conversation.customer_handle)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1ad38c628d148aee6fe0952ad65a2aa037b7b6dfcc8cb112fa878ea90cbeacc1"
+}

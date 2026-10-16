@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO meta_messaging_connection (id,team_id,user_id,provider,account_id,business_account_id,display_name,credential,credential_expires_at,status,connected_at,history_status,developer_account,human_agent_approved)\n               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'connecting',now(),$10,$11,$12)\n               ON CONFLICT (id) DO UPDATE SET credential = EXCLUDED.credential, credential_expires_at = EXCLUDED.credential_expires_at,\n                   user_id = EXCLUDED.user_id, display_name = EXCLUDED.display_name, status = 'connecting',\n                   human_agent_approved = EXCLUDED.human_agent_approved, connected_at = now(), health_error = NULL, checked_at = NULL, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bytea",
+        "Timestamptz",
+        "Text",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07d99e4450978cd056aef867f9734de61fc141bd2469b3c6f548ccc597befb23"
+}

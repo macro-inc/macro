@@ -1,0 +1,17 @@
+{
+  "scenario": "meta-messaging",
+  "description": "Isolated native messaging UI and permission fixtures. No Meta account, provider credential, or external send is created by this scenario.",
+  "users": {
+    "alice": { "email": "alice.messaging@seed.macro.local", "first_name": "Alice", "roles": ["team_subscriber", "sub_opus"] },
+    "bob": { "email": "bob.messaging@seed.macro.local", "first_name": "Bob", "roles": ["team_subscriber", "sub_opus"] },
+    "carol": { "email": "carol.messaging@seed.macro.local", "first_name": "Carol", "roles": ["team_subscriber", "sub_opus"] },
+    "eve": { "email": "eve.messaging@seed.macro.local", "first_name": "Eve", "roles": ["team_subscriber", "sub_opus"] }
+  },
+  "teams": {
+    "support": { "name": "Messaging Test Team", "owner": "alice", "members": { "bob": "member", "carol": "member" } },
+    "other": { "name": "Other Test Team", "owner": "eve" }
+  },
+  "channels": {
+    "internal-notes": { "type": "private", "owner": "alice", "members": ["bob"] }
+  }
+}

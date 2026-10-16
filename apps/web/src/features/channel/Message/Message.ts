@@ -14,7 +14,7 @@ import { NewDivider } from './NewDivider';
 import { Reactions } from './Reactions';
 import { Root } from './Root';
 import { SenderIcon } from './SenderIcon';
-import { MessageSenderName } from './SenderName';
+import { ExternalBadge, MessageSenderName } from './SenderName';
 import { Slot } from './Slot';
 import { Timestamp } from './Timestamp';
 
@@ -23,6 +23,7 @@ export const Message = {
   Layout,
   Slot,
   SenderName: MessageSenderName,
+  ExternalBadge,
   AgentBadge,
   AgentSessionLink,
   FromPill,
