@@ -10,6 +10,8 @@ aws-sdk-sqs = { workspace = true }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 chrono = { workspace = true }
+email = { path = "../../crates/email", default-features = false, features = ["ports"] }
+futures = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }

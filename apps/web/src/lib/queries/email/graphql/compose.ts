@@ -9,7 +9,7 @@ import type { EmailDraft } from '@app/features/email-compose/core/email-draft';
 import {
   SaveEmailDraftDocument,
   type SaveEmailDraftInput,
-  SendEmailMessageDocument,
+  SendEmailComposeMessageDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { draftContactInput, draftFailureCode } from './draft';
@@ -70,7 +70,7 @@ export async function sendEmailComposeMessage(
   input: SendEmailDraft
 ): Promise<PersistedEmailIdentity> {
   const result = await getGraphqlSoupClient()
-    .mutation(SendEmailMessageDocument, {
+    .mutation(SendEmailComposeMessageDocument, {
       input: {
         draft: composeDraftInput(
           input.message,
@@ -82,7 +82,7 @@ export async function sendEmailComposeMessage(
     })
     .toPromise();
   if (result.error) throw result.error;
-  const sent = result.data?.sendEmailMessage;
+  const sent = result.data?.sendEmailComposeMessage;
   if (!sent) throw new Error('Send returned no delivery identity');
   return {
     draftId: sent.messageId,

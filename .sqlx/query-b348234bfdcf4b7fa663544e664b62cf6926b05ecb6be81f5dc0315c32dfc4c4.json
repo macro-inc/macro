@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sent, delivery_unconfirmed, cancelled FROM email_send_attempts WHERE message_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "delivery_unconfirmed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "cancelled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b348234bfdcf4b7fa663544e664b62cf6926b05ecb6be81f5dc0315c32dfc4c4"
+}

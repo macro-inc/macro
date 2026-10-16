@@ -119,6 +119,27 @@ pub trait MailboxSendClient: Send + Sync + 'static {
     ) -> impl Future<Output = Result<SentIds, EmailApiError>> + Send;
 }
 
+/// Explicitly separated provider dispatch and delivery reconciliation.
+///
+/// This optional capability leaves existing message-send implementations intact.
+pub trait MailboxSendRecoveryClient: Send + Sync + 'static {
+    /// Dispatches already-built MIME once, without token refresh or send retries.
+    fn send_prepared(
+        &self,
+        access_token: &AccessToken,
+        mime: &[u8],
+        provider_thread_id: Option<&str>,
+    ) -> impl Future<Output = Result<SentIds, EmailApiError>> + Send;
+
+    /// Finds one sent message by the stable RFC 5322 Message-ID. An empty result
+    /// does not prove that an earlier ambiguous request was never delivered.
+    fn find_sent_message(
+        &self,
+        access_token: &AccessToken,
+        message_id: &str,
+    ) -> impl Future<Output = Result<Option<SentIds>, EmailApiError>> + Send;
+}
+
 /// Mailbox label management capabilities.
 pub trait MailboxLabelClient: Send + Sync + 'static {
     /// Lists and normalizes all mailbox labels.
@@ -405,6 +426,25 @@ impl MailboxSendClient for NoOpMailboxClient {
         _: &SendRequest,
         _: Option<&str>,
     ) -> Result<SentIds, EmailApiError> {
+        Err(unavailable())
+    }
+}
+
+impl MailboxSendRecoveryClient for NoOpMailboxClient {
+    async fn send_prepared(
+        &self,
+        _: &AccessToken,
+        _: &[u8],
+        _: Option<&str>,
+    ) -> Result<SentIds, EmailApiError> {
+        Err(unavailable())
+    }
+
+    async fn find_sent_message(
+        &self,
+        _: &AccessToken,
+        _: &str,
+    ) -> Result<Option<SentIds>, EmailApiError> {
         Err(unavailable())
     }
 }

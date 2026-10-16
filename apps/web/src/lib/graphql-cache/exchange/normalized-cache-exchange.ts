@@ -1022,6 +1022,11 @@ export function normalizedCacheExchange(
       ): Promise<OperationResult | undefined> {
         const epoch = mutationQueue.epoch();
         if (host.disabled) {
+          if (optimisticContextOf(op)?.durableIntent)
+            return uncertainEnqueueResult(
+              op,
+              new Error('Durable mutation storage is unavailable')
+            );
           notifyOptimisticMutationEnqueued(op);
           enqueueForward(op);
           return undefined;
@@ -1041,7 +1046,20 @@ export function normalizedCacheExchange(
           query: queryText(op),
           operationName: operationName(op),
           variables: op.variables as Record<string, unknown> | undefined,
-          data: optimistic.optimisticResponse,
+          data: optimistic.durableIntent
+            ? {
+                ...(typeof optimistic.optimisticResponse === 'object' &&
+                optimistic.optimisticResponse !== null
+                  ? optimistic.optimisticResponse
+                  : {}),
+                __durableIntent: {
+                  ...optimistic.durableIntent,
+                  deferInitialClaim:
+                    typeof navigator !== 'undefined' &&
+                    navigator.onLine === false,
+                },
+              }
+            : optimistic.optimisticResponse,
           linkPatches: optimistic.linkPatches,
           revalidations: optimistic.revalidations,
           identityBindings: optimistic.identityBindings,
@@ -1070,6 +1088,13 @@ export function normalizedCacheExchange(
             // The old-scope queue may already contain the side effect. It is
             // unsafe to forward or retry without a coordinator fence.
             return uncertainEnqueueResult(op, error);
+          }
+          if (optimistic.durableIntent) {
+            options.onCacheError?.(error, op);
+            return uncertainEnqueueResult(
+              op,
+              error instanceof Error ? error : new Error(String(error))
+            );
           }
           // Another context holds the database, so the enqueue never reached
           // an engine. Send it as a disabled cache would.

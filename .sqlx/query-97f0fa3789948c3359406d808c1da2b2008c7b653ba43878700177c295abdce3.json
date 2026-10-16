@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages SET processing=$2,\n             delivery_lease_expires_at=NOW()+INTERVAL '5 minutes' WHERE message_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "97f0fa3789948c3359406d808c1da2b2008c7b653ba43878700177c295abdce3"
+}

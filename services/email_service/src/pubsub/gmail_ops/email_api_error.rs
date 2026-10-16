@@ -31,6 +31,7 @@ fn error_policy(error: &EmailApiError) -> ErrorPolicy {
         | EmailApiError::NotFound
         | EmailApiError::Conflict
         | EmailApiError::OutdatedCursor
+        | EmailApiError::SendRejected { .. }
         | EmailApiError::Permanent { .. } => ErrorPolicy::Permanent,
     }
 }
@@ -95,6 +96,7 @@ fn processing_error(error: EmailApiError, retryable: bool) -> ProcessingError {
         | EmailApiError::NotFound
         | EmailApiError::Conflict
         | EmailApiError::Transient { .. }
+        | EmailApiError::SendRejected { .. }
         | EmailApiError::Permanent { .. } => FailureReason::GmailApiFailed,
     };
     let detail = DetailedError {

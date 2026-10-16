@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use crate::outbound::{RecoveryQueue, RecoveryRepository};
+use email::domain::scheduled_delivery::recovery::ScheduledRecovery;
 
 #[derive(Clone)]
 pub struct Context {
-    pub db: sqlx::Pool<sqlx::Postgres>,
-    pub sqs_client: Arc<sqs_client::SQS>,
+    pub recovery: ScheduledRecovery<RecoveryRepository, RecoveryQueue>,
 }

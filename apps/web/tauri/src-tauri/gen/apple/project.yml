@@ -59,8 +59,8 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CFBundleShortVersionString: 2.0.10
-        CFBundleVersion: "187"
+        CFBundleShortVersionString: 2.0.11
+        CFBundleVersion: "188"
         # Exempt encryption only (HTTPS / OS crypto): answers App Store
         # Connect's export-compliance questionnaire for every build. Keep in
         # sync with src-tauri/Info.ios.plist.
@@ -146,8 +146,8 @@ targets:
       path: ShareExtension/Info.plist
       properties:
         CFBundleDisplayName: Share to Macro
-        CFBundleShortVersionString: 2.0.10
-        CFBundleVersion: "187"
+        CFBundleShortVersionString: 2.0.11
+        CFBundleVersion: "188"
         LSApplicationQueriesSchemes:
           - macro
         NSExtension:
@@ -181,8 +181,8 @@ targets:
       path: NotificationServiceExtension/Info.plist
       properties:
         CFBundleDisplayName: NotificationServiceExtension
-        CFBundleShortVersionString: 2.0.10
-        CFBundleVersion: "187"
+        CFBundleShortVersionString: 2.0.11
+        CFBundleVersion: "188"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

@@ -10,6 +10,7 @@ import type {
   EmailThreadMessageFieldsFragment,
   EmailThreadPageFieldsFragment,
   GraphqlEntityAccessLevel,
+  GraphqlScheduledSendStatus,
 } from '@service-storage/graphql/generated/graphql';
 import { match } from 'ts-pattern';
 
@@ -122,6 +123,15 @@ export function mapGraphqlEmailMessage(
     provider_id: optional(message.providerId),
     replying_to_id: optional(message.replyingToId),
     scheduled_send_time: message.scheduledSendTime,
+    scheduled_send_status:
+      message.scheduledSendStatus == null
+        ? null
+        : match<GraphqlScheduledSendStatus>(message.scheduledSendStatus)
+            .with('PENDING', () => 'pending' as const)
+            .with('SENDING', () => 'sending' as const)
+            .with('FAILED', () => 'failed' as const)
+            .with('UNCONFIRMED', () => 'unconfirmed' as const)
+            .exhaustive(),
     sent_at: message.sentAt,
     snippet: message.snippet,
     subject: message.subject,

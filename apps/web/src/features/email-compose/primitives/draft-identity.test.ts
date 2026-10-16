@@ -473,3 +473,55 @@ it('waits for a replacement identity read before correlating an already-sent fai
     root.dispose();
   }
 });
+
+it('retries a failed confirmed attachment handoff once on reconnect', async () => {
+  let changed!: () => void;
+  const upload = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('transport offline'))
+    .mockResolvedValue(undefined);
+  const root = createRoot((dispose) => {
+    const session = createDraftSession({
+      draftId: 'server',
+      threadId: 'server-thread',
+      persistence: 'committed',
+    });
+    observeDraftIdentity(
+      {
+        ...createComposeContext().drafts,
+        readDraft: async () => ({
+          draft: message('server', {
+            thread_db_id: 'server-thread',
+            is_draft: true,
+          }),
+          persistence: 'committed',
+        }),
+        watchDrafts: (callback) => {
+          changed = callback;
+          return () => {};
+        },
+      },
+      session,
+      createComposeContext().notices,
+      vi.fn(),
+      vi.fn(),
+      upload
+    );
+    return { dispose };
+  });
+  try {
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledOnce());
+    changed();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(upload).toHaveBeenCalledOnce();
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+    changed();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(upload).toHaveBeenCalledTimes(2);
+  } finally {
+    root.dispose();
+  }
+});

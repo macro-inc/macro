@@ -290,12 +290,14 @@ it('keeps rendering and attachment identities while excluding transport metadata
       ],
       provider_id: 'reply-provider-id',
       scheduled_send_time: '2026-10-01T12:00:00Z',
+      scheduled_send_status: 'unconfirmed',
     }),
   ]);
   const projected = toEmailThread(wire).messages[0];
   expect(projected).toMatchObject({
     provider_id: 'reply-provider-id',
     scheduled_send_time: '2026-10-01T12:00:00Z',
+    scheduled_send_status: 'unconfirmed',
     labels: [{ name: 'CATEGORY_PERSONAL', provider_label_id: 'UNREAD' }],
     attachments: [{ db_id: 'inline', content_id: 'image-cid', sfs_id: 'file' }],
     attachments_draft: [{ id: 'draft-file', s3_key: 'notes' }],

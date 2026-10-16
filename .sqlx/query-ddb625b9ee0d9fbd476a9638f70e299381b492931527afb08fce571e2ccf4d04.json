@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.link_id, m.thread_id, m.provider_thread_id, l.email_address,\n           a.id AS attachment_id, a.s3_key FROM email_messages m\n           JOIN email_links l ON l.id = m.link_id\n           JOIN email_attachments_drafts a ON a.draft_id = m.id WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_thread_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "attachment_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "s3_key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ddb625b9ee0d9fbd476a9638f70e299381b492931527afb08fce571e2ccf4d04"
+}

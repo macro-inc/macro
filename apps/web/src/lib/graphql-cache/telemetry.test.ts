@@ -152,6 +152,7 @@ describe('cache telemetry privacy contract', () => {
       'inspect-query-variants': 'inspection',
       'inspect-query': 'inspection',
       'claim-next-mutation': 'transaction',
+      'claim-next-non-durable-mutation': 'transaction',
       'defer-optimistic-write': 'transaction',
       'commit-optimistic-write': 'transaction',
       'rollback-optimistic-write': 'transaction',

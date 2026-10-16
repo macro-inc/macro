@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages SET send_time = NOW() - INTERVAL '1 minute' WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fbbf74147f59395c77e63eeb9b7b4c8bead2b2857c5c41e306c5b334da9c134b"
+}

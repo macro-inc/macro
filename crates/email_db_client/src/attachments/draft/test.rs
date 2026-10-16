@@ -208,9 +208,7 @@ async fn insert_draft_attachment_creates_new_attachment(pool: Pool<Postgres>) ->
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("draft_attachments"))
 )]
-async fn insert_draft_attachment_does_nothing_for_wrong_link_id(
-    pool: Pool<Postgres>,
-) -> Result<()> {
+async fn insert_draft_attachment_rejects_wrong_link_id(pool: Pool<Postgres>) -> Result<()> {
     let wrong_link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000d02")?;
     let draft_id = Uuid::parse_str("00000000-0000-0000-0000-00000000d502")?;
     let attachment_id = Uuid::parse_str("00000000-0000-0000-0000-0000000da098")?;
@@ -225,8 +223,12 @@ async fn insert_draft_attachment_does_nothing_for_wrong_link_id(
         s3_key: "s3://bucket/should_not_insert.pdf".to_string(),
     };
 
-    // Insert with wrong link_id (should not insert anything)
-    insert_draft_attachment(&pool, wrong_link_id, attachment).await?;
+    // A rejected insert must not report that an attachment was persisted.
+    assert!(
+        insert_draft_attachment(&pool, wrong_link_id, attachment)
+            .await
+            .is_err()
+    );
 
     // Verify nothing was inserted (check with correct link_id)
     let correct_link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000d01")?;

@@ -66,6 +66,9 @@ impl PhysicalResetReason {
 /// variables, record bytes, or mutation payloads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
 pub enum TursoStorageError {
+    /// Another active durable intent owns the requested entity.
+    #[error("Entity already has an active durable mutation")]
+    ExclusiveIntentConflict,
     /// A caller supplied a value outside the checked storage contract.
     #[error("invalid storage input")]
     InvalidInput,
@@ -75,6 +78,19 @@ pub enum TursoStorageError {
     /// The disposable physical database must be closed and replaced.
     #[error("physical cache reset required: {0}")]
     PhysicalResetRequired(PhysicalResetReason),
+}
+
+impl From<cache_core::durable_intent::DurableIntentError> for TursoStorageError {
+    fn from(error: cache_core::durable_intent::DurableIntentError) -> Self {
+        match error {
+            cache_core::durable_intent::DurableIntentError::ExclusiveConflict => {
+                Self::ExclusiveIntentConflict
+            }
+            cache_core::durable_intent::DurableIntentError::InvalidExclusivity => {
+                Self::InvalidInput
+            }
+        }
+    }
 }
 
 impl TursoStorageError {
@@ -87,7 +103,7 @@ impl TursoStorageError {
     pub const fn physical_reset_reason(&self) -> Option<PhysicalResetReason> {
         match self {
             Self::PhysicalResetRequired(reason) => Some(*reason),
-            Self::InvalidInput | Self::Database => None,
+            Self::InvalidInput | Self::Database | Self::ExclusiveIntentConflict => None,
         }
     }
 
@@ -123,7 +139,9 @@ impl TursoStorageError {
     pub(crate) const fn initialization(self) -> Self {
         match self {
             Self::PhysicalResetRequired(_) => self,
-            Self::InvalidInput | Self::Database => Self::reset(PhysicalResetReason::Compatibility),
+            Self::InvalidInput | Self::Database | Self::ExclusiveIntentConflict => {
+                Self::reset(PhysicalResetReason::Compatibility)
+            }
         }
     }
 }

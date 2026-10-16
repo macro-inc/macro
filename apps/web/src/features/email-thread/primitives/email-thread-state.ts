@@ -37,6 +37,7 @@ export type EmailThreadState = {
   drafts: {
     getDraftForMessage: (messageDbId: string) => EmailMessage | undefined;
     deleteDraftForMessage: (messageDbId: string) => void;
+    restoreDraftForMessage: (draft: EmailMessage) => void;
     initialDraftsSettled: Accessor<boolean>;
   };
 

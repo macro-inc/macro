@@ -214,6 +214,8 @@ pub enum InitialClaimOutcome<E> {
 pub struct EnqueueOptimisticMutationResult<E> {
     /// Engine-assigned id of the newly enqueued optimistic mutation.
     pub transaction_id: OptimisticTransactionId,
+    /// Fence of the newly persisted request, before the initial lease claim.
+    pub request_generation: u64,
     /// How the caller UUID changed the queue.
     pub upsert_kind: MutationUpsertKind,
     /// Visible cache changes caused by the newly published optimistic layer.
@@ -305,6 +307,8 @@ pub type OptimisticTransactionId = MutationId;
 /// head can be claimed and settled.
 #[derive(Clone)]
 struct OptimisticLayer {
+    durable_intent: Option<Json>,
+    lease_generation: u64,
     identity_bindings: Vec<IdentityBinding>,
     identity_keys: BTreeSet<EntityKey<'static>>,
     id: OptimisticTransactionId,
@@ -319,6 +323,7 @@ struct OptimisticLayer {
 
 struct BegunOptimisticWrite {
     transaction_id: OptimisticTransactionId,
+    request_generation: u64,
     upsert_kind: MutationUpsertKind,
     write_result: WriteResult,
 }
@@ -657,6 +662,11 @@ impl<S: Storage> Engine<S> {
                 ),
             );
             layers.push(OptimisticLayer {
+                lease_generation: queued.mutation.lease_generation,
+                durable_intent: source
+                    .mutation_data
+                    .get(crate::durable_intent::FIELD)
+                    .cloned(),
                 identity_keys: source
                     .identity_bindings
                     .iter()
@@ -1854,18 +1864,20 @@ impl<S: Storage> Engine<S> {
             .map(MutationQueueSnapshot::from)
             .collect::<Vec<_>>();
         let old_layers = self.rebuild_queued_layers(queued.clone()).await?;
+        let replacing = crate::durable_intent::replaces(data);
         let collision = queued
             .iter()
             .find(|queued| queued.uuid == uuid && !queued.superseded)
             .map(|queued| {
                 (
                     queued.id,
-                    crate::queue::collision_stays_active(
-                        queued.mutation.lease_expires_at_ms,
-                        created_at_ms,
-                        queued.mutation.attempt_count > 0,
-                        &queued.optimistic.optimistic_data_json,
-                    ),
+                    !replacing
+                        && crate::queue::collision_stays_active(
+                            queued.mutation.lease_expires_at_ms,
+                            created_at_ms,
+                            queued.mutation.attempt_count > 0,
+                            &queued.optimistic.optimistic_data_json,
+                        ),
                 )
             });
         let expected_kind = match collision {
@@ -1874,6 +1886,12 @@ impl<S: Storage> Engine<S> {
             Some((removed_id, false)) => MutationUpsertKind::ReplacedPending { removed_id },
         };
 
+        let replacement_id = if replacing {
+            collision.map(|(id, _)| id)
+        } else {
+            None
+        };
+        let staged_id = replacement_id.unwrap_or(MutationId::MAX);
         let patches = deduplicate_patches(&self.schema, link_patches)?;
         let revalidations = deduplicate_revalidations(
             revalidations
@@ -1916,6 +1934,15 @@ impl<S: Storage> Engine<S> {
             },
         };
 
+        if let Some(id) = replacement_id {
+            entry.mutation.lease_generation = queued
+                .iter()
+                .find(|row| row.id == id)
+                .expect("replacement exists")
+                .mutation
+                .lease_generation
+                + 1;
+        }
         let mut proposed_queue = queued.clone();
         match expected_kind {
             MutationUpsertKind::Inserted => {}
@@ -1931,18 +1958,20 @@ impl<S: Storage> Engine<S> {
             }
         }
         proposed_queue.push(QueuedMutation {
-            id: MutationId::MAX,
+            id: staged_id,
             uuid,
             superseded: false,
             mutation: entry.mutation.clone(),
             optimistic: entry.optimistic.clone(),
         });
+        proposed_queue.sort_by_key(|row| row.id);
         let mut proposed_layers = self
-            .rebuild_queued_layers_with_strict_tail(proposed_queue, Some(MutationId::MAX))
+            .rebuild_queued_layers_with_strict_tail(proposed_queue, Some(staged_id))
             .await?;
         entry.optimistic.normalized_updates = proposed_layers
-            .last()
-            .expect("proposed queue contains the new tail")
+            .iter()
+            .find(|layer| layer.id == staged_id)
+            .expect("proposed queue contains replacement")
             .updates
             .clone();
 
@@ -1992,7 +2021,7 @@ impl<S: Storage> Engine<S> {
             .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?
             .into_iter()
             .map(|projection| StagedOptimisticProjection {
-                owner: if projection.owner == MutationId::MAX {
+                owner: if projection.owner == staged_id {
                     StagedOptimisticProjectionOwner::Enqueued
                 } else {
                     StagedOptimisticProjectionOwner::Existing(projection.owner)
@@ -2001,6 +2030,7 @@ impl<S: Storage> Engine<S> {
                 uncertainty: projection.uncertainty,
             })
             .collect();
+        let request_generation = entry.mutation.lease_generation;
         let upsert = self
             .storage
             .upsert_mutation_with_shadow(
@@ -2018,8 +2048,9 @@ impl<S: Storage> Engine<S> {
             return Err(EngineError::StaleOptimisticUpsert);
         }
         proposed_layers
-            .last_mut()
-            .expect("proposed queue contains the new tail")
+            .iter_mut()
+            .find(|layer| layer.id == staged_id)
+            .expect("proposed queue contains replacement")
             .id = upsert.id;
         self.optimistic = proposed_layers;
         live_projection_keys.extend(live_query::projection_keys(&self.optimistic));
@@ -2043,6 +2074,7 @@ impl<S: Storage> Engine<S> {
         );
         Ok(BegunOptimisticWrite {
             transaction_id: upsert.id,
+            request_generation,
             upsert_kind: upsert.kind,
             write_result: WriteResult {
                 field_changes: Some(crate::field_changes::between(&before, &after)),
@@ -2101,6 +2133,12 @@ impl<S: Storage> Engine<S> {
         projection_mutations: Vec<OptimisticProjectionMutation>,
         uncertain_calendar_event_keys: Vec<EntityKey<'static>>,
     ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
+        let defer_initial_claim = input
+            .data
+            .get(crate::durable_intent::FIELD)
+            .and_then(|intent| intent.get("deferInitialClaim"))
+            .and_then(Json::as_bool)
+            == Some(true);
         let begun = self
             .upsert_optimistic_write(
                 origin_op,
@@ -2109,17 +2147,95 @@ impl<S: Storage> Engine<S> {
                 uncertain_calendar_event_keys,
             )
             .await?;
-        let initial_claim = match self.claim_next_mutation(claim).await {
+        let initial_claim = match if defer_initial_claim {
+            Ok(None)
+        } else {
+            self.claim_next_mutation(claim).await
+        } {
             Ok(Some(claimed)) => InitialClaimOutcome::Claimed(Box::new(claimed)),
             Ok(None) => InitialClaimOutcome::NotRunnable,
             Err(error) => InitialClaimOutcome::Failed(error),
         };
         Ok(EnqueueOptimisticMutationResult {
             transaction_id: begun.transaction_id,
+            request_generation: begun.request_generation,
             upsert_kind: begun.upsert_kind,
             write_result: begun.write_result,
             initial_claim,
         })
+    }
+
+    /// Recover user intent after navigation, restart, or permanent rollback.
+    pub async fn durable_mutation_intents(&self) -> Result<Vec<Json>, EngineError<S::Error>> {
+        let key = crate::durable_intent::key();
+        let records = self
+            .storage
+            .get_batch(&[key])
+            .await
+            .map_err(EngineError::Storage)?;
+        Ok(crate::durable_intent::values(
+            records.into_iter().next().flatten(),
+        ))
+    }
+
+    /// Retire terminal recovery content without touching pending queue entries.
+    pub async fn retire_mutation_intent(
+        &mut self,
+        uuid: &str,
+    ) -> Result<bool, EngineError<S::Error>> {
+        let uuid =
+            Uuid::parse_str(uuid).map_err(|_| EngineError::InvalidMutationUuid(uuid.to_owned()))?;
+        self.storage
+            .retire_mutation_intent(uuid)
+            .await
+            .map_err(EngineError::Storage)
+    }
+
+    async fn intent_settlement(
+        &self,
+        transaction: MutationId,
+        phase: &str,
+        response: Option<&Json>,
+    ) -> Result<Option<(EntityKey<'static>, Record)>, EngineError<S::Error>> {
+        let Some(row) = self.optimistic.iter().find(|row| row.id == transaction) else {
+            return Ok(None);
+        };
+        let Some(metadata) = &row.durable_intent else {
+            return Ok(None);
+        };
+        let key = crate::durable_intent::key();
+        let mut record = self
+            .storage
+            .get_batch(std::slice::from_ref(&key))
+            .await
+            .map_err(EngineError::Storage)?
+            .pop()
+            .flatten()
+            .unwrap_or_default();
+        let locally_cancelled = record
+            .fields
+            .get(&row.uuid.to_string())
+            .and_then(|v| {
+                if let crate::value::CacheValue::String(s) = v {
+                    serde_json::from_str::<Json>(s).ok()
+                } else {
+                    None
+                }
+            })
+            .and_then(|v| v.get("locallyCancelled").and_then(Json::as_bool))
+            == Some(true);
+        // Storage merges this single intent inside the settlement transaction.
+        // A concurrent enqueue must never be lost by replacing the whole catalog.
+        record.fields.clear();
+        crate::durable_intent::update(
+            &mut record,
+            row.uuid,
+            metadata,
+            phase,
+            response,
+            locally_cancelled,
+        );
+        Ok(Some((key, record)))
     }
 
     /// Reads durable queue entries without acquiring or changing their leases.
@@ -2145,6 +2261,19 @@ impl<S: Storage> Engine<S> {
         self.hydrate_optimistic().await?;
         self.storage
             .claim_next_mutation(request)
+            .await
+            .map_err(EngineError::Storage)
+    }
+
+    /// Atomically leave a durable strict head unclaimed, preserving offline Undo.
+    /// A durable head blocks later mutations; this never skips queue order.
+    pub async fn claim_next_non_durable_mutation(
+        &mut self,
+        request: MutationClaimRequest,
+    ) -> Result<Option<ClaimedMutation>, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        self.storage
+            .claim_next_mutation_with_policy(request, crate::queue::MutationClaimPolicy::NonDurable)
             .await
             .map_err(EngineError::Storage)
     }
@@ -2352,6 +2481,12 @@ impl<S: Storage> Engine<S> {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
         let reconciliation = OptimisticShadowReconciliation {
+            expected_tail_generations: self
+                .optimistic
+                .iter()
+                .skip(1)
+                .map(|layer| (layer.id, layer.lease_generation))
+                .collect(),
             expected_queue,
             affected_keys,
             replacements,
@@ -2602,7 +2737,14 @@ impl<S: Storage> Engine<S> {
             apply_link_patches(&self.schema, &mut effective, &mut updates, &recipes, true)?;
         revalidations
             .retain(|query| !query.only_on_link_failure || recipes.is_empty() || !links_applied);
-        let (durable_changed, entries) = stage_updates(&bases, updates);
+        let (durable_changed, mut entries) = stage_updates(&bases, updates);
+        if let Some(intent) = self
+            .intent_settlement(transaction, "committed", Some(data))
+            .await?
+        {
+            entries.push(intent);
+        }
+
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)
             .await?;
@@ -2740,12 +2882,24 @@ impl<S: Storage> Engine<S> {
         candidates.extend(layer_keys(&replacement));
         let current_bases = self.load_bases(&candidates).await?;
         let after = effective_records(&current_bases, &replacement, &candidates);
-        if !self
-            .storage
-            .discard_mutation_with_shadow(transaction, claim, reconciliation)
-            .await
-            .map_err(EngineError::Storage)?
-        {
+        let settled =
+            if let Some(intent) = self.intent_settlement(transaction, "failed", None).await? {
+                self.storage
+                    .complete_mutation_with_shadow(
+                        transaction,
+                        claim,
+                        vec![intent],
+                        Vec::new(),
+                        reconciliation,
+                    )
+                    .await
+            } else {
+                self.storage
+                    .discard_mutation_with_shadow(transaction, claim, reconciliation)
+                    .await
+            }
+            .map_err(EngineError::Storage)?;
+        if !settled {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
         let revision = self.advance_revision()?;

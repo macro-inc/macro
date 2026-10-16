@@ -5,6 +5,12 @@ use uuid::Uuid;
 /// Errors that can occur in the email domain.
 #[derive(Debug, Error)]
 pub enum EmailErr {
+    /// A send attempt was reused with a different approved snapshot.
+    #[error("Send attempt payload does not match the original request")]
+    SendAttemptConflict,
+    /// A send snapshot is invalid or its attachments have changed.
+    #[error("Invalid send snapshot: {0}")]
+    InvalidSendSnapshot(String),
     /// A repository/infrastructure error.
     #[error(transparent)]
     RepoErr(#[from] anyhow::Error),

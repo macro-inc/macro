@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.hoisted(() => vi.fn());
+const queueContractMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
 const emitMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args: unknown) =>
+    command === 'graphql_cache_mutation_queue_contract_version'
+      ? queueContractMock(args)
+      : invokeMock(command, args),
+}));
 vi.mock('@tauri-apps/api/event', () => ({
   listen: listenMock,
   emit: emitMock,
@@ -49,6 +55,7 @@ describe('createTauriCacheHost', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    queueContractMock.mockResolvedValue(1);
     eventCallbacks = new Map();
     invokeMock.mockResolvedValue(null);
     emitMock.mockResolvedValue(undefined);
@@ -56,6 +63,24 @@ describe('createTauriCacheHost', () => {
       eventCallbacks.set(event, cb);
       return Promise.resolve(unlisten);
     });
+  });
+
+  it('uses a distinct native command for offline-safe claims and never falls back to an unrestricted claim', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_claim_next_non_durable_mutation')
+        throw new Error('Command not found');
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'offline-policy' });
+    await expect(
+      host.claimNextMutation('offline-runner', 10, 100, false)
+    ).rejects.toThrow('Command not found');
+    expect(
+      invokeMock.mock.calls.some(
+        ([command]) => command === 'graphql_cache_claim_next_mutation'
+      )
+    ).toBe(false);
+    host.dispose();
   });
 
   it('reads the database generation after native initialization', async () => {
@@ -67,7 +92,6 @@ describe('createTauriCacheHost', () => {
     await expect(host.currentStorageGeneration()).resolves.toBe(generation);
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
       'graphql_cache_init_with_schema',
-      'graphql_cache_inspect_mutations',
       'graphql_cache_current_storage_generation',
     ]);
     host.dispose();
@@ -144,13 +168,12 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
-  it('preserves the old queue and refuses writes when an OTA outpaces the native runtime', async () => {
+  it('preserves the old queue when inspection exists but the native queue contract is unavailable', async () => {
     const onInitializationError = vi.fn();
-    invokeMock.mockImplementation(async (command: string) => {
-      if (command === 'graphql_cache_inspect_mutations')
-        throw 'Command graphql_cache_inspect_mutations not found';
-      return null;
-    });
+    invokeMock.mockResolvedValue([]);
+    queueContractMock.mockRejectedValue(
+      'Command graphql_cache_mutation_queue_contract_version not found'
+    );
     const host = createTauriCacheHost({
       scope: 'old-native',
       onInitializationError,
@@ -173,12 +196,22 @@ describe('createTauriCacheHost', () => {
         message: expect.stringContaining('Update Macro'),
       })
     );
-    expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
-      'graphql_cache_init_with_schema',
-      'graphql_cache_inspect_mutations',
-    ]);
+    expect(invokeMock).not.toHaveBeenCalled();
     host.dispose();
   });
+
+  it.each([0, null, {}, '1', 1.5])(
+    'rejects an incompatible native queue contract (%j) before opening storage',
+    async (version) => {
+      queueContractMock.mockResolvedValue(version);
+      const host = createTauriCacheHost({ scope: 'old-contract' });
+      await expect(host.currentRevision()).rejects.toBeInstanceOf(
+        NativeCacheUpgradeRequiredError
+      );
+      expect(invokeMock).not.toHaveBeenCalled();
+      host.dispose();
+    }
+  );
 
   it('projects selected records by explicit key', async () => {
     const records = [

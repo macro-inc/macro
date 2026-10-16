@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.message_id, f.message_id AS forwarded_by\n           FROM email_attachments a JOIN email_attachments_fwd f ON f.attachment_id = a.id\n           WHERE a.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "forwarded_by",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ceba1f5e7543a11fc1a74a045c2af0a5dd9b319c060170e85ca76e2ad8b56dde"
+}

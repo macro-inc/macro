@@ -5,6 +5,49 @@ import { createThreadContext, message, thread } from '../tests/fixtures';
 import { createEmailThreadState } from './email-thread-state';
 
 describe('thread state with an injected source', () => {
+  it('adopts a canonical reply identity over a restored local handle despite client clock skew', () =>
+    createRoot((dispose) => {
+      try {
+        const local = message('local-draft', {
+          is_draft: true,
+          replying_to_id: 'parent',
+          updated_at: '2026-09-01T12:00:00Z',
+        });
+        const [snapshot, setSnapshot] = createSignal(
+          thread([message('parent'), local])
+        );
+        const state = createEmailThreadState(
+          createThreadContext({ thread: snapshot })
+        );
+        state.drafts.deleteDraftForMessage('parent');
+        const restored = {
+          ...local,
+          body_text: 'Restored reply',
+          updated_at: '2026-09-01T13:00:00Z',
+        };
+        state.drafts.restoreDraftForMessage(restored);
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(restored);
+        const canonical = {
+          ...restored,
+          db_id: 'server-draft',
+          updated_at: '2026-09-01T10:00:00Z',
+        };
+        setSnapshot(thread([message('parent'), canonical]));
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(canonical);
+        const edited = {
+          ...canonical,
+          body_text: 'New canonical edits',
+          updated_at: '2026-09-01T11:00:00Z',
+        };
+        setSnapshot(thread([message('parent'), edited]));
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(edited);
+        state.drafts.deleteDraftForMessage('parent');
+        expect(state.drafts.getDraftForMessage('parent')).toBeUndefined();
+      } finally {
+        dispose();
+      }
+    }));
+
   it('does not move an open bottom reply to a newly sent message', () =>
     createRoot((dispose) => {
       try {
@@ -29,6 +72,79 @@ describe('thread state with an injected source', () => {
       }
     }));
 
+  it('keeps a newly restored canonical reply ahead of the unchanged local source handle', () =>
+    createRoot((dispose) => {
+      try {
+        const local = message('local-draft', {
+          is_draft: true,
+          replying_to_id: 'parent',
+          updated_at: '2026-09-01T12:00:00Z',
+        });
+        const [snapshot, setSnapshot] = createSignal(
+          thread([message('parent'), local])
+        );
+        const state = createEmailThreadState(
+          createThreadContext({ thread: snapshot })
+        );
+        const restored = {
+          ...local,
+          db_id: 'server-draft',
+          body_text: 'Restored canonical reply',
+          updated_at: '2026-09-01T10:00:00Z',
+        };
+        state.drafts.restoreDraftForMessage(restored);
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(restored);
+        setSnapshot(thread([message('parent'), { ...local }]));
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(restored);
+        const canonical = {
+          ...restored,
+          body_text: 'Canonical source caught up',
+          updated_at: '2026-09-01T11:00:00Z',
+        };
+        setSnapshot(thread([message('parent'), canonical]));
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(canonical);
+      } finally {
+        dispose();
+      }
+    }));
+
+  it('explicit restoration reopens a sent reply tombstone without resurrecting stale content', () =>
+    createRoot((dispose) => {
+      try {
+        const sent = message('draft', {
+          is_draft: true,
+          replying_to_id: 'parent',
+          updated_at: '2026-09-01T10:00:00Z',
+        });
+        const [snapshot, setSnapshot] = createSignal(
+          thread([message('parent'), sent])
+        );
+        const state = createEmailThreadState(
+          createThreadContext({ thread: snapshot })
+        );
+        state.drafts.deleteDraftForMessage('parent');
+        const restored = {
+          ...sent,
+          body_text: 'Original restored body',
+          updated_at: '2026-09-01T11:00:00Z',
+        };
+        state.drafts.restoreDraftForMessage(restored);
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(restored);
+        setSnapshot(thread([message('parent'), sent]));
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(restored);
+        const edited = {
+          ...restored,
+          body_text: 'New edits',
+          updated_at: '2026-09-01T12:00:00Z',
+        };
+        setSnapshot(thread([message('parent'), edited]));
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(edited);
+        state.drafts.deleteDraftForMessage('parent');
+        expect(state.drafts.getDraftForMessage('parent')).toBeUndefined();
+      } finally {
+        dispose();
+      }
+    }));
   it('retains newer drafts through stale snapshots and does not resurrect discarded replies', () =>
     createRoot((dispose) => {
       try {

@@ -140,6 +140,9 @@ export interface CacheHost {
   /** Durable database identity, preserved across engine restarts and replaced
    * whenever the stored cache is cleared or recreated. */
   currentStorageGeneration(): Promise<string>;
+  /** Recovery records persisted atomically with mutation lifecycle changes. */
+  durableMutationIntents(): Promise<unknown[]>;
+  retireDurableMutationIntent(uuid: string): Promise<boolean>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   /** Engine-owned document projection; absent on older/disabled runtimes. */
   watchQuery?(args: CacheWatchArgs): Promise<QueryUpdate>;
@@ -182,7 +185,8 @@ export interface CacheHost {
   claimNextMutation(
     owner: string,
     nowMs: number,
-    leaseExpiresAtMs: number
+    leaseExpiresAtMs: number,
+    allowDurable?: boolean
   ): Promise<ClaimedMutation | undefined>;
   /** Retains a retryable mutation and releases its lease. */
   deferOptimisticWrite(

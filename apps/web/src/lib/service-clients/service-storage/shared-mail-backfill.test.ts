@@ -40,7 +40,7 @@ describe('Shared Mail scope refresh', () => {
     invokeMock.mockReset();
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'graphql_cache_init_with_schema') return null;
-      if (command === 'graphql_cache_inspect_mutations') return [];
+      if (command === 'graphql_cache_mutation_queue_contract_version') return 1;
       if (command === 'graphql_cache_read')
         return { kind: 'hit', data: { user: { id: 'viewer' } } };
       if (command === 'graphql_cache_entity_filter')

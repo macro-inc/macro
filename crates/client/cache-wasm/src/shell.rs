@@ -192,6 +192,7 @@ struct JsEnqueueOptimisticMutationResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     transaction_id: String,
+    request_generation: String,
     upsert_kind: JsMutationUpsertKind,
     revision: String,
     revision_advanced: bool,
@@ -1290,6 +1291,28 @@ impl CacheEngine {
         })
     }
 
+    /// Retire terminal recovery content only after its queue entry has settled.
+    #[wasm_bindgen(js_name = retireDurableMutationIntent)]
+    pub fn retire_durable_mutation_intent(&self, uuid: String) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.retire_mutation_intent(&uuid).await;
+            to_js(&state.engine_result(result)?)
+        })
+    }
+
+    /// Recover durable user intents independently of optimistic queue layers.
+    #[wasm_bindgen(js_name = durableMutationIntents)]
+    pub fn durable_mutation_intents(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.durable_mutation_intents().await;
+            to_js(&state.engine_result(result)?)
+        })
+    }
+
     /// Returns the durable cache generation, initializing it when absent.
     #[wasm_bindgen(js_name = currentStorageGeneration)]
     pub fn current_storage_generation(&self) -> js_sys::Promise {
@@ -1931,6 +1954,7 @@ impl CacheEngine {
             to_js(&JsEnqueueOptimisticMutationResult {
                 field_changes: result.write_result.field_changes,
                 transaction_id: result.transaction_id.to_string(),
+                request_generation: result.request_generation.to_string(),
                 upsert_kind: result.upsert_kind.into(),
                 revision: result.write_result.revision.to_string(),
                 revision_advanced: result.write_result.revision_advanced,
@@ -2025,6 +2049,35 @@ impl CacheEngine {
                 )?,
             };
             let result = state.engine_mut()?.claim_next_mutation(request).await;
+            let claimed = state.engine_result(result)?;
+            to_js(&claimed.map(JsClaimedMutation::try_from).transpose()?)
+        })
+    }
+
+    /// Claims a non-durable strict head without attempting a durable send.
+    #[wasm_bindgen(js_name = claimNextNonDurableMutation)]
+    pub fn claim_next_non_durable_mutation(
+        &self,
+        owner: String,
+        now_ms: f64,
+        lease_expires_at_ms: f64,
+    ) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let request = MutationClaimRequest {
+                owner,
+                now_ms: parse_timestamp(now_ms, "claim timestamp")?,
+                lease_expires_at_ms: parse_timestamp(
+                    lease_expires_at_ms,
+                    "lease expiration timestamp",
+                )?,
+            };
+            let result = state
+                .engine_mut()?
+                .claim_next_non_durable_mutation(request)
+                .await;
             let claimed = state.engine_result(result)?;
             to_js(&claimed.map(JsClaimedMutation::try_from).transpose()?)
         })

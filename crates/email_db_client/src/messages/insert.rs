@@ -25,6 +25,9 @@ pub async fn insert_message_with_tx(
     // 2. backfilling messages (metadata gets updated once after all messages complete)
     update_thread_metadata: bool,
 ) -> anyhow::Result<()> {
+    if let Some(provider_thread_id) = message.provider_thread_id.as_deref() {
+        threads::provider_identity::lock_provider_thread(tx, link_id, provider_thread_id).await?;
+    }
     let message_db_id = insert_db_message(
         tx,
         message,

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages SET delivery_claim_id=NULL, delivery_lease_expires_at=NULL,\n         delivery_started_at=NULL, updated_at=NOW()-INTERVAL '10 minutes' WHERE message_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0ce123893b3cbfd386cca0011a92a14a1a6892b97bd28c296e483ecae79c140"
+}

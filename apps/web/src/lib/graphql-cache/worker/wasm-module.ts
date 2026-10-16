@@ -77,6 +77,9 @@ export type CacheEngineHydrationResult = WriteResult &
 export interface CacheEngine {
   currentRevision(): Promise<CacheRevision>;
   currentStorageGeneration(): Promise<string>;
+  /** Recovery records persisted atomically with mutation lifecycle changes. */
+  durableMutationIntents(): Promise<unknown[]>;
+  retireDurableMutationIntent(uuid: string): Promise<boolean>;
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
   queueDiagnostics?(): Promise<CacheQueueDiagnostics>;
@@ -162,6 +165,11 @@ export interface CacheEngine {
     variableFilters: Array<Record<string, unknown>>
   ): Promise<CachedQueryInstanceWire[]>;
   claimNextMutation(
+    owner: string,
+    nowMs: number,
+    leaseExpiresAtMs: number
+  ): Promise<ClaimedMutation | undefined>;
+  claimNextNonDurableMutation?(
     owner: string,
     nowMs: number,
     leaseExpiresAtMs: number

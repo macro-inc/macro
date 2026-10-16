@@ -16,6 +16,7 @@ fn contact(email: &str, name: &str) -> ContactInfo {
 #[test]
 fn mime_contains_recipients_threading_bodies_and_attachments() {
     let request = SendRequest {
+        message_id: Some("stable-send@example.com".to_string()),
         message: MessageToSend {
             db_id: None,
             provider_id: None,
@@ -50,6 +51,8 @@ fn mime_contains_recipients_threading_bodies_and_attachments() {
         .expect("generated MIME should be UTF-8 for this fixture");
 
     assert!(mime.contains("From:"));
+    assert!(mime.contains("Message-ID: <stable-send@example.com>\r\n"));
+    assert_eq!(mime.matches("Message-ID:").count(), 1);
     assert!(mime.contains("sender@example.com"));
     assert!(mime.contains("To:"));
     assert!(mime.contains("to@example.com"));
@@ -63,4 +66,18 @@ fn mime_contains_recipients_threading_bodies_and_attachments() {
     assert!(mime.contains("<strong>HTML body</strong>"));
     assert!(mime.contains("filename=\"notes.txt\""));
     assert!(mime.contains("attachment contents") || mime.contains("YXR0YWNobWVudCBjb250ZW50cw=="));
+}
+
+#[test]
+fn stable_message_id_rejects_header_or_query_injection() {
+    for id in [
+        "",
+        "<already-bracketed@example.com>",
+        "bad\r\nBcc: other@example.com",
+        "id@example.com OR in:sent",
+        "id@@example.com",
+    ] {
+        assert!(super::validate_message_id(id).is_err());
+    }
+    assert!(super::validate_message_id("email-send-123+attempt@macro.com").is_ok());
 }

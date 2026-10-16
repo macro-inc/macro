@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT delivery_claim_id, processing, sent, delivery_started_at IS NOT NULL AS \"started!\",\n                  delivery_status, delivery_lease_expires_at\n           FROM email_scheduled_messages WHERE message_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "delivery_claim_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "processing",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "started!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "delivery_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "delivery_lease_expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      null,
+      false,
+      true
+    ]
+  },
+  "hash": "f75a925002bd6c23767d5918661540d6ebf2a8f95c4867e0a2b14cf7a16e2b0f"
+}

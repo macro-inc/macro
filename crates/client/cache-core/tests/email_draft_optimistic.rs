@@ -13,7 +13,7 @@ use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
 use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::InMemoryStorage;
-use cache_core::value::EntityKey;
+use cache_core::value::{EntityKey, canonical_json};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -305,6 +305,189 @@ mutation DeleteEmailDraft($input: DeleteEmailDraftInput!) {
   }
 }
 "#;
+
+#[test]
+fn restored_draft_enqueues_without_a_previously_loaded_thread_query() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(
+                None,
+                "query { user { id } }",
+                None,
+                &serde_json::Map::new(),
+                &json!({"user": {"id": "user-1"}}),
+                None,
+            )
+            .await
+            .unwrap();
+        let mut response = mutation_response();
+        response["__durableIntent"] = json!({
+            "kind": "email-send-v1",
+            "replace": true,
+            "payload": {"restoring": true}
+        });
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    client_metadata: None,
+                    uuid: "11111111-1111-4111-8111-111111111110",
+                    query: MUTATION,
+                    operation_name: Some("SaveEmailDraft"),
+                    variables: &mutation_variables(),
+                    data: &response,
+                    link_patches: &[messages_patch()],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                    identity_bindings: &[],
+                },
+            )
+            .await
+            .expect("an uncached thread lookup must not reject durable restoration");
+
+        let mut engine = Engine::new(engine.into_storage());
+        let selection = cache_core::record_selection::RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            "fragment Draft on GraphqlSoupEmailMessage { id bodyHtmlSanitized }",
+            "Draft",
+        )
+        .unwrap();
+        let records = engine
+            .read_records_by_keys(
+                &selection,
+                &[EntityKey("GraphqlSoupEmailMessage:draft-1".into())],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            records.value[0].record["bodyHtmlSanitized"],
+            "<p>offline</p>"
+        );
+        assert!(matches!(
+            engine
+                .read_query(None, PAGE_QUERY, Some("EmailThreadPage"), &page_variables())
+                .await
+                .unwrap(),
+            ReadResult::Miss
+        ));
+        let claim = claim_head(&mut engine).await;
+        let committed = engine
+            .commit_optimistic_write(
+                transaction,
+                claim,
+                MUTATION,
+                Some("SaveEmailDraft"),
+                &mutation_variables(),
+                &mutation_response(),
+            )
+            .await
+            .unwrap();
+        assert!(committed.revalidations.iter().any(|query| {
+            query.query == PAGE_QUERY
+                && query.variables_json == canonical_json(&Json::Object(page_variables()))
+        }));
+    });
+}
+
+#[test]
+fn restored_draft_enqueues_and_survives_restart_with_a_null_thread_lookup() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let absent_thread = json!({"user": {"id": "user-1", "emailThread": null}});
+        engine
+            .write_query(
+                None,
+                PAGE_QUERY,
+                Some("EmailThreadPage"),
+                &page_variables(),
+                &absent_thread,
+                None,
+            )
+            .await
+            .unwrap();
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    client_metadata: None,
+                    uuid: "11111111-1111-4111-8111-111111111109",
+                    query: MUTATION,
+                    operation_name: Some("SaveEmailDraft"),
+                    variables: &mutation_variables(),
+                    data: &mutation_response(),
+                    link_patches: &[messages_patch()],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                    identity_bindings: &[],
+                },
+            )
+            .await
+            .expect("a null thread lookup must not prevent durable draft restoration");
+
+        let mut engine = Engine::new(engine.into_storage());
+        let selection = cache_core::record_selection::RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            "fragment Draft on GraphqlSoupEmailMessage { id bodyHtmlSanitized }",
+            "Draft",
+        )
+        .unwrap();
+        let records = engine
+            .read_records_by_keys(
+                &selection,
+                &[EntityKey("GraphqlSoupEmailMessage:draft-1".into())],
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            records.value[0].record["bodyHtmlSanitized"],
+            "<p>offline</p>"
+        );
+        let ReadResult::Hit { data } = engine
+            .read_query(None, PAGE_QUERY, Some("EmailThreadPage"), &page_variables())
+            .await
+            .unwrap()
+        else {
+            panic!("null lookup should remain readable until revalidation")
+        };
+        assert_eq!(data, absent_thread);
+
+        let claim = claim_head(&mut engine).await;
+        let committed = engine
+            .commit_optimistic_write(
+                transaction,
+                claim,
+                MUTATION,
+                Some("SaveEmailDraft"),
+                &mutation_variables(),
+                &mutation_response(),
+            )
+            .await
+            .unwrap();
+        assert!(committed.revalidations.iter().any(|query| {
+            query.query == PAGE_QUERY
+                && query.variables_json == canonical_json(&Json::Object(page_variables()))
+        }));
+        engine
+            .write_query(
+                None,
+                PAGE_QUERY,
+                Some("EmailThreadPage"),
+                &page_variables(),
+                &thread_page(),
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            engine
+                .read_query(None, PAGE_QUERY, Some("EmailThreadPage"), &page_variables())
+                .await
+                .unwrap(),
+            ReadResult::Hit { data } if data["user"]["emailThread"]["id"] == "thread-1"
+        ));
+    });
+}
 
 fn delete_variables() -> serde_json::Map<String, Json> {
     match json!({ "input": { "draftId": "draft-1" } }) {

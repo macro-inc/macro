@@ -4,6 +4,7 @@ use crate::domain::{
         ResolvedDraftInput, SavedUserDraft, SimpleMessageInfo, ThreadRow,
     },
     ports::EmailRepo,
+    send_attempt::SendSourceInbox,
 };
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -71,8 +72,7 @@ where
                 .draft_attachments_by_message_ids(&message_ids),
             self.email_repo
                 .forwarded_attachments_by_message_ids(&message_ids),
-            self.email_repo
-                .scheduled_send_times_by_message_ids(&message_ids),
+            self.email_repo.scheduled_sends_by_message_ids(&message_ids),
             self.email_repo
                 .message_timestamps(draft.db_id, draft.link_id),
             self.email_repo.labels_by_message_ids(&message_ids),
@@ -84,7 +84,9 @@ where
 
         // Autosaves leave scheduling untouched. Return the stored schedule,
         // not the usually absent input, so normalized cache writes preserve it.
-        draft.send_time = send_times.remove(&draft.db_id);
+        draft.send_time = send_times
+            .remove(&draft.db_id)
+            .map(|schedule| schedule.send_time);
 
         Ok(SavedUserDraft {
             sender: senders
@@ -254,7 +256,7 @@ where
             }
             if self
                 .email_repo
-                .scheduled_send_times_by_message_ids(&[msg.db_id])
+                .scheduled_sends_by_message_ids(&[msg.db_id])
                 .await
                 .map_err(anyhow::Error::from)?
                 .contains_key(&msg.db_id)
@@ -286,20 +288,109 @@ where
         &self,
         link: &Link,
         accessible_inboxes: &[Link],
-        mut input: CreateDraftInput,
+        input: CreateDraftInput,
         is_draft: bool,
     ) -> Result<CreatedDraft, EmailErr> {
+        let (resolved, contacts, new_thread, _) = self
+            .prepare_message(link, accessible_inboxes, input, is_draft, false)
+            .await?;
+        let link_id = link.id;
+        let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
+
+        // The insert reports the IDs it settled on rather than echoing the
+        // candidates above: a save whose client handle raced a concurrent
+        // first save adopts that save's row, and the client must hear about
+        // the row that actually exists.
+        let Some(settled) = self
+            .email_repo
+            .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
+            .await?
+        else {
+            // A concurrent first save can settle a client handle on a different
+            // row. Classify the authoritative row, not our discarded candidate.
+            let rejected_id = match resolved.draft_client_id {
+                Some(handle) => self
+                    .email_repo
+                    .message_id_for_client_draft_id(handle, &accessible_link_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .unwrap_or(resolved.db_id),
+                None => resolved.db_id,
+            };
+            let rejected = self
+                .email_repo
+                .get_simple_message(rejected_id, &accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?;
+            if rejected.as_ref().is_some_and(|m| m.is_sent || !m.is_draft) {
+                return Err(EmailErr::MessageAlreadySent(rejected_id));
+            }
+            if rejected.is_some()
+                && self
+                    .email_repo
+                    .scheduled_sends_by_message_ids(&[rejected_id])
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .contains_key(&rejected_id)
+            {
+                return Err(EmailErr::MessageDeliveryConflict(rejected_id));
+            }
+            return Err(EmailErr::MessageNotFound(rejected_id));
+        };
+
+        Ok(CreatedDraft {
+            db_id: settled.message_db_id,
+            provider_id: resolved.provider_id,
+            replying_to_id: resolved.replying_to_id,
+            provider_thread_id: resolved.provider_thread_id,
+            thread_db_id: settled.thread_db_id,
+            link_id,
+            subject: resolved.subject,
+            to: resolved.to,
+            cc: resolved.cc,
+            bcc: resolved.bcc,
+            body_text: resolved.body_text,
+            body_html: resolved.body_html,
+            body_macro: resolved.body_macro,
+            headers_json: resolved.headers_json,
+            send_time: resolved.send_time,
+        })
+    }
+
+    pub(super) async fn prepare_message(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        mut input: CreateDraftInput,
+        is_draft: bool,
+        defer_inbox_move: bool,
+    ) -> Result<
+        (
+            ResolvedDraftInput,
+            crate::domain::models::UpsertedContacts,
+            Option<ThreadRow>,
+            Option<SendSourceInbox>,
+        ),
+        EmailErr,
+    > {
         let link_id = link.id;
         let sender = self
             .resolve_sender(link, input.sender_email.as_ref(), !is_draft)
             .await?;
         let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
 
-        self.validate_existing_message(link_id, &accessible_link_ids, &mut input)
+        let source_inbox = self
+            .validate_existing_message(link_id, &accessible_link_ids, &mut input, defer_inbox_move)
             .await?;
 
+        let source_message_id = input.db_id;
         self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
             .await?;
+        if source_inbox.is_some() && input.db_id != source_message_id {
+            return Err(EmailErr::InvalidSendSnapshot(
+                "another reply draft exists in the selected inbox; review it before sending".into(),
+            ));
+        }
 
         self.validate_thread_hint(link_id, &mut input).await?;
 
@@ -362,64 +453,7 @@ where
             thread_client_id: input.thread_client_binding,
         };
 
-        // The insert reports the IDs it settled on rather than echoing the
-        // candidates above: a save whose client handle raced a concurrent
-        // first save adopts that save's row, and the client must hear about
-        // the row that actually exists.
-        let Some(settled) = self
-            .email_repo
-            .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
-            .await?
-        else {
-            // A concurrent first save can settle a client handle on a different
-            // row. Classify the authoritative row, not our discarded candidate.
-            let rejected_id = match resolved.draft_client_id {
-                Some(handle) => self
-                    .email_repo
-                    .message_id_for_client_draft_id(handle, &accessible_link_ids)
-                    .await
-                    .map_err(anyhow::Error::from)?
-                    .unwrap_or(resolved.db_id),
-                None => resolved.db_id,
-            };
-            let rejected = self
-                .email_repo
-                .get_simple_message(rejected_id, &accessible_link_ids)
-                .await
-                .map_err(anyhow::Error::from)?;
-            if rejected.as_ref().is_some_and(|m| m.is_sent || !m.is_draft) {
-                return Err(EmailErr::MessageAlreadySent(rejected_id));
-            }
-            if rejected.is_some()
-                && self
-                    .email_repo
-                    .scheduled_send_times_by_message_ids(&[rejected_id])
-                    .await
-                    .map_err(anyhow::Error::from)?
-                    .contains_key(&rejected_id)
-            {
-                return Err(EmailErr::MessageDeliveryConflict(rejected_id));
-            }
-            return Err(EmailErr::MessageNotFound(rejected_id));
-        };
-
-        Ok(CreatedDraft {
-            db_id: settled.message_db_id,
-            provider_id: resolved.provider_id,
-            replying_to_id: resolved.replying_to_id,
-            provider_thread_id: resolved.provider_thread_id,
-            thread_db_id: settled.thread_db_id,
-            link_id,
-            subject: resolved.subject,
-            to: resolved.to,
-            cc: resolved.cc,
-            bcc: resolved.bcc,
-            body_text: resolved.body_text,
-            body_html: resolved.body_html,
-            body_macro: resolved.body_macro,
-            headers_json: resolved.headers_json,
-            send_time: resolved.send_time,
-        })
+        Ok((resolved, contacts, new_thread, source_inbox))
     }
 
     /// Appends the inbox's signature to the outgoing body (send path only).
@@ -455,9 +489,10 @@ where
         link_id: Uuid,
         accessible_link_ids: &[Uuid],
         input: &mut CreateDraftInput,
-    ) -> Result<(), EmailErr> {
+        defer_inbox_move: bool,
+    ) -> Result<Option<SendSourceInbox>, EmailErr> {
         let Some(db_id) = input.db_id else {
-            return Ok(());
+            return Ok(None);
         };
 
         let Some(msg) = self
@@ -479,6 +514,17 @@ where
         }
 
         if msg.link_id != link_id {
+            if defer_inbox_move {
+                // Send owns the final snapshot. Preserve attachments and the
+                // source draft until admission can move it under its row lock.
+                input.provider_id = None;
+                input.thread_db_id = None;
+                input.provider_thread_id = None;
+                return Ok(Some(SendSourceInbox {
+                    link_id: msg.link_id,
+                    thread_id: msg.thread_db_id,
+                }));
+            }
             // The sender was switched to a different inbox. A draft belongs to a
             // single inbox, so discard it (and its now-empty thread) and create a
             // fresh draft in the sending inbox; validate_replying_to re-derives
@@ -509,13 +555,13 @@ where
             input.provider_id = None;
             input.thread_db_id = None;
             input.provider_thread_id = None;
-            return Ok(());
+            return Ok(None);
         }
 
         input.thread_db_id = Some(msg.thread_db_id);
         input.provider_thread_id = msg.provider_thread_id;
 
-        Ok(())
+        Ok(None)
     }
 
     async fn validate_replying_to(

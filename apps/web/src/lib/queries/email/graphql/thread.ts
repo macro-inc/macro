@@ -236,6 +236,11 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   getGraphqlSoupClient();
   const host = getGraphqlCacheHost();
   const [identity, setIdentity] = createSignal<ThreadIdentity>();
+  const [returnedIdentity, setReturnedIdentity] = createSignal<{
+    requested: string;
+    queried: string;
+    canonical: string;
+  }>();
   let request = 0;
   let disposed = false;
   const refreshIdentity = async () => {
@@ -280,8 +285,15 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     disposed = true;
     unsubscribe?.();
   });
-  const resolvedThreadId = () =>
+  const queryThreadId = () =>
     identity()?.requested === threadId() ? identity()!.canonical : threadId();
+  const resolvedThreadId = () => {
+    const returned = returnedIdentity();
+    return returned?.requested === threadId() &&
+      returned.queried === queryThreadId()
+      ? returned.canonical
+      : queryThreadId();
+  };
   const query = createUrqlInfiniteQuery<
     EmailThreadPageQuery,
     EmailThreadPageQueryVariables,
@@ -292,7 +304,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     client: getGraphqlSoupClient(),
     initialPageParam: 0,
     variables: (offset) => ({
-      threadId: resolvedThreadId(),
+      threadId: queryThreadId(),
       offset,
       limit: DEFAULT_THREAD_MESSAGES_LIMIT,
     }),
@@ -316,6 +328,18 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
         ? 'cache-only'
         : 'cache-and-network',
     keepPreviousData: false,
+    onResult: (result, { pageIndex }) => {
+      const canonical = result.data?.user.emailThread?.id;
+      const queried = result.operation.variables.threadId;
+      if (
+        pageIndex !== 0 ||
+        result.error ||
+        !canonical ||
+        queried !== untrack(queryThreadId)
+      )
+        return;
+      setReturnedIdentity({ requested: untrack(threadId), queried, canonical });
+    },
     select: ({ pages, pageParams }) => {
       const mapped = {
         pages: pages.map((page) =>

@@ -11,7 +11,8 @@ export function observeDraftIdentity(
   session: DraftSession,
   notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
   recover: () => void,
-  onAlreadySent: () => void
+  onAlreadySent: () => void,
+  onConfirmed?: () => Promise<boolean | void>
 ) {
   createEffect(
     on(
@@ -25,7 +26,8 @@ export function observeDraftIdentity(
             notices,
             recover,
             onAlreadySent,
-            !!storage.retryDraft
+            !!storage.retryDraft,
+            onConfirmed
           );
       }
     )
@@ -39,11 +41,13 @@ function observeAvailableDraftIdentity(
   notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
   recover: () => void,
   onAlreadySent: () => void,
-  durableRecovery: boolean
+  durableRecovery: boolean,
+  onConfirmed?: () => Promise<boolean | void>
 ) {
   let generation = 0;
   let mutationUuid: string | undefined;
   let disposed = false;
+  let uploadHandoff: string | undefined;
   let rejectionNotice: number | undefined;
   const dismissRejectionNotice = () => {
     if (rejectionNotice === undefined) return;
@@ -76,6 +80,14 @@ function observeAvailableDraftIdentity(
       }
       if (!result.draft) return;
       const current = session.identity();
+      const confirmed = result.persistence === 'committed';
+      const handoff = async () => {
+        const version = `${result.draft!.db_id}:${result.local?.generation ?? ''}:${result.local?.acknowledgedRevision ?? result.draft!.updated_at}`;
+        if (version === uploadHandoff) return;
+        uploadHandoff = version;
+        if ((await onConfirmed?.()) === false && uploadHandoff === version)
+          uploadHandoff = undefined;
+      };
       if (
         current.kind !== 'none' &&
         current.draftId === result.draft.db_id &&
@@ -83,8 +95,10 @@ function observeAvailableDraftIdentity(
         current.queued === (result.persistence === 'queued') &&
         (result.persistence === 'queued' ||
           current.inboxId === result.draft.link_id)
-      )
+      ) {
+        if (confirmed) await handoff();
         return;
+      }
       session.dispatch({
         type: 'saved',
         epoch,
@@ -95,6 +109,7 @@ function observeAvailableDraftIdentity(
           persistence: result.persistence,
         },
       });
+      if (confirmed) await handoff();
     } catch (error) {
       notices.reportError(error);
     }
@@ -169,6 +184,7 @@ function observeAvailableDraftIdentity(
   createEffect(
     on(epoch, () => {
       mutationUuid = undefined;
+      uploadHandoff = undefined;
       dismissRejectionNotice();
     })
   );
@@ -177,7 +193,13 @@ function observeAvailableDraftIdentity(
       void refresh();
     })
   );
+  const reconnect = () => {
+    uploadHandoff = undefined;
+    void refresh();
+  };
+  window.addEventListener('online', reconnect);
   onCleanup(() => {
+    window.removeEventListener('online', reconnect);
     disposed = true;
     dismissRejectionNotice();
     unsubscribe();

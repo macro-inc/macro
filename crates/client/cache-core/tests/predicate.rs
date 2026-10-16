@@ -111,7 +111,7 @@ fn optimistic_variables() -> serde_json::Map<String, serde_json::Value> {
 async fn try_begin_with_projection(
     engine: &mut Engine<InMemoryStorage>,
     projection_mutations: Vec<OptimisticProjectionMutation>,
-) -> Result<MutationId, EngineError<std::convert::Infallible>> {
+) -> Result<MutationId, EngineError<cache_core::durable_intent::DurableIntentError>> {
     let uuid = uuid::Uuid::new_v4().to_string();
     try_begin_with_projection_uuid(engine, &uuid, projection_mutations).await
 }
@@ -120,7 +120,7 @@ async fn try_begin_with_projection_uuid(
     engine: &mut Engine<InMemoryStorage>,
     uuid: &str,
     projection_mutations: Vec<OptimisticProjectionMutation>,
-) -> Result<MutationId, EngineError<std::convert::Infallible>> {
+) -> Result<MutationId, EngineError<cache_core::durable_intent::DurableIntentError>> {
     engine
         .begin_optimistic_write_with_projections(
             None,

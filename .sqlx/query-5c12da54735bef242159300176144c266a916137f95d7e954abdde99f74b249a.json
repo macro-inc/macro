@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachments_drafts (id, draft_id, file_name, content_type, sha, size, s3_key)\n           VALUES ($1, $2, 'approved.txt', 'text/plain', 'sha', 3, 'approved-bytes')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c12da54735bef242159300176144c266a916137f95d7e954abdde99f74b249a"
+}

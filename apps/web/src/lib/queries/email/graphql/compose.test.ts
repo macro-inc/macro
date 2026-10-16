@@ -40,7 +40,7 @@ describe('GraphQL compose transport', () => {
                     draftId: 'server-message',
                     draft: { threadId: 'server-thread', linkId: 'delegated' },
                   },
-                  sendEmailMessage: {
+                  sendEmailComposeMessage: {
                     messageId: 'server-message',
                     threadId: 'server-thread',
                     linkId: 'delegated',
@@ -86,6 +86,14 @@ describe('GraphQL compose transport', () => {
       draft: operations[0].variables?.input,
       includeSignature: false,
     });
+    expect(operations[1].query.definitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'OperationDefinition',
+          name: expect.objectContaining({ value: 'SendEmailComposeMessage' }),
+        }),
+      ])
+    );
     expect(operations[1].context.optimistic).toBeUndefined();
   });
   it('refuses to send without a stable draft identity', () => {

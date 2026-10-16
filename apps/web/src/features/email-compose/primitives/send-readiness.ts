@@ -1,3 +1,10 @@
+import { $isImageNode, $isVideoNode } from '@macro-inc/lexical-core';
+import {
+  $getRoot,
+  $isElementNode,
+  type LexicalEditor,
+  type LexicalNode,
+} from 'lexical';
 import type {
   EmailComposeFeedback,
   EmailConnectivity,
@@ -5,20 +12,20 @@ import type {
 import type { DraftIdentity } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
 
-/**
- * Why an immediate send cannot proceed. Send is a REST call that resolves
- * server ids only and is never queued (it moves onto the durable queue in a
- * later change), so it needs the device online, a draft the server can
- * address, and every attachment uploaded.
- */
+/** Immediate GraphQL sends accept durable local handles; attachments must be uploaded. */
 export type SendRefusal =
   | 'offline'
+  | 'offline-attachments'
+  | 'media-not-uploaded'
   | 'draft-not-saved'
   | 'draft-not-confirmed'
   | 'attachment-not-uploaded';
 
 const SEND_REFUSAL_SUBTEXT: Record<SendRefusal, string> = {
   offline: "You're offline",
+  'offline-attachments': 'Reconnect to send this email.',
+  'media-not-uploaded':
+    'Wait for images and videos to finish uploading, or remove them.',
   'draft-not-saved': 'Draft not saved',
   'draft-not-confirmed': 'Draft still syncing, try again',
   'attachment-not-uploaded': 'Attachment not uploaded',
@@ -30,11 +37,18 @@ export function refuseSend(notices: EmailComposeFeedback, reason: SendRefusal) {
   });
 }
 
-/** Offline, the pre-send save could only queue; refuse before it runs. */
+/** Legacy sending and Send Later still require connectivity. */
 export function sendRefusalBeforeSave(
-  connectivity: EmailConnectivity
+  connectivity: EmailConnectivity,
+  queueActive = false,
+  hasAttachments = false
 ): SendRefusal | undefined {
-  return connectivity.looksOffline() ? 'offline' : undefined;
+  if (!connectivity.looksOffline()) return;
+  return hasAttachments
+    ? 'offline-attachments'
+    : !queueActive
+      ? 'offline'
+      : undefined;
 }
 
 /**
@@ -48,12 +62,14 @@ export function sendRefusalAfterSave(input: {
   autosaveAllowed: boolean;
   attachments: readonly DraftFormAttachment[];
   unqueuedHandleMaySend: boolean;
+  queueActive?: boolean;
 }): SendRefusal | undefined {
   const { identity } = input;
   if (!input.autosaveAllowed) return 'draft-not-confirmed';
-  if (identity.kind === 'server' && identity.queued)
+  if (!input.queueActive && identity.kind === 'server' && identity.queued)
     return 'draft-not-confirmed';
   if (
+    !input.queueActive &&
     identity.kind === 'handle' &&
     (!input.unqueuedHandleMaySend || identity.queued)
   ) {
@@ -61,10 +77,28 @@ export function sendRefusalAfterSave(input: {
   }
   if (
     input.attachments.some(
-      (attachment) => attachment.type === 'local' && !attachment.attachmentId
+      (attachment) =>
+        attachment.type === 'local' &&
+        (!attachment.attachmentId ||
+          (input.queueActive && attachment.uploaded !== true))
     )
   ) {
     return 'attachment-not-uploaded';
   }
   return undefined;
+}
+
+/** The immutable send payload must contain durable media URLs. */
+export function pendingInlineMedia(editor: LexicalEditor | undefined): boolean {
+  if (!editor) return false;
+  return editor.read(() => {
+    const pending = (node: LexicalNode): boolean => {
+      if ($isImageNode(node) || $isVideoNode(node))
+        return (
+          node.getSrcType() === 'local' || node.getUrl().startsWith('blob:')
+        );
+      return $isElementNode(node) && node.getChildren().some(pending);
+    };
+    return pending($getRoot());
+  });
 }

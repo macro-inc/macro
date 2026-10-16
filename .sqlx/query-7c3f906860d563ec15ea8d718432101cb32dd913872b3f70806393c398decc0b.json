@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_send_attempts SET sent = false WHERE attempt_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7c3f906860d563ec15ea8d718432101cb32dd913872b3f70806393c398decc0b"
+}

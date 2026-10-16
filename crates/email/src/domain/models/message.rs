@@ -4,6 +4,31 @@ use super::attachment::{AttachmentDraft, AttachmentForwarded, MessageAttachment}
 use super::contact::ContactInfo;
 use super::label::MessageLabel;
 
+/// The user-visible delivery state of an unsent scheduled message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ScheduledSendStatus {
+    /// Waiting for its send time or safely retrying preparation.
+    Pending,
+    /// Provider submission has started, or a legacy claim has an unknown outcome.
+    Sending,
+    /// Delivery was definitely rejected; cancellation can restore the draft.
+    Failed,
+    /// Delivery may have succeeded; only reconciliation is safe.
+    Unconfirmed,
+}
+
+/// Persisted schedule and its delivery state, independent of the client journal.
+#[derive(Debug, Clone)]
+pub struct ScheduledSend {
+    /// The time the user approved for delivery.
+    pub send_time: DateTime<Utc>,
+    /// Whether delivery is waiting, in progress, failed, or uncertain.
+    pub status: ScheduledSendStatus,
+}
+
 /// A raw message record without assembled sub-types.
 #[derive(Debug, Clone)]
 pub struct MessageRow {
@@ -149,6 +174,8 @@ pub struct Message {
     pub has_attachments: bool,
     /// Scheduled send time for draft messages.
     pub scheduled_send_time: Option<DateTime<Utc>>,
+    /// Delivery recovery state for an unsent scheduled message.
+    pub scheduled_send_status: Option<ScheduledSendStatus>,
     /// Sender contact info.
     pub from: Option<ContactInfo>,
     /// To recipients.

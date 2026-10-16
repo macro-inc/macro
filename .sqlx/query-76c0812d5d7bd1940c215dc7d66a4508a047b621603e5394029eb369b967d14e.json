@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages SET processing = true, delivery_claim_id = $3,\n           delivery_lease_expires_at = NOW() + make_interval(secs => $4),\n           delivery_message_id = $5,\n           delivery_started_at = CASE WHEN $6 THEN COALESCE(delivery_started_at, updated_at) ELSE delivery_started_at END,\n           updated_at = NOW() WHERE message_id = $1 AND link_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Float8",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76c0812d5d7bd1940c215dc7d66a4508a047b621603e5394029eb369b967d14e"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_send_attempts SET thread_id = $3 WHERE message_id = $1 AND link_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d6fc42cb77b6d8b7ba923084e3493db02c8adc882fb8e6fe51c5925ffa5035ac"
+}

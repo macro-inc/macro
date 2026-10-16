@@ -1,4 +1,5 @@
 import { EmailFormContextProvider } from '@app/features/email-compose/context/email-form-context';
+import { observeDraftRestoration } from '@app/features/email-compose/primitives/draft-restoration';
 import { EmailComposeView } from '@app/features/email-compose/views/email-compose';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import type { JSX } from 'solid-js';
@@ -23,6 +24,22 @@ export function EmailThreadView(props: EmailThreadViewProps) {
   const viewContext = useEmailThreadViewContext();
   const threadContext = viewContext.thread;
   const isTouchDevice = threadContext.isTouch;
+  observeDraftRestoration({
+    storage: viewContext.compose.drafts,
+    accepts: (change) =>
+      change.threadId === props.threadId() && !!change.replyingToId,
+    version: props.threadId,
+    cancelPendingSave() {},
+    setPending() {},
+    restore: (draft) => {
+      context.drafts.restoreDraftForMessage(draft);
+      if (!draft.replying_to_id) return;
+      if (isTouchDevice())
+        context.mobileReplyComposer.openForMessage(draft.replying_to_id);
+      else context.messages.setReplyingToMessageId(draft.replying_to_id);
+    },
+    reportError: viewContext.compose.notices.reportError,
+  });
   const navigation = createThreadNavigation(
     props,
     context,

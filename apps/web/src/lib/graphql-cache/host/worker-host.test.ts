@@ -72,6 +72,7 @@ function responseFor(request: CacheRequest): unknown {
     case 'inspect-query-variants':
       return [];
     case 'claim-next-mutation':
+    case 'claim-next-non-durable-mutation':
       return undefined;
     case 'invalidate':
     case 'delete-records':
@@ -211,6 +212,25 @@ describe('createWorkerCacheHost', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('requests an atomic non-durable claim when offline policy forbids durable sends', async () => {
+    const host = createWorkerCacheHost({ scope: 'offline-policy' });
+    await host.claimNextMutation('offline-runner', 10, 100, false);
+    expect(requireAdapter().requests).toContainEqual(
+      expect.objectContaining({
+        kind: 'claim-next-non-durable-mutation',
+        owner: 'offline-runner',
+        nowMs: 10,
+        leaseExpiresAtMs: 100,
+      })
+    );
+    expect(
+      requireAdapter().requests.some(
+        (request) => request.kind === 'claim-next-mutation'
+      )
+    ).toBe(false);
+    host.dispose();
   });
 
   it('uses a storage-free no-op host when a required capability is unavailable', async () => {

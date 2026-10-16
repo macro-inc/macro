@@ -52,7 +52,7 @@ where
             sent = true,
             processing = false,
             updated_at = NOW()
-        WHERE link_id = $1 AND message_id = $2 AND processing AND NOT sent
+        WHERE link_id = $1 AND message_id = $2 AND processing AND NOT sent AND delivery_claim_id IS NULL
         "#,
         link_id,
         message_id,
@@ -80,7 +80,7 @@ where
         SET
             processing = false,
             updated_at = NOW()
-        WHERE link_id = $1 AND message_id = $2 AND processing AND NOT sent
+        WHERE link_id = $1 AND message_id = $2 AND processing AND NOT sent AND delivery_claim_id IS NULL
         "#,
         link_id,
         message_id,

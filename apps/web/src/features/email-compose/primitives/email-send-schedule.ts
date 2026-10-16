@@ -13,13 +13,26 @@ export type EmailDeliveryIntent =
 
 export type EmailScheduleState =
   | { type: 'editing'; intent: EmailDeliveryIntent }
-  | { type: 'scheduled'; confirmedTime: Date; proposedTime?: Date };
+  | {
+      type: 'scheduled';
+      confirmedTime: Date;
+      proposedTime?: Date;
+      deliveryStatus?: 'pending' | 'sending' | 'failed' | 'unconfirmed';
+    };
 
 export type EmailScheduleAction =
   | 'send'
   | 'schedule'
   | 'update'
   | 'unavailable';
+
+export function scheduleTimeLocked(state: EmailScheduleState) {
+  return (
+    state.type === 'scheduled' &&
+    state.deliveryStatus !== undefined &&
+    state.deliveryStatus !== 'pending'
+  );
+}
 
 export function getScheduleSelection(state: EmailScheduleState) {
   if (state.type === 'editing') {
@@ -34,6 +47,7 @@ export function getScheduleAction(
   if (state.type === 'editing') {
     return state.intent.type === 'later' ? 'schedule' : 'send';
   }
+  if (scheduleTimeLocked(state)) return 'unavailable';
   return state.proposedTime ? 'update' : 'unavailable';
 }
 
@@ -59,6 +73,10 @@ export function createEmailSendSchedule(options: {
   delivery: Pick<EmailDelivery, 'schedule' | 'unschedule' | 'archive'>;
   notices: EmailComposeFeedback;
   initialScheduledTime?: Date;
+  initialDeliveryStatus?: Extract<
+    EmailScheduleState,
+    { type: 'scheduled' }
+  >['deliveryStatus'];
   draftId: Accessor<string | null | undefined>;
   saveDraft: () => Promise<string | undefined>;
   threadId: Accessor<string | null | undefined>;
@@ -94,6 +112,7 @@ export function createEmailSendSchedule(options: {
       ? {
           type: 'scheduled',
           confirmedTime: options.initialScheduledTime,
+          deliveryStatus: options.initialDeliveryStatus,
         }
       : { type: 'editing', intent: { type: 'immediate' } }
   );
@@ -126,6 +145,8 @@ export function createEmailSendSchedule(options: {
   /** Picker changes are deliberately local. They never mutate delivery state. */
   const select = (date: Date | null): boolean => {
     if (pending()) return false;
+    const before = state();
+    if (scheduleTimeLocked(before)) return false;
     selectionRevision += 1;
     setState((current) => {
       if (current.type === 'editing') {
@@ -135,30 +156,38 @@ export function createEmailSendSchedule(options: {
       }
 
       if (!date || sameTime(date, current.confirmedTime)) {
-        return { type: 'scheduled', confirmedTime: current.confirmedTime };
+        return { ...current, proposedTime: undefined };
       }
       return {
-        type: 'scheduled',
-        confirmedTime: current.confirmedTime,
+        ...current,
         proposedTime: date,
       };
     });
     return true;
   };
 
-  const applyScheduled = (sendTime: Date, replaceProposal = false) => {
+  const applyScheduled = (
+    sendTime: Date,
+    replaceProposal = false,
+    deliveryStatus?: Extract<
+      EmailScheduleState,
+      { type: 'scheduled' }
+    >['deliveryStatus']
+  ) => {
     const current = state();
     if (
       !replaceProposal &&
       current.type === 'scheduled' &&
       sameTime(current.confirmedTime, sendTime) &&
-      current.proposedTime
+      current.proposedTime &&
+      (!deliveryStatus || deliveryStatus === 'pending')
     ) {
+      setState({ ...current, deliveryStatus });
       return;
     }
     scheduledDraftId = options.draftId() ?? scheduledDraftId;
     selectionRevision += 1;
-    setState({ type: 'scheduled', confirmedTime: sendTime });
+    setState({ type: 'scheduled', confirmedTime: sendTime, deliveryStatus });
   };
 
   const applyEditing = () => {
@@ -179,7 +208,7 @@ export function createEmailSendSchedule(options: {
     }
     if (next === ignoredLifecycleObservation) return;
     if (next.type === 'scheduled') {
-      applyScheduled(new Date(next.sendTime));
+      applyScheduled(new Date(next.sendTime), false, next.deliveryStatus);
       return;
     }
     if (next.type === 'editing') applyEditing();
@@ -457,6 +486,11 @@ export function createEmailSendSchedule(options: {
   const cancel = async (): Promise<boolean> => {
     const before = state();
     if (before.type !== 'scheduled' || pending()) return false;
+    if (
+      before.deliveryStatus === 'sending' ||
+      before.deliveryStatus === 'unconfirmed'
+    )
+      return false;
     const draftId = options.draftId();
     if (!draftId) return false;
     const generation = options.generation();
@@ -503,6 +537,18 @@ export function createEmailSendSchedule(options: {
     }
   };
 
+  const checkStatus = async () => {
+    try {
+      const next = await options.reconcile?.();
+      if (next) observe(next);
+    } catch (error) {
+      notices.reportError(error);
+      notices.feedback.failure(
+        'Could not check delivery status. Try again when you have service.'
+      );
+    }
+  };
+
   /** Preserve a proposed replacement as inert local intent after detaching. */
   const detach = () => {
     const current = state();
@@ -526,9 +572,11 @@ export function createEmailSendSchedule(options: {
     confirmedTime,
     action: () => getScheduleAction(state()),
     actionLabel: () => getScheduleActionLabel(state()),
+    pickerDisabled: () => pending() || scheduleTimeLocked(state()),
     select,
     submit,
     cancel,
+    checkStatus,
     observe,
     detach,
     reset: () => {

@@ -17,8 +17,9 @@ use crate::predicate::{
     StagedOptimisticProjectionOwner, apply_authoritative_projection_mutations,
 };
 use crate::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
-    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
+    ClaimedMutation, MutationClaimPolicy, MutationClaimRequest, MutationClaimToken, MutationId,
+    MutationQueueSnapshot, MutationUpsertKind, MutationUpsertResult, NewQueuedMutation,
+    QueuedMutation,
 };
 use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use crate::value::{EntityKey, Record};
@@ -28,9 +29,9 @@ use predicate_index::{
     RecordKey as PredicateRecordKey, evaluate_reference,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use uuid::Uuid;
 
 mod calendar;
 
@@ -186,6 +187,15 @@ pub trait Storage: MaybeSend {
         async { Ok(vec![None; keys.len()]) }
     }
 
+    /// Remove completed recovery metadata only if no queued request still owns it.
+    /// Storage adapters without intent persistence conservatively refuse retirement.
+    fn retire_mutation_intent(
+        &mut self,
+        _uuid: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
+        async { Ok(false) }
+    }
+
     /// Loads the complete mutation queue in ascending id order.
     fn load_mutation_queue(
         &self,
@@ -207,6 +217,16 @@ pub trait Storage: MaybeSend {
     fn claim_next_mutation(
         &mut self,
         request: MutationClaimRequest,
+    ) -> impl Future<Output = Result<Option<ClaimedMutation>, Self::Error>> + MaybeSend {
+        self.claim_next_mutation_with_policy(request, MutationClaimPolicy::Any)
+    }
+
+    /// Check policy and acquire the strict head in the same write transaction,
+    /// before incrementing attempt count or changing its lease.
+    fn claim_next_mutation_with_policy(
+        &mut self,
+        request: MutationClaimRequest,
+        policy: MutationClaimPolicy,
     ) -> impl Future<Output = Result<Option<ClaimedMutation>, Self::Error>> + MaybeSend;
 
     /// Retains a retryable mutation and its optimistic layer, releases its
@@ -409,7 +429,7 @@ impl InMemoryStorage {
 }
 
 impl Storage for InMemoryStorage {
-    type Error = Infallible;
+    type Error = crate::durable_intent::DurableIntentError;
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.record_get_count.fetch_add(1, Ordering::Relaxed);
@@ -519,6 +539,46 @@ impl Storage for InMemoryStorage {
             assert_eq!(&actual, expected, "stale in-memory mutation upsert plan");
         }
 
+        let metadata =
+            crate::durable_intent::source_metadata(&entry.optimistic.optimistic_data_json);
+        if let Some(metadata) = &metadata {
+            crate::durable_intent::check_exclusivity(
+                self.records
+                    .get(&crate::durable_intent::key())
+                    .unwrap_or(&Record::default()),
+                entry.uuid,
+                metadata,
+                |key| Ok(self.records.get(key).cloned()),
+            )?;
+        }
+        let replacing = metadata
+            .as_ref()
+            .and_then(|v| v.get("replace"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(true);
+        let previous = self
+            .records
+            .get(&crate::durable_intent::key())
+            .and_then(|record| record.fields.get(&entry.uuid.to_string()))
+            .and_then(|value| {
+                if let crate::value::CacheValue::String(value) = value {
+                    Some(value.as_str())
+                } else {
+                    None
+                }
+            });
+        let locally_cancelled = replacing
+            && self
+                .mutations
+                .values()
+                .find(|row| row.uuid == entry.uuid && !row.superseded)
+                .is_some_and(|row| {
+                    crate::durable_intent::locally_cancelled(
+                        previous,
+                        &row.optimistic.optimistic_data_json,
+                        row.mutation.attempt_count,
+                    )
+                });
         let collision = self
             .mutations
             .iter()
@@ -526,12 +586,13 @@ impl Storage for InMemoryStorage {
             .map(|(id, queued)| {
                 (
                     *id,
-                    crate::queue::collision_stays_active(
-                        queued.mutation.lease_expires_at_ms,
-                        now_ms,
-                        queued.mutation.attempt_count > 0,
-                        &queued.optimistic.optimistic_data_json,
-                    ),
+                    !replacing
+                        && crate::queue::collision_stays_active(
+                            queued.mutation.lease_expires_at_ms,
+                            now_ms,
+                            queued.mutation.attempt_count > 0,
+                            &queued.optimistic.optimistic_data_json,
+                        ),
                 )
             });
         let kind = match collision {
@@ -550,7 +611,25 @@ impl Storage for InMemoryStorage {
         };
 
         self.next_mutation_id += 1;
-        let id = self.next_mutation_id;
+        let id = if replacing {
+            collision.map(|(id, _)| id).unwrap_or(self.next_mutation_id)
+        } else {
+            self.next_mutation_id
+        };
+        if let Some(metadata) = metadata {
+            let catalog = self
+                .records
+                .entry(crate::durable_intent::key())
+                .or_default();
+            crate::durable_intent::update(
+                catalog,
+                entry.uuid,
+                &metadata,
+                "pending",
+                None,
+                locally_cancelled,
+            );
+        }
         self.mutations.insert(
             id,
             InMemoryQueuedMutation {
@@ -601,6 +680,16 @@ impl Storage for InMemoryStorage {
             .collect())
     }
 
+    async fn retire_mutation_intent(&mut self, uuid: Uuid) -> Result<bool, Self::Error> {
+        if self.mutations.values().any(|row| row.uuid == uuid) {
+            return Ok(false);
+        }
+        Ok(self
+            .records
+            .get_mut(&crate::durable_intent::key())
+            .is_some_and(|record| record.fields.remove(&uuid.to_string()).is_some()))
+    }
+
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
         self.mutation_queue_load_count
             .fetch_add(1, Ordering::Relaxed);
@@ -629,13 +718,20 @@ impl Storage for InMemoryStorage {
         })
     }
 
-    async fn claim_next_mutation(
+    async fn claim_next_mutation_with_policy(
         &mut self,
         request: MutationClaimRequest,
+        policy: MutationClaimPolicy,
     ) -> Result<Option<ClaimedMutation>, Self::Error> {
         let Some((&id, queued)) = self.mutations.iter_mut().next() else {
             return Ok(None);
         };
+        if policy == MutationClaimPolicy::NonDurable
+            && crate::durable_intent::source_metadata(&queued.optimistic.optimistic_data_json)
+                .is_some()
+        {
+            return Ok(None);
+        }
         let mutation = &mut queued.mutation;
         if mutation
             .next_attempt_at_ms
@@ -733,6 +829,14 @@ impl Storage for InMemoryStorage {
     ) -> Result<bool, Self::Error> {
         if reconciliation.validate(id).is_err()
             || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
+            || reconciliation
+                .expected_tail_generations
+                .iter()
+                .any(|(id, generation)| {
+                    self.mutations
+                        .get(id)
+                        .is_none_or(|row| row.mutation.lease_generation != *generation)
+                })
         {
             return Ok(false);
         }
@@ -747,7 +851,12 @@ impl Storage for InMemoryStorage {
                 return Ok(false);
             }
         }
-        for (key, record) in entries {
+        for (key, mut record) in entries {
+            if key == crate::durable_intent::key() {
+                let mut merged = self.records.get(&key).cloned().unwrap_or_default();
+                merged.fields.extend(record.fields);
+                record = merged;
+            }
             self.write_record(key, record);
         }
         apply_in_memory_projection_mutations(&mut self.projections, projections);
@@ -787,6 +896,14 @@ impl Storage for InMemoryStorage {
     ) -> Result<bool, Self::Error> {
         if reconciliation.validate(id).is_err()
             || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
+            || reconciliation
+                .expected_tail_generations
+                .iter()
+                .any(|(id, generation)| {
+                    self.mutations
+                        .get(id)
+                        .is_none_or(|row| row.mutation.lease_generation != *generation)
+                })
         {
             return Ok(false);
         }

@@ -564,17 +564,35 @@ impl crate::domain::scheduled_delivery::ScheduledDeliveryRepo for ClaimRepo {
     type Claim = (Uuid, Uuid);
     type Sent = ();
 
-    async fn try_claim(&self, link: Uuid, message: Uuid) -> anyhow::Result<Option<Self::Claim>> {
+    async fn try_claim(
+        &self,
+        link: Uuid,
+        message: Uuid,
+    ) -> anyhow::Result<Option<crate::domain::scheduled_delivery::ClaimedDelivery<Self::Claim>>>
+    {
         Ok(
             get_and_start_processing_scheduled_message(&self.0, link, message)
                 .await?
-                .map(|_| (link, message)),
+                .map(|_| crate::domain::scheduled_delivery::ClaimedDelivery {
+                    claim: (link, message),
+                    mode: crate::domain::scheduled_delivery::DeliveryMode::Send,
+                }),
         )
     }
     async fn complete(&self, _: &Self::Claim, _: ()) -> anyhow::Result<()> {
         Ok(())
     }
-    async fn release(&self, claim: Self::Claim) -> anyhow::Result<()> {
+    async fn begin_send(&self, _: &Self::Claim) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+    async fn pause(
+        &self,
+        _: &Self::Claim,
+        _: crate::domain::scheduled_delivery::DeliveryPause,
+    ) -> anyhow::Result<()> {
+        panic!("unexpected pause")
+    }
+    async fn release(&self, claim: &Self::Claim) -> anyhow::Result<()> {
         email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
             &self.0, claim.0, claim.1,
         )
@@ -592,7 +610,21 @@ struct PendingProvider {
 impl crate::domain::scheduled_delivery::ScheduledMessageSender<(Uuid, Uuid), ()>
     for PendingProvider
 {
-    async fn send_claimed(&self, _: &(Uuid, Uuid)) -> anyhow::Result<()> {
+    type Prepared = ();
+    async fn prepare(
+        &self,
+        _: &(Uuid, Uuid),
+    ) -> Result<(), crate::domain::scheduled_delivery::PreparationError> {
+        Ok(())
+    }
+    async fn reconcile(&self, _: &(Uuid, Uuid)) -> anyhow::Result<Option<()>> {
+        panic!("unexpected reconciliation")
+    }
+    async fn send_prepared(
+        &self,
+        _: &(Uuid, Uuid),
+        _: (),
+    ) -> Result<(), crate::domain::scheduled_delivery::SubmissionError> {
         self.entered.notify_one();
         self.finish.notified().await;
         Ok(())
@@ -642,5 +674,30 @@ async fn pending_provider_holds_no_locks_and_duplicate_cannot_release_claim(
     );
     provider.finish.notify_one();
     delivery.await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn cancelling_a_schedule_preserves_historical_delivery_facts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let (link, message) = identity();
+    let actor = actor();
+    repo.change_schedule(link, message, &actor, future(), None)
+        .await?;
+    for (sent, unconfirmed) in [(true, false), (false, true), (false, false)] {
+        sqlx::query!("INSERT INTO email_send_attempts (user_id, link_id, attempt_id, message_id, sent, delivery_unconfirmed) VALUES ($1, $2, $3, $4, $5, $6)", actor.as_ref(), link, Uuid::now_v7(), message, sent, unconfirmed).execute(&pool).await?;
+    }
+    repo.change_schedule(link, message, &actor, ScheduleChange::Cancel, None)
+        .await?;
+    let rows = sqlx::query!("SELECT sent, delivery_unconfirmed, cancelled FROM email_send_attempts WHERE message_id = $1", message).fetch_all(&pool).await?;
+    assert_eq!(rows.len(), 3);
+    for row in rows {
+        assert_eq!(row.cancelled, !row.sent && !row.delivery_unconfirmed);
+    }
     Ok(())
 }

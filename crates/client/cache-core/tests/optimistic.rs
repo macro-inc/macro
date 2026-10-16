@@ -139,14 +139,19 @@ impl Storage for ClaimFailingStorage {
         Ok(self.inner.load_mutation_queue().await.unwrap())
     }
 
-    async fn claim_next_mutation(
+    async fn claim_next_mutation_with_policy(
         &mut self,
         request: MutationClaimRequest,
+        policy: cache_core::queue::MutationClaimPolicy,
     ) -> Result<Option<ClaimedMutation>, Self::Error> {
         if std::mem::take(&mut self.fail_next_claim) {
             return Err(std::io::Error::other("injected claim failure"));
         }
-        Ok(self.inner.claim_next_mutation(request).await.unwrap())
+        Ok(self
+            .inner
+            .claim_next_mutation_with_policy(request, policy)
+            .await
+            .unwrap())
     }
 
     async fn defer_mutation(

@@ -58,6 +58,7 @@ fragment EmailThreadMessageFields on GraphqlSoupEmailMessage {
 	isDraft
 	hasAttachments
 	scheduledSendTime
+	scheduledSendStatus
 	from {
 		email
 		name

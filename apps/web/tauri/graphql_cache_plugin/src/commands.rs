@@ -34,6 +34,13 @@ mod test;
 
 type Variables = serde_json::Map<String, serde_json::Value>;
 
+/// V1 guarantees enqueue/claim request-generation fencing and persisted client metadata.
+/// Probe without opening storage so an incompatible OTA cannot modify an older queue.
+#[tauri::command]
+pub fn graphql_cache_mutation_queue_contract_version() -> u8 {
+    1
+}
+
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
         .0
@@ -124,6 +131,25 @@ pub async fn graphql_cache_current_revision(
     state: State<'_, CacheState>,
 ) -> Result<String, String> {
     Ok(engine_handle(&state)?.current_revision().await.to_string())
+}
+
+/// Retire terminal recovery content without removing queued mutations.
+#[tauri::command]
+pub async fn graphql_cache_retire_durable_mutation_intent(
+    state: State<'_, CacheState>,
+    uuid: String,
+) -> Result<bool, String> {
+    engine_handle(&state)?
+        .retire_durable_mutation_intent(&uuid)
+        .await
+}
+
+/// Read persisted mutation recovery records.
+#[tauri::command]
+pub async fn graphql_cache_durable_mutation_intents(
+    state: State<'_, CacheState>,
+) -> Result<Vec<serde_json::Value>, String> {
+    engine_handle(&state)?.durable_mutation_intents().await
 }
 
 /// Returns the durable cache generation, initializing it when absent.
@@ -503,6 +529,19 @@ pub async fn graphql_cache_claim_next_mutation(
 ) -> Result<Option<ClaimedMutationWire>, String> {
     engine_handle(&state)?
         .claim_next_mutation(owner, now_ms, lease_expires_at_ms)
+        .await
+}
+
+/// Claims a non-durable strict head without attempting a durable send.
+#[tauri::command]
+pub async fn graphql_cache_claim_next_non_durable_mutation(
+    state: State<'_, CacheState>,
+    owner: String,
+    now_ms: i64,
+    lease_expires_at_ms: i64,
+) -> Result<Option<ClaimedMutationWire>, String> {
+    engine_handle(&state)?
+        .claim_next_non_durable_mutation(owner, now_ms, lease_expires_at_ms)
         .await
 }
 

@@ -366,6 +366,15 @@ pub struct MutationClaimRequest {
     pub lease_expires_at_ms: i64,
 }
 
+/// Which strict queue heads a runner may claim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MutationClaimPolicy {
+    /// Claim any runnable head.
+    Any,
+    /// Leave durable intents unattempted while the browser reports offline.
+    NonDurable,
+}
+
 /// Identifies the attempt allowed to settle or defer a mutation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MutationClaimToken {

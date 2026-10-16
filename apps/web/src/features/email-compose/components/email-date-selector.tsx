@@ -1,4 +1,7 @@
-import type { EmailScheduleState } from '@app/features/email-compose/primitives/email-send-schedule';
+import {
+  type EmailScheduleState,
+  scheduleTimeLocked,
+} from '@app/features/email-compose/primitives/email-send-schedule';
 import ClockIcon from '@phosphor/clock.svg';
 import { buttonClasses, cn, Tooltip } from '@ui';
 import { addYears } from 'date-fns/addYears';
@@ -36,6 +39,8 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
   const hasProposal = () =>
     props.state.type === 'scheduled' && !!props.state.proposedTime;
   const accessibleLabel = () => {
+    if (scheduleTimeLocked(props.state))
+      return 'Send time cannot be changed during delivery or recovery.';
     const label = formattedDate();
     if (!label) return 'Choose send time';
     if (!isConfirmed()) return `Send time set to ${label}. Open to change it.`;
@@ -59,7 +64,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
         <DateSelector
           selectedDate={props.selectedTime}
           onSelectDate={props.onSelectTime}
-          disabled={props.disabled}
+          disabled={props.disabled || scheduleTimeLocked(props.state)}
           disablePriorToDate={new Date()}
           disableAfterDate={addYears(new Date(), 1)}
           disablePortal={props.disablePortal}
@@ -75,7 +80,13 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                 : undefined
           }
           footer={
-            <Show when={props.mobile && isConfirmed()}>
+            <Show
+              when={
+                props.mobile &&
+                isConfirmed() &&
+                !scheduleTimeLocked(props.state)
+              }
+            >
               <div class="flex flex-col gap-2">
                 <p class="px-1 text-xs text-ink-muted">
                   {hasProposal()

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_contacts SET email_address = id::text || '@changed.example', name = 'Changed contact' WHERE link_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9315be86b5506e4556d80a4b712abd7d4a38dfb6df2d761843fd099616b27ab3"
+}

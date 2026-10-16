@@ -154,6 +154,9 @@ fn test() -> Job {
             "${{ needs.path-check.outputs.rust_packages }}",
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
+        // Concurrent workspace test links exhaust the 16 GiB runner and
+        // spend over an hour reclaiming memory before tests can start.
+        .add_env(("CARGO_BUILD_JOBS", "2"))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.

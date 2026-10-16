@@ -123,6 +123,8 @@ pub struct EnqueueOptimisticMutationResultWire {
     /// Engine-assigned id; settle with commit/rollback. A string because JS
     /// numbers lose precision past 2^53 (same as the wasm shell).
     pub transaction_id: String,
+    /// Persisted request fence before the initial lease claim; JS-safe decimal.
+    pub request_generation: String,
     /// How the caller UUID changed the queue.
     pub upsert_kind: MutationUpsertKindWire,
     /// Visible composed-view changes caused by the new optimistic layer.
@@ -482,6 +484,28 @@ impl EngineHandle {
         self.inner.lock().await.engine.current_revision()
     }
 
+    /// Removes a recovered intent only when its mutation is no longer queued.
+    pub async fn retire_durable_mutation_intent(&self, uuid: &str) -> Result<bool, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .retire_mutation_intent(uuid)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    /// Reads intent snapshots that survive optimistic rollback and process restarts.
+    pub async fn durable_mutation_intents(&self) -> Result<Vec<serde_json::Value>, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .durable_mutation_intents()
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Returns the durable cache generation, initializing it when absent.
     pub async fn current_storage_generation(&self) -> Result<String, String> {
         self.inner
@@ -827,6 +851,7 @@ impl EngineHandle {
         };
         Ok(EnqueueOptimisticMutationResultWire {
             transaction_id: result.transaction_id.to_string(),
+            request_generation: result.request_generation.to_string(),
             upsert_kind: result.upsert_kind.into(),
             result: wire_write_result(ops, result.write_result),
             initial_claim,
@@ -856,6 +881,27 @@ impl EngineHandle {
         state
             .engine
             .claim_next_mutation(MutationClaimRequest {
+                owner,
+                now_ms,
+                lease_expires_at_ms,
+            })
+            .await
+            .map_err(|e| e.to_string())?
+            .map(ClaimedMutationWire::try_from)
+            .transpose()
+    }
+
+    /// Claims a non-durable strict head without attempting a durable send.
+    pub async fn claim_next_non_durable_mutation(
+        &self,
+        owner: String,
+        now_ms: i64,
+        lease_expires_at_ms: i64,
+    ) -> Result<Option<ClaimedMutationWire>, String> {
+        let mut state = self.inner.lock().await;
+        state
+            .engine
+            .claim_next_non_durable_mutation(MutationClaimRequest {
                 owner,
                 now_ms,
                 lease_expires_at_ms,

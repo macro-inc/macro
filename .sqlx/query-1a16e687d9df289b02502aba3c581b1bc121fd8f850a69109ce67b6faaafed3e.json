@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename) VALUES ($1, $2, 'attachment', 'event.ics')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1a16e687d9df289b02502aba3c581b1bc121fd8f850a69109ce67b6faaafed3e"
+}

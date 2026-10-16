@@ -144,3 +144,56 @@ it('does not pick an alias belonging only to another connected inbox', () =>
       dispose();
     }
   }));
+
+it.each(['base@example.com', 'resident@example.com'])(
+  'restores sender %s and edited recipients into a new reply after cancellation',
+  (email) =>
+    createRoot((dispose) => {
+      try {
+        const [inboxes, setInboxes] = createSignal<SenderInbox[]>([loaded]);
+        const form = createEmailFormState(
+          { viewerEmail: () => 'base@example.com', inboxes },
+          { type: 'replying_to', messageId: 'parent' },
+          {
+            getMessageById: () => parent,
+            getDraftForMessageReply: () => undefined,
+          }
+        );
+        form.setSelectedInbox(
+          'inbox',
+          email === 'base@example.com'
+            ? 'resident@example.com'
+            : 'base@example.com'
+        );
+        form.clear();
+        const revision = form.editRevision();
+        form.restoreDraft(
+          message('restored', {
+            is_draft: true,
+            link_id: 'inbox',
+            from: { email },
+            to: [{ email: 'edited@example.com' }],
+            cc: [{ email: 'reviewer@example.com' }],
+            bcc: [{ email: 'private@example.com' }],
+            body_html_sanitized: null,
+          })
+        );
+        // Catalog refreshes must not re-derive explicit restored choices.
+        setInboxes([primary]);
+        setInboxes([loaded]);
+        expect(form.senderEmail()).toBe(email);
+        expect(form.recipients().to.map((item) => item.data.email)).toEqual([
+          'edited@example.com',
+        ]);
+        expect(form.recipients().cc.map((item) => item.data.email)).toEqual([
+          'reviewer@example.com',
+        ]);
+        expect(form.recipients().bcc.map((item) => item.data.email)).toEqual([
+          'private@example.com',
+        ]);
+        expect(form.editRevision()).toBe(revision);
+      } finally {
+        dispose();
+      }
+    })
+);

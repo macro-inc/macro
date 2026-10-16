@@ -20,13 +20,15 @@ use super::{
 pub enum ScheduleChange {
     /// Commit or update a future delivery time.
     Set(DateTime<Utc>),
-    /// Restore an unclaimed, unsent message to an editable draft.
+    /// Restore an unsent message before provider submission to an editable draft.
     Cancel,
 }
 
 /// Atomic persistence for schedule transitions. Implementations must serialize
-/// against claim/finalization and reject sent/processing messages. An absent
-/// schedule can only be cancelled idempotently for an unsent editable draft.
+/// against claim/finalization. Cancellation may revoke a managed preparation
+/// claim before submission, but must reject submitted or ambiguous legacy claims.
+/// Time changes must reject processing messages. An absent schedule can only be
+/// cancelled idempotently for an unsent editable draft.
 pub trait EmailSchedulingRepo: Send + Sync {
     /// Return the changed thread, or `None` for an already-cancelled draft.
     fn change_schedule(

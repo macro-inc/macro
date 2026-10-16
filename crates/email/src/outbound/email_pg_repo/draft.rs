@@ -23,6 +23,23 @@ pub(crate) async fn insert_message(
 ) -> Result<Option<SettledDraftIds>, EmailErr> {
     let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
 
+    let settled =
+        insert_message_in_transaction(&mut tx, input, contacts, link_id, new_thread, is_draft)
+            .await?;
+    if settled.is_some() {
+        tx.commit().await.map_err(anyhow::Error::from)?;
+    }
+    Ok(settled)
+}
+
+pub(super) async fn insert_message_in_transaction(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    input: &ResolvedDraftInput,
+    contacts: &UpsertedContacts,
+    link_id: Uuid,
+    new_thread: Option<ThreadRow>,
+    is_draft: bool,
+) -> Result<Option<SettledDraftIds>, EmailErr> {
     let mut settled = SettledDraftIds {
         message_db_id: input.db_id,
         thread_db_id: input.thread_db_id,
@@ -36,10 +53,10 @@ pub(crate) async fn insert_message(
     // handle and re-read the binding under the lock: the loser adopts the row
     // the winner settled on and updates it instead.
     if let Some(client_id) = input.draft_client_id {
-        client_id_mapping::lock_draft_client_id(&mut tx, client_id, link_id)
+        client_id_mapping::lock_draft_client_id(&mut *tx, client_id, link_id)
             .await
             .map_err(anyhow::Error::from)?;
-        if let Some(bound) = client_id_mapping::bound_draft_row(&mut tx, client_id, link_id)
+        if let Some(bound) = client_id_mapping::bound_draft_row(&mut *tx, client_id, link_id)
             .await
             .map_err(anyhow::Error::from)?
             && bound.message_db_id != settled.message_db_id
@@ -61,7 +78,7 @@ pub(crate) async fn insert_message(
         "SELECT link_id, is_sent, is_draft FROM email_messages WHERE id = $1 FOR UPDATE",
         message_db_id,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await
     .map_err(anyhow::Error::from)?;
     let was_missing = existing.is_none();
@@ -72,20 +89,20 @@ pub(crate) async fn insert_message(
         let scheduled = sqlx::query_scalar!(
             "SELECT EXISTS(SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2) AS \"exists!\"",
             message_db_id, link_id,
-        ).fetch_one(&mut *tx).await.map_err(anyhow::Error::from)?;
+        ).fetch_one(&mut **tx).await.map_err(anyhow::Error::from)?;
         if scheduled {
             return Err(EmailErr::MessageDeliveryConflict(message_db_id));
         }
     }
 
     if let Some(thread) = new_thread {
-        thread::insert_thread(&mut tx, &thread, link_id)
+        thread::insert_thread(&mut *tx, &thread, link_id)
             .await
             .map_err(anyhow::Error::from)?;
     }
 
     let updated = upsert_draft(
-        &mut tx,
+        &mut *tx,
         input,
         message_db_id,
         thread_db_id,
@@ -107,7 +124,7 @@ pub(crate) async fn insert_message(
         let scheduled = sqlx::query_scalar!(
             "SELECT EXISTS(SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2) AS \"exists!\"",
             message_db_id, link_id,
-        ).fetch_one(&mut *tx).await.map_err(anyhow::Error::from)?;
+        ).fetch_one(&mut **tx).await.map_err(anyhow::Error::from)?;
         if scheduled {
             return Err(EmailErr::MessageDeliveryConflict(message_db_id));
         }
@@ -117,7 +134,7 @@ pub(crate) async fn insert_message(
     // Ordinary draft writes never touch scheduling, even for legacy clients.
     if !is_draft && input.send_time.is_some() {
         message::process_scheduled_message(
-            &mut tx,
+            &mut *tx,
             link_id,
             message_db_id,
             input.send_time,
@@ -127,32 +144,31 @@ pub(crate) async fn insert_message(
         .map_err(anyhow::Error::from)?;
     }
 
-    message::upsert_recipients(&mut tx, message_db_id, contacts)
+    message::upsert_recipients(&mut *tx, message_db_id, contacts)
         .await
         .map_err(anyhow::Error::from)?;
 
-    thread::update_thread_metadata(&mut tx, thread_db_id, link_id)
+    thread::update_thread_metadata(&mut *tx, thread_db_id, link_id)
         .await
         .map_err(anyhow::Error::from)?;
 
-    thread::upsert_user_history(&mut tx, link_id, thread_db_id)
+    thread::upsert_user_history(&mut *tx, link_id, thread_db_id)
         .await
         .map_err(anyhow::Error::from)?;
 
     // Persist handles with the actual settled identity, including a concurrent
     // first-save winner and a draft recreated after sender migration.
     if let Some(client_id) = input.draft_client_id {
-        client_id_mapping::bind_draft_client_id(&mut tx, client_id, link_id, message_db_id)
+        client_id_mapping::bind_draft_client_id(&mut *tx, client_id, link_id, message_db_id)
             .await
             .map_err(anyhow::Error::from)?;
     }
     if let Some(client_id) = input.thread_client_id {
-        client_id_mapping::bind_thread_client_id(&mut tx, client_id, link_id, thread_db_id)
+        client_id_mapping::bind_thread_client_id(&mut *tx, client_id, link_id, thread_db_id)
             .await
             .map_err(anyhow::Error::from)?;
     }
 
-    tx.commit().await.map_err(anyhow::Error::from)?;
     Ok(Some(settled))
 }
 

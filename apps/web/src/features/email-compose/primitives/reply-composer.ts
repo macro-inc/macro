@@ -37,7 +37,9 @@ import type {
   EmailUndoHandle,
 } from '../context/compose-capabilities';
 import type { EmailReplySession } from '../context/email-form-inputs';
+import { decodeBase64Utf8 } from '../core/decode-base64';
 import type { EmailDraft } from '../core/email-draft';
+import { plainTextToHtml } from '../core/plain-text-to-html';
 import {
   convertContactInfoToEmailRecipient,
   convertEmailRecipientToContactInfo,
@@ -52,6 +54,7 @@ import {
   createDraftPersistence,
   deleteDraftForDiscard,
 } from './draft-persistence';
+import { observeDraftRestoration } from './draft-restoration';
 import { createDraftSaveNotice } from './draft-save-notice';
 import { createDraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
@@ -68,6 +71,7 @@ import {
 import { createReplyComposerFocus } from './reply-composer-focus';
 import { createReplyRecipientFields } from './reply-recipient-fields';
 import {
+  pendingInlineMedia,
   refuseSend,
   sendRefusalAfterSave,
   sendRefusalBeforeSave,
@@ -209,6 +213,7 @@ export function createReplyComposer(
       : undefined;
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
+  const [restoring, setRestoring] = createSignal(false);
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   // Gmail-style sizing: the composer opens compact and grows to the full cap
   // once the user scrolls the content
@@ -223,27 +228,6 @@ export function createReplyComposer(
   const [quoteCollapsed, setQuoteCollapsed] = createSignal(
     !form.replyAppended()
   );
-  const recipients = createReplyRecipientFields({
-    values: form.recipients,
-    setValues: form.setRecipients,
-    onChange: scheduleDraftSave,
-    container: dom.container,
-    disabled: () =>
-      submitting() ||
-      pendingDeletion() ||
-      movingInbox() ||
-      schedule?.pending() ||
-      schedule?.state().type === 'scheduled' ||
-      terminalState() !== undefined,
-  });
-  const focus = createReplyComposerFocus({
-    editor,
-    container: dom.container,
-    footer: dom.footer,
-    scrollContainer,
-    toInput: recipients.toRef,
-    expandRecipients: () => recipients.setShowExpandedRecipients(true),
-  });
   // A pending undo-send restore that belongs to this thread (inline reply
   // remount case). It carries a just-undone send. Consumed below.
   const restoredSnapshot = replyUndo.takePending(undoKey);
@@ -283,6 +267,31 @@ export function createReplyComposer(
       code: 'INTERNAL',
     });
   const savedDraftId = session.draftId;
+  const sendLocked = () => props.delivery.sendLocked?.(savedDraftId()) ?? false;
+  const recipients = createReplyRecipientFields({
+    values: form.recipients,
+    setValues: form.setRecipients,
+    onChange: scheduleDraftSave,
+    container: dom.container,
+    disabled: () =>
+      restoring() ||
+      submitting() ||
+      pendingDeletion() ||
+      movingInbox() ||
+      schedule?.pending() ||
+      schedule?.state().type === 'scheduled' ||
+      terminalState() !== undefined ||
+      sendLocked(),
+  });
+  const focus = createReplyComposerFocus({
+    editor,
+    container: dom.container,
+    footer: dom.footer,
+    scrollContainer,
+    toInput: recipients.toRef,
+    expandRecipients: () => recipients.setShowExpandedRecipients(true),
+  });
+
   const savedDraftThreadId = session.threadId;
   observeDraftIdentity(
     props.drafts,
@@ -294,7 +303,19 @@ export function createReplyComposer(
         void retryDraft().catch(props.notices.reportError);
       } else detachFromObsoleteDraft('Saving your edits as a new draft.');
     },
-    handleAlreadySent
+    handleAlreadySent,
+    async () => {
+      if (
+        sendLocked() ||
+        schedule.state().type === 'scheduled' ||
+        !session.autosaveAllowed() ||
+        props.connectivity.looksOffline()
+      )
+        return false;
+      const draftId = session.draftId();
+      if (draftId && session.serverConfirmed())
+        await attachmentPersistence.upload(draftId);
+    }
   );
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
@@ -310,6 +331,7 @@ export function createReplyComposer(
   // Consume the undo-send snapshot so a later composer mount doesn't restore
   // it again. Use bodyHtml as initialHtml for the editor, restore attachments
   // on mount.
+  const [restoredBodyHtml, setRestoredBodyHtml] = createSignal<string>();
   const restoreEnvelope = (snapshot: UndoReplySnapshot) => {
     form.setSelectedInbox(snapshot.inboxId, snapshot.draftRestore.sender_email);
     form.setSubject(snapshot.draftRestore.subject);
@@ -327,9 +349,7 @@ export function createReplyComposer(
     onMount(() => {
       // Restored content is local state worth keeping — latch the seed.
       props.onEngaged?.();
-      for (const attachment of restoredSnapshot.attachments) {
-        form.attachments.add(attachment);
-      }
+      form.attachments.replace(restoredSnapshot.attachments);
       setIncludeSignature(restoredSnapshot.includeSignature);
       form.setReplyAppended(restoredSnapshot.replyAppended);
       // Reopen with the quote visible, as it was when the send was undone.
@@ -362,13 +382,12 @@ export function createReplyComposer(
       inboxId: snapshot.inboxId,
     });
     restoreEnvelope(snapshot);
+    setRestoredBodyHtml(snapshot.bodyHtml ?? plainTextToHtml(''));
     const currentEditor = editor();
     if (currentEditor && snapshot.bodyHtml) {
       setEditorStateFromHtml(currentEditor, snapshot.bodyHtml);
     }
-    for (const attachment of snapshot.attachments) {
-      form.attachments.add(attachment);
-    }
+    form.attachments.replace(snapshot.attachments);
     setIncludeSignature(snapshot.includeSignature);
     form.setReplyAppended(snapshot.replyAppended);
     // Reopen with the quote visible, as it was when the send was undone.
@@ -381,7 +400,8 @@ export function createReplyComposer(
     unregisterUndo();
   });
 
-  const initialHtml = () => restoredSnapshot?.bodyHtml ?? props.preloadedHtml;
+  const initialHtml = () =>
+    restoredBodyHtml() ?? restoredSnapshot?.bodyHtml ?? props.preloadedHtml;
   const [editorConnected, setEditorConnected] = createSignal(false);
   const handleEditorConnect = () => {
     const currentEditor = editor();
@@ -403,33 +423,40 @@ export function createReplyComposer(
   const restoreAfterUndoSend = async (
     draftId: string,
     sentThreadId: string | undefined,
-    inboxId: string | undefined
+    inboxId: string | undefined,
+    draftRestored = false
   ) => {
     const snapshot = replyUndo.peek(draftId);
 
     // Reconcile the actual message thread, which can differ from the host when
     // replying from another inbox. The host's undoKey still owns local recovery.
     const threadId = sentThreadId ?? snapshot?.threadId;
-    await props.drafts.restoreDraft({
-      draftId,
-      threadId,
-      draft: snapshot?.draftRestore,
-      html: snapshot?.bodyHtml,
-      inboxId,
-    });
+    if (!draftRestored)
+      await props.drafts.restoreDraft({
+        draftId,
+        threadId,
+        draft: snapshot?.draftRestore,
+        html: snapshot?.bodyHtml,
+        inboxId,
+      });
 
     if (snapshot) {
       // Keep the recovery snapshot available if restoring the server draft
       // fails. Consume it only after the authoritative restore succeeds.
       replyUndo.take(draftId);
       // Resolve the live registration after cache updates and unmounts settle.
-      setTimeout(() => replyUndo.restore(undoKey, snapshot), 0);
+      if (!draftRestored)
+        setTimeout(() => replyUndo.restore(undoKey, snapshot), 0);
       props.setShowReply?.(true);
     }
   };
 
   const attachmentPersistence = createAttachmentPersistence({
     confirmRemoval: !!props.drafts.saveLocalDraft,
+    allowed: () =>
+      !sendLocked() &&
+      schedule.state().type !== 'scheduled' &&
+      !props.connectivity.looksOffline(),
     services: props.attachmentStorage,
     attachments: form.attachments,
     draftId: () =>
@@ -479,6 +506,7 @@ export function createReplyComposer(
     'idle' | 'preparing' | 'sending'
   >('idle');
   const submitting = () => sendPhase() !== 'idle';
+  let sendOperationVersion = 0;
   const [pendingDeletion, setPendingDeletion] = createSignal(false);
 
   function collectDraft(forDelivery = false) {
@@ -657,24 +685,71 @@ export function createReplyComposer(
       });
     },
     paused: () =>
+      restoring() ||
       submitting() ||
       pendingDeletion() ||
       movingInbox() ||
       schedule?.pending() ||
       schedule?.state().type === 'scheduled' ||
-      terminalState() !== undefined,
+      terminalState() !== undefined ||
+      sendLocked(),
+  });
+  observeDraftRestoration({
+    storage: props.drafts,
+    accepts: (change) =>
+      savedDraftId()
+        ? [change.draftId, change.originalDraftId].includes(savedDraftId()!)
+        : !hasLocalChanges &&
+          change.threadId === thread()?.db_id &&
+          change.replyingToId === replyTarget?.db_id,
+    ready: () => !sendLocked(),
+    version: () => `${identityVersion}:${editVersion}:${session.epoch()}`,
+    cancelPendingSave: () => {
+      identityVersion += 1;
+      sendOperationVersion += 1;
+      setSendPhase('idle');
+      autosave.cancel();
+    },
+    setPending: setRestoring,
+    restore: (draft, change, restoredPersistence, local, attachments) => {
+      persistence.restored(local);
+      session.dispatch({
+        type: 'seeded',
+        draftId: draft.db_id,
+        threadId: draft.thread_db_id,
+        inboxId: draft.link_id,
+        persistence: restoredPersistence,
+      });
+      form.restoreDraft(draft);
+      if (attachments) form.attachments.replace(attachments);
+      setIncludeSignature(change.includeSignature !== false);
+      const bodyHtml = draft.body_html_sanitized
+        ? decodeBase64Utf8(draft.body_html_sanitized)
+        : plainTextToHtml(draft.body_text ?? '');
+      setRestoredBodyHtml(bodyHtml);
+      const currentEditor = editor();
+      if (currentEditor) setEditorStateFromHtml(currentEditor, bodyHtml);
+      setQuoteCollapsed(!form.replyAppended());
+      hasLocalChanges = false;
+      setTerminalState(undefined);
+      props.onEngaged?.();
+      props.setShowReply?.(true);
+    },
+    reportError: props.notices.reportError,
   });
   function executeSaveDraft(completingThread = false) {
     return autosave.save(captureSave(completingThread));
   }
   function scheduleDraftSave() {
     if (
+      restoring() ||
       submitting() ||
       pendingDeletion() ||
       movingInbox() ||
       schedule.pending() ||
       schedule.state().type === 'scheduled' ||
-      terminalState()
+      terminalState() ||
+      sendLocked()
     )
       return;
     hasLocalChanges = true;
@@ -688,12 +763,14 @@ export function createReplyComposer(
   // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
   const saveSelectedInbox = async (inboxId: string, senderEmail?: string) => {
     if (
+      restoring() ||
       submitting() ||
       pendingDeletion() ||
       movingInbox() ||
       schedule.pending() ||
       schedule.state().type === 'scheduled' ||
-      terminalState()
+      terminalState() ||
+      sendLocked()
     )
       return;
     hasLocalChanges = true;
@@ -738,6 +815,7 @@ export function createReplyComposer(
     initialScheduledTime: draftSeed?.scheduled_send_time
       ? new Date(draftSeed.scheduled_send_time)
       : undefined,
+    initialDeliveryStatus: draftSeed?.scheduled_send_status ?? undefined,
     draftId: savedDraftId,
     saveDraft: saveForSchedule,
     threadId: savedDraftThreadId,
@@ -762,6 +840,7 @@ export function createReplyComposer(
     },
   });
   const cancelSchedule = async () => {
+    if (sendLocked() || restoring()) return false;
     if (!(await schedule.cancel())) return false;
     session.dispatch({ type: 'schedule-cancelled' });
     return true;
@@ -771,6 +850,27 @@ export function createReplyComposer(
     const requestReplyType = ctx.replyRequest.replyType();
 
     if (!requestReplyType) return;
+
+    // Message-card actions reach this path even while composer controls are disabled.
+    // Consume the request so cancelling the send cannot apply a stale Forward later.
+    if (sendLocked()) {
+      // A fresh composer can be waiting for durable storage initialization.
+      // Preserve its initial action; requests against a queued draft are discarded.
+      if (savedDraftId()) ctx.replyRequest.clear();
+      return;
+    }
+    if (
+      restoring() ||
+      submitting() ||
+      pendingDeletion() ||
+      movingInbox() ||
+      schedule.pending() ||
+      schedule.state().type === 'scheduled' ||
+      terminalState()
+    ) {
+      ctx.replyRequest.clear();
+      return;
+    }
 
     if (form.replyType() !== requestReplyType) {
       form.setReplyType(requestReplyType);
@@ -800,6 +900,7 @@ export function createReplyComposer(
   const hasPaidAccess = props.hasPaidAccess;
 
   const sendEmail = async (markDone = false) => {
+    if (sendLocked() || restoring()) return;
     if (scheduling() || movingInbox() || terminalState()) return;
     if (submitting() || pendingDeletion()) return;
     // Thread identity can be available before its account/alias catalog. Wait
@@ -855,8 +956,14 @@ export function createReplyComposer(
       inboxId = primaryInboxId() ?? inboxes[0].id;
     }
 
-    const offline = sendRefusalBeforeSave(props.connectivity);
+    const offline = sendRefusalBeforeSave(
+      props.connectivity,
+      props.delivery.queueActive?.() && schedule.action() === 'send',
+      form.attachments.list().length > 0
+    );
     if (offline) return refuseSend(props.notices, offline);
+    if (pendingInlineMedia(editor()))
+      return refuseSend(props.notices, 'media-not-uploaded');
     const currentEditor = editor();
     const rememberCurrentReply = () => {
       if (!currentEditor) return;
@@ -920,12 +1027,22 @@ export function createReplyComposer(
     const willMarkDone = markDone || currentThread.inbox_visible;
 
     setSendPhase('preparing');
+    const sendOperation = ++sendOperationVersion;
     const sendGeneration = identityVersion;
     try {
       // Ensure draft is saved before sending so undo-send always has a draft to restore
       const epochBeforeSave = session.epoch();
       try {
-        await autosave.save(captureSave(willMarkDone), { acknowledge: false });
+        if (
+          props.delivery.queueActive?.() &&
+          props.drafts.saveLocalDraft &&
+          !form.attachments.list().length
+        )
+          await autosave.saveLocal(captureSave(willMarkDone));
+        else
+          await autosave.save(captureSave(willMarkDone), {
+            acknowledge: false,
+          });
       } catch (error) {
         props.notices.reportError(error);
         if (session.isStale(epochBeforeSave)) return;
@@ -934,16 +1051,24 @@ export function createReplyComposer(
       if (
         sendGeneration !== identityVersion ||
         session.isStale(epochBeforeSave) ||
-        terminalState()
+        terminalState() ||
+        sendLocked()
       )
         return;
+      const expectedLocalVersion = props.delivery.queueActive?.()
+        ? persistence.localVersion()
+        : undefined;
       const refusal = sendRefusalAfterSave({
         identity: session.identity(),
         autosaveAllowed: session.autosaveAllowed(),
         attachments: form.attachments.list(),
         unqueuedHandleMaySend: false,
+        queueActive: props.delivery.queueActive?.(),
       });
       if (refusal) return refuseSend(props.notices, refusal);
+
+      if (pendingInlineMedia(editor()))
+        return refuseSend(props.notices, 'media-not-uploaded');
 
       // Snapshot editor state before watermark so undo-send can restore it.
       // Remember by draft so sends in separate composers cannot replace each other.
@@ -955,6 +1080,8 @@ export function createReplyComposer(
 
       // Append watermark after all validation passes so failed sends don't
       // leave orphaned watermark nodes in the editor tree.
+      const restoration = prepareEmailBody(currentEditor);
+      const restoreMacro = bodyMacro();
       const cleanupWatermark = $appendWatermarkNodeToLast(
         currentEditor,
         !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
@@ -982,10 +1109,22 @@ export function createReplyComposer(
 
       setSendPhase('sending');
       const pendingSend = props.delivery.sendMessage({
-        clientHandles:
-          session.identity().kind === 'handle' && session.draftId()
-            ? { draftId: session.draftId()!, threadId: session.threadId() }
-            : undefined,
+        expectedLocalVersion,
+        clientHandles: {
+          draftId: currentDraftId!,
+          threadId: savedDraftThreadId() ?? currentThread.db_id,
+        },
+        attachmentIds: form.attachments
+          .list()
+          .filter((a) => a.type !== 'forwarded')
+          .flatMap((a) => (a.attachmentId ? [a.attachmentId] : [])),
+        forwardedAttachmentIds: form.attachments
+          .list()
+          .filter((a) => a.type === 'forwarded')
+          .flatMap((a) => (a.attachmentId ? [a.attachmentId] : [])),
+        restoreBodyHtml: restoration?.bodyHtml,
+        restoreBodyText: restoration?.bodyText,
+        restoreBodyMacro: restoreMacro,
         message: {
           sender_email: activeInboxEmail(),
           db_id: currentDraftId,
@@ -1008,19 +1147,16 @@ export function createReplyComposer(
         completingThread: willMarkDone,
       });
 
-      // Reset immediately while this task owns completion, including after unmount.
-      try {
-        resetState();
-        clearDraftState();
-      } catch (error) {
-        props.notices.reportError(error);
-      } finally {
-        cleanupWatermark();
-      }
       let result;
       try {
         result = await pendingSend;
       } catch (error) {
+        if (
+          sendGeneration !== identityVersion ||
+          session.isStale(epochBeforeSave)
+        )
+          return;
+        cleanupWatermark();
         autosave.cancel();
         if (mounted && currentDraftId) {
           const snapshot = replyUndo.peek(currentDraftId);
@@ -1030,6 +1166,20 @@ export function createReplyComposer(
         props.notices.feedback.failure('Failed to send email');
         return;
       }
+      if (
+        sendGeneration !== identityVersion ||
+        session.isStale(epochBeforeSave)
+      )
+        return;
+      // Clear only after the send is durably accepted, including after unmount.
+      try {
+        resetState();
+        clearDraftState();
+      } catch (error) {
+        props.notices.reportError(error);
+      } finally {
+        cleanupWatermark();
+      }
       autosave.cancel();
       const draftId = result.draftId;
       if (draftId) endUndoSend(draftId);
@@ -1038,11 +1188,17 @@ export function createReplyComposer(
       let markDoneUndoHandle: EmailUndoHandle | undefined;
       const undoSend = (draftId: string) =>
         props.delivery.undoSend({
+          sendAttemptId: result.sendAttemptId,
           threadId: result.threadId,
           draftId,
           inboxId,
-          onUndone: async () => {
-            await restoreAfterUndoSend(draftId, result.threadId, inboxId);
+          onUndone: async (undo) => {
+            await restoreAfterUndoSend(
+              draftId,
+              result.threadId,
+              inboxId,
+              undo?.draftRestored
+            );
             const doneHandle = markDoneUndoHandle;
             markDoneUndoHandle = undefined;
             await doneHandle?.undo({
@@ -1054,21 +1210,28 @@ export function createReplyComposer(
           },
         });
       try {
-        const toastId = props.notices.feedback.success('Email sent', {
-          actions: draftId
-            ? [
-                {
-                  label: 'Undo',
-                  onClick: () => {
-                    if (toastId != null)
-                      props.notices.feedback.dismiss(toastId);
-                    void undoSend(draftId).catch(props.notices.reportError);
+        const toastId = props.notices.feedback.success(
+          result.sendAttemptId
+            ? result.persistence === 'queued'
+              ? 'Email queued to send'
+              : 'Email sending'
+            : 'Email sent',
+          {
+            actions: draftId
+              ? [
+                  {
+                    label: 'Undo',
+                    onClick: () => {
+                      if (toastId != null)
+                        props.notices.feedback.dismiss(toastId);
+                      void undoSend(draftId).catch(props.notices.reportError);
+                    },
                   },
-                },
-              ]
-            : undefined,
-          duration: 5_000,
-        });
+                ]
+              : undefined,
+            duration: 5_000,
+          }
+        );
       } catch (error) {
         props.notices.reportError(error);
       }
@@ -1107,11 +1270,12 @@ export function createReplyComposer(
     } catch (error) {
       props.notices.reportError(error);
     } finally {
-      setSendPhase('idle');
+      if (sendOperation === sendOperationVersion) setSendPhase('idle');
     }
   };
 
   const resetState = () => {
+    setRestoredBodyHtml(plainTextToHtml(''));
     clearEmailBody(editor());
     setBodyMacro('');
     session.dispatch({ type: 'reset' });
@@ -1127,6 +1291,7 @@ export function createReplyComposer(
   };
 
   const deleteDraftAndReset = async () => {
+    if (sendLocked() || restoring()) return;
     if (schedule.state().type === 'scheduled') {
       props.notices.feedback.alert(
         'Cancel the schedule before deleting this draft.'
@@ -1189,20 +1354,10 @@ export function createReplyComposer(
   };
 
   const handleAddAttachments = async (files: File[]) => {
-    if (
-      submitting() ||
-      pendingDeletion() ||
-      movingInbox() ||
-      scheduling() ||
-      schedule.state().type === 'scheduled' ||
-      terminalState()
-    )
+    if (editingDisabled()) return;
+    if (await refuseAttachmentsOffline(props.connectivity, props.notices))
       return;
-    if (
-      !props.drafts.saveLocalDraft &&
-      (await refuseAttachmentsOffline(props.connectivity, props.notices))
-    )
-      return;
+    if (editingDisabled()) return;
     const currentAttachments = form.attachments.list();
 
     const attachmentsToAddByteSize = files.reduce(
@@ -1244,15 +1399,7 @@ export function createReplyComposer(
   };
 
   const handleRemoveAttachment = async (attachment: DraftFormAttachment) => {
-    if (
-      submitting() ||
-      pendingDeletion() ||
-      movingInbox() ||
-      scheduling() ||
-      schedule.state().type === 'scheduled' ||
-      terminalState()
-    )
-      return;
+    if (editingDisabled()) return;
     try {
       if (!(await attachmentPersistence.remove(attachment))) return;
       scheduleDraftSave();
@@ -1263,11 +1410,13 @@ export function createReplyComposer(
 
   const scheduling = schedule.pending;
   const scheduleBlocked = () =>
+    restoring() ||
     attachmentPersistence.removing() ||
     pendingDeletion() ||
     movingInbox() ||
     submitting() ||
-    terminalState() !== undefined;
+    terminalState() !== undefined ||
+    sendLocked();
   const handleSendTimeChange = (date: Date | null) =>
     scheduleBlocked() ? false : schedule.select(date);
 
@@ -1290,93 +1439,119 @@ export function createReplyComposer(
 
   let lastScheduledTime = schedule.confirmedTime()?.toISOString();
   let handledTerminalIdentity: string | undefined;
+  let reconcileAfterQueuedSend = false;
   createEffect(
-    on([lifecycle.state, scheduling, movingInbox], ([state, , moving]) => {
-      if (
-        !state ||
-        !session.serverConfirmed() ||
-        state.draftId !== savedDraftId() ||
-        state.threadId !== savedDraftThreadId() ||
-        (state.inboxId !== undefined && state.inboxId !== persistedInboxId()) ||
-        moving ||
-        pendingDeletion()
-      )
-        return;
+    on(
+      [
+        lifecycle.state,
+        scheduling,
+        movingInbox,
+        () => sendPhase() === 'sending',
+        () => sendLocked() || restoring(),
+      ],
+      ([state, , moving, sending, queued]) => {
+        if (queued) {
+          reconcileAfterQueuedSend = true;
+          return;
+        }
+        if (reconcileAfterQueuedSend) {
+          reconcileAfterQueuedSend = false;
+          // Admission's non-draft observation predates the cancellation.
+          void lifecycle.refresh().catch(props.notices.reportError);
+          return;
+        }
+        if (
+          !state ||
+          !session.serverConfirmed() ||
+          state.draftId !== savedDraftId() ||
+          state.threadId !== savedDraftThreadId() ||
+          (state.inboxId !== undefined &&
+            state.inboxId !== persistedInboxId()) ||
+          moving ||
+          sending ||
+          pendingDeletion()
+        )
+          return;
 
-      if (state.type === 'scheduled') {
+        if (state.type === 'scheduled') {
+          if (editVersion > persistedEditVersion) {
+            detachFromObsoleteDraft(
+              'This email was scheduled in another tab. Your newer text was kept as a new draft.'
+            );
+            return;
+          }
+          const nextTime = new Date(state.sendTime);
+          const changedElsewhere =
+            !schedule.confirmedTime() ||
+            schedule.confirmedTime()?.getTime() !== nextTime.getTime();
+          schedule.observe(state);
+          if (changedElsewhere && lastScheduledTime !== state.sendTime) {
+            props.notices.feedback.alert(
+              `Email scheduled for ${nextTime.toLocaleString()}. Cancel the schedule to edit.`
+            );
+          }
+          lastScheduledTime = state.sendTime;
+          return;
+        }
+
+        if (state.type === 'editing') {
+          const wasScheduled = schedule.state().type === 'scheduled';
+          schedule.observe(state);
+          if (wasScheduled && schedule.state().type === 'editing') {
+            session.dispatch({ type: 'schedule-cancelled' });
+            lastScheduledTime = undefined;
+            props.notices.feedback.success(
+              'Schedule cancelled. This email is editable again.'
+            );
+          }
+          return;
+        }
+
+        if (handledTerminalIdentity === `${state.draftId}:${state.type}`)
+          return;
+        handledTerminalIdentity = `${state.draftId}:${state.type}`;
+        // Only a confirmed schedule makes a delivery "the scheduled email"; any
+        // other draft was sent from another tab or device.
+        const wasScheduled = schedule.state().type === 'scheduled';
         if (editVersion > persistedEditVersion) {
           detachFromObsoleteDraft(
-            'This email was scheduled in another tab. Your newer text was kept as a new draft.'
+            state.type !== 'sent'
+              ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
+              : wasScheduled
+                ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
+                : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
           );
           return;
         }
-        const nextTime = new Date(state.sendTime);
-        const changedElsewhere =
-          !schedule.confirmedTime() ||
-          schedule.confirmedTime()?.getTime() !== nextTime.getTime();
-        schedule.observe(state);
-        if (changedElsewhere && lastScheduledTime !== state.sendTime) {
-          props.notices.feedback.alert(
-            `Email scheduled for ${nextTime.toLocaleString()}. Cancel the schedule to edit.`
-          );
+
+        identityVersion += 1;
+        autosave.cancel();
+        resetState();
+        setTerminalState(state.type);
+        clearDraftState();
+        if (state.type === 'sent') {
+          if (wasScheduled)
+            props.notices.feedback.success('Scheduled email sent');
+          else props.notices.feedback.alert('This email was already sent');
+        } else {
+          props.notices.feedback.alert('This draft is no longer available.');
         }
-        lastScheduledTime = state.sendTime;
-        return;
       }
-
-      if (state.type === 'editing') {
-        const wasScheduled = schedule.state().type === 'scheduled';
-        schedule.observe(state);
-        if (wasScheduled && schedule.state().type === 'editing') {
-          session.dispatch({ type: 'schedule-cancelled' });
-          lastScheduledTime = undefined;
-          props.notices.feedback.success(
-            'Schedule cancelled. This email is editable again.'
-          );
-        }
-        return;
-      }
-
-      if (handledTerminalIdentity === `${state.draftId}:${state.type}`) return;
-      handledTerminalIdentity = `${state.draftId}:${state.type}`;
-      // Only a confirmed schedule makes a delivery "the scheduled email"; any
-      // other draft was sent from another tab or device.
-      const wasScheduled = schedule.state().type === 'scheduled';
-      if (editVersion > persistedEditVersion) {
-        detachFromObsoleteDraft(
-          state.type !== 'sent'
-            ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
-            : wasScheduled
-              ? 'The scheduled email was sent while you were editing. Your newer text was kept as a new draft and was not sent.'
-              : 'This email was already sent. Your newer text was kept as a new draft and was not sent.'
-        );
-        return;
-      }
-
-      identityVersion += 1;
-      autosave.cancel();
-      resetState();
-      setTerminalState(state.type);
-      clearDraftState();
-      if (state.type === 'sent') {
-        if (wasScheduled)
-          props.notices.feedback.success('Scheduled email sent');
-        else props.notices.feedback.alert('This email was already sent');
-      } else {
-        props.notices.feedback.alert('This draft is no longer available.');
-      }
-    })
+    )
   );
 
   const hasBodyText = () => bodyMacro().trim().length > 0;
   const editingDisabled = () =>
+    restoring() ||
     submitting() ||
     pendingDeletion() ||
     movingInbox() ||
     scheduling() ||
     schedule.state().type === 'scheduled' ||
-    terminalState() !== undefined;
+    terminalState() !== undefined ||
+    sendLocked();
   const sendUnavailableReason = () => {
+    if (sendLocked()) return 'Queued to send. Cancel the send before editing.';
     if (terminalState() === 'sent') return 'This email has already been sent.';
     if (terminalState() === 'missing')
       return 'This draft is no longer available.';
@@ -1389,11 +1564,13 @@ export function createReplyComposer(
     return undefined;
   };
   const sendActionDisabled = () =>
+    restoring() ||
     submitting() ||
     pendingDeletion() ||
     movingInbox() ||
     scheduling() ||
     terminalState() !== undefined ||
+    sendLocked() ||
     attachmentPersistence.uploading() ||
     schedule.action() === 'unavailable';
   const toggleQuotedText = () => {
@@ -1439,7 +1616,10 @@ export function createReplyComposer(
     activeInboxEmail,
     replyType: form.replyType,
     signatureHtml: replySignatureHtml,
-    setIncludeSignature,
+    setIncludeSignature: (include: boolean) => {
+      if (editingDisabled()) return;
+      setIncludeSignature(include);
+    },
     setScrollContainer,
     composerExpanded,
     setComposerExpanded,
@@ -1464,7 +1644,9 @@ export function createReplyComposer(
     scheduleActionLabel: schedule.actionLabel,
     scheduleOperation: schedule.operation,
     cancelSchedule,
-    schedulePickerDisabled: () => scheduleBlocked() || scheduling(),
+    checkScheduleStatus: schedule.checkStatus,
+    schedulePickerDisabled: () =>
+      scheduleBlocked() || schedule.pickerDisabled(),
     editingDisabled,
     sendUnavailableReason,
     hasBodyText,
