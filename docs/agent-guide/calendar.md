@@ -942,7 +942,8 @@ vertical scrolling without clipping the lower sections.
 In `/app/component/mail`, open an invitation message; the same card appears in
 `/app/email/:threadId`. Saved details appear below the sender without waiting for calendar
 sync. Expand guests and descriptions with their explicit controls. `View original email`
-is an accessible disclosure that starts closed; attachments remain below it.
+is an accessible disclosure that starts closed and stays open across unchanged
+permission refreshes and window refocus on desktop and mobile; attachments remain below it.
 ICS attachments show a calendar icon in the attachment pill and file headers on
 desktop and mobile, including when the email uses `application/ics` or a
 parameterized `text/calendar` MIME type. Opening the attachment still shows the

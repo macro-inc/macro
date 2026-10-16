@@ -1,4 +1,5 @@
 import { cleanup, render } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { AccessLevel } from '../core/types';
@@ -35,9 +36,9 @@ it('ignores initial cache and failures, but propagates confirmed removal and a l
   expect(apply).not.toHaveBeenCalled();
   expect(access!()).toBeUndefined();
   update('isFetchedAfterMount', true);
-  expect(apply).toHaveBeenLastCalledWith('edit');
+  expect(apply).toHaveBeenLastCalledWith('edit', undefined);
   update('data', 'accessLevel', null);
-  expect(apply).toHaveBeenLastCalledWith(null);
+  expect(apply).toHaveBeenLastCalledWith(null, 'edit');
   expect(access!()).toBeNull();
   const calls = apply.mock.calls.length;
   update('isSuccess', false);
@@ -45,5 +46,36 @@ it('ignores initial cache and failures, but propagates confirmed removal and a l
   expect(apply).toHaveBeenCalledTimes(calls);
   update('data', 'accessLevel', 'view');
   update('isSuccess', true);
-  expect(apply).toHaveBeenLastCalledWith('view');
+  expect(apply).toHaveBeenLastCalledWith('view', null);
+});
+
+it('reports the previous confirmation for refreshes and resets it for a new entity', () => {
+  const [state, update] = createStore({
+    isSuccess: true,
+    isFetchedAfterMount: true,
+    data: { accessLevel: 'owner' as AccessLevel | null },
+  });
+  snapshot = state;
+  const [entityId, setEntityId] = createSignal('first');
+  const apply = vi.fn();
+  function Host() {
+    useSharedAccessUpdates(
+      () => ({ entityType: 'document', entityId: entityId() }),
+      apply
+    );
+    return null;
+  }
+  render(() => <Host />);
+  expect(apply).toHaveBeenLastCalledWith('owner', undefined);
+  update('isSuccess', false);
+  expect(apply).toHaveBeenCalledTimes(1);
+  update('isSuccess', true);
+  expect(apply).toHaveBeenCalledTimes(2);
+  expect(apply).toHaveBeenLastCalledWith('owner', 'owner');
+
+  setEntityId('second');
+  expect(apply).toHaveBeenCalledTimes(3);
+  expect(apply).toHaveBeenLastCalledWith('owner', undefined);
+  update('data', 'accessLevel', 'view');
+  expect(apply).toHaveBeenLastCalledWith('view', 'owner');
 });

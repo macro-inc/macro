@@ -73,6 +73,9 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
   move between inboxes).
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
+- Preserve loaded block content on initial access confirmation when its loader
+  supplies no permissions; reload only on a later confirmed permission change.
+  Apply shared access in place only after a successful permissionless load.
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).

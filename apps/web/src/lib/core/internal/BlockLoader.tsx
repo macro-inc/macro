@@ -70,18 +70,31 @@ export function BlockLoader<
   const analytics = useAnalytics();
   const currentSharedAccess = useSharedAccessUpdates(
     () => shareEntity(blockNameToItemType(props.definition.name), props.id),
-    (level) => {
+    (level, previous) => {
+      const data = blockDataSignal.get();
+      const hasLoadedPermissions =
+        data != null && typeof data === 'object' && 'userAccessLevel' in data;
+      // Lightweight loaders (e.g. email) supply no permissions. Their initial
+      // fallback is not a confirmed access change that requires a remount.
+      const accessChanged = hasLoadedPermissions
+        ? blockUserAccessSignal.get() !== level
+        : previous !== undefined && previous !== level;
       if (level === null) {
         clearLoadedDocument();
         setError('UNAUTHORIZED');
       } else if (
-        (blockDataSignal.get() != null &&
-          blockUserAccessSignal.get() !== level) ||
+        (data != null && accessChanged) ||
         blockErrorSignal.get() === 'UNAUTHORIZED'
       ) {
         clearLoadedDocument();
         setError(undefined);
         blockLoadRetrySignal.set((count) => (count ?? 0) + 1);
+      } else if (
+        data != null &&
+        !hasLoadedPermissions &&
+        !blockErrorSignal.get()
+      ) {
+        setUserAccess(level);
       }
     }
   );
@@ -207,7 +220,9 @@ Check that the load function does not return a preload source when the intent is
     setFile(() => (data && 'dssFile' in data ? data.dssFile : undefined));
     setText((text) => (data && 'text' in data ? data.text : text));
     setUserAccess<UserAccessLevel>(() =>
-      data && 'userAccessLevel' in data ? data.userAccessLevel : 'view'
+      data && 'userAccessLevel' in data
+        ? data.userAccessLevel
+        : (untrack(currentSharedAccess) ?? 'view')
     );
     setDocumentMetadata(() => {
       if (data && 'projectMetadata' in data) {
