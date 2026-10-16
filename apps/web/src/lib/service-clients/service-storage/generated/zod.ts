@@ -26385,7 +26385,7 @@ export const approveHarnessPairingResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether agents may bypass ACP permission requests on this harness.'
+        'Whether the web owner lets agents bypass ACP permission requests on\nthis harness. Takes effect only while the operator allows it too.'
       ),
     connected: zod
       .boolean()
@@ -26399,6 +26399,12 @@ export const approveHarnessPairingResponse = zod
       .nullish()
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
+    operator_allows_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "The machine operator's local consent to permission bypass, as the\ndaemon last reported it on connect. `None` until a daemon reports it."
+      ),
     owner: zod
       .union([
         zod
@@ -26451,7 +26457,7 @@ export const claimHarnessPairingResponse = zod
           .boolean()
           .optional()
           .describe(
-            'Whether agents may bypass ACP permission requests on this harness.'
+            'Whether the web owner lets agents bypass ACP permission requests on\nthis harness. Takes effect only while the operator allows it too.'
           ),
         connected: zod
           .boolean()
@@ -26465,6 +26471,12 @@ export const claimHarnessPairingResponse = zod
           .nullish()
           .describe('When the daemon last attached a runtime connection.'),
         name: zod.string().describe('Display name.'),
+        operator_allows_bypass: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "The machine operator's local consent to permission bypass, as the\ndaemon last reported it on connect. `None` until a daemon reports it."
+          ),
         owner: zod
           .union([
             zod
@@ -26505,7 +26517,7 @@ export const listHarnessesResponseItem = zod
       .boolean()
       .optional()
       .describe(
-        'Whether agents may bypass ACP permission requests on this harness.'
+        'Whether the web owner lets agents bypass ACP permission requests on\nthis harness. Takes effect only while the operator allows it too.'
       ),
     connected: zod
       .boolean()
@@ -26519,6 +26531,12 @@ export const listHarnessesResponseItem = zod
       .nullish()
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
+    operator_allows_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "The machine operator's local consent to permission bypass, as the\ndaemon last reported it on connect. `None` until a daemon reports it."
+      ),
     owner: zod
       .union([
         zod
@@ -26553,7 +26571,7 @@ export const getSelfHarnessResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether agents may bypass ACP permission requests on this harness.'
+        'Whether the web owner lets agents bypass ACP permission requests on\nthis harness. Takes effect only while the operator allows it too.'
       ),
     connected: zod
       .boolean()
@@ -26567,6 +26585,12 @@ export const getSelfHarnessResponse = zod
       .nullish()
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
+    operator_allows_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "The machine operator's local consent to permission bypass, as the\ndaemon last reported it on connect. `None` until a daemon reports it."
+      ),
     owner: zod
       .union([
         zod
@@ -26636,6 +26660,74 @@ export const listHarnessSessionsResponse = zod.array(
 export const deleteHarnessParams = zod.object({
   harness_id: zod.string().describe('Harness ID'),
 });
+
+/**
+ * @summary Handler for `PATCH /harnesses/{harness_id}`.
+ */
+export const patchHarnessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const patchHarnessBody = zod
+  .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether agents may bypass ACP permission requests on this harness.\nEnabling requires the machine operator's reported consent."
+      ),
+  })
+  .describe('Request to change a registered harness.');
+
+export const patchHarnessResponse = zod
+  .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the web owner lets agents bypass ACP permission requests on\nthis harness. Takes effect only while the operator allows it too.'
+      ),
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    operator_allows_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "The machine operator's local consent to permission bypass, as the\ndaemon last reported it on connect. `None` until a daemon reports it."
+      ),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
 
 /**
  * @summary Gets the users history
