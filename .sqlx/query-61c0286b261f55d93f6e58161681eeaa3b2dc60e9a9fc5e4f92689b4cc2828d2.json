@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,\n            created_at, updated_at, last_connected_at, last_disconnected_at\n        FROM harnesses\n        WHERE id = $1 AND deleted_at IS NULL\n        ",
+  "query": "\n            UPDATE harnesses\n            SET allow_permission_bypass = $2, updated_at = now()\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING\n                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,\n                operator_allows_bypass, created_at, updated_at, last_connected_at,\n                last_disconnected_at\n            ",
   "describe": {
     "columns": [
       {
@@ -40,28 +40,34 @@
       },
       {
         "ordinal": 7,
+        "name": "operator_allows_bypass",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "last_connected_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "last_disconnected_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Bool"
       ]
     },
     "nullable": [
@@ -72,11 +78,12 @@
       true,
       false,
       false,
+      true,
       false,
       false,
       true,
       true
     ]
   },
-  "hash": "9c0a40ee4c671cdcd35dde8f6ef8278e3fc0a72e3f3ac82759719d660b4e4e5d"
+  "hash": "61c0286b261f55d93f6e58161681eeaa3b2dc60e9a9fc5e4f92689b4cc2828d2"
 }

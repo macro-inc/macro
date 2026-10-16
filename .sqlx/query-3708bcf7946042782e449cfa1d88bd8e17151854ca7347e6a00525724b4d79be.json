@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT owner_user_id, team_id, allow_permission_bypass\n            FROM harnesses\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
+  "query": "\n            SELECT\n                owner_user_id, team_id,\n                allow_permission_bypass AND operator_allows_bypass IS NOT FALSE\n                    AS \"allow_permission_bypass!\"\n            FROM harnesses\n            WHERE id = $1 AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "allow_permission_bypass",
+        "name": "allow_permission_bypass!",
         "type_info": "Bool"
       }
     ],
@@ -27,8 +27,8 @@
     "nullable": [
       true,
       true,
-      false
+      null
     ]
   },
-  "hash": "e88fe4be33541cd554f98cfdd4335818f3c56238c8048bb3ccdb5000ace68598"
+  "hash": "3708bcf7946042782e449cfa1d88bd8e17151854ca7347e6a00525724b4d79be"
 }
