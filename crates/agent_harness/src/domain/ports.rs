@@ -139,8 +139,13 @@ pub trait CodingAgentSource: Send + Sync + 'static {
 /// Methods take `Arc<Self>` and return owned futures so the registry can fire
 /// them from its own background tasks.
 pub trait HarnessPresence: Send + Sync + 'static {
-    /// A runtime attached for this harness.
-    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    /// A runtime attached for this harness, reporting its operator's local
+    /// consent to permission bypass (`None` from runtimes that predate it).
+    fn connected(
+        self: Arc<Self>,
+        harness: HarnessId,
+        operator_allows_bypass: Option<bool>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
     /// This harness's runtime connection closed.
     fn disconnected(

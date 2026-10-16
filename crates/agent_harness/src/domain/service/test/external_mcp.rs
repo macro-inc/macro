@@ -18,7 +18,7 @@ async fn external_binding_preserves_an_explicit_agent_mcp_selection() {
     });
     let session = service.open_external_session(request).await.unwrap();
     let runtime = ContainerMock::default();
-    runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), None, runtime.clone());
     let prompted = service.control_event(
         session.id,
         ControlEvent {
@@ -68,7 +68,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // session: no handshake, no ACP session, nothing sent - a session nobody
     // is prompting costs the runtime nothing.
     let runtime = ContainerMock::default();
-    runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), None, runtime.clone());
     assert!(runtime.agent().received_requests().is_empty());
     assert!(
         repo.get(session.id)
