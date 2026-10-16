@@ -16,3 +16,6 @@ pub use domain::models::{
 pub use domain::ports::{RateLimitPort, RateLimitService};
 pub use domain::service::RateLimitServiceImpl;
 pub use outbound::redis::{RedisRateLimitAdapter, RedisRateLimitOps};
+
+/// CI cache experiment marker (PR #8101); never merge.
+pub const CI_CACHE_EXPERIMENT: u32 = 1;
