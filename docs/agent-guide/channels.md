@@ -19,10 +19,11 @@ repeat with a plus-addressed DM recipient to check the email-name fallback.
 
 ## Private conversations with an agent
 
-Agent DM discovery is enabled with the local/environment flag
-`VITE_ENABLE_AGENT_DMS=true`; it defaults off and has no PostHog flag. Set it
-before starting Vite or building the frontend. Disabling discovery does not
-delete existing conversations or cancel their work.
+Agent DM discovery is on in development builds (dev.macro.com and `bun run dev`)
+and off in production; there is no PostHog flag. Override it with
+`VITE_ENABLE_AGENT_DMS=true` or `false` before starting Vite or building the
+frontend. Disabling discovery does not delete existing conversations or cancel
+their work.
 
 Choose an agent in **Create → Message**, or click **Message** in its settings or
 bot profile. The picker offers your agents, eligible team agents, and Macro.

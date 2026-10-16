@@ -22,7 +22,8 @@ Most product rollouts are **remote**. Use **env-only** when there is no PostHog
 flag and never will be (compile-time / local kill switch).
 
 Ask before assuming. If the user said "flag it" and did not mention PostHog,
-prefer remote and confirm.
+prefer remote and confirm. The answer decides where the flag lives, not who
+sees it: either way a new flag is usually on in dev (see `default` below).
 
 ## 2. Define it
 
@@ -33,10 +34,12 @@ Add one `defineFlag` next to its neighbors. Do not add `ENABLE_*_FLAG` /
   `disable-browser-turso-cache`). Export the object in matching camelCase
   (`enableFoo`).
 - `env`: the name after `VITE_`, e.g. `'ENABLE_FOO'` → `VITE_ENABLE_FOO`.
-- `default`: used when env is unset. On a remote flag, `false` is a real
-  override and **skips PostHog**. On-in-dev / on-in-local is
-  `DEV_MODE_ENV || undefined` or `LOCAL_ONLY || undefined`, not the boolean
-  itself.
+- `default`: used when env is unset. Turn a new flag on in dev:
+  `DEV_MODE_ENV` on an env-only flag; on a remote flag `onInDev`
+  (`DEV_MODE_ENV || undefined`), not the boolean itself. If it must stay off in
+  dev, say why in a comment above it. On a remote flag, `false` is a real
+  override and **skips PostHog**. On-in-local only is
+  `LOCAL_ONLY || undefined`.
 - Never invert on the flag object. If the product question is "disable X",
   invert at the call site (`!isFeatureEnabled(disableX)`).
 - Env-only exports that are used as `if (ENABLE_FOO)` must be the boolean:
@@ -51,7 +54,7 @@ export const enableFoo = defineFlag({
 
 export const ENABLE_BAR = defineFlag({
   env: 'ENABLE_BAR',
-  default: false,
+  default: DEV_MODE_ENV,
 }).enabled;
 ```
 
