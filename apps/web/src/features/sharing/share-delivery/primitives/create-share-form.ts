@@ -1,3 +1,4 @@
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ShareDeliveryContext } from '../context/share-delivery-context';
@@ -31,8 +32,11 @@ import {
   shareAccess,
 } from '../core/share-item';
 
+export type ShareLocation = 'forward_to_channel' | 'bulk_share';
+
 export type ShareFormOptions = {
   readonly items: Accessor<readonly ShareItem[]>;
+  readonly location: ShareLocation;
   readonly markdownComments: boolean;
   readonly mintMessageId: () => string;
 };
@@ -153,21 +157,32 @@ export function createShareForm<Recipient extends PickedRecipient>(
     };
   }
 
-  async function runTarget(work: TargetWork): Promise<TargetRun | undefined> {
+  async function runTarget(
+    work: TargetWork,
+    span: Span
+  ): Promise<TargetRun | undefined> {
+    span.setAttr('share.messages', work.unsentMessages.length);
+    span.setAttr('share.pending_grants', work.pendingGrants.length);
     let record: TargetRecord;
     if (work.channel.t === 'known') {
       record = work.channel.record;
     } else {
+      span.setAttr('share.recipients', work.channel.userIds.length);
       const channelId = await context.resolvePeopleChannel(
         work.channel.userIds
       );
-      if (channelId === undefined) return undefined;
+      if (channelId === undefined) {
+        span.error('No channel for the recipients');
+        return undefined;
+      }
       record = emptyRecord(channelId);
     }
+    span.setAttr('channel.id', record.channelId);
     let open: (() => void) | undefined;
     if (work.pendingGrants.length > 0) {
       record = (await grantAll(record, work.pendingGrants)).record;
     }
+    let sentCount = 0;
     for (const message of work.unsentMessages) {
       if (message.grantFirst.length > 0) {
         const first = await grantAll(record, message.grantFirst);
@@ -180,11 +195,17 @@ export function createShareForm<Recipient extends PickedRecipient>(
         items: message.items,
         text: message.text,
       });
-      if (!sent) break;
+      if (!sent) {
+        span.error('Message was not sent');
+        break;
+      }
+      sentCount++;
       record = withDelivery(record, message.id);
       open ??= sent.open;
       record = (await grantAll(record, message.grantAfter)).record;
     }
+    span.setAttr('share.sent', sentCount);
+    span.setAttr('share.grant_errors', record.grantErrors.size);
     return { key: work.key, record, open };
   }
 
@@ -220,35 +241,51 @@ export function createShareForm<Recipient extends PickedRecipient>(
     if (!attempt) return undefined;
 
     const { plan } = attempt;
-    setStatus({ t: 'sending', ...attempt });
-    const before = ledger;
-    const runs = await Promise.allSettled(
-      remainingWork(plan, before).map(runTarget)
-    );
-    const finished = runs.flatMap((run) =>
-      run.status === 'fulfilled' && run.value ? [run.value] : []
-    );
-    ledger = new Map([
-      ...before,
-      ...finished.map(({ key, record }) => [key, record] as const),
-    ]);
-    for (const { key, open } of finished) {
-      if (open && !opens.has(key)) opens.set(key, open);
-    }
-    const outcome = summarizeShare(plan, ledger);
-    setStatus(
-      outcome.complete
-        ? { t: 'complete', plan, outcome }
-        : { t: 'incomplete', plan, outcome }
-    );
-    for (const event of shareEvents(plan, before, ledger)) context.track(event);
-    const rejected = runs.find((run) => run.status === 'rejected');
-    if (rejected) throw rejected.reason;
-    return {
-      outcome,
-      open:
-        plan.targets.length === 1 ? opens.get(plan.targets[0].key) : undefined,
-    };
+    return Telemetry.span('share.submit', async (span) => {
+      span.setAttr('share.location', options.location);
+      span.setAttr('share.items', plan.request.items.length);
+      span.setAttr('share.targets', plan.targets.length);
+      span.setAttr('share.retry', attempt.previousOutcome !== undefined);
+      setStatus({ t: 'sending', ...attempt });
+      const before = ledger;
+      const runs = await Promise.allSettled(
+        remainingWork(plan, before).map((work) =>
+          span.span('share.target', (target) => runTarget(work, target))
+        )
+      );
+      const finished = runs.flatMap((run) =>
+        run.status === 'fulfilled' && run.value ? [run.value] : []
+      );
+      ledger = new Map([
+        ...before,
+        ...finished.map(({ key, record }) => [key, record] as const),
+      ]);
+      for (const { key, open } of finished) {
+        if (open && !opens.has(key)) opens.set(key, open);
+      }
+      const outcome = summarizeShare(plan, ledger);
+      span.setAttr('share.complete', outcome.complete);
+      span.setAttr('share.retryable', outcome.retryable);
+      setStatus(
+        outcome.complete
+          ? { t: 'complete', plan, outcome }
+          : { t: 'incomplete', plan, outcome }
+      );
+      for (const event of shareEvents(plan, before, ledger))
+        context.track(event);
+      const rejected = runs.find((run) => run.status === 'rejected');
+      if (rejected) {
+        span.error(rejected.reason);
+        throw rejected.reason;
+      }
+      return {
+        outcome,
+        open:
+          plan.targets.length === 1
+            ? opens.get(plan.targets[0].key)
+            : undefined,
+      };
+    });
   }
 
   return {

@@ -23,6 +23,7 @@ import {
 import {
   createShareForm,
   type ShareForm,
+  type ShareLocation,
 } from './primitives/create-share-form';
 import { changeChannelAccess } from './queries/channel-access';
 
@@ -35,6 +36,7 @@ export type {
 export { isSendRestricted, parseChannelAccessLevel } from './core/share-item';
 export type {
   ShareForm,
+  ShareLocation,
   ShareSubmitResult,
 } from './primitives/create-share-form';
 export { changeChannelAccess } from './queries/channel-access';
@@ -42,8 +44,6 @@ export { changeChannelAccess } from './queries/channel-access';
 export type RecipientOption = WithCustomUserInput<
   'user' | 'contact' | 'channel'
 >;
-
-export type ShareLocation = 'forward_to_channel' | 'bulk_share';
 
 export type ShareItemInput = {
   readonly id: string;
@@ -86,6 +86,7 @@ export function useShareForm(
   return createShareForm<RecipientOption>(
     {
       items,
+      location: options.location,
       markdownComments: ENABLE_MARKDOWN_COMMENTS,
       mintMessageId: newMessageId,
     },

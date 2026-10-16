@@ -103,6 +103,7 @@ function setup(
     const form = createShareForm<PickedRecipient>(
       {
         items: () => items,
+        location: 'bulk_share',
         markdownComments: true,
         mintMessageId: () => `m${++minted}`,
       },
@@ -177,7 +178,7 @@ describe('BulkShareView', () => {
       )
     ).toBeTruthy();
     expect(button('Permission')).toHaveProperty('disabled', true);
-    expect(onSubmitted).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(onSubmitted).toHaveBeenCalledOnce());
     expect(onFinish).not.toHaveBeenCalled();
 
     failingChannels.delete('design');

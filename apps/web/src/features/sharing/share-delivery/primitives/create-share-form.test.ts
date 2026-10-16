@@ -1,6 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
-import { expect, it, onTestFinished } from 'vitest';
+import { expect, it, onTestFinished, vi } from 'vitest';
 import type { ShareDeliveryContext } from '../context/share-delivery-context';
 import type { PickedRecipient, ShareEvent } from '../core/delivery-plan';
 import type {
@@ -10,6 +10,47 @@ import type {
   ShareKind,
 } from '../core/share-item';
 import { createShareForm } from './create-share-form';
+
+type RecordedSpan = {
+  name: string;
+  attributes: Record<string, unknown>;
+  errors: unknown[];
+  children: RecordedSpan[];
+};
+
+const traces = vi.hoisted((): RecordedSpan[] => []);
+
+vi.mock('@macro-inc/observability', () => {
+  type Operation = (span: ReturnType<typeof recorder>) => Promise<unknown>;
+  const open = (name: string): RecordedSpan => ({
+    name,
+    attributes: {},
+    errors: [],
+    children: [],
+  });
+  const recorder = (node: RecordedSpan) => ({
+    span: (name: string, operation: Operation) => {
+      const child = open(name);
+      node.children.push(child);
+      return operation(recorder(child));
+    },
+    setAttr: (name: string, value: unknown) => {
+      node.attributes[name] = value;
+    },
+    error: (error: unknown) => {
+      node.errors.push(error);
+    },
+  });
+  return {
+    Telemetry: {
+      span: (name: string, operation: Operation) => {
+        const root = open(name);
+        traces.push(root);
+        return operation(recorder(root));
+      },
+    },
+  };
+});
 
 function item(kind: ShareKind, id: string, canGrant = true): ShareItem {
   return {
@@ -26,6 +67,7 @@ const channel = (id: string): PickedRecipient => ({ kind: 'channel', id });
 const person = (id: string): PickedRecipient => ({ kind: 'user', id });
 
 function setup(items: readonly ShareItem[]) {
+  traces.length = 0;
   let log: Record<string, string[]> = {};
   const note = (channelId: string, line: string) => {
     log = { ...log, [channelId]: [...(log[channelId] ?? []), line] };
@@ -79,6 +121,7 @@ function setup(items: readonly ShareItem[]) {
     return createShareForm<PickedRecipient>(
       {
         items: () => items,
+        location: 'bulk_share',
         markdownComments: true,
         mintMessageId: () => `m${++minted}`,
       },
@@ -280,6 +323,81 @@ it('retries a failed grant but never a refused one', async () => {
   expect(form.status().t).toBe('incomplete');
 });
 
+it('traces each attempt with a span per recipient it worked on', async () => {
+  const { form, failingPosts, grantErrors } = setup([
+    item('document', 'spec'),
+    item('document', 'brief'),
+  ]);
+  form.setRecipients([channel('design'), person('ana')]);
+  failingPosts.add('m2');
+  grantErrors.set('brief', { kind: 'not-allowed' });
+
+  await form.submit();
+  failingPosts.clear();
+  await form.submit();
+
+  const submit = (attributes: Record<string, unknown>) => ({
+    'share.location': 'bulk_share',
+    'share.items': 2,
+    'share.targets': 2,
+    'share.complete': false,
+    ...attributes,
+  });
+  expect(traces).toEqual([
+    {
+      name: 'share.submit',
+      attributes: submit({ 'share.retry': false, 'share.retryable': true }),
+      errors: [],
+      children: [
+        {
+          name: 'share.target',
+          attributes: {
+            'share.messages': 1,
+            'share.pending_grants': 0,
+            'channel.id': 'design',
+            'share.sent': 1,
+            'share.grant_errors': 1,
+          },
+          errors: [],
+          children: [],
+        },
+        {
+          name: 'share.target',
+          attributes: {
+            'share.messages': 1,
+            'share.pending_grants': 0,
+            'share.recipients': 1,
+            'channel.id': 'dm:ana',
+            'share.sent': 0,
+            'share.grant_errors': 0,
+          },
+          errors: ['Message was not sent'],
+          children: [],
+        },
+      ],
+    },
+    {
+      name: 'share.submit',
+      attributes: submit({ 'share.retry': true, 'share.retryable': false }),
+      errors: [],
+      children: [
+        {
+          name: 'share.target',
+          attributes: {
+            'share.messages': 1,
+            'share.pending_grants': 0,
+            'channel.id': 'dm:ana',
+            'share.sent': 1,
+            'share.grant_errors': 1,
+          },
+          errors: [],
+          children: [],
+        },
+      ],
+    },
+  ]);
+});
+
 it('locks recipients, group, level, and text after the first submit', async () => {
   const { form, takeLog, failingPosts } = setup([item('document', 'spec')]);
   form.setRecipients([person('ana'), person('ben')]);
@@ -341,6 +459,7 @@ it('settles the form and keeps the other recipients when a send throws', async (
 
   await expect(form.submit()).rejects.toBe(broken);
 
+  expect(traces.map(({ errors }) => errors)).toEqual([[broken]]);
   expect(form.status()).toMatchObject({
     t: 'incomplete',
     outcome: { anyDelivered: true, retryable: true },
