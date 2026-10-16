@@ -1,6 +1,7 @@
 import { clearMcpAuthAttempts } from '@app/features/settings/mcp-auth-attempt';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { clearPipedreamCallbacks } from '@core/pipedream/connect-callback';
 import { syncLoginStorage } from '@core/util/cookies';
 import { isTauri } from '@core/util/platform';
 import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
@@ -44,6 +45,7 @@ const unauthenticatedUserInfo: UserInfoData = {
 };
 
 export async function clearLocalAuthSession() {
+  clearPipedreamCallbacks();
   document.cookie =
     'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
   syncLoginStorage(false);

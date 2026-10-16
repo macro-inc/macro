@@ -271,6 +271,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         rollupOptions: {
           input: {
             app: resolve(__dirname, 'index.html'),
+            pipedreamConnect: resolve(__dirname, 'pipedream-connect.html'),
           },
           // KaTeX and PDF.js are now reachable through lazy boundaries. Let
           // Rollup place them naturally; forcing named chunks hoists shared

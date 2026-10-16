@@ -65,6 +65,17 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 
 ## Development Patterns
 
+### Pipedream native authorization
+
+Keep native Pipedream consent in the system browser: the desktop navigation
+plugin redirects external popups and breaks the embedded iframe's return path.
+`pipedream-connect.html` is a separate Vite entry, served at
+`/app/pipedream-connect.html`, without a Macro browser login. The Connect token
+and one-time state travel only in its URL fragment, which the page removes on
+load. Its **Return to Macro** link is consumed by the Tauri navigation bridge
+without changing the active route. Backend registration still verifies account
+ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
+
 ### General
 - All API/network calls live in service-clients.
 - Draft autosaves preserve active email thread messages; evict inactive legacy

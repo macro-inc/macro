@@ -22,7 +22,10 @@ tool list. Expand the discovery row to see the results. An app name alone does
 not establish that the requested action is supported.
 
 For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
-it opens the hosted authorization flow over the agent transcript. After the
+it opens the hosted authorization flow over the agent transcript on web. In
+native apps, consent opens in the system browser; choose **Return to Macro**
+after authorization. The waiting dialog also offers **Cancel**, and callbacks
+from canceled or expired attempts cannot resume the agent. After the
 backend verifies and registers the connection, the agent session sends a visible
 continuation message in the same conversation. Before that message reaches the
 agent, the harness hands the live session its permitted connector servers again

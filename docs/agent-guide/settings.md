@@ -397,11 +397,18 @@ Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio
 connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
 Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
 with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
-that opens the Pipedream Connect flow inside the page. Unconnected picks never block
+that opens the Pipedream Connect flow inside the web page. Native apps open
+consent in the system browser; choose **Return to Macro** after authorization
+to save the connection in the waiting app. Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Agents → Connections for that app. The same page
 is also available as Settings → Agent connections.
+
+Reference captures from an isolated browser fixture: [native waiting dialog](media/pipedream/native-waiting.png)
+and [browser return page](media/pipedream/browser-return.png). The fixture uses
+the real UI and iframe messaging with simulated provider consent and native IPC;
+it does not exercise a real provider account or the operating system's app launch.
 
 To change an agent's picture, open `Edit <name>`, choose an image with `Upload`,
 wait for `Uploading…` to finish, then click `Save changes`. Images up to 16 MB

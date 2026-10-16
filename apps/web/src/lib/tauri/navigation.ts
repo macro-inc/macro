@@ -1,3 +1,4 @@
+import { handlePipedreamCallback } from '@core/pipedream/connect-callback';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { useNavigate } from '@solidjs/router';
@@ -24,6 +25,7 @@ export function useTauriNavigationEffect() {
 
     async function inner() {
       unsubscribe = await listen<NavigateEvent>('navigate', (ev) => {
+        if (handlePipedreamCallback(ev.payload.path, ev.payload.query)) return;
         const path = ev.payload.query
           ? `${ev.payload.path}?${ev.payload.query}`
           : ev.payload.path;
