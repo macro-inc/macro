@@ -15,6 +15,7 @@ env:
     - ready_for_review
     branches:
     - main
+    - wolf/kache
 jobs:
   path-check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=nextest-filter
@@ -290,6 +291,8 @@ jobs:
         R2_SECRET_KEY: ${{ secrets.KACHE_R2_SECRET_ACCESS_KEY }}
     - name: fmt
       run: cargo fmt --check
+    - name: Clean target (experiment)
+      run: find target -mindepth 1 -maxdepth 1 -exec rm -rf {} +
     - name: clippy
       run: |
         set -euo pipefail
@@ -651,6 +654,12 @@ jobs:
         docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
     - name: prepare tests
       run: just setup_test_envs && just initialize_dbs && just setup_test_template
+    - name: Clean target (experiment)
+      run: find target -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    - name: Trace kache keys (experiment)
+      run: |
+        echo "KACHE_LOG_FILE=kache::cache_key=trace" >> "$GITHUB_ENV"
+        echo "KACHE_LOG_FILE_PATH=$RUNNER_TEMP/kache-keys.log" >> "$GITHUB_ENV"
     - name: run tests
       run: |
         set -euo pipefail
@@ -725,6 +734,16 @@ jobs:
 
         kache daemon stop || true
       shell: bash
+    - name: Upload kache key trace (experiment)
+      if: always()
+      run: gzip -9 -c "$RUNNER_TEMP/kache-keys.log" > "$RUNNER_TEMP/kache-keys.log.gz" || true
+    - name: Upload kache key trace artifact (experiment)
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: kache-keys
+        path: ${{ runner.temp }}/kache-keys.log.gz
+        retention-days: 3
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
