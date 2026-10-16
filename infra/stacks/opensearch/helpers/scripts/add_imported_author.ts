@@ -5,12 +5,16 @@ import { CHANNELS_ALIAS, IS_DRY_RUN } from '../constants';
 export const IMPORTED_AUTHOR_MAPPING = {
   type: 'text' as const,
   analyzer: 'content_text',
-  copy_to: 'content',
+  // Explicitly clear existing copy_to mappings; omitting it preserves them.
+  // OpenSearch otherwise loads the author instead of the body for highlights.
+  copy_to: [] as string[],
 };
 
 /**
  * Add the field to the live alias (including legacy physical `channels` indices).
- * Run before deploying the writer, then backfill affected channels: mapping
+ * Deploy direct imported_author search before running this on an existing index.
+ * Clearing copy_to restores body highlights immediately, without a reindex.
+ * If adding the field for the first time, backfill affected channels: mapping
  * updates do not index fields already present in old documents' _source.
  * No index creation, alias swap, or message-content rewrite is performed.
  * From helpers/: DRY_RUN=false bun scripts/add_imported_author.ts
@@ -38,7 +42,7 @@ export async function addImportedAuthor(
   if (!response.body.acknowledged) {
     throw new Error(`Failed to add imported_author mapping to ${index}`);
   }
-  console.log(`${index}: imported_author mapped; backfill affected channels`);
+  console.log(`${index}: imported_author mapped without copy_to`);
 }
 
 if (import.meta.main) {

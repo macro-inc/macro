@@ -6,7 +6,7 @@ import {
   selectIndexSpecs,
 } from './create_indices';
 
-test('channel fallback authors are searchable content, not sender identities', () => {
+test('channel fallback authors preserve body highlights and sender identities', () => {
   const spec = INDEX_SPECS.find((spec) => spec.aliasName === 'channels');
   expect(spec?.body).toMatchObject({
     mappings: {
@@ -15,7 +15,7 @@ test('channel fallback authors are searchable content, not sender identities', (
         imported_author: {
           type: 'text',
           analyzer: 'content_text',
-          copy_to: 'content',
+          copy_to: [],
         },
         content: { type: 'text', analyzer: 'content_text' },
         sender_id: { type: 'keyword', index: true },
