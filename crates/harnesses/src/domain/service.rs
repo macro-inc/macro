@@ -14,7 +14,7 @@ use super::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, HarnessSession,
-        PairingDetails, PairingStatus,
+        PairingDetails, PairingStatus, PatchHarnessRequest,
     },
     ports::{HarnessError, HarnessRepo, HarnessService, NewHarness, NewPairing},
     tokens,
@@ -299,6 +299,38 @@ where
             .list_visible_harnesses(caller)
             .await
             .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self), fields(caller = %caller), err)]
+    async fn patch_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        req: PatchHarnessRequest,
+    ) -> Result<Harness, HarnessError> {
+        let harness = self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
+        self.ensure_may_manage(&caller, &harness).await?;
+
+        let Some(allowed) = req.allow_permission_bypass else {
+            return Ok(harness);
+        };
+        // Two-party consent: a web account alone never enables bypass on a
+        // machine whose operator has not opted in locally.
+        if allowed && harness.operator_allows_bypass != Some(true) {
+            return Err(HarnessError::BadRequest(
+                "this machine's operator has not allowed Full Access in macrod".to_owned(),
+            ));
+        }
+        self.repo
+            .set_allow_permission_bypass(harness_id, allowed)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]

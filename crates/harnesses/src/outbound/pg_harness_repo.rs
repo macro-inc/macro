@@ -34,6 +34,7 @@ impl PgHarnessRepo {
 
 struct HarnessRow {
     allow_permission_bypass: bool,
+    operator_allows_bypass: Option<bool>,
     id: Uuid,
     kind: String,
     name: String,
@@ -64,6 +65,7 @@ impl TryFrom<HarnessRow> for Harness {
         Ok(Self {
             id: HarnessId::new_from_uuid(row.id),
             allow_permission_bypass: row.allow_permission_bypass,
+            operator_allows_bypass: row.operator_allows_bypass,
             kind: row.kind,
             name: row.name,
             owner,
@@ -94,7 +96,7 @@ async fn fetch_harness(
         r#"
         SELECT
             id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-            created_at, updated_at, last_connected_at, last_disconnected_at
+            operator_allows_bypass, created_at, updated_at, last_connected_at, last_disconnected_at
         FROM harnesses
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -350,7 +352,7 @@ impl HarnessRepo for PgHarnessRepo {
             r#"
             SELECT
                 id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at
+                operator_allows_bypass, created_at, updated_at, last_connected_at, last_disconnected_at
             FROM harnesses
             WHERE deleted_at IS NULL
               AND (
@@ -370,6 +372,32 @@ impl HarnessRepo for PgHarnessRepo {
 
     async fn get_harness(&self, harness_id: HarnessId) -> Result<Option<Harness>, Self::Err> {
         fetch_harness(&self.pool, harness_id.as_uuid()).await
+    }
+
+    async fn set_allow_permission_bypass(
+        &self,
+        harness_id: HarnessId,
+        allowed: bool,
+    ) -> Result<Option<Harness>, Self::Err> {
+        let row = sqlx::query_as!(
+            HarnessRow,
+            r#"
+            UPDATE harnesses
+            SET allow_permission_bypass = $2, updated_at = now()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING
+                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
+                operator_allows_bypass, created_at, updated_at, last_connected_at,
+                last_disconnected_at
+            "#,
+            harness_id.as_uuid(),
+            allowed,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to set harness permission bypass")?;
+
+        row.map(Harness::try_from).transpose()
     }
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {
