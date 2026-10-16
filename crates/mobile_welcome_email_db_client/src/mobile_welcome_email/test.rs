@@ -19,5 +19,10 @@ async fn test_insert_and_get_mobile_welcome_email(pool: Pool<Postgres>) -> anyho
     // Duplicate insert returns false
     assert!(!insert_mobile_welcome_email(&pool, email).await?);
 
+    // Deleting releases the claim so the address can be inserted again
+    delete_mobile_welcome_email(&pool, email).await?;
+    assert!(!get_mobile_welcome_email(&pool, email).await?);
+    assert!(insert_mobile_welcome_email(&pool, email).await?);
+
     Ok(())
 }

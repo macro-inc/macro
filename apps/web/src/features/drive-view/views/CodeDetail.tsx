@@ -5,6 +5,7 @@ import {
 } from '@block-code/component/CodeContent';
 import { CodeModeControl } from '@block-code/component/CodeModeControl';
 import { isHtmlFileType } from '@block-code/util/fileMode';
+import { SidePanel } from '@components/app/side-panel';
 import { downloadFile } from '@filesystem/download';
 import { Rerun } from '@solid-primitives/keyed';
 import {
@@ -45,7 +46,9 @@ function CodeDetailContent(props: {
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
       <Show when={isHtmlFile}>
-        <CodeModeControl mode={mode()} onModeChange={setMode} />
+        <SidePanel.HeaderActions>
+          <CodeModeControl mode={mode()} onModeChange={setMode} />
+        </SidePanel.HeaderActions>
       </Show>
       <div class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <CodeContent

@@ -62,6 +62,13 @@ pub struct SessionMachine<Token> {
     /// `session/resume`, and `session/load` alike, because the agent process
     /// behind a reconnect is fresh and holds no server from before.
     mcp_servers: Vec<McpServer>,
+    /// `mcp_servers` changed after the request that opened this session went
+    /// out, so the agent still has the old list. Settled by re-resuming the
+    /// live session between turns; see [`Self::begin_mcp_refresh`].
+    mcp_refresh_required: bool,
+    /// What the connection's `initialize` said about restoring sessions;
+    /// `None` until this machine opens. A refresh needs `session/resume`.
+    restore: Option<SessionRestoreSupport>,
     permission_policy: PermissionPolicy,
     /// Only for a newly created ACP session; restored sessions retain their model.
     initial_model: Option<String>,
@@ -91,6 +98,8 @@ impl<Token> SessionMachine<Token> {
             reload_required: false,
             workspace,
             mcp_servers,
+            mcp_refresh_required: false,
+            restore: None,
             permission_policy,
             initial_model: None,
             outstanding_permissions: HashMap::new(),
@@ -117,6 +126,8 @@ impl<Token> SessionMachine<Token> {
             reload_required: false,
             workspace,
             mcp_servers,
+            mcp_refresh_required: false,
+            restore: None,
             permission_policy,
             initial_model: None,
             outstanding_permissions: HashMap::new(),
@@ -198,7 +209,79 @@ impl<Token> SessionMachine<Token> {
                 self.begin_opening(restore, &mut effects);
                 effects
             }
+            Input::ReplaceMcpServers(servers) => self.on_mcp_servers_replaced(servers),
             Input::Closed(reason) => self.on_closed(reason),
+        }
+    }
+
+    fn on_mcp_servers_replaced(&mut self, servers: Vec<McpServer>) -> Vec<Effect<Token>> {
+        let mut effects = Vec::new();
+        if servers == self.mcp_servers {
+            return effects;
+        }
+        self.mcp_servers = servers;
+        match self.phase {
+            // The opening request has not gone out yet, and will carry them.
+            SessionPhase::Booting | SessionPhase::Initializing { .. } | SessionPhase::Dead => {}
+            SessionPhase::Opening { .. } | SessionPhase::ConfiguringModel { .. } => {
+                self.mcp_refresh_required = true;
+            }
+            SessionPhase::Live { .. } => {
+                self.mcp_refresh_required = true;
+                self.begin_mcp_refresh(&mut effects);
+            }
+        }
+        effects
+    }
+
+    /// Re-resume the live session so the agent picks up `mcp_servers`.
+    ///
+    /// Only between turns and with no question open: a resume mid-turn would
+    /// race the prompt it interrupts, so a turn in flight leaves the refresh
+    /// for its end, and a held elicitation for its answer. Actions
+    /// arriving meanwhile queue behind the resume, so the next prompt runs
+    /// with the new servers. An agent that cannot resume, or refuses, is not
+    /// asked again until the list changes. Returns whether a resume went out.
+    fn begin_mcp_refresh(&mut self, effects: &mut Vec<Effect<Token>>) -> bool {
+        if !self.mcp_refresh_required || self.in_flight_turn.is_some() {
+            return false;
+        }
+        let SessionPhase::Live {
+            session_id,
+            elicitation: None,
+        } = &self.phase
+        else {
+            return false;
+        };
+        let session_id = session_id.clone();
+        self.mcp_refresh_required = false;
+        if !self.restore.is_some_and(|restore| restore.resume) {
+            tracing::warn!(
+                id = %self.id,
+                "the agent cannot resume a session; its new MCP servers wait for the next attach"
+            );
+            return false;
+        }
+        match self.build_session_request(
+            self.resume_request(session_id.clone()),
+            SessionOpening::Refresh(session_id),
+        ) {
+            Ok((resume, request_id, kind)) => {
+                effects.push(Effect::Send {
+                    from: None,
+                    message: ToRuntimeMessage::Acp(AcpMessage(resume)),
+                });
+                self.phase = SessionPhase::Opening { request_id, kind };
+                true
+            }
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    id = %self.id,
+                    "could not build the session/resume that hands over new MCP servers"
+                );
+                false
+            }
         }
     }
 
@@ -291,6 +374,7 @@ impl<Token> SessionMachine<Token> {
             }
         }
 
+        let answers_elicitation = matches!(action, AgentAction::RespondElicitation(_));
         // Through the queue even when live, so an action can never overtake
         // one accepted earlier. (A completed flush leaves the queue empty, so
         // the flush below sends exactly this action.)
@@ -301,6 +385,10 @@ impl<Token> SessionMachine<Token> {
             token,
         });
         self.flush(&session_id, &mut effects);
+        // A refresh held back by the question can go now that it is answered.
+        if answers_elicitation {
+            self.begin_mcp_refresh(&mut effects);
+        }
         effects
     }
 
@@ -396,6 +484,8 @@ impl<Token> SessionMachine<Token> {
                 self.cancel_outstanding_permissions(effects);
                 if self.reload_required {
                     self.begin_reload(effects);
+                } else {
+                    self.begin_mcp_refresh(effects);
                 }
                 return;
             }
@@ -457,6 +547,9 @@ impl<Token> SessionMachine<Token> {
 
     /// Ask the agent for this session, however it has to be established.
     fn begin_opening(&mut self, restore: SessionRestoreSupport, effects: &mut Vec<Effect<Token>>) {
+        self.restore = Some(restore);
+        // Whichever request opens the session carries the current list.
+        self.mcp_refresh_required = false;
         let opening = match self.resume_session_id.clone() {
             Some(session_id) if restore.resume && !self.reload_required => {
                 self.build_resume_session_request(session_id)
@@ -487,6 +580,23 @@ impl<Token> SessionMachine<Token> {
     }
 
     fn on_session_opened(&mut self, frame: &RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
+        if let SessionPhase::Opening {
+            kind: SessionOpening::Refresh(session_id),
+            ..
+        } = &self.phase
+        {
+            // The session was live before this resume and the agent still
+            // holds it either way; a refusal only means the old servers stay.
+            let session_id = session_id.clone();
+            if !matches!(frame, RawJsonRpcMessage::Response(Response::Result { .. })) {
+                tracing::warn!(
+                    id = %self.id,
+                    "the agent refused new MCP servers; the session keeps the ones it had"
+                );
+            }
+            self.finish_opening(session_id, effects);
+            return;
+        }
         let RawJsonRpcMessage::Response(Response::Result { result, .. }) = frame else {
             self.die(StopReason::SessionRefused, effects);
             return;
@@ -519,6 +629,7 @@ impl<Token> SessionMachine<Token> {
                 }
                 (session_id, false)
             }
+            SessionOpening::Refresh(_) => unreachable!("answered before the shared opening path"),
             SessionOpening::Load(session_id) => {
                 if let Err(error) = serde_json::from_value::<LoadSessionResponse>(result.clone()) {
                     self.die(
@@ -610,6 +721,9 @@ impl<Token> SessionMachine<Token> {
             self.begin_reload(effects);
             return;
         }
+        if self.begin_mcp_refresh(effects) {
+            return;
+        }
         self.flush(&session_id, effects);
     }
 
@@ -635,11 +749,15 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            ResumeSessionRequest::new(session_id.clone(), self.workspace.clone())
-                .mcp_servers(self.mcp_servers.clone())
-                .meta(self.session_meta()),
+            self.resume_request(session_id.clone()),
             SessionOpening::Resume(session_id),
         )
+    }
+
+    fn resume_request(&self, session_id: SessionId) -> ResumeSessionRequest {
+        ResumeSessionRequest::new(session_id, self.workspace.clone())
+            .mcp_servers(self.mcp_servers.clone())
+            .meta(self.session_meta())
     }
 
     fn build_load_session_request(

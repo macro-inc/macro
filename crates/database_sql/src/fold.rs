@@ -19,13 +19,14 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use models_databases::position::Position;
-use models_databases::{OptionId, RowId};
+use models_databases::{Formula, OptionId, RowId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
 use crate::catalog::Catalog;
-use crate::resolve::{AggregateFunction, OrderKey, SelectItem};
+use crate::formula;
+use crate::resolve::{AggregateFunction, OrderKey, SelectItem, binding, column_key};
 use crate::run::RunError;
 use crate::split::{Plan, Shape};
 
@@ -122,9 +123,40 @@ pub type Table = Vec<Vec<Option<Cell>>>;
 pub fn fold_relations(
     catalog: &Catalog,
     plan: &Plan,
-    fetched: Vec<Vec<Row>>,
+    mut fetched: Vec<Vec<Row>>,
 ) -> (Table, Vec<RowId>) {
+    for (index, rows) in fetched.iter_mut().enumerate() {
+        derive(catalog, plan, index, rows);
+    }
     fold_joined(catalog, plan, join::join(plan, fetched))
+}
+
+/// Give the rows of relation `index` the cells of its table's derived
+/// columns the plan reads, computed from their other cells.
+fn derive(catalog: &Catalog, plan: &Plan, index: usize, rows: &mut [Row]) {
+    let Some(table) = catalog
+        .tables
+        .iter()
+        .find(|table| table.id == plan.relations[index].relation.table)
+    else {
+        return;
+    };
+    let key = |definition: Uuid| column_key(index, definition);
+    let derived: Vec<(Uuid, &Formula)> = formula::derived(table)
+        .map(|(column, formula)| (key(column.id), formula))
+        .filter(|(derived_key, _)| binding(&plan.bindings, *derived_key).is_some())
+        .collect();
+    if derived.is_empty() {
+        return;
+    }
+    for row in rows {
+        for (derived_key, formula) in &derived {
+            match formula::evaluate(table, formula, &row.cells, key) {
+                Some(cell) => row.cells.insert(*derived_key, cell),
+                None => row.cells.remove(derived_key),
+            };
+        }
+    }
 }
 
 /// Finish a plan over rows that are already joined (or come from one
@@ -147,15 +179,15 @@ fn fold_joined(catalog: &Catalog, plan: &Plan, rows: Vec<Row>) -> (Table, Vec<Ro
         Shape::Rows(columns) => {
             let mut rows = rows;
             sort::rows(catalog, plan, &mut rows);
-            let projected = rows.into_iter().map(|mut row| {
+            let projected = rows.into_iter().map(|row| {
                 let cells: Vec<Option<Cell>> = columns
                     .iter()
-                    .map(|column| row.cells.remove(column))
+                    .map(|column| row.cells.get(column).cloned())
                     .collect();
                 (row.id, cells)
             });
             let (ids, table): (Vec<RowId>, Table) = if plan.distinct {
-                window(plan, distinct(projected)).unzip()
+                window(plan, distinct(projected, |(_, cells)| cells)).unzip()
             } else {
                 window(plan, projected).unzip()
             };
@@ -164,6 +196,11 @@ fn fold_joined(catalog: &Catalog, plan: &Plan, rows: Vec<Row>) -> (Table, Vec<Ro
         Shape::Aggregate { group_by, items } => {
             let mut groups = aggregate::groups(rows, *group_by, items);
             sort::groups(catalog, plan, &mut groups, *group_by, items);
+            let groups = if plan.distinct {
+                distinct(groups.into_iter(), |group| &group.cells).collect()
+            } else {
+                groups
+            };
             (
                 window(plan, groups.into_iter().map(|group| group.cells)).collect(),
                 Vec::new(),
@@ -179,13 +216,14 @@ fn window<Item>(plan: &Plan, rows: impl Iterator<Item = Item>) -> impl Iterator<
 }
 
 /// Keep the first of every set of equal result rows, in order.
-fn distinct(
-    rows: impl Iterator<Item = (RowId, Vec<Option<Cell>>)>,
-) -> impl Iterator<Item = (RowId, Vec<Option<Cell>>)> {
+fn distinct<Item>(
+    rows: impl Iterator<Item = Item>,
+    cells: impl Fn(&Item) -> &[Option<Cell>],
+) -> impl Iterator<Item = Item> {
     let mut seen: HashSet<Vec<Option<CellKey>>> = HashSet::new();
-    rows.filter(move |(_, cells)| {
+    rows.filter(move |row| {
         seen.insert(
-            cells
+            cells(row)
                 .iter()
                 .map(|cell| cell.as_ref().map(CellKey::from))
                 .collect(),
@@ -220,7 +258,7 @@ pub fn fold_bins(catalog: &Catalog, plan: &Plan, bins: Vec<Bin>) -> Result<Table
         })
         .collect::<Result<_, RunError>>()?;
     sort::groups(catalog, plan, &mut groups, *group_by, items);
-    Ok(groups.into_iter().map(|group| group.cells).collect())
+    Ok(window(plan, groups.into_iter().map(|group| group.cells)).collect())
 }
 
 /// Where an `ORDER BY` key lives in a group's output.

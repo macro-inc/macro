@@ -14,7 +14,7 @@ import {
 } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { CrmContact } from '../core/contact';
-import { CrmCompanyDetail } from './record-detail';
+import { CrmRecordDetail } from './record-detail';
 
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
@@ -61,8 +61,16 @@ vi.mock('./company-detail', () => ({
   ),
 }));
 vi.mock('./contact-detail', () => ({
-  Contact: (props: { contactId: string }) => (
-    <div>Contact content: {props.contactId}</div>
+  Contact: (props: {
+    contactId: string;
+    onOpenCompany(companyId: string): boolean;
+  }) => (
+    <div>
+      Contact content: {props.contactId}
+      <button onClick={() => props.onOpenCompany('company-1')}>
+        Open contact company
+      </button>
+    </div>
   ),
 }));
 afterEach(cleanup);
@@ -78,8 +86,8 @@ it('removes contact breadcrumbs safely when returning to the company and reopeni
           <button onClick={() => setSelected(true)}>Open company</button>
         }
       >
-        <CrmCompanyDetail
-          company={{ id: 'company-1', name: 'Northstar' }}
+        <CrmRecordDetail
+          record={{ type: 'company', id: 'company-1', name: 'Northstar' }}
           viewName="Pipeline"
           onClose={() => setSelected(false)}
           navigation={null}
@@ -104,4 +112,32 @@ it('removes contact breadcrumbs safely when returning to the company and reopeni
     fireEvent.click(screen.getByRole('button', { name: 'Open company' }));
   }
   expect(failed).not.toHaveBeenCalled();
+});
+
+it('opens a People contact in place and follows its company without duplicating the trail', () => {
+  const close = vi.fn();
+  render(() => (
+    <CrmRecordDetail
+      record={{ type: 'contact', id: 'contact-1', name: 'Maya' }}
+      viewName="People"
+      onClose={close}
+      navigation={null}
+    />
+  ));
+  const crumbs = () =>
+    within(screen.getByRole('navigation', { name: 'CRM record location' }))
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+  expect(crumbs()).toEqual(['People', 'Maya']);
+  expect(screen.getByText('Contact content: contact-1')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Open contact company' }));
+  expect(crumbs()).toEqual(['People', 'Maya', 'Company']);
+
+  // The company's contact is already in the trail, so opening it returns there.
+  fireEvent.click(screen.getByRole('button', { name: 'Open Maya' }));
+  expect(crumbs()).toEqual(['People', 'Maya']);
+
+  fireEvent.click(screen.getByRole('button', { name: 'People' }));
+  expect(close).toHaveBeenCalledOnce();
 });

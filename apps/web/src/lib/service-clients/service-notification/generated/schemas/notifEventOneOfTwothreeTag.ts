@@ -10,5 +10,5 @@ export type NotifEventOneOfTwothreeTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfTwothreeTag = {
-  new_email: 'new_email',
+  channel_message_reply: 'channel_message_reply',
 } as const;

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH due AS (\n            SELECT id FROM entity_access_request_event\n            WHERE delivered_at IS NULL AND available_at <= now()\n            ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 25\n        ) UPDATE entity_access_request_event e SET available_at = now() + interval '30 seconds'\n        FROM due WHERE e.id = due.id RETURNING e.payload AS \"payload!: Json<RequestEvent>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload!: Json<RequestEvent>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c16f51b360e47c973e876e4647ed87f8fc5c3c6f24f0de2a872bf73b6a283358"
+}

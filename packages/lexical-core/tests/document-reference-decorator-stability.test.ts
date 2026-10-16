@@ -88,3 +88,40 @@ it.each(['mention', 'card'] as const)(
     );
   }
 );
+
+it('keeps a database editor mounted when its serialized table and view change', () => {
+  setDecorator(DocumentCardNode, () => null);
+  const editor = createHeadlessEditor({ nodes: SupportedNodeTypes });
+  let key = '';
+  let original: unknown;
+  editor.update(
+    () => {
+      const node = $createDocumentCardNode({
+        documentId: 'db-1',
+        documentName: 'Tasks',
+        blockName: 'database',
+        blockParams: { tableId: 'table-1' },
+      });
+      $getRoot().append(node);
+      key = node.getKey();
+      original = node.decorate(editor, editor._config);
+    },
+    { discrete: true }
+  );
+  editor.update(
+    () => {
+      const node = $getNodeByKey<DocumentCardNode>(key)!;
+      node.setBlockParams({ tableId: 'table-2', viewId: 'view-2' });
+      expect(node.getLatest().decorate(editor, editor._config)).toBe(original);
+    },
+    { discrete: true }
+  );
+  editor.read(() => {
+    expect(
+      $getNodeByKey<DocumentCardNode>(key)!.exportJSON().blockParams
+    ).toEqual({
+      tableId: 'table-2',
+      viewId: 'view-2',
+    });
+  });
+});

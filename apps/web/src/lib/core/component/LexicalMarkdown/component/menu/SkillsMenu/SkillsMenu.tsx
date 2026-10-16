@@ -225,6 +225,7 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     props.editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
       id: item.id,
       label: `${item.metadata.owner}/${item.metadata.repo}#${item.metadata.number}`,
+      url: item.metadata.url || undefined,
     });
   };
 

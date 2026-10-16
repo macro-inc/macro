@@ -84,12 +84,18 @@ export type EmailViewContext = {
   setState: SetStoreFunction<EmailViewState>;
   setTab: (tab: EmailTab) => void;
   setInboxIds: (ids: string[] | undefined) => void;
+  setAliasFilter: (alias: NonNullable<EmailViewState['aliasFilter']>) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
   /**
    * Shows the given tags across the whole mailbox: a non-empty selection
    * lands on the All tab. Clearing keeps the current tab.
    */
   showTags: (tagIds: string[]) => void;
+  /**
+   * Filters by a single tag without changing tabs. Used by the inline
+   * "filter by tag" button on entity rows.
+   */
+  filterByTag: (optionId: string) => void;
   source: EmailDataSource;
   list: EmailListController;
   registerListActivationHandler: (
@@ -134,7 +140,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     createStore<EmailViewState>({
       tab: availableTab(initial.tab ?? DEFAULT_EMAIL_TAB),
       search: initial.search ?? '',
-      inboxIds: normalizeInboxSelection(initial.inboxIds),
+      inboxIds: initial.aliasFilter
+        ? [initial.aliasFilter.inboxId]
+        : normalizeInboxSelection(initial.inboxIds),
+      ...(initial.aliasFilter ? { aliasFilter: initial.aliasFilter } : {}),
       facets: normalizeFacetSelection(initial.facets),
       collapsedSidebarSectionIds: [
         ...(initial.collapsedSidebarSectionIds ?? []),
@@ -344,7 +353,19 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   const setInboxIds = (ids: string[] | undefined) => {
     closeThread();
-    setState('inboxIds', normalizeInboxSelection(ids));
+    setState({
+      inboxIds: normalizeInboxSelection(ids),
+      aliasFilter: undefined,
+    });
+  };
+  const setAliasFilter = (
+    alias: NonNullable<EmailViewState['aliasFilter']>
+  ) => {
+    closeThread();
+    setState({
+      inboxIds: [alias.inboxId],
+      aliasFilter: { ...alias, emailAddress: alias.emailAddress.toLowerCase() },
+    });
   };
 
   // This belongs to the view lifecycle, even while every inbox picker is unmounted.
@@ -354,7 +375,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     loadedLinks: () =>
       linksQuery.isSuccess ? linksQuery.data.links : undefined,
     // Widening stale scope to all inboxes should preserve the current thread.
-    clearSelection: () => setState('inboxIds', undefined),
+    clearSelection: () =>
+      setState({ inboxIds: undefined, aliasFilter: undefined }),
   });
 
   const setFacets = (facets: EmailViewState['facets']) => {
@@ -378,6 +400,16 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread();
   };
 
+  // Filters by a single tag without changing tabs. Used by the inline
+  // "filter by tag" button on entity rows.
+  const filterByTag = (optionId: string) => {
+    closeThread();
+    setState(
+      'facets',
+      reconcile(normalizeFacetSelection({ tags: [optionId] }))
+    );
+  };
+
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
 
@@ -391,8 +423,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setState,
     setTab,
     setInboxIds,
+    setAliasFilter,
     setFacets,
     showTags,
+    filterByTag,
     source,
     list,
     registerListActivationHandler,

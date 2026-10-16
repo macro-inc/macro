@@ -27,6 +27,7 @@ const STOPPING_BLOCK_TYPES = new Set([
   'video',
   'horizontalrule',
   'database-query',
+  'document-card',
 ]);
 
 type Direction = 'up' | 'down';

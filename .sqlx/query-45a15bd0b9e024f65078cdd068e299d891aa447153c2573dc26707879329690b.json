@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) > 0 AS \"connected!\",\n            COALESCE(bool_or(a.sync_status IN ('pending', 'syncing')), false) AS \"syncing!\"\n            FROM calendar_accounts a JOIN email_links l ON l.id = a.email_link_id\n            WHERE ((a.owner_id = $1 AND l.macro_id = $1)\n                OR EXISTS (SELECT 1 FROM macro_user_links delegation\n                    WHERE delegation.primary_macro_id = $1 AND delegation.link_id = a.email_link_id))\n              AND a.sync_status NOT IN ('disabled', 'reauth_required')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "connected!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "syncing!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "45a15bd0b9e024f65078cdd068e299d891aa447153c2573dc26707879329690b"
+}

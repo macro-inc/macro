@@ -3,7 +3,7 @@ import {
   SettingsSection,
 } from '@app/features/settings/primitives';
 import { Button } from '@ui';
-import { createSignal, For, Index, Show } from 'solid-js';
+import { createSignal, For, Index, type JSX, Show } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import {
   type AvailabilitySchedule,
@@ -22,10 +22,22 @@ export function EventEditor(props: {
   members: SchedulingMember[];
   team: boolean;
   saving: boolean;
+  /** Availability slot for an inline draft, otherwise show saved schedule selection. */
+  availability?: JSX.Element;
+  submitLabel?: string;
+  cancelEditingLabel?: string;
+  onChange?: (event: EventType) => void;
   onSave: (event: EventType) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = createSignal(structuredClone(unwrap(props.event)));
+  const [draft, setDraftValue] = createSignal(
+    structuredClone(unwrap(props.event))
+  );
+  const setDraft = (update: (current: EventType) => EventType) => {
+    const next = setDraftValue(update);
+    props.onChange?.(next);
+    return next;
+  };
   const [error, setError] = createSignal('');
   const update = <K extends keyof EventType>(key: K, value: EventType[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -57,7 +69,7 @@ export function EventEditor(props: {
     <form onSubmit={(e) => void save(e)} class="@container min-w-0">
       <div class="flex min-w-0 flex-col gap-5">
         <Button variant="ghost" class="self-start" onClick={props.onCancel}>
-          Cancel editing
+          {props.cancelEditingLabel ?? 'Cancel editing'}
         </Button>
         <header class="mb-7 flex items-start justify-between gap-4">
           <div class="min-w-0">
@@ -71,7 +83,7 @@ export function EventEditor(props: {
             </p>
           </div>
           <Button type="submit" variant="strong" disabled={props.saving}>
-            {props.saving ? 'Saving…' : 'Save changes'}
+            {props.saving ? 'Saving…' : (props.submitLabel ?? 'Save changes')}
           </Button>
         </header>
         <div class="flex min-w-0 flex-col gap-7">
@@ -133,14 +145,42 @@ export function EventEditor(props: {
                     }
                   />
                 </Field>
-                <CheckField
-                  checked={draft().googleMeet}
-                  onChange={(v) => update('googleMeet', v)}
-                  label="Create a Google Meet link"
-                />
+                <Field
+                  label="Video"
+                  hint={
+                    draft().macroCall
+                      ? 'A Macro call is created when someone books and added to the calendar invitation.'
+                      : draft().googleMeet
+                        ? 'A Google Meet link is created when someone books.'
+                        : 'Guests only see the location you enter.'
+                  }
+                >
+                  <SelectInput
+                    label="Video"
+                    value={
+                      draft().macroCall
+                        ? 'macro'
+                        : draft().googleMeet
+                          ? 'google_meet'
+                          : 'none'
+                    }
+                    options={[
+                      { value: 'macro', label: 'Macro call' },
+                      { value: 'google_meet', label: 'Google Meet' },
+                      { value: 'none', label: 'No video link' },
+                    ]}
+                    onChange={(value) =>
+                      setDraft((current) => ({
+                        ...current,
+                        macroCall: value === 'macro',
+                        googleMeet: value === 'google_meet',
+                      }))
+                    }
+                  />
+                </Field>
                 <Field
                   label={
-                    draft().googleMeet
+                    draft().macroCall || draft().googleMeet
                       ? 'Additional location details'
                       : 'Location or meeting URL'
                   }
@@ -165,54 +205,63 @@ export function EventEditor(props: {
           >
             <SettingsCard>
               <div class="flex flex-col gap-5 p-6">
-                <Field label="Availability schedule">
-                  <SelectInput
-                    label="Availability schedule"
-                    value={draft().scheduleId}
-                    options={props.schedules.map((s) => ({
-                      value: s.id,
-                      label: s.name,
-                    }))}
-                    onChange={(value) => update('scheduleId', value)}
-                  />
-                </Field>
                 <Show
-                  when={props.schedules.find(
-                    (s) => s.id === draft().scheduleId
-                  )}
-                >
-                  {(schedule) => (
-                    <div class="overflow-hidden rounded-lg border border-edge-muted">
-                      <div class="border-b border-edge-muted bg-surface-2 px-4 py-3 text-sm font-medium">
-                        Weekly hours{' '}
-                        <span class="ml-2 font-normal text-ink-muted">
-                          {schedule().timeZone.replaceAll('_', ' ')}
-                        </span>
-                      </div>
-                      <dl class="divide-y divide-edge-muted">
-                        <For each={schedule().weekly}>
-                          {(day) => (
-                            <div class="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm">
-                              <dt>{WEEKDAYS[day.day]}</dt>
-                              <dd class="text-ink-muted">
-                                {day.windows.length
-                                  ? day.windows
-                                      .map((w) => `${w.start} – ${w.end}`)
-                                      .join(', ')
-                                  : 'Unavailable'}
-                              </dd>
+                  when={props.availability}
+                  fallback={
+                    <>
+                      <Field label="Availability schedule">
+                        <SelectInput
+                          label="Availability schedule"
+                          value={draft().scheduleId}
+                          options={props.schedules.map((s) => ({
+                            value: s.id,
+                            label: s.name,
+                          }))}
+                          onChange={(value) => update('scheduleId', value)}
+                        />
+                      </Field>
+                      <Show
+                        when={props.schedules.find(
+                          (s) => s.id === draft().scheduleId
+                        )}
+                      >
+                        {(schedule) => (
+                          <div class="overflow-hidden rounded-lg border border-edge-muted">
+                            <div class="border-b border-edge-muted bg-surface-2 px-4 py-3 text-sm font-medium">
+                              Weekly hours{' '}
+                              <span class="ml-2 font-normal text-ink-muted">
+                                {schedule().timeZone.replaceAll('_', ' ')}
+                              </span>
                             </div>
-                          )}
-                        </For>
-                      </dl>
-                    </div>
-                  )}
+                            <dl class="divide-y divide-edge-muted">
+                              <For each={schedule().weekly}>
+                                {(day) => (
+                                  <div class="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm">
+                                    <dt>{WEEKDAYS[day.day]}</dt>
+                                    <dd class="text-ink-muted">
+                                      {day.windows.length
+                                        ? day.windows
+                                            .map((w) => `${w.start} – ${w.end}`)
+                                            .join(', ')
+                                        : 'Unavailable'}
+                                    </dd>
+                                  </div>
+                                )}
+                              </For>
+                            </dl>
+                          </div>
+                        )}
+                      </Show>
+                      <p class="text-sm text-ink-muted">
+                        Busy events on each host’s connected calendar are
+                        excluded automatically. Manage weekly hours and date
+                        overrides in Availability.
+                      </p>
+                    </>
+                  }
+                >
+                  {props.availability}
                 </Show>
-                <p class="text-sm text-ink-muted">
-                  Busy events on each host’s connected calendar are excluded
-                  automatically. Manage weekly hours and date overrides in
-                  Availability.
-                </p>
               </div>
             </SettingsCard>
           </SettingsSection>
@@ -488,7 +537,7 @@ export function EventEditor(props: {
             Cancel
           </Button>
           <Button type="submit" variant="strong" disabled={props.saving}>
-            {props.saving ? 'Saving…' : 'Save changes'}
+            {props.saving ? 'Saving…' : (props.submitLabel ?? 'Save changes')}
           </Button>
         </div>
       </div>

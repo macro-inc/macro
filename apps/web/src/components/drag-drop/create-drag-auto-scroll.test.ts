@@ -35,7 +35,10 @@ afterEach(() => {
   drag.detectCollisions.mockClear();
 });
 
-function setup(axis: 'x' | 'both' = 'x') {
+function setup(
+  axis: 'x' | 'both' = 'x',
+  nestedScroll?: { viewportSelector: string; horizontalOutside: boolean }
+) {
   const frames = new Map<number, FrameRequestCallback>();
   let sequence = 0;
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -58,7 +61,7 @@ function setup(axis: 'x' | 'both' = 'x') {
   drag.pointer = { x: 390, y: 200 };
   createRoot((cleanup) => {
     dispose = cleanup;
-    createDragAutoScroll({ getViewport: () => viewport, axis });
+    createDragAutoScroll({ getViewport: () => viewport, axis, nestedScroll });
   });
   const frame = (time: number) => {
     const pending = [...frames.values()];
@@ -118,5 +121,112 @@ describe('drag auto-scroll', () => {
     dispose?.();
     dispose = undefined;
     expect(frames.size).toBe(0);
+  });
+});
+
+function addLane(viewport: HTMLElement, left: number) {
+  const lane = document.createElement('div');
+  lane.dataset.taskBoardScroll = String(left);
+  viewport.append(lane);
+  vi.spyOn(lane, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(left, 140, 180, 300)
+  );
+  Object.defineProperties(lane, {
+    scrollHeight: { value: 1000 },
+    clientHeight: { value: 300 },
+  });
+  return lane;
+}
+
+const nestedScroll = {
+  viewportSelector: '[data-task-board-scroll]',
+  horizontalOutside: true,
+};
+
+describe('nested drag auto-scroll', () => {
+  it('scrolls only the lane under the pointer, clips to the board, and switches lanes', () => {
+    const { viewport, setActive, frame } = setup('x', nestedScroll);
+    const first = addLane(viewport, 0);
+    const second = addLane(viewport, 200);
+    drag.pointer = { x: 90, y: 430 };
+    setActive(true);
+    frame(0);
+    frame(16);
+    expect(first.scrollTop).toBeGreaterThan(0);
+    expect(second.scrollTop).toBe(0);
+    expect(viewport.scrollTop).toBe(0);
+    const offset = first.scrollTop;
+    drag.pointer = { x: 290, y: 430 };
+    frame(32);
+    expect(first.scrollTop).toBe(offset);
+    expect(second.scrollTop).toBeGreaterThan(0);
+    drag.pointer = { x: 290, y: 490 };
+    frame(48);
+    expect(second.scrollTop).toBeGreaterThan(0);
+    const clipped = second.scrollTop;
+    drag.pointer = { x: 290, y: 120 };
+    frame(64);
+    expect(second.scrollTop).toBe(clipped);
+    expect(drag.detectCollisions).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores nested options without a marked lane', () => {
+    const { viewport, setActive, frame } = setup('both', nestedScroll);
+    drag.pointer = { x: 410, y: 490 };
+    setActive(true);
+    frame(0);
+    frame(16);
+    expect(viewport.scrollLeft).toBe(0);
+    expect(viewport.scrollTop).toBe(0);
+    expect(drag.detectCollisions).not.toHaveBeenCalled();
+  });
+
+  it('clips lane edges to the visible board and stops after unmount', () => {
+    const { viewport, setActive, frame, frames } = setup('both', nestedScroll);
+    const lane = addLane(viewport, 200);
+    vi.spyOn(lane, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(200, 140, 180, 600)
+    );
+    drag.pointer = { x: 290, y: 490 };
+    setActive(true);
+    frame(0);
+    frame(16);
+    expect(lane.scrollTop).toBeGreaterThan(0);
+    expect(viewport.scrollTop).toBe(0);
+    const first = lane.scrollTop;
+    drag.pointer = { x: 290, y: 530 };
+    frame(32);
+    expect(lane.scrollTop).toBe(first);
+    lane.scrollTop = 699;
+    drag.pointer = { x: 290, y: 499 };
+    frame(48);
+    expect(lane.scrollTop).toBe(700);
+    dispose?.();
+    dispose = undefined;
+    expect(frames.size).toBe(0);
+    frame(64);
+    expect(lane.scrollTop).toBe(700);
+  });
+
+  it('scrolls horizontally past the viewport and screen, clamps velocity, and stops on drag end', () => {
+    const { viewport, setActive, frame, frames } = setup('x', nestedScroll);
+    addLane(viewport, 200);
+    drag.pointer = { x: 1000, y: -40 };
+    setActive(true);
+    frame(0);
+    frame(16);
+    expect(viewport.scrollLeft).toBeCloseTo(11.2);
+    expect(viewport.scrollTop).toBe(0);
+    drag.pointer = { x: -100, y: 900 };
+    frame(32);
+    expect(viewport.scrollLeft).toBe(0);
+    viewport.scrollLeft = 599;
+    drag.pointer = { x: 1000, y: 900 };
+    frame(48);
+    expect(viewport.scrollLeft).toBe(600);
+    setActive(false);
+    expect(frames.size).toBe(0);
+    frame(64);
+    expect(viewport.scrollLeft).toBe(600);
   });
 });

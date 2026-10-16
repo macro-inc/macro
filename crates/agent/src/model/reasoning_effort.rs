@@ -36,6 +36,7 @@ impl ReasoningEffort {
             }
             "openai/gpt-5.5" => &[Default, None, Low, Medium, High, XHigh],
             "openai/gpt-5-mini" => &[Default, Minimal, Low, Medium, High],
+            "openai/gpt-5.4-mini" => &[Default, None, Low, Medium, High, XHigh],
             _ => &[],
         }
     }

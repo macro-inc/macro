@@ -6,8 +6,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use entity_access::domain::{
     models::{
-        AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType, TeamRole,
-        ViewAccessLevel,
+        Entity, EntityAccessReceipt, EntityPermission, EntityType, TeamRole, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -20,13 +19,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{
-    auth::CrmCompanyReceipt,
     model::{CrmContact, CrmError},
     service::CrmService,
 };
 
 use super::{
-    CrmToolContext, ToolCompanyStage, crm_error, extract_company_crm_props,
+    CrmToolContext, ToolCompanyStage, company_view_receipt, crm_error, extract_company_crm_props,
     load_stage_option_catalog,
 };
 
@@ -106,7 +104,8 @@ pub struct GetCompanyResponse {
     pub first_interaction: DateTime<Utc>,
     /// Most recent known email interaction with this company.
     pub last_interaction: DateTime<Utc>,
-    /// The company's pipeline stage, if set.
+    /// The company's own Stage property, if set; separate from any
+    /// pipeline entry's stage.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stage: Option<ToolCompanyStage>,
     /// Macro user id of the company's owner, if set.
@@ -128,7 +127,7 @@ pub struct GetCompanyResponse {
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[schemars(
     title = "GetCompany",
-    description = "Fetch one of the team's CRM companies by id, with its domains, contacts, pipeline Stage / Owner / Revenue, and all attached property values (including custom properties and the valid stage options). Use ListCompanies to find company ids. To change a property (move stage, set owner/revenue, or edit a custom property) call SetEntityProperty with entity_type=company, the company id, and a property_definition_id / option id from this response."
+    description = "Fetch one of the team's CRM companies by id, with its domains, contacts, its own Stage / Owner / Revenue properties (not a pipeline deal's), and all attached property values (including custom properties and the valid stage options). Use ListCompanies to find company ids. To change one of the company's own properties (its Stage, Owner, Revenue or a custom property) call SetEntityProperty with entity_type=company, the company id, and a property_definition_id / option id from this response. Deals in a pipeline have their own stage and fields: find them with FindPipelineEntries (recordIds = this company's id) and change them with UpdatePipelineEntries."
 )]
 pub struct GetCompany {
     /// The CRM company id to fetch.
@@ -159,49 +158,12 @@ where
 
         let company_id = self.company_id.to_string();
 
-        // Resolve the caller's permission on this company (derived from
-        // their role on the owning team). Access failures collapse to
-        // "not found" so company ids can't be probed across teams.
-        let (permission, team_id, team_role) = match service_context
-            .entity_access_service
-            .get_crm_entity_permission_with_team(
-                Some(&request_context.user_id),
-                &company_id,
-                EntityType::CrmCompany,
-            )
-            .await
-        {
-            Ok(triple) => triple,
-            Err(
-                AccessError::Unauthorized
-                | AccessError::UnauthorizedWithMessage(_)
-                | AccessError::NotFound(_),
-            ) => return Err(not_found()),
-            Err(e) => {
-                return Err(ToolCallError {
-                    description: "failed to verify access to the CRM company".to_string(),
-                    internal_error: e.into(),
-                });
-            }
-        };
-
-        if !permission.satisfies::<ViewAccessLevel>() {
-            return Err(not_found());
-        }
-
-        let receipt = EntityAccessReceipt::try_new_authenticated_user(
-            request_context.user_id.clone(),
-            Entity {
-                entity_id: company_id.clone(),
-                entity_type: EntityType::CrmCompany,
-            },
-            permission,
+        let (receipt, team_id) = company_view_receipt(
+            &*service_context.entity_access_service,
+            &request_context,
+            self.company_id,
         )
-        .map_err(|e| ToolCallError {
-            description: "failed to verify access to the CRM company".to_string(),
-            internal_error: e.into(),
-        })?;
-        let receipt = CrmCompanyReceipt::new(receipt, team_id, team_role);
+        .await?;
 
         let record = service_context
             .service
@@ -211,7 +173,7 @@ where
             .ok_or_else(|| crm_error(CrmError::CompanyNotFoundForTeam))?;
 
         // Asserted rather than minted: view access to this company was just
-        // verified above via `get_crm_entity_permission_with_team`.
+        // verified by `company_view_receipt`.
         let properties_access =
             EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
                 request_context.user_id.clone(),
@@ -227,7 +189,7 @@ where
                 internal_error: e.into(),
             })?;
 
-        // `get_crm_entity_permission_with_team` resolved `team_id` from the
+        // `company_view_receipt` resolved `team_id` from the
         // ownership row that granted access, so the caller's membership of
         // that team is proven; Member is the floor every member satisfies.
         let team_receipt = EntityAccessReceipt::try_new_authenticated_user(
@@ -288,13 +250,6 @@ where
             properties: properties.into_iter().map(to_property_item).collect(),
             summary,
         })
-    }
-}
-
-fn not_found() -> ToolCallError {
-    ToolCallError {
-        description: "CRM company not found or not accessible to the caller's team".to_string(),
-        internal_error: anyhow::anyhow!("crm company not found or not accessible"),
     }
 }
 

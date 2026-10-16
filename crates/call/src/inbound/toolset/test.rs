@@ -16,3 +16,14 @@ fn test_read_call_record_schema_validation() {
         "Description should contain expected text"
     );
 }
+
+#[test]
+fn test_call_mutation_schema_validation() {
+    use super::{delete_call_record::DeleteCallRecord, update_call_record::UpdateCallRecord};
+
+    let update = generate_validated_input_schema::<UpdateCallRecord>().expect("valid schema");
+    assert_eq!(update.name, "UpdateCallRecord");
+    let delete = generate_validated_input_schema::<DeleteCallRecord>().expect("valid schema");
+    assert_eq!(delete.name, "DeleteCallRecord");
+    assert!(delete.description.contains("cannot be undone"));
+}

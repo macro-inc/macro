@@ -24,7 +24,7 @@ async fn timestamp_ties_deduplicate_without_merging_entity_types(
     assert_eq!(same_id[0].notified_at.minute(), 10);
     assert_eq!(same_id[1].entity.entity_type, EntityType::Document);
     assert_eq!(same_id[1].notified_at.minute(), 9);
-    assert_eq!(page.len(), 12);
+    assert_eq!(page.len(), 11);
     Ok(())
 }
 
@@ -48,7 +48,7 @@ async fn cursor_does_not_resurrect_older_notifications(pool: Pool<Postgres>) -> 
     // Neither the document's T1 notifications nor its duplicate T9 rows may
     // reintroduce it after its T9 cursor. The same-id chat is newer still.
     assert!(page.iter().all(|item| item.entity.entity_id != DOC_A));
-    assert_eq!(minutes(&page), vec![8, 7, 6, 5, 4, 3, 2, 0]);
+    assert_eq!(minutes(&page), vec![8, 7, 6, 5, 4, 3, 0]);
     Ok(())
 }
 

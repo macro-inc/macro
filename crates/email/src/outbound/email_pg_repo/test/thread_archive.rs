@@ -93,6 +93,7 @@ async fn archive_enqueue_failure_restores_only_changed_labels_and_the_original_f
         entity_access_management_service: original.entity_access_management_service,
         macro_event_broker: original.macro_event_broker,
         sent_undo_delay_secs: original.sent_undo_delay_secs,
+        sender_provider: original.sender_provider,
     };
     let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;

@@ -1,8 +1,7 @@
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
-import { Button } from '@ui';
 import { Show } from 'solid-js';
-import { FormError } from './form-fields';
+import { AuthButton, FormError } from './form-fields';
 import { OtpInput } from './otp-input';
 
 export function VerifyForm(props: {
@@ -50,19 +49,14 @@ export function VerifyForm(props: {
         </button>
       </p>
       <FormError message={props.error} />
-      <Button variant="cta" size="xl" type="submit" disabled={!props.canVerify}>
+      <AuthButton type="submit" disabled={!props.canVerify}>
         Verify
-        <ArrowRight class="size-5" />
-      </Button>
-      <Button
-        variant="outline"
-        size="xl"
-        class="bg-surface"
-        onClick={props.onBack}
-      >
-        <ArrowLeft class="size-5" />
+        <ArrowRight class="size-5 shrink-0" />
+      </AuthButton>
+      <AuthButton variant="secondary" onClick={props.onBack}>
+        <ArrowLeft class="size-5 shrink-0" />
         Change email
-      </Button>
+      </AuthButton>
     </form>
   );
 }

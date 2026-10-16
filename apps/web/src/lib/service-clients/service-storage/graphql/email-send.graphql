@@ -1,0 +1,8 @@
+mutation SendEmailMessage($input: SendEmailMessageInput!) {
+  sendEmailMessage(input: $input) {
+    messageId
+    threadId
+    linkId
+    sendTime
+  }
+}

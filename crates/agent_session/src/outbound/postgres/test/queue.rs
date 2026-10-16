@@ -16,6 +16,7 @@ fn stored_prompt(text: &str) -> StoredQueuedAction {
             "messageId": "00000000-0000-0000-0000-0000000000f2"
         })),
         announced_message_id: None,
+        context: None,
     }
 }
 

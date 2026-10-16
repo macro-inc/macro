@@ -49,7 +49,6 @@ export class SearchTextEndpoint extends OpenAPIRoute {
       const syncClient = createSyncClient({
         baseUrl: c.env.SYNC_SERVICE_URL,
         internalAuthKey: c.env.SYNC_SERVICE_AUTH_KEY,
-        serviceFetcher: c.env.SYNC_SERVICE,
       });
 
       const rawDocument = await syncClient.raw(docId);

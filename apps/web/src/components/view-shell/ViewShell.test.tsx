@@ -1,4 +1,9 @@
 import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
+import { SplitPanel } from '@components/app/split-panel';
+import {
   cleanup,
   fireEvent,
   render,
@@ -7,7 +12,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useViewShell, ViewShell } from './ViewShell';
+import { useViewShell, ViewShell, ViewSidebarToggle } from './ViewShell';
 import { ViewSidebar } from './ViewSidebar';
 
 const measurement = vi.hoisted(() => ({ width: (): number => 1200 }));
@@ -26,6 +31,7 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
+  ...(await import('../ui/utils/press')),
   Button: (
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
   ) => (
@@ -33,6 +39,7 @@ vi.mock('@ui', async () => ({
       aria-label={props.label}
       aria-expanded={props['aria-expanded']}
       onClick={props.onClick}
+      onMouseDown={props.onMouseDown}
     >
       {props.children}
     </button>
@@ -51,6 +58,52 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it('keeps navigation controls inside their own workspaces', () => {
+  const collapsed = new Map<string, () => boolean>();
+  function Workspace(props: { id: string }) {
+    function Controls() {
+      collapsed.set(props.id, useViewShell().aside.isCollapsed);
+      return (
+        <>
+          <ViewSidebarToggle action="expand" />
+          <ViewSidebarToggle action="collapse" />
+        </>
+      );
+    }
+    return (
+      <SplitPanelContext.Provider
+        value={
+          {
+            handle: { isFirst: () => true },
+            isPanelActive: () => true,
+            splitHotkeyScope: props.id,
+          } as unknown as SplitPanelContextType
+        }
+      >
+        <ViewShell.Root asidePreferenceKey={props.id} data-testid={props.id}>
+          <Controls />
+        </ViewShell.Root>
+      </SplitPanelContext.Provider>
+    );
+  }
+  const view = render(() => (
+    <>
+      <Workspace id="home" />
+      <Workspace id="mail" />
+    </>
+  ));
+  const home = within(view.getByTestId('home'));
+  const mail = within(view.getByTestId('mail'));
+  fireEvent.click(home.getByRole('button', { name: 'Hide navigation' }));
+  expect(collapsed.get('home')?.()).toBe(true);
+  expect(collapsed.get('mail')?.()).toBe(false);
+  fireEvent.click(mail.getByRole('button', { name: 'Hide navigation' }));
+  expect(collapsed.get('mail')?.()).toBe(true);
+  fireEvent.click(home.getByRole('button', { name: 'Show navigation' }));
+  expect(collapsed.get('home')?.()).toBe(false);
+  expect(collapsed.get('mail')?.()).toBe(true);
 });
 
 function setup(preserveDuringResize: boolean, persistWidth = false) {
@@ -214,6 +267,7 @@ describe('ViewShell aside resize preference', () => {
 function Workspace(props: {
   app: string;
   asideRequired?: boolean;
+  asidePinned?: boolean;
   mounted?: () => void;
 }) {
   function Content() {
@@ -225,9 +279,11 @@ function Workspace(props: {
       <ViewShell.Root
         asidePreferenceKey={props.app}
         asideRequired={props.asideRequired}
+        asidePinned={props.asidePinned}
       >
         <ViewShell.Aside>
           <ViewSidebar.Header>
+            <ViewSidebar.CloseButton />
             <ViewSidebar.Title>{props.app}</ViewSidebar.Title>
           </ViewSidebar.Header>
         </ViewShell.Aside>
@@ -241,6 +297,52 @@ function Workspace(props: {
     </section>
   );
 }
+
+it.each([720, 600, 400])(
+  'keeps split close available in a %spx navigation overlay',
+  (width) => {
+    measurement.width = () => width;
+    const [canClose, setCanClose] = createSignal(true);
+    const panes = ['home', 'tasks', 'email'].map((app) => ({
+      app,
+      close: vi.fn(),
+    }));
+    render(() =>
+      panes.map((pane) => (
+        <SplitPanel.Root
+          controller={{
+            canClose,
+            close: pane.close,
+            canGoBack: () => false,
+            goBack: vi.fn(),
+            canGoForward: () => false,
+            goForward: vi.fn(),
+          }}
+        >
+          <Workspace app={pane.app} />
+        </SplitPanel.Root>
+      ))
+    );
+
+    for (const pane of panes) {
+      const workspace = within(screen.getByRole('region', { name: pane.app }));
+      fireEvent.click(
+        workspace.getByRole('button', { name: 'Show navigation' })
+      );
+      expect(workspace.getByRole('button', { name: 'Close' })).toBeTruthy();
+    }
+
+    const email = within(screen.getByRole('region', { name: 'email' }));
+    fireEvent.click(email.getByRole('button', { name: 'Close' }));
+    expect(panes[2].close).toHaveBeenCalledOnce();
+    expect(panes[0].close).not.toHaveBeenCalled();
+    expect(panes[1].close).not.toHaveBeenCalled();
+
+    setCanClose(false);
+    expect(email.queryByRole('button', { name: 'Close' })).toBeNull();
+    expect(email.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+  }
+);
 
 it('hides only the owning split and keeps the current item mounted', () => {
   const mounted = vi.fn();
@@ -287,6 +389,33 @@ it('restores visibility per app after remount and persists reopening', () => {
   expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
 });
 
+it('opens secondary splits without navigation and leaves the preference alone', () => {
+  function InSplit(props: { app: string; first: boolean }) {
+    return (
+      <SplitPanelContext.Provider
+        value={
+          {
+            handle: { isFirst: () => props.first },
+            isPanelActive: () => false,
+            splitHotkeyScope: props.app,
+          } as unknown as SplitPanelContextType
+        }
+      >
+        <Workspace app={props.app} />
+      </SplitPanelContext.Provider>
+    );
+  }
+  const split = render(() => <InSplit app="email" first={false} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+  split.unmount();
+  const reopened = render(() => <InSplit app="email" first={false} />);
+  expect(screen.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
+  reopened.unmount();
+  render(() => <InSplit app="email" first />);
+  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+});
+
 it('reopens automatic narrow collapse as a dismissible overlay', () => {
   measurement.width = () => 600;
   render(() => <Workspace app="documents" />);
@@ -306,12 +435,52 @@ it('reopens automatic narrow collapse as a dismissible overlay', () => {
   ).toBeNull();
 });
 
-describe('required navigation', () => {
-  const asideDocked = () =>
-    !document
-      .querySelector('[data-view-shell-aside]')!
-      .parentElement!.classList.contains('hidden');
+const asideDocked = () =>
+  !document
+    .querySelector('[data-view-shell-aside]')!
+    .parentElement!.classList.contains('hidden');
 
+describe('pinned navigation', () => {
+  it('docks wide navigation without a collapse control, even when saved hidden', () => {
+    const unpinned = render(() => <Workspace app="settings" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    expect(asideDocked()).toBe(false);
+    unpinned.unmount();
+
+    render(() => <Workspace app="settings" asidePinned />);
+    expect(asideDocked()).toBe(true);
+    expect(
+      screen.queryByRole('button', { name: 'Hide navigation' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Show navigation' })
+    ).toBeNull();
+  });
+
+  it('collapses only into the narrow overlay, which starts closed', () => {
+    const [width, setWidth] = createSignal(1000);
+    measurement.width = width;
+    render(() => <Workspace app="settings" asidePinned />);
+
+    setWidth(600);
+    expect(
+      screen.queryByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    expect(
+      screen.queryByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeNull();
+
+    setWidth(1000);
+    expect(asideDocked()).toBe(true);
+    expect(
+      screen.queryByRole('button', { name: 'Hide navigation' })
+    ).toBeNull();
+  });
+});
+
+describe('required navigation', () => {
   it('docks a hidden wide sidebar without a collapse control until a selection returns', () => {
     const [required, setRequired] = createSignal(false);
     render(() => <Workspace app="channels" asideRequired={required()} />);

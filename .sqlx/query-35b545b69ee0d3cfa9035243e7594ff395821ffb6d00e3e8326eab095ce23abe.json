@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_entity_mentions\n            (id, source_entity_type, source_entity_id, entity_type, entity_id)\n           VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "35b545b69ee0d3cfa9035243e7594ff395821ffb6d00e3e8326eab095ce23abe"
+}

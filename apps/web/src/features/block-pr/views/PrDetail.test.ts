@@ -2,8 +2,7 @@ import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  invalidateQueries: vi.fn().mockResolvedValue(undefined),
-  onRefreshed: undefined as (() => void) | undefined,
+  refreshedKeys: undefined as (() => readonly unknown[]) | undefined,
 }));
 
 vi.mock('../data/prDiscussionSource', () => ({
@@ -28,16 +27,12 @@ vi.mock('@entity/components/GithubLabelPill', () => ({
 vi.mock('@notifications', () => ({
   DebouncedNotificationReadMarker: () => null,
 }));
-vi.mock('@tanstack/solid-query', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tanstack/solid-query')>()),
-  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
-}));
 vi.mock('@queries/storage/github-pull-requests', () => ({
   useRefreshGithubPullRequest: (
     _reference: unknown,
-    onRefreshed: () => void
+    refreshedKeys: () => readonly unknown[]
   ) => {
-    mocks.onRefreshed = onRefreshed;
+    mocks.refreshedKeys = refreshedKeys;
   },
 }));
 vi.mock('../data/queries', () => ({
@@ -57,19 +52,15 @@ vi.mock('../component/sidepanel/PrSidePanelSections', () => ({
 import { githubPullRequestChangesKeys } from '@queries/storage/keys';
 import { usePrDetail } from './PrDetail';
 
-describe('PR refresh cache invalidation', () => {
-  it('invalidates the PR details and changes summary after a successful refresh', () => {
+describe('PR refresh wiring', () => {
+  it('passes the PR details and changes summary keys to the refresh', () => {
     const id = '019a5faa-d2cd-7c55-8e8a-23aac4f0bc88';
     createRoot((dispose) => {
       usePrDetail(() => id);
-      mocks.onRefreshed?.();
-      expect(mocks.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['pr-foreign-entity', id],
-      });
-      expect(mocks.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: githubPullRequestChangesKeys.summary(id).queryKey,
-      });
-      expect(mocks.invalidateQueries).toHaveBeenCalledTimes(2);
+      expect(mocks.refreshedKeys?.()).toEqual([
+        ['pr-foreign-entity', id],
+        githubPullRequestChangesKeys.summary(id).queryKey,
+      ]);
       dispose();
     });
   });

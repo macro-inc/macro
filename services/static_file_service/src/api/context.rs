@@ -6,6 +6,7 @@ use axum::extract::FromRef;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
+use macro_service_urls::StaticFilePublicUrl;
 use std::sync::Arc;
 
 /// Concrete authorization service used by the `MacroAuthorizationExtractor` in handlers.
@@ -17,5 +18,7 @@ pub struct AppState {
     pub storage_client: Arc<S3Client>,
     pub sqs_client: Client,
     pub config: Arc<Config>,
+    /// Base that permalinks are stamped with.
+    pub public_url: Arc<StaticFilePublicUrl>,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
 }

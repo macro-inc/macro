@@ -1,25 +1,43 @@
+import { CLAUDE_BOT_PRINCIPAL_ID } from '@core/constant/claudeAgent';
+import { CODEX_BOT_PRINCIPAL_ID } from '@core/constant/codexAgent';
 import {
   MACRO_AGENT_NAME,
   MACRO_AGENT_PRINCIPAL_ID,
 } from '@core/constant/macroAgent';
+import {
+  MACRO_CODER_BOT_ID,
+  MACRO_CODER_NAME,
+  MACRO_CODER_PRINCIPAL_ID,
+} from '@core/constant/macroCoder';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { IUser } from '@core/user/types';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { claudeMentionUser, codexMentionUser } from './macroAi';
 import { useAgentMentionUsers } from './use-agent-mention-users';
 
 const flags = vi.hoisted(() => ({
   agents: (): boolean => false,
+  claude: (): boolean => false,
+  codex: (): boolean => false,
   cursor: (): boolean => false,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
+  claudeCloud: { key: 'claude-cloud' },
   enableChatV3Agents: { key: 'enable-chat-v3-agents' },
+  enableCodexAgents: { key: 'enable-codex-agents' },
   enableCursorAgents: { key: 'enable-cursor-agents' },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled:
-      flag.key === 'enable-chat-v3-agents' ? flags.agents() : flags.cursor(),
+      flag.key === 'enable-chat-v3-agents'
+        ? flags.agents()
+        : flag.key === 'claude-cloud'
+          ? flags.claude()
+          : flag.key === 'enable-codex-agents'
+            ? flags.codex()
+            : flags.cursor(),
   }),
 }));
 
@@ -30,7 +48,44 @@ function macroEntries(users: IUser[]): IUser[] {
 describe('useAgentMentionUsers', () => {
   beforeEach(() => {
     flags.agents = () => false;
+    flags.claude = () => false;
+    flags.codex = () => false;
     flags.cursor = () => false;
+  });
+
+  it('offers Codex only within the agents and Codex rollouts, even when it is a participant', () => {
+    createRoot((dispose) => {
+      const [codex, setCodex] = createSignal(false);
+      flags.agents = () => true;
+      flags.codex = codex;
+      const users = useAgentMentionUsers(() => [codexMentionUser()]);
+      const codexIds = () =>
+        users()
+          .map((user) => user.id)
+          .filter((id) => id === CODEX_BOT_PRINCIPAL_ID);
+      expect(codexIds()).toEqual([]);
+      setCodex(true);
+      expect(codexIds()).toEqual([CODEX_BOT_PRINCIPAL_ID]);
+      flags.agents = () => false;
+      expect(codexIds()).toEqual([]);
+      dispose();
+    });
+  });
+
+  it('offers Claude only within its rollout, even when it is a participant', () => {
+    createRoot((dispose) => {
+      const [enabled, setEnabled] = createSignal(false);
+      flags.claude = enabled;
+      const users = useAgentMentionUsers(() => [claudeMentionUser()]);
+      const claudeIds = () =>
+        users()
+          .map((user) => user.id)
+          .filter((id) => id === CLAUDE_BOT_PRINCIPAL_ID);
+      expect(claudeIds()).toEqual([]);
+      setEnabled(true);
+      expect(claudeIds()).toEqual([CLAUDE_BOT_PRINCIPAL_ID]);
+      dispose();
+    });
   });
 
   it('offers the classic Macro bot as the only Macro entry without the rollout', () => {
@@ -84,4 +139,44 @@ describe('useAgentMentionUsers', () => {
       dispose();
     });
   });
+
+  it.each([false, true])(
+    'excludes the retired coder with the agents rollout set to %s',
+    (rollout) => {
+      createRoot((dispose) => {
+        flags.agents = () => rollout;
+        const users = useAgentMentionUsers(() => []);
+        expect(users().map((user) => user.id)).not.toContain(
+          MACRO_CODER_PRINCIPAL_ID
+        );
+
+        const person = {
+          id: 'person',
+          name: 'Person',
+          email: 'person@example.com',
+        };
+        const [enabled, setEnabled] = createSignal(true);
+        const participants = [
+          person,
+          ...[MACRO_CODER_BOT_ID, MACRO_CODER_PRINCIPAL_ID].map((id) => ({
+            id,
+            name: MACRO_CODER_NAME,
+            email: MACRO_CODER_NAME,
+          })),
+        ];
+        const mentions = useAgentMentionUsers(() => participants, enabled);
+        expect(mentions()).toContainEqual(person);
+        expect(mentions().map((user) => user.id)).not.toContain(
+          MACRO_CODER_BOT_ID
+        );
+        expect(mentions().map((user) => user.id)).not.toContain(
+          MACRO_CODER_PRINCIPAL_ID
+        );
+        setEnabled(false);
+        expect(mentions()).toEqual([person]);
+        expect(participants).toHaveLength(3);
+        dispose();
+      });
+    }
+  );
 });

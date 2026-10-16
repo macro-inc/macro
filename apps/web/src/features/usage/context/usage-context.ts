@@ -1,5 +1,6 @@
 import type { Accessor } from 'solid-js';
 import type {
+  AutoReloadBudget,
   AutoReloadSettings,
   UsagePreviewPlan,
   UsageSummary,
@@ -19,8 +20,12 @@ export type UsageContext = {
   };
   autoReload: {
     settings: Accessor<AutoReloadSettings>;
+    /** Authoritative calendar-month cap commitments, or explicit lab fixtures. */
+    budget?: Accessor<AutoReloadBudget | undefined>;
     available: Accessor<boolean>;
     pending: Accessor<boolean>;
+    /** The last automatic reload failed to charge; saving retries. */
+    suspended: Accessor<boolean>;
     save: (settings: AutoReloadSettings) => Promise<void>;
     preview: Accessor<boolean>;
   };
@@ -35,6 +40,7 @@ export type UsageContext = {
   navigateToPayment: (url: string) => void;
   openPlans: () => void;
   developer?: {
+    openBillingLab?: () => void;
     active: Accessor<boolean>;
     plan: Accessor<UsagePreviewPlan | undefined>;
     beforeLaunch: Accessor<boolean>;

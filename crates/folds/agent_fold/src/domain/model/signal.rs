@@ -3,7 +3,7 @@
 use agent_runtime_protocol::domain::action::AgentActionId;
 use serde::{Deserialize, Serialize};
 
-use super::{ElicitationRequestId, StopReason};
+use super::{ElicitationRequestId, ProjectedSegment, StopReason, TurnPhase};
 use crate::domain::model::TurnId;
 
 /// A turn-level fact the fold vouches for, derived from one pushed frame.
@@ -15,6 +15,25 @@ use crate::domain::model::TurnId;
 /// dispatcher's knowledge and stays with it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TurnSignal {
+    /// The agent's reply for `turn` changed shape: a segment opened or
+    /// sealed, a step started or finished, or what the agent is doing
+    /// changed. Prose growing inside an open passage is not a change of
+    /// shape; that streams to viewers through the fold itself.
+    ///
+    /// Reported for a closing reply too, with every segment sealed, ahead of
+    /// its [`Self::TurnEnded`], so whoever posts the reply has its final
+    /// shape before it hears that the turn is over.
+    Progressed {
+        /// The turn whose reply changed.
+        turn: TurnId,
+        /// The prompt's action id, when the turn was opened by one this
+        /// server minted.
+        action_id: Option<AgentActionId>,
+        /// What the agent is doing now; `None` once the reply has closed.
+        phase: Option<TurnPhase>,
+        /// The reply's segments, sealed prose with its text.
+        segments: Vec<ProjectedSegment>,
+    },
     /// The agent's message for `turn` closed.
     TurnEnded {
         /// The turn that closed.

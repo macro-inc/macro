@@ -3,6 +3,8 @@
 //! options.
 
 mod core;
+mod provisioning;
+mod required;
 mod transfer;
 
 use std::collections::HashMap;
@@ -22,8 +24,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::journal::{Before, JournalActor, RowImage, cell_value, row_cells};
 use crate::domain::models::{
-    NewDefinition, OptionId, PropertyDefinitionId, RowId, TableId, TakenId, Write, Writes,
-    WritesOutcome,
+    ColumnProtection, NewDefinition, OptionId, PropertyDefinitionId, RowId, TableId, TakenId,
+    Write, Writes, WritesOutcome,
 };
 use crate::domain::ports::CellStore;
 use crate::outbound::pg_databases_repo::schema::{self, Inserted, Removed};
@@ -347,6 +349,13 @@ where
             }
         }
 
+        if let Some(missing) = self
+            .check_required_cells(&mut transaction, writes, &inserted)
+            .await?
+        {
+            return Ok(missing);
+        }
+
         let mut grouped: Vec<(TableId, Vec<RowId>)> = Vec::new();
         for (table, row) in &writes.related_rows {
             match grouped.iter_mut().find(|(target, _)| target == table) {
@@ -419,6 +428,27 @@ where
     ) -> Result<Applied, PgCellStoreError> {
         let refused = |outcome| Ok(Applied::Refused(outcome));
         let database_id = writes.database_id;
+        // Schema planning is optimistic. Recheck protections under the same table
+        // locks that serialize protection registration before changing stored schema.
+        let protected_operation = match write {
+            Write::DeleteColumn { column_id, .. } => Some((*column_id, ColumnProtection::Delete)),
+            Write::ReplaceColumn { replacement, .. } => {
+                Some((replacement.column.id, ColumnProtection::ChangeType))
+            }
+            _ => None,
+        };
+        if let Some((column_id, capability)) = protected_operation {
+            let blocked = sqlx::query_scalar!(
+                "SELECT EXISTS(SELECT 1 FROM database_column_protections WHERE column_id = $1 AND capability = $2) AS \"blocked!\"",
+                column_id.into_uuid(), capability.to_string()
+            ).fetch_one(&mut **transaction).await?;
+            if blocked {
+                return refused(WritesOutcome::ColumnProtected {
+                    write: index,
+                    capability,
+                });
+            }
+        }
         match write {
             Write::Unchanged { .. } => {}
             Write::CreateTable { table_id, name } => {

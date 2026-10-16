@@ -14,6 +14,10 @@ const SPLIT_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../macro_db_client/migrations/20261005183743_separate_database_entity.down.sql"
 ));
+const WEBHOOKS_DOWN: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../macro_db_client/migrations/20261014153433_database_webhooks.down.sql"
+));
 
 fn batch(database_id: DatabaseId, writes: Vec<Write>) -> Writes {
     Writes {
@@ -183,6 +187,11 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
     let store = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
     store.create_storage().await.unwrap();
     let mut transaction = pool.begin().await.unwrap();
+    // Roll back the newer foreign key dependency before the historical cutover.
+    sqlx::raw_sql(WEBHOOKS_DOWN)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
     // Down also resets populated app and core storage, without a preservation guard.
     sqlx::raw_sql(SPLIT_DOWN)
         .execute(&mut *transaction)

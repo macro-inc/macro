@@ -1,0 +1,17 @@
+---
+title: MoveToTrash
+description: >-
+  Delete a document (including a task), an AI chat, or a project (folder) by
+  moving it to the trash, as the Delete action in the app does.
+---
+
+# MoveToTrash
+
+Delete a document (including a task), an AI chat, or a project (folder) by moving it to the trash, as the Delete action in the app does. Trashing a project also trashes everything inside it. Only the item's owner can trash it. Use only when the user explicitly asks to delete an item. Channels, email threads, and calendar events are not deleted with this tool.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"document"` \| `"chat"` \| `"project"` | Yes | The kind of item to move to the trash. |
+| `entityId` | string | Yes | The id of the item to move to the trash. |

@@ -9,6 +9,22 @@ import type { EntityActionListState } from '../../next-soup/actions/entity-actio
 import type { SoupState } from '../../next-soup/create-soup-state';
 import type { QueryStore } from '../../next-soup/filters/filter-store/query-store';
 
+export type CrmRouteSearch = {
+  tab: Accessor<string>;
+  setTab(
+    tab: string,
+    options?: { replace?: boolean; clearPipelineRequest?: boolean }
+  ): void;
+};
+
+/** A pipeline another view asked the workspace to show. */
+export type CrmPipelineRequest = {
+  /** A new `seek` repeats a request for the same pipeline. */
+  current: Accessor<{ pipelineId: string; seek: string } | undefined>;
+  /** Forgets the request once the workspace shows something else. */
+  release(): void;
+};
+
 /** Collection capabilities consumed by CRM views, supplied by the host adapter. */
 export type CrmWorkspace = {
   host: {
@@ -19,6 +35,7 @@ export type CrmWorkspace = {
     openCompany(entity: EntityData, newSplit: boolean): void;
     openSettings(): void;
     openTeamSettings(): void;
+    pipelineRequest: CrmPipelineRequest['current'];
   };
 
   soup: EntityActionListState & {
@@ -38,7 +55,7 @@ export type CrmWorkspace = {
     hasNextPage: Accessor<boolean>;
     fetchNextPage(): Promise<void>;
   };
-  queryFilters: Pick<QueryStore, 'state' | 'replace'>;
+  queryFilters: Pick<QueryStore, 'state' | 'set' | 'replace'>;
   searchText: Accessor<string>;
   setSearchText(value: string): void;
   activeTab: Accessor<string | undefined>;
@@ -47,8 +64,6 @@ export type CrmWorkspace = {
   setStageFilter: Setter<string[]>;
   ownerFilter: Accessor<string[]>;
   setOwnerFilter: Setter<string[]>;
-  viewMode: Accessor<'list' | 'board'>;
-  setViewMode: Setter<'list' | 'board'>;
 };
 const Context = createContext<CrmWorkspace>();
 export const CrmWorkspaceProvider = Context.Provider;

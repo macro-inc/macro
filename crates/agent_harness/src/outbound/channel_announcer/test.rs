@@ -13,6 +13,8 @@ use messages::domain::models::Message;
 
 fn announcement() -> SessionAnnouncement {
     SessionAnnouncement {
+        reply_message_id: None,
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         bot_id: BotId::TEST_A,
         is_coding: true,
@@ -112,6 +114,7 @@ fn markdown(body: AgentChatReplyBody) -> String {
     match body {
         AgentChatReplyBody::Markdown { markdown } => markdown,
         AgentChatReplyBody::Pending => panic!("expected prose, got the spinner"),
+        AgentChatReplyBody::Segments { .. } => panic!("expected prose, got segments"),
     }
 }
 
@@ -129,6 +132,7 @@ fn every_reply_names_its_session() {
         AgentChatReply {
             session_id: "00000000-0000-0000-0000-00000000000a".to_owned(),
             body: AgentChatReplyBody::Pending,
+            link: None,
         }
     );
 }
@@ -419,6 +423,8 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
             origin_parent: parent,
             triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
             outcome: ReplyOutcome::Answered("Your emails: <m-document-mention/>".to_owned()),
+            turn: agent_fold::domain::model::TurnId(0),
+            segments: Vec::new(),
         })
         .await
         .expect("the pointer replaces the spinner");
@@ -426,5 +432,124 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
     assert_eq!(
         *patched.lock().unwrap(),
         ["composed answer", "composed pointer"]
+    );
+}
+
+/// Shared threads and DMs both persist message snapshots. Neither audience
+/// grants session access, even when the live view can show tool details.
+#[tokio::test]
+async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
+    use agent_fold::domain::model::{ActivityRow, Segment};
+    let segments = vec![ProjectedSegment {
+        segment: Segment {
+            index: 1,
+            kind: SegmentKind::Activity,
+            start: 0,
+            end: 3,
+            sealed: true,
+            rows: vec![
+                ActivityRow {
+                    id: "terminal".into(),
+                    label: "Ran".into(),
+                    detail: Some("TOKEN=private-value run-report".into()),
+                    status: ActivityStatus::Completed,
+                },
+                ActivityRow {
+                    id: "search".into(),
+                    label: "Searched".into(),
+                    detail: Some("confidential acquisition".into()),
+                    status: ActivityStatus::Completed,
+                },
+                ActivityRow {
+                    id: "request".into(),
+                    label: "Fetched".into(),
+                    detail: Some("https://internal.example/?token=private-value".into()),
+                    status: ActivityStatus::Failed,
+                },
+            ],
+        },
+        text: None,
+    }];
+    for thread in [None, Some(Uuid::from_u128(2))] {
+        let lexical = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("POST"))
+            .and(wiremock::matchers::path("/agent-announcement"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"markdown": "safe activity"})),
+            )
+            .expect(1)
+            .mount(&lexical)
+            .await;
+        let parent = MessageParent::Channel(Uuid::from_u128(1));
+        let message_parent = parent.clone();
+        let mut messages = messages::domain::api::MockMessageCommands::new();
+        messages
+            .expect_post_from_event()
+            .times(1)
+            .returning(move |_, id, post| {
+                assert_eq!(post.thread_id, thread);
+                assert_eq!(post.content, "safe activity");
+                Ok(Message {
+                    id,
+                    parent: message_parent.clone(),
+                    thread_id: thread,
+                    sender_id: channel_sender::ChannelSender::new_from_user(
+                        MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+                    ),
+                    triggered_by: None,
+                    bot_profile: None,
+                    mentions: vec![],
+                    imported_author: None,
+                    content: post.content,
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                    edited_at: None,
+                    deleted_at: None,
+                    attachments: vec![],
+                    reactions: vec![],
+                })
+            });
+        let announcer = MessageAnnouncer::new(
+            Arc::new(messages),
+            Arc::new(EditingAccess),
+            LexicalClient::new("test-key".to_owned(), lexical.uri()),
+        );
+        announcer
+            .present(ReplyPresentation {
+                session_id: SESSION,
+                bot_id: BotId::TEST_A,
+                triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+                parent,
+                thread_id: thread,
+                message_id: Uuid::from_u128(3),
+                turn: TurnId(0),
+                segments: segments.clone(),
+                link: thread.is_some(),
+                pending: false,
+                outcome: None,
+                notify: false,
+            })
+            .await
+            .unwrap();
+        let requests = lexical.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        let rows = body["chatReply"]["body"]["segments"][0]["rows"]
+            .as_array()
+            .unwrap();
+        assert_eq!(rows.len(), 3);
+        assert!(rows.iter().all(|row| row.get("detail").is_none()));
+        assert_eq!(rows[0]["label"], "Ran");
+        assert_eq!(rows[0]["status"], "completed");
+        assert_eq!(rows[2]["status"], "failed");
+        let serialized = String::from_utf8(requests[0].body.clone()).unwrap();
+        assert!(!serialized.contains("private-value"));
+        assert!(!serialized.contains("confidential acquisition"));
+        assert!(!serialized.contains("internal.example"));
+    }
+    assert_eq!(
+        segments[0].segment.rows[0].detail.as_deref(),
+        Some("TOKEN=private-value run-report"),
+        "snapshot serialization leaves live session details intact"
     );
 }

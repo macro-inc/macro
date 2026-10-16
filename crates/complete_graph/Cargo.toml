@@ -25,8 +25,10 @@ entity_access = { path = "../entity_access", default-features = false, features 
 entity_mutation = { path = "../entity_mutation" }
 favorites = { path = "../favorites", default-features = false, features = ["ports"] }
 graphql_activity = { path = "../graphql_activity" }
+graphql_calendar = { path = "../graphql_calendar" }
 graphql_channel = { path = "../graphql_channel" }
 graphql_common = { path = "../graphql_common" }
+graphql_crm = { path = "../graphql_crm" }
 graphql_email = { path = "../graphql_email" }
 graphql_entity_mutation = { path = "../graphql_entity_mutation" }
 graphql_favorite = { path = "../graphql_favorite" }
@@ -36,6 +38,7 @@ graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
 graphql_scheduled_action = { path = "../graphql_scheduled_action" }
 graphql_soup = { path = "../graphql_soup" }
+graphql_work_feed = { path = "../graphql_work_feed" }
 macro_authorization = { path = "../macro_authorization", features = [
   "axum",
   "outbound",
@@ -55,13 +58,19 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id" }
+crm = { path = "../crm", default-features = false, features = ["ports"] }
+databases = { path = "../databases", default-features = false, features = ["ports"] }
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
+work_feed = { path = "../work_feed" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }
+calendar_events = { path = "../calendar_events" }
 chrono = { workspace = true }
 model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }
 models_pagination = { path = "../models_pagination" }
+models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 rootcause = { workspace = true }

@@ -104,6 +104,51 @@ describe('chart layout', () => {
     expect(heights[1]).toBeCloseTo(heights[2]);
   });
 
+  it('fills a 100% stack to the axis, positives and negatives apart', () => {
+    const at = (label: string) =>
+      of(shapes, 'text').find((shape) => shape.text === label)?.y;
+    const shapes = chartScene(
+      data(
+        [
+          {
+            kind: 'column',
+            grouping: 'percentStacked',
+            series: [series('A', [20, 30]), series('B', [30, -10])],
+          },
+        ],
+        { categories: ['Jan', 'Feb'] }
+      ),
+      400,
+      300
+    ).shapes;
+    const span = Math.abs((at('100%') ?? 0) - (at('0%') ?? 0));
+    const bar = (tip: string) =>
+      of(shapes, 'rect').find((shape) => shape.tip === tip);
+    // Jan is 20 + 30, both positive, so the two bars together are the axis.
+    expect(
+      (bar('A · Jan: 20')?.height ?? 0) + (bar('B · Jan: 30')?.height ?? 0)
+    ).toBeCloseTo(span);
+    // Feb's positive series is the whole axis, and its negative series mirrors it.
+    expect(bar('A · Feb: 30')?.height).toBeCloseTo(span);
+    expect(bar('B · Feb: -10')?.height).toBeCloseTo(
+      Math.abs((at('-100%') ?? 0) - (at('0%') ?? 0))
+    );
+    const line = chartScene(
+      data([
+        {
+          kind: 'line',
+          grouping: 'percentStacked',
+          series: [series('A', [10, 10, 10]), series('B', [30, 30, 30])],
+        },
+      ]),
+      400,
+      300
+    ).shapes;
+    const hundred = of(line, 'text').find((shape) => shape.text === '100%');
+    const top = of(line, 'circle').find((shape) => shape.tip === 'B · Jan: 30');
+    expect(top?.y).toBeCloseTo(hundred?.y ?? Number.NaN);
+  });
+
   it('labels a secondary axis on the right and keeps series without fill out of the legend', () => {
     const shapes = chartScene(
       data(
@@ -209,6 +254,18 @@ describe('radar, bubble, stock and contour charts', () => {
     const [small, large] = of(shapes, 'circle');
     expect(large.r / small.r).toBeCloseTo(2);
     expect(large.tip).toBe('A: (2, 20), 4');
+    const marked = chartScene(
+      data([
+        {
+          kind: 'scatter',
+          series: [series('A', [10, 20], { x: [1, 2], noLine: true })],
+        },
+      ]),
+      400,
+      300
+    ).shapes;
+    expect(of(marked, 'circle')).toHaveLength(2);
+    expect(of(marked, 'path').filter((path) => path.tip)).toHaveLength(0);
     expect(large.x).toBeGreaterThan(small.x);
     expect(large.y).toBeLessThan(small.y);
   });

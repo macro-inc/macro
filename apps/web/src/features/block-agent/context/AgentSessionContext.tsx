@@ -1,5 +1,6 @@
 /** Feature-owned session state and its provider/consumer boundary. */
 
+import type { InteractionController } from '@app/features/agent-interactions/context/interaction';
 import type { IssueResult } from '@core/agent-session/AgentSession';
 import type {
   FoldedMessage,
@@ -16,7 +17,6 @@ import type { ToolApprovalController } from '../primitives/create-tool-approval-
 import type { EffortSelection } from '../state/session-config';
 import type { QuoteInsert } from '../ui';
 import type { QueueController } from './create-queue-controller';
-import type { InteractionController } from './interaction';
 
 export type AgentSessionState = {
   /** The viewer and display-name lookup supplied by production composition. */
@@ -41,6 +41,12 @@ export type AgentSessionState = {
   metadata: Accessor<SessionMetadata | undefined>;
   /** The folded transcript, ordered by turn, live-following the session. */
   messages: Accessor<FoldedMessage[]>;
+  /** Optional in galleries/replays; production reports actual answer rendering. */
+  observeRenderedText?: (
+    sessionId: string,
+    turn: number,
+    element: HTMLElement
+  ) => (() => void) | undefined;
   loadFailed: Accessor<boolean>;
   /** The load failed because the viewer is not a participant (401/403). */
   accessDenied: Accessor<boolean>;

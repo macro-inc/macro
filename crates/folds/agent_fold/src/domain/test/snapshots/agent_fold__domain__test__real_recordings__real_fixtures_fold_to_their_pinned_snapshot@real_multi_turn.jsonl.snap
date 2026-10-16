@@ -1,8 +1,7 @@
 ---
-source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 244
+source: crates/folds/agent_fold/src/domain/test/real_recordings.rs
 expression: messages
-input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
+input_file: crates/folds/agent_fold/fixtures/real/real_multi_turn.jsonl
 ---
 [
     FoldedMessage {
@@ -28,6 +27,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -124,6 +124,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
             EndTurn,
         ),
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -150,6 +151,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -174,6 +176,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -768,6 +771,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
             EndTurn,
         ),
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -793,6 +797,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -819,6 +824,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -843,6 +849,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -889,5 +896,6 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
 ]

@@ -1,7 +1,13 @@
 import {
+  DocumentAccessDenied,
+  useSharedAccessUpdates,
+} from '@app/features/access-requests/access-requests';
+import { shareEntity } from '@app/features/access-requests/core/types';
+import {
   DocumentFileSidePanelSections,
   SidePanel,
 } from '@components/app/side-panel';
+import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
   getPermissions,
   hasPermissions,
@@ -86,20 +92,51 @@ function FileDetailBodyState(props: {
   );
 }
 
-export function FileDetailLoadGate<T extends object>(props: {
+export function FileDetailLoadGate<
+  T extends { userAccessLevel: AccessLevel },
+>(props: {
   documentId: string;
   label: string;
   load: (documentId: string) => Promise<T>;
   children: (data: T) => JSX.Element;
 }) {
-  const [document, { refetch }] = createResource(
+  const [document, { refetch, mutate }] = createResource(
     () => props.documentId,
     props.load
   );
+  const reload = () => {
+    // Dispose the old editor and its sync source before loading a new token.
+    mutate(undefined);
+    void refetch();
+  };
+  const sharedAccess = useSharedAccessUpdates(
+    () => shareEntity('document', props.documentId),
+    (level) => {
+      if (level === null) {
+        mutate(undefined);
+        return;
+      }
+      const loaded = document.state === 'ready' ? document.latest : undefined;
+      if (loaded?.userAccessLevel !== level) reload();
+    }
+  );
+  const accessDenied = () => {
+    if (sharedAccess() === null) return true;
+    const error = toEntityLoadError(document.error);
+    return error === 'UNAUTHORIZED' || error === 'FORBIDDEN';
+  };
 
   return (
     <Suspense fallback={<FileDetailBodyState label={props.label} />}>
       <Switch>
+        <Match when={accessDenied()}>
+          <DocumentAccessDenied
+            documentId={props.documentId}
+            onAccessGranted={() => {
+              if (document.error) reload();
+            }}
+          />
+        </Match>
         <Match when={document.error}>
           {(error) => (
             <FileDetailBodyState

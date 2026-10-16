@@ -58,6 +58,7 @@ const STATIC_ROUTES = [
   '/jobs',
   '/terms',
   '/privacy',
+  '/delete-account',
   '/dpa',
   '/posts',
   '/tasks',
@@ -86,6 +87,7 @@ const ROUTE_MODULES: Array<[RegExp, string]> = [
   [/^\/jobs$/, 'src/app/routes/RouteJobs.tsx'],
   [/^\/terms$/, 'src/app/routes/RouteTerms.tsx'],
   [/^\/privacy$/, 'src/app/routes/RoutePrivacy.tsx'],
+  [/^\/delete-account$/, 'src/app/routes/RouteDeleteAccount.tsx'],
   [/^\/dpa$/, 'src/app/routes/RouteDpa.tsx'],
   [/^\/tasks$/, 'src/app/routes/RouteTasks.tsx'],
   [/^\/email$/, 'src/app/routes/RouteEmail.tsx'],
@@ -139,6 +141,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/jobs': 'Careers',
   '/terms': 'Terms',
   '/privacy': 'Privacy',
+  '/delete-account': 'Delete your account',
   '/dpa': 'Data Processing Agreement',
   '/posts': 'Blog',
   '/tasks': 'Tasks',
@@ -180,6 +183,7 @@ function sitemapHints(route: string): { priority: string; changefreq: string } {
   if (
     route === '/terms' ||
     route === '/privacy' ||
+    route === '/delete-account' ||
     route === '/dpa' ||
     route === '/partners/terms'
   )

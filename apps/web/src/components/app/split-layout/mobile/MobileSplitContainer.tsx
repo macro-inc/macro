@@ -1,4 +1,3 @@
-import { ContentLoading } from '@components/app/ContentLoading';
 import { useAndroidBackNavigation } from '@core/mobile/androidBack';
 import {
   type Accessor,
@@ -9,6 +8,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { runSplitBack } from '../back-interceptor';
 import { SplitPanel } from '../components/SplitPanel';
 import type {
   SplitHandle,
@@ -56,11 +56,12 @@ function createPaneSlots(stack: MobilePaneStack): Accessor<Slots> {
 export function MobileSplitContainer(props: MobileSplitContainerProps) {
   const { splitManager, stack } = props;
 
-  useAndroidBackNavigation(() => {
-    if (!stack.canGoBack()) return false;
-    stack.goBack();
-    return true;
-  });
+  useAndroidBackNavigation(() =>
+    runSplitBack({
+      canGoBack: stack.canGoBack,
+      goBack: stack.goBack,
+    })
+  );
 
   const motion = createMobileSplitMotion({ stack });
   const slots = createPaneSlots(stack);
@@ -108,7 +109,7 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
                         motion.handleTransitionEnd(e, isFront())
                       }
                     >
-                      <Suspense fallback={<ContentLoading />}>
+                      <Suspense>
                         <SplitPanel
                           split={current().split}
                           handle={current().handle}

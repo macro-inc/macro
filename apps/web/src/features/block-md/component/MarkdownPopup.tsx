@@ -53,7 +53,6 @@ import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import ArrowUp from '@phosphor/arrow-up.svg';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import GridIcon from '@phosphor/grid-four.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
@@ -62,7 +61,7 @@ import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?componen
 import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
-import { Button, Toolbar } from '@ui';
+import { Button, SendButton, Toolbar } from '@ui';
 import {
   $getSelection,
   $isRangeSelection,
@@ -313,15 +312,10 @@ export function MarkdownPopup(props: {
     <Show
       when={hasActiveAiEdit(blockId)}
       fallback={
-        <Button
-          size="icon-sm"
-          variant="strong"
-          tooltip="Send"
+        <SendButton
           disabled={!aiEditInput().trim()}
           onClick={handleAiEditSubmit}
-        >
-          <ArrowUp class="size-4" />
-        </Button>
+        />
       }
     >
       <Button

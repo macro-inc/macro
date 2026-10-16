@@ -1,14 +1,20 @@
 import { DEFAULT_TAG_COLOR } from '@property/tags/tagColors';
-import { cn } from '@ui';
+import { cn, TagDot } from '@ui';
 import { For, Show } from 'solid-js';
 import type { GithubPullRequestLabel } from '../types/entity';
+import { rowPillClasses } from './row-pill';
 
 const GITHUB_HEX_COLOR = /^#?([0-9a-f]{6})$/i;
 
+/** A GitHub label's color as CSS, or the default tag color when it has none. */
+export function githubLabelColor(color: string | null | undefined): string {
+  const hex = color && GITHUB_HEX_COLOR.exec(color)?.[1];
+  return hex ? `#${hex}` : DEFAULT_TAG_COLOR;
+}
+
 /**
- * A GitHub label drawn the way GitHub draws it. Dark themes tint the pill and
- * lighten dark label colors until the text is readable; light themes fill with
- * the label color and flip the text to black or white by its lightness.
+ * A GitHub label drawn like Macro's tag pills: a neutral outline pill with
+ * the label's color as a dot, so labels read the same as email and task tags.
  */
 export function GithubLabelPill(props: {
   name: string;
@@ -16,22 +22,15 @@ export function GithubLabelPill(props: {
   color?: string | null;
   class?: string;
 }) {
-  const color = () => {
-    const hex = props.color && GITHUB_HEX_COLOR.exec(props.color)?.[1];
-    return hex ? `#${hex}` : DEFAULT_TAG_COLOR;
-  };
-
   return (
     <span
-      class={cn(
-        'inline-flex h-5 max-w-full min-w-0 items-center rounded-full border px-[7px] text-xs leading-none font-medium',
-        'dark-mode:border-[color:oklch(from_var(--label-color)_max(l,0.72)_c_h/0.3)] dark-mode:bg-[oklch(from_var(--label-color)_l_c_h/0.18)] dark-mode:text-[color:oklch(from_var(--label-color)_max(l,0.72)_c_h)]',
-        'light-mode:border-[color:oklch(from_var(--label-color)_calc(l_-_0.25)_c_h/clamp(0,(l_-_0.95)_*_100,1))] light-mode:bg-(--label-color) light-mode:text-[color:oklch(from_var(--label-color)_clamp(0,(0.66_-_l)_*_1000,1)_0_0)]',
-        props.class
-      )}
-      style={{ '--label-color': color() }}
+      title={props.name}
+      class={rowPillClasses(cn('max-w-full', props.class))}
     >
-      <span class="truncate">{props.name}</span>
+      <TagDot fill={githubLabelColor(props.color)} size="sm" />
+      <span data-pill-text class="min-w-0 truncate">
+        {props.name}
+      </span>
     </span>
   );
 }
@@ -44,10 +43,7 @@ export function GithubLabelPills(props: {
 }) {
   return (
     <Show when={props.labels.length > 0}>
-      <span
-        class={cn('flex min-w-0 items-center gap-1', props.class)}
-        title={props.labels.map((label) => label.name).join(', ')}
-      >
+      <span class={cn('flex min-w-0 items-center gap-1', props.class)}>
         <For each={props.labels}>
           {(label) => (
             <GithubLabelPill

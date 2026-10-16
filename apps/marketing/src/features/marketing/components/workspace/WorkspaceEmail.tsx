@@ -32,6 +32,8 @@ export function WorkspaceEmail(props: {
   tag?: EmailTagId;
   onClearTag?: () => void;
   navigationOpen?: boolean;
+  /** A linked split has no inbox navigation history. */
+  hideCollectionNavigation?: boolean;
   onToggleNavigation?: () => void;
 }) {
   const w = props.workspace;
@@ -113,7 +115,7 @@ export function WorkspaceEmail(props: {
   return (
     <>
       <ViewShell.TopBar>
-        <Show when={!props.navigationOpen}>
+        <Show when={!props.navigationOpen && !props.hideCollectionNavigation}>
           <Button
             size="icon-sm"
             variant="plain"
@@ -127,15 +129,19 @@ export function WorkspaceEmail(props: {
           class="flex items-center gap-2 min-w-0 text-sm"
           aria-label="Email location"
         >
-          <button
-            type="button"
-            class="text-ink-muted"
-            onClick={() => w.backToCollection('email')}
-          >
-            {title()}
-          </button>
+          <Show when={!props.hideCollectionNavigation}>
+            <button
+              type="button"
+              class="text-ink-muted"
+              onClick={() => w.backToCollection('email')}
+            >
+              {title()}
+            </button>
+          </Show>
           <Show when={selected() || w.selected() === 'new'}>
-            <CaretRight class="size-3 shrink-0 text-ink-muted" />
+            <Show when={!props.hideCollectionNavigation}>
+              <CaretRight class="size-3 shrink-0 text-ink-muted" />
+            </Show>
             <Envelope class="size-3.5 shrink-0" />
             <span class="truncate font-medium">
               {selected()?.subject ?? 'New email'}
@@ -177,27 +183,29 @@ export function WorkspaceEmail(props: {
               >
                 <Check />
               </Button>
-              <Button
-                size="icon-sm"
-                variant="plain"
-                label="Previous email"
-                disabled={emails().findIndex((e) => e.id === email().id) <= 0}
-                onClick={() => adjacent(-1)}
-              >
-                <CaretUp />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="plain"
-                label="Next email"
-                disabled={
-                  emails().findIndex((e) => e.id === email().id) >=
-                  emails().length - 1
-                }
-                onClick={() => adjacent(1)}
-              >
-                <CaretDown />
-              </Button>
+              <Show when={!props.hideCollectionNavigation}>
+                <Button
+                  size="icon-sm"
+                  variant="plain"
+                  label="Previous email"
+                  disabled={emails().findIndex((e) => e.id === email().id) <= 0}
+                  onClick={() => adjacent(-1)}
+                >
+                  <CaretUp />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="plain"
+                  label="Next email"
+                  disabled={
+                    emails().findIndex((e) => e.id === email().id) >=
+                    emails().length - 1
+                  }
+                  onClick={() => adjacent(1)}
+                >
+                  <CaretDown />
+                </Button>
+              </Show>
               <Dropdown modal={false}>
                 <Dropdown.Trigger
                   size="sm"
@@ -322,7 +330,7 @@ export function WorkspaceEmail(props: {
                   <>
                     <PanelSection title="Details" open>
                       <p class="mb-2">From {email().sender}</p>
-                      <p class="text-ink-muted text-xs">To Jacob Beckerman</p>
+                      <p class="text-ink-muted text-xs">To Jacob</p>
                       <Button
                         size="sm"
                         class="mt-4"

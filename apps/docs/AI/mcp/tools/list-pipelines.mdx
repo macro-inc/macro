@@ -1,0 +1,10 @@
+---
+title: ListPipelines
+description: >-
+  List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or
+  partner pipelines) with their stages and fields.
+---
+
+# ListPipelines
+
+List the user's CRM pipelines (deal pipelines, sales pipelines, hiring or partner pipelines) with their stages and fields. A pipeline holds entries (deals); each entry tracks one CRM company or contact and has its own fields, such as Stage, Owner and Revenue. Each pipeline lists its id, whether it tracks companies or contacts, the user's access, and its fields in order with their types; a select field lists its options, so Stage lists the pipeline's stages from first to last. Call this first whenever the user talks about deals, a pipeline, a stage, or moving a company or contact along, then use FindPipelineEntries, AddToPipeline and UpdatePipelineEntries with the returned pipelineId and field names. When the user names no pipeline and there is exactly one, use it; when several could match, ask which one.

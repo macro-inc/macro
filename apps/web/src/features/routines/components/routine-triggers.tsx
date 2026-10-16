@@ -8,6 +8,7 @@ import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file-text.svg';
 import HashIcon from '@phosphor/hash.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import PhoneIcon from '@phosphor/phone.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, badgeTriggerClasses } from '@ui';
 import { format } from 'date-fns';
@@ -47,6 +48,11 @@ type EventSlots = {
     trigger: Accessor<EventTriggerDraft>,
     change: (ids: string[] | undefined) => void
   ) => JSX.Element;
+  /** Absent where conditions are unavailable. */
+  renderEventCondition?: (
+    trigger: Accessor<EventTriggerDraft>,
+    change: (condition: string | undefined) => void
+  ) => JSX.Element;
 };
 
 function scheduleSummary(trigger: ScheduleTriggerDraft) {
@@ -77,6 +83,9 @@ function EventIcon(props: { group: RoutineEventGroup; class: string }) {
       <Match when={props.group === 'Email'}>
         <EnvelopeIcon class={props.class} />
       </Match>
+      <Match when={props.group === 'Calls'}>
+        <PhoneIcon class={props.class} />
+      </Match>
     </Switch>
   );
 }
@@ -88,6 +97,7 @@ function TriggerIcon(props: { trigger?: RoutineTriggerDraft }) {
     if (kind === 'TASK') return 'Tasks';
     if (kind === 'THREAD') return 'Email';
     if (kind === 'DOCUMENT') return 'Documents';
+    if (kind === 'CALL_RECORD') return 'Calls';
     return 'Channels';
   };
   return (
@@ -308,7 +318,9 @@ function TriggerChip(
         title={
           props.trigger?.kind === 'schedule'
             ? `${label()} · ${props.trigger.timezone.replace(/_/g, ' ')}`
-            : label()
+            : [label(), savedEvent()?.condition?.trim()]
+                .filter(Boolean)
+                .join(' · if ')
         }
         class={badgeTriggerClasses({
           variant: 'outline',
@@ -324,6 +336,9 @@ function TriggerChip(
           <Show when={savedEvent()}>
             {(value) => <> · {props.renderEventLabel(value)}</>}
           </Show>
+          <Show when={savedEvent()?.condition?.trim()}>
+            {(condition) => <> · if {condition()}</>}
+          </Show>
         </span>
         <Show when={props.trigger}>
           <CaretDownIcon class="size-3" />
@@ -337,7 +352,7 @@ function TriggerChip(
         }}
       >
         <Popover.Content
-          class="z-modal flex max-h-[min(32rem,var(--kb-popper-content-available-height))] w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink shadow-lg"
+          class="menu-surface z-modal flex max-h-[min(32rem,var(--kb-popper-content-available-height))] w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden"
           onKeyDown={(e) => e.stopPropagation()}
         >
           <Popover.Title class="sr-only">
@@ -386,6 +401,9 @@ function TriggerChip(
                     </p>
                     {props.renderEventScope(value, (ids) =>
                       edit({ ...value(), ids })
+                    )}
+                    {props.renderEventCondition?.(value, (condition) =>
+                      edit({ ...value(), condition })
                     )}
                   </>
                 )}
@@ -440,6 +458,7 @@ export function RoutineTriggers(
             trigger={props.triggers.find((trigger) => trigger.id === id)}
             renderEventLabel={props.renderEventLabel}
             renderEventScope={props.renderEventScope}
+            renderEventCondition={props.renderEventCondition}
             onSave={(value) =>
               props.onChange(
                 props.triggers.map((trigger) =>
@@ -458,6 +477,7 @@ export function RoutineTriggers(
       <TriggerChip
         renderEventLabel={props.renderEventLabel}
         renderEventScope={props.renderEventScope}
+        renderEventCondition={props.renderEventCondition}
         onSave={(trigger) => props.onChange([...props.triggers, trigger])}
       />
     </>

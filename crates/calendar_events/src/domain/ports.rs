@@ -6,18 +6,19 @@ use chrono::{DateTime, Utc};
 use rootcause::Report;
 use uuid::Uuid;
 
+use super::meeting_links::{MeetingLink, MeetingLinkError, MeetingLinkRequest};
 use super::models::{
     ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
     CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEvent, CalendarEventDraft,
     CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert, CalendarGrantIntent,
     CalendarLinkTokenIdentity, CalendarMentionPreview, CalendarMentionRequestItem,
-    CalendarOccurrence, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
-    CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
-    CalendarSyncStatus, DisconnectedGoogleCalendar, DueCalendarReminder,
-    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
-    GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
-    StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
+    CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage,
+    CalendarReminderFiring, CalendarReminderSweepSummary, CalendarSyncStatus,
+    DisconnectedGoogleCalendar, DueCalendarReminder, GoogleCalendarSyncSnapshot,
+    GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel,
+    GoogleWatchConfig, OccurrenceListing, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
+    TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -312,13 +313,20 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> impl Future<Output = Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<OccurrenceListing>, Report>> + Send;
 
     /// Return the aggregate ingestion state of the requester's visible accounts.
     fn sync_status(
         &self,
         requester_id: &str,
     ) -> impl Future<Output = Result<CalendarSyncStatus, Report>> + Send;
+
+    /// List every calendar visible to the requester across owned and
+    /// delegated inboxes, primaries and writables first.
+    fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Vec<VisibleCalendar>, Report>> + Send;
 
     /// Resolve mentioned events to the requester's own projections, one
     /// result per requested item in order.
@@ -371,6 +379,8 @@ pub struct CalendarEventWriteOutcome {
     pub owner_id: String,
     /// What happened to the row.
     pub change: CalendarEventChange,
+    /// A changed source was or is OOO; it may revoke a teammate's status/title.
+    pub team_ooo_changed: bool,
 }
 
 /// One event's fate after its sources were retired.
@@ -430,7 +440,7 @@ pub trait CalendarRepository: Send + Sync + 'static {
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> impl Future<Output = Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<OccurrenceListing>, Report>> + Send;
 
     /// Return the aggregate ingestion state across the requester's visible accounts.
     fn sync_status(
@@ -630,11 +640,13 @@ pub trait CalendarRepository: Send + Sync + 'static {
 /// Macro-originated mutation changed them. Best effort: implementations log
 /// and swallow delivery failures, since the mutation is already committed.
 pub trait CalendarRefreshNotifier: Send + Sync + 'static {
-    /// Signal that `email_link_id`'s calendar projection changed.
+    /// Signal that `email_link_id`'s calendar projection changed. Only pass
+    /// `team_ooo_changed: false` when the change cannot affect team OOO access.
     fn calendar_changed(
         &self,
         owner_id: &str,
         email_link_id: Uuid,
+        team_ooo_changed: bool,
     ) -> impl Future<Output = ()> + Send;
 }
 
@@ -714,6 +726,52 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         requester_id: &str,
         email_link_id: Uuid,
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
+}
+
+/// Outbound port minting Macro meetings for calendar events.
+///
+/// Implementations act as the requester: the meeting is owned by the user
+/// whose event carries it, so only they can later edit or cancel it.
+pub trait MeetingLinkProvider: Send + Sync + 'static {
+    /// Mint a meeting the requester owns and return its join link.
+    fn create_meeting_link(
+        &self,
+        requester_id: &str,
+        request: MeetingLinkRequest,
+    ) -> impl Future<Output = Result<MeetingLink, MeetingLinkError>> + Send;
+
+    /// Cancel a meeting the requester owns. Used to roll back a meeting
+    /// whose event never got written.
+    fn cancel_meeting_link(
+        &self,
+        requester_id: &str,
+        meeting_id: Uuid,
+    ) -> impl Future<Output = Result<(), MeetingLinkError>> + Send;
+}
+
+/// Unwired meeting-link port for hosts that expose calendar operations but
+/// have no call service. Every method fails with
+/// [`MeetingLinkError::Unavailable`], so an event asking for a Macro call
+/// is refused before anything reaches the calendar.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnavailableMeetingLinks;
+
+impl MeetingLinkProvider for UnavailableMeetingLinks {
+    async fn create_meeting_link(
+        &self,
+        _requester_id: &str,
+        _request: MeetingLinkRequest,
+    ) -> Result<MeetingLink, MeetingLinkError> {
+        Err(MeetingLinkError::Unavailable)
+    }
+
+    async fn cancel_meeting_link(
+        &self,
+        _requester_id: &str,
+        _meeting_id: Uuid,
+    ) -> Result<(), MeetingLinkError> {
+        Err(MeetingLinkError::Unavailable)
+    }
 }
 
 /// Use-case failures surfaced by calendar mutations.
@@ -815,7 +873,8 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         key: CalendarBackfillJobKey,
     ) -> impl Future<Output = Result<CalendarBackfillClaim, Report>> + Send;
 
-    /// Mark the account as actively syncing after a successful claim.
+    /// Mark the account as actively syncing after a successful claim, preserving
+    /// any prior failure until successful completion establishes healthy coverage.
     fn mark_google_account_syncing(
         &self,
         key: CalendarBackfillJobKey,

@@ -6,6 +6,7 @@
  * URL is never opened without the user pressing Open.
  */
 
+import type { InteractionResponse } from '@app/features/agent-interactions/context/interaction';
 import type {
   MessagePart,
   PendingElicitation,
@@ -14,7 +15,6 @@ import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas
 import { fireEvent, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { InteractionResponse } from '../../context/interaction';
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
 let pending: PendingElicitation | undefined;
@@ -60,6 +60,9 @@ vi.mock('../../ui', () => ({
       <div data-testid="body">{props.children}</div>
     </div>
   ),
+}));
+
+vi.mock('@app/features/agent-interactions/components/ElicitationForm', () => ({
   ElicitationForm: (props: {
     schema: { properties: { name: string; schema: { type: string } }[] };
     onChange: (name: string, value: unknown) => void;
@@ -424,6 +427,21 @@ describe('ElicitationPart', () => {
       draft,
       schema: emptySchema,
     });
+
+    it.each(['CreateBookingLink', 'EditBookingLink'])(
+      'dismisses legacy %s requests without exposing IDs or a form',
+      (tool) => {
+        const request = review(tool, { teamId: 'internal-team-id', draft: {} });
+        pending = { ...live(), request };
+        const view = render(() => (
+          <ElicitationPart turn={0} part={part({ request })} />
+        ));
+        expect(view.queryByTestId('form')).toBeNull();
+        expect(view.queryByText('internal-team-id')).toBeNull();
+        fireEvent.click(view.getByRole('button', { name: 'Dismiss request' }));
+        expect(respond).toHaveBeenCalledWith({ action: 'decline' });
+      }
+    );
 
     it("opens the tool's own composer, and Create answers with the whole draft", () => {
       const request = review('CreateCalendarEvent', eventDraft);

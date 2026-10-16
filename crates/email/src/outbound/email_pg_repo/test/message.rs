@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::{RecipientType, UpsertedContacts, UpsertedRecipient};
+use crate::domain::models::{AttachmentDraft, RecipientType, UpsertedContacts, UpsertedRecipient};
 use chrono::Timelike;
 use sqlx::Row;
 
@@ -709,6 +709,50 @@ async fn test_upsert_recipients_removes_stale(pool: Pool<Postgres>) -> anyhow::R
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
+async fn test_upsert_recipients_unchanged_set_writes_nothing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // msg1 has bob=TO in the fixture; upserting the same set must leave the row alone.
+    let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let bob_id = Uuid::parse_str("c0000002-0000-0000-0000-000000000002")?;
+
+    let row_versions = || {
+        sqlx::query_scalar!(
+            r#"
+            SELECT xmin::text AS "xmin!"
+            FROM email_message_recipients
+            WHERE message_id = $1
+            ORDER BY contact_id, recipient_type
+            "#,
+            msg_id
+        )
+        .fetch_all(&pool)
+    };
+    let before = row_versions().await?;
+    assert_eq!(before.len(), 1);
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![UpsertedRecipient {
+            contact_id: bob_id,
+            name: Some("Bob Jones".to_string()),
+            recipient_type: RecipientType::To,
+        }],
+    };
+
+    let mut tx = pool.begin().await?;
+    super::super::message::upsert_recipients(&mut tx, msg_id, &contacts).await?;
+    tx.commit().await?;
+
+    assert_eq!(row_versions().await?, before);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_upsert_recipients_empty_deletes_all(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // msg1 has bob=TO. Calling upsert with empty recipients should delete all existing.
@@ -785,5 +829,76 @@ async fn test_delete_scheduled_messages_batch_empty_input(
         .delete_scheduled_messages_batch(&[], Uuid::new_v4())
         .await?;
     assert!(deleted.is_empty());
+    Ok(())
+}
+
+// ── insert_draft_attachment ─────────────────────────────────────────
+
+fn staged_attachment(draft_id: Uuid, id: Uuid) -> AttachmentDraft {
+    AttachmentDraft {
+        id,
+        draft_id,
+        file_name: "report.pdf".to_owned(),
+        content_type: "application/pdf".to_owned(),
+        sha: "f".repeat(64),
+        size: 42,
+        s3_key: format!("draft/{draft_id}/{id}"),
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn insert_draft_attachment_records_the_attachment_on_the_inboxs_draft(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::ports::DraftAttachmentRepo;
+    let repo = EmailPgRepo::new(pool);
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let id = Uuid::parse_str("dd000009-0000-0000-0000-000000000009")?;
+
+    repo.insert_draft_attachment(link, &staged_attachment(draft, id))
+        .await?;
+
+    let drafts = repo.draft_attachments_by_message_ids(&[draft]).await?;
+    let staged = drafts[&draft]
+        .iter()
+        .find(|a| a.id == id)
+        .expect("the staged attachment is recorded");
+    assert_eq!(staged.file_name, "report.pdf");
+    assert_eq!(staged.content_type, "application/pdf");
+    assert_eq!(staged.size, 42);
+    assert_eq!(staged.s3_key, format!("draft/{draft}/{id}"));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn insert_draft_attachment_refuses_another_inboxs_draft(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::ports::DraftAttachmentRepo;
+    let repo = EmailPgRepo::new(pool);
+    let other_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let id = Uuid::parse_str("dd000009-0000-0000-0000-000000000009")?;
+
+    let result = repo
+        .insert_draft_attachment(other_link, &staged_attachment(draft, id))
+        .await;
+    assert!(
+        matches!(result, Err(sqlx::Error::RowNotFound)),
+        "recording on another inbox's draft is an error, got {result:?}"
+    );
+
+    let drafts = repo.draft_attachments_by_message_ids(&[draft]).await?;
+    assert!(
+        drafts[&draft].iter().all(|a| a.id != id),
+        "a draft outside the inbox gains no attachment"
+    );
     Ok(())
 }

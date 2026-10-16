@@ -11,12 +11,14 @@ export type ItemType =
   | 'channel_thread'
   | 'call'
   | 'database'
+  | 'form'
   | 'agent_session'
   | 'routine'
   | 'calendar_event'
   | 'foreign'
   | 'crm_company'
   | 'crm_contact'
+  | 'crm_pipeline'
   | 'initiative';
 
 /** Item type assumed when a surface has no better information. */
@@ -48,6 +50,7 @@ export function stringToItemType(str: string): ItemType | undefined {
     .with('routine', 'automation', () => 'routine')
     .with(
       'database',
+      'form',
       'agent_session',
       'call',
       'calendar_event',
@@ -56,6 +59,7 @@ export function stringToItemType(str: string): ItemType | undefined {
       'project',
       'channel',
       'crm_company',
+      'crm_pipeline',
       'initiative',
       (itemType) => itemType
     )
@@ -74,6 +78,7 @@ export function blockNameToItemType(
       'email',
       'routine',
       'database',
+      'form',
       'initiative',
       (b) => b
     )
@@ -81,6 +86,7 @@ export function blockNameToItemType(
     .with('calendar', () => 'calendar_event')
     .with('company', () => 'crm_company')
     .with('contact', () => 'crm_contact')
+    .with('pipeline', () => 'crm_pipeline')
     .with('pr', () => 'foreign')
     .otherwise(() => DEFAULT_ITEM_TYPE);
 }

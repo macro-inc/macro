@@ -9,11 +9,11 @@ import { CalendarSettingsDropdown } from '@app/features/calendar/components/Cale
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
 import {
-  TEAM_OOO_SOURCE_ID,
   type TeamOooWindow,
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
+import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
@@ -21,7 +21,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import CloseIcon from '@phosphor/x.svg';
-import { cn, Calendar as MiniCalendar, ToggleSwitch } from '@ui';
+import { Key } from '@solid-primitives/keyed';
+import { Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { format } from 'date-fns';
 import {
@@ -39,7 +40,6 @@ import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateCallItem,
   CalendarCreateEventItem,
-  CalendarCreateReminderItem,
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 
@@ -121,6 +121,7 @@ function CalendarSourcesSection() {
         </CollapsibleSection.Trigger>
         <CollapsibleSection.Content>
           <SourceControls
+            ref={tourTarget(CALENDAR_TOUR.sources)}
             sources={calendarView.sources()}
             isVisible={calendarView.isSourceVisible}
             onVisibilityChange={calendarView.setSourceVisibility}
@@ -153,7 +154,7 @@ function TeamOooSkeleton() {
   );
 }
 
-function TeamOooUpcomingList() {
+export function TeamOooUpcomingList() {
   const calendarPager = useCalendarPager();
   const shell = useViewShell();
   const upcoming = useUpcomingTeamOoo();
@@ -175,23 +176,26 @@ function TeamOooUpcomingList() {
         </Match>
         <Match when={windows().length === 0}>
           <span class="px-2 py-1 text-xs text-ink-muted">
-            No time off in the next 90 days
+            No shared time off in the next 90 days
           </span>
         </Match>
         <Match when={windows().length > 0}>
-          <For each={windows().slice(0, UPCOMING_SHOWN_MAX)}>
+          <Key
+            each={windows().slice(0, UPCOMING_SHOWN_MAX)}
+            by={(window) => window.event.id}
+          >
             {(window) => (
               <button
                 type="button"
                 class={cn(
                   'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs',
-                  isActive(window) ? 'bg-active' : 'hover:bg-hover'
+                  isActive(window()) ? 'bg-active' : 'hover:bg-hover'
                 )}
-                aria-current={isActive(window) ? 'true' : undefined}
+                aria-current={isActive(window()) ? 'true' : undefined}
                 onClick={(event) => {
-                  calendarPager.gotoDate(window.start);
+                  calendarPager.gotoDate(window().start);
                   calendarView.selectEvent(
-                    window.event,
+                    window().event,
                     event.currentTarget,
                     'agenda'
                   );
@@ -199,7 +203,7 @@ function TeamOooUpcomingList() {
                 }}
               >
                 <UserIcon
-                  id={window.ownerId}
+                  id={window().ownerId}
                   size="md"
                   suppressClick
                   showTooltip={false}
@@ -207,21 +211,21 @@ function TeamOooUpcomingList() {
                 <span class="flex min-w-0 flex-1 flex-col">
                   <span class="flex w-full items-baseline gap-2">
                     <span class="min-w-0 flex-1 truncate text-ink">
-                      {window.name}
+                      {window().name}
                     </span>
                     <span class="shrink-0 text-ink-muted">
-                      {windowDateLabel(window)}
+                      {windowDateLabel(window())}
                     </span>
                   </span>
-                  <Show when={window.title}>
+                  <Show when={window().title}>
                     <span class="w-full truncate text-ink-muted">
-                      {window.title}
+                      {window().title}
                     </span>
                   </Show>
                 </span>
               </button>
             )}
-          </For>
+          </Key>
           <Show when={windows().length > UPCOMING_SHOWN_MAX}>
             <span class="px-2 py-1 text-xs text-ink-muted">
               +{windows().length - UPCOMING_SHOWN_MAX} more
@@ -237,26 +241,30 @@ function CalendarTeamOooSection() {
   const calendarView = useCalendarView();
   const hasTeammates = useHasTeammates();
   const [open, setOpen] = createSignal(true);
-  const isOverlayVisible = () =>
-    calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID);
-  const setOverlayVisible = (visible: boolean) =>
-    calendarView.setSourceVisibility(TEAM_OOO_SOURCE_ID, visible);
 
   return (
     <Show when={hasTeammates()}>
       <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
         <CollapsibleSection.Header>
-          <CollapsibleSection.Trigger class="min-w-0 flex-1">
+          <Checkbox
+            checked={calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID)}
+            onChange={(visible) =>
+              calendarView.setSourceVisibility(TEAM_OOO_SOURCE_ID, visible)
+            }
+            title="Show on calendar"
+            class="h-full shrink-0 pr-1 pl-(--sidebar-item-inset)"
+          >
+            <Checkbox.Control class="size-3.5 [&_svg]:size-2.5" />
+            <Checkbox.Label class="absolute inset-0">
+              <span class="sr-only">
+                Show team out of office on the calendar
+              </span>
+            </Checkbox.Label>
+          </Checkbox>
+          <CollapsibleSection.Trigger class="min-w-0 flex-1 pl-1">
             <span class="min-w-0 truncate">Team out of office</span>
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
-          <span title="Show on calendar">
-            <ToggleSwitch
-              checked={isOverlayVisible()}
-              onChange={setOverlayVisible}
-              aria-label="Show team out of office on the calendar"
-            />
-          </span>
         </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <TeamOooUpcomingList />
@@ -312,7 +320,6 @@ export function CalendarSidebar() {
         >
           <CalendarCreateEventItem onSelect={closeOverlay} />
           <CalendarCreateCallItem onSelect={closeOverlay} />
-          <CalendarCreateReminderItem onSelect={closeOverlay} />
         </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">

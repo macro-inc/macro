@@ -6,11 +6,16 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 
 ## Start here
 
-1. Identify the affected app, service, or crate using the map below.
-2. Read any applicable directory-level `AGENTS.md` / `CLAUDE.md` before editing.
+Unless the user says otherwise, before writing any code:
+
+1. Read [CODING.md](CODING.md).
+2. Find the affected app, service, or crate in the map below and read its
+   `AGENTS.md`.
 3. Read the task-relevant guides below, not every linked document.
-4. Follow [the style guide](docs/STYLE_GUIDE.md) for the language you change.
-   Prefer its current rules over patterns in older code.
+4. Explore the code you will change and its callers until you know how it works.
+
+Rules in `.agents/rules/` load when you touch matching files. Prefer them over
+patterns in older code.
 
 ## Repository map
 
@@ -23,7 +28,21 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 | `crates/macro_db_client/migrations/` | MacroDB PostgreSQL migrations. |
 | `infra/` | Deployment definitions and local infrastructure. |
 | `tooling/` | Development tools, scripts, and imported `just` recipes. |
-| `docs/AGENT_GUIDE/` | How browser agents operate the app, not how to develop the repository. |
+| `docs/` | Development guides, architecture, designs, runbooks, and the browser agent guide; see [the index](docs/README.md). |
+
+## Where agent guidance lives
+
+| Path | Contents |
+| --- | --- |
+| `CODING.md` | Coding rules for every language; read before writing code. |
+| `AGENTS.md` in a directory | Scope, map, checks, and gotchas for that subtree; a sibling `CLAUDE.md` symlinks to it. |
+| `.agents/skills/` | Task workflows. `.claude/skills` and `.pi/skills` symlink here. |
+| `.agents/rules/` | Path-scoped conventions, loaded when you touch matching files. `.claude/rules` and `.cursor/rules` symlink here. |
+| `.agents/agents/` | Subagents (`auditor`, `browser-verifier`). `.claude/agents` symlinks here. |
+| `.agents/templates/` | Templates for new rules and `AGENTS.md` files. |
+| `rules/ast-grep/` | Mechanically enforced code rules, run by `just check`. |
+
+Real files live in `.agents/`; tool-specific directories only symlink to it.
 
 ## Read when relevant
 
@@ -31,38 +50,63 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 | --- | --- |
 | Reusing database storage or separating it from an app entity | [Database core skill](.agents/skills/database-core/SKILL.md) |
 | Adding collaborative markdown to a feature | [Collab surface core skill](.agents/skills/collab-surface-core/SKILL.md) |
-| Rust code, builds, or tests | [Rust development](docs/RUST_DEVELOPMENT.md) |
-| SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/DATABASE_DEVELOPMENT.md) |
+| Adding a flow or hot path, or tracing one | `instrumentation` skill |
+| Rust code, builds, or tests | [Rust development](docs/development/rust.md) |
+| SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/development/database.md) |
 | Web frontend | [Web agent guide](apps/web/AGENTS.md) |
+| iOS App Store releases, breaking Tauri changes, native build floors | [iOS releases](apps/web/docs/ios-releases.md) |
 | Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
-| Running the frontend or backend on a local machine | [Running locally](docs/RUNNING_LOCALLY.md) |
-| Working inside Cursor Cloud | [Cursor Cloud](docs/CURSOR_CLOUD.md) |
-| Driving the app through a browser | [App agent guide](docs/AGENT_GUIDE/README.md) |
+| Running the frontend or backend on a local machine | [Running locally](docs/development/running-locally.md) |
+| Giving the user a local preview link | `local-preview` skill |
+| Working inside Cursor Cloud | [Cursor Cloud](docs/development/cursor-cloud.md) |
+| Driving the app through a browser | [App agent guide](docs/agent-guide/README.md) |
+| Adding or changing SDK methods | [SDK rule](.agents/rules/sdk.md), `add-sdk-endpoint` skill |
 | SDK version bumps and npm publishing | [SDK release guide](packages/sdk/RELEASING.md), [release-sdk skill](.agents/skills/release-sdk/SKILL.md) |
-| Deployment | [Infrastructure guide](infra/README.md) |
+| Adding a service, worker, or Pulumi stack | [New service guide](docs/guides/new-service.md) |
+| Infrastructure, Pulumi, or deploys | [Infrastructure guide](docs/development/infrastructure.md) |
 
-## Essential guardrails
+## Rules
 
-- Run Rust tests from the repository root with `cargo test -p <package>` and
-  **leave `SQLX_OFFLINE` unset**. Offline mode is for checks/builds/lints, not tests.
-- Generate migrations with `sqlx migrate add`; never invent timestamped filenames.
-  Never hand-edit `.sqlx/query-*.json`. Prepare the workspace cache from the root
-  inside Nix; see the database guide for the workflow and test-query flags.
-- Do not reset databases or wipe stack volumes to troubleshoot without explicit
-  approval. Database and Cloud guides distinguish rebuilds from destructive resets.
-- On a local machine, frontend-only work uses `apps/web` against the dev backend;
-  it does not need a local Rust stack. `.cursor/*.sh` scripts are **Cursor Cloud
-  only**, not local-machine setup commands. Treat hosted dev data as real data.
-- Load Rust configuration through `macro_env_var` / `macro_config`, never
-  `std::env::var` or hand-rolled wrappers. Register new env vars in Doppler; never
-  paste secrets into chat or commit them.
-- Across domain crates, depend on the owning domain service or port; only a
-  composition root may construct that crate's outbound adapters. Never import
-  another crate's `outbound` module from an outbound adapter.
-- Use `\cd` instead of `cd` to bypass repository shell aliases.
+**Working with the user**
+
+- Do only what was asked. Questions get answers, not code changes.
+- Commit as you go, in small logical commits on a feature branch, without
+  asking. Never commit to `main`. Push or open a PR only when asked.
+- Flag real risks; once the user decides, act on it.
+- Disagree when they're wrong. No flattery.
+- Answer simple questions directly.
+- For UI work, ask how it should behave on mobile unless that's obvious.
+- Be brief. No justification essays, no time estimates.
+
+**Environment**
+
+- Never touch production (data, services, consoles, secrets) without explicit
+  permission.
+- Never deploy (`pulumi up`, `wrangler deploy`, workflow dispatch) without
+  explicit permission for that deploy.
+- Never reset databases or wipe stack volumes without approval.
+- Never paste or commit secrets.
+- Never `git stash`; it's shared across sessions.
+- Memory is context, not authority; verify against code.
+- Treat hosted dev data as real. `.cursor/*.sh` is Cursor Cloud only.
+- Use `\cd` instead of `cd`.
 
 ## Before handing off
 
+- Commits, branches, and PRs follow the `git` skill: Conventional Commit titles
+  such as `fix(onboarding): preserve team inputs`, and Why / What bodies with no test plan.
+- Run the `audit` skill (via the `auditor` subagent) before saying work is done.
+- Update every doc your change makes stale, in the same change: the `AGENTS.md`
+  of each directory you touched, `docs/guides/`, `docs/architecture/`, the
+  agent guide, READMEs, rules, and skills. Search for the names you changed.
+- A new crate, service, or package gets an `AGENTS.md` from the
+  [template](.agents/templates/AGENTS.md); one you change keeps its `AGENTS.md`
+  current. Add the sibling symlink (`ln -s AGENTS.md CLAUDE.md`) so Claude Code
+  reads it too.
+- Open pull requests ready for review. If one is created as a draft, mark it
+  ready for review before handing off.
+- Get CI passing before handing off. A pull request whose checks are failing
+  or still running is not done.
 - Test the affected packages/services individually before committing. Use the
   relevant guide for setup; there is no root `just test` recipe.
 - For code changes, run `just check` (format/lint/code rules scoped to changes).
@@ -70,12 +114,35 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
   the workspace Rust type check. These checks do not replace tests.
 - Exercise user-visible changes in a browser. If routes, creation flows, editors,
   AI surfaces, or composer behavior change, update the corresponding
-  [app agent guide](docs/AGENT_GUIDE/README.md) in the same change.
+  [app agent guide](docs/agent-guide/README.md) in the same change.
 - Report what you tested and any checks blocked by the environment.
 
-## Keeping these instructions useful
+## Keeping guidance current
 
-Keep this file short: shared guardrails and links with explicit reading triggers.
-Put workflows in the relevant guide, coding rules in `docs/STYLE_GUIDE.md`, and
-subtree-specific instructions near their code. Do not append implementation
-journals, duplicate command lists, or environment-specific runbooks here.
+Update the docs in the same change whenever:
+
+- the user gives feedback that applies beyond the current task,
+- you and the user settle on a new convention or reverse an old one,
+- you find a doc, rule, or guide that is wrong or stale.
+
+Put it in exactly one place, the narrowest that fits:
+
+| Kind of guidance | Goes in |
+| --- | --- |
+| How to behave with the user, or a cross-cutting guardrail | This file, **Rules** |
+| A coding rule for every language | `CODING.md` |
+| A convention for certain paths (Rust, web, DB, infra) | `.agents/rules/<area>/`, from the [rule template](.agents/templates/rule.md) |
+| Something checkable by a tool | An ast-grep rule in `rules/ast-grep/` or a lint, instead of prose |
+| Navigation, recipes, or gotchas for one directory | That directory's `AGENTS.md`, from the [template](.agents/templates/AGENTS.md) |
+| A repeatable multi-step task | A skill in `.agents/skills/` |
+| An end-to-end walkthrough of a change | `docs/guides/` |
+| How a system works | `docs/architecture/` |
+
+How:
+
+- Edit the existing entry before adding a new one; delete what the change makes
+  wrong. Never leave two versions of the same rule.
+- Write the rule as one imperative line, with the reason only when it isn't
+  obvious. ID-bearing rules take the next free number.
+- Keep this file short: rules and links, no journals, command lists, or runbooks.
+- Tell the user which doc you changed and how, in one line.

@@ -1,7 +1,16 @@
 use super::*;
 use chrono::Duration;
 
+/// CI clones every test database from a `template1` that already holds the macrodb
+/// schema (`just setup_test_template`). These tests build their own schema, so they
+/// start from an empty `public` schema.
+const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
+
 async fn setup(pool: &PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::raw_sql(
         "CREATE TABLE \"User\" (id text PRIMARY KEY); CREATE TABLE team (id uuid PRIMARY KEY);",
     )

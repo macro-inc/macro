@@ -18,6 +18,7 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { isMobile } from '@core/mobile/isMobile';
 import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import {
@@ -28,9 +29,17 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import Download from '@phosphor/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import type { Component } from 'solid-js';
+import { Show } from 'solid-js';
+import type { CodeBlockMode } from './CodeContent';
 import { CodeFileTypeChip } from './CodeFileTypeChip';
+import { CodeModeControl } from './CodeModeControl';
 
-export function TopBar() {
+export const TopBar: Component<{
+  isHtmlFile: boolean;
+  mode: CodeBlockMode;
+  onModeChange: (mode: CodeBlockMode) => void;
+}> = (props) => {
   const analytics = useAnalytics();
 
   const blockId = useBlockId();
@@ -100,6 +109,14 @@ export function TopBar() {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel badges={<CodeFileTypeChip />} />
+        <Show when={props.isHtmlFile && !isMobile()}>
+          <div class="ph-no-capture mx-2 h-full min-w-0 shrink-0">
+            <CodeModeControl
+              mode={props.mode}
+              onModeChange={props.onModeChange}
+            />
+          </div>
+        </Show>
       </SplitHeaderLeft>
 
       <ResponsivePermissionsBadge />
@@ -113,4 +130,4 @@ export function TopBar() {
       />
     </>
   );
-}
+};

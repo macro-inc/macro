@@ -1,4 +1,3 @@
-import { SearchBar } from '@app/components/view-shell';
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
 import { TaskList } from '@app/features/tasks-view/components/task-list/TaskList';
 import { useTasksDataSource } from '@app/features/tasks-view/queries/use-tasks-query';
@@ -8,6 +7,7 @@ import {
 } from '@app/features/tasks-view/tasks-view-context';
 import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import PlusIcon from '@phosphor/plus.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import type { PropertyApiValues } from '@property/types';
@@ -16,12 +16,12 @@ import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { RecordSection } from './components/record-section';
 import type { CrmRecordScope } from './core/record';
-import { crmRecordPropertyId } from './queries/record-items';
 
 /**
- * The record's Tasks tab: the production Tasks list, scoped to tasks whose
- * Companies or Contacts property references the record. It owns its tag
- * sets because a standalone record has no list provider above it.
+ * The record's Tasks tab: the production Tasks list, scoped to tasks
+ * associated with the record through its Companies or Contacts property or a
+ * reference (for a company, also through any of its contacts). It owns its
+ * tag sets because a standalone record has no list provider above it.
  */
 export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
   const layout = useSplitLayout();
@@ -35,7 +35,7 @@ export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
             scopeKey={`crm:${scope.type}:${scope.id}:tasks`}
             onOpenTask={(task, options) => {
               layout.openWithSplit(
-                { type: 'md', id: task.id },
+                { type: 'task', id: task.id },
                 { preferNewSplit: options?.event?.shiftKey }
               );
               return true;
@@ -44,10 +44,7 @@ export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
             sourceFactory={(state, options) =>
               useTasksDataSource(state, {
                 ...options,
-                reference: () => ({
-                  propertyDefinitionId: crmRecordPropertyId(scope),
-                  entityId: scope.id,
-                }),
+                crm: () => ({ type: scope.type, id: scope.id }),
               })
             }
           >
@@ -116,18 +113,16 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
   return (
     <RecordSection
       title="Tasks"
+      search={state.search}
+      onSearchChange={(search) => setState('search', search)}
+      onSearchEscape={() => listElement?.focus()}
       actions={
         <>
-          <SearchBar
-            label={`Search ${props.scope.type} tasks`}
-            placeholder="Search tasks"
-            class="w-56"
-            value={state.search}
-            onValueChange={(search) => setState('search', search)}
-            onEscape={() => listElement?.focus()}
-          />
           <TasksControls />
-          <Button onClick={composeTask}>New task</Button>
+          <Button variant="outline" onClick={composeTask}>
+            <PlusIcon class="size-4" />
+            New task
+          </Button>
         </>
       }
     >

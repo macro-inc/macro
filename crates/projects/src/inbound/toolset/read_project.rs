@@ -11,8 +11,7 @@ use model_entity::EntityType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::ProjectToolContext;
-use crate::domain::ports::ProjectService;
+use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 
 /// The kind of an item inside a project.
 #[derive(Debug, Serialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
@@ -108,10 +107,10 @@ impl ToolAnnotated for ReadProject {
 impl<PSvc, ESvc, DSvc, CSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
     for ReadProject
 where
-    PSvc: ProjectService + MoveEntity,
+    PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
-    DSvc: MoveEntity + Send + Sync + 'static,
-    CSvc: MoveEntity + Send + Sync + 'static,
+    DSvc: DocumentCapabilities,
+    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     type Output = ReadProjectResponse;

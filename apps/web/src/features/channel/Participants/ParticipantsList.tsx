@@ -24,7 +24,7 @@ export function ParticipantsList(props: {
         when={props.participants().length > 0}
         fallback={<ParticipantsEmptyState searchQuery={props.searchQuery()} />}
       >
-        <div class="py-1">
+        <div class="px-2 py-1">
           <Virtualizer
             data={props.participants()}
             scrollRef={scrollRoot()}

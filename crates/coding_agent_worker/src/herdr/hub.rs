@@ -537,7 +537,7 @@ async fn steer(inner: &Inner, session: &str, request: FromPane) -> Result<(), St
     };
     inner
         .api
-        .control(macro_session, &owner, action)
+        .control(macro_session, &owner, action, None)
         .await
         .map_err(|error| format!("Macro refused: {error}"))
 }

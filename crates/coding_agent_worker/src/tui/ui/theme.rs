@@ -1,5 +1,6 @@
 use ratatui::Frame;
 use ratatui::style::{Color, Style, Stylize as _};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Padding};
 
 pub(super) struct Theme {
@@ -76,4 +77,17 @@ pub(super) fn focus_style(focused: bool) -> Style {
     } else {
         Style::new()
     }
+}
+
+/// A titled rule that groups the rows below it.
+pub(super) fn section(title: &str, note: &str, width: u16) -> Line<'static> {
+    let used = title.chars().count() + note.chars().count() + 2;
+    Line::from(vec![
+        Span::styled(title.to_owned(), Style::new().fg(ACCENT).bold()),
+        Span::styled(format!(" {note} "), Style::new().fg(DIM)),
+        Span::styled(
+            "─".repeat(usize::from(width).saturating_sub(used)),
+            Style::new().fg(THEME.border),
+        ),
+    ])
 }

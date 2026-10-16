@@ -148,6 +148,84 @@ async fn blank_insert_creates_new_thread(pool: Pool<Postgres>) -> anyhow::Result
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("links"))
+)]
+async fn resyncing_an_unchanged_thread_rewrites_no_messages(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::messages::insert::test::{PARENT_GLOBAL_ID, SyncedMessage, row_versions};
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let parent = SyncedMessage {
+        provider_id: "thread-parent",
+        global_id: PARENT_GLOBAL_ID,
+        in_reply_to: None,
+        to: &["user1@macro.com"],
+        cc: &[],
+        labels: &[],
+        body: "parent body",
+    };
+    let reply = SyncedMessage {
+        provider_id: "thread-reply",
+        global_id: "<reply@macro.com>",
+        in_reply_to: Some(PARENT_GLOBAL_ID),
+        to: &["sender@macro.com"],
+        cc: &["cc@macro.com"],
+        labels: &[],
+        body: "reply body",
+    };
+    let synced_thread = || {
+        let thread_db_id = Uuid::now_v7();
+        let ts =
+            chrono::DateTime::<Utc>::from_timestamp(1_790_000_000, 0).expect("valid timestamp");
+        thread::Thread {
+            db_id: thread_db_id,
+            provider_id: Some("resync-thread".to_string()),
+            link_id,
+            inbox_visible: true,
+            is_read: false,
+            latest_inbound_message_ts: Some(ts),
+            latest_outbound_message_ts: None,
+            latest_non_spam_message_ts: Some(ts),
+            created_at: ts,
+            updated_at: ts,
+            messages: vec![
+                parent.build(link_id, thread_db_id),
+                reply.build(link_id, thread_db_id),
+            ],
+        }
+    };
+
+    let first_sync = synced_thread();
+    let parent_id = first_sync.messages[0].db_id;
+    let reply_id = first_sync.messages[1].db_id;
+    let thread_id = insert_thread_and_messages(&pool, first_sync, link_id).await?;
+
+    let replying_to = sqlx::query_scalar!(
+        r#"SELECT replying_to_id FROM email_messages WHERE id = $1"#,
+        reply_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(replying_to, Some(parent_id));
+    let parent_before = row_versions(&pool, parent_id).await?;
+    let reply_before = row_versions(&pool, reply_id).await?;
+
+    let resynced_thread_id = insert_thread_and_messages(&pool, synced_thread(), link_id).await?;
+
+    assert_eq!(resynced_thread_id, thread_id);
+    assert_eq!(row_versions(&pool, parent_id).await?, parent_before);
+    assert_eq!(
+        row_versions(&pool, reply_id).await?,
+        reply_before,
+        "re-syncing an unchanged thread must not rewrite its messages"
+    );
+
+    Ok(())
+}
+
 /// The live inbox-sync path funnels through here, so it needs the same
 /// protection from unstorable provider values as the backfill path.
 #[sqlx::test(

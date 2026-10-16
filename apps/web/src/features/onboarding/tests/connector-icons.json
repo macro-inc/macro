@@ -1,0 +1,112 @@
+{
+  "posthog": {
+    "page": "https://pipedream.com/apps/posthog",
+    "source": "https://pipedream.com/s.v0/app_mo7h7A/logo/96",
+    "file": "posthog.png"
+  },
+  "notion": {
+    "page": "https://pipedream.com/apps/notion",
+    "source": "https://pipedream.com/s.v0/app_X7Lhxr/logo/96",
+    "file": "notion.svg"
+  },
+  "linear": {
+    "page": "https://pipedream.com/apps/linear",
+    "source": "https://pipedream.com/s.v0/app_X7Lh0L/logo/96",
+    "file": "linear.svg"
+  },
+  "stripe": {
+    "page": "https://pipedream.com/apps/stripe",
+    "source": "https://pipedream.com/s.v0/app_OD5hrX/logo/96",
+    "file": "stripe.png"
+  },
+  "slack": {
+    "page": "https://pipedream.com/apps/slack-v2",
+    "source": "https://pipedream.com/s.v0/app_M0hv7G/logo/96",
+    "file": "slack.png"
+  },
+  "intercom": {
+    "page": "https://pipedream.com/apps/intercom",
+    "source": "https://pipedream.com/s.v0/app_1pbh0B/logo/96",
+    "file": "intercom.svg"
+  },
+  "figma": {
+    "page": "https://pipedream.com/apps/figma",
+    "source": "https://pipedream.com/s.v0/app_OkrhRR/logo/96",
+    "file": "figma.png"
+  },
+  "hubspot": {
+    "page": "https://pipedream.com/apps/hubspot",
+    "source": "https://pipedream.com/s.v0/app_OkrhlP/logo/96",
+    "file": "hubspot.svg"
+  },
+  "github": {
+    "page": "https://pipedream.com/apps/github",
+    "source": "https://pipedream.com/s.v0/app_OrZhaO/logo/96",
+    "file": "github.png"
+  },
+  "mailchimp": {
+    "page": "https://pipedream.com/apps/mailchimp",
+    "source": "https://pipedream.com/s.v0/app_mE7h2q/logo/96",
+    "file": "mailchimp.png"
+  },
+  "shopify": {
+    "page": "https://pipedream.com/apps/shopify",
+    "source": "https://pipedream.com/s.v0/app_X7Lhpm/logo/96",
+    "file": "shopify.svg"
+  },
+  "airtable_oauth": {
+    "page": "https://pipedream.com/apps/airtable-oauth",
+    "source": "https://pipedream.com/s.v0/app_XBxhAl/logo/96",
+    "file": "airtable_oauth.png"
+  },
+  "xero_accounting_api": {
+    "page": "https://pipedream.com/apps/xero-accounting-api",
+    "source": "https://pipedream.com/s.v0/app_1dBh9j/logo/96",
+    "file": "xero_accounting_api.png"
+  },
+  "zendesk": {
+    "page": "https://pipedream.com/apps/zendesk",
+    "source": "https://pipedream.com/s.v0/app_1pbhGX/logo/96",
+    "file": "zendesk.png"
+  },
+  "asana": {
+    "page": "https://pipedream.com/apps/asana",
+    "source": "https://pipedream.com/s.v0/app_OVWhPX/logo/96",
+    "file": "asana.png"
+  },
+  "calendly_v2": {
+    "page": "https://pipedream.com/apps/calendly-v2",
+    "source": "https://pipedream.com/s.v0/app_Oz6h0D/logo/96",
+    "file": "calendly_v2.png"
+  },
+  "quickbooks": {
+    "page": "https://pipedream.com/apps/quickbooks",
+    "source": "https://pipedream.com/s.v0/app_m02hWG/logo/96",
+    "file": "quickbooks.png"
+  },
+  "supabase": {
+    "page": "https://pipedream.com/apps/supabase",
+    "source": "https://pipedream.com/s.v0/app_1dBhP3/logo/96",
+    "file": "supabase.svg"
+  },
+  "trello": {
+    "page": "https://pipedream.com/apps/trello",
+    "source": "https://pipedream.com/s.v0/app_168hnX/logo/96",
+    "file": "trello.png"
+  },
+  "mysql": {
+    "page": "https://pipedream.com/apps/mysql",
+    "source": "https://pipedream.com/s.v0/app_1YMhwo/logo/96",
+    "file": "mysql.png"
+  },
+  "google_sheets": {
+    "page": "https://pipedream.com/apps/google-sheets",
+    "source": "https://pipedream.com/s.v0/app_168hvn/logo/96",
+    "file": "google_sheets.png"
+  },
+  "google_drive": {
+    "page": "https://pipedream.com/apps/google-drive",
+    "source": "https://pipedream.com/s.v0/app_1lxhk1/logo/96",
+    "file": "google_drive.png"
+  }
+}

@@ -2,10 +2,12 @@
 resolver = "2"
 
 members = [
+  "crates/access_requests",
   "crates/routines",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
+  "crates/trigger_context",
   "crates/agent_preview",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
@@ -34,11 +36,15 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/jev",
   "crates/claude_cloud_agents",
   "crates/database_sql",
+  "crates/database_webhooks",
   "crates/databases",
   "crates/databases_sql",
   "crates/models_databases",
+  "crates/forms",
+  "crates/models_forms",
   "crates/embedding",
   "crates/image_generation",
   "crates/dictation",
@@ -48,6 +54,7 @@ members = [
   "crates/entity_registry/entity_registry_db_utils",
   "crates/entity_registry/shared_entity_registry",
   "crates/favorites",
+  "crates/feature_flags",
   "crates/foreign_entity",
   "crates/genai_telemetry",
   "crates/generic_email_domains",
@@ -55,11 +62,13 @@ members = [
   "crates/gmail_client",
   "crates/google_token",
   "crates/graphql_activity",
+  "crates/graphql_calendar",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_email",
   "crates/graphql_entity_mutation",
   "crates/graphql_favorite",
+  "crates/graphql_crm",
   "crates/graphql_initiative",
   "crates/graphql_notification",
   "crates/graphql_permission",
@@ -67,6 +76,7 @@ members = [
   "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/graphql_work_feed",
   "crates/gtm_invite",
   "crates/harness_id",
   "crates/harness_token",
@@ -92,9 +102,11 @@ members = [
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/ai_engine",
   "crates/docx_engine",
   "crates/fig_engine",
   "crates/pptx_engine",
+  "crates/psd_engine",
   "crates/predicate_index",
   "crates/prompt",
   "crates/properties_service",
@@ -110,6 +122,7 @@ members = [
   "crates/unfurl",
   "crates/user_api_key",
   "crates/webhook_signature",
+  "crates/work_feed",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
   "services/agent_harness_service",
@@ -140,6 +153,7 @@ members = [
   "services/image_proxy_service",
   "services/mcp_auth_proxy",
   "services/mcp_service",
+  "services/notification_retention_handler",
   "services/notification_service",
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
@@ -193,14 +207,18 @@ async-trait = "0.1.86"
 automod = "1"
 aws-config = { version = "1.8.16", features = ["behavior-version-latest"] }
 aws-msk-iam-sasl-signer = "1.0.1"
-aws-sdk-dynamodb = "1.111.0"
-aws-sdk-kms = "1.104.0"
-aws-sdk-lambda = "1.122.0"
-aws-sdk-s3 = "1.132.0"
-aws-sdk-secretsmanager = "1.104.0"
-aws-sdk-sesv2 = "1.118.0"
-aws-sdk-sns = "1.99.0"
-aws-sdk-sqs = "1.98.0"
+# SDK defaults also enable the deprecated `rustls` feature, which pulls in
+# rustls 0.21 / hyper 0.14. Keep the modern HTTPS client and the other defaults;
+# macro_aws_config uses BehaviorVersion::latest() with this transport.
+aws-sdk-dynamodb = { version = "1.111.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-ecs = { version = "1.124.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-kms = { version = "1.104.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-lambda = { version = "1.122.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-s3 = { version = "1.132.0", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
+aws-sdk-secretsmanager = { version = "1.104.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-sesv2 = { version = "1.118.0", default-features = false, features = ["sigv4a", "default-https-client", "rt-tokio"] }
+aws-sdk-sns = { version = "1.99.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-sqs = { version = "1.98.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-smithy-types = "1.4.7"
 aws-types = "1"
 aws_lambda_events = { version = "0.16.0", default-features = false }
@@ -245,6 +263,8 @@ http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
 httpdate = "1"
+hyper = "1"
+hyper-util = { version = "0.1", features = ["tokio"] }
 image = "0.25"
 image-webp = "0.2"
 indexmap = "2"
@@ -268,6 +288,7 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
+loro = "1.16.2"
 lru = "0.16"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
@@ -294,6 +315,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+proptest = { version = "1.11", default-features = false, features = ["std"] }
 quote = "1"
 rand = "0.9.0"
 ratatui = "0.29"
@@ -318,14 +340,14 @@ rmcp = "1.6.0"
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs"] }
 # Mirrors the ACP SDK's own declaration: `coding_agent_worker` ports its
 # process-group kill and makes the same call.
 rustix = { version = "1", default-features = false, features = ["process", "std"] }
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
-ruzstd = { version = "0.8", default-features = false, features = ["std"] }
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
@@ -364,6 +386,10 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
   "connect",
   "rustls-tls-webpki-roots",
 ] }
+# Signal's compression fork is based on tungstenite 0.27. Keep its Tokio
+# adapter separate from the upstream sockets used elsewhere in the workspace.
+tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", default-features = false, features = ["handshake"] }
+tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
 tower = { version = "0.5.1", features = ["util"] }
 tower-http = { version = "0.6.1", features = [
@@ -427,9 +453,26 @@ strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
-ammonia = "4.1.4"
+ammonia = "4.1.7"
 html-escape = "0.2"
 subtle = "2.6.1"
+
+[patch.crates-io]
+# Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
+tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
+
+# cache-turso's storage tests load thousands of rows into the embedded SQL engine
+# to assert VM step budgets. Unoptimized, the engine made them the slowest tests
+# in the Rust suite (34 s for the crate); at opt-level 2 the crate's tests take
+# 2.6 s. The assertions count VM steps, which optimization does not change.
+[profile.dev.package.turso_core]
+opt-level = 2
+
+[profile.dev.package.turso_parser]
+opt-level = 2
+
+[profile.dev.package.turso_ext]
+opt-level = 2
 
 # Retain Rust DWARF for local cache profiling while keeping release-level LLVM
 # optimization. wasm-pack's custom profile metadata prevents the final
@@ -451,6 +494,16 @@ opt-level = "s"
 # The fig engine's browser build (apps/web `build-fig-engine-wasm`): one
 # codegen unit and full LTO, so its rasterizing loops inline across crates.
 [profile.fig-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.psd-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.ai-engine-wasm]
 inherits = "release"
 lto = "fat"
 codegen-units = 1

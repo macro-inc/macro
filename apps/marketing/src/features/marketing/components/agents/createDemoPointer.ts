@@ -34,7 +34,12 @@ export function createDemoPointer(options: {
     });
     const resize = new ResizeObserver(position);
     resize.observe(options.frame());
-    onCleanup(() => resize.disconnect());
+    const frame = options.frame();
+    frame.addEventListener('scroll', position, true);
+    onCleanup(() => {
+      resize.disconnect();
+      frame.removeEventListener('scroll', position, true);
+    });
   });
   return pointer;
 }

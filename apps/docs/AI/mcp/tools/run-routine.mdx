@@ -1,0 +1,16 @@
+---
+title: RunRoutine
+description: >-
+  Start a routine owned by the authenticated user now, outside its schedule, as
+  Run Now in the app does.
+---
+
+# RunRoutine
+
+Start a routine owned by the authenticated user now, outside its schedule, as Run Now in the app does. The run continues after this returns; check its result later with ReadRoutine. Fails if the routine is already running.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `routineId` | string | Yes | Routine UUID. |

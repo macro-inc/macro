@@ -12,7 +12,10 @@ import type {
   RsvpCalendarEventRequest,
   UpdateCalendarEventRequest,
 } from '@service-calendar/generated/schemas';
+import type { AvailabilityCalendarBody } from '@service-calendar/generated/schemas/availabilityCalendarBody';
+import type { AvailabilityCalendarsResponse } from '@service-calendar/generated/schemas/availabilityCalendarsResponse';
 import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/calendarMutationErrorCode';
+import type { TeamCalendarSharingBody } from '@service-calendar/generated/schemas/teamCalendarSharingBody';
 import type { Result } from 'neverthrow';
 import type {
   AddDraftAttachmentRequest,
@@ -617,6 +620,37 @@ export const emailClient = {
     return fetchWithToken<ListCalendarsResponse>(`${calendarHost}/calendars`, {
       method: 'GET',
     });
+  },
+
+  async getTeamCalendarSharing(signal?: AbortSignal) {
+    return fetchWithToken<TeamCalendarSharingBody>(
+      `${calendarHost}/team-sharing`,
+      { method: 'GET', signal }
+    );
+  },
+
+  async setTeamCalendarSharing(body: TeamCalendarSharingBody) {
+    return fetchWithToken<TeamCalendarSharingBody>(
+      `${calendarHost}/team-sharing`,
+      { method: 'PUT', body: JSON.stringify(body) }
+    );
+  },
+
+  async getAvailabilityCalendars(signal?: AbortSignal) {
+    return fetchWithToken<AvailabilityCalendarsResponse>(
+      `${calendarHost}/availability-calendars`,
+      { method: 'GET', signal }
+    );
+  },
+
+  async setAvailabilityCalendar(
+    calendarId: string,
+    body: AvailabilityCalendarBody
+  ) {
+    return fetchWithToken<EmptyResponse>(
+      `${calendarHost}/availability-calendars/${encodeURIComponent(calendarId)}`,
+      { method: 'PUT', body: JSON.stringify(body) }
+    );
   },
   async createCalendarEvent(args: CreateCalendarEventRequest) {
     return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(

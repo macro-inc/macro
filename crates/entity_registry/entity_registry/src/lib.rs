@@ -39,8 +39,8 @@ pub use domain::owner_grant_policy::OwnerGrantPolicy;
 pub use domain::ports::{BotFacts, EntityRegistryRepository, EntityRegistryService};
 pub use domain::service::EntityRegistryServiceImpl;
 pub use shared_entity_registry::{
-    EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, Owner,
-    RegisteredEntityType, UnregisteredEntityType, WriteOutcome,
+    EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, OwnedPurgeOutcome,
+    Owner, PurgeOwnedEntity, RegisteredEntityType, UnregisteredEntityType, WriteOutcome,
 };
 
 #[cfg(feature = "axum")]

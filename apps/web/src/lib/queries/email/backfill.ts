@@ -106,6 +106,10 @@ export function estimateEtaSeconds(
   return threadsLeft / ratePerMs / 1000;
 }
 
+function fetchBackfillJobs() {
+  return throwOnErr(() => emailClient.listBackfillJobs());
+}
+
 /**
  * Lists every backfill job for the user. Fired when the email settings open, to
  * surface COMPLETED backfills. In-progress backfills are driven by the live
@@ -116,8 +120,7 @@ export function estimateEtaSeconds(
 export function useBackfillJobsQuery() {
   return useQuery(() => ({
     queryKey: emailKeys.backfillJobs.queryKey,
-    queryFn: async () =>
-      throwOnErr(async () => await emailClient.listBackfillJobs()),
+    queryFn: fetchBackfillJobs,
   }));
 }
 

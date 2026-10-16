@@ -122,6 +122,191 @@ fn get_destination_no_app_link_hosts_keeps_old_behavior() {
 }
 
 #[test]
+fn popup_and_main_frame_share_external_url_policy() {
+    let plugin = test_plugin();
+    for input in [
+        "https://github.com/macro-inc/macro/pull/7858",
+        "http://example.com/",
+        "mailto:hello@example.com",
+        "tel:+15551234567",
+        "codex://new?prompt=hello",
+        "cursor://anysphere.cursor-deeplink/prompt?text=hello",
+        "zed://agent?prompt=hello",
+    ] {
+        let url = Url::parse(input).unwrap();
+        for destination in [
+            plugin.get_destination(&url),
+            plugin.new_window_destination(&url),
+        ] {
+            match destination {
+                NavigationOutput::External(external) => assert_eq!(external.0.as_ref(), &url),
+                other => panic!("expected External for {url}, got {other:?}"),
+            }
+        }
+    }
+}
+
+#[test]
+fn popup_app_links_include_same_origin_and_macro_scheme() {
+    let plugin = test_plugin();
+    for input in [
+        "https://macro.com/app/mail?view=all",
+        "https://dev.macro.com/app/mail?view=all",
+        "https://www.macro.com/app/mail?view=all",
+        "macro:///mail?view=all",
+        "tauri://localhost/app/mail?view=all",
+        "http://tauri.localhost/app/mail?view=all",
+        "http://localhost:3000/app/mail?view=all",
+        "tauri://localhost/mail?view=all",
+        "http://localhost:3000/mail?view=all",
+    ] {
+        let url = Url::parse(input).unwrap();
+        match plugin.new_window_destination(&url) {
+            NavigationOutput::AppLink(scheme) => {
+                assert_eq!(scheme.path(), "/mail", "{url}");
+                assert_eq!(scheme.query(), Some("view=all"), "{url}");
+            }
+            other => panic!("expected AppLink for {url}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn standalone_html_popup_remains_internal_and_is_allowed() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tauri::Listener;
+
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let received = Arc::new(AtomicUsize::new(0));
+    let events = received.clone();
+    app.listen("navigate", move |_| {
+        events.fetch_add(1, Ordering::Relaxed);
+    });
+
+    let plugin = test_plugin();
+    for input in [
+        "http://localhost:3000/billing-lab.html",
+        "http://localhost:3000/billing-lab.html?scenario=paid#details",
+        "tauri://localhost/billing-lab.html",
+        "http://tauri.localhost/another-document.html",
+    ] {
+        let url = Url::parse(input).unwrap();
+        assert!(
+            matches!(
+                plugin.new_window_destination(&url),
+                NavigationOutput::Internal
+            ),
+            "{url}"
+        );
+        assert!(
+            matches!(
+                plugin.on_new_window(app.handle(), &url),
+                tauri::webview::NewWindowResponse::Allow
+            ),
+            "{url}"
+        );
+    }
+    assert_eq!(received.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn standalone_html_does_not_bypass_origin_policy() {
+    let plugin = test_plugin();
+    for input in [
+        "https://example.com/billing-lab.html",
+        "http://localhost:9999/billing-lab.html",
+    ] {
+        assert!(
+            matches!(
+                plugin.new_window_destination(&Url::parse(input).unwrap()),
+                NavigationOutput::External(_)
+            ),
+            "{input}"
+        );
+    }
+    assert!(matches!(
+        plugin.new_window_destination(&Url::parse("file:///etc/billing-lab.html").unwrap()),
+        NavigationOutput::Blocked
+    ));
+}
+
+#[test]
+fn browser_only_urls_and_untrusted_local_files_are_blocked() {
+    let plugin = test_plugin();
+    for input in [
+        "about:blank",
+        "javascript:alert(1)",
+        "data:text/html,test",
+        "blob:tauri://localhost/123",
+        "file:///etc/passwd",
+    ] {
+        let url = Url::parse(input).unwrap();
+        assert!(
+            matches!(plugin.get_destination(&url), NavigationOutput::Blocked),
+            "{url}"
+        );
+        assert!(
+            matches!(
+                plugin.new_window_destination(&url),
+                NavigationOutput::Blocked
+            ),
+            "{url}"
+        );
+    }
+}
+
+#[test]
+fn popup_app_link_emits_once_and_never_creates_a_webview() {
+    use std::sync::Mutex;
+    use tauri::Listener;
+
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let received = Arc::new(Mutex::new(Vec::new()));
+    let events = received.clone();
+    app.listen("navigate", move |event| {
+        events
+            .lock()
+            .unwrap()
+            .push(serde_json::from_str::<serde_json::Value>(event.payload()).unwrap());
+    });
+
+    let response = test_plugin().on_new_window(
+        app.handle(),
+        &Url::parse("https://macro.com/app/mail?view=all").unwrap(),
+    );
+
+    assert!(matches!(response, tauri::webview::NewWindowResponse::Deny));
+    assert_eq!(
+        *received.lock().unwrap(),
+        vec![serde_json::json!({"path": "/mail", "query": "view=all"})],
+    );
+    assert!(app.webview_windows().is_empty());
+}
+
+#[test]
+fn blocked_popup_neither_opens_nor_emits_navigation() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tauri::Listener;
+
+    let app = tauri::test::mock_builder()
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let received = Arc::new(AtomicUsize::new(0));
+    let events = received.clone();
+    app.listen("navigate", move |_| {
+        events.fetch_add(1, Ordering::Relaxed);
+    });
+    // No opener plugin is installed: browser-only URLs must never reach it.
+    let response = test_plugin().on_new_window(app.handle(), &Url::parse("about:blank").unwrap());
+    assert!(matches!(response, tauri::webview::NewWindowResponse::Deny));
+    assert_eq!(received.load(Ordering::Relaxed), 0);
+}
+
+#[test]
 fn from_url_extracts_correct_path_from_universal_link() {
     let url = Url::parse("https://macro.com/app/component/doc123").unwrap();
     let result = MacroScheme::from_url(&url).unwrap();

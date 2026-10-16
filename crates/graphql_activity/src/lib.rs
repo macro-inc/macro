@@ -12,15 +12,14 @@
 //!   entities through [`EntityActivityLoader`] so it costs nothing when not
 //!   selected and one query when it is.
 //!
-//! - the timeline of one database ([`resolve_database_activity`]), which is
-//!   not a Soup item and so is read by id behind a view receipt.
+//! - the timeline of one database ([`resolve_database_activity`]) or form
+//!   ([`resolve_form_activity`]), which are not Soup items and so are read by
+//!   id behind a view receipt.
 //!
 //! Items carry `entityType`/`entityId` references only — clients resolve
 //! entity names from their normalized Soup cache rather than hydrating
 //! entities here.
 
-/// The access-checked timeline of one database.
-mod database;
 /// The viewer activity feed: input, page, cursor codec, resolver.
 mod feed;
 /// Edge reader traits, the entity-activity DataLoader, and its readers.
@@ -31,9 +30,10 @@ mod objects;
 mod overview;
 /// Realtime activity subscription root and patch union.
 mod subscriptions;
+/// The access-checked timeline of one database or form.
+mod timeline;
 
 pub use activity::{ActivitySubscriptionService, NoOpActivitySubscriptionService};
-pub use database::resolve_database_activity;
 pub use feed::{
     ActivityFeedInput, DEFAULT_ACTIVITY_FEED_LIMIT, GraphqlActivityPage, MAX_ACTIVITY_FEED_LIMIT,
     resolve_activity_feed,
@@ -50,3 +50,4 @@ pub use overview::{
     resolve_activity_overview,
 };
 pub use subscriptions::{ActivitySubscriptionRoot, GraphqlActivityPatch, subscribe_to_activity};
+pub use timeline::{resolve_database_activity, resolve_form_activity};

@@ -3,6 +3,9 @@
 #[cfg(test)]
 pub(crate) mod test;
 
+mod association;
+mod contact_listing;
+
 use crate::domain::{
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
@@ -247,6 +250,25 @@ impl CompaniesRepositoryImpl {
 }
 
 impl CompaniesRepository for CompaniesRepositoryImpl {
+    #[tracing::instrument(skip_all, err)]
+    async fn list_contacts_for_soup(
+        &self,
+        scope: crate::domain::contact_listing::CrmContactListScope<'_>,
+        viewer_id: &str,
+        query: &crate::domain::contact_listing::CrmContactListQuery,
+    ) -> Result<Vec<crate::domain::contact_listing::CrmContactForSoup>, CrmError> {
+        self.query_contacts_for_soup(scope, viewer_id, query).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn resolve_association(
+        &self,
+        scope: crate::domain::contact_listing::CrmContactListScope<'_>,
+        record: crate::domain::association::CrmAssociation,
+    ) -> Result<Option<crate::domain::association::CrmRecordAssociation>, CrmError> {
+        self.query_association(scope, record).await
+    }
+
     #[tracing::instrument(skip(self), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(

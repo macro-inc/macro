@@ -45,16 +45,6 @@ export function FormInput(props: {
   );
 }
 
-/** A quiet inset frame, free of gradients. */
-export function NoiseBackground() {
-  return (
-    <div
-      aria-hidden="true"
-      class="pointer-events-none absolute inset-4 rounded-[32px] border border-ink/[0.04] sm:inset-6"
-    />
-  );
-}
-
 export function SkipButton(props: {
   label?: string;
   disabled?: boolean;

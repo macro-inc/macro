@@ -2,6 +2,9 @@ use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
 use models_email::gmail::ListSendAsResponse;
 
+#[cfg(test)]
+mod test;
+
 #[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn list_send_as(
     client: &GmailClient,

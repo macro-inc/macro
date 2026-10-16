@@ -48,6 +48,14 @@ export {
 } from './components/Checkbox';
 export type { CollapsedInputProps } from './components/CollapsedInput';
 export { CollapsedInput } from './components/CollapsedInput';
+export type {
+  ColorPickerFieldProps,
+  ColorPickerInputProps,
+  ColorPickerPreviewProps,
+  ColorPickerRootProps,
+  ColorPickerTrackProps,
+} from './components/ColorPicker';
+export { ColorPicker } from './components/ColorPicker';
 export {
   type CommandListController,
   CommandMenuEmptyState,
@@ -78,6 +86,7 @@ export { EmptyStatePanel } from './components/EmptyStatePanel';
 export { EntityComposer } from './components/EntityComposer';
 export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
 export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
+export { HoldButton, type HoldButtonProps } from './components/HoldButton';
 export { Hotkey } from './components/Hotkey';
 export { HoverCard } from './components/HoverCard';
 export type {
@@ -148,6 +157,7 @@ export { SendButton } from './components/SendButton';
 export { SideNav } from './components/SideNav';
 export { Surface } from './components/Surface';
 export { TabbedControl } from './components/TabbedControl';
+export { TabSelector } from './components/TabSelector';
 export type { TabItem, TabsProps } from './components/Tabs';
 export { Tabs } from './components/Tabs';
 export { TagDot, type TagDotProps, type TagDotSize } from './components/TagDot';

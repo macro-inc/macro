@@ -1,19 +1,23 @@
+use anyhow::Context;
 use axum::{
     Json,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use github::domain::{models::GithubError, ports::GithubLinkService};
+use github::domain::{
+    models::{GithubError, GithubLinkStatus},
+    ports::GithubLinkService,
+};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
 use model::response::{EmptyResponse, ErrorResponse};
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
-use crate::api::{
-    context::{ApiContext, AuthorizationService},
-    oauth2::OAuthState,
+use crate::{
+    account_link_state::{AccountLinkState, LinkProvider, sign_account_link_state},
+    api::context::{ApiContext, AuthorizationService},
 };
 
 pub const REAUTHENTICATION_REQUIRED_MESSAGE: &str = "ReauthenticationRequired";
@@ -77,6 +81,18 @@ impl IntoResponse for InitGithubLinkError {
     }
 }
 
+const NO_GITHUB_LINK_MESSAGE: &str = "no github link found";
+
+fn error_response(status_code: StatusCode, message: &'static str) -> Response {
+    (
+        status_code,
+        Json(ErrorResponse {
+            message: message.into(),
+        }),
+    )
+        .into_response()
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum GithubLinkStatusError {
     #[error(transparent)]
@@ -85,27 +101,9 @@ pub enum GithubLinkStatusError {
 
 impl IntoResponse for GithubLinkStatusError {
     fn into_response(self) -> Response {
-        let (status_code, message) = match &self {
-            Self::Github(GithubError::NoLinkFound) => {
-                (StatusCode::NOT_FOUND, "no github link found")
-            }
-            Self::Github(GithubError::ReauthenticationRequired) => (
-                StatusCode::PRECONDITION_REQUIRED,
-                REAUTHENTICATION_REQUIRED_MESSAGE,
-            ),
-            Self::Github(error) => {
-                tracing::error!(error=?error, "failed to check GitHub link status");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error")
-            }
-        };
-
-        (
-            status_code,
-            Json(ErrorResponse {
-                message: message.into(),
-            }),
-        )
-            .into_response()
+        let Self::Github(error) = &self;
+        tracing::error!(error=?error, "failed to check GitHub link status");
+        error_response(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
     }
 }
 
@@ -127,18 +125,31 @@ pub async fn check_github_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
-) -> Result<Json<GithubLinkStatusResponse>, GithubLinkStatusError> {
+) -> Result<Response, GithubLinkStatusError> {
     let user_id = &authorization.authorization.user.macro_user_id;
-    ctx.github_link_service
-        .check_user_link_token(user_id)
+    let status = ctx
+        .github_link_service
+        .get_user_link_status(user_id)
         .await?;
-    let link = ctx.github_link_service.get_user_link(user_id).await?;
+    // No link and an expired token are expected states: answer them here
+    // rather than as `Err`, which `instrument(err)` would log as an error.
+    let response = match status {
+        GithubLinkStatus::Linked(link) => Json(GithubLinkStatusResponse {
+            reauthentication_required: false,
+            github_username: link.github_username,
+            github_user_id: link.github_user_id,
+        })
+        .into_response(),
+        GithubLinkStatus::NotLinked => {
+            error_response(StatusCode::NOT_FOUND, NO_GITHUB_LINK_MESSAGE)
+        }
+        GithubLinkStatus::ReauthenticationRequired => error_response(
+            StatusCode::PRECONDITION_REQUIRED,
+            REAUTHENTICATION_REQUIRED_MESSAGE,
+        ),
+    };
 
-    Ok(Json(GithubLinkStatusResponse {
-        reauthentication_required: false,
-        github_username: link.github_username,
-        github_user_id: link.github_user_id,
-    }))
+    Ok(response)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -172,12 +183,15 @@ pub async fn init_github_link_handler(
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
     let Query(InitGithubLinkQueryParams { original_url }) = query;
+    let fusion_user_id = &authorization.authorization.user.user_context.fusion_user_id;
+    let initiator =
+        macro_uuid::string_to_uuid(fusion_user_id).context("fusion user id must be a uuid")?;
     // TODO: this should probably be a middleware or extractor
     // Check count of in-progress links
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
-            &authorization.authorization.user.user_context.fusion_user_id,
+            fusion_user_id,
         )
         .await?;
 
@@ -188,7 +202,7 @@ pub async fn init_github_link_handler(
     // Create in-progress link
     let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
         &ctx.db,
-        &authorization.authorization.user.user_context.fusion_user_id,
+        fusion_user_id,
     )
     .await?;
 
@@ -199,20 +213,25 @@ pub async fn init_github_link_handler(
         .await
         .map_err(|_| InitGithubLinkError::IdentityProviderNotFound)?;
 
-    // Build OAuth state
-    let state = OAuthState {
-        identity_provider_id: github_idp_id.clone(),
-        link_id: Some(link_id),
-        original_url: original_url.map(|x| x.0.to_string()),
-        is_mobile: None,
-    };
+    // Build the signed OAuth state. The callback refuses state it did not sign,
+    // state issued for another provider, and state whose pending link belongs
+    // to a different user.
+    let state = AccountLinkState::new(
+        LinkProvider::Github,
+        github_idp_id.clone(),
+        link_id,
+        initiator,
+        original_url.map(|x| x.0.to_string()),
+    );
+    let state = sign_account_link_state(&state, &ctx.account_link_state_key)
+        .context("failed to sign OAuth state")?;
 
     // Build Github OAuth URL
-    let redirect_uri = crate::api::oauth2::format_redirect_uri("github");
+    let redirect_uri = crate::api::oauth2::format_redirect_uri(LinkProvider::Github.as_str());
 
     let authorization_url = ctx
         .github_link_service
-        .construct_oauth_url(&redirect_uri, state)
+        .construct_oauth_url(&redirect_uri, &state)
         .map_err(InitGithubLinkError::GithubServiceError)?;
 
     Ok(Json(InitGithubLinkResponse {

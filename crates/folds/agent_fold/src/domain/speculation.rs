@@ -334,6 +334,7 @@ impl SpeculativeFold {
             agent_session_id: self.session,
             user_id: speculation.user_id.clone(),
             content: Message::ToRuntime(message),
+            logged_at: None,
         })
     }
 

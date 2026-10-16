@@ -7,6 +7,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
 import type { ConsentScopes } from '@service-auth/client';
 import {
   ALREADY_INITIALIZED_CODE,
@@ -30,7 +31,7 @@ const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
 >();
 
 function hasEmailLinks(query: UseQueryResult<ListLinksResponse, Error>) {
-  if (!query.data || query.error) {
+  if (!queryReadyGate(query)) {
     return false;
   }
   return query.data.links.length > 0;

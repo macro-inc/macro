@@ -1,11 +1,13 @@
 import Calendar from '@phosphor/calendar-blank.svg';
+import Caret from '@phosphor/caret-right.svg';
 import CheckSquare from '@phosphor/check-square.svg';
 import Clock from '@phosphor/clock.svg';
+import Repeat from '@phosphor/clock-clockwise.svg';
 import File from '@phosphor/file.svg';
 import Folder from '@phosphor/folder-simple.svg';
 import GitPull from '@phosphor/git-pull-request.svg';
-import Hash from '@phosphor/hash.svg';
 import ListChecks from '@phosphor/list-checks.svg';
+import Search from '@phosphor/magnifying-glass.svg';
 import Note from '@phosphor/note-pencil.svg';
 import Plugs from '@phosphor/plugs-connected.svg';
 import Plus from '@phosphor/plus.svg';
@@ -13,15 +15,15 @@ import Sidebar from '@phosphor/sidebar-simple.svg';
 import Sparkle from '@phosphor/sparkle.svg';
 import Stack from '@phosphor/stack.svg';
 import Users from '@phosphor/users-three.svg';
+import { Button, Tabs } from '@ui';
 import { TabsInset } from '@ui/components/TabsInset';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { WorkspaceView } from '../../core/dummy-workspace';
-import { homepagePeople } from '../../core/homepage-demo-people';
 import { sampleAgentSessions } from '../../core/workspace-parity-fixtures';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { ViewSidebar } from '../DemoViewSidebar';
-import { Segments } from './frozen/DetailPanel';
-import { ModelIcon } from './frozen/model-picker/ProviderIcon';
+import { SearchBar } from '../email/frozen/SearchBar';
+import { ChatSidebar } from './ChatSidebar';
 import { MiniCalendar } from './WorkspaceCalendar';
 import { WorkspaceHomeFeed } from './WorkspaceHomeFeed';
 import type { TaskFilter } from './WorkspaceTasks';
@@ -34,7 +36,7 @@ function Group(props: { title: string; children: JSX.Element }) {
     </section>
   );
 }
-export function WorkspaceSidebar(props: {
+function WorkspaceSidebarOther(props: {
   workspace: DummyWorkspace;
   title: string;
   collapse: () => void;
@@ -44,11 +46,10 @@ export function WorkspaceSidebar(props: {
   setTaskFilter: (value: TaskFilter) => void;
 }) {
   const w = props.workspace;
-  const [chatList, setChatList] = createSignal<'All' | 'Recent'>('All');
-  const channel = (id: string) => {
-    w.setChannel(id);
-    props.navigate('messages', id);
-  };
+  const [conversationsOpen, setConversationsOpen] = createSignal(true);
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  const [agentSearch, setAgentSearch] = createSignal('');
+  let conversationSearch: HTMLInputElement | undefined;
   const taskFilter = (id: TaskFilter) => {
     props.setTaskFilter(id);
     props.navigate('tasks');
@@ -56,10 +57,30 @@ export function WorkspaceSidebar(props: {
   return (
     <ViewSidebar.Root aria-label={`${props.title} navigation`}>
       <ViewSidebar.Header>
-        <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
-        <ViewSidebar.Control label="Collapse sidebar" onClick={props.collapse}>
-          <Sidebar />
-        </ViewSidebar.Control>
+        <Show
+          when={w.view() === 'agents'}
+          fallback={
+            <>
+              <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
+              <ViewSidebar.Control
+                label="Collapse sidebar"
+                onClick={props.collapse}
+              >
+                <Sidebar />
+              </ViewSidebar.Control>
+            </>
+          }
+        >
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewSidebar.Control
+              label="Collapse sidebar"
+              onClick={props.collapse}
+            >
+              <Sidebar />
+            </ViewSidebar.Control>
+            <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
+          </div>
+        </Show>
       </ViewSidebar.Header>
       <Switch
         fallback={
@@ -77,24 +98,41 @@ export function WorkspaceSidebar(props: {
           </ViewSidebar.Primary>
         }
       >
-        <Match when={w.view() === 'messages'}>
-          <div class="px-4 pb-4">
-            <Segments
-              sidebar
-              label="Chat lists"
-              items={['All', 'Recent']}
-              value={chatList()}
-              onChange={setChatList}
+        <Match when={w.view() === 'agents'}>
+          <div class="shrink-0 px-(--sidebar-gutter) pt-1" data-agent-mode-row>
+            <Tabs
+              aria-label="Agents mode"
+              fullWidth
+              list={[
+                { value: 'work', label: 'Work' },
+                { value: 'code', label: 'Code' },
+              ]}
+              value={w.agentMode()}
+              onChange={(value) => {
+                w.setAgentMode(value === 'code' ? 'code' : 'work');
+                props.navigate('agents', 'new');
+              }}
             />
           </div>
+          <div
+            class="shrink-0 px-(--sidebar-gutter) pt-2"
+            data-agent-create-row
+          >
+            <ViewSidebar.Action onClick={() => props.navigate('agents', 'new')}>
+              <ViewSidebar.Icon>
+                <Plus />
+              </ViewSidebar.Icon>
+              <span class="truncate">New conversation</span>
+            </ViewSidebar.Action>
+          </div>
         </Match>
-        <Match when={w.view() === 'home' || w.view() === 'agents'}>
+        <Match when={w.view() === 'home'}>
           <ViewSidebar.Primary>
             <ViewSidebar.Action onClick={() => props.navigate('agents', 'new')}>
               <ViewSidebar.Icon>
                 <Plus />
               </ViewSidebar.Icon>
-              {w.view() === 'home' ? 'New chat' : 'New conversation'}
+              New chat
             </ViewSidebar.Action>
           </ViewSidebar.Primary>
         </Match>
@@ -216,66 +254,7 @@ export function WorkspaceSidebar(props: {
               </ViewSidebar.Item>
             </Group>
           </Match>
-          <Match when={w.view() === 'messages'}>
-            <Show when={chatList() === 'All'}>
-              <Group title="Favorites">
-                <For
-                  each={w.data.channels.filter((c) => !c.person).slice(0, 2)}
-                >
-                  {(c) => (
-                    <ViewSidebar.Item onClick={() => channel(c.id)}>
-                      <ViewSidebar.Icon>
-                        <Hash />
-                      </ViewSidebar.Icon>
-                      {c.id}
-                    </ViewSidebar.Item>
-                  )}
-                </For>
-              </Group>
-            </Show>
-            <Group
-              title={chatList() === 'All' ? 'Channels' : 'Recent conversations'}
-            >
-              <For
-                each={w.data.channels.filter(
-                  (c) =>
-                    !c.person &&
-                    (chatList() === 'All' ||
-                      c.id === w.channel() ||
-                      c.id === 'launch')
-                )}
-              >
-                {(c) => (
-                  <ViewSidebar.Item
-                    active={w.channel() === c.id}
-                    onClick={() => channel(c.id)}
-                  >
-                    <ViewSidebar.Icon>
-                      <Hash />
-                    </ViewSidebar.Icon>
-                    {c.id}
-                  </ViewSidebar.Item>
-                )}
-              </For>
-            </Group>
-            <Group title="DMs">
-              <For each={w.data.channels.filter((c) => c.person)}>
-                {(c) => (
-                  <ViewSidebar.Item
-                    active={w.channel() === c.id}
-                    onClick={() => channel(c.id)}
-                  >
-                    <img
-                      class="size-5 rounded-full"
-                      src={homepagePeople[c.person!].photo}
-                      alt=""
-                    />
-                    {homepagePeople[c.person!].name}
-                  </ViewSidebar.Item>
-                )}
-              </For>
-            </Group>
-          </Match>
+
           <Match when={w.view() === 'home'}>
             <WorkspaceHomeFeed workspace={w} navigate={props.navigate} />
           </Match>
@@ -291,6 +270,15 @@ export function WorkspaceSidebar(props: {
                 Agents
               </ViewSidebar.Item>
               <ViewSidebar.Item
+                active={w.selected() === 'routines'}
+                onClick={() => props.navigate('agents', 'routines')}
+              >
+                <ViewSidebar.Icon>
+                  <Repeat />
+                </ViewSidebar.Icon>
+                Routines
+              </ViewSidebar.Item>
+              <ViewSidebar.Item
                 active={w.selected() === 'connections'}
                 onClick={() => props.navigate('agents', 'connections')}
               >
@@ -300,45 +288,99 @@ export function WorkspaceSidebar(props: {
                 Connections
               </ViewSidebar.Item>
             </ViewSidebar.Nav>
-            <Group title="Conversations">
-              <For each={sampleAgentSessions}>
-                {(session) => (
-                  <ViewSidebar.Item
-                    class="sample-agent-session"
-                    active={w.selected() === session.id}
-                    onClick={() => props.navigate('agents', session.id)}
+            <section class="flex min-h-0 flex-col">
+              <div class="flex h-8 items-center gap-1 px-2 text-xs text-ink-muted">
+                <button
+                  type="button"
+                  class="flex min-w-0 flex-1 items-center gap-1 text-left"
+                  aria-expanded={conversationsOpen()}
+                  onClick={() => setConversationsOpen(!conversationsOpen())}
+                >
+                  Conversations{' '}
+                  <Caret
+                    class={`size-3 ${conversationsOpen() ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                <Button
+                  variant="plain"
+                  size="icon-sm"
+                  label="Search conversations"
+                  aria-pressed={searchOpen()}
+                  onClick={() => {
+                    setConversationsOpen(true);
+                    setSearchOpen(!searchOpen());
+                    if (!searchOpen()) setAgentSearch('');
+                    else queueMicrotask(() => conversationSearch?.focus());
+                  }}
+                >
+                  <Search class="size-3.5" />
+                </Button>
+              </div>
+              <Show when={conversationsOpen()}>
+                <Show when={searchOpen()}>
+                  <SearchBar
+                    ref={conversationSearch}
+                    label="Search conversations"
+                    placeholder="Search conversations"
+                    value={agentSearch()}
+                    onValueChange={setAgentSearch}
+                    onEscape={() => {
+                      setAgentSearch('');
+                      setSearchOpen(false);
+                    }}
+                  />
+                </Show>
+                <ViewSidebar.Nav aria-label="Recent conversations">
+                  <For
+                    each={sampleAgentSessions.filter((session) =>
+                      session.title
+                        .toLowerCase()
+                        .includes(agentSearch().toLowerCase())
+                    )}
                   >
-                    <ViewSidebar.Icon>
-                      <ModelIcon
-                        provider={session.provider}
-                        class="size-5 text-ink-muted"
-                      />
-                    </ViewSidebar.Icon>
-                    <span class="min-w-0 flex-1">
-                      <span class="flex items-center gap-2">
-                        <span class="truncate flex-1">{session.title}</span>
-                        <span class="text-[10px] text-ink-extra-muted">
-                          {session.time}
-                        </span>
-                      </span>
-                      <Show when={'branch' in session}>
-                        <span class="mt-1 flex items-center gap-1 text-[10px] text-ink-extra-muted min-w-0">
-                          <GitPull class="size-3 shrink-0 text-success" />
-                          <span class="text-success">
-                            {'pr' in session ? session.pr : ''}
+                    {(session) => (
+                      <ViewSidebar.Item
+                        class="sample-agent-session"
+                        aria-label={session.title}
+                        data-agent-session-row={session.id}
+                        data-has-code={'branch' in session}
+                        active={w.selected() === session.id}
+                        onClick={() => {
+                          w.setAgentMode(
+                            session.runtime === 'Macro' ? 'work' : 'code'
+                          );
+                          props.navigate('agents', session.id);
+                        }}
+                      >
+                        <ViewSidebar.Icon />
+                        <span class="min-w-0 flex-1">
+                          <span class="flex items-center gap-2">
+                            <span class="min-w-0 truncate flex-1">
+                              {session.title}
+                            </span>
+                            <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
+                              {session.time}
+                            </span>
                           </span>
-                          <span class="truncate">
-                            · launch-team/workspace ·{' '}
-                            {'branch' in session ? session.branch : ''}
-                          </span>
+                          <Show when={'branch' in session}>
+                            <span class="flex items-center gap-1.5 text-xs leading-4 text-ink-extra-muted min-w-0">
+                              <GitPull class="size-3 shrink-0 text-success" />
+                              <span class="text-success">
+                                {'pr' in session ? session.pr : ''}
+                              </span>
+                              <span class="truncate">
+                                · launch-team/workspace ·{' '}
+                                {'branch' in session ? session.branch : ''}
+                              </span>
+                            </span>
+                          </Show>
                         </span>
-                      </Show>
-                      <span class="sr-only">{session.runtime}</span>
-                    </span>
-                  </ViewSidebar.Item>
-                )}
-              </For>
-            </Group>
+                      </ViewSidebar.Item>
+                    )}
+                  </For>
+                </ViewSidebar.Nav>
+              </Show>
+            </section>
           </Match>
           <Match when={w.view() === 'crm'}>
             <div class="shrink-0 px-1.5">
@@ -420,5 +462,25 @@ export function WorkspaceSidebar(props: {
         </Switch>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
+  );
+}
+
+export function WorkspaceSidebar(
+  props: Parameters<typeof WorkspaceSidebarOther>[0]
+) {
+  return (
+    <Show
+      when={props.workspace.view() === 'messages'}
+      fallback={<WorkspaceSidebarOther {...props} />}
+    >
+      <ChatSidebar
+        workspace={props.workspace}
+        collapse={props.collapse}
+        navigate={(id) => {
+          props.workspace.setChannel(id);
+          props.navigate('messages', id);
+        }}
+      />
+    </Show>
   );
 }

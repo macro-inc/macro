@@ -141,6 +141,10 @@ pub struct ChannelInviteMetadata {
     #[serde(default)]
     #[serde(alias = "channel_name")]
     pub channel_name: String,
+    /// Whether this is a direct message rather than a channel invitation.
+    /// Older notification payloads retain channel-invitation wording.
+    #[serde(default)]
+    pub is_direct_message: bool,
     /// Message content to show in the invite email, when the invite was triggered by a message.
     #[serde(default)]
     pub message_content: Option<String>,
@@ -170,10 +174,14 @@ impl NotificationTitle for ChannelInviteMetadata {
     ) -> Result<String, rootcause::Report> {
         let email = self.invited_by.email_part();
         let sender = email.email_str();
-        Ok(format!(
-            "{sender} invited you to join #{}",
-            self.channel_name
-        ))
+        if self.is_direct_message {
+            Ok(format!("{sender} sent you a message"))
+        } else {
+            Ok(format!(
+                "{sender} invited you to join #{}",
+                self.channel_name
+            ))
+        }
     }
 
     fn format_body(
@@ -188,7 +196,11 @@ impl NotificationExtEmail for ChannelInviteMetadata {
     fn format_email(&self) -> EmailContent {
         let sender = self.sender_display();
         EmailContent {
-            subject: format!("{sender} has invited you to join #{}", self.channel_name),
+            subject: if self.is_direct_message {
+                format!("{sender} sent you a message on Macro")
+            } else {
+                format!("{sender} has invited you to join #{}", self.channel_name)
+            },
             body: self
                 .render()
                 .expect("ChannelInviteMetadata template render failed in format_email"),

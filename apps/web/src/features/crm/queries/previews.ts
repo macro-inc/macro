@@ -49,6 +49,37 @@ export async function fetchCrmCompanyPreviews(
   );
 }
 
+/** A pipeline previews from its own read; one gone or trashed reads as deleted. */
+export async function fetchCrmPipelinePreviews(
+  getPipeline: typeof storageServiceClient.getCrmPipeline,
+  pipelineIds: string[]
+): Promise<PreviewItem[]> {
+  return await Promise.all(
+    pipelineIds.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'crm_pipeline', loading: false } as const;
+      const result = await getPipeline(id);
+      if (result.isErr())
+        return {
+          ...base,
+          access: result.error.some(
+            (error) => error.code === 'NOT_FOUND' || error.code === 'GONE'
+          )
+            ? 'does_not_exist'
+            : 'no_access',
+        };
+      const pipeline = result.value;
+      if (pipeline.trashedAt) return { ...base, access: 'does_not_exist' };
+      return {
+        ...base,
+        access: 'access',
+        rawName: pipeline.name,
+        name: pipeline.name,
+        owner: pipeline.userId,
+      };
+    })
+  );
+}
+
 /** Contact titles use the same role-aware REST boundary as contact details. */
 export async function fetchCrmContactPreviews(
   getContact: typeof storageServiceClient.getContact,

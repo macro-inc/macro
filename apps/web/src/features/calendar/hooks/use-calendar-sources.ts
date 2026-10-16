@@ -36,6 +36,9 @@ export function useCalendarSources() {
   const sourceById = createMemo(
     () => new Map(sources().map((source) => [source.id, source]))
   );
+  // A failed lookup still permits the default source; a pending one must not
+  // briefly paint every event with the default color.
+  const sourcesReady = () => !calendarsQuery.isPending;
 
-  return { calendarsQuery, sourceById, sources };
+  return { calendarsQuery, sourceById, sources, sourcesReady };
 }

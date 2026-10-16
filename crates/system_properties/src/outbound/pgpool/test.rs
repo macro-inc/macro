@@ -522,8 +522,42 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
         "DOCUMENT",
     )
     .await?;
+    // A second reference in the array, an extra key, and an empty array. Containment
+    // keeps the first two and drops the empty array, same as whole-value containment.
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (
+            gen_random_uuid(), 'two', 'TASK', $1,
+            jsonb_build_object('type', 'EntityReference', 'value', jsonb_build_array(
+                jsonb_build_object('entity_id', $2::text, 'entity_type', 'INITIATIVE'),
+                jsonb_build_object('entity_id', $3::text, 'entity_type', 'INITIATIVE')
+            ))
+        ), (
+            gen_random_uuid(), 'extra', 'TASK', $1,
+            jsonb_build_object('type', 'EntityReference', 'value', jsonb_build_array(
+                jsonb_build_object(
+                    'entity_id', $2::text,
+                    'entity_type', 'INITIATIVE',
+                    'specific_message_id', 'x'
+                )
+            ))
+        ), (
+            gen_random_uuid(), 'empty', 'TASK', $1,
+            '{"type": "EntityReference", "value": []}'::jsonb
+        )
+        "#,
+        project,
+        first.to_string(),
+        second.to_string(),
+    )
+    .execute(&pool)
+    .await?;
 
-    assert_eq!(repo.project_task_ids(first).await?, ["task-a", "task-b"]);
+    assert_eq!(
+        repo.project_task_ids(first).await?,
+        ["extra", "task-a", "task-b", "two"]
+    );
     let mut projects = repo
         .task_projects(&[
             "task-a".to_string(),

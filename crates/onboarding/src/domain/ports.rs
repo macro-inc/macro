@@ -43,4 +43,10 @@ pub trait OnboardingRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         skipped: bool,
     ) -> impl Future<Output = Result<OnboardingRow>> + Send;
+
+    /// Remove the user's onboarding row, for account deletion. Idempotent: a
+    /// user who never entered the flow (or whose row is already gone from an
+    /// earlier attempt) is not an error.
+    fn delete_row(&self, user: &MacroUserIdStr<'static>)
+    -> impl Future<Output = Result<()>> + Send;
 }

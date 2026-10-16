@@ -1,7 +1,6 @@
 import { itemToBlockName } from '@core/constant/allBlocks';
 import SpreadsheetIcon from '@icon/wide-spreadsheet.svg';
 import ContactIcon from '@phosphor/address-book.svg';
-import ReminderIcon from '@phosphor/bell-simple.svg';
 import SkillIcon from '@phosphor/blueprint.svg';
 import SnippetIcon from '@phosphor/brackets-curly.svg';
 import CompanyIcon from '@phosphor/building-office.svg';
@@ -83,27 +82,6 @@ const entityGlyphs: [
   ['agent', { type: 'agent_session' }, SparkleIcon],
   ['project', { type: 'project' }, FolderIcon],
   ['calendar', { type: 'calendar_event' }, CalendarIcon],
-  ['reminder', { type: 'reminder' }, ReminderIcon],
-  [
-    'email reminder',
-    { type: 'reminder', referencedEntity: { id: 'email', type: 'email' } },
-    EnvelopeIcon,
-    'email',
-  ],
-  [
-    'task reminder',
-    {
-      type: 'reminder',
-      referencedEntity: {
-        id: 'task',
-        type: 'document',
-        fileType: 'md',
-        subType: 'task',
-      },
-    },
-    ListChecksIcon,
-    'task',
-  ],
   ['call', { type: 'call' }, PhoneIcon],
   ['routine', { type: 'routine' }, RoutineIcon],
   [

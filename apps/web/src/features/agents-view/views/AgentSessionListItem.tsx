@@ -60,6 +60,16 @@ export function AgentSessionListItem(props: Props) {
     };
   };
 
+  const hideLeading = () => props.surface === 'agents';
+  const codeStatusIndicator = () =>
+    props.surface === 'agents' && mode() === 'code' ? (
+      <AgentSessionStatusIndicator state={state()} unread={props.unread} />
+    ) : undefined;
+  const workStatusIndicator = () =>
+    props.surface === 'agents' && mode() !== 'code' ? (
+      <AgentSessionStatusIndicator state={state()} unread={props.unread} />
+    ) : undefined;
+
   return (
     <AgentSessionRow
       id={props.entity.id}
@@ -68,6 +78,7 @@ export function AgentSessionListItem(props: Props) {
       state={state()}
       active={props.active}
       unread={props.unread}
+      hideLeading={hideLeading()}
       onOpen={props.onOpen}
       timestamp={compactAge(conversationTimestamp(props.entity))}
       leading={
@@ -86,18 +97,22 @@ export function AgentSessionListItem(props: Props) {
         </Show>
       }
       trailing={
-        <Show when={props.surface === 'home' && props.unread}>
-          <span
-            aria-label="Unread"
-            class="size-1.5 shrink-0 rounded-full bg-accent"
-          />
-        </Show>
+        <>
+          <Show when={props.surface === 'home' && props.unread}>
+            <span
+              aria-label="Unread"
+              class="size-1.5 shrink-0 rounded-full bg-accent"
+            />
+          </Show>
+          {workStatusIndicator()}
+        </>
       }
     >
       <Show when={details()}>
         {(details) => (
           <AgentSessionCodeDetails
             details={details()}
+            statusIndicator={codeStatusIndicator()}
             onOpenPullRequest={
               props.entity.pullRequestId
                 ? (event) => {

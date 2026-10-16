@@ -1,14 +1,14 @@
 # Lexical Service API
-This is a Cloudflare Worker that provides API endpoints for converting Lexical documents to various formats.
+This is a Bun service that provides API endpoints for converting Lexical documents to various formats.
 It uses OpenAPI 3.1 with [chanfana](https://github.com/cloudflare/chanfana) and [Hono](https://github.com/honojs/hono).
 
 The service fetches documents from the `sync-service/document/{id}/raw` endpoint and uses the nodes and
 utilities from the shared `packages/lexical-core` workspace package. In general the pattern should be to define the
 utilities in lexical-core and then bind them to endpoints here.
 
-The services are deployed to [https://lexical-service-dev.macroverse.workers.dev](https://lexical-service-dev.macroverse.workers.dev)
-and [https://lexical-service-prod.macroverse.workers.dev](https://lexical-service-prod.macroverse.workers.dev) and must
-be called internally with an 'x-internal-auth-key' header set.
+It runs on ECS behind the gateway at [https://dev-gateway.macro.com/lexical](https://dev-gateway.macro.com/lexical)
+and [https://gateway.macro.com/lexical](https://gateway.macro.com/lexical) (`infra/stacks/lexical-service`,
+`docker/lexical-service.Dockerfile`) and must be called internally with an 'x-internal-auth-key' header set.
 
 # Endpoints
 ## /plaintext/<document-id>
@@ -34,24 +34,14 @@ image retains intrinsic dimensions and uses 400px channel attachment bounds.
 Deploy this endpoint before the image-generation backend that calls it.
 
 # Local Development
-`bun run dev` will start the development server with the wrangler env set to 'local' and the port set to 8931. The local
-environment uses 'local' as the INTERNAL_API_SECRET_KEY. There are scripts to run document ids against the local endpoints.
+The local stack (`just run_local`) builds and runs the service as `lexical_service` on port 8096, authenticated with
+the stack's `INTERNAL_API_SECRET_KEY`. There are scripts to run document ids against the local endpoints.
 For example: `bun run <search | plaintext | cognition> <document-id>` will curl the local endpoints.
 
-### Env
-You will need a file called `.dev.vars.local` with the following secrets:
-
-```
-INTERNAL_API_SECRET_KEY="local"
-SYNC_SERVICE_AUTH_KEY="<secret>"
-```
-
 # Secrets
-The service relies on two secrets:
-- `INTERNAL_API_SECRET_KEY`
-- `SYNC_SERVICE_AUTH_KEY`
-
-Use `wrangler secret put <key name> --env <prod | dev>` to set the secrets in the cloudflare environment. These secrets are likely already set up in only need to be re-put when changed. You can run `wrangler secret list --env <prod | dev>` to see the current secrets.
+The service reads `INTERNAL_AUTH_KEY` (callers' `INTERNAL_API_KEY`), `SYNC_SERVICE_AUTH_KEY` and `SYNC_SERVICE_URL`
+from its environment (`src/server.ts`). On ECS they come from the `lexical-service` Doppler project and Secrets Manager.
 
 # Deploy
-`bun run deploy-dev` and `bun run deploy-prod` to deploy the services to the cloudflare environment.
+Deploys go through the generic service pipeline (`.github/services-config.json`): dev on push to `main`, prod on
+release. Never deploy by hand without permission.

@@ -2,19 +2,11 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import ChevronDown from '@phosphor/caret-down.svg';
 import Check from '@phosphor/check.svg';
-import { cn, Dropdown } from '@ui';
+import { cn, Dropdown, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
+import type { FromInboxOption } from '../core/email-sender';
 
-type FromInbox = {
-  id: string;
-  email_address: string;
-  displayName?: string;
-  photo_url?: string | null;
-};
-
-/** A single inbox: the account's user icon, name, and address. */
-function FromInboxOption(props: { inbox: FromInbox }) {
-  const name = () => props.inbox.displayName;
+function SenderRow(props: { inbox: FromInboxOption }) {
   return (
     <>
       <UserIcon
@@ -25,18 +17,18 @@ function FromInboxOption(props: { inbox: FromInbox }) {
         class="shrink-0"
       />
       <span class="flex-1 truncate">
-        <Show when={name()} fallback={props.inbox.email_address}>
-          {name()} &lt;{props.inbox.email_address}&gt;
+        <Show
+          when={props.inbox.displayName}
+          fallback={props.inbox.email_address}
+        >
+          {props.inbox.displayName} &lt;{props.inbox.email_address}&gt;
         </Show>
       </span>
     </>
   );
 }
 
-function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
-  const name = () => props.inbox.displayName;
-  const label = () => name() || props.inbox.email_address;
-
+function SenderPill(props: { inbox: FromInboxOption; selectable: boolean }) {
   return (
     <div
       class={cn(
@@ -51,7 +43,9 @@ function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
         suppressClick
         class="shrink-0"
       />
-      <p class="text-sm whitespace-nowrap truncate max-w-60">{label()}</p>
+      <p class="text-sm whitespace-nowrap truncate max-w-60">
+        {props.inbox.email_address}
+      </p>
       <Show when={props.selectable}>
         <ChevronDown class="size-3 shrink-0 text-ink-muted" />
       </Show>
@@ -59,176 +53,146 @@ function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
   );
 }
 
-/**
- * Lets the user pick which linked inbox a compose/reply sends from. Renders an
- * identical "from" chip in every composer: the active inbox's icon, name, and
- * address, with a dropdown over the other inboxes when there's more than one.
- */
+/** Shared From control: inboxes followed by their verified aliases. Identities
+ * are keyed by inbox AND address, including addresses shared by two accounts. */
 export function FromInboxSelector(props: {
-  links: FromInbox[];
+  links: FromInboxOption[];
   activeInboxId: string | undefined;
-  onSelect: (inboxId: string) => void;
+  activeEmail?: string;
+  onSelect: (inboxId: string, senderEmail?: string) => void;
   disabled?: boolean;
   compact?: boolean;
   pill?: boolean;
   class?: string;
   portalScope?: 'local';
 }) {
-  const activeInbox = () =>
-    props.links.find((l) => l.id === props.activeInboxId);
-  const sortedLinks = () =>
-    [...props.links].sort((a, b) =>
-      a.email_address.localeCompare(b.email_address)
+  const active = () => {
+    const inbox = props.links.find(
+      (option) => option.inboxId === props.activeInboxId && !option.isAlias
     );
-
-  const unresolvedInboxPicker = () => (
-    <Show when={props.links.length > 0}>
-      <Dropdown>
-        <Dropdown.Trigger
-          disabled={props.disabled}
-          class={cn(
-            'inline-flex items-center gap-1 text-sm text-ink-muted',
-            props.class
+    const email = props.activeEmail?.toLowerCase();
+    if (!email) return inbox;
+    return (
+      props.links.find(
+        (option) =>
+          option.inboxId === props.activeInboxId &&
+          option.email_address.toLowerCase() === email
+      ) ??
+      (inbox
+        ? {
+            ...inbox,
+            email_address: props.activeEmail!,
+            displayName: undefined,
+          }
+        : undefined)
+    );
+  };
+  const choices = () => (
+    <Dropdown.Content portalScope={props.portalScope}>
+      <Dropdown.Group>
+        <For each={props.links}>
+          {(option, index) => (
+            <>
+              <Show
+                when={
+                  index() > 0 &&
+                  props.links[index() - 1].inboxId !== option.inboxId
+                }
+              >
+                <Dropdown.Separator />
+              </Show>
+              <Dropdown.Item
+                onSelect={() =>
+                  props.onSelect(option.inboxId, option.email_address)
+                }
+                class={cn(option.isAlias && 'pl-7')}
+              >
+                <Tooltip label={option.email_address}>
+                  <span class="flex items-center gap-2 min-w-0 flex-1">
+                    <SenderRow inbox={option} />
+                  </span>
+                </Tooltip>
+                <Show
+                  when={
+                    option.inboxId === props.activeInboxId &&
+                    option.email_address.toLowerCase() ===
+                      active()?.email_address.toLowerCase()
+                  }
+                >
+                  <Check class="size-3.5 shrink-0" />
+                </Show>
+              </Dropdown.Item>
+            </>
           )}
-        >
+        </For>
+      </Dropdown.Group>
+    </Dropdown.Content>
+  );
+  const label = (selectable: boolean) => (
+    <Show
+      when={active()}
+      fallback={
+        <>
           Select sending inbox
           <ChevronDown class="size-3 shrink-0" />
-        </Dropdown.Trigger>
-        <Dropdown.Content portalScope={props.portalScope}>
-          <Dropdown.Group>
-            <For each={sortedLinks()}>
-              {(inbox) => (
-                <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                  <FromInboxOption inbox={inbox} />
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Group>
-        </Dropdown.Content>
-      </Dropdown>
-    </Show>
-  );
-
-  if (props.compact) {
-    return (
-      <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
-        {(active) => (
-          <Show
-            when={props.links.length > 1}
-            fallback={<span class={props.class}>{active().email_address}</span>}
-          >
-            <Dropdown>
-              <Dropdown.Trigger
-                disabled={props.disabled}
-                class={`inline-flex min-w-0 max-w-full items-center gap-1 ${props.class ?? ''}`}
-              >
-                <span class="min-w-0 truncate">{active().email_address}</span>
-                <ChevronDown class="size-3 shrink-0" />
-              </Dropdown.Trigger>
-              <Dropdown.Content portalScope={props.portalScope}>
-                <Dropdown.Group>
-                  <For each={sortedLinks()}>
-                    {(inbox) => (
-                      <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                        <FromInboxOption inbox={inbox} />
-                        <Show when={inbox.id === props.activeInboxId}>
-                          <Check class="size-3.5 shrink-0" />
-                        </Show>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Group>
-              </Dropdown.Content>
-            </Dropdown>
-          </Show>
-        )}
-      </Show>
-    );
-  }
-
-  if (props.pill) {
-    return (
-      <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
-        {(active) => (
-          <Show
-            when={props.links.length > 1}
-            fallback={
-              <div class={props.class}>
-                <FromInboxPill inbox={active()} selectable={false} />
-              </div>
-            }
-          >
-            <Dropdown>
-              <Dropdown.Trigger
-                disabled={props.disabled}
-                class={cn(
-                  'inline-flex h-auto min-w-0 max-w-full border-none bg-transparent p-0 not-disabled:hover:bg-transparent active:bg-transparent',
-                  props.class
-                )}
-              >
-                <FromInboxPill inbox={active()} selectable={true} />
-              </Dropdown.Trigger>
-              <Dropdown.Content portalScope={props.portalScope}>
-                <Dropdown.Group>
-                  <For each={sortedLinks()}>
-                    {(inbox) => (
-                      <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                        <FromInboxOption inbox={inbox} />
-                        <Show when={inbox.id === props.activeInboxId}>
-                          <Check class="size-3.5 shrink-0" />
-                        </Show>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                </Dropdown.Group>
-              </Dropdown.Content>
-            </Dropdown>
-          </Show>
-        )}
-      </Show>
-    );
-  }
-
-  return (
-    <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
-      {(active) => (
+        </>
+      }
+    >
+      {(inbox) => (
         <Show
-          when={props.links.length > 1}
+          when={props.pill}
           fallback={
-            <div class="flex items-center gap-2 min-w-0 text-sm text-ink-muted">
-              <Show when={active()} keyed>
-                {(inbox) => <FromInboxOption inbox={inbox} />}
+            <>
+              <Show
+                when={props.compact}
+                fallback={<SenderRow inbox={inbox()} />}
+              >
+                <span class="min-w-0 truncate">{inbox().email_address}</span>
               </Show>
-            </div>
+              <Show when={selectable}>
+                <ChevronDown class="size-3 shrink-0" />
+              </Show>
+            </>
           }
         >
-          <Dropdown>
-            <Dropdown.Trigger
-              disabled={props.disabled}
-              class="flex items-center min-w-0 max-w-full gap-2 text-sm text-ink-muted"
-            >
-              <Show when={active()} keyed>
-                {(inbox) => <FromInboxOption inbox={inbox} />}
-              </Show>
-              <ChevronDown class="size-3 shrink-0" />
-            </Dropdown.Trigger>
-            <Dropdown.Content portalScope={props.portalScope}>
-              <Dropdown.Group>
-                <For each={sortedLinks()}>
-                  {(inbox) => (
-                    <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                      <FromInboxOption inbox={inbox} />
-                      <Show when={inbox.id === props.activeInboxId}>
-                        <Check class="size-3.5 shrink-0" />
-                      </Show>
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Group>
-            </Dropdown.Content>
-          </Dropdown>
+          <SenderPill inbox={inbox()} selectable={selectable} />
         </Show>
       )}
+    </Show>
+  );
+  return (
+    <Show when={props.links.length > 0}>
+      <Show
+        when={props.links.length > 1 || !active()}
+        fallback={
+          <div
+            class={cn(
+              'flex items-center gap-2 min-w-0 text-sm text-ink-muted',
+              props.class
+            )}
+          >
+            {label(false)}
+          </div>
+        }
+      >
+        <Dropdown>
+          <Tooltip label={active()?.email_address ?? 'Select sending inbox'}>
+            <Dropdown.Trigger
+              disabled={props.disabled}
+              aria-label={active() ? 'From address' : 'Select sending inbox'}
+              class={cn(
+                'inline-flex min-w-0 max-w-full items-center gap-2 text-sm text-ink-muted',
+                props.pill &&
+                  'h-auto border-none bg-transparent p-0 not-disabled:hover:bg-transparent active:bg-transparent',
+                props.class
+              )}
+            >
+              {label(true)}
+            </Dropdown.Trigger>
+          </Tooltip>
+          {choices()}
+        </Dropdown>
+      </Show>
     </Show>
   );
 }

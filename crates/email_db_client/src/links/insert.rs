@@ -16,6 +16,9 @@ struct LinkId {
 /// If a record with matching fusionauth_user_id, email_address, and provider already exists,
 /// updates the existing record with values from the provided Link.
 /// Returns the ID of the inserted or updated link and a boolean indicating if a new record was created.
+///
+/// Fails when the existing record is being deleted: reviving it would resume sync on a link
+/// whose data is mid-purge. Once the purge removes the row, a retry inserts a fresh link.
 #[tracing::instrument(skip(conn), err)]
 pub async fn upsert_link(
     conn: &mut sqlx::PgConnection,
@@ -52,6 +55,7 @@ pub async fn upsert_link(
             needs_reauth = false,
             last_sync_error_at = NULL,
             updated_at = NOW()
+        WHERE email_links.deleting_at IS NULL
         RETURNING id, is_primary
         "#,
         id,
@@ -61,8 +65,14 @@ pub async fn upsert_link(
         db_provider as _,
         is_sync_active
     )
-        .fetch_one(&mut *conn)
+        .fetch_optional(&mut *conn)
         .await?;
+
+    let Some(result) = result else {
+        anyhow::bail!(
+            "email link for {fusionauth_user_id} is being deleted; retry once it is gone"
+        );
+    };
 
     let service_link = service::link::Link {
         id: result.id,

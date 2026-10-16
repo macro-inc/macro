@@ -2,16 +2,43 @@ import type {
   PlatformNotificationHandle,
   PlatformNotificationInterface,
 } from '@notifications';
+import { invoke } from '@tauri-apps/api/core';
 import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
+import { type as osType } from '@tauri-apps/plugin-os';
+import { showLinuxNotification } from './linux-notification';
+import { MacOSNotificationUpdateRequiredError } from './notification-errors';
+
+export { MacOSNotificationUpdateRequiredError } from './notification-errors';
 
 export function createTauriNotificationInterface(
-  setDisabled: () => Promise<void>
+  setDisabled: () => Promise<void>,
+  shouldSend: () => boolean = () => true
 ): PlatformNotificationInterface {
-  async function getCur() {
+  const platform = osType();
+  const isMacOS = platform === 'macos';
+  let hasMacOSPermissionCommands = isMacOS;
+
+  async function getCur(): Promise<NotificationPermission> {
+    // The notification plugin always reports permission as granted on desktop.
+    // Read the actual OS authorization on macOS instead.
+    if (hasMacOSPermissionCommands) {
+      try {
+        return await invoke<NotificationPermission>(
+          'get_macos_notification_permission'
+        );
+      } catch (error) {
+        // Older native builds can receive this frontend through an OTA update.
+        // Preserve their existing behavior only when the command is absent.
+        if (error !== 'Command get_macos_notification_permission not found') {
+          throw error;
+        }
+        hasMacOSPermissionCommands = false;
+      }
+    }
     return (await isPermissionGranted()) ? 'granted' : 'denied';
   }
   return {
@@ -20,14 +47,45 @@ export function createTauriNotificationInterface(
       if (cur === 'granted') {
         return 'granted';
       }
+      if (hasMacOSPermissionCommands) {
+        // macOS will not prompt again after denial; permission must be changed
+        // in System Settings.
+        if (cur === 'denied') return 'denied';
+        return await invoke<NotificationPermission>(
+          'request_macos_notification_permission'
+        );
+      }
       return await requestPermission();
     },
     getCurrentPermission: getCur,
     showNotification: async (data) => {
       const granted = await getCur();
 
-      if (granted !== 'granted') {
+      // A user can disable notifications while the native permission check
+      // is in flight. Check the current preference just before dispatching.
+      if (granted !== 'granted' || !shouldSend()) {
         return 'not-granted';
+      }
+
+      if (isMacOS) {
+        try {
+          await invoke<void>('send_macos_notification', {
+            title: data.title,
+            body: data.options?.body,
+          });
+        } catch (error) {
+          // OTA frontend updates can reach an older native app. Its legacy
+          // sender silently drops notifications, so require a native update.
+          if (error === 'Command send_macos_notification not found') {
+            throw new MacOSNotificationUpdateRequiredError(error);
+          }
+          throw error;
+        }
+        return createTauriNotification();
+      }
+
+      if (platform === 'linux') {
+        return await showLinuxNotification(data.title, data.options);
       }
 
       if (!data.options) {

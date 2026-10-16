@@ -1,0 +1,16 @@
+---
+title: DeleteRoutine
+description: >-
+  Permanently delete a routine owned by the authenticated user, stopping all
+  future runs.
+---
+
+# DeleteRoutine
+
+Permanently delete a routine owned by the authenticated user, stopping all future runs. This cannot be undone; to stop it temporarily, pause it with UpdateRoutine instead. Use only when the user explicitly asks to delete a routine.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `routineId` | string | Yes | Routine UUID. |

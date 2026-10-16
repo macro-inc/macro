@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const testState = vi.hoisted(() => ({
   graphqlEnabled: false,
   restPending: false,
+  restNextPageError: false,
 }));
 const restRefetch = vi.hoisted(() => vi.fn(async () => undefined));
 const fetchSoup = vi.hoisted(() => vi.fn());
@@ -20,6 +21,7 @@ function makeGraphqlQuery(enabled: boolean) {
     isLoading: vi.fn(() => false),
     isFetching: vi.fn(() => false),
     isFetchingNextPage: vi.fn(() => false),
+    isFetchNextPageError: vi.fn(() => false),
     isPlaceholderData: vi.fn(() => false),
     hasNextPage: vi.fn(() => false),
     fetchNextPage: vi.fn(async () => undefined),
@@ -69,6 +71,7 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getSoupItems: vi.fn(), getSoupAstItems: fetchSoup },
 }));
 vi.mock('@tanstack/solid-query', () => ({
+  infiniteQueryOptions: vi.fn((options: unknown) => options),
   useInfiniteQuery: vi.fn(() => ({
     data: undefined,
     error: null,
@@ -79,6 +82,9 @@ vi.mock('@tanstack/solid-query', () => ({
     isFetching: false,
     isPlaceholderData: false,
     isFetchingNextPage: false,
+    get isFetchNextPageError() {
+      return testState.restNextPageError;
+    },
     isEnabled: true,
     hasNextPage: false,
     fetchNextPage: vi.fn(async () => undefined),
@@ -132,6 +138,7 @@ describe('Soup refetch transport selection', () => {
   beforeEach(() => {
     testState.graphqlEnabled = false;
     testState.restPending = false;
+    testState.restNextPageError = false;
     vi.clearAllMocks();
   });
 
@@ -145,6 +152,21 @@ describe('Soup refetch transport selection', () => {
     const query = mountAutoTransportQuery();
     expect(query.isLoading).toBe(false);
     expect(query.isPending).toBe(true);
+  });
+
+  it('reports continuation-page failures from the selected transport', () => {
+    const rest = mountAutoTransportQuery();
+    expect(rest.isFetchNextPageError).toBe(false);
+    testState.restNextPageError = true;
+    expect(rest.isFetchNextPageError).toBe(true);
+    disposeRoot?.();
+
+    testState.graphqlEnabled = true;
+    const graphql = mountAutoTransportQuery();
+    expect(graphql.transport).toBe('graphql');
+    groupedQuery.isFetchNextPageError.mockReturnValueOnce(true);
+    expect(graphql.isFetchNextPageError).toBe(true);
+    expect(graphql.isFetchNextPageError).toBe(false);
   });
 
   it('keeps paused GraphQL requests pending until data or an error arrives, unless disabled', () => {

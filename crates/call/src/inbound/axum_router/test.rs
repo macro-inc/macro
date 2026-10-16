@@ -2,6 +2,9 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 
 use crate::domain::models::CallError;
+use entity_access::domain::models::{AccessLevel, EntityPermission};
+
+use super::DeclineCallPermission;
 
 #[test]
 fn maps_domain_errors_to_status_codes() {
@@ -40,6 +43,16 @@ fn maps_domain_errors_to_status_codes() {
         let description = format!("{error:?}");
         assert_eq!(error.into_response().status(), status, "{description}");
     }
+}
+
+/// The entity-access service resolves a call to an access level, never a
+/// channel role, so the decline route must accept a plain viewer.
+#[test]
+fn decline_accepts_the_permission_call_access_resolves_to() {
+    let viewer = EntityPermission::AccessLevel {
+        access_level: AccessLevel::View,
+    };
+    assert!(viewer.satisfies::<DeclineCallPermission>());
 }
 
 mod public_routes {

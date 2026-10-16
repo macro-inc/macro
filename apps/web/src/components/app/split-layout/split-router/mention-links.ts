@@ -68,18 +68,20 @@ export function createMacroMentionLinkResolver(
     const leaf = route.matches.at(-1);
     if (!leaf) return;
 
+    const query = new URLSearchParams(link.query);
     const reference = routes.byId
       .get(leaf.id)
-      ?.definition.toReference?.(leaf.params);
+      ?.definition.toReference?.(leaf.params, query);
     if (!isBlockRouteReference(reference)) return;
     const mention: MacroMentionLink = {
       id: reference.id,
       block: reference.type,
-      params: {},
+      params: { ...reference.params },
     };
+    if (reference.params) return mention;
     const entry: Entry = { id: 'mention', location: { route } };
     const externalKeys = new Set(externalSearchKeys(routes, [entry]));
-    new URLSearchParams(link.query).forEach((value, key) => {
+    query.forEach((value, key) => {
       if (key !== 'referral_code' && externalKeys.has(key)) {
         mention.params[key] = value;
       }

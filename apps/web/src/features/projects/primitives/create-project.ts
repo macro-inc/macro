@@ -34,6 +34,9 @@ export function createProjectComposer(
   initial?: ProjectComposerDraft
 ) {
   const [name, setName] = createSignal(initial?.name ?? '');
+  const [description, setDescription] = createSignal(
+    initial?.description ?? ''
+  );
   const [shareWithTeam, setShareWithTeam] = createSignal(
     initial?.shareWithTeam ?? true
   );
@@ -50,6 +53,7 @@ export function createProjectComposer(
   const [error, setError] = createSignal(initial?.error);
   const snapshot = (): ProjectComposerDraft => ({
     name: name(),
+    description: description(),
     shareWithTeam: shareWithTeam(),
     properties: [...drafts().values()],
     error: error(),
@@ -57,6 +61,8 @@ export function createProjectComposer(
   return {
     name,
     setName,
+    description,
+    setDescription,
     shareWithTeam,
     setShareWithTeam,
     drafts,
@@ -66,6 +72,7 @@ export function createProjectComposer(
     clear() {
       if (pending()) return;
       setName('');
+      setDescription('');
       setShareWithTeam(true);
       setDrafts(new Map());
       setError(undefined);

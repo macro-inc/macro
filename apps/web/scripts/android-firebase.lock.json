@@ -2,13 +2,13 @@
   "dev": {
     "project": "android-release",
     "config": "dev",
-    "secret": "GOOGLE_SERVICES_JSON_V1",
-    "sha256": "2462d00a44657518daad1da298f57e108811ebc2e6dea00673696a30dd8dbbae"
+    "secret": "GOOGLE_SERVICES_JSON_V2",
+    "sha256": "e2391d4bbfb3c511ab45321aa510ce9abcd4c4018851353ed09d035ad5b5a381"
   },
   "build": {
     "project": "android-release",
     "config": "prd",
-    "secret": "GOOGLE_SERVICES_JSON_V1",
-    "sha256": "8d16839be88a544f205edfbf25e9561f20fd5016bcc0c0fdf3f8a313d29b780a"
+    "secret": "GOOGLE_SERVICES_JSON_V2",
+    "sha256": "6fd0b408ae4cb3ab4f2f8b0abdbcc51b798ccdc56fbbbde76aa6e449a10d879e"
   }
 }

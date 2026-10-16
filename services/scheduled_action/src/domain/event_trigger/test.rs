@@ -558,6 +558,72 @@ fn mention_trigger_is_only_for_the_mentioned_user() {
     );
 }
 
+fn call_event(event_type: &str, participants: &[&str]) -> IncomingEvent {
+    IncomingEvent {
+        event_id: Uuid::parse_str(EVENT_ID).unwrap(),
+        schema_version: 1,
+        payload: EventPayload::Call(
+            serde_json::from_value(json!({
+                "event_type": event_type, "metadata": {
+                    "call_id": ENTITY_ID, "channel_id": OTHER_ID, "created_by": HUMAN,
+                    "created_at": "2024-01-01T00:00:00Z", "recording_enabled": true,
+                    "started_at": "2024-01-01T00:00:00Z", "ended_at": "2024-01-01T00:30:00Z",
+                    "duration_ms": 1_800_000, "participant_count": participants.len(),
+                    "participants": participants, "has_recording": true,
+                    "archive_reason": "last_participant_left", "ai_name_generated": false
+                }
+            }))
+            .unwrap(),
+        ),
+    }
+}
+
+#[test]
+fn started_calls_keep_only_ids_and_belong_to_who_created_them() {
+    let event = call_event("call.started", &[]);
+    let normalized = event.normalize().unwrap();
+    assert_eq!(normalized.event_name(), EventName::CallStarted);
+    assert_eq!(normalized.entity_type(), EventEntityType::Call);
+    assert_eq!(normalized.entity_id().to_string(), ENTITY_ID);
+    assert_eq!(normalized.message_id(), None);
+    let stored = serde_json::to_string(&normalized).unwrap();
+    assert!(!stored.contains("example.com"));
+    assert!(!stored.contains(OTHER_ID));
+
+    assert!(event.is_for_owner(&MacroUserIdStr::parse_from_str(HUMAN).unwrap()));
+    assert!(
+        !event.is_for_owner(&MacroUserIdStr::parse_from_str("macro|other@example.com").unwrap())
+    );
+}
+
+#[test]
+fn ended_calls_keep_only_ids_and_belong_to_the_people_who_joined() {
+    let event = call_event("call.record_archived", &[HUMAN, "macro|guest@example.com"]);
+    let normalized = event.normalize().unwrap();
+    assert_eq!(normalized.event_name(), EventName::CallEnded);
+    assert_eq!(normalized.entity_type(), EventEntityType::Call);
+    assert_eq!(normalized.entity_id().to_string(), ENTITY_ID);
+    assert_eq!(normalized.message_id(), None);
+    let stored = serde_json::to_string(&normalized).unwrap();
+    assert!(!stored.contains("example.com"));
+    assert!(!stored.contains(OTHER_ID));
+
+    assert!(event.is_for_owner(&MacroUserIdStr::parse_from_str(HUMAN).unwrap()));
+    assert!(
+        !event.is_for_owner(&MacroUserIdStr::parse_from_str("macro|other@example.com").unwrap())
+    );
+    assert_eq!(
+        call_event("call.record_archived", &[]).normalize(),
+        Err(EventRejection::UnsafeAttribution)
+    );
+    for name in ["call.record_summarized", "call.recording_ready"] {
+        assert_eq!(
+            call_event(name, &[HUMAN]).normalize(),
+            Err(EventRejection::UnsupportedEvent)
+        );
+    }
+}
+
 #[test]
 fn email_receipts_keep_only_ids_and_exclude_spam_and_backfills() {
     use email::domain::events::ThreadBackfilledMetadata;

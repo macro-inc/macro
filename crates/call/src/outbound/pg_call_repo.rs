@@ -32,8 +32,8 @@ use crate::domain::meetings::{
 };
 use crate::domain::models::{
     ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
-    CallPeople, CallRecord, CallRecordGuest, CallRecordParticipant, CallRecordPreview,
-    CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
+    CallPeople, CallRecord, CallRecordGuest, CallRecordPage, CallRecordParticipant,
+    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
     DeletedCallRecordStorageKeys, EditCallRecordRepoArgs, EnrichedCallTranscript,
     TranscriptSegmentRequest, WithCallId,
 };
@@ -901,6 +901,42 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn record_decline(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            INSERT INTO call_declines (call_id, user_id)
+            VALUES ($1, $2)
+            ON CONFLICT (call_id, user_id) DO NOTHING
+            "#,
+            call_id,
+            user_id.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn has_declined(&self, call_id: &Uuid, user_id: &str) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM call_declines
+                WHERE call_id = $1 AND user_id = $2
+            ) as "exists!"
+            "#,
+            call_id,
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn delete_call(&self, call_id: &Uuid) -> Result<(), Self::Err> {
         let mut tx = self.pool.begin().await?;
 
@@ -1331,6 +1367,7 @@ impl CallRepository for PgCallRepo {
                 team_share_access_level: active.team_share_access_level,
                 is_active: true,
                 status: None,
+                viewer_has_declined: false,
                 participants,
                 guests,
                 transcript,
@@ -1441,6 +1478,7 @@ impl CallRepository for PgCallRepo {
             team_share_access_level: archived.team_share_access_level,
             is_active: false,
             status: None,
+            viewer_has_declined: false,
             participants,
             guests,
             transcript,
@@ -1547,6 +1585,7 @@ impl CallRepository for PgCallRepo {
         user_id: MacroUserIdStr<'a>,
         limit: u32,
         filter: &LiteralTree<CallLiteral>,
+        page: CallRecordPage,
     ) -> Result<Vec<CallRecord>, Self::Err> {
         // Fetch active and archived headers without transcripts. Channel calls
         // accept matching user, channel, or team grants; standalone calls require
@@ -1741,7 +1780,17 @@ impl CallRepository for PgCallRepo {
                 status as "status!"
             FROM visible_calls
             WHERE ($7::bool IS FALSE OR status = ANY($8::text[]))
-            ORDER BY "started_at!" DESC
+              -- Soup's keyset: calls sort by start, or by last activity.
+              AND (
+                  $15::timestamptz IS NULL
+                  OR (
+                      CASE WHEN $14 THEN started_at ELSE COALESCE(ended_at, started_at) END,
+                      call_id::text
+                  ) < ($15, $16::text)
+              )
+            ORDER BY
+                CASE WHEN $14 THEN started_at ELSE COALESCE(ended_at, started_at) END DESC,
+                call_id::text DESC
             LIMIT $2
             "#,
             user_id.as_ref(),
@@ -1757,6 +1806,9 @@ impl CallRepository for PgCallRepo {
             &property.negated,
             &property.definition_ids as &[Option<Uuid>],
             &property.values,
+            page.by_start,
+            page.after.map(|(sort_ts, _)| sort_ts),
+            page.after.map(|(_, call_id)| call_id.to_string()),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -1865,6 +1917,7 @@ impl CallRepository for PgCallRepo {
                 team_share_access_level: row.team_share_access_level,
                 is_active: row.is_active,
                 status: Some(call_status_from_sql(&row.status)),
+                viewer_has_declined: false,
                 participants,
                 guests,
                 transcript: Vec::new(),

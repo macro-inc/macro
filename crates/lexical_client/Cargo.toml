@@ -8,6 +8,7 @@ version = "0.1.0"
 agent_fold = { path = "../folds/agent_fold", default-features = false }
 anyhow = { workspace = true }
 messages = { path = "../messages" }
+trigger_context = { path = "../trigger_context" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }

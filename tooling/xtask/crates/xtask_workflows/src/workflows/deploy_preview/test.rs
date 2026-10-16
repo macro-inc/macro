@@ -1,6 +1,15 @@
 use super::*;
 
 #[test]
+fn preview_can_be_disabled_in_the_pull_request_title() {
+    let workflow = serde_json::to_value(deploy_preview()).expect("workflow JSON");
+    assert_eq!(
+        workflow["jobs"]["deploy"]["if"],
+        "!contains(github.event.pull_request.title, '[no preview]')"
+    );
+}
+
+#[test]
 fn preview_build_uses_remote_sccache_and_wasm_cache() {
     let yaml = deploy_preview().to_string().expect("workflow yaml");
     let job = yaml.split("\n  deploy:\n").nth(1).expect("deploy job");

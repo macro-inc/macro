@@ -52,7 +52,7 @@ export function EventContent(props: EventContentProps) {
 
     return (
       !props.event.allDay &&
-      duration > 0 &&
+      duration >= 0 &&
       duration <= SINGLE_LINE_EVENT_DURATION_MS
     );
   };

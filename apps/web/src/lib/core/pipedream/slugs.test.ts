@@ -9,9 +9,9 @@ import {
 } from './slugs';
 
 describe('Pipedream slugs', () => {
-  it('keeps the documented fallback connect slug first', () => {
+  it('uses the OAuth connector for new connections and preserves alias priority', () => {
     expect(SLACK_PIPEDREAM_SLUGS).toEqual(['slack', 'slack_v2']);
-    expect(SLACK_CONNECT_SLUG).toBe(SLACK_PIPEDREAM_SLUGS[0]);
+    expect(SLACK_CONNECT_SLUG).toBe('slack_v2');
   });
 
   it.each(SLACK_PIPEDREAM_SLUGS)('recognizes %s as Slack', (slug) => {

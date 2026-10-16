@@ -122,3 +122,24 @@ fn test_comment_on_document_schema_fields() {
     );
     assert!(response["properties"].get("markedText").is_some());
 }
+
+#[test]
+fn test_comment_mutation_and_skill_schema_validation() {
+    for (name, result) in [
+        (
+            "EditDocumentComment",
+            generate_validated_input_schema::<EditDocumentComment>(),
+        ),
+        (
+            "DeleteDocumentComment",
+            generate_validated_input_schema::<DeleteDocumentComment>(),
+        ),
+        (
+            "CreateSkill",
+            generate_validated_input_schema::<CreateSkill>(),
+        ),
+    ] {
+        let validated = result.unwrap_or_else(|error| panic!("{name}: {error:?}"));
+        assert_eq!(validated.name, name);
+    }
+}

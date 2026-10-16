@@ -22,6 +22,17 @@ const htmlFor = (route: string) =>
 const typesIn = (html: string) =>
   [...html.matchAll(/"@type"\s*:\s*"([^"]+)"/g)].map((match) => match[1]);
 
+// Intentional copy updates; retain the captured migration baseline unchanged.
+const updatedTitles: Record<string, string> = {
+  '/github': 'GitHub in Macro | Pull Requests, Code Changes, and Tasks',
+  '/agents': 'Macro Agents | Agents That Know What Your Team Is Doing',
+  '/calls': 'Macro Calls — Turn Conversations into Tasks and Updates',
+  '/channels': 'Macro Chat: Bring the Work into the Conversation',
+  '/documents': 'Macro Docs | Write With Your Team and Your Agents',
+  '/migrate': 'Switch your company to Macro | Migration guide',
+  '/tasks': 'Macro Tasks — Task management that keeps up with your team',
+};
+
 const linksByRoute = new Map<string, string[]>();
 const documentsByRoute = new Map<string, ReturnType<typeof parse>>();
 const indexedRoutes = baseline.routes.filter(
@@ -80,13 +91,8 @@ for (const previous of indexedRoutes) {
     (doc.getElementById('root')?.textContent?.length ?? 0) > 200,
     `${previous.path}: empty HTML shell`
   );
-  // The copy audit replaces the absolute ‘perfect memory’ claim. Keep the
-  // captured baseline intact and require the intentional replacement exactly.
   if (previous.path !== '/') {
-    const expectedTitle =
-      previous.path === '/calls'
-        ? 'Macro Calls — Recordings, Transcripts, and Agent Tools'
-        : previous.title;
+    const expectedTitle = updatedTitles[previous.path] ?? previous.title;
     assert.equal(doc.title, expectedTitle, `${previous.path}: title changed`);
   }
   for (const type of previous.schemaTypes)

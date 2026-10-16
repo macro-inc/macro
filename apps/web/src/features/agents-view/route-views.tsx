@@ -7,13 +7,13 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createRenderEffect, lazy, Show } from 'solid-js';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { routineContent } from '../routines/routine-navigation';
+import { AgentsViewSkeleton } from './agents-view-skeleton';
 import { parseAgentsRoute } from './core/route';
 
 const SoupView = lazy(async () => ({
@@ -113,7 +113,7 @@ export const AgentsRouteView = withAuth(() => {
     );
   };
   return (
-    <Show when={!flag().loading} fallback={<LoadingBlock />}>
+    <Show when={!flag().loading} fallback={<AgentsViewSkeleton />}>
       <Show
         when={enabled()}
         fallback={
@@ -178,4 +178,4 @@ export const AgentsRouteView = withAuth(() => {
       </Show>
     </Show>
   );
-});
+}, AgentsViewSkeleton);

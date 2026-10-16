@@ -12,24 +12,3 @@ pub struct Experiment {
     /// The date the experiment was ended
     pub ended_at: Option<chrono::DateTime<chrono::Utc>>,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ExperimentOperation {
-    /// Starts an experiment
-    Start,
-    /// Ends an experiment
-    End,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-pub struct ExperimentLog {
-    /// The id of the experiment
-    pub experiment_id: String,
-    /// The id of the user
-    pub user_id: String,
-    /// The group the experiment belongs to, can either be 'A' or 'B'
-    pub experiment_group: String,
-    /// Whether the user has completed the experiment
-    pub completed: bool,
-}

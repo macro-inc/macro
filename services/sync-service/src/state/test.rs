@@ -95,3 +95,77 @@ fn shared_history_still_compacts_with_concurrent_heads() {
         assert!(compact.len() < full.len() / 2);
     }
 }
+
+#[test]
+fn root_change_previews_an_update_without_applying_it() {
+    let state = DocumentState::new();
+    state
+        .loro_doc
+        .get_map("root")
+        .insert("type", "root")
+        .unwrap();
+    let client = LoroDoc::new();
+    client
+        .import(&state.loro_doc.export(ExportMode::Snapshot).unwrap())
+        .unwrap();
+    client.get_map("root").insert("indent", 1).unwrap();
+    let update = client
+        .export(ExportMode::updates(&state.loro_doc.oplog_vv()))
+        .unwrap();
+
+    assert_eq!(
+        state.root_change(&[&update]).unwrap(),
+        Some(RootChange {
+            before: serde_json::json!({"type": "root"}),
+            after: serde_json::json!({"type": "root", "indent": 1}),
+        })
+    );
+    assert_eq!(
+        state.loro_doc.get_deep_value().to_json(),
+        r#"{"root":{"type":"root"}}"#
+    );
+}
+
+#[test]
+fn root_change_refuses_writes_outside_the_root() {
+    let state = DocumentState::new();
+    state
+        .loro_doc
+        .get_map("root")
+        .insert("type", "root")
+        .unwrap();
+    let client = LoroDoc::new();
+    client
+        .import(&state.loro_doc.export(ExportMode::Snapshot).unwrap())
+        .unwrap();
+    client.get_map("elsewhere").insert("hidden", true).unwrap();
+    let update = client
+        .export(ExportMode::updates(&state.loro_doc.oplog_vv()))
+        .unwrap();
+
+    assert_eq!(state.root_change(&[&update]).unwrap(), None);
+}
+
+#[test]
+fn root_change_refuses_updates_missing_their_history() {
+    let state = DocumentState::new();
+    state
+        .loro_doc
+        .get_map("root")
+        .insert("type", "root")
+        .unwrap();
+    let client = LoroDoc::new();
+    client
+        .import(&state.loro_doc.export(ExportMode::Snapshot).unwrap())
+        .unwrap();
+    client.get_map("root").insert("indent", 1).unwrap();
+    let unseen = client.oplog_vv();
+    client.get_map("root").insert("indent", 2).unwrap();
+    let depends_on_unseen = client.export(ExportMode::updates(&unseen)).unwrap();
+
+    assert_eq!(state.root_change(&[&depends_on_unseen]).unwrap(), None);
+    assert_eq!(
+        state.loro_doc.get_deep_value().to_json(),
+        r#"{"root":{"type":"root"}}"#
+    );
+}

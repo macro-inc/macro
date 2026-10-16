@@ -2,6 +2,8 @@ import { ItemPreview } from '@core/component/ItemPreview';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg';
 import ChatCircle from '@phosphor-icons/core/regular/chat-circle.svg';
 import CheckCircle from '@phosphor-icons/core/regular/check-circle.svg';
+import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
+import Trash from '@phosphor-icons/core/regular/trash.svg';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -90,6 +92,57 @@ export const resolveDocumentCommentHandler = createToolRenderer({
       >
         <div class="min-w-0 flex-1">
           {verb()} a comment on{' '}
+          <DocumentPreview documentId={ctx.tool.data.documentId} />
+        </div>
+      </BaseTool>
+    );
+  },
+});
+
+export const editDocumentCommentHandler = createToolRenderer({
+  name: 'EditDocumentComment',
+  render: (ctx) => {
+    const [expanded, setExpanded] = createSignal(false);
+
+    return (
+      <BaseTool
+        icon={PencilSimple}
+        renderContext={ctx.renderContext}
+        type="call"
+        response={
+          expanded() ? (
+            <p class="whitespace-pre-wrap break-words rounded-lg border border-edge-muted bg-ink/[0.02] p-3 text-xs text-ink">
+              {ctx.tool.data.content}
+            </p>
+          ) : undefined
+        }
+      >
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <span class="min-w-0">
+            {ctx.response ? 'Edited a comment on' : 'Edit a comment on'}{' '}
+            <DocumentPreview documentId={ctx.tool.data.documentId} />
+          </span>
+          <Tool.ResultToggle
+            expanded={expanded()}
+            onToggle={() => setExpanded((value) => !value)}
+            showToggle={!!ctx.tool.data.content}
+          />
+        </div>
+      </BaseTool>
+    );
+  },
+});
+
+export const deleteDocumentCommentHandler = createToolRenderer({
+  name: 'DeleteDocumentComment',
+  render: (ctx) => {
+    const noun = () =>
+      ctx.response?.data.deletedThread ? 'a comment thread' : 'a comment';
+
+    return (
+      <BaseTool icon={Trash} renderContext={ctx.renderContext} type="call">
+        <div class="min-w-0 flex-1">
+          {ctx.response ? 'Deleted' : 'Delete'} {noun()} on{' '}
           <DocumentPreview documentId={ctx.tool.data.documentId} />
         </div>
       </BaseTool>

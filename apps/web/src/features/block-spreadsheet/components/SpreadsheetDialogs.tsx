@@ -143,3 +143,54 @@ export function SpreadsheetFindDialog(props: {
     </Dialog>
   );
 }
+
+/** Confirms that moved cells replace values already at their destination. */
+export function SpreadsheetMoveDialog(props: {
+  open: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+  onRestoreFocus?: () => void;
+}) {
+  return (
+    <Dialog
+      onRestoreFocus={props.onRestoreFocus}
+      open={props.open}
+      onOpenChange={(open) => {
+        if (!open) props.onClose();
+      }}
+      position="center"
+      class="w-96"
+    >
+      <form
+        class="p-5 text-ink"
+        onKeyDown={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          props.onConfirm();
+        }}
+      >
+        <Dialog.Title class="mb-2 text-sm font-semibold">
+          Replace cells?
+        </Dialog.Title>
+        <Dialog.Description class="mb-4 text-sm text-ink-muted">
+          There are already values where you are moving these cells. Moving
+          replaces them, and formulas that refer to them show #REF!. You can
+          undo this change.
+        </Dialog.Description>
+        <div class="mt-5 flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={props.onClose}
+          >
+            Cancel
+          </Button>
+          <Button size="sm" variant="strong" type="submit">
+            Replace
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}

@@ -2,7 +2,6 @@ import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
-import BellIcon from '@phosphor/bell.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ChatsCircleIcon from '@phosphor/chats-circle.svg';
@@ -13,7 +12,6 @@ import HouseIcon from '@phosphor/house.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
-import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
 import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
@@ -58,15 +56,6 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
-  },
-  {
-    id: 'reminders',
-    label: 'Reminders',
-    href: LIST_VIEW_PATHS.reminders,
-    icon: BellIcon,
-    iconActive: BellFillIcon,
-    hotkey: 'm',
-    hotkeyToken: TOKENS.sidebar.goTo.reminders,
   },
   {
     id: 'documents',
@@ -155,7 +144,6 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 export type NavItemGates = {
   showCalendar: boolean;
   showCustomers: boolean;
-  showReminders: boolean;
   showCalls: boolean;
   showReviews: boolean;
   /** User preferences for which items are shown and in what order. */
@@ -169,7 +157,6 @@ export const isNavItemAvailable = (
 ): boolean => {
   if (item.id === 'calendar') return gates.showCalendar;
   if (item.id === 'companies') return gates.showCustomers;
-  if (item.id === 'reminders') return gates.showReminders;
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   return true;

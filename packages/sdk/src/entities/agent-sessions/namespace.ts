@@ -1,4 +1,7 @@
-import type { SandboxSize } from '../../../generated/agent-harness/types.gen';
+import type {
+  CodingPreferencesBody,
+  SandboxSize,
+} from '../../../generated/agent-harness/types.gen';
 import type { MacroClient } from '../../utils/client';
 import {
   AgentSession,
@@ -53,5 +56,17 @@ export class AgentSessionNamespace {
   /** Set the caller's default sandbox size for the next `@coder` mention. */
   setDefaultSandboxSize(size: SandboxSize): Promise<SandboxSize> {
     return AgentSession.setDefaultSandboxSize(this.client, size);
+  }
+
+  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  codingPreferences(): Promise<CodingPreferencesBody> {
+    return AgentSession.codingPreferences(this.client);
+  }
+
+  /** Replace the caller's coding preferences. */
+  setCodingPreferences(
+    preferences: CodingPreferencesBody
+  ): Promise<CodingPreferencesBody> {
+    return AgentSession.setCodingPreferences(this.client, preferences);
   }
 }

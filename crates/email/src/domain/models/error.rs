@@ -11,6 +11,15 @@ pub enum EmailErr {
     /// An external provider API error (e.g. Gmail API).
     #[error("Provider error: {0}")]
     ProviderErr(anyhow::Error),
+    /// Sender lookup is unavailable on this host or at the provider.
+    #[error("Email sender addresses are unavailable")]
+    SendAsUnavailable,
+    /// The provider grant cannot read sender settings.
+    #[error("Reconnect this inbox to access its sender addresses")]
+    SendAsPermissionRequired,
+    /// The requested address is not an approved sender for this inbox.
+    #[error("This address is not a verified sender for the selected inbox")]
+    InvalidSender,
     /// A frecency query error.
     #[error(transparent)]
     Frecency(#[from] FrecencyQueryErr),
@@ -63,6 +72,29 @@ pub enum EmailErr {
     /// Invalid email filter input.
     #[error("{0}")]
     InvalidEmailFilter(String),
+    /// This host has no attachment source or storage wired, so a send that
+    /// names attachments cannot be honoured.
+    #[error("Email attachments are not available here")]
+    AttachmentsUnavailable,
+    /// A referenced document cannot be attached: it is not a file (a Macro
+    /// document with no stored bytes), is gone, or could not be read.
+    #[error("Cannot attach \"{name}\": {reason}")]
+    AttachmentUnavailable {
+        /// What the document is called, for the message the user reads.
+        name: String,
+        /// Why it cannot be attached.
+        reason: String,
+    },
+    /// The attachments together exceed what one email can carry.
+    #[error(
+        "Attachments total {total_bytes} bytes, over the {limit_bytes} byte limit for one email"
+    )]
+    AttachmentsTooLarge {
+        /// The combined raw size of every attachment requested.
+        total_bytes: usize,
+        /// The ceiling it crossed.
+        limit_bytes: usize,
+    },
     /// The caller's team has `team_crm_settings.crm_enabled = false` (or no
     /// row at all), so no CRM-scoped query is allowed.
     #[error("CRM is disabled for this team")]

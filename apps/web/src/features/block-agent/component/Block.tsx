@@ -30,10 +30,10 @@ import {
 } from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
-import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentComposer } from './AgentComposer';
+import { AgentConnections } from './AgentConnections';
 import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { AgentSplitHeader } from './AgentSplitHeader';
@@ -159,7 +159,9 @@ function AgentBlockContent(props: {
             {/* The Changes pane opens beside the transcript; closed, the
                 transcript keeps the whole width. */}
             <ChangesSplit>
-              <Transcript searchTarget={searchTarget()} />
+              <AgentConnections>
+                <Transcript searchTarget={searchTarget()} />
+              </AgentConnections>
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
               <AgentComposerRegion>
@@ -211,7 +213,6 @@ export default function BlockAgent() {
   // nowhere.
   const adoptSessionId = (sessionId: string) => {
     split?.handle.adoptContentId({ type: 'agent', nextId: sessionId });
-    forgetPendingSession(blockId);
   };
 
   return (

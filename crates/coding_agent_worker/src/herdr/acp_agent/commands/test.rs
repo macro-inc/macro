@@ -24,6 +24,7 @@ fn advertised_commands_reach_macro_metadata_for_each_provider() {
                 },
             }))
             .unwrap(),
+            logged_at: None,
         });
         let names: Vec<_> = fold
             .metadata()

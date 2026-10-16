@@ -40,8 +40,6 @@ export function formulaCompletion(
   text: string,
   context: CompletionContext
 ): FormulaCompletion {
-  if (text.trim() === '=')
-    return { kind: 'list', names: names.slice(0, 40), from: 1 };
   const argument = context.expecting.find(
     (token) => typeof token === 'object' && 'Argument' in token
   );
@@ -53,7 +51,12 @@ export function formulaCompletion(
   const partial = context.expecting.find(
     (token) => typeof token === 'object' && 'FunctionName' in token
   );
-  if (!partial || typeof partial !== 'object' || !('FunctionName' in partial))
+  if (
+    !partial ||
+    typeof partial !== 'object' ||
+    !('FunctionName' in partial) ||
+    !partial.FunctionName
+  )
     return;
   const matches = names.filter((name) =>
     name.startsWith(partial.FunctionName.toUpperCase())

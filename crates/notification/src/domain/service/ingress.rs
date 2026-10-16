@@ -233,35 +233,58 @@ where
             .await
             .context(SendNotificationError::Other)?;
 
-        if request.req.recipient_ids.is_empty() {
-            return Ok(None);
-        }
-
-        let (queue_messages, apns_collapse_key) = self
-            .build_queue_message(notification_id, &mut request)
-            .await?;
-
-        let notified_recipients = request.req.recipient_ids.clone();
+        let apns_collapse_key = request
+            .build_apns
+            .as_ref()
+            .map(|apns| apns.attr.collapse_key.as_str());
 
         // Create notification in DB (with collapse key if APNS was built)
         let created = self
             .repository
             .create_notification(
-                request.req,
+                request.req.clone(),
                 notification_id,
                 self.service_name,
-                apns_collapse_key.as_deref(),
+                apns_collapse_key,
             )
             .await
             .context(SendNotificationError::Other)?;
 
-        // If notification already exists (idempotent), return early
+        // Completed publications and withdrawn notifications stay idempotent.
         let Some(n) = created else {
+            if request.req.recipient_ids.is_empty() {
+                return Ok(None);
+            }
             return Ok(Some(NotificationResult {
                 notification_id,
                 notified_recipients: HashSet::new(),
             }));
         };
+
+        // Do not alert again after a recipient has already acted on the stored notification.
+        let n: Vec<_> = n
+            .into_iter()
+            .filter(|row| {
+                row.state == crate::domain::models::NotificationState::Unseen
+                    && row.deleted_at.is_none()
+            })
+            .collect();
+        if n.is_empty() {
+            self.repository
+                .complete_notification_publication(notification_id)
+                .await
+                .context(SendNotificationError::Other)?;
+            return Ok(Some(NotificationResult {
+                notification_id,
+                notified_recipients: HashSet::new(),
+            }));
+        }
+        // A retry uses the original recipients, including when current filters changed.
+        request.req.recipient_ids = n.iter().map(|row| row.owner_id.clone()).collect();
+        let notified_recipients = request.req.recipient_ids.clone();
+        let (queue_messages, _) = self
+            .build_queue_message(notification_id, &mut request)
+            .await?;
 
         // get the timestamp info back out of the db created values
         let first = n
@@ -283,6 +306,11 @@ where
                     .map(|msg| msg.with_timestamps(created_at, updated_at))
                     .collect(),
             )
+            .await
+            .context(SendNotificationError::Other)?;
+
+        self.repository
+            .complete_notification_publication(notification_id)
             .await
             .context(SendNotificationError::Other)?;
 

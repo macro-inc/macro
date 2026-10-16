@@ -178,15 +178,52 @@ pub enum SessionStatus {
 }
 
 /// Which Pipedream MCP servers a session is handed: the agent's own choice,
-/// snapshotted onto the session at creation like `instructions`. The ACP
-/// agent is given its server list once per attach and cannot refresh it, so
-/// the snapshot is what every later attach re-advertises; editing the agent
-/// applies to its next session.
+/// snapshotted onto the session at creation like `instructions`. The servers
+/// it resolves to are re-listed before each prompt, so an app the owner
+/// connects mid-session reaches a live agent that can `session/resume`;
+/// editing the agent's selection applies to its next session.
 pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
+
+/// Why a session is created, independently of whether it appears in broad lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionPurpose {
+    /// A regular session opened directly or from a thread mention.
+    Standalone,
+    /// An unprompted speculative runtime, eligible for warm claim and expiry.
+    Warm,
+    /// Context backing an agent DM; accessed through its conversation.
+    AgentDm,
+}
+
+impl SessionPurpose {
+    /// Validate speculative creation against durable conversation provenance.
+    /// A legacy standalone caller naming a reserved context adopts DM policy.
+    pub fn for_creation(
+        self,
+        conversation: bool,
+        has_message: bool,
+    ) -> Result<Self, AgentSessionError> {
+        if self == Self::Warm && (conversation || has_message) {
+            return Err(AgentSessionError::InvalidSessionPurpose);
+        }
+        Ok(if conversation { Self::AgentDm } else { self })
+    }
+
+    /// Whether creation should omit the session from broad Agents/Home lists.
+    pub fn list_hidden(self, bot_id: BotId, thread_id: Option<Uuid>, hide_agent_dms: bool) -> bool {
+        match self {
+            Self::Warm => true,
+            Self::AgentDm => hide_agent_dms,
+            Self::Standalone => bot_id == bot_id::MACRO_NEW_BOT_ID && thread_id.is_some(),
+        }
+    }
+}
 
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
 pub struct CreateAgentSessionParams {
+    /// Creation policy for visibility and speculative runtime lifecycle.
+    pub purpose: SessionPurpose,
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
     /// Who created and owns the session.
@@ -258,6 +295,8 @@ pub struct AgentSession {
     pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// The pull request associated with this session, independent of conversation history.
     pub pull_request_url: Option<String>,
+    /// The Macro task the session was explicitly linked to.
+    pub task_id: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,
@@ -405,6 +444,9 @@ pub struct StoredQueuedAction {
     /// Chip message id, once posted, so a retry does not announce twice.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub announced_message_id: Option<Uuid>,
+    /// Why the agent is being asked, composed into the prompt at dispatch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<trigger_context::TriggerContext>,
 }
 
 impl From<&StoredQueuedAction> for super::ports::QueuedControl {

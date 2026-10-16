@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 use crate::attachments::provider;
 use crate::messages::replying_to_id;
@@ -72,6 +72,13 @@ pub async fn insert_message_with_tx(
 }
 
 /// inserts message object into the database
+///
+/// On conflict the update is skipped entirely when the stored row already
+/// holds the incoming values, so a re-sync writes no new row version. When
+/// only small columns change, the large body/header columns keep their
+/// existing values, which lets Postgres reuse their TOAST chunks instead of
+/// rewriting them. Provider messages arrive without `replying_to_id` (it is
+/// resolved from headers afterwards), so a NULL keeps the stored value.
 #[tracing::instrument(skip(tx, message), err)]
 async fn insert_db_message(
     tx: &mut sqlx::PgConnection,
@@ -83,7 +90,7 @@ async fn insert_db_message(
     let db_message =
         parse::service_to_db::map_service_message_to_db(message, thread_id, from_contact_id);
 
-    let result = sqlx::query!(
+    let result = sqlx::query_scalar!(
         r#"
         INSERT INTO email_messages (
         id, provider_id, link_id, global_id, thread_id, provider_thread_id, replying_to_id, provider_history_id, internal_date_ts,
@@ -95,7 +102,7 @@ async fn insert_db_message(
             global_id = EXCLUDED.global_id,
             provider_history_id = EXCLUDED.provider_history_id,
             provider_thread_id = EXCLUDED.provider_thread_id,
-            replying_to_id = EXCLUDED.replying_to_id,
+            replying_to_id = COALESCE(EXCLUDED.replying_to_id, email_messages.replying_to_id),
             from_name = EXCLUDED.from_name,
             from_contact_id = EXCLUDED.from_contact_id,
             internal_date_ts = EXCLUDED.internal_date_ts,
@@ -108,10 +115,36 @@ async fn insert_db_message(
             is_starred = EXCLUDED.is_starred,
             is_sent = EXCLUDED.is_sent,
             is_draft = EXCLUDED.is_draft,
-            headers_jsonb = EXCLUDED.headers_jsonb,
-            body_text = EXCLUDED.body_text,
-            body_html_sanitized = EXCLUDED.body_html_sanitized,
+            headers_jsonb = CASE
+                WHEN email_messages.headers_jsonb IS DISTINCT FROM EXCLUDED.headers_jsonb
+                THEN EXCLUDED.headers_jsonb ELSE email_messages.headers_jsonb END,
+            body_text = CASE
+                WHEN email_messages.body_text IS DISTINCT FROM EXCLUDED.body_text
+                THEN EXCLUDED.body_text ELSE email_messages.body_text END,
+            body_html_sanitized = CASE
+                WHEN email_messages.body_html_sanitized IS DISTINCT FROM EXCLUDED.body_html_sanitized
+                THEN EXCLUDED.body_html_sanitized ELSE email_messages.body_html_sanitized END,
             updated_at = NOW()
+        -- Large columns last: the row comparison stops at the first difference.
+        WHERE (
+            email_messages.global_id, email_messages.provider_history_id,
+            email_messages.provider_thread_id, email_messages.replying_to_id,
+            email_messages.from_name, email_messages.from_contact_id,
+            email_messages.internal_date_ts, email_messages.snippet,
+            email_messages.size_estimate, email_messages.subject, email_messages.sent_at,
+            email_messages.has_attachments, email_messages.is_read, email_messages.is_starred,
+            email_messages.is_sent, email_messages.is_draft, email_messages.headers_jsonb,
+            email_messages.body_text, email_messages.body_html_sanitized
+        ) IS DISTINCT FROM (
+            EXCLUDED.global_id, EXCLUDED.provider_history_id,
+            EXCLUDED.provider_thread_id, COALESCE(EXCLUDED.replying_to_id, email_messages.replying_to_id),
+            EXCLUDED.from_name, EXCLUDED.from_contact_id,
+            EXCLUDED.internal_date_ts, EXCLUDED.snippet,
+            EXCLUDED.size_estimate, EXCLUDED.subject, EXCLUDED.sent_at,
+            EXCLUDED.has_attachments, EXCLUDED.is_read, EXCLUDED.is_starred,
+            EXCLUDED.is_sent, EXCLUDED.is_draft, EXCLUDED.headers_jsonb,
+            EXCLUDED.body_text, EXCLUDED.body_html_sanitized
+        )
         RETURNING id
         "#,
         db_message.id,
@@ -138,10 +171,26 @@ async fn insert_db_message(
         db_message.body_html_sanitized,
         db_message.headers_jsonb
     )
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
 
-    Ok(result.id)
+    if let Some(id) = result {
+        return Ok(id);
+    }
+
+    // The conflicting row already holds this data; fetch its id.
+    let existing_id = sqlx::query_scalar!(
+        r#"
+        SELECT id FROM email_messages
+        WHERE link_id = $1 AND provider_id = $2
+        "#,
+        db_message.link_id,
+        db_message.provider_id,
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    Ok(existing_id)
 }
 
 /// Inserts a single message into the database with transaction handling

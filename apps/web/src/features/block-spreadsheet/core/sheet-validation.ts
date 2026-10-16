@@ -1,4 +1,9 @@
 import {
+  type DropdownOptions,
+  literalListItems,
+  validationReference,
+} from '@macro-inc/spreadsheet/data-validation';
+import {
   type ComparisonOperator,
   type DataValidation,
   sqrefContains,
@@ -17,6 +22,32 @@ export function validationAt(
   );
 }
 
+/** A list rule as the dropdown dialog edits it. */
+export function dropdownOptions(
+  rule: DataValidation | undefined
+): DropdownOptions | undefined {
+  const source = rule?.type === 'list' ? rule.formulas?.[0] : undefined;
+  if (!rule || source === undefined) return;
+  const rejectInvalid =
+    !!rule.showError && (rule.errorStyle ?? 'stop') === 'stop';
+  const items = literalListItems(source);
+  return {
+    ...(items ? { items } : { range: source.replace(/\$/g, '') }),
+    rejectInvalid,
+    ...(rule.colors && { colors: rule.colors }),
+  };
+}
+
+/** A list rule's choice colors by lowercase text, as Excel matches choices. */
+export function choiceColors(
+  rule: DataValidation
+): Map<string, string> | undefined {
+  if (!rule.colors?.length) return;
+  return new Map(
+    rule.colors.map(({ item, color }) => [item.toLowerCase(), color])
+  );
+}
+
 /** A cell's displayed text, and its number when it holds one. */
 export type RangeValue = { text: string; number?: number };
 
@@ -25,23 +56,6 @@ export type RangeValues = (
   sheet: string | undefined,
   range: string
 ) => RangeValue[] | undefined;
-
-const reference =
-  /^(?:(?:'((?:[^']|'')+)'|([^\s!'"(),:]+))!)?\$?([A-Z]{1,3})\$?(\d+)(?::\$?([A-Z]{1,3})\$?(\d+))?$/i;
-
-/** A formula that is a single reference: its sheet and plain A1 range. */
-function referenceOf(formula: string) {
-  const match = reference.exec(formula.trim());
-  if (!match) return;
-  const [, quoted, bare, column1, row1, column2, row2] = match;
-  const start = `${column1}${row1}`.toUpperCase();
-  const end = column2 ? `${column2}${row2}`.toUpperCase() : start;
-  if (!parseCellAddress(start) || !parseCellAddress(end)) return;
-  return {
-    sheet: quoted?.replace(/''/g, "'") ?? bare,
-    range: start === end ? start : `${start}:${end}`,
-  };
-}
 
 /**
  * A list rule's choices: the items of a quoted list, or the values of a
@@ -56,17 +70,14 @@ export function listItems(
   if (rule.type !== 'list') return;
   const source = rule.formulas?.[0]?.trim();
   if (!source) return;
-  if (/^".*"$/s.test(source))
-    return source
-      .slice(1, -1)
-      .replace(/""/g, '"')
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
+  const literal = literalListItems(source);
+  if (literal) return literal;
   const name = names.find(
     (entry) => entry.name.toLowerCase() === source.toLowerCase()
   );
-  const target = referenceOf(name ? name.formula.replace(/^=/, '') : source);
+  const target = validationReference(
+    name ? name.formula.replace(/^=/, '') : source
+  );
   if (!target) return;
   const items = values(target.sheet, target.range);
   if (!items) return;
@@ -123,7 +134,7 @@ function bound(formula: string | undefined, values: RangeValues) {
   if (formula === undefined) return;
   const direct = numericInput(formula.replace(/^"(.*)"$/, '$1'));
   if (direct !== undefined) return direct;
-  const target = referenceOf(formula);
+  const target = validationReference(formula);
   if (!target || target.range.includes(':')) return;
   const value = values(target.sheet, target.range)?.[0];
   return value?.number ?? (value && numericInput(value.text));

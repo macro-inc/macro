@@ -5,6 +5,10 @@ import {
   $isTableNode,
 } from '@lexical/table';
 import {
+  $createDateMentionNode,
+  $isDateMentionNode,
+} from '@macro-inc/lexical-core/nodes/DateMentionNode';
+import {
   $createImageNode,
   $isImageNode,
 } from '@macro-inc/lexical-core/nodes/ImageNode';
@@ -62,6 +66,38 @@ describe('table cell allowed content', () => {
       expect(
         $isElementNode(children[2]) && children[2].getFirstChild()?.getKey()
       ).toBe(linkKey);
+    });
+  });
+
+  it('keeps a date mention appended to a table cell', async () => {
+    const editor = createTableEditor();
+    await buildTable(editor, textGrid([['hello']]));
+    let mentionKey = '';
+
+    editor.update(
+      () => {
+        const mention = $createDateMentionNode({
+          date: '2026-03-24T00:00:00.000Z',
+          displayFormat: 'March 24, 2026',
+        });
+        mentionKey = mention.getKey();
+        $getCell(0, 0).append(mention);
+      },
+      { discrete: true }
+    );
+
+    editor.read(() => {
+      const children = $getCell(0, 0).getChildren();
+      expect(children.map((child) => child.getType())).toEqual([
+        'paragraph',
+        'paragraph',
+      ]);
+      const mention = $isElementNode(children[1])
+        ? children[1].getChildren().find($isDateMentionNode)
+        : undefined;
+      expect(mention?.getKey()).toBe(mentionKey);
+      expect(mention?.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention?.getDisplayFormat()).toBe('March 24, 2026');
     });
   });
 

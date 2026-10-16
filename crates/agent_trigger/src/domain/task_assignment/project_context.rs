@@ -3,8 +3,9 @@
 use agent_session::domain::error::{AgentSessionError, Result};
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{EntityAccessAuth, EntityAccessReceipt};
-use initiative::domain::events::InitiativeEventActor;
+use initiative::domain::{events::InitiativeEventActor, lookup::InitiativeReader};
 use messages::domain::service::MessageWrite;
+use trigger_context::ProjectRef;
 
 use crate::domain::project_assignment::{ProjectAssignmentAccess, ProjectMemberships};
 
@@ -14,28 +15,35 @@ use super::{TaskAssignmentContext, TaskBrief};
 mod test;
 
 /// Enriches task briefs with the current project only when the same actor can view it.
-pub struct ProjectTaskAssignmentContext<C, M, A> {
-    tasks: C,
-    memberships: M,
-    access: A,
+pub struct ProjectTaskAssignmentContext<Tasks, Memberships, Access, Projects> {
+    tasks: Tasks,
+    memberships: Memberships,
+    access: Access,
+    projects: Projects,
 }
 
-impl<C, M, A> ProjectTaskAssignmentContext<C, M, A> {
-    /// Compose task content, current memberships, and project authorization ports.
-    pub fn new(tasks: C, memberships: M, access: A) -> Self {
+impl<Tasks, Memberships, Access, Projects>
+    ProjectTaskAssignmentContext<Tasks, Memberships, Access, Projects>
+{
+    /// Compose task content, current memberships, project authorization, and
+    /// project identity ports.
+    pub fn new(tasks: Tasks, memberships: Memberships, access: Access, projects: Projects) -> Self {
         Self {
             tasks,
             memberships,
             access,
+            projects,
         }
     }
 }
 
-impl<C, M, A> TaskAssignmentContext for ProjectTaskAssignmentContext<C, M, A>
+impl<Tasks, Memberships, Access, Projects> TaskAssignmentContext
+    for ProjectTaskAssignmentContext<Tasks, Memberships, Access, Projects>
 where
-    C: TaskAssignmentContext,
-    M: ProjectMemberships + 'static,
-    A: ProjectAssignmentAccess + 'static,
+    Tasks: TaskAssignmentContext,
+    Memberships: ProjectMemberships + 'static,
+    Access: ProjectAssignmentAccess + 'static,
+    Projects: InitiativeReader,
 {
     async fn task_brief(
         &self,
@@ -45,7 +53,7 @@ where
             return Ok(None);
         };
         // Membership may have changed since another source built the brief.
-        brief.project_id = None;
+        brief.project = None;
         let actor = match access.auth() {
             EntityAccessAuth::Authenticated(user) => InitiativeEventActor {
                 actor: ChannelSender::new_from_user(user.clone()),
@@ -78,10 +86,20 @@ where
             .receipts(&actor, project, task)
             .await
             .map_err(|error| AgentSessionError::Unknown(error.into()))?
-            .is_some()
+            .is_none()
         {
-            brief.project_id = Some(project);
+            return Ok(Some(brief));
         }
+        // A project deleted since the membership read is not named.
+        brief.project = self
+            .projects
+            .read_basic(project)
+            .await
+            .map_err(|error| AgentSessionError::Unknown(error.into()))?
+            .map(|project| ProjectRef {
+                id: project.id.as_uuid(),
+                name: project.name,
+            });
         Ok(Some(brief))
     }
 }

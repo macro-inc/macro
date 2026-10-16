@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::messages;
 use crate::messages::get;
 
@@ -5,7 +8,8 @@ use models_email::service::message;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 
-/// Updates a single message's replying_to_id field
+/// Updates a single message's replying_to_id field. The row is only rewritten when the value
+/// changes. Returns whether the message exists for the link.
 #[tracing::instrument(skip(executor), err)]
 pub async fn update_db_message_replying_to_id<'e, E>(
     executor: E,
@@ -16,36 +20,38 @@ pub async fn update_db_message_replying_to_id<'e, E>(
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    let result = sqlx::query!(
+    let found = sqlx::query_scalar!(
         r#"
-        UPDATE email_messages
-        SET
-            replying_to_id = $1,
-            updated_at = NOW()
-        WHERE
-            id = $2
-            AND link_id = $3
-        RETURNING id
+        WITH updated AS (
+            UPDATE email_messages
+            SET
+                replying_to_id = $1,
+                updated_at = NOW()
+            WHERE
+                id = $2
+                AND link_id = $3
+                AND replying_to_id IS DISTINCT FROM $1
+        )
+        SELECT EXISTS (
+            SELECT 1 FROM email_messages WHERE id = $2 AND link_id = $3
+        ) AS "found!"
         "#,
         replying_to_id,
         message_id,
         link_id
     )
-    .fetch_optional(executor)
+    .fetch_one(executor)
     .await?;
 
-    // Return true if a message was updated, false otherwise
-    let updated = result.is_some();
-
-    if !updated {
+    if !found {
         tracing::warn!(
             message_id = %message_id,
             link_id = %link_id,
-            "No message was updated - message may not exist or doesn't belong to the link"
+            "Message not found - it may not exist or doesn't belong to the link"
         );
     }
 
-    Ok(updated)
+    Ok(found)
 }
 
 /// Updates the replying_to_id for multiple messages belonging to a single link (typically part
@@ -65,34 +71,40 @@ where
 
     let (message_ids, replying_to_ids): (Vec<Uuid>, Vec<Uuid>) = updates.iter().cloned().unzip();
 
-    let result = sqlx::query!(
+    // Rows that already hold the value are left alone; the count covers every matching message
+    // so the warning below only fires for messages that are missing.
+    let matched = sqlx::query_scalar!(
         r#"
-        UPDATE email_messages
-        SET
-            replying_to_id = update_data.new_replying_to_id,
-            updated_at = NOW()
-        FROM
-            UNNEST($1::uuid[], $2::uuid[])
-                AS update_data(message_id, new_replying_to_id)
-        WHERE
-            email_messages.id = update_data.message_id
-            AND email_messages.link_id = $3
+        WITH updated AS (
+            UPDATE email_messages
+            SET
+                replying_to_id = update_data.new_replying_to_id,
+                updated_at = NOW()
+            FROM
+                UNNEST($1::uuid[], $2::uuid[])
+                    AS update_data(message_id, new_replying_to_id)
+            WHERE
+                email_messages.id = update_data.message_id
+                AND email_messages.link_id = $3
+                AND email_messages.replying_to_id IS DISTINCT FROM update_data.new_replying_to_id
+        )
+        SELECT COUNT(*) AS "matched!"
+        FROM email_messages
+        WHERE id = ANY($1) AND link_id = $3
         "#,
         &message_ids,
         &replying_to_ids,
         link_id
     )
-    .execute(executor)
+    .fetch_one(executor)
     .await?;
 
-    let rows_affected = result.rows_affected();
-
-    if rows_affected < updates.len() as u64 {
+    if matched < updates.len() as i64 {
         tracing::warn!(
             link_id = %link_id,
-            expected_updates = updates.len(),
-            actual_updates = rows_affected,
-            "Fewer messages were updated than expected. Some messages may not exist or do not belong to the link."
+            expected_messages = updates.len(),
+            found_messages = matched,
+            "Fewer messages found than expected. Some messages may not exist or do not belong to the link."
         );
     }
 

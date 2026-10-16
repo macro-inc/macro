@@ -33,7 +33,9 @@ use serde::Deserialize;
 
 use super::create_calendar_event::CreateCalendarEvent;
 use super::{CalendarToolContext, ToolCalendarEvent};
-use crate::domain::ports::{CalendarMutationService, CalendarOccurrenceService};
+use crate::domain::ports::{
+    CalendarMutationService, CalendarOccurrenceService, MeetingLinkProvider,
+};
 
 /// Create a calendar event the user has already approved in conversation.
 ///
@@ -43,7 +45,7 @@ use crate::domain::ports::{CalendarMutationService, CalendarOccurrenceService};
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "CreateConfirmedCalendarEvent",
-    description = "Create a calendar event immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The event is always shown before it is created, even when the user's request already spelled the whole thing out: in one turn write it into the thread - title, date and time with its time zone, duration, guests, location, Google Meet, recurrence - ask whether to create it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific event, quoting that reply verbatim in userConfirmation. Being asked to schedule something is a request to draft the event, never approval to create it, so a userConfirmation quoting the request that asked you to set it up - rather than the reply approving the event you wrote out - is wrong. Never call it in the agent session view or in chat: use CreateCalendarEvent there, whose review card or composer is the confirmation. Takes the same fields as CreateCalendarEvent; the event is written to Google Calendar at once and any attendees receive invitations."
+    description = "Create a calendar event immediately, with no review card or composer. Only for a prompt that came from a channel or document thread (the context block says so), where there is nothing to review a draft in. The event is always shown before it is created, even when the user's request already spelled the whole thing out: in one turn write it into the thread - title, date and time with its time zone, duration, guests, location, Google Meet or Macro call, recurrence - ask whether to create it, and stop there. Call this tool only in a later turn, once the user has replied approving that specific event, quoting that reply verbatim in userConfirmation. Being asked to schedule something is a request to draft the event, never approval to create it, so a userConfirmation quoting the request that asked you to set it up - rather than the reply approving the event you wrote out - is wrong. Never call it in the agent session view or in chat: use CreateCalendarEvent there, whose review card or composer is the confirmation. Takes the same fields as CreateCalendarEvent; the event is written to Google Calendar at once and any attendees receive invitations."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct CreateConfirmedCalendarEvent {
@@ -63,17 +65,18 @@ impl ToolAnnotated for CreateConfirmedCalendarEvent {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for CreateConfirmedCalendarEvent
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for CreateConfirmedCalendarEvent
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = ToolCalendarEvent;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         // The schema makes the field required, so a call gets here with one;

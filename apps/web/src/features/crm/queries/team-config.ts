@@ -26,20 +26,24 @@ export type {
 import { throwOnErr } from '@core/util/result';
 import type { CrmTeamSettingsResponse } from '@service-storage/generated/schemas/crmTeamSettingsResponse';
 import type { UpdateCrmTeamSettingsRequest } from '@service-storage/generated/schemas/updateCrmTeamSettingsRequest';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
 
 export const CRM_TEAM_SETTINGS_QUERY_KEY = ['crm', 'team-settings'] as const;
+
+function teamCrmSettingsQueryOptions(deps: CrmQueryDependencies) {
+  return queryOptions({
+    queryKey: CRM_TEAM_SETTINGS_QUERY_KEY,
+    queryFn: async () =>
+      await throwOnErr(() => deps.storage.getCrmTeamSettings()),
+  });
+}
 
 export function useTeamCrmConfig(deps: CrmQueryDependencies) {
   const queryClient = deps.client;
 
   const settingsQuery = useQuery(
-    () => ({
-      queryKey: CRM_TEAM_SETTINGS_QUERY_KEY,
-      queryFn: async () =>
-        await throwOnErr(() => deps.storage.getCrmTeamSettings()),
-    }),
+    () => teamCrmSettingsQueryOptions(deps),
     () => deps.client
   );
 

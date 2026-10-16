@@ -1,6 +1,7 @@
 import './block.css';
 
 import type { PortalScope } from '@core/component/ScopedPortal';
+import { useTauri } from '@macro/tauri';
 import type { GetDocumentResponseDataViewLocation } from '@service-storage/generated/schemas/getDocumentResponseDataViewLocation';
 import { debounce, leading } from '@solid-primitives/scheduled';
 import { type BeforeLeaveEventArgs, useBeforeLeave } from '@solidjs/router';
@@ -109,6 +110,11 @@ function PdfDocumentBehavior(props: PdfDocumentProps) {
   const pdfViewer = usePdfViewer();
   const comments = usePdfCommentProjection();
   const savePdf = usePdfSave();
+  const unregisterUpdatePreparation =
+    useTauri()?.registerNativeUpdatePreparation(() =>
+      savePdf({ throwOnError: true })
+    );
+  onCleanup(() => unregisterUpdatePreparation?.());
   const [pendingLocationParams, setPendingLocationParams] =
     createSignal<LocationBlockParams>();
   const goToInitialLocation = useGoToLinkLocation();

@@ -1,6 +1,7 @@
-// Keep the connect slug first, per docs/SLACK_LIVE_CHANNEL_IMPORT.md.
+// Match the backend's selection order for existing Slack connections.
 export const SLACK_PIPEDREAM_SLUGS = ['slack', 'slack_v2'] as const;
-export const SLACK_CONNECT_SLUG = SLACK_PIPEDREAM_SLUGS[0];
+// Pipedream's OAuth Slack connector; `slack` remains a legacy connection alias.
+export const SLACK_CONNECT_SLUG = 'slack_v2';
 
 export function isSlackPipedreamSlug(slug: string): boolean {
   return SLACK_PIPEDREAM_SLUGS.some((alias) => alias === slug);

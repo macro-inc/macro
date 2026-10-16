@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "types": ["bun", "node"],
+    "types": ["vite/client", "bun", "node"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"]
   },
   "include": ["./**/*.ts"],

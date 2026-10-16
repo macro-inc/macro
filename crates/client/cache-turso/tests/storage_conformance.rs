@@ -37,6 +37,7 @@ fn queued(label: &str, created_at_ms: i64) -> NewQueuedMutation {
                 identity: Some("identity-witness".into()),
             },
             attempt_count: 7,
+            server_failure_count: 3,
             next_attempt_at_ms: None,
             lease_owner: None,
             lease_generation: 11,
@@ -307,13 +308,13 @@ fn strict_head_retries_leases_and_fences_conform() {
         assert_eq!(reclaimed.lease_generation, 2);
         assert!(
             !storage
-                .defer_mutation(first, claim("runner-a", 1), 300, "stale".into())
+                .defer_mutation(first, claim("runner-a", 1), 300, "stale".into(), true)
                 .await
                 .unwrap()
         );
         assert!(
             storage
-                .defer_mutation(first, claim("runner-b", 2), 300, "offline".into())
+                .defer_mutation(first, claim("runner-b", 2), 300, "offline".into(), false)
                 .await
                 .unwrap()
         );

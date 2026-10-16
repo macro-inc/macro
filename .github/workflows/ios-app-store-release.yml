@@ -1,0 +1,426 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/ios_app_store_release.rs
+name: iOS App Store Release
+'on':
+  pull_request:
+    types:
+    - labeled
+jobs:
+  release:
+    if: github.event.label.name == 'ios-update' && github.event.pull_request.head.repo.full_name == github.repository
+    name: iOS App Store Release
+    runs-on: nscloud-macos-sequoia-arm64-6x14
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: read
+      statuses: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    timeout-minutes: 90
+    steps:
+    - name: Checkout PR head
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: '0'
+        persist-credentials: 'false'
+    - name: Ensure gh and jq are installed
+      run: |
+        set -euo pipefail
+        for tool in gh jq; do
+          if ! command -v "$tool" >/dev/null; then
+            echo "${tool} missing on this runner; installing with Homebrew."
+            brew install "$tool"
+          fi
+        done
+        gh --version | head -1
+        jq --version
+      shell: bash
+    - name: Require the PR to be ready to merge
+      run: |
+        # --- native tree ------------------------------------------------------------
+        # Hash identifying "the iOS native code" at a commit: every tracked blob under
+        # apps/web/tauri except the paths that never reach the iOS binary. Android-only
+        # code is recognised by Tauri's naming convention — a path component that is
+        # `android`, starts with `android_` / `android.`, or contains `.android.`
+        # (the android_* plugins, every android/ directory, android.rs / android.json,
+        # android_tls.rs, tauri.android.conf.json; the Rust ones are all behind
+        # cfg(target_os = "android")) — plus the desktop updater manifest and editor
+        # config. Plus one thing outside that tree: the version of the client cache
+        # wasm package (crates/client/cache-wasm/Cargo.toml). The app compiles the
+        # cache crates natively, and the team bumps that version when a cache change
+        # must ship, so the bump — not every edit under crates/client — is the native
+        # signal. The release stamps uploaded builds with the hash, the merge gate
+        # compares the live build's stamp against the merge result's, and the drift /
+        # head guards compare commits with it. Must match nativeTreeHash() in
+        # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
+        # detection (web_app_check_main/ios_native_check.rs).
+        NATIVE_TREE_PATH=apps/web/tauri
+        CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
+        export NATIVE_TREE_EXCLUDE='(^|/)android([_./]|$)|\.android\.|^desktop-release\.json$|^\.helix/'
+
+        # native_tree_hash <commit>: prints the hash, fails if the path is missing.
+        # (--full-tree: ls-tree otherwise narrows its output to the current directory,
+        # which would silently hash nothing when run from apps/web.)
+        native_tree_hash() {
+          git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
+          {
+            git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+              | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+            echo "cache-wasm-version $(cache_wasm_version "$1")"
+          } | git hash-object --stdin
+        }
+
+        # cache_wasm_version <commit>: the `version` of the client cache wasm package
+        # at that commit ("none" before the package existed).
+        cache_wasm_version() {
+          git show "$1:${CACHE_WASM_MANIFEST}" 2>/dev/null \
+            | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none
+        }
+
+        # native_tree_fetch <sha>: make a commit that is not in this checkout (a new
+        # PR head, GitHub's test merge commit, the pre-push head) available to
+        # native_tree_hash. Checkouts here don't persist credentials, so authenticate
+        # the way actions/checkout does. Fails if the commit is unreachable (a
+        # force-pushed-away head).
+        native_tree_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ----------------------------------------------------------------------------
+        set -euo pipefail
+        # The ios-update label means "release this and merge it when Apple approves",
+        # so refuse to start unless the PR is in a mergeable state: not a draft, and
+        # every other check on the head commit passing. Pending checks are waited on
+        # (the label often lands right after a push); anything failing stops the
+        # release before the long build. Our own checks are excluded: the native
+        # check is expected to be red until the release is live.
+        pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json isDraft,headRefOid)
+        if [[ "$(jq -r '.isDraft' <<<"$pr_json")" == "true" ]]; then
+          echo "PR #${PR_NUMBER} is a draft; mark it ready for review before adding ios-update." >&2
+          exit 1
+        fi
+        head_sha=$(jq -r '.headRefOid' <<<"$pr_json")
+        if [[ "$head_sha" != "$HEAD_SHA" ]]; then
+          # Pushed since the label event. Web-only commits are fine (they ship over
+          # the air after the merge); native ones would make this build stale.
+          native_tree_fetch "$head_sha"
+          if [[ "$(native_tree_hash "$head_sha")" != "$(native_tree_hash HEAD)" ]]; then
+            echo "PR #${PR_NUMBER} got native changes since this run started (${HEAD_SHA:0:10} → ${head_sha:0:10});" \
+              "re-add ios-update on the current head." >&2
+            exit 1
+          fi
+          echo "PR #${PR_NUMBER} moved to ${head_sha:0:10} since this run started, but its native code is unchanged; continuing."
+        fi
+
+        # Web App Status Check aggregates the gate, so it is red whenever the gate is;
+        # its other inputs (Typecheck, Test, Build, ...) are separate checks and stay.
+        # (`gh pr checks` names are job names, not workflow names.)
+        ours='^(iOS Native Check|Re-run the iOS Native Check|Web App Status Check|iOS App Store Release|iOS Release Drift)'
+        deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
+        while true; do
+          checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket \
+            | jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]')
+          failing=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")
+          pending=$(jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' <<<"$checks")
+          if [[ -n "$failing" ]]; then
+            echo "PR #${PR_NUMBER} has failing checks: ${failing}. Get the PR green, then re-add ios-update." >&2
+            exit 1
+          fi
+          if [[ -z "$pending" ]]; then
+            echo "All other checks on ${head_sha:0:10} pass ($(jq 'length' <<<"$checks") checks)."
+            exit 0
+          fi
+          if (( $(date +%s) > deadline )); then
+            echo "Checks still pending after ${WAIT_MINUTES} minutes: ${pending}. Re-add ios-update once they pass." >&2
+            exit 1
+          fi
+          echo "Waiting for: ${pending}"
+          sleep 60
+        done
+      shell: bash
+      env:
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        WAIT_MINUTES: '30'
+    - name: Install Nix
+      run: |
+        set -euo pipefail
+        if ! command -v nix >/dev/null 2>&1; then
+          curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+            --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install macos --no-confirm \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "sandbox = false" \
+            --extra-conf "trusted-users = root runner"
+        fi
+        echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+        echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        export NIX_REMOTE=daemon
+        nix --version
+      shell: bash
+    - name: Verify iOS release numbers were bumped
+      run: |-
+        nix develop --command bash -euo pipefail -c '
+          cd apps/web
+          bun scripts/ios-verify-native-bump.mjs
+        '
+      shell: bash
+      env:
+        BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+    - name: Fetch App Store Connect credentials from Doppler
+      run: |
+        set -euo pipefail
+        # Fetch the App Store Connect credentials from Doppler (ios-release/prd) —
+        # the same shape as the DMG workflow's notarization step — and hand them to
+        # later steps the way the iOS scripts expect them:
+        #   APPLE_API_KEY / APPLE_API_ISSUER            exported via GITHUB_ENV
+        #   ~/.appstoreconnect/private_keys/AuthKey_<ID>.p8   the private key, where
+        #     altool, tauri (APPLE_API_KEY_PATH default) and ios-app-store.mjs look
+        # With IOS_DISTRIBUTION_CERTIFICATE=1 the optional Apple Distribution .p12 is
+        # decoded to $RUNNER_TEMP and exported as APPLE_DISTRIBUTION_CERTIFICATE_PATH
+        # / _PASSWORD for the signing step.
+        if [ -z "${DOPPLER_TOKEN:-}" ]; then
+          echo "DOPPLER_TOKEN is empty: the IOS_RELEASE_DOPPLER_TOKEN secret is missing, or this is a fork PR (secrets are not available to forks; a maintainer must run the release from a branch in this repository, or add skip-ios-update if the change is non-breaking)." >&2
+          exit 1
+        fi
+
+        umask 077
+        secrets=$(mktemp)
+        trap 'rm -f "$secrets"' EXIT
+        curl --fail --silent --show-error --retry 3 \
+          --header "Authorization: Bearer $DOPPLER_TOKEN" \
+          'https://api.doppler.com/v3/configs/config/secrets/download?project=ios-release&config=prd&format=json' \
+          > "$secrets"
+
+        required() {
+          jq -er --arg name "$1" '.[$name] | strings | select(length > 0)' "$secrets" \
+            || { echo "ios-release/prd is missing $1" >&2; exit 1; }
+        }
+        key_id=$(required APPLE_API_KEY_ID)
+        issuer=$(required APPLE_API_ISSUER)
+
+        key_dir="$HOME/.appstoreconnect/private_keys"
+        mkdir -p "$key_dir"
+        key_path="$key_dir/AuthKey_${key_id}.p8"
+        required APPLE_API_PRIVATE_KEY > "$key_path"
+        echo "::add-mask::$issuer"
+        {
+          echo "APPLE_API_KEY=$key_id"
+          echo "APPLE_API_ISSUER=$issuer"
+        } >> "$GITHUB_ENV"
+        echo "Wrote App Store Connect API key $key_id to $key_path"
+
+        if [ "${IOS_DISTRIBUTION_CERTIFICATE:-}" = "1" ]; then
+          certificate=$(jq -r '.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 // empty' "$secrets")
+          if [ -z "$certificate" ]; then
+            echo "No APPLE_DISTRIBUTION_CERTIFICATE_BASE64 in ios-release/prd; the build will" \
+              "rely on Xcode cloud signing via the API key."
+            exit 0
+          fi
+          certificate_path="$RUNNER_TEMP/apple-distribution.p12"
+          printf '%s' "$certificate" | base64 --decode > "$certificate_path" 2>/dev/null \
+            || printf '%s' "$certificate" | base64 -D > "$certificate_path"
+          password=$(jq -r '.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD // empty' "$secrets")
+          [ -z "$password" ] || echo "::add-mask::$password"
+          {
+            echo "APPLE_DISTRIBUTION_CERTIFICATE_PATH=$certificate_path"
+            echo "APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
+          echo "Wrote Apple Distribution certificate to $certificate_path"
+        fi
+      shell: bash
+      env:
+        DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
+        IOS_DISTRIBUTION_CERTIFICATE: '1'
+    - id: build-check
+      name: Check the build number is unused in App Store Connect
+      run: |-
+        nix develop --command bash -euo pipefail -c '
+          cd apps/web
+          bun scripts/ios-app-store.mjs status --require-unused-build
+        '
+      shell: bash
+    - name: Configure signing identity
+      run: |
+        set -euo pipefail
+        # The credentials step decodes the optional .p12 from Doppler and exports its
+        # path; without one, xcodebuild uses cloud signing through the API key
+        # (-allowProvisioningUpdates).
+        certificate_path="${APPLE_DISTRIBUTION_CERTIFICATE_PATH:-}"
+        if [ -z "$certificate_path" ]; then
+          echo "No Apple Distribution certificate; relying on Xcode cloud signing" \
+            "via the App Store Connect API key."
+          exit 0
+        fi
+
+        # Mirror configure_signing_identity.sh (DMG builds): the System keychain keeps
+        # the identity visible to xcodebuild without per-user keychain unlocking.
+        sudo security import "$certificate_path" \
+          -k /Library/Keychains/System.keychain \
+          -P "${APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD:-}" \
+          -A \
+          -T /usr/bin/codesign \
+          -T /usr/bin/security
+        sudo security set-key-partition-list \
+          -S apple-tool:,apple:,codesign: \
+          -s \
+          -k "" \
+          /Library/Keychains/System.keychain || true
+
+        identity=$(security find-identity -v -p codesigning /Library/Keychains/System.keychain \
+          | awk -F '"' '/Apple Distribution/ { print $2; exit }')
+        if [ -z "$identity" ]; then
+          echo "No Apple Distribution identity found in System.keychain after import" >&2
+          security find-identity -v -p codesigning /Library/Keychains/System.keychain >&2 || true
+          exit 1
+        fi
+        echo "Using signing identity: $identity"
+      shell: bash
+    - name: Build and upload to App Store Connect
+      if: steps.build-check.outputs.uploaded != 'true'
+      run: |-
+        nix develop --command bash -euo pipefail -c '
+          bun install --frozen-lockfile
+          cd apps/web
+          just ios-release --no-bump
+        '
+      shell: bash
+      env:
+        VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        IOS_RELEASE_PR: ${{ github.event.pull_request.number }}
+    - name: Require the PR's native code to be unchanged since the build
+      run: |
+        # --- native tree ------------------------------------------------------------
+        # Hash identifying "the iOS native code" at a commit: every tracked blob under
+        # apps/web/tauri except the paths that never reach the iOS binary. Android-only
+        # code is recognised by Tauri's naming convention — a path component that is
+        # `android`, starts with `android_` / `android.`, or contains `.android.`
+        # (the android_* plugins, every android/ directory, android.rs / android.json,
+        # android_tls.rs, tauri.android.conf.json; the Rust ones are all behind
+        # cfg(target_os = "android")) — plus the desktop updater manifest and editor
+        # config. Plus one thing outside that tree: the version of the client cache
+        # wasm package (crates/client/cache-wasm/Cargo.toml). The app compiles the
+        # cache crates natively, and the team bumps that version when a cache change
+        # must ship, so the bump — not every edit under crates/client — is the native
+        # signal. The release stamps uploaded builds with the hash, the merge gate
+        # compares the live build's stamp against the merge result's, and the drift /
+        # head guards compare commits with it. Must match nativeTreeHash() in
+        # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
+        # detection (web_app_check_main/ios_native_check.rs).
+        NATIVE_TREE_PATH=apps/web/tauri
+        CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
+        export NATIVE_TREE_EXCLUDE='(^|/)android([_./]|$)|\.android\.|^desktop-release\.json$|^\.helix/'
+
+        # native_tree_hash <commit>: prints the hash, fails if the path is missing.
+        # (--full-tree: ls-tree otherwise narrows its output to the current directory,
+        # which would silently hash nothing when run from apps/web.)
+        native_tree_hash() {
+          git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
+          {
+            git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+              | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+            echo "cache-wasm-version $(cache_wasm_version "$1")"
+          } | git hash-object --stdin
+        }
+
+        # cache_wasm_version <commit>: the `version` of the client cache wasm package
+        # at that commit ("none" before the package existed).
+        cache_wasm_version() {
+          git show "$1:${CACHE_WASM_MANIFEST}" 2>/dev/null \
+            | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none
+        }
+
+        # native_tree_fetch <sha>: make a commit that is not in this checkout (a new
+        # PR head, GitHub's test merge commit, the pre-push head) available to
+        # native_tree_hash. Checkouts here don't persist credentials, so authenticate
+        # the way actions/checkout does. Fails if the commit is unreachable (a
+        # force-pushed-away head).
+        native_tree_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ----------------------------------------------------------------------------
+        set -euo pipefail
+        # Last check before submitting for review: native code pushed to the PR while
+        # this run was building would make the uploaded build stale. The drift
+        # workflow withdraws submissions after the fact, but better not to submit at
+        # all. Compares the native tree of the PR's current head with the tree that
+        # was built (this checkout is the head the run started from).
+        built_tree=$(native_tree_hash HEAD)
+        built=$(jq -r '.bundle.iOS.bundleVersion' apps/web/tauri/src-tauri/tauri.ios.conf.json)
+        head_sha=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')
+        if [[ "$head_sha" == "$(git rev-parse HEAD)" ]]; then
+          echo "PR head unchanged (${head_sha:0:10}); native tree ${built_tree:0:10} is current."
+          exit 0
+        fi
+        native_tree_fetch "$head_sha"
+        head_tree=$(native_tree_hash "$head_sha")
+        if [[ "$head_tree" == "$built_tree" ]]; then
+          echo "PR head moved to ${head_sha:0:10} but its native tree is still ${built_tree:0:10}; submitting."
+          exit 0
+        fi
+        echo "Native code changed on PR #${PR_NUMBER} while this release was building" \
+          "(tree ${built_tree:0:10} → ${head_tree:0:10}). Not submitting the stale build ${built}." >&2
+        echo "Bump (doppler run --project ios-release --config prd -- just ios-bump), commit," \
+          "and re-add the ios-update label to release the current head." >&2
+        exit 1
+      shell: bash
+    - name: Submit for App Review
+      run: |-
+        nix develop --command bash -euo pipefail -c '
+          cd apps/web
+          bun scripts/ios-app-store.mjs submit
+        '
+      shell: bash
+      env:
+        IOS_RELEASE_PR: ${{ github.event.pull_request.number }}
+    - name: Comment on the PR
+      if: success() || failure()
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const confPath = 'apps/web/tauri/src-tauri/tauri.ios.conf.json';
+          const conf = fs.existsSync(confPath)
+            ? JSON.parse(fs.readFileSync(confPath, 'utf8'))
+            : { version: '?', bundle: { iOS: { bundleVersion: '?' } } };
+          const version = conf.version;
+          const build = conf.bundle.iOS.bundleVersion;
+          const runUrl =
+            `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
+            `/actions/runs/${context.runId}`;
+          const success = '${{ job.status }}' === 'success';
+          const body = success
+            ? [
+                `📱 iOS ${version} (build ${build}) was uploaded to TestFlight and submitted for App Review.`,
+                '',
+                'When Apple approves it, the version releases to the App Store automatically,',
+                'the **iOS Release Watch** workflow re-runs the **iOS Native Check** on this PR',
+                'within half an hour of that, and the PR becomes mergeable. To merge it the',
+                'moment that happens, click **Enable auto-merge** on this PR now (squash).',
+                'After merge, the next prod deploy applies the iOS native build floor committed in `min-native-build.json`, prompting older installs to update.',
+                '',
+                `[Workflow run](${runUrl})`,
+              ].join('\n')
+            : [
+                `📱 iOS App Store release for ${version} (build ${build}) **failed** — see the [workflow run](${runUrl}).`,
+                '',
+                'Fix the problem, then remove and re-add the `ios-update` label to retry.',
+              ].join('\n');
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body,
+          });
+concurrency:
+  group: ios-app-store-release-${{ github.event.pull_request.number }}

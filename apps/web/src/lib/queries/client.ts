@@ -32,8 +32,8 @@ export const queryClient = new QueryClient({
   },
 });
 
-if (isPlatform('ios')) {
-  // Replace WKWebView's navigator.onLine integration with NWPathMonitor.
+if (isPlatform(['ios', 'android'])) {
+  // Use the native default network path on both mobile platforms.
   onlineManager.setEventListener((setOnline) =>
     subscribeNativeNetworkStatus((status) => {
       if (status !== 'unknown') setOnline(status === 'online');

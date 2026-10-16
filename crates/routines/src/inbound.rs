@@ -1,6 +1,7 @@
 //! AI workflow tools. Request identity is supplied by the host, never by the model.
 use crate::domain::{
-    RoutineConfiguration, RoutineDetails, RoutineInfo, RoutineList, RoutineService,
+    RoutineConfiguration, RoutineDetails, RoutineInfo, RoutineList, RoutineRunStarted,
+    RoutineService,
 };
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations,
@@ -8,7 +9,7 @@ use ai_toolset::{
 };
 use async_trait::async_trait;
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -40,6 +41,8 @@ pub fn routine_toolset() -> AsyncToolCollection<RoutineToolContext> {
         .add_tool::<ListRoutines, RoutineToolContext>()
         .add_tool::<ReadRoutine, RoutineToolContext>()
         .add_tool::<UpdateRoutine, RoutineToolContext>()
+        .add_tool::<RunRoutine, RoutineToolContext>()
+        .add_tool::<DeleteRoutine, RoutineToolContext>()
 }
 /// Schedule future work.
 #[derive(Deserialize, JsonSchema)]
@@ -195,5 +198,74 @@ impl AsyncTool<RoutineToolContext> for UpdateRoutine {
             }
         }
         .map_err(error)
+    }
+}
+/// Run an owned routine immediately.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(
+    title = "RunRoutine",
+    description = "Start a routine owned by the authenticated user now, outside its schedule, as Run Now in the app does. The run continues after this returns; check its result later with ReadRoutine. Fails if the routine is already running."
+)]
+pub struct RunRoutine {
+    /// Routine UUID.
+    pub routine_id: Uuid,
+}
+impl ToolAnnotated for RunRoutine {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Run routine");
+}
+#[async_trait]
+impl AsyncTool<RoutineToolContext> for RunRoutine {
+    type Output = RoutineRunStarted;
+    async fn call(
+        &self,
+        context: ServiceContext<RoutineToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        context
+            .service()?
+            .run_now(&request.user_id, self.routine_id)
+            .await
+            .map_err(error)
+    }
+}
+/// Delete an owned routine.
+#[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(
+    title = "DeleteRoutine",
+    description = "Permanently delete a routine owned by the authenticated user, stopping all future runs. This cannot be undone; to stop it temporarily, pause it with UpdateRoutine instead. Use only when the user explicitly asks to delete a routine."
+)]
+pub struct DeleteRoutine {
+    /// Routine UUID.
+    pub routine_id: Uuid,
+}
+/// The deleted routine.
+#[derive(Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletedRoutine {
+    /// Routine UUID.
+    pub routine_id: Uuid,
+}
+impl ToolAnnotated for DeleteRoutine {
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::destructive("Delete routine").with_idempotent();
+}
+#[async_trait]
+impl AsyncTool<RoutineToolContext> for DeleteRoutine {
+    type Output = DeletedRoutine;
+    async fn call(
+        &self,
+        context: ServiceContext<RoutineToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        context
+            .service()?
+            .delete(&request.user_id, self.routine_id)
+            .await
+            .map_err(error)?;
+        Ok(DeletedRoutine {
+            routine_id: self.routine_id,
+        })
     }
 }

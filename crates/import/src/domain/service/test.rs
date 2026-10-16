@@ -311,6 +311,9 @@ fn notion_prompt_imports_only_source_backed_body_content() {
     let prompt = prompts::NOTION_IMPORT_SYSTEM;
 
     assert!(prompt.contains("canonical Notion `notion-fetch` tool"));
+    assert!(prompt.contains("connector's page retrieval and block-children tools instead"));
+    assert!(prompt.contains("following pagination and recursively reading blocks"));
+    assert!(prompt.contains("Page metadata alone is not body content"));
     assert!(prompt.contains("Never use a search snippet or a generic `view` result"));
     assert!(prompt.contains("ONLY body content that actually appears in the fetched page"));
     assert!(prompt.contains(r#"Here is the result of "view"..."#));

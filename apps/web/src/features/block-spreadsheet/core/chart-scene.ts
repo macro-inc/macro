@@ -89,14 +89,14 @@ function extent(plots: ChartPlotData[], categories: number): [number, number] {
   };
   for (const plot of plots) {
     if (plot.grouping === 'percentStacked') {
+      // Each category fills to 100% of its positive values and -100% of its
+      // negative values, so the axis always includes both ends that occur.
       see(0);
-      see(
-        plot.series.some((series) =>
-          series.values.some((value) => (value ?? 0) < 0)
-        )
-          ? -1
-          : 1
-      );
+      const values = plot.series.flatMap((series) => series.values);
+      const hasPositive = values.some((value) => (value ?? 0) > 0);
+      const hasNegative = values.some((value) => (value ?? 0) < 0);
+      if (hasPositive || !hasNegative) see(1);
+      if (hasNegative) see(-1);
       continue;
     }
     if (plot.grouping === 'stacked')
@@ -293,13 +293,22 @@ export function chartScene(
   );
   const count = Math.max(1, data.categories.length);
   const valueScale = (plots: ChartPlotData[], range: [number, number]) => {
-    const scale = scaleLinear()
-      .domain(extent(plots, count))
-      .range(range)
-      .nice(5);
+    // A 100% axis is already 0–100% (and -100% when negatives occur). Nice
+    // rounding would draw ticks past the stack.
+    const percent =
+      plots.length > 0 &&
+      plots.every((plot) => plot.grouping === 'percentStacked');
+    const scale = scaleLinear().domain(extent(plots, count)).range(range);
+    if (!percent) scale.nice(5);
     const ticks = scale.ticks(5);
     const step = ticks.length > 1 ? ticks[1] - ticks[0] : 1;
-    return { scale, ticks, format: tickFormat(sample(plots), step) };
+    const format = tickFormat(sample(plots), step);
+    return {
+      scale,
+      ticks,
+      format,
+      axisFormat: percent ? tickFormat('0%', step) : format,
+    };
   };
   // Axis label space, measured with the widest tick label.
   const measure = (plots: ChartPlotData[]) => {
@@ -351,7 +360,7 @@ export function chartScene(
             type: 'text',
             x: at,
             y: bottom + font * 1.2,
-            text: values.format(tick),
+            text: values.axisFormat(tick),
             anchor: 'middle',
             size: font,
             role: 'label',
@@ -360,7 +369,7 @@ export function chartScene(
             type: 'text',
             x: left - 4 * scale,
             y: at,
-            text: values.format(tick),
+            text: values.axisFormat(tick),
             anchor: 'end',
             size: font,
             role: 'label',
@@ -377,7 +386,7 @@ export function chartScene(
         type: 'text',
         x: right + 4 * scale,
         y: secondaryValues.scale(tick),
-        text: secondaryValues.format(tick),
+        text: secondaryValues.axisFormat(tick),
         anchor: 'start',
         size: font,
         role: 'label',
@@ -506,6 +515,33 @@ function legendSwatch(
 type Box = { top: number; bottom: number; left: number; right: number };
 type Scale = ReturnType<typeof scaleLinear<number, number>>;
 
+/**
+ * How much of its category a value is in a 100% stack. Positive values share
+ * the positive total and negative values share the negative total, so each
+ * direction fills the axis to 100%, as Excel, Google Sheets and LibreOffice
+ * draw it.
+ */
+function percentShare(
+  raw: number,
+  mass: { positive: number; negative: number }
+): number {
+  if (raw > 0) return mass.positive ? raw / mass.positive : 0;
+  if (raw < 0) return mass.negative ? raw / Math.abs(mass.negative) : 0;
+  return 0;
+}
+
+function categoryMass(series: ChartSeriesData[], index: number) {
+  let positive = 0;
+  let negative = 0;
+  for (const item of series) {
+    const value = item.values[index];
+    if (value === null || value === undefined) continue;
+    if (value > 0) positive += value;
+    else if (value < 0) negative += value;
+  }
+  return { positive, negative };
+}
+
 function bars(
   shapes: ChartShape[],
   plot: ChartPlotData,
@@ -521,18 +557,19 @@ function bars(
   const groups = stacked ? 1 : plot.series.length;
   // Excel's default gap is 150% of a bar's width.
   const barWidth = band / (groups + 1.5);
+  const masses = data.categories.map((_, index) =>
+    categoryMass(plot.series, index)
+  );
   data.categories.forEach((category, index) => {
     let positive = 0;
     let negative = 0;
-    const total = plot.series.reduce(
-      (sum, series) => sum + Math.abs(series.values[index] ?? 0),
-      0
-    );
     plot.series.forEach((series, position) => {
       const raw = series.values[index];
       if (raw === null || raw === undefined) return;
       const value =
-        plot.grouping === 'percentStacked' ? (total ? raw / total : 0) : raw;
+        plot.grouping === 'percentStacked'
+          ? percentShare(raw, masses[index])
+          : raw;
       let from = 0;
       let to = value;
       if (stacked) {
@@ -585,35 +622,45 @@ function lines(
   format: (value: number) => string,
   zoom: number
 ) {
-  const stacked =
-    plot.grouping === 'stacked' || plot.grouping === 'percentStacked';
-  const totals = data.categories.map((_, index) =>
-    plot.series.reduce(
-      (sum, series) => sum + Math.abs(series.values[index] ?? 0),
-      0
-    )
+  const percent = plot.grouping === 'percentStacked';
+  const stacked = plot.grouping === 'stacked' || percent;
+  // A stacked line or area is one running total. A 100% stack keeps
+  // positives and negatives on separate piles, the same way bars do.
+  const running = data.categories.map(() => 0);
+  const positive = data.categories.map(() => 0);
+  const negative = data.categories.map(() => 0);
+  const masses = data.categories.map((_, index) =>
+    categoryMass(plot.series, index)
   );
-  const base = data.categories.map(() => 0);
   const markers = data.categories.length <= 40;
   for (const series of plot.series) {
     const points = series.values.map((raw, index) => {
       if (raw === null) return undefined;
-      let value =
-        plot.grouping === 'percentStacked'
-          ? totals[index]
-            ? raw / totals[index]
-            : 0
+      const baseline = percent
+        ? raw >= 0
+          ? positive[index]
+          : negative[index]
+        : stacked
+          ? running[index]
+          : 0;
+      const value = percent
+        ? baseline + percentShare(raw, masses[index])
+        : stacked
+          ? baseline + raw
           : raw;
-      if (stacked) value += base[index];
-      return { x: center(index), y: scale(value), raw, index };
+      return {
+        x: center(index),
+        y: scale(value),
+        from: scale(baseline),
+        raw,
+        index,
+      };
     });
     if (plot.kind === 'area' && !series.noFill) {
       const present = points.filter((point) => point !== undefined);
       if (present.length) {
         const floor = present
-          .map(
-            (point) => `L${point.x},${scale(stacked ? base[point.index] : 0)}`
-          )
+          .map((point) => `L${point.x},${point.from}`)
           .reverse()
           .join('');
         shapes.push({
@@ -627,12 +674,14 @@ function lines(
     }
     if (stacked)
       series.values.forEach((raw, index) => {
-        base[index] +=
-          plot.grouping === 'percentStacked'
-            ? totals[index]
-              ? (raw ?? 0) / totals[index]
-              : 0
-            : (raw ?? 0);
+        if (raw === null || raw === undefined) return;
+        if (!percent) {
+          running[index] += raw;
+          return;
+        }
+        const share = percentShare(raw, masses[index]);
+        if (share >= 0) positive[index] += share;
+        else negative[index] += share;
       });
     if (plot.kind !== 'line') continue;
     // Gaps in the data break the line, as Excel shows blanks.

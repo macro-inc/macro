@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO form_responses (id, form_id, respondent_id, row_id, status, submitted_at, updated_at)\n        VALUES ($1, $2, $3, $4, 'submitted', $5, $5)\n        ON CONFLICT (form_id, respondent_id) WHERE respondent_id IS NOT NULL\n        DO UPDATE SET status = 'submitted',\n                      row_id = EXCLUDED.row_id,\n                      stopped_at_section = NULL,\n                      submitted_at = EXCLUDED.submitted_at,\n                      updated_at = EXCLUDED.updated_at\n        WHERE form_responses.status = 'stopped'\n        RETURNING id, form_id, status, stopped_at_section, row_id, submitted_at, updated_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "form_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "stopped_at_section",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "row_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "submitted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "3d2bacbe741627b067a3630110659ebac9f7ed7878f2036b8fc35d58277272d7"
+}

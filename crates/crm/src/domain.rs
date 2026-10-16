@@ -33,3 +33,16 @@ pub mod search_repo;
 /// The CRM search service trait and implementation
 #[cfg(feature = "search")]
 pub mod search_service;
+
+/// The CRM records an associated-items query matches against.
+#[cfg(feature = "ports")]
+pub mod association;
+/// Contact listing models shared by Soup and the CRM service.
+#[cfg(feature = "ports")]
+pub mod contact_listing;
+/// Pipeline use cases addressed by record, field name and stage label.
+#[cfg(feature = "ports")]
+pub mod pipeline_workflows;
+/// CRM pipelines and their lifecycle.
+#[cfg(feature = "ports")]
+pub mod pipelines;

@@ -1,23 +1,18 @@
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import CheckSquare from '@phosphor/check-square.svg';
-import FileText from '@phosphor/file-text.svg';
-import GridFour from '@phosphor/grid-four.svg';
-import LinkIcon from '@phosphor/link.svg';
-import TextB from '@phosphor/text-b.svg';
-import TextItalic from '@phosphor/text-italic.svg';
-import TextStrikethrough from '@phosphor/text-strikethrough.svg';
-import { createSignal, For, Show } from 'solid-js';
-import type { TaskStatus, WorkspaceTask } from '../../core/dummy-workspace';
+import { batch, createSignal, onCleanup, Show } from 'solid-js';
+import type {
+  TaskStatus,
+  WorkspaceComment,
+  WorkspaceTask,
+} from '../../core/dummy-workspace';
 import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
-import { DemoCursor } from '../DemoCursor';
 import { PrStatusIcon } from '../DemoPrDocument';
-import { ViewShell } from '../DemoWorkspaceChrome';
+import type { ChannelComposerHandle } from '../email/frozen/ChannelComposer';
 import { ProductDemo } from '../product/ProductPage';
 import { ProductWorkspace } from '../product/ProductWorkspace';
-import { TaskMention } from '../workspace/frozen/TaskMention';
 import { TaskNotebook } from '../workspace/frozen/TaskNotebook';
-import { WorkspaceTasks } from '../workspace/WorkspaceTasks';
+import { WorkspaceChannel } from '../workspace/WorkspaceChannel';
+import { createProposalWorkspace } from './proposalWorkspace';
 import '../workspace/dummy-workspace.css';
 import '../demo-markdown.css';
 import './task-stories.css';
@@ -28,251 +23,209 @@ export function TaskFromMessageDemo() {
   return <TaskCreationFlow />;
 }
 
-const launchAsks = [
+const proposalAsks = [
+  { title: 'Draft the customer proposal', owner: 'teo', priority: 'High' },
   {
-    title: 'Fix the team invite handoff',
-    owner: 'teo',
-    priority: 'Urgent',
-  },
-  {
-    title: 'Final read of the launch announcement',
-    owner: 'julia',
-    priority: 'High',
-  },
-  {
-    title: 'Own the launch checklist',
+    title: 'Review the pricing',
     owner: 'jacob',
     priority: 'Medium',
   },
 ] as const;
 
-/** @Macro in a channel: one request becomes several assigned tasks. */
+/** Explicit requests create tasks and then change one assignment. */
 export function TaskAgentChannelDemo() {
   let root!: HTMLDivElement;
-  const w = createDummyWorkspace('messages');
-  const thread = [
-    {
-      id: 'launch-asks',
-      person: 'julia' as const,
-      body: 'Last pass before Thursday. The invite still drops people in their personal workspace, the announcement needs a final read, and nobody owns the checklist yet.',
-      time: '9:20 AM',
-    },
-    {
-      id: 'make-tasks',
-      person: 'jacob' as const,
-      body: '@[Macro](demo-mention:macro) make tasks for these. Teo takes the invite fix, Julia the announcement, I’ll take the checklist.',
-      time: '9:22 AM',
-    },
-  ];
-  w.setData('channels', (c) => c.id === 'launch', 'messages', thread);
-  w.open('messages', 'launch');
-  let created = false;
-  const finish = () => {
-    if (created) return;
-    created = true;
-    const ids = launchAsks.map((ask) => {
-      const id = w.createTask(ask.title, '', 'launch');
-      w.updateTask(id, { owner: ask.owner, priority: ask.priority });
-      return id;
+  const w = createProposalWorkspace();
+  w.open('messages', 'sales');
+  w.setData('tasks', []);
+  const [typing, setTyping] = createSignal(false);
+  const firstRequest =
+    '@Macro make tasks for this proposal. Teo drafts it; I’ll review the pricing.';
+  const secondRequest =
+    'Julia will draft the proposal instead. Can you update the task?';
+  w.setData('channels', 0, 'messages', []);
+  const [replyTarget, setReplyTarget] = createSignal<string>();
+  const composers = new Map<string, ChannelComposerHandle>();
+  let scrollFrame: number | undefined;
+  let takenOver = false;
+  let smooth = true;
+  const follow = () => {
+    if (takenOver) return;
+    if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame);
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = undefined;
+      const log = root.querySelector<HTMLElement>('[role="log"]');
+      if (log && !takenOver)
+        log.scrollTo({
+          top: log.scrollHeight,
+          behavior: smooth ? 'smooth' : 'instant',
+        });
     });
-    w.setData('channels', (c) => c.id === 'launch', 'messages', [
-      ...thread,
+  };
+  onCleanup(() => {
+    if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame);
+  });
+  const hasMessage = (id: string) =>
+    w.data.channels[0].messages.some((message) => message.id === id);
+  const writeDraft = (text: string) => {
+    composers.get(replyTarget() ?? 'main')?.setText(text);
+    setTyping(!!text);
+  };
+  const sendRequest = () => {
+    if (hasMessage('make-tasks')) return;
+    writeDraft('');
+    w.setData('channels', 0, 'messages', (items): WorkspaceComment[] => [
+      ...items,
       {
-        id: 'macro-tasks',
-        person: 'macro',
-        body: 'Created 3 tasks for Thursday’s launch and assigned them.',
-        time: '9:22 AM',
-        taskIds: ids,
+        id: 'make-tasks',
+        person: 'jacob',
+        time: '9:20 AM',
+        body: '@[Macro](demo-mention:macro) make tasks for this proposal. Teo drafts it; I’ll review the pricing.',
       },
     ]);
-    w.open('messages', 'launch');
+    w.setChannelThread('make-tasks');
   };
-  const playback = createProductWalkthrough({
-    root: () => root,
-    steps: 2,
-    reset: () => {},
-    reduced: finish,
-    delay: (step) => (step === 1 ? 900 : 1600),
-    advance: (step) => {
-      if (step === 2) finish();
-    },
-  });
-  return (
-    <ProductDemo
-      ref={(el) => (root = el)}
-      label="Ask the Macro agent to make tasks from a channel message"
-      onInteract={playback.pause}
-      height={540}
-      mobileHeight={640}
-    >
-      <ProductWorkspace workspace={w} />
-    </ProductDemo>
-  );
-}
-
-const checklist = [
-  'Verify both invite paths before Thursday',
-  'Final read of the announcement',
-  'Record the product demo',
-];
-
-/**
- * MarkdownPopup's selection toolbar offers "Tasks" when the selection holds
- * checkboxes. Each checkbox becomes a task mention in place.
- */
-export function TaskFromChecklistDemo() {
-  let root!: HTMLDivElement;
-  const w = createDummyWorkspace('documents');
-  const [phase, setPhase] = createSignal(0);
-  const [tasks, setTasks] = createSignal<WorkspaceTask[]>([]);
-  const convert = () => {
-    if (tasks().length) return;
-    const owners = ['teo', 'julia', 'jacob'] as const;
-    const ids = checklist.map((title, index) => {
-      const id = w.createTask(title, '', 'launch');
-      w.updateTask(id, { owner: owners[index] });
-      return id;
+  let ids: string[] = [];
+  const create = () =>
+    batch(() => {
+      if (ids.length) return;
+      const tasks: WorkspaceTask[] = proposalAsks.map((ask) => ({
+        id: crypto.randomUUID(),
+        title: ask.title,
+        description:
+          ask.title === 'Draft the customer proposal'
+            ? 'Draft the proposal using the customer brief and request. Include scope, pricing, and a delivery date.'
+            : 'Check the price and scope before we send the proposal.',
+        owner: ask.owner,
+        priority: ask.priority,
+        creator: 'jacob',
+        status: 'Not Started',
+        tags: ['Customers'],
+        relatedDocumentIds: ['brief'],
+        channel: 'sales',
+        steps: [],
+        comments: [],
+      }));
+      ids = tasks.map((task) => task.id);
+      w.setData('tasks', tasks);
+      w.setData('channels', 0, 'messages', (items): WorkspaceComment[] => [
+        ...items,
+        {
+          id: 'created',
+          replyTo: 'make-tasks',
+          person: 'macro',
+          body: 'Created and assigned both tasks.',
+          time: '9:20 AM',
+          taskIds: ids,
+        },
+      ]);
+      follow();
     });
-    w.open('documents', 'plan');
-    setTasks(ids.map((id) => w.data.tasks.find((task) => task.id === id)!));
-    setPhase(3);
+  const beginReply = () => {
+    setReplyTarget('make-tasks');
+    follow();
   };
+  const requestUpdate = () => {
+    if (hasMessage('reassign')) return;
+    writeDraft('');
+    w.setData('channels', 0, 'messages', (items): WorkspaceComment[] => [
+      ...items,
+      {
+        id: 'reassign',
+        replyTo: 'make-tasks',
+        person: 'jacob',
+        body: secondRequest,
+        time: '9:24 AM',
+      },
+    ]);
+    setReplyTarget(undefined);
+    follow();
+  };
+  const update = () => {
+    if (hasMessage('updated') || !ids.length) return;
+    w.updateTask(ids[0], { owner: 'julia' });
+    w.setData('channels', 0, 'messages', (items): WorkspaceComment[] => [
+      ...items,
+      {
+        id: 'updated',
+        replyTo: 'make-tasks',
+        person: 'macro',
+        body: 'The proposal is now assigned to Julia.',
+        time: '9:24 AM',
+        taskId: ids[0],
+      },
+    ]);
+    follow();
+  };
+  const typeMessage = (text: string, delay: number) =>
+    Array.from({ length: Math.ceil(text.length / 2) }, (_, index) => ({
+      delay: index === 0 ? delay : 35,
+      run: () => writeDraft(text.slice(0, (index + 1) * 2)),
+    }));
+  const steps = [
+    ...typeMessage(firstRequest, 600),
+    { delay: 450, run: sendRequest },
+    { delay: 1400, run: create },
+    { delay: 2200, run: beginReply },
+    ...typeMessage(secondRequest, 300),
+    { delay: 450, run: requestUpdate },
+    { delay: 1400, run: update },
+  ];
   const playback = createProductWalkthrough({
-    root: () => root,
-    steps: 3,
+    root: () =>
+      root.querySelector<HTMLElement>('.sample-chat-composer') ?? root,
+    visibilityThreshold: 1,
+    steps: steps.length,
     reset: () => {},
-    reduced: convert,
-    delay: (step) => [0, 1200, 1500, 1400][step] ?? 1400,
-    advance: (step) => {
-      if (step === 3) convert();
-      else setPhase(step);
+    reduced: () => {
+      smooth = false;
+      sendRequest();
+      create();
+      requestUpdate();
+      update();
     },
+    delay: (step) => steps[step - 1]?.delay ?? 35,
+    advance: (step) => steps[step - 1]?.run(),
   });
-  const opened = () =>
-    w.contentView() === 'tasks'
-      ? w.data.tasks.find((t) => t.id === w.selected())
-      : undefined;
+  const pause = () => {
+    takenOver = true;
+    if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame);
+    scrollFrame = undefined;
+    playback.pause();
+    setTyping(false);
+  };
   return (
     <ProductDemo
       ref={(el) => (root = el)}
-      label="Turn checklist items in a document into tasks"
-      onInteract={playback.pause}
-      height={460}
-      mobileHeight={560}
+      label="Ask Macro to create tasks and change an owner"
+      onInteract={pause}
+      height={560}
+      mobileHeight={620}
     >
-      <Show when={!opened()} fallback={<ProductWorkspace workspace={w} />}>
-        <ViewShell.TopBar>
-          <FileText class="size-4 text-note" />
-          <span class="text-sm font-medium">Q3 launch plan</span>
-        </ViewShell.TopBar>
-        <div class="dummy-scroll task-checklist-doc">
-          <h1>Q3 launch plan</h1>
-          <h2>Before Thursday</h2>
-          <div
-            class="task-checklist-block"
-            data-selected={phase() >= 1 && phase() < 3}
-          >
-            <Show when={phase() >= 1 && phase() < 3}>
-              <div
-                class="task-checklist-toolbar"
-                role="toolbar"
-                aria-label="Selection"
-              >
-                <button type="button">AI edit</button>
-                <button
-                  type="button"
-                  data-convert-tasks
-                  onClick={() => {
-                    playback.pause();
-                    convert();
-                  }}
-                >
-                  <CheckSquare class="size-4" />
-                  Tasks
-                  <Show when={phase() === 2}>
-                    <DemoCursor
-                      label="Jacob"
-                      class="task-checklist-cursor"
-                      clicking
-                    />
-                  </Show>
-                </button>
-                <span class="task-checklist-divider" />
-                <button type="button" aria-label="Bold">
-                  <TextB class="size-4" />
-                </button>
-                <button type="button" aria-label="Italic">
-                  <TextItalic class="size-4" />
-                </button>
-                <button type="button" aria-label="Strikethrough">
-                  <TextStrikethrough class="size-4" />
-                </button>
-                <button type="button" aria-label="Insert link">
-                  <LinkIcon class="size-4" />
-                </button>
-                <span class="task-checklist-divider" />
-                <button type="button">
-                  <GridFour class="size-4" />
-                  Table
-                </button>
-                <span class="task-checklist-divider" />
-                <button type="button" aria-label="Comment">
-                  <ChatTeardrop class="size-4" />
-                </button>
-              </div>
-            </Show>
-            <Show
-              when={tasks().length}
-              fallback={
-                <ul class="task-checklist-list">
-                  <For each={checklist}>
-                    {(item) => (
-                      <li>
-                        <span class="task-checklist-box" aria-hidden="true" />
-                        <span class="task-checklist-text">{item}</span>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              }
-            >
-              <ul class="task-checklist-list" data-converted="true">
-                <For each={tasks()}>
-                  {(task) => (
-                    <li>
-                      <TaskMention
-                        task={
-                          w.data.tasks.find((t) => t.id === task.id) ?? task
-                        }
-                        onOpen={() => {
-                          playback.pause();
-                          w.open('tasks', task.id);
-                        }}
-                      />
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </Show>
-          </div>
-          <p class="task-checklist-after">
-            Launch is Thursday at 9. Julia sends the announcement once the
-            invite fix ships.
-          </p>
-          <h2>Owners</h2>
-          <p class="task-checklist-after">
-            Teo owns sign-up, Julia owns the announcement, and Jacob runs the
-            final checklist.
-          </p>
-        </div>
-      </Show>
+      <div class="task-agent-scene" data-typing={typing()} onWheel={pause}>
+        <Show
+          when={w.contentView() === 'messages'}
+          fallback={<ProductWorkspace workspace={w} />}
+        >
+          <WorkspaceChannel
+            workspace={w}
+            scriptedReply={replyTarget}
+            stableComposer
+            onComposerReady={(handle, thread) => {
+              const key = thread ?? 'main';
+              if (handle) composers.set(key, handle);
+              else composers.delete(key);
+            }}
+          />
+        </Show>
+      </div>
     </ProductDemo>
   );
 }
 
 const PR = {
-  title: 'Keep the invited team through sign-up',
-  repo: 'launch-team/web',
+  title: 'Fix mobile sign-in',
+  repo: 'company/website',
   number: 491,
 };
 
@@ -281,12 +234,30 @@ export function TaskGithubDemo() {
   let root!: HTMLDivElement;
   const w = createDummyWorkspace('tasks');
   w.open('tasks', 'invite');
+  w.setChannel('website');
+  w.setData('channels', [
+    {
+      id: 'website',
+      messages: [
+        {
+          id: 'sign-in-request',
+          person: 'julia',
+          body: 'The sign-in button does nothing on mobile. Can you fix it?',
+          time: '9:10 AM',
+          taskId: 'invite',
+        },
+      ],
+    },
+  ]);
   w.updateTask('invite', {
+    title: 'Fix the sign-in button',
+    description: 'The sign-in button does nothing on mobile.',
+    channel: 'website',
+    tags: ['Website'],
     status: 'In Progress',
     steps: [
-      { id: 'new', text: 'New accounts land in the invited team', done: true },
-      { id: 'existing', text: 'Existing accounts switch teams', done: true },
-      { id: 'tests', text: 'Regression tests for both paths', done: false },
+      { id: 'mobile', text: 'Sign-in works on mobile', done: true },
+      { id: 'desktop', text: 'Desktop sign-in still works', done: true },
     ],
     comments: [],
   });
@@ -301,18 +272,12 @@ export function TaskGithubDemo() {
     reset: () => {},
     reduced: () => {
       move('merged', 'Completed');
-      w.updateTask('invite', {
-        steps: task().steps.map((item) => ({ ...item, done: true })),
-      });
     },
     delay: (step) => [0, 1000, 2200, 2200][step] ?? 1400,
     advance: (step) => {
       if (step === 1) move('open', 'In Review');
       if (step === 3) {
         move('merged', 'Completed');
-        w.updateTask('invite', {
-          steps: task().steps.map((item) => ({ ...item, done: true })),
-        });
       }
     },
   });
@@ -327,7 +292,7 @@ export function TaskGithubDemo() {
     >
       <Show
         when={w.contentView() === 'tasks' && w.selected() === 'invite'}
-        fallback={<WorkspaceTasks workspace={w} filter="all" />}
+        fallback={<ProductWorkspace workspace={w} />}
       >
         <TaskNotebook
           workspace={w}

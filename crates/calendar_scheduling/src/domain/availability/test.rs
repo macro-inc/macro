@@ -26,6 +26,7 @@ fn event() -> EventType {
         description: String::new(),
         duration_minutes: 30,
         location: String::new(),
+        macro_call: false,
         google_meet: false,
         enabled: true,
         schedule_id: Uuid::nil(),
@@ -42,6 +43,31 @@ fn event() -> EventType {
     }
 }
 use uuid::Uuid;
+
+#[test]
+fn point_inside_a_slot_does_not_block_it_and_reversed_busy_is_unavailable() {
+    let day = NaiveDate::from_ymd_opt(2026, 9, 21).unwrap();
+    let now = Utc.with_ymd_and_hms(2026, 9, 20, 0, 0, 0).unwrap();
+    let point = Utc.with_ymd_and_hms(2026, 9, 21, 13, 15, 0).unwrap();
+    let mut busy = BusyRange {
+        host: "a".into(),
+        start: point,
+        end: point,
+    };
+    let slots = slots_for_date(&event(), &schedule(), day, now, &[busy.clone()]).unwrap();
+    assert_eq!(
+        slots.len(),
+        slots_for_date(&event(), &schedule(), day, now, &[])
+            .unwrap()
+            .len()
+    );
+    assert_eq!(slots[0].hosts, vec!["a", "b"]);
+    busy.end -= Duration::seconds(1);
+    assert!(matches!(
+        slots_for_date(&event(), &schedule(), day, now, &[busy]),
+        Err(Error::CalendarUnavailable)
+    ));
+}
 #[test]
 fn collective_intersects_and_round_robin_unions_host_availability() {
     let day = NaiveDate::from_ymd_opt(2026, 9, 21).unwrap();
@@ -213,4 +239,49 @@ fn primary_schedule_rejects_slots_that_leave_hours_during_fall_back() {
         .unwrap()
         .is_empty()
     );
+}
+
+#[test]
+fn saved_links_without_a_macro_call_keep_google_meet() {
+    let event: EventType = serde_json::from_value(serde_json::json!({
+        "id": Uuid::nil(),
+        "title": "Meeting",
+        "slug": "meeting",
+        "description": "",
+        "durationMinutes": 30,
+        "location": "",
+        "googleMeet": true,
+        "enabled": true,
+        "scheduleId": Uuid::nil(),
+        "mode": "collective",
+        "hosts": ["a", "b"],
+        "beforeMinutes": 0,
+        "afterMinutes": 0,
+        "noticeMinutes": 0,
+        "horizonDays": 30,
+        "intervalMinutes": 30,
+        "dailyLimit": null,
+        "requiresConfirmation": false,
+        "questions": []
+    }))
+    .unwrap();
+    assert!(event.google_meet);
+    assert!(!event.macro_call);
+}
+
+#[test]
+fn a_link_cannot_request_both_a_macro_call_and_google_meet() {
+    let mut profile = Profile {
+        id: Uuid::nil(),
+        name: "Calendar".into(),
+        description: String::new(),
+        schedules: vec![schedule()],
+        default_schedule_id: None,
+        event_types: vec![event()],
+        revision: 0,
+    };
+    profile.event_types[0].macro_call = true;
+    assert!(validate_profile(&profile, true).is_ok());
+    profile.event_types[0].google_meet = true;
+    assert!(validate_profile(&profile, true).is_err());
 }

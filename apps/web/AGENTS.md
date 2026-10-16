@@ -6,6 +6,9 @@
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
+- The app does not register a service worker. Keep `public/sw.js` as a retirement
+  endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
+  Loro uses async WASM loading and HTML preloads independently of service workers.
 
 ## Verifying a change in a real browser
 
@@ -19,6 +22,7 @@ cd apps/web && PORT=3003 bun run dev   # any free port in 3000-3009
 
 `import.meta.env.MODE === 'development'` resolves the service clients to `https://dev.macro.com` through Vite’s same-origin development proxy. Sign in on the development hostname; existing `.macro.com` cookies are separate. Vite prints `https://<hostname>:<port>/app/`; `https://localhost:<port>/app/` also works. Trust `infra/local/certs/ca.pem` once in the visiting browser (see `infra/local/certs/README.md`). `MACRO_DEV_HTTPS=false` restores HTTP for workflows that require it. Notes:
 
+- On a remote devbox, open the app through Tailscale Serve rather than `https://<hostname>:<port>`. Vite drops to HTTP/1.1 while its development proxy is on, so the browser fetches the ~7k dev modules six at a time and pays a round trip for each (about 45 s at 30 ms). Run `sudo tailscale serve --bg --https=443 https+insecure://localhost:<port>` on the devbox and open `https://<devbox>.<tailnet>.ts.net/app/`, which serves HTTP/2 with a trusted certificate. Sign in again there. Serve offers HTTPS ports 443, 8443, and 10000.
 - Never assume port 3000 or 3002 is yours. Check with `lsof -nP -iTCP:<port> -sTCP:LISTEN -t` and confirm the owner's worktree via `lsof -p <pid> | awk '$4=="cwd"'`. Take a free port instead of killing another session's server, and reuse one only if its cwd is this worktree.
 - The `.cursor/*.sh` scripts and the `run-app` skill are **Cursor Cloud** entry points. On a local machine they prompt for sudo and are the wrong tool. Only backend (Rust) changes need the local stack.
 
@@ -34,7 +38,7 @@ nix develop --command just run_local --instance <name>
 - `--instance <name>` gives an isolated Compose project, volumes, and a deterministic per-name port window, so it never clashes with another worktree's stack. `just status_local --instance <name>` prints the endpoints without starting anything; `just stop_local --instance <name>` stops it (volumes kept) and `just destroy_local --instance <name>` removes it.
 - First bring-up is slow (zigbuild of every service plus the agent-harness sandbox image); later runs reuse the caches. While attached, press `r` to rebuild changed Rust services in place and `q` to stop cleanly.
 - No accounts are pre-created: passwordless login registers any email on demand, and the one-time code lands in the instance's Mailpit (endpoint in `just status_local`). `just seed-scenario apply --file seed/scenarios/team-perms.json` seeds multi-user team fixtures with printed login links.
-- Full details, Doppler vs no-Doppler modes, and port-conflict debugging: `docs/RUNNING_LOCALLY.md`.
+- Full details, Doppler vs no-Doppler modes, and port-conflict debugging: `docs/development/running-locally.md`.
 - First run in a fresh worktree spends a few minutes on `just ensure-cache-wasm` / `just ensure-agent-fold-wasm` before Vite serves.
 - That tab is pointed at **real dev data**. Treat creates, edits, and deletes as real, and discard drafts you open.
 
@@ -65,45 +69,17 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - All API/network calls live in service-clients.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
-- When adding or changing a feature flag, follow the `define-feature-flag` skill.
+- Reactive GraphQL reads use `createLiveQuery` for a document and
+  `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
+  [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
+- When adding or changing a feature flag, follow the `feature-flags` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
-### SolidJs
-- Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.
-- Prefer wrapping the setter over `createEffect(() => { if (signal()) sideEffect() })`. When setting focus/selection should also clear another stop, blur a control, or scroll, put that work in the setter (or a named helper the setter calls) so the action is explicit at the call site — not a distant effect watching the signal.
-- Use createMemo only when you need referential stability or the derivation is expensive. Cheap derivations (() => a() + b()) don't need it regardless of subscriber count.
-- Before rolling your own reactive utility, check solid-primitives first.
-- Never read a solid-query `query.data` unguarded from a component body or an eager `createMemo`. `data` is a resource read: while the query is pending it suspends the caller's nearest `<Suspense>`, which detaches and re-attaches that whole subtree — a blank flash, lost scroll position, remounted editors. Gate the read on status (`query.isSuccess ? query.data : fallback`, or `queryReadyGate` from `src/lib/queries/gate.ts`); an `isLoading` check is not enough, because a disabled or paused query is pending without loading and its data read still suspends. Every other field is a plain store read and is safe. Remember `createMemo` runs immediately, so a guard inside a `<Show>`/`<Match>` further down does not save you. This has blanked the calendar grid twice — see `focusTarget` in `src/features/block-calendar/CalendarBlockAdapter.tsx` and `useSystemSkillsQuery`.
+## Rules
 
-## UI / Components
-- Prefer composition over configurability. Follow slot-based patterns (see src/features/channel, src/features/entity, or Kobalte).
-- Keep reusable components small, atomic, and decoupled from queries/complex state. Push data-fetching and mutations up to use-case-specific composed components.
-- Context should be scoped to a component subtree — Message.Content consuming a MessageContext is fine because the ownership boundary is clear.
-- Composed primitives must not depend on use-case-specific context — a RecipientsSelector should never require an EmailComposeContext.
-- New features and feature restructures use the layered layout in [docs/FRONTEND_FEATURE_ARCHITECTURE.md](../../docs/FRONTEND_FEATURE_ARCHITECTURE.md), summarized by FE-33 (`core / queries / primitives / components / views` plus an injected `context/`). Keep production wiring in an app-facing entry point and give reactive logic narrow feature-owned contracts. `src/features/activity` illustrates the layers but still has documented composition and contract migration gaps.
-
-### Porting shadcn-solid primitives
-- Use the upstream structure and behavior as a starting point, then reshape exports to match the local slot-based, compound-component API.
-- Replace upstream palette, surface, border, and status classes with the existing semantic tokens; inputs normally use `bg-input`, `border-edge-muted`, `text-ink`, and `text-ink-placeholder`.
-- Preserve Kobalte semantics, state attributes, and polymorphic prop types. Keep accessibility relationships inside the primitive instead of recreating them at call sites.
-- Add a co-located `*.docs.tsx` gallery page and focused `*.test.tsx` coverage for every ported component.
-- Keep `Input` a thin native control. Use `InputGroup` for icons, clear actions, inline Buttons, and shared ButtonGroup framing instead of adding composition props to `Input`.
-- In `InputGroup`, keep the input as the single control and place surrounding content in `Addon` slots. Use `align` for visual placement so accessible DOM order stays independent of layout.
-
-## Styling
-- Use semantic color tokens, not raw Tailwind color classes.
-- Do not add cursor-pointer to clickable elements.
-- Prefer styling in the component (Tailwind classes on the markup) so styling lives next to structure. Reserve `@utility` in `index.css` for styles that are widely shared across many components — not one-off or two-component layouts.
-
-## TS
-- For exhaustive switch statements use `match` from `ts-pattern`.
-
-### Misc
-- If you create a Lexical Node or make breaking changes to a Lexical Node, you must increment the lexical version counter (in src/lib/core/component/LexicalMarkdown/version.ts) along with a brief note about changes.
-- Do not add dependencies on the legacy block state system. Read it only at an
-  existing block-adapter boundary, then pass identity, permissions, state, and
-  lifecycle through feature context or explicit props; see FE-34 in
-  `docs/STYLE_GUIDE.md`.
+Conventions for this app live in `.agents/rules/web/` and load when you touch
+matching files: data fetching, Solid reactivity, architecture, UI, UI primitives,
+the startup bundle, and Lexical nodes.
 
 ### Good Reference
 - https://github.com/solidjs-community/solid-primitives

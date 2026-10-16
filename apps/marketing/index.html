@@ -4,6 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
+    <script>
+      // First-paint palette for every public website route.
+      // Mirrors src/features/setup/sitePalette.ts.
+      (function () {
+        var theme = new URLSearchParams(location.search).get('theme');
+        var cream = theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+        if (!cream) return;
+        var root = document.documentElement;
+        root.dataset.palette = 'cream';
+        root.dataset.themeLight = 'true';
+        document.querySelector('meta[name="theme-color"]').content = '#f5f1e8';
+      })();
+    </script>
     <title>Macro — The Unified System for Work</title>
     <!-- Default SEO tags. Tags marked data-seo are replaced per-route by the
          prerender step (scripts/prerender.ts) and updated at runtime by

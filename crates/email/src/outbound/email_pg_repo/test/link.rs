@@ -227,6 +227,38 @@ async fn user_inbox_details_maps_enriched_owned_inbox(pool: Pool<Postgres>) -> a
         inbox.photo_url.as_deref(),
         Some("https://example.com/inbox.png")
     );
+    assert!(inbox.needs_calendar_permission);
+    assert!(!inbox.calendar_disabled);
+    assert!(!inbox.has_calendar_data);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
+async fn user_inbox_details_reports_the_calendar_grant(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let scopes = calendar_events::domain::models::GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+    sqlx::query!(
+        r#"
+        INSERT INTO email_link_google_scopes (link_id, granted_scopes, calendar_disabled_at)
+        VALUES ($1, $2, now())
+        "#,
+        link_id,
+        &scopes,
+    )
+    .execute(&pool)
+    .await?;
+
+    let details = EmailPgRepo::new(pool)
+        .user_inbox_details(MacroUserIdStr::parse_from_str("macro|user1@test.com")?)
+        .await?;
+
+    let inbox = &details[0];
+    assert!(!inbox.needs_calendar_permission);
+    assert!(inbox.calendar_disabled);
+    assert!(!inbox.has_calendar_data);
     Ok(())
 }
 

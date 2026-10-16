@@ -30,6 +30,7 @@ import IconPriorityMedium from '../../../assets/icons/wide-priority-medium.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob-work.webp';
 import avatarJulia from '../../../assets/people/julia.webp';
+import { DEMO_BOOKING_URL } from '../../../features/marketing/core/navigation';
 import { createVisible } from '../../utils/utilVisible';
 
 // ---------------------------------------------------------------------------
@@ -160,8 +161,6 @@ type Block = {
   md: string;
   segs: Seg[];
 };
-
-const CAL_LINK = 'https://cal.com/jacob-beckerman-b56mrn/30min';
 
 /** What a bare @ offers before it has been narrowed: one row from every kind
     of thing in the workspace. This is the whole argument of the graphic, so
@@ -309,7 +308,7 @@ const SCRIPT: Block[] = [
         trigger: ';',
         insert: 'link',
         query: '',
-        label: CAL_LINK,
+        label: DEMO_BOOKING_URL,
         wide: SNIPPETS,
         narrow: SNIPPETS,
       },

@@ -33,7 +33,7 @@ describe('extract reply', () => {
       `<m-reply-target>${JSON.stringify({ parent, ...target })}</m-reply-target>\n\nplease fix`
     );
     expect(response.status).toBe(200);
-    expect(await response.json<unknown>()).toEqual({
+    expect(await response.json()).toEqual({
       reply: { parent, ...target },
     });
   });
@@ -42,13 +42,13 @@ describe('extract reply', () => {
       `<m-reply-target>${JSON.stringify({ channelId: 'channel', ...target })}</m-reply-target>\n\nplease fix`
     );
     expect(response.status).toBe(200);
-    expect(await response.json<unknown>()).toEqual({
+    expect(await response.json()).toEqual({
       reply: { parent: { type: 'channel', id: 'channel' }, ...target },
     });
   });
   it('returns null for a blockquote', async () => {
     const response = await request('> quoted\n\nplease fix');
     expect(response.status).toBe(200);
-    expect(await response.json<unknown>()).toEqual({ reply: null });
+    expect(await response.json()).toEqual({ reply: null });
   });
 });

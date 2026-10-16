@@ -1,16 +1,17 @@
-import { handleDemoClick } from '../../../app/utils/utilCta';
+import { demoHref, handleDemoClick } from '../../../app/utils/utilCta';
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureConstellation } from '../../setup/components/FeatureOverview';
 import { WelcomeStep } from '../../setup/components/WelcomeSteps';
 import { FeaturePage } from '../components/FeaturePage';
 import { HomepageTrustBadges } from '../components/HomepageTrustBadges';
-import { DemoBookingEmbed } from '../components/sales/DemoBookingEmbed';
+import { DemoBookingInline } from '../components/sales/DemoBookingInline';
 import { SalesCalculator } from '../components/sales/SalesCalculator';
 import { formatWholeUsd } from '../core/sales-savings';
 import { MACRO_SEAT_CENTS } from '../core/savings-calculator';
 import '../components/homepage-scroll-cue.css';
 import '../components/homepage-unification.css';
 import '../components/workspace-story.css';
+import '../../setup/cream-preview.css';
 import './sales-page.css';
 
 /** `OnboardingShell`'s palette, which the homepage hero is drawn in. */
@@ -38,9 +39,16 @@ function TourHeading(props: {
   );
 }
 
-/** Every demo CTA scrolls to the inline booker instead of leaving the page. */
-function bookDemo(buttonName: string) {
+/**
+ * Every demo CTA scrolls to the inline booker instead of opening the booking
+ * dialog. Cancelling the click keeps `DemoBookingDialog` from opening it; a
+ * new-tab click still follows the link.
+ */
+function bookDemo(event: MouseEvent, buttonName: string) {
   handleDemoClick(buttonName);
+  if (event.defaultPrevented || event.button !== 0) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
   document
     .getElementById('book')
     ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -75,11 +83,10 @@ export function RouteTour() {
                   <div class="homepage-hero-action mt-6 flex justify-center pb-5">
                     <a
                       class="site-nav-start homepage-hero-cta tour-cta"
-                      href="#book"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        bookDemo('tour_hero_book_demo');
-                      }}
+                      href={demoHref()}
+                      onClick={(event) =>
+                        bookDemo(event, 'tour_hero_book_demo')
+                      }
                     >
                       Book a demo
                     </a>
@@ -135,7 +142,7 @@ export function RouteTour() {
               description="Choose your team size and the tools you pay for today. Every Macro plan includes every module."
             />
             <SalesCalculator
-              onBook={() => bookDemo('tour_calculator_book_demo')}
+              onBook={(event) => bookDemo(event, 'tour_calculator_book_demo')}
             />
           </section>
 
@@ -149,7 +156,7 @@ export function RouteTour() {
               title="See how to grow your business faster."
               description="A 30-minute call with our CEO or a member of our team. Pick a time below."
             />
-            <DemoBookingEmbed id="tour-booking" />
+            <DemoBookingInline />
           </section>
 
           <footer class="tour-footer">

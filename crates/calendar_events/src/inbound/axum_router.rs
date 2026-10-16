@@ -224,13 +224,18 @@ where
     let next_cursor = has_more
         .then(|| occurrences.last())
         .flatten()
-        .map(|(_, occurrence)| {
-            Base64Str::encode_json(CalendarOccurrenceCursor::from_occurrence(occurrence))
-                .type_erase()
+        .map(|listing| {
+            Base64Str::encode_json(CalendarOccurrenceCursor::from_occurrence(
+                &listing.occurrence,
+            ))
+            .type_erase()
         });
     let items = occurrences
         .into_iter()
-        .map(|(event, occurrence)| CalendarOccurrenceItem { event, occurrence })
+        .map(|listing| {
+            let (event, occurrence) = listing.into_occurrence_event();
+            CalendarOccurrenceItem { event, occurrence }
+        })
         .collect();
 
     Ok(Json(CalendarOccurrenceResponse {
@@ -269,7 +274,7 @@ pub struct TeamOutOfOfficeItem {
     event_id: Uuid,
     /// Stable occurrence key within the event.
     occurrence_key: String,
-    /// Event title, absent when the event's visibility withholds details.
+    /// Event title, absent unless the teammate shares event details.
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
     /// Occurrence time span.

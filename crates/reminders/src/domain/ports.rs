@@ -1,21 +1,16 @@
 //! Ports (trait contracts) for the reminders domain.
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Advance, Completion, CreateReminder, DeliveryOutcome, DueFiring, DueReminder, NewReminder,
-    Reminder, ReminderBatch, ReminderDispatchMessage, ReminderError, ReminderFilter,
-    ReminderForSoup, ReminderPage, ReminderPatch, ReminderUpdate, SoupReminderQuery, SweepSummary,
+    DeliveryOutcome, DueFiring, DueReminder, ReminderDispatchMessage, ReminderError, SweepSummary,
 };
 
 /// Source of the current time.
 ///
-/// Injected so schedule boundaries — "exactly now", DST transitions, a cron
-/// whose last firing has passed — can be tested deterministically instead of
-/// relative to the wall clock.
+/// Injected so schedule boundaries and retries can be tested deterministically.
 pub trait Clock: Send + Sync + 'static {
     /// The current instant.
     fn now(&self) -> DateTime<Utc>;
@@ -39,7 +34,7 @@ pub trait RemindersRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Coalesce private eligible email reminders before keyset pagination.
+    /// Read private active email snoozes with keyset pagination.
     /// `thread_ids` optionally restricts candidates; None discovers the collection.
     fn email_candidates(
         &self,
@@ -51,87 +46,6 @@ pub trait RemindersRepo: Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<Vec<super::email_collection::EmailReminderCandidate>, Self::Err>,
     > + Send;
-
-    /// Read private native rows in actionable-first order, with filters and cursor applied before the limit.
-    fn list_collection(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        query: &super::collection::CollectionQuery,
-        as_of: DateTime<Utc>,
-        limit: i64,
-    ) -> impl Future<Output = Result<super::collection::CollectionBatch, Self::Err>> + Send;
-
-    /// Insert a reminder for the user.
-    fn create_reminder(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        new: &NewReminder,
-    ) -> impl Future<Output = Result<Reminder, Self::Err>> + Send;
-
-    /// Fetch one of the user's reminders.
-    fn get_reminder(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
-    ) -> impl Future<Output = Result<Option<Reminder>, Self::Err>> + Send;
-
-    /// Read at most `limit` of the user's reminders matching `filter`, ordered
-    /// by `(next_run_at, created_at, id)` and resuming after `filter.cursor`.
-    ///
-    /// The caller asks for one more than the page size to discover whether
-    /// another page exists, and must use [`ReminderBatch::examined`] — not the
-    /// decoded row count — to make that judgement.
-    fn list_reminders(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        filter: &ReminderFilter,
-        limit: i64,
-    ) -> impl Future<Output = Result<ReminderBatch, Self::Err>> + Send;
-
-    /// Read at most `limit` of the user's reminders for the Soup feed, ordered
-    /// by `next_run_at` in `order`'s direction.
-    ///
-    /// `query.order` must match the direction Soup will merge in. There is no cursor
-    /// here, so it selects which `limit` reminders come back, not merely how
-    /// they are arranged: an ascending view served by a descending read gets
-    /// the furthest-future reminders and never sees an overdue one.
-    ///
-    /// Deliberately separate from [`RemindersRepo::list_reminders`]: Soup pages
-    /// on its own cursor, whereas the CRUD list keysets ascending on
-    /// `(next_run_at, created_at, id)`. As in [`RemindersRepo::list_reminders`],
-    /// an undecodable row is skipped rather than failing the whole read.
-    ///
-    /// `query.fired` selects on whether `next_run_at` has come due, evaluated against
-    /// the database clock so the caller need not agree with it on the time.
-    ///
-    /// An empty `ids`/`entities` slice means "no constraint", not "match none".
-    fn list_reminders_for_soup(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        query: SoupReminderQuery<'_>,
-    ) -> impl Future<Output = Result<Vec<ReminderForSoup>, Self::Err>> + Send;
-
-    /// Apply `update` to one of the user's reminders, returning the new state.
-    fn update_reminder(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
-        update: &ReminderUpdate,
-    ) -> impl Future<Output = Result<Option<Reminder>, Self::Err>> + Send;
-
-    /// Delete one of the user's reminders, retracting any notification it
-    /// already produced. Returns `true` when a row was removed.
-    ///
-    /// The retraction is part of this contract rather than a separate call so
-    /// the two cannot drift apart. A reminder *is* its notification's
-    /// `event_item`, so a notification outliving it would point at a row that
-    /// no longer exists: the Inbox would keep showing it, and clicking it would
-    /// resolve nothing. Both deletes happen in one transaction.
-    fn delete_reminder(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: Uuid,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Outbound persistence port for firing reminders.
@@ -145,14 +59,8 @@ pub trait ReminderDispatchRepo: Send + Sync + 'static {
 
     /// Every firing due at or before `now`, soonest first.
     ///
-    /// Enabled and not yet completed, of either schedule kind. Returns
-    /// identifiers rather than whole reminders because a sweep only fans these
-    /// out; the row is read at delivery, by which point it may have changed.
-    ///
-    /// Deliberately unbounded — a sweep that silently truncated would strand
-    /// whatever fell off the end until someone noticed. See the note on the
-    /// implementation for where paging goes if a sweep ever grows too large
-    /// to fan out inside one message.
+    /// Returns undelivered snooze identifiers for fan-out. Delivery reads the
+    /// current workflow again because it may have changed since the sweep.
     fn due_firings(
         &self,
         now: DateTime<Utc>,
@@ -192,56 +100,11 @@ pub trait ReminderDispatchRepo: Send + Sync + 'static {
         scheduled_for: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Record the firing as delivered, and move a recurring reminder on to
-    /// `advance_to`.
-    ///
-    /// Named for both halves because it does both, and the pairing is the whole
-    /// point — a call site that reads this as "mark sent" alone is a call site
-    /// that will eventually drop the advance.
-    ///
-    /// Marks the occurrence, not the reminder: delivery is not completion.
-    /// `completed_at` is the owner saying they are finished with a reminder,
-    /// and one that has just landed in their inbox is not. The sent occurrence
-    /// is what stops [`ReminderDispatchRepo::due_firings`] returning the firing
-    /// again.
-    ///
-    /// `advance_to` is `None` for a one-shot, and for a cron with no further
-    /// firing — both leave `next_run_at` where it is and simply stop coming
-    /// due. `Some` rolls the series forward.
-    ///
-    /// **Both writes must land atomically.** A reminder marked sent but not
-    /// advanced is excluded by its own sent occurrence and never moves, so it
-    /// would go quiet forever rather than fire again — the one failure in this
-    /// design that does not heal itself.
-    ///
-    /// Implementations must not advance a reminder whose `next_run_at` has
-    /// moved off `scheduled_for`: that means the owner rescheduled mid-flight,
-    /// and their choice outranks the series. Declining to advance is reported
-    /// as [`Completion::NotAdvanced`] rather than passed over in silence, so a
-    /// no-op that is expected cannot be mistaken for one that is not.
-    fn complete_occurrence_and_advance(
+    /// Record successful delivery so duplicate queue messages cannot notify again.
+    fn complete_occurrence(
         &self,
         reminder_id: Uuid,
         scheduled_for: DateTime<Utc>,
-        advance: Option<Advance>,
-    ) -> impl Future<Output = Result<Completion, Self::Err>> + Send;
-
-    /// Retract the notifications this reminder's firings before `before` left
-    /// behind.
-    ///
-    /// Only recurring delivery calls this, so a daily reminder shows the firing
-    /// its owner has not dealt with rather than every one since they last
-    /// looked. A one-shot has no earlier firing to retract.
-    ///
-    /// Bounded by `before` — the firing just delivered — rather than clearing
-    /// the reminder outright. Two things would otherwise be swept up with the
-    /// stale ones: the notification this delivery just created, and one a
-    /// concurrent delivery of a *later* firing created. Both are the current
-    /// state of the inbox, and neither is this call's to remove.
-    fn retract_notifications(
-        &self,
-        reminder_id: Uuid,
-        before: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -319,112 +182,25 @@ pub trait ReminderDispatch: Send + Sync + 'static {
 
 /// Inbound service port: the reminders API used by drivers (HTTP).
 pub trait RemindersService: Send + Sync + 'static {
-    /// Original email identities with current private reminder work.
+    /// List original email identities with the caller's active snoozes.
     fn list_email_reminders(
         &self,
-        _viewer: super::email_collection::EmailReminderViewer,
-        _query: super::email_collection::EmailReminderQuery,
-    ) -> impl Future<Output = Result<super::email_collection::EmailReminderPage, ReminderError>> + Send
-    {
-        async {
-            Err(ReminderError::BadRequest(
-                "Email reminders are unavailable".into(),
-            ))
-        }
-    }
+        viewer: super::email_collection::EmailReminderViewer,
+        query: super::email_collection::EmailReminderQuery,
+    ) -> impl Future<Output = Result<super::email_collection::EmailReminderPage, ReminderError>> + Send;
 
-    /// Paginate the caller's private Reminders collection with native source metadata.
-    fn list_collection(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        query: super::collection::CollectionQuery,
-    ) -> impl Future<Output = Result<super::collection::ReminderCollectionPage, ReminderError>> + Send;
-    /// Read the email workflow when this service has email capabilities wired.
+    /// Read the most recent snooze on this caller's thread.
     fn get_email_followup(
         &self,
-        _user: MacroUserIdStr<'static>,
-        _thread: Uuid,
-    ) -> impl Future<Output = Result<Option<super::email_followup::EmailFollowup>, ReminderError>> + Send
-    {
-        async {
-            Err(ReminderError::BadRequest(
-                "Email reminders are unavailable".into(),
-            ))
-        }
-    }
+        user: MacroUserIdStr<'static>,
+        thread: Uuid,
+    ) -> impl Future<Output = Result<Option<super::email_followup::EmailFollowup>, ReminderError>> + Send;
 
-    /// Execute an idempotent email workflow command. Generic/AI-only services
-    /// deliberately do not gain inbox mutation capabilities by default.
+    /// Execute an idempotent email snooze command.
     fn execute_email_followup(
         &self,
-        _user: MacroUserIdStr<'static>,
-        _thread: Uuid,
-        _command: super::email_followup::EmailFollowupCommand,
-    ) -> impl Future<Output = Result<super::email_followup::EmailFollowup, ReminderError>> + Send
-    {
-        async {
-            Err(ReminderError::BadRequest(
-                "Email reminders are unavailable".into(),
-            ))
-        }
-    }
-
-    /// Create a reminder for the user.
-    ///
-    /// `entity_receipt` must be present whenever `request` names an entity, and
-    /// must have been minted for that same entity and user — that is what
-    /// proves the caller may attach a reminder to it. Standalone reminders need
-    /// no receipt.
-    fn create_reminder(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        request: CreateReminder,
-        entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
-    ) -> impl Future<Output = Result<Reminder, ReminderError>> + Send;
-
-    /// Fetch the reminder the receipt was minted for.
-    ///
-    /// The receipt carries both the reminder and the caller it was proven for,
-    /// so there is no separate id or user to pass — and no way to reach a
-    /// reminder without having proven ownership first.
-    fn get_reminder(
-        &self,
-        receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> impl Future<Output = Result<Reminder, ReminderError>> + Send;
-
-    /// List one page of the user's reminders, soonest firing first.
-    fn list_reminders(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        filter: ReminderFilter,
-    ) -> impl Future<Output = Result<ReminderPage, ReminderError>> + Send;
-
-    /// List the user's reminders for the Soup feed, ordered by `order`.
-    ///
-    /// Soup owns pagination across every item type, so this returns a plain
-    /// bounded slice rather than a [`ReminderPage`]. It does not own ordering:
-    /// the bound is applied here, so `order` decides which reminders Soup gets
-    /// to merge.
-    ///
-    /// Unlike the single-reminder methods this takes a user id rather than a
-    /// receipt: Soup reads many reminders at once, so there is no one entity
-    /// to have proven access to.
-    fn list_reminders_for_soup(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        query: SoupReminderQuery<'_>,
-    ) -> impl Future<Output = Result<Vec<ReminderForSoup>, ReminderError>> + Send;
-
-    /// Modify the reminder the receipt was minted for.
-    fn update_reminder(
-        &self,
-        receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        patch: ReminderPatch,
-    ) -> impl Future<Output = Result<Reminder, ReminderError>> + Send;
-
-    /// Delete the reminder the receipt was minted for.
-    fn delete_reminder(
-        &self,
-        receipt: EntityAccessReceipt<OwnerAccessLevel>,
-    ) -> impl Future<Output = Result<(), ReminderError>> + Send;
+        user: MacroUserIdStr<'static>,
+        thread: Uuid,
+        command: super::email_followup::EmailFollowupCommand,
+    ) -> impl Future<Output = Result<super::email_followup::EmailFollowup, ReminderError>> + Send;
 }

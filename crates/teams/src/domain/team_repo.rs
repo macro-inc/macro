@@ -15,6 +15,7 @@ use crate::domain::model::{
     TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
     ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
 };
+use crate::domain::owned_entity_cleanup::ClearedTeam;
 
 /// The TeamRepository defines a set of actions to perform on teams data
 pub trait TeamRepository: Clone + Send + Sync + 'static {
@@ -133,10 +134,11 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         paying: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
-    /// Deletes a team
+    /// Deletes a team that owns nothing, with the access grants it and its
+    /// bots were given.
     fn delete_team(
         &self,
-        team_id: &uuid::Uuid,
+        cleared: &ClearedTeam,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Gets all members of a team including the owner
@@ -394,7 +396,8 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         team_invite_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RemoveTeamInviteError>> + Send;
 
-    /// Cancels the team subscription and deletes the team.
+    /// Purges everything the team and its bots own, then cancels the team
+    /// subscription and deletes the team.
     fn delete_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,
@@ -435,6 +438,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn restore_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
+        started: Option<super::open_seat_release::SubscriptionStart>,
     ) -> impl Future<Output = Result<(), RestorePermissionsForTeamMembersError>> + Send;
 
     /// Moves a member's seat to `plan`: swaps the seat between the team

@@ -14,6 +14,40 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
+#[test]
+fn view_access_notifications_preserve_permission_and_format_copy() {
+    let request = EntityAccessRequestedMetadata {
+        request_id: Uuid::nil(),
+        revision: 1,
+        entity_name: "Private document".into(),
+        file_type: Some("md".into()),
+        access_level: RequestedAccessLevel::View,
+    };
+    let encoded = serde_json::to_value(&request).unwrap();
+    assert_eq!(encoded["accessLevel"], "view");
+    let decoded: EntityAccessRequestedMetadata = serde_json::from_value(encoded).unwrap();
+    assert_eq!(decoded.access_level, RequestedAccessLevel::View);
+    assert!(
+        decoded
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap()
+            .contains("requested view access")
+    );
+    let granted = EntityAccessGrantedMetadata {
+        request_id: request.request_id,
+        revision: 2,
+        entity_name: request.entity_name,
+        file_type: request.file_type,
+        access_level: RequestedAccessLevel::View,
+    };
+    assert!(
+        granted
+            .format_title(Some(uid("macro|owner@macro.com")))
+            .unwrap()
+            .contains("granted you view access")
+    );
+}
+
 fn channel_reaction() -> ChannelMessageReactionMetadata {
     ChannelMessageReactionMetadata {
         message_id: "message-1".to_string(),
@@ -805,7 +839,10 @@ fn reminder_notif_event_round_trips_and_renders_without_a_sender() {
 
     // A reminder is self-set, so the dispatcher passes no sender. Formatting
     // must not depend on one.
-    assert_eq!(event.format_title(None).unwrap(), "Reminder");
+    assert_eq!(
+        event.format_title(None).unwrap(),
+        "Reminder: Follow up on the contract"
+    );
     assert_eq!(
         event.format_body(None).unwrap(),
         "Follow up on the contract"

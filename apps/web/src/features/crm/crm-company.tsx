@@ -15,10 +15,11 @@ export function Company(props: ComponentProps<typeof View>) {
   );
 }
 
-/** The company's section tabs, below a host's header. */
+/** The company's section tabs, for a host's top bar. */
 export function CompanyTabs(props: {
   value: CompanySection;
   onChange: (section: CompanySection) => void;
+  compact?: boolean;
 }) {
   return <RecordTabs sections={COMPANY_SECTIONS} {...props} />;
 }

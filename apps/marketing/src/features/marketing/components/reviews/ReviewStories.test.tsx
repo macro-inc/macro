@@ -1,6 +1,11 @@
 import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { GithubHomeHero, PrLinkDemo, ReviewInboxDemo } from './ReviewStories';
+import {
+  GithubConversationDemo,
+  GithubPrHero,
+  GithubTaskDemo,
+} from './GithubWorkflow';
+import { PrLinkDemo, ReviewInboxDemo } from './ReviewStories';
 
 let intersections: IntersectionObserverCallback[];
 let motionListeners: (() => void)[];
@@ -13,6 +18,7 @@ beforeEach(() => {
   hidden = false;
   vi.useFakeTimers();
   vi.stubGlobal('fetch', vi.fn());
+  vi.stubGlobal('scrollTo', vi.fn());
   vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden);
   vi.stubGlobal('matchMedia', () => ({
     get matches() {
@@ -58,139 +64,149 @@ function visible(value: boolean) {
     );
 }
 
-const REQUEST = 'Keep the invited team through sign-up #491';
+const REQUEST = 'Fix mobile sign-in #491';
 const home = (view: ReturnType<typeof render>) =>
   within(view.getByRole('complementary', { name: 'Home' }));
 
-it('delivers a review request to Home, opens the pull request, then marks it done', () => {
+it('opens a review request and leaves it until the visitor marks it done', () => {
   const view = render(() => <ReviewInboxDemo />);
-  expect(home(view).queryByRole('button', { name: REQUEST })).toBeNull();
   visible(true);
-  vi.advanceTimersByTime(900);
-  const request = home(view).getByRole('button', { name: REQUEST });
-  expect(within(request).getByRole('img', { name: 'Unread' })).toBeTruthy();
-  expect(home(view).getByText('Last few minutes')).toBeTruthy();
-  vi.advanceTimersByTime(2000);
-  expect(
-    view.getByRole('heading', { name: 'Keep the invited team through sign-up' })
-  ).toBeTruthy();
-  expect(view.getByText('launch-team/web#491')).toBeTruthy();
-  expect(view.getByText('src/invite/accept-invite.ts:42')).toBeTruthy();
-  expect(view.getByRole('button', { name: 'Open on GitHub' })).toBeTruthy();
-  expect(within(request).queryByRole('img', { name: 'Unread' })).toBeNull();
-  vi.advanceTimersByTime(2600);
-  expect(home(view).queryByRole('button', { name: REQUEST })).toBeNull();
-  expect(view.getByRole('status').textContent).toContain('Marked as done');
-  expect(
-    home(view)
-      .getByRole('button', { name: 'engineers' })
-      .getAttribute('aria-current')
-  ).toBe('page');
-  fireEvent.click(view.getByRole('button', { name: 'Undo' }));
-  expect(home(view).getByRole('button', { name: REQUEST })).toBeTruthy();
   vi.advanceTimersByTime(30000);
-  expect(vi.getTimerCount()).toBe(0);
-});
-
-it('shows the review request open, without a cursor, for reduced motion', () => {
-  reduced = true;
-  const view = render(() => <ReviewInboxDemo />);
   expect(
     home(view)
       .getByRole('button', { name: REQUEST })
       .getAttribute('aria-current')
   ).toBe('page');
-  expect(view.getByText('src/invite/accept-invite.ts:42')).toBeTruthy();
+  expect(view.queryByText('Marked as done')).toBeNull();
+  fireEvent.keyDown(view.getByRole('heading', { name: 'Fix mobile sign-in' }), {
+    key: 'e',
+  });
+  expect(home(view).queryByRole('button', { name: REQUEST })).toBeNull();
+  fireEvent.click(view.getByRole('button', { name: 'Undo' }));
+  expect(home(view).getByRole('button', { name: REQUEST })).toBeTruthy();
+});
+
+it('shows the request without motion and keeps GitHub discussion read-only', () => {
+  reduced = true;
+  const view = render(() => <ReviewInboxDemo />);
+  expect(view.getByText('src/auth/SignIn.tsx:18')).toBeTruthy();
+  expect(view.container.querySelector('.demo-cursor')).toBeNull();
+  expect(view.queryByRole('switch', { name: /Hide bots/ })).toBeNull();
+  expect(view.queryByText('No issues found in this change.')).toBeNull();
+  expect(view.getByText(/both go through the form now/)).toBeTruthy();
+});
+
+it('opens PR changes and returns to the conversation without losing the conversation', async () => {
+  const view = render(() => <PrLinkDemo />);
+  await Promise.resolve();
+  expect(view.getByRole('log', { name: 'Channel website' })).toBeTruthy();
+  expect(
+    fireEvent.keyDown(view.getByRole('link', { name: REQUEST }), {
+      key: 'Enter',
+    })
+  ).toBe(false);
+  expect(
+    view.getByRole('heading', { name: 'Fix mobile sign-in' })
+  ).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: 'Changes' }));
+  expect(
+    view.getByRole('region', { name: 'Pull request changes' })
+  ).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: 'Close the changes pane' }));
+  fireEvent.click(view.getByRole('button', { name: 'Back to channel' }));
+  visible(true);
+  vi.advanceTimersByTime(30000);
+  expect(
+    view.queryByRole('heading', { name: 'Fix mobile sign-in' })
+  ).toBeNull();
+  expect(view.getByText('thanks, checking now')).toBeTruthy();
+});
+
+it('finishes the conversation walkthrough on readable changes, without merging', () => {
+  const view = render(() => <PrLinkDemo />);
+  visible(true);
+  vi.advanceTimersByTime(30000);
+  expect(
+    view.getByRole('region', { name: 'Pull request changes' })
+  ).toBeTruthy();
+  expect(
+    view.getByRole('link', { name: REQUEST }).getAttribute('data-status')
+  ).toBe('open');
   expect(view.container.querySelector('.demo-cursor')).toBeNull();
 });
 
-it('lets a visitor open Home items, filter bots, and press E to mark a PR done', () => {
-  const view = render(() => <GithubHomeHero />);
+it('changes files and closes the hero changes pane', () => {
+  const view = render(() => <GithubPrHero />);
+  fireEvent.click(view.getByRole('button', { name: /SignIn.test.tsx/ }));
   expect(
-    view.getByRole('heading', { name: 'Keep the invited team through sign-up' })
-  ).toBeTruthy();
-  fireEvent.click(view.getByRole('switch', { name: 'Hide bots (1)' }));
-  expect(view.queryByText(/Bugbot reviewed/)).toBeNull();
-  expect(view.getByText(/Expired invites go to the error page/)).toBeTruthy();
-  fireEvent.click(
-    home(view).getByRole('button', {
-      name: 'Shorten the onboarding checklist #479',
-    })
-  );
+    view.getByLabelText('Changes to src/auth/SignIn.test.tsx').shadowRoot
+      ?.textContent
+  ).toContain('signs in at');
+  fireEvent.click(view.getByRole('button', { name: 'Close the changes pane' }));
   expect(
-    view.getByRole('heading', { name: 'Shorten the onboarding checklist' })
-  ).toBeTruthy();
-  expect(view.getByText('Merged')).toBeTruthy();
-  fireEvent.keyDown(
-    view.getByRole('heading', { name: 'Shorten the onboarding checklist' }),
-    { key: 'e' }
-  );
-  expect(
-    home(view).queryByRole('button', {
-      name: 'Shorten the onboarding checklist #479',
-    })
+    view.queryByRole('region', { name: 'Pull request changes' })
   ).toBeNull();
-  expect(view.getByRole('status').textContent).toContain('Marked as done');
+  fireEvent.click(view.getByRole('button', { name: 'Changes' }));
   expect(
-    home(view)
-      .getByRole('button', { name: 'Next steps for our team' })
-      .getAttribute('aria-current')
-  ).toBe('page');
+    view.getByRole('region', { name: 'Pull request changes' })
+  ).toBeTruthy();
 });
 
-/** jsdom has no layout; give the overlays a box to measure. */
-function layout() {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    x: 40,
-    y: 120,
-    left: 40,
-    top: 120,
-    right: 340,
-    bottom: 144,
-    width: 300,
-    height: 24,
-    toJSON: () => ({}),
-  });
-}
-
-it('previews a pull request link on hover and follows it to merged', () => {
-  layout();
-  const view = render(() => <PrLinkDemo />);
-  const link = view.getByRole('link', { name: REQUEST });
-  expect(link.getAttribute('data-status')).toBe('open');
-  expect(view.queryByRole('dialog')).toBeNull();
+it('syncs the task after a confirmed merge and does not change its checklist', () => {
+  const view = render(() => <GithubTaskDemo />);
   visible(true);
-  vi.advanceTimersByTime(2250);
-  const card = view.getByRole('dialog', {
-    name: 'Preview of launch-team/web#491',
-  });
-  expect(card.textContent).toContain('open');
-  expect(card.textContent).toContain('+38');
-  expect(card.textContent).toContain('12 passed');
-  expect(view.container.querySelector('.demo-cursor')).toBeTruthy();
-  vi.advanceTimersByTime(2200);
-  expect(link.getAttribute('data-status')).toBe('merged');
-  expect(card.textContent).toContain('merged');
-  fireEvent.click(link);
+  vi.advanceTimersByTime(1800);
   expect(
-    view.getByRole('heading', { name: 'Keep the invited team through sign-up' })
-  ).toBeTruthy();
-  fireEvent.click(view.getByRole('button', { name: '#launch' }));
-  expect(view.getByRole('log', { name: 'Channel launch' })).toBeTruthy();
-});
-
-it('opens the preview for a visitor who hovers the link', () => {
-  layout();
-  const view = render(() => <PrLinkDemo />);
-  const link = view.getByRole('link', { name: REQUEST });
-  fireEvent.mouseEnter(link);
-  vi.advanceTimersByTime(50);
+    view.getAllByRole('button', { name: 'Change status' })[0].textContent
+  ).toContain('In Review');
+  fireEvent.click(view.getByRole('link', { name: REQUEST }));
+  fireEvent.click(view.getByRole('button', { name: 'Merge' }));
+  fireEvent.click(view.getByRole('button', { name: 'Cancel' }));
   expect(
-    view.getByRole('dialog', { name: 'Preview of launch-team/web#491' })
-  ).toBeTruthy();
-  fireEvent.mouseLeave(link);
-  expect(view.queryByRole('dialog', { hidden: true })).toBeNull();
-  visible(true);
+    view.getAllByRole('button', { name: 'Change status' })[0].textContent
+  ).toContain('In Review');
+  fireEvent.click(view.getByRole('button', { name: 'Merge' }));
+  fireEvent.click(view.getByRole('button', { name: 'Merge pull request' }));
+  expect(
+    view.getAllByRole('button', { name: 'Change status' })[0].textContent
+  ).toContain('Completed');
+  expect(
+    view
+      .getAllByRole('checkbox')
+      .filter(
+        (el) =>
+          el.getAttribute('aria-checked') === 'true' ||
+          (el as HTMLInputElement).checked
+      )
+  ).toHaveLength(2);
   vi.advanceTimersByTime(30000);
-  expect(link.getAttribute('data-status')).toBe('open');
+  expect(
+    view.getByRole('heading', { name: 'Fix mobile sign-in' })
+  ).toBeTruthy();
+});
+
+it('shows one coding-agent response with an openable session and PR', async () => {
+  const view = render(() => <GithubConversationDemo agent />);
+  visible(true);
+  vi.advanceTimersByTime(10000);
+  await Promise.resolve();
+  expect(
+    view.container.querySelectorAll('[data-magic-chip="mobile-sign-in"]')
+  ).toHaveLength(1);
+  expect(view.getByText('#491 · Fix mobile sign-in')).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: 'Open session' }));
+  expect(view.getByText('Cursor · Fix mobile sign-in')).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: 'Changes' }));
+  expect(
+    view.getByRole('region', { name: 'Pull request changes' })
+  ).toBeTruthy();
+});
+
+it('uses completed local states for reduced motion', () => {
+  reduced = true;
+  const view = render(() => <GithubTaskDemo />);
+  expect(
+    view.getAllByRole('button', { name: 'Change status' })[0].textContent
+  ).toContain('Completed');
+  expect(view.container.querySelector('.demo-cursor')).toBeNull();
 });

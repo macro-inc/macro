@@ -21,14 +21,11 @@ import CheckSquareIcon from '@phosphor/check-square.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
 import StackIcon from '@phosphor/stack.svg';
-import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { tourTarget } from '@ui/components/Tour';
 import { createMemo, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useTasksView } from '../tasks-view-context';
-import { TASKS_TOUR } from '../tour';
 import type { TasksTab } from '../types';
 
 const TASK_NAV_ITEMS = [
@@ -153,7 +150,6 @@ export function TasksSidebar() {
     state,
     projectsEnabled,
     setTab,
-    setFacets,
     isSidebarSectionOpen,
     setSidebarSectionOpen,
   } = useTasksView();
@@ -209,16 +205,6 @@ export function TasksSidebar() {
             }}
           />
         </Show>
-        <div ref={tourTarget(TASKS_TOUR.tags)}>
-          <SidebarTagsSection
-            activeIds={state.facets.tags ?? []}
-            onActiveIdsChange={(ids) =>
-              setFacets({ ...state.facets, tags: ids })
-            }
-            open={isSidebarSectionOpen('tags')}
-            onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
-          />
-        </div>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

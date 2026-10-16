@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session SET for_warming = TRUE, created_at = NOW() - INTERVAL '11 minutes' WHERE id = ANY($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c9e8001e4e31c820031aee2112504838a1072a54f10a924fb86ff126884edbd2"
+}

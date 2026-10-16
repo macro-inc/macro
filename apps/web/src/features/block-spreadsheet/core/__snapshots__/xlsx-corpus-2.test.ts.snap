@@ -1,0 +1,291 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`real-world XLSX corpus > bea-gdp-key-source-data-2q2026-third.xl… 1`] = `
+{
+  "calculation": {
+    "compared": 0,
+    "matched": 0,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 7816,
+  "formulas": 0,
+  "roundTrip": "identical",
+  "sheets": 4,
+  "styledCells": 9255,
+  "warnings": [
+    "Hyperlinks are imported as display text; link targets are not retained.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > closedxml-template-table-source-pivot-t… 1`] = `
+{
+  "calculation": {
+    "compared": 1450,
+    "matched": 1449,
+    "mismatchedFunctions": {
+      "XLL.DSSDATA": 1,
+    },
+    "volatile": 0,
+  },
+  "cells": 1789,
+  "formulas": 1450,
+  "roundTrip": "identical",
+  "sheets": 28,
+  "styledCells": 2126,
+  "warnings": [
+    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
+    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
+    "Macro cannot calculate these Excel functions yet, so their formulas show errors: _XLL.DSSDATA.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > ironcalc-template-travel-expenses-track… 1`] = `
+{
+  "calculation": {
+    "compared": 40,
+    "matched": 40,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 382,
+  "formulas": 40,
+  "roundTrip": "identical",
+  "sheets": 2,
+  "styledCells": 1475,
+  "warnings": [
+    "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > libreoffice-missing-path-external-shift… 1`] = `
+{
+  "calculation": {
+    "compared": 4027,
+    "matched": 4027,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 8334,
+  "formulas": 4027,
+  "roundTrip": "identical",
+  "sheets": 3,
+  "styledCells": 8397,
+  "warnings": [
+    "External workbook links are not supported; formulas that use them keep their last calculated values.",
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Names that refer to other workbooks are not imported.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > obr-public-finances-databank-2026-09.xl… 1`] = `
+{
+  "calculation": {
+    "compared": 5938,
+    "matched": 5938,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 14387,
+  "formulas": 5938,
+  "roundTrip": "identical",
+  "sheets": 7,
+  "styledCells": 20760,
+  "warnings": [
+    "Chart sheets and other non-grid sheets are not imported.",
+    "External workbook links are not supported; formulas that use them keep their last calculated values.",
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+    "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Names that refer to other workbooks are not imported.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+    "Special font effects are simplified to the supported text formatting.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > ons-business-demography-2024-reference-… 1`] = `
+{
+  "calculation": {
+    "compared": 1808,
+    "matched": 1808,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 94578,
+  "formulas": 1808,
+  "roundTrip": "identical",
+  "sheets": 45,
+  "styledCells": 110323,
+  "warnings": [
+    "Hyperlinks are imported as display text; link targets are not retained.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+    "Text number formats on numeric, boolean, date or formula cells are reset to preserve the original value types.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > packt-project-finance-model.xlsx 1`] = `
+{
+  "calculation": {
+    "compared": 2973,
+    "matched": 2973,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 4088,
+  "formulas": 2973,
+  "roundTrip": "identical",
+  "sheets": 10,
+  "styledCells": 5437,
+  "warnings": [
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > poi-number-format-tests-date1904.xlsx 1`] = `
+{
+  "calculation": {
+    "compared": 325,
+    "matched": 88,
+    "mismatchedFunctions": {
+      "TEXT": 237,
+    },
+    "volatile": 0,
+  },
+  "cells": 1314,
+  "formulas": 325,
+  "roundTrip": "identical",
+  "sheets": 2,
+  "styledCells": 1322,
+  "warnings": [
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+    "Text number formats on numeric, boolean, date or formula cells are reset to preserve the original value types.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > poi-structured-refs-lots-with-lookups-b… 1`] = `
+{
+  "calculation": {
+    "compared": 3476,
+    "matched": 3476,
+    "mismatchedFunctions": {},
+    "volatile": 3798,
+  },
+  "cells": 37696,
+  "formulas": 7274,
+  "roundTrip": "identical",
+  "sheets": 5,
+  "styledCells": 4022,
+  "warnings": [
+    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
+    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
+    "External workbook links are not supported; formulas that use them keep their last calculated values.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Names that refer to other workbooks are not imported.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > sba-table-of-size-standards-2023.xlsx 1`] = `
+{
+  "calculation": {
+    "compared": 0,
+    "matched": 0,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 5873,
+  "formulas": 0,
+  "roundTrip": "identical",
+  "sheets": 6,
+  "styledCells": 5739,
+  "warnings": [
+    "Excel filters are retained for export; Macro displays all rows.",
+    "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
+    "Hyperlinks are imported as display text; link targets are not retained.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > sec-educational-development-corp-10k-fy… 1`] = `
+{
+  "calculation": {
+    "compared": 0,
+    "matched": 0,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 3835,
+  "formulas": 0,
+  "roundTrip": "identical",
+  "sheets": 81,
+  "styledCells": 3835,
+  "warnings": [
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Text longer than 10,000 characters was shortened to fit Macro cells.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > sheetjs-metadata-2019-dynamic-arrays-ri… 1`] = `
+{
+  "calculation": {
+    "compared": 8,
+    "matched": 1,
+    "mismatchedFunctions": {
+      "FV": 6,
+      "UNIQUE": 1,
+    },
+    "volatile": 0,
+  },
+  "cells": 30,
+  "formulas": 8,
+  "roundTrip": "identical",
+  "sheets": 1,
+  "styledCells": 4,
+  "warnings": [
+    "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
+    "Linked data types and pictures in cells are imported as their displayed values.",
+    "Macro cannot calculate these Excel functions yet, so their formulas show errors: _FV.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > zenodo-debt-capacity-calculator.xlsx 1`] = `
+{
+  "calculation": {
+    "compared": 110,
+    "matched": 110,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 225,
+  "formulas": 110,
+  "roundTrip": "identical",
+  "sheets": 2,
+  "styledCells": 328,
+  "warnings": [
+    "External workbook links are not supported; formulas that use them keep their last calculated values.",
+    "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Names that refer to other workbooks are not imported.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+  ],
+}
+`;

@@ -32,7 +32,7 @@
   box-sizing: border-box;
   height: calc(var(--product-demo-height) + var(--product-demo-fade-tail));
   padding-bottom: var(--product-demo-fade-tail);
-  background: linear-gradient(145deg, #17181b, #101112 60%);
+  background: var(--color-panel);
   mask-image: linear-gradient(
     #000 calc(100% - var(--product-demo-fade-tail)),
     rgb(0 0 0 / 0.65) calc(100% - 32px),

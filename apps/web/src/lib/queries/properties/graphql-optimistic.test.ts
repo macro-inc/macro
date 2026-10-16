@@ -158,6 +158,49 @@ describe('buildOptimisticEntityPropertyOptions', () => {
       buildOptimisticEntityPropertyOptions(definition, ['cool'], assignmentId)
     ).toBeUndefined();
   });
+
+  it('gives first tag assignments the same target identity as full-value saves', () => {
+    const target = { entityType: 'DOCUMENT', entityId: 'doc-1' };
+    const expectedId = buildOptimisticSetEntityProperty(
+      definition,
+      { valueType: 'SELECT_STRING', values: ['cool'] },
+      target
+    )?.id;
+
+    for (const assignmentId of [
+      undefined,
+      'tag-def',
+      'pending:tag-def',
+      expectedId,
+    ]) {
+      expect(
+        buildOptimisticEntityPropertyOptions(
+          definition,
+          ['cool'],
+          assignmentId,
+          target
+        )
+      ).toMatchObject({
+        id: expectedId,
+        dataType: 'TAG',
+        value: { optionIds: ['cool'] },
+      });
+    }
+    expect(
+      buildOptimisticEntityPropertyOptions(definition, ['cool'], undefined, {
+        ...target,
+        entityId: 'doc-2',
+      })?.id
+    ).not.toBe(expectedId);
+    expect(
+      buildOptimisticEntityPropertyOptions(
+        definition,
+        [],
+        'assignment-1',
+        target
+      )
+    ).toMatchObject({ id: 'assignment-1', value: null });
+  });
 });
 
 describe('buildOptimisticSetEntityProperty', () => {

@@ -170,6 +170,35 @@ it('waits for asynchronous upload confirmation before assigning the picture', as
   expect(storageServiceClient.setChannelPicture).toHaveBeenCalledTimes(1);
 });
 
+it('waits through a full queue retry before saving the uploaded picture', async () => {
+  vi.useFakeTimers();
+  let uploaded = false;
+  vi.mocked(staticFileClient.getMetadata).mockImplementation(async () =>
+    ok({
+      file_id: 'new-picture',
+      owner_id: 'owner',
+      content_type: 'image/png',
+      is_uploaded: uploaded,
+      file_name: 'picture.png',
+      s3_key: 'file/new-picture',
+    })
+  );
+  vi.mocked(storageServiceClient.setChannelPicture).mockResolvedValue(
+    ok(undefined)
+  );
+  const mutation = setup(vi.fn().mockResolvedValue('new-picture'));
+  const pending = mutation.mutateAsync({
+    channelId: 'channel',
+    file: new File(['image'], 'picture.png'),
+  });
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(storageServiceClient.setChannelPicture).not.toHaveBeenCalled();
+  uploaded = true;
+  await vi.advanceTimersByTimeAsync(500);
+  await pending;
+  expect(storageServiceClient.setChannelPicture).toHaveBeenCalledTimes(1);
+});
+
 it('preserves the existing picture if upload confirmation fails', async () => {
   client.setQueryData(channelKeys.picture('channel').queryKey, 'old-picture');
   vi.mocked(staticFileClient.getMetadata).mockRejectedValue(

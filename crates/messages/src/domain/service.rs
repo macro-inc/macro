@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
+mod timeline;
 
 /// Minimum view permission for any supported message parent.
 #[derive(Debug, Clone, Copy)]
@@ -34,6 +35,7 @@ impl RequiredPermission for MessageWrite {
 /// Shared message use cases. Parent management and delivery are separate capabilities.
 #[derive(Clone)]
 pub struct MessageService<R, E> {
+    activity: Option<std::sync::Arc<dyn activity::domain::timeline::ActivityTimeline>>,
     repo: R,
     events: E,
     references: std::sync::Arc<dyn MessageReferenceAccess>,
@@ -45,12 +47,22 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// Compose a service from persistence and delivery ports.
     pub fn new(repo: R, events: E) -> Self {
         Self {
+            activity: None,
             repo,
             events,
             references: std::sync::Arc::new(DenyMessageReferences),
             mentions: std::sync::Arc::new(NoMessageMentionExtractor),
             groups: std::sync::Arc::new(NoMessageGroups),
         }
+    }
+
+    /// Supply the activity owner's read boundary for mixed parent timelines.
+    pub fn with_activity(
+        mut self,
+        activity: impl activity::domain::timeline::ActivityTimeline,
+    ) -> Self {
+        self.activity = Some(std::sync::Arc::new(activity));
+        self
     }
 
     /// Supply current channel membership for authored group mentions.
@@ -76,8 +88,45 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
-        mut query: MessageTimelineQuery,
+        query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
+        let (parent, query) = self.timeline_selection(&access, query).await?;
+        self.repo.timeline(&parent, query).await
+    }
+
+    /// Read a parent's messages and its timeline activity as one ordered page.
+    /// Parents without a timeline activity source return their messages only.
+    #[tracing::instrument(err, skip(self, access))]
+    pub async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        let (parent, query) = self.timeline_selection(&access, query).await?;
+        let Some(source) = timeline_activity(&parent) else {
+            return self.repo.timeline(&parent, query).await.map(Into::into);
+        };
+        // These filters select a subset of roots, and activity has no matching
+        // filter, so the merged window would be wrong. Including deleted threads
+        // only adds tombstones on the same keyset, so it combines with activity.
+        if !query.ids.is_empty()
+            || query.anchored.is_some()
+            || query.activity_after.is_some()
+            || query.activity_before.is_some()
+        {
+            return Err(MessageError::Invalid(
+                "activity timelines cannot be combined with message filters",
+            ));
+        }
+        self.activity_timeline(&parent, source, query).await
+    }
+
+    /// Validate a selection and resolve the parent it reads.
+    async fn timeline_selection(
+        &self,
+        access: &EntityAccessReceipt<MessageView>,
+        mut query: MessageTimelineQuery,
+    ) -> Result<(MessageParent, MessageTimelineQuery), MessageError> {
         if query
             .activity_after
             .zip(query.activity_before)
@@ -95,13 +144,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 "centered windows cannot have filters",
             ));
         }
-        let parent = parent_from_receipt(&access)?;
+        let parent = parent_from_receipt(access)?;
         self.ensure_parent(&parent).await?;
         query.limit = Some(query.limit.unwrap_or(50).clamp(1, 100));
         if query.ids.len() > 100 || (query.around.is_some() && query.cursor.is_some()) {
             return Err(MessageError::Invalid("invalid timeline selection"));
         }
-        self.repo.timeline(&parent, query).await
+        Ok((parent, query))
     }
 
     /// Read a message and its canonical root for navigation.
@@ -158,6 +207,36 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError> {
+        self.publish_typing(access, root_id, active, nonce, None)
+            .await
+    }
+
+    /// Publish an agent session typing through the bot that speaks for it.
+    /// Only a bot capability may say a session is typing: a person's typing
+    /// never names one.
+    #[tracing::instrument(err, skip(self, access))]
+    pub async fn agent_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root_id: Option<Uuid>,
+        active: bool,
+        agent: AgentTyping,
+    ) -> Result<(), MessageError> {
+        if !matches!(access.auth(), EntityAccessAuth::Bot(_)) {
+            return Err(MessageError::Forbidden);
+        }
+        self.publish_typing(access, root_id, active, None, Some(agent))
+            .await
+    }
+
+    async fn publish_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root_id: Option<Uuid>,
+        active: bool,
+        nonce: Option<String>,
+        agent: Option<AgentTyping>,
+    ) -> Result<(), MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -171,6 +250,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             change: MessageChange::Typing {
                 thread_id: root_id,
                 active,
+                agent,
             },
         })
         .await;
@@ -389,6 +469,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             input.attachments.as_deref().unwrap_or_default(),
         )
         .await?;
+        // Reconciliation may repeat a bot's final reply after a process died
+        // between patching it and recording success. Identical content must
+        // not produce another edit event or completion notification.
+        if actor.as_bot().is_some()
+            && input.content == current.content
+            && input.mentions == current.mentions
+            && input.attachments.is_none()
+        {
+            return Ok(current);
+        }
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
@@ -715,6 +805,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 }
                 MessageReferenceKind::Automation => continue,
                 MessageReferenceKind::Document => EntityType::Document,
+                MessageReferenceKind::Form => EntityType::Form,
                 MessageReferenceKind::Channel => EntityType::Channel,
                 MessageReferenceKind::EmailThread => EntityType::EmailThread,
                 MessageReferenceKind::Call => EntityType::Call,

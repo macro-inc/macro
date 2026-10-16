@@ -1,0 +1,1 @@
+Macro updater signature test fixture.

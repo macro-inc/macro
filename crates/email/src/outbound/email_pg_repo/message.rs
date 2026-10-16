@@ -491,13 +491,11 @@ pub(super) async fn upsert_recipients(
     }
 
     let n = contacts.recipients.len();
-    let mut message_ids: Vec<Uuid> = Vec::with_capacity(n);
     let mut contact_ids: Vec<Uuid> = Vec::with_capacity(n);
     let mut recipient_names: Vec<Option<String>> = Vec::with_capacity(n);
     let mut recipient_types: Vec<DbRecipientType> = Vec::with_capacity(n);
 
     for r in &contacts.recipients {
-        message_ids.push(message_db_id);
         contact_ids.push(r.contact_id);
         recipient_names.push(r.name.clone());
         recipient_types.push(match r.recipient_type {
@@ -507,32 +505,24 @@ pub(super) async fn upsert_recipients(
         });
     }
 
-    // Delete stale recipients
+    // Delete stale recipients and insert new ones; an unchanged set deletes and inserts nothing.
     sqlx::query!(
         r#"
-        DELETE FROM email_message_recipients
-        WHERE message_id = $1
-          AND (contact_id, recipient_type) NOT IN (
-              SELECT contact_id, recipient_type
-              FROM unnest($2::uuid[], $3::email_recipient_type[])
-              AS t(contact_id, recipient_type)
-          )
-        "#,
-        message_db_id,
-        &contact_ids,
-        &recipient_types as &[DbRecipientType],
-    )
-    .execute(&mut *tx)
-    .await?;
-
-    // Insert new recipients
-    sqlx::query!(
-        r#"
+        WITH incoming AS (
+            SELECT * FROM unnest($2::uuid[], $3::text[], $4::email_recipient_type[])
+            AS t(contact_id, name, recipient_type)
+        ), removed AS (
+            DELETE FROM email_message_recipients
+            WHERE message_id = $1::uuid
+              AND (contact_id, recipient_type) NOT IN (
+                  SELECT contact_id, recipient_type FROM incoming
+              )
+        )
         INSERT INTO email_message_recipients (message_id, contact_id, name, recipient_type)
-        SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::email_recipient_type[])
+        SELECT $1, contact_id, name, recipient_type FROM incoming
         ON CONFLICT (message_id, contact_id, recipient_type) DO NOTHING
         "#,
-        &message_ids,
+        message_db_id,
         &contact_ids,
         &recipient_names as &[Option<String>],
         &recipient_types as &[DbRecipientType],
@@ -540,5 +530,41 @@ pub(super) async fn upsert_recipients(
     .execute(&mut *tx)
     .await?;
 
+    Ok(())
+}
+
+/// Record a staged attachment on a draft. The insert selects through the
+/// draft row under `link_id`, so a draft that belongs to another inbox (or
+/// does not exist) records nothing instead of leaking a cross-inbox row,
+/// and that is reported as [`sqlx::Error::RowNotFound`]: a send that went
+/// ahead would otherwise go out without the attachment.
+pub(super) async fn insert_draft_attachment(
+    pool: &PgPool,
+    link_id: Uuid,
+    attachment: &AttachmentDraft,
+) -> Result<(), sqlx::Error> {
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO email_attachments_drafts (
+            id, draft_id, file_name, content_type, sha, size, s3_key
+        )
+        SELECT $1, $2, $3, $4, $5, $6, $7
+        FROM email_messages m
+        WHERE m.id = $2 AND m.link_id = $8
+        "#,
+        attachment.id,
+        attachment.draft_id,
+        attachment.file_name,
+        attachment.content_type,
+        attachment.sha,
+        attachment.size,
+        attachment.s3_key,
+        link_id,
+    )
+    .execute(pool)
+    .await?;
+    if result.rows_affected() == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
     Ok(())
 }

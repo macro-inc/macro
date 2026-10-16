@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE forms SET updated_at = $2\n            WHERE id = $1 AND trashed_at IS NULL\n            RETURNING id, name, description, owner_id, database_id, table_id,\n                      submitted_column_id, respondent_column_id, audience, tally_visible,\n                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,\n                      name_follows_database\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "submitted_column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "respondent_column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "audience",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "tally_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "closes_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "confirmation_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "trashed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "name_follows_database",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "860acc99bc10afe64dd03729ec1f2add9b2662a90f64315f95d53165ef43344c"
+}

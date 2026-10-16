@@ -4,8 +4,12 @@ import {
   CompanyTabs,
 } from '@app/features/crm/crm-company';
 import { CrmCopyLinkButton } from '@app/features/crm/crm-link';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
 import { useBlockId } from '@core/block';
 import {
   createParamsState,
@@ -29,17 +33,36 @@ export function CompanyBlockAdapter() {
   });
   return (
     <>
+      <SplitHeaderLeft>
+        <CollapsibleHeaderItem
+          id="company-tabs"
+          priority={1}
+          containerClass="ph-no-capture min-w-0 h-full mx-2"
+        >
+          {(isCollapsed) => (
+            <div
+              class={
+                isCollapsed()
+                  ? 'min-w-0 overflow-x-auto scrollbar-hidden'
+                  : 'shrink-0'
+              }
+            >
+              <CompanyTabs
+                value={section()}
+                onChange={setSection}
+                compact={isCollapsed()}
+              />
+            </div>
+          )}
+        </CollapsibleHeaderItem>
+      </SplitHeaderLeft>
       <SplitHeaderRight>
         <HeaderIsland>
           <CrmCopyLinkButton type="company" id={companyId} />
         </HeaderIsland>
       </SplitHeaderRight>
       <ParamsProvider state={params}>
-        <Company
-          companyId={companyId}
-          section={section()}
-          navigation={<CompanyTabs value={section()} onChange={setSection} />}
-        />
+        <Company companyId={companyId} section={section()} />
       </ParamsProvider>
     </>
   );

@@ -1,7 +1,7 @@
 ---
-source: crates/agent_fold/src/domain/test/real_recordings.rs
+source: crates/folds/agent_fold/src/domain/test/real_recordings.rs
 expression: messages
-input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jsonl
+input_file: crates/folds/agent_fold/fixtures/real/elicitation_claude_single_select.jsonl
 ---
 [
     FoldedMessage {
@@ -27,6 +27,7 @@ input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jso
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -139,5 +140,6 @@ input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jso
             EndTurn,
         ),
         pending: false,
+        posted_at: None,
     },
 ]

@@ -5,14 +5,101 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AvailabilityCalendarBody,
+  AvailabilityCalendarsResponse,
   CalendarEvent,
   CalendarMutationApiError,
   CreateCalendarEventRequest,
   DeleteCalendarEventParams,
   ListCalendarsResponse,
   RsvpCalendarEventRequest,
+  TeamCalendarSharingBody,
   UpdateCalendarEventRequest,
 } from './schemas';
+
+/**
+ * @summary List calendars and their personal-availability inclusion.
+ */
+export type getAvailabilityCalendarsResponse200 = {
+  data: AvailabilityCalendarsResponse;
+  status: 200;
+};
+
+export type getAvailabilityCalendarsResponseSuccess =
+  getAvailabilityCalendarsResponse200 & {
+    headers: Headers;
+  };
+
+export type getAvailabilityCalendarsResponse =
+  getAvailabilityCalendarsResponseSuccess;
+
+export const getGetAvailabilityCalendarsUrl = () => {
+  return `/availability-calendars`;
+};
+
+export const getAvailabilityCalendars = async (
+  options?: RequestInit
+): Promise<getAvailabilityCalendarsResponse> => {
+  const res = await fetch(getGetAvailabilityCalendarsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAvailabilityCalendarsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAvailabilityCalendarsResponse;
+};
+
+/**
+ * @summary Change which source calendars normally occupy this user's time.
+ */
+export type setAvailabilityCalendarResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type setAvailabilityCalendarResponseSuccess =
+  setAvailabilityCalendarResponse204 & {
+    headers: Headers;
+  };
+
+export type setAvailabilityCalendarResponse =
+  setAvailabilityCalendarResponseSuccess;
+
+export const getSetAvailabilityCalendarUrl = (calendarId: string) => {
+  return `/availability-calendars/${calendarId}`;
+};
+
+export const setAvailabilityCalendar = async (
+  calendarId: string,
+  availabilityCalendarBody: AvailabilityCalendarBody,
+  options?: RequestInit
+): Promise<setAvailabilityCalendarResponse> => {
+  const res = await fetch(getSetAvailabilityCalendarUrl(calendarId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(availabilityCalendarBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setAvailabilityCalendarResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setAvailabilityCalendarResponse;
+};
 
 /**
  * @summary List the requester's visible calendars for pickers and filters.
@@ -433,4 +520,79 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
+};
+
+/**
+ * @summary Read the authenticated user's sharing choice.
+ */
+export type getTeamSharingResponse200 = {
+  data: TeamCalendarSharingBody;
+  status: 200;
+};
+
+export type getTeamSharingResponseSuccess = getTeamSharingResponse200 & {
+  headers: Headers;
+};
+
+export type getTeamSharingResponse = getTeamSharingResponseSuccess;
+
+export const getGetTeamSharingUrl = () => {
+  return `/team-sharing`;
+};
+
+export const getTeamSharing = async (
+  options?: RequestInit
+): Promise<getTeamSharingResponse> => {
+  const res = await fetch(getGetTeamSharingUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamSharingResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamSharingResponse;
+};
+
+/**
+ * @summary Set the authenticated user's sharing choice.
+ */
+export type setTeamSharingResponse200 = {
+  data: TeamCalendarSharingBody;
+  status: 200;
+};
+
+export type setTeamSharingResponseSuccess = setTeamSharingResponse200 & {
+  headers: Headers;
+};
+
+export type setTeamSharingResponse = setTeamSharingResponseSuccess;
+
+export const getSetTeamSharingUrl = () => {
+  return `/team-sharing`;
+};
+
+export const setTeamSharing = async (
+  teamCalendarSharingBody: TeamCalendarSharingBody,
+  options?: RequestInit
+): Promise<setTeamSharingResponse> => {
+  const res = await fetch(getSetTeamSharingUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(teamCalendarSharingBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamSharingResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamSharingResponse;
 };

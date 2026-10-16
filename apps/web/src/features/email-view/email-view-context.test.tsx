@@ -121,6 +121,22 @@ function mount() {
 }
 
 describe('email view inbox reconciliation', () => {
+  it('selects an alias atomically without clearing it or navigating twice', () => {
+    const { view } = mount();
+    view.setAliasFilter({
+      inboxId: 'saved-inbox',
+      emailAddress: 'Resident@Example.com',
+    });
+    expect(view.state.aliasFilter).toEqual({
+      inboxId: 'saved-inbox',
+      emailAddress: 'resident@example.com',
+    });
+    expect(view.state.inboxIds).toEqual(['saved-inbox']);
+    expect(mocks.navigate).toHaveBeenCalledOnce();
+    view.setInboxIds(undefined);
+    expect(view.state.aliasFilter).toBeUndefined();
+    expect(view.state.inboxIds).toBeUndefined();
+  });
   it.each([{ links: [] }, { links: [{ id: 'remaining-inbox' }] }])(
     'preserves the thread when loaded accounts invalidate the saved scope: %j',
     ({ links }) => {

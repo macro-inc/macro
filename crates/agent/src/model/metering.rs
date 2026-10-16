@@ -5,6 +5,10 @@
 //! trusted policy facts. Raw unscoped HTTP calls retain legacy behavior and are NOT
 //! covered producers. Spawned tasks must explicitly carry the scope.
 
+mod per_call;
+
+use super::ModelSpeed;
+use per_call::PerCallUsage;
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -201,6 +205,7 @@ pub struct MeteringContext {
     mode: FinancialMode,
     capability: FinancialCapability,
     tracking: Option<Arc<dyn UsageTracking>>,
+    per_call: Option<PerCallUsage>,
     usage: UsageContext,
     support: Arc<Vec<ProviderSupport>>,
     stopped: Arc<AtomicBool>,
@@ -219,6 +224,7 @@ impl MeteringContext {
             mode,
             capability,
             tracking: None,
+            per_call: None,
             usage,
             support: Arc::new(support),
             stopped: Arc::new(AtomicBool::new(false)),
@@ -241,10 +247,11 @@ impl MeteringContext {
     /// Bridge analytics injection to per-attempt tracking. Financial scopes remain
     /// strict; observational child operations bind their own user/feature/entity.
     pub fn for_operation(recorder: &dyn UsageRecorder, usage: &UsageContext) -> Option<Self> {
-        if let Some(current) = Self::current() {
+        if let Some(mut current) = Self::current() {
             if current.activated() {
                 return Some(current);
             }
+            current.per_call = None;
             if let Some(tracking) = &current.tracking {
                 if current.usage.user == usage.user
                     && current.usage.feature == usage.feature
@@ -255,10 +262,43 @@ impl MeteringContext {
                 let tracking = recorder.tracking().unwrap_or_else(|| tracking.clone());
                 return Some(Self::tracking_only(tracking, usage.clone()));
             }
+            // Mask a parent session's per-call scope even without observational tracking.
+            current.usage = usage.clone();
+            current.tracking = recorder.tracking();
+            return Some(current);
         }
         recorder
             .tracking()
             .map(|tracking| Self::tracking_only(tracking, usage.clone()))
+    }
+
+    /// Bind per-call cost attribution for models with speed or context-dependent rates.
+    /// This uses the existing usage recorder; it never enables financial admission.
+    pub(crate) fn for_session(
+        recorder: Arc<dyn UsageRecorder>,
+        usage: &UsageContext,
+        model: &str,
+        speed: ModelSpeed,
+    ) -> Option<Self> {
+        let context = Self::for_operation(recorder.as_ref(), usage);
+        if !ModelSpeed::has_per_call_pricing(model) || context.as_ref().is_some_and(Self::activated)
+        {
+            return context;
+        }
+        let mut context = context.unwrap_or_else(|| {
+            Self::new(
+                FinancialMode::Legacy,
+                FinancialCapability::Unavailable,
+                usage.clone(),
+                vec![],
+            )
+        });
+        context.per_call = Some(PerCallUsage::new(recorder, usage.clone(), model, speed));
+        Some(context)
+    }
+
+    pub(crate) fn records_per_call(&self) -> bool {
+        self.per_call.is_some()
     }
 
     /// Run a completion, structured generation or session operation in this scope.
@@ -299,7 +339,7 @@ impl MeteringContext {
     }
 
     pub(crate) fn enabled(&self) -> bool {
-        self.activated() || self.tracking.is_some()
+        self.activated() || self.tracking.is_some() || self.per_call.is_some()
     }
 
     pub(crate) async fn begin(
@@ -308,6 +348,14 @@ impl MeteringContext {
         protocol: WireProtocol,
         body: &mut Value,
     ) -> Result<Attempt, MeteringError> {
+        let pricing = self
+            .per_call
+            .as_ref()
+            .filter(|pricing| pricing.matches(&model, body))
+            .cloned();
+        if self.per_call.is_some() && pricing.is_none() {
+            return Err(MeteringError::Unsupported);
+        }
         if let Some(service) = &self.tracking {
             let request = TrackedInvocation {
                 run_id: self.run_id,
@@ -329,8 +377,19 @@ impl MeteringContext {
                 },
                 context: self.clone(),
                 protocol,
+                pricing,
                 // Unreviewed compatible endpoints may return zero sentinels.
                 zero_usage_is_missing: protocol == WireProtocol::ChatCompletions,
+            });
+        }
+        if self.per_call.is_some() && !self.activated() {
+            return Ok(Attempt {
+                id: InvocationId::new(),
+                service: AttemptRecorder::Legacy,
+                context: self.clone(),
+                protocol,
+                pricing,
+                zero_usage_is_missing: false,
             });
         }
         if self.stopped.load(Ordering::Acquire) {
@@ -377,12 +436,14 @@ impl MeteringContext {
             service: AttemptRecorder::Financial(service.clone()),
             context: self.clone(),
             protocol: support.protocol,
+            pricing: None,
             zero_usage_is_missing: support.zero_usage_is_missing,
         })
     }
 }
 
 enum AttemptRecorder {
+    Legacy,
     Financial(Arc<dyn FinancialUsage>),
     Tracking {
         service: Arc<dyn UsageTracking>,
@@ -396,9 +457,26 @@ pub(crate) struct Attempt {
     context: MeteringContext,
     pub(crate) protocol: WireProtocol,
     pub(crate) zero_usage_is_missing: bool,
+    pricing: Option<PerCallUsage>,
 }
 
 impl Attempt {
+    pub(crate) fn record_cost(
+        &self,
+        usage: UsageEvidence,
+        delivered_speed: Option<&str>,
+    ) -> Result<(), MeteringError> {
+        if let Some(pricing) = &self.pricing
+            && let Err(error) = pricing.record(usage, delivered_speed)
+        {
+            if self.activated() {
+                return Err(error);
+            }
+            tracing::error!(invocation_id = ?self.id, ?error, "per-call usage not recorded; provider result preserved");
+        }
+        Ok(())
+    }
+
     pub(crate) fn activated(&self) -> bool {
         self.context.activated()
     }
@@ -433,6 +511,7 @@ impl Attempt {
         let delivered = tokio::spawn(async move {
             for retry in 0..3 {
                 let result = match &self.service {
+                    AttemptRecorder::Legacy => Ok(()),
                     AttemptRecorder::Financial(service) => service.finalize(evidence.clone()).await.map(|_| ()),
                     AttemptRecorder::Tracking { service, request } => {
                         // Retry begin as well: a lost acknowledgement must not lose

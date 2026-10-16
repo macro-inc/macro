@@ -1,7 +1,9 @@
 import { BaseTool } from '@core/component/AI/component/tool/BaseTool';
 import { createToolRenderer } from '@core/component/AI/component/tool/ToolRenderer';
+import { ItemPreview } from '@core/component/ItemPreview';
 import Buildings from '@phosphor-icons/core/regular/buildings.svg';
-import { Show } from 'solid-js';
+import UserPlus from '@phosphor-icons/core/regular/user-plus.svg';
+import { Show, Suspense } from 'solid-js';
 import {
   GetCompanyToolResponse,
   ListCompaniesToolResponse,
@@ -92,4 +94,60 @@ const getCompanyHandler = createToolRenderer({
   },
 });
 
-export { getCompanyHandler, listCompaniesHandler };
+function CompanyPreview(props: { companyId: string }) {
+  return (
+    <Suspense>
+      <ItemPreview
+        class="inline-flex align-middle ring-0"
+        id={props.companyId}
+        type="crm_company"
+      />
+    </Suspense>
+  );
+}
+
+const createCompanyHandler = createToolRenderer({
+  name: 'CreateCompany',
+  render: (ctx) => (
+    <BaseTool icon={Buildings} renderContext={ctx.renderContext} type="call">
+      <div class="min-w-0 flex-1">
+        <Show
+          when={ctx.response?.data.companyId}
+          fallback={
+            <>
+              Add CRM company <span class="text-ink">{ctx.tool.data.name}</span>{' '}
+              ({ctx.tool.data.domain})
+            </>
+          }
+        >
+          {(companyId) => (
+            <>
+              Added CRM company <CompanyPreview companyId={companyId()} />
+            </>
+          )}
+        </Show>
+      </div>
+    </BaseTool>
+  ),
+});
+
+const createContactHandler = createToolRenderer({
+  name: 'CreateContact',
+  render: (ctx) => (
+    <BaseTool icon={UserPlus} renderContext={ctx.renderContext} type="call">
+      <div class="min-w-0 flex-1">
+        {ctx.response ? 'Added' : 'Add'} contact{' '}
+        <span class="text-ink">{ctx.tool.data.name}</span> (
+        {ctx.tool.data.email}) to{' '}
+        <CompanyPreview companyId={ctx.tool.data.companyId} />
+      </div>
+    </BaseTool>
+  ),
+});
+
+export {
+  createCompanyHandler,
+  createContactHandler,
+  getCompanyHandler,
+  listCompaniesHandler,
+};

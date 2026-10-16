@@ -1,5 +1,5 @@
 import { A } from '@solidjs/router';
-import { type Component, createSignal, type JSX, Show } from 'solid-js';
+import { type Component, createSignal, Show } from 'solid-js';
 import LogoA16z from '../../assets/logos/a16z-artdeco.svg';
 import LogoBoxGroup from '../../assets/logos/boxgroup.svg';
 import LogoNyu from '../../assets/logos/nyu.svg';
@@ -10,13 +10,13 @@ import { HomeSectionRule } from '../components/sections/HomeSectionRule';
 import { type FaqItem, SectionFaq } from '../components/sections/SectionFaq';
 import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
 import { buildCalLinkWithAttribution } from '../utils/utilAnalytic';
-import { viewportWidth } from '../utils/utilBreakpoint';
+import { demoHref } from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../routes/posts/posts-shell.css';
+import './partners-hero.css';
 
 const SUPPORT_EMAIL = 'support@macro.com';
 const KICKOFF_URL = 'https://cal.com/team/macro/partnerships-program';
-const DEMO_URL = 'https://cal.com/team/macro/macro-demo-call';
 
 const partnerFaq: FaqItem[] = [
   {
@@ -111,67 +111,19 @@ const partnerFaq: FaqItem[] = [
 ];
 
 function PartnerCtaBar() {
-  const compact = () => viewportWidth() < 700;
-  const buttonStyle = (accent: boolean): JSX.CSSProperties => ({
-    'align-items': 'center',
-    'background-color': accent ? 'var(--a0)' : 'var(--c1)',
-    border: '1px solid color-mix(in srgb, var(--b4) 32%, transparent)',
-    'border-radius': '999px',
-    'box-sizing': 'border-box',
-    color: 'var(--b0)',
-    cursor: 'default',
-    display: 'inline-flex',
-    'font-family': 'body',
-    'font-size': compact() ? '15px' : '14px',
-    'font-weight': '700',
-    height: compact() ? '38px' : '40px',
-    'justify-content': 'center',
-    'letter-spacing': '0.01em',
-    'line-height': 1,
-    padding: compact() ? '0 16px' : '0 22px',
-    'text-decoration': 'none',
-    'text-transform': 'uppercase',
-    transition: 'transform 160ms ease',
-    'white-space': 'nowrap',
-  });
-
   return (
-    <div
-      class="home-hero-cta-bar partners-cta-bar"
-      style={{
-        'align-items': 'center',
-        'backdrop-filter': 'blur(6px)',
-        '-webkit-backdrop-filter': 'blur(6px)',
-        'background-color': 'color-mix(in srgb, var(--b1) 86%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--b4) 32%, transparent)',
-        'border-radius': '999px',
-        'box-shadow':
-          'inset 0 1px 0 color-mix(in srgb, var(--c1) 6%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--b0) 40%, transparent), 0 14px 32px -22px rgb(0 0 0 / 0.55)',
-        'box-sizing': 'border-box',
-        display: 'inline-flex',
-        gap: compact() ? '8px' : '10px',
-        'justify-content': 'flex-start',
-        overflow: 'hidden',
-        padding: compact() ? '8px' : '10px',
-        position: 'relative',
-        width: 'fit-content',
-      }}
-    >
+    <div class="partners-actions">
       <a
-        class="home-hero-cta"
+        class="partners-action partners-action-primary"
         href={buildCalLinkWithAttribution(KICKOFF_URL)}
         target="_blank"
         rel="noreferrer"
-        style={buttonStyle(true)}
       >
         Book a kickoff call
       </a>
       <a
-        class="home-hero-cta"
+        class="partners-action partners-action-secondary"
         href="mailto:partner@macro.com"
-        target="_blank"
-        rel="noreferrer"
-        style={buttonStyle(false)}
       >
         Get in touch
       </a>
@@ -182,8 +134,6 @@ function PartnerCtaBar() {
 function PartnerAnnouncementPlayer() {
   let videoRef!: HTMLVideoElement;
   const [playing, setPlaying] = createSignal(false);
-  const compact = () => viewportWidth() < 700;
-
   function handlePlay() {
     videoRef
       .play()
@@ -192,13 +142,7 @@ function PartnerAnnouncementPlayer() {
   }
 
   return (
-    <div
-      class={`partners-video-frame${playing() ? '' : ' partners-video-frame--idle'}`}
-      style={{ cursor: playing() ? 'default' : 'pointer' }}
-      onClick={() => {
-        if (!playing()) handlePlay();
-      }}
-    >
+    <div class="partners-video-frame">
       <video
         ref={videoRef}
         controls={playing()}
@@ -209,96 +153,18 @@ function PartnerAnnouncementPlayer() {
         preload="metadata"
         src={partnerAnnouncementVideo}
         aria-label="Partnership program announcement from Macro"
-        style={{
-          'object-fit': playing() ? 'contain' : 'cover',
-        }}
       />
       <Show when={!playing()}>
-        <img
-          src={partnerAnnouncementPoster}
-          loading="lazy"
-          alt=""
-          aria-hidden="true"
-          style={{
-            display: 'block',
-            filter: 'grayscale(1) brightness(0.9)',
-            height: '100%',
-            inset: '0',
-            'object-fit': 'cover',
-            'object-position': 'center center',
-            'pointer-events': 'none',
-            position: 'absolute',
-            width: '100%',
-          }}
-        />
-      </Show>
-      <Show when={!playing()}>
-        <div
-          style={{
-            background:
-              'linear-gradient(0deg, oklch(from var(--b0) l c h / 0.78), oklch(from var(--b0) l c h / 0.12) 52%, transparent 78%)',
-            inset: '0',
-            'pointer-events': 'none',
-            position: 'absolute',
-            'z-index': 1,
-          }}
-        />
-      </Show>
-      <Show when={!playing()}>
-        <div
-          style={{
-            'align-items': 'center',
-            bottom: compact() ? '20px' : '28px',
-            display: 'grid',
-            gap: compact() ? '12px' : '14px',
-            'grid-template-columns': 'min-content min-content 1fr',
-            left: compact() ? '20px' : '28px',
-            'pointer-events': 'none',
-            position: 'absolute',
-            right: compact() ? '20px' : '28px',
-            'z-index': 2,
-          }}
+        <button
+          class="partners-play"
+          onClick={handlePlay}
+          aria-label="Play Macro Partnership Overview"
         >
-          <svg
-            width={compact() ? '38' : '42'}
-            height={compact() ? '38' : '42'}
-            viewBox="0 0 48 48"
-            aria-hidden="true"
-          >
-            <circle
-              cx="24"
-              cy="24"
-              r="21"
-              fill="none"
-              stroke="var(--c1)"
-              stroke-width="2"
-            />
-            <path d="M20.5 16.5 L20.5 31.5 L32.5 24 Z" fill="var(--c1)" />
-          </svg>
-          <div
-            style={{
-              color: 'var(--c1)',
-              'font-family': 'Inter, body',
-              'font-size': compact() ? '14px' : '15px',
-              'font-weight': '700',
-              'letter-spacing': '0.1em',
-              'line-height': 1,
-              'text-transform': 'uppercase',
-              'white-space': 'nowrap',
-            }}
-          >
-            Macro Partnership Overview
-          </div>
-          <div
-            style={{
-              'background-color': 'var(--c1)',
-              height: '1px',
-              'margin-top': '1px',
-              opacity: 0.8,
-              width: '100%',
-            }}
-          />
-        </div>
+          <span class="partners-play-icon" aria-hidden="true">
+            ▶
+          </span>
+          <span>Macro Partnership Overview</span>
+        </button>
       </Show>
     </div>
   );
@@ -327,7 +193,7 @@ export const RoutePartners: Component = () => {
         .posts-article-header .posts-title {
           font-family: display, Georgia, serif;
           font-size: clamp(22px, 2.8vw, 28px);
-          font-weight: 370;
+          font-weight: calc(370 + var(--cream-slab-weight-increase, 0));
           letter-spacing: -0.012em;
           line-height: 1.25;
           margin-left: 0;
@@ -540,17 +406,17 @@ export const RoutePartners: Component = () => {
         }
       `}</style>
 
-      <article class="posts-shell posts-article posts-article--with-footer">
-        <header class="posts-article-header">
-          <h1 class="posts-title">
-            Partner with us to help teams adopt Macro.
-          </h1>
-          <h2 class="partners-subtitle">
-            Earn on referrals, preview features before release, and help your
-            clients roll out a modern workspace.
-          </h2>
-          <div class="partners-header-cta">
-            <PartnerCtaBar />
+      <article class="posts-shell posts-article posts-article--with-footer partners-article">
+        <header class="posts-article-header partners-hero">
+          <div class="partners-hero-copy">
+            <h1 class="posts-title">Build your business with Macro.</h1>
+            <h2 class="partners-subtitle">
+              Help clients adopt Macro. Earn on referrals and get early access
+              to new features.
+            </h2>
+            <div class="partners-header-cta">
+              <PartnerCtaBar />
+            </div>
           </div>
           <div class="posts-hero-art">
             <PartnerAnnouncementPlayer />
@@ -625,18 +491,20 @@ export const RoutePartners: Component = () => {
           <h2>How to become a partner</h2>
           <ol class="partners-steps">
             <li>
-              Book a partner screening call with our team{' '}
-              <a
-                href={buildCalLinkWithAttribution(DEMO_URL)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                here
-              </a>
-              .
+              <span>
+                Book a partner screening call with our team{' '}
+                <a href={demoHref()} target="_blank" rel="noreferrer">
+                  here
+                </a>
+                .
+              </span>
             </li>
-            <li>Get approved as a partner.</li>
-            <li>Roll out Macro to your clients.</li>
+            <li>
+              <span>Get approved as a partner.</span>
+            </li>
+            <li>
+              <span>Roll out Macro to your clients.</span>
+            </li>
           </ol>
 
           <div class="partners-faq">
@@ -647,13 +515,13 @@ export const RoutePartners: Component = () => {
 
       <HomeSectionRule />
       <div class="posts-home-cta-wrap posts-shell">
-        <section class="posts-home-cta" aria-label="Become a partner">
+        <section class="partners-closing-cta" aria-label="Become a partner">
           <div class="posts-home-cta-copy">
             <h2>Become a Macro partner.</h2>
           </div>
           <PartnerCtaBar />
           <A href="/partners/terms" class="partners-terms-link">
-            Full partner program terms →
+            Full partner program terms
           </A>
         </section>
       </div>

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM mobile_welcome_email\n            WHERE email = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "80a3c59c18f6fe25099d9b0a6d2dee52f5cb9461aa059cb1c6a7b6dae8ce3f8c"
+}

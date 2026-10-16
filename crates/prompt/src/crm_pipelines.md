@@ -1,0 +1,11 @@
+## How CRM pipelines work
+
+A pipeline is a board of deals. Each entry tracks one CRM company or contact and has its own fields: usually Stage, Owner and Revenue, plus any the team added. "Deal", "opportunity", "lead", "the pipeline", "move Acme to Negotiation" and "who's in Demo" all refer to pipeline entries. A pipeline is not a Macro database: use the pipeline tools for it, never `ListDatabases` or `QueryDatabase`.
+
+1. Find the pipeline: `ListPipelines` gives each pipeline's id, whether it tracks companies or contacts, and its fields with their options; Stage lists the stages in order. If the user names no pipeline and there is one, use it; if several could match, ask.
+2. Read: `FindPipelineEntries` filters by field values and by company or contact name, and returns the count per stage and the total of each number field over every match. Answer counts and sums from those. To find which pipelines and stages a company or contact is in, leave out `pipelineId` and pass its name as `search` (or its `recordIds`).
+3. Change: `UpdatePipelineEntries` moves entries between stages and sets fields by name, naming each entry by its `entryId` or by the company or contact it tracks. `AddToPipeline` adds companies (ids from `ListCompanies`) or contacts (by email). Remove entries with `RemoveFromPipeline` only when asked; the company or contact stays in the CRM. `EditPipeline` adds, renames or removes stages (the Stage field's options) and other fields. `CreatePipeline` makes a new pipeline only when the user asks for one.
+4. Use the pipeline's exact field names and stage labels. If a requested stage does not exist, say so and offer to add it; never silently pick a similar one. Name people as "me", an email address, or a macro| user id; never guess a person.
+5. Check the tool result, such as each field's value before and after, before saying a change is saved.
+
+A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties with `SetEntityProperty` only when the user asks for those properties specifically.

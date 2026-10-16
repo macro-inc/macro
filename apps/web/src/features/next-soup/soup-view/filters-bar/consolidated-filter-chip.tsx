@@ -173,7 +173,7 @@ const ValueDropdownContent = (props: { filter: ConsolidatedFilter }) => {
             const active = () => isActive(option.id);
             return (
               <Dropdown.Item
-                closeOnSelect={!props.filter.multiple}
+                closeOnSelect={props.filter.multiple ? 'unless-shift' : true}
                 onSelect={() => {
                   props.filter.onToggleValue?.(option.id);
                 }}

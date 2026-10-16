@@ -5,6 +5,7 @@ import type {
   EmailFormRecipients,
   EmailRecipient,
 } from '../core/email-recipient';
+import type { FromInboxOption } from '../core/email-sender';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailScheduleState } from './email-send-schedule';
 
@@ -82,16 +83,9 @@ export interface ComposeState {
   fromAddress?: Accessor<string | undefined>;
   // From-inbox selection: the inboxes the user can send from, the active one,
   // and a setter to change it.
-  fromInboxes?: Accessor<
-    {
-      id: string;
-      email_address: string;
-      displayName?: string;
-      photo_url?: string | null;
-    }[]
-  >;
+  fromInboxes?: Accessor<FromInboxOption[]>;
   selectedInboxId?: Accessor<string | undefined>;
-  onSelectInbox?: (inboxId: string) => void;
+  onSelectInbox?: (inboxId: string, senderEmail?: string) => void;
   hasPaidAccess: Accessor<boolean>;
 
   // Signature preview slot — rendered below the body. Provided by the new-email

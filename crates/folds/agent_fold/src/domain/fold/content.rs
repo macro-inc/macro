@@ -78,6 +78,7 @@ impl FoldState {
                 parts: NonEmpty::one(part),
                 stop: None,
                 pending: self.speculative,
+                posted_at: None,
             });
             self.open_turn().agent = Some(message);
             return Some((Changed::new(message), 0));

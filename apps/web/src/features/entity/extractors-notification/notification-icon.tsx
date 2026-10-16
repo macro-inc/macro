@@ -51,6 +51,8 @@ function getNotificationIcon(
     .with('channel_message_send', () => ChatIcon)
     .with('channel_message_reaction', () => SmileyIcon)
     .with('new_email', () => EnvelopeIcon)
+    .with('entity_access_requested', () => UserPlusIcon)
+    .with('entity_access_granted', () => CheckIcon)
     .with('channel_invite', () => UserPlusIcon)
     .with('invite_to_team', () => UserPlusIcon)
     .with('task_assigned', () => CheckIcon)

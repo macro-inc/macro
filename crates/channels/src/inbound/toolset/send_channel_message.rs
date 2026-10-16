@@ -6,22 +6,22 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::ports::ChannelService;
-use crate::inbound::toolset::ChannelToolContext;
+use crate::inbound::toolset::{ChannelToolContext, types::ChannelMessageAttachmentInput};
 use entity_access::domain::ports::EntityAccessService;
 use messages::domain::{
-    models::{MessageAttribution, PostMessage, PostMessageNotificationPolicy},
+    models::{MessageAttribution, NewAttachment, PostMessage, PostMessageNotificationPolicy},
     ports::MessageError,
 };
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[schemars(
     title = "SendChannelMessage",
-    description = "Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message"
+    description = "Send or reply to a channel on behalf of the user. Only use this when explicitly asked to send a message. To send an image or video, first upload it with CreateChannelMediaUpload (where available) and pass the returned attachment here; to attach a Macro document, pass its document ID."
 )]
 pub struct SendChannelMessage {
     /// macro markdown
     #[schemars(
-        description = "Message content in macro markdown format. This uses the same syntax as markdown documents"
+        description = "Message content in macro markdown format. This uses the same syntax as markdown documents. May be empty when attachments are sent."
     )]
     pub content: String,
     /// the channel to send to
@@ -30,6 +30,12 @@ pub struct SendChannelMessage {
     /// an optional thread being replied too
     #[schemars(description = "An optional thread id to reply too")]
     pub thread_id: Option<Uuid>,
+    /// files shown with the message
+    #[serde(default)]
+    #[schemars(
+        description = "Optional images, videos, or documents to attach, at most 10. Upload media before sending; a media attachment whose upload has not finished shows as broken."
+    )]
+    pub attachments: Vec<ChannelMessageAttachmentInput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -79,12 +85,12 @@ where
                     thread_id: self.thread_id,
                     anchor: None,
                     mentions: vec![],
-                    attachments: vec![],
+                    attachments: self.attachments.iter().map(NewAttachment::from).collect(),
                     nonce: None,
                 },
             )
             .await
-            .map_err(tool_err("failed to send message"))
+            .map_err(send_error)
             .map(|message| SendChannelMessageResponse {
                 channel_id: self.channel_id,
                 message_id: message.id.to_string(),
@@ -92,9 +98,20 @@ where
     }
 }
 
-fn tool_err(description: &'static str) -> impl FnOnce(MessageError) -> ToolCallError {
-    move |err| ToolCallError {
-        description: description.to_string(),
+fn send_error(err: MessageError) -> ToolCallError {
+    let description = match &err {
+        MessageError::Invalid(message) => (*message).to_string(),
+        MessageError::Forbidden => {
+            "not allowed to send this message: it attaches or mentions an item the user cannot view"
+                .to_string()
+        }
+        MessageError::NotFound => "thread not found in this channel".to_string(),
+        MessageError::Conflict | MessageError::Repository(_) => {
+            "failed to send message".to_string()
+        }
+    };
+    ToolCallError {
+        description,
         internal_error: anyhow::Error::new(err),
     }
 }

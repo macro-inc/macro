@@ -1,3 +1,4 @@
+import { openExternalUrl } from '@core/util/url';
 import CalendarBlank from '@phosphor/calendar-blank.svg';
 import Check from '@phosphor/check.svg';
 import Clock from '@phosphor/clock.svg';
@@ -8,8 +9,9 @@ import Users from '@phosphor/users.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description-sanitizer';
 import {
   type CalendarInvitation,
   type CalendarInvitationActions,
@@ -50,7 +52,7 @@ function MetaRow(props: { icon: JSX.Element; children: JSX.Element }) {
   );
 }
 
-/** Native host UI: no provider fetches, parser, grid, or HTML injection. */
+/** Native host UI with sanitized descriptions and host-supplied actions. */
 export function CalendarInviteCard(props: {
   invitation: CalendarInvitation;
   actions?: CalendarInvitationActions;
@@ -65,6 +67,16 @@ export function CalendarInviteCard(props: {
   };
   const invite = () =>
     displayedInvitation(props.invitation, props.actions?.resolution);
+  const descriptionHtml = createMemo(() =>
+    sanitizeCalendarDescription(invite().description ?? '')
+  );
+  const openDescriptionLink = (event: MouseEvent) => {
+    const anchor =
+      event.target instanceof Element ? event.target.closest('a[href]') : null;
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    (props.actions?.openExternal ?? openExternalUrl)(anchor.href);
+  };
   const cancelled = () =>
     props.actions?.resolution?.kind === 'cancelled' ||
     invitationIsCancelled(props.invitation) ||
@@ -236,12 +248,12 @@ export function CalendarInviteCard(props: {
         </ul>
         <Show when={!cancelled() && invite().description}>
           <div class="flex flex-col items-start gap-1.5">
-            <p
-              class="whitespace-pre-wrap break-words text-ink-muted [overflow-wrap:anywhere]"
+            <div
+              class="break-words text-ink-muted [overflow-wrap:anywhere] [&_a]:text-accent [&_a]:underline [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
               classList={{ 'line-clamp-2': !descriptionExpanded() }}
-            >
-              {invite().description}
-            </p>
+              innerHTML={descriptionHtml()}
+              onClick={openDescriptionLink}
+            />
             <Button
               variant="ghost"
               class="h-auto border-0 p-0 text-xs font-medium text-accent"

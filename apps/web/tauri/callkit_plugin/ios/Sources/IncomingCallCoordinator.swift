@@ -20,6 +20,9 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     private var pendingCalls: [UUID: PendingCallInfo] = [:]
     private var pendingCallTokens: [UUID: PendingCallToken] = [:]
+    /// Ring-status URLs from VoIP payloads, kept while the call is ringing so
+    /// a decline on this device can be reported with the same credential.
+    private var pendingRingStatusUrls: [UUID: String] = [:]
     private var ringPollers: [UUID: RingStatePoller] = [:]
     private var activeCallUUID: UUID?
     private var activeNativeMediaUUID: UUID?
@@ -346,6 +349,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
             provider.reportCall(with: staleUUID, endedAt: nil, reason: .failed)
             pendingCalls.removeValue(forKey: staleUUID)
             pendingCallTokens.removeValue(forKey: staleUUID)
+            pendingRingStatusUrls.removeValue(forKey: staleUUID)
             stopRingStatePolling(uuid: staleUUID)
         }
 
@@ -359,6 +363,11 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         } else {
             pendingCallTokens.removeValue(forKey: uuid)
             print("[CallKit] VoIP payload missing native connection credentials; lock-screen answer will not connect natively")
+        }
+        if let ringStatusUrl {
+            pendingRingStatusUrls[uuid] = ringStatusUrl
+        } else {
+            pendingRingStatusUrls.removeValue(forKey: uuid)
         }
         // A ring must not displace an active call's UUID: every leave path keys
         // off activeCallUUID, and the ring's later cleanup would nil it, leaving
@@ -387,6 +396,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
                 print("[CallKit] reportNewIncomingCall failed uuid=\(uuid.uuidString) error=\(String(describing: error))")
                 self?.pendingCalls.removeValue(forKey: uuid)
                 self?.pendingCallTokens.removeValue(forKey: uuid)
+                self?.pendingRingStatusUrls.removeValue(forKey: uuid)
                 if self?.activeCallUUID == uuid { self?.activeCallUUID = nil }
             } else {
                 print("[CallKit] reportNewIncomingCall succeeded uuid=\(uuid.uuidString)")
@@ -403,6 +413,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         stopAllRingStatePolling()
         pendingCalls.removeAll()
         pendingCallTokens.removeAll()
+        pendingRingStatusUrls.removeAll()
         activeCallUUID = nil
         isCallKitAudioSessionActive = false
         pendingAnsweredCall = nil
@@ -436,6 +447,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         // in `didReceiveIncomingPushWith` fail this now-active outgoing call.
         pendingCalls.removeValue(forKey: uuid)
         pendingCallTokens.removeValue(forKey: uuid)
+        pendingRingStatusUrls.removeValue(forKey: uuid)
         provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
         mediaSessionProvider().prepareForCallKitAudio()
         action.fulfill()
@@ -495,6 +507,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         activeCallUUID = answeredUUID
         pendingCalls.removeValue(forKey: answeredUUID)
         pendingCallTokens.removeValue(forKey: answeredUUID)
+        pendingRingStatusUrls.removeValue(forKey: answeredUUID)
 
         print("[CallKit] Fulfilling CXAnswerCallAction uuid=\(answeredUUID.uuidString)")
         applyProviderConfiguration(reason: "answer action fulfillment")
@@ -531,6 +544,13 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         let callId = action.callUUID.uuidString
         print("[CallKit] CXEndCallAction received uuid=\(callId)")
+        // Ending a call that is still pending (never answered here, not an
+        // outgoing call) is the user declining the incoming ring — e.g. the
+        // lock-screen Decline button. Tell the backend before the state is
+        // cleared so the user's other devices stop ringing too.
+        if pendingCalls[action.callUUID] != nil, !outgoingCallUUIDs.contains(action.callUUID) {
+            reportDecline(uuid: action.callUUID)
+        }
         onCallEnded(callId)
 
         // Keyed off the session as well as activeNativeMediaUUID: if the
@@ -587,6 +607,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         stopRingStatePolling(uuid: uuid)
         pendingCalls.removeValue(forKey: uuid)
         pendingCallTokens.removeValue(forKey: uuid)
+        pendingRingStatusUrls.removeValue(forKey: uuid)
         if activeCallUUID == uuid {
             activeCallUUID = nil
             // The pending answered call belongs to the active call; clearing an
@@ -646,6 +667,18 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         }
     }
 
+    /// Report a local decline of a ringing call to the backend (best-effort).
+    /// Needs the VoIP payload's ring-status URL and LiveKit token; older
+    /// backends without either simply leave other devices ringing as before.
+    private func reportDecline(uuid: UUID) {
+        guard let ringStatusUrl = pendingRingStatusUrls[uuid],
+              let token = pendingCallTokens[uuid]?.token else {
+            print("[CallKit] Skipping decline report; no ring credential uuid=\(uuid.uuidString)")
+            return
+        }
+        RingDeclineReporter.report(uuid: uuid, ringStatusUrl: ringStatusUrl, bearerToken: token)
+    }
+
     private func handleRemoteRingResolution(uuid: UUID, status: RingStatePoller.ResolvedStatus) {
         stopRingStatePolling(uuid: uuid)
         // A late in-flight response can land after the ring resolved locally
@@ -656,8 +689,13 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
             print("[CallKit] Ignoring remote ring resolution; call no longer pending uuid=\(uuid.uuidString)")
             return
         }
-        let reason: CXCallEndedReason = status == .answered ? .answeredElsewhere : .remoteEnded
-        print("[CallKit] Ending ringing call from remote resolution uuid=\(uuid.uuidString) reason=\(status == .answered ? "answeredElsewhere" : "remoteEnded")")
+        let reason: CXCallEndedReason
+        switch status {
+        case .answered: reason = .answeredElsewhere
+        case .declined: reason = .declinedElsewhere
+        case .ended: reason = .remoteEnded
+        }
+        print("[CallKit] Ending ringing call from remote resolution uuid=\(uuid.uuidString) reason=\(reason.rawValue)")
         // reportCall(with:endedAt:reason:) does not trigger the
         // CXEndCallAction delegate, so notify JS and clear state here.
         provider.reportCall(with: uuid, endedAt: nil, reason: reason)

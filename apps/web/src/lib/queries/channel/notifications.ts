@@ -1,7 +1,7 @@
 import { createUrqlQuery } from '@app/lib/urql-solid';
 import {
-  SoupNotificationsDocument,
-  type SoupNotificationsQuery,
+  ChannelDetailSoupDocument,
+  type ChannelDetailSoupQuery,
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupClient,
@@ -15,21 +15,22 @@ import {
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
-/** Complete, live channel notifications; never read the global GraphQL feed. */
+/** Complete, live unread channel notifications; never read the global GraphQL feed. */
 export function createChannelNotificationsQuery(
   channelId: string,
   enabled: Accessor<boolean>
 ) {
+  // The same variables as the open detail, so both read one request.
   const variables = {
     input: buildGraphqlEntitySoupInput('CHANNEL', channelId)!,
   };
   const query = createUrqlQuery(() => ({
-    query: SoupNotificationsDocument,
+    query: ChannelDetailSoupDocument,
     client: getGraphqlSoupClient(),
     variables,
     enabled: enabled(),
     requestPolicy: 'cache-and-network',
-    select: (data: SoupNotificationsQuery) =>
+    select: (data: ChannelDetailSoupQuery) =>
       (
         data.user.soup.items.find((item) => item.id === channelId)
           ?.notifications ?? []
@@ -37,12 +38,13 @@ export function createChannelNotificationsQuery(
   }));
   const refresh = registerChannelNotificationRefresh(() => ({
     client: getGraphqlSoupClient(),
-    queries: [{ document: SoupNotificationsDocument, variables }],
+    queries: [{ document: ChannelDetailSoupDocument, variables }],
     reader: {
       enabled: enabled(),
       fetching: query.isFetching,
       channelId,
-      filtered: false,
+      // Unread only: a read update can remove a known notification.
+      filtered: true,
       notificationIds: query.isSuccess
         ? (query.data ?? []).map((n) => n.id)
         : [],
@@ -52,7 +54,7 @@ export function createChannelNotificationsQuery(
   onCleanup(
     registerGraphqlSoupRevalidations(
       () =>
-        enabled() ? [{ document: SoupNotificationsDocument, variables }] : [],
+        enabled() ? [{ document: ChannelDetailSoupDocument, variables }] : [],
       getGraphqlSoupClient
     )
   );

@@ -102,7 +102,7 @@ export function DeleteDialog(props: DeleteDialogProps) {
           </Button>
           <Button
             type="button"
-            variant="strong"
+            variant="danger"
             depth={2}
             disabled={!canDelete()}
             onClick={deleteItem}

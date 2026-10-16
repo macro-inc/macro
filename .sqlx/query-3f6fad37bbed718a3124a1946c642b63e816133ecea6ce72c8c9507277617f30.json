@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"DocumentBom\" (\"documentId\", \"createdAt\", \"updatedAt\")\n            VALUES ($1, NOW(), NOW())\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3f6fad37bbed718a3124a1946c642b63e816133ecea6ce72c8c9507277617f30"
+}

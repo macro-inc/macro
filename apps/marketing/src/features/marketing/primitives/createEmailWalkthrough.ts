@@ -4,6 +4,8 @@ import { createSignal, onCleanup, onMount } from 'solid-js';
 export function createEmailWalkthrough(options: {
   root: () => HTMLElement;
   steps: number;
+  /** Wait until this share of a taller scene is visible before animating. */
+  visibilityThreshold?: number;
   advance: (step: number) => void;
   reset: () => void;
   reduced: () => void;
@@ -65,10 +67,13 @@ export function createEmailWalkthrough(options: {
     sync();
     const observer = new IntersectionObserver(
       ([entry]) => {
-        visible = entry.isIntersecting;
+        visible =
+          entry.isIntersecting &&
+          (options.visibilityThreshold === undefined ||
+            (entry.intersectionRatio ?? 1) >= options.visibilityThreshold);
         schedule();
       },
-      { threshold: 0.25 }
+      { threshold: options.visibilityThreshold ?? 0.25 }
     );
     observer.observe(options.root());
     media.addEventListener('change', sync);

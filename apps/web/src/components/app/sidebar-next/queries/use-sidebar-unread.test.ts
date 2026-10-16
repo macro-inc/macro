@@ -26,8 +26,8 @@ vi.mock('@queries/channel/unread-presence', () => ({
 vi.mock('@app/features/email-view/queries/email-query', () => ({
   buildEmailQuery: () => ({ params: {}, body: {} }),
 }));
-vi.mock('@app/features/home/queries/use-home-query', () => ({
-  useHomeEntitiesQuery: mocks.home,
+vi.mock('@app/features/home/queries/use-home-unread-query', () => ({
+  useHomeUnreadQuery: mocks.home,
 }));
 vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: mocks.email,
@@ -124,11 +124,9 @@ function setup(graphql = false) {
     mocks.hasUnreadEntity.mockImplementation((items: EmailEntity[]) =>
       items.some((item) => !item.done && !item.isRead)
     );
-    mocks.home.mockReturnValue({
-      query,
-      hasUnreadEntity: mocks.hasUnreadEntity,
-      transformEntities: mocks.transformEntities,
-    });
+    mocks.home.mockReturnValue(() =>
+      loading() ? false : mocks.hasUnreadEntity(emails())
+    );
     mocks.email.mockReturnValue(query);
     mocks.notifications.mockImplementation(notifications);
     return {
@@ -151,10 +149,8 @@ describe('sidebar unread presence', () => {
     }
     expect(mocks.hasUnreadEntity).not.toHaveBeenCalled();
     expect(mocks.transformEntities).not.toHaveBeenCalled();
-    expect(mocks.home).toHaveBeenCalledWith({
-      tab: 'signal',
-      facets: { read: ['unread'] },
-    });
+    expect(mocks.home).toHaveBeenCalledWith(expect.any(Function));
+    expect(mocks.home.mock.calls[0][0]()).toBe(false);
   });
 
   it('reacts to read, unread, and done changes in loaded rows', () => {

@@ -10,6 +10,14 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { isServer } from 'solid-js/web';
+import {
+  applyPalette,
+  onPaletteChange,
+  preferredPalette,
+} from '../../features/setup/sitePalette';
+import '../../styles/dark-theme.css';
+import '../../features/setup/cream-preview.css';
 import { DemoMentionMenu } from '../../features/marketing/components/DemoMentionMenu';
 import { PageVignette } from '../../features/marketing/components/PageVignette';
 import {
@@ -52,6 +60,10 @@ const RoutePrivacy = lazy(() =>
 const RouteDpa = lazy(() =>
   import('../routes/RouteDpa').then((module) => ({ default: module.RouteDpa }))
 );
+const RouteDeleteAccount = lazy(async () => {
+  const module = await import('../routes/RouteDeleteAccount');
+  return { default: module.RouteDeleteAccount };
+});
 const RouteTest = lazy(() =>
   import('../routes/RouteTest').then((module) => ({
     default: module.RouteTest,
@@ -164,6 +176,11 @@ macbook of protons
 
 const RootLayout: ParentComponent = (props) => {
   const location = useLocation();
+  createEffect(() => {
+    void location.search;
+    if (!isServer) applyPalette(preferredPalette());
+  });
+  onMount(() => onCleanup(onPaletteChange(applyPalette)));
   let scrollRef!: HTMLDivElement;
   const [headerCtaActive, setHeaderCtaActive] = createSignal(false);
 
@@ -231,12 +248,21 @@ const RootLayout: ParentComponent = (props) => {
                 width: 'calc(100vw / var(--site-scale, 1))',
               }}
             >
-              <BaseHeader
-                ctaActive={headerCtaActive()}
-                hideOpenApp={
-                  location.pathname.replace(/\/$/, '') === '/download'
+              {/* The phone signup pages are only the email capture. */}
+              <Show
+                when={
+                  ![MOBILE_SIGNUP_PATH, MOBILE_SIGNUP_SENT_PATH].includes(
+                    location.pathname.replace(/\/$/, '')
+                  )
                 }
-              />
+              >
+                <BaseHeader
+                  ctaActive={headerCtaActive()}
+                  hideOpenApp={
+                    location.pathname.replace(/\/$/, '') === '/download'
+                  }
+                />
+              </Show>
               <UtilWrap>{props.children}</UtilWrap>
             </div>
             <PageVignette />
@@ -267,6 +293,7 @@ export const App: Component<{
       <Route path="/jobs" component={RouteJobs} />
       <Route path="/terms" component={RouteTerms} />
       <Route path="/privacy" component={RoutePrivacy} />
+      <Route path="/delete-account" component={RouteDeleteAccount} />
       <Route path="/dpa" component={RouteDpa} />
       <Route path="/posts" component={PostsIndex} />
       <Route path="/posts/:slug" component={PostPage} />

@@ -48,6 +48,12 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
       channel: Channel.byId(client, metadata.channel_id),
       actor: userFromPrincipal(client, metadata.actor),
     }))
+    .with({ event_type: 'channel.picture_changed' }, ({ metadata }) => ({
+      event_type: 'channel.picture_changed' as const,
+      metadata,
+      channel: Channel.byId(client, metadata.channel_id),
+      actor: userFromPrincipal(client, metadata.actor),
+    }))
     .with({ event_type: 'channel.participant_added' }, ({ metadata }) => ({
       event_type: 'channel.participant_added' as const,
       metadata,

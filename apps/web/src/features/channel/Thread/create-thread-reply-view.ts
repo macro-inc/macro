@@ -1,16 +1,17 @@
 import { type Accessor, createMemo } from 'solid-js';
-import type { GroupableMessage } from '../Channel/message-grouping-meta';
-import { getVisibleReplyCount } from './utils/thread-reply-indicator-helpers';
+
+// Match the timeline's three-reply preview. Live updates append to that cache
+// even when older replies are missing, so it is not a complete set of groups.
+const COLLAPSED_REPLY_PREVIEW_LIMIT = 3;
 
 /** Full reply data may arrive independently of the user's expansion choice. */
-export function createThreadReplyView<T extends GroupableMessage>(options: {
+export function createThreadReplyView<T>(options: {
   preview: Accessor<T[]>;
   loaded: Accessor<T[] | undefined>;
   isExpanded: Accessor<boolean>;
 }) {
-  const previewCount = createMemo(() =>
-    getVisibleReplyCount(options.preview())
-  );
+  const previewCount = () =>
+    Math.min(options.preview().length, COLLAPSED_REPLY_PREVIEW_LIMIT);
   const activeReplies = () => options.loaded() ?? options.preview();
   const displayReplies = createMemo(() =>
     options.isExpanded()

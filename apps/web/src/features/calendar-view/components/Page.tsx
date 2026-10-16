@@ -29,6 +29,7 @@ import {
   scrollEventChipIntoView,
   timeGridScroller,
 } from '@app/features/calendar/utils/time-grid-scroller';
+import { mergeCalendarOverlays } from '@app/features/calendar-team/core/merge';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
@@ -223,6 +224,7 @@ export function Page(props: {
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
+    sourcesReady: calendarView.sourcesReady,
     isSourceVisible: isRenderedSourceVisible,
     queryOptions: () => ({
       pollWhileSyncing: isActive(),
@@ -234,14 +236,11 @@ export function Page(props: {
     isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
-  const visibleEvents = createMemo(() => [
-    ...data.visibleEvents(),
-    ...teamOoo.visibleEvents(),
-  ]);
-  const eventsById = createMemo(() =>
-    teamOoo.eventsById().size === 0
-      ? data.eventsById()
-      : new Map([...data.eventsById(), ...teamOoo.eventsById()])
+  const visibleEvents = createMemo(() =>
+    mergeCalendarOverlays(data.visibleEvents(), teamOoo.events())
+  );
+  const eventsById = createMemo(
+    () => new Map(visibleEvents().map((event) => [event.id, event]))
   );
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleSelect = (selection: DateSelectArg) => {
@@ -356,7 +355,7 @@ export function Page(props: {
           <CalendarPageHost
             id={props.id}
             data={data}
-            teamEvents={teamOoo.visibleEvents}
+            teamEvents={teamOoo.events}
             eventsById={eventsById}
             grid={grid}
             onLoadingBlockingChange={setLoadingDecorationBlocking}
@@ -435,8 +434,7 @@ function CalendarPageHost(props: {
         wasActive === false &&
         props.data.occurrencesQuery.isSuccess &&
         props.data.occurrencesQuery.isStale &&
-        !props.data.occurrencesQuery.isFetching &&
-        !props.data.occurrencesQuery.isPlaceholderData
+        !props.data.occurrencesQuery.isFetching
       ) {
         void props.data.occurrencesQuery.refetch();
       }
@@ -454,12 +452,11 @@ function CalendarPageHost(props: {
       ([active, selectedEventId, eventsById]) => {
         if (!active || !selectedEventId) return;
 
-        // Placeholder data is the previous range, so an absent event proves
-        // nothing yet.
+        // An absent event proves nothing until its occurrences and source
+        // metadata are ready to render.
         calendarView.refreshSelectedEventFromPage(
           eventsById,
-          props.data.occurrencesQuery.isSuccess &&
-            !props.data.occurrencesQuery.isPlaceholderData
+          props.data.occurrencesQuery.isSuccess && !props.data.isLoading()
         );
       }
     )

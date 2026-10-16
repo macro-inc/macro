@@ -355,7 +355,8 @@ export function ComposeRecipients(props: {
                 disabled={ctx.disabled()}
                 links={ctx.fromInboxes?.() ?? []}
                 activeInboxId={ctx.selectedInboxId?.()}
-                onSelect={(id) => ctx.onSelectInbox?.(id)}
+                activeEmail={ctx.fromAddress?.()}
+                onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
               />
             </div>
           </div>

@@ -5898,6 +5898,7 @@ async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Re
 
 fn mock_empty_ast() -> EntityFilterAst {
     EntityFilterAst {
+        crm_association: None,
         document_filter: None,
         calendar_event_filter: None,
         project_filter: None,
@@ -5907,9 +5908,9 @@ fn mock_empty_ast() -> EntityFilterAst {
         channel_thread_filter: None,
         call_filter: None,
         crm_company_filter: None,
+        crm_contact_filter: None,
         foreign_entity_filter: None,
         github_pull_request_filter: None,
-        reminder_filter: None,
         agent_session_filter: None,
         initiative_filter: None,
         database_row_filter: None,

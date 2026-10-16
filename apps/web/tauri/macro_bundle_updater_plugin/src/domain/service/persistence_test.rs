@@ -13,7 +13,7 @@ async fn failed_bundle_root_persistence_preserves_active_bundle_state() {
     let active_dir = seed_bundle(&fs, &cache_dir, "1", 20, 0);
     let persisted_root = cache_dir.join("bundle_root");
     seed_persisted_bundle_root(&fs, &cache_dir, &active_dir);
-    fs.fail_remove_file(&persisted_root);
+    fs.fail_write(&persisted_root);
     let (mut service, _start_rx) = service_with_status_and_fs(clear_required_status(), fs.clone());
     service.bundle_root = BundleRoot::from_path(active_dir.clone());
     service

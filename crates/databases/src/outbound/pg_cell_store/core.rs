@@ -25,6 +25,26 @@ where
         Ok(id)
     }
 
+    async fn storage_row_page(
+        &self,
+        table: TableId,
+        after: Option<RowId>,
+        limit: i64,
+    ) -> Result<Vec<crate::domain::models::RowRef>, Self::Error> {
+        let rows = sqlx::query!(
+            "SELECT id, position FROM database_rows WHERE table_id = $1 AND ($2::uuid IS NULL OR id > $2) ORDER BY id LIMIT $3",
+            table.into_uuid(), after.map(RowId::into_uuid), limit,
+        ).fetch_all(&self.pool).await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(crate::domain::models::RowRef {
+                    id: RowId::from_uuid(row.id),
+                    position: row.position.parse().map_err(PgDatabasesRepoError::from)?,
+                })
+            })
+            .collect()
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn delete_storage(&self, id: DatabaseId) -> Result<(), Self::Error> {
         let mut transaction = self.pool.begin().await?;

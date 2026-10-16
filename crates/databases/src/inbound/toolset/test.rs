@@ -92,6 +92,8 @@ fn table() -> Table {
 fn status_column() -> ColumnDetail {
     ColumnDetail {
         column: Column {
+            protections: vec![],
+            nullable: true,
             infer_type: false,
             display_name: None,
             id: COLUMN_ID,

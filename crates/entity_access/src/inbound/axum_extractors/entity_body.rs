@@ -14,6 +14,7 @@ use macro_authorization::{
     OptionalMacroAuthorizationExtractor,
 };
 use serde::{Deserialize, de::DeserializeOwned};
+use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
@@ -54,7 +55,7 @@ where
 {
     type Rejection = ExtractorError;
 
-    #[tracing::instrument(err, skip(req, state))]
+    #[tracing::instrument(err(level = Level::INFO), skip(req, state))]
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let authorization = req
             .extract_parts_with_state::<OptionalMacroAuthorizationExtractor<Auth, AnyPrincipal>, _>(

@@ -11,6 +11,7 @@ import { useContactEmailsQuery } from './use-crm';
 
 export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
   const email = () => props.contact?.email;
+  const [search, setSearch] = createSignal('');
   const [view, setView] = createSignal<EmailView>('team');
   const [signalView, setSignalView] = createSignal<EmailSignalView>('all');
   const emailsQuery = useContactEmailsQuery(email, view, signalView);
@@ -18,6 +19,8 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
   return (
     <RecordSection
       title="Emails"
+      search={search()}
+      onSearchChange={setSearch}
       actions={
         <>
           <TabsInset
@@ -41,6 +44,7 @@ export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
     >
       <RecordItemList
         source={emailsQuery}
+        search={search()}
         pending={!props.contact}
         empty={`No ${signalView() === 'signal' ? 'signal emails' : 'emails'} with this contact ${view() === 'me' ? 'in your inbox' : 'yet'}.`}
       />

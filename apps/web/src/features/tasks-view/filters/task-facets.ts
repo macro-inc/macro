@@ -9,7 +9,7 @@ import {
   TAG_FACET_ID,
   type TagFacetContext,
   tagFacetOption,
-} from '@app/features/soup';
+} from '@app/features/soup/filters/facets';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 import {
   getTaskAssigneeIds,

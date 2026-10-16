@@ -1,5 +1,10 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import {
+  normalizeContentId,
+  staticFileIdsByContentId,
+} from '@app/features/email-message/core/inline-images';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
+import { staticFileReferenceEndpoint } from '@core/constant/servers';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
@@ -143,6 +148,19 @@ function $generateHeaderNodes(
 
 const REPLYING_TO_ID_ATTRIBUTE = 'data-replying-to-id';
 
+/**
+ * The quoted message's inline parts are not sent along, so a cid: image would
+ * reach the recipient broken. Point it at the image's public static-file copy.
+ */
+function linkInlineImages(root: ParentNode, replyingTo: EmailMessage) {
+  const fileIds = staticFileIdsByContentId(replyingTo.attachments);
+  for (const img of root.querySelectorAll('img[src^="cid:"]')) {
+    const src = img.getAttribute('src') ?? '';
+    const fileId = fileIds.get(normalizeContentId(src.slice(4)));
+    if (fileId) img.setAttribute('src', staticFileReferenceEndpoint(fileId));
+  }
+}
+
 const $appendPreviousEmail = (
   editor: LexicalEditor,
   replyingTo: EmailMessage | undefined,
@@ -176,6 +194,7 @@ const $appendPreviousEmail = (
       sanitizeEmailHtml(replyingToBodyHTML),
       'text/html'
     );
+    linkInlineImages(dom, replyingTo);
     // Forwards always embed the original as a non-editable HTML Render Node so
     // the recipient gets the exact original markup. For replies, a table is a
     // good indicator of content we can't convert into editable nodes correctly.
@@ -359,6 +378,7 @@ function getAppendedReplyElement(
       sanitizeEmailHtml(replyingToBodyHTML),
       'text/html'
     );
+    linkInlineImages(innerDom, replyingTo);
     // Extract style tags from head to preserve email styling for weirdo emails with initial style tags.
     const styleTags = innerDom.head?.querySelectorAll('style');
     styleTags?.forEach((style) => {

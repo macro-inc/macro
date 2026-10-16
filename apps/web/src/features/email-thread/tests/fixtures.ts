@@ -41,7 +41,6 @@ export function createThreadContext(
     viewerEmail: () => 'viewer@example.com',
     viewerLoading: () => false,
     isTouch: () => false,
-    isMobile: () => false,
     createCommands: () => ({
       archiveThread: () => false,
       isThreadDone: () => false,

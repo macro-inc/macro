@@ -1,0 +1,18 @@
+---
+title: ShareWithChannel
+description: >-
+  Share an item with the current members of a channel by writing a channel
+  entity-access grant.
+---
+
+# ShareWithChannel
+
+Share an item with the current members of a channel by writing a channel entity-access grant. Call it only after the user agrees to share that item, or when they already asked you to share it. entityType is the stored type: calendar_event for a calendar chip, document, chat, project, database, form, call, thread, or agent_session. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channelId` | string | Yes | Channel id whose current members should be able to view the item. |
+| `entityId` | string | Yes | Id of the item to share. For a calendar chip this is the event id in documentId. |
+| `entityType` | `"calendar_event"` \| `"document"` \| `"chat"` \| `"project"` \| `"database"` \| `"form"` \| `"call"` \| `"thread"` \| `"agent_session"` | Yes | Entity types a channel grant can cover.  Values are the stored entity types. `calendar` is accepted for a calendar chip, whose stored type is `calendar_event`. |

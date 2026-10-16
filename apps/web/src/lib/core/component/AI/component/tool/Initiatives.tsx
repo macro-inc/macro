@@ -4,13 +4,12 @@ import { ProjectChip } from '@app/features/projects/components/project-chip';
 import type { ProjectSection } from '@app/features/projects/core/project';
 import { projectActivityEvent } from '@app/features/projects/core/project-activity';
 import { openProject } from '@app/features/projects/open-project';
-import { projectKeys } from '@app/features/projects/queries/keys';
+import { refreshProjectQueries } from '@app/features/projects/queries/project-revalidation';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import Stack from '@phosphor-icons/core/regular/stack.svg';
-import { queryClient } from '@queries/client';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
@@ -21,7 +20,7 @@ type ProjectDetails = NamedTool<'CreateInitiative', 'response'>['data'];
 
 async function refreshProjectsAfterMutation(): Promise<void> {
   if (!isFeatureEnabled(enableProjects)) return;
-  await queryClient.invalidateQueries({ queryKey: projectKeys._def });
+  await refreshProjectQueries();
 }
 
 function resultCount(count: number, noun: string, more = false): string {

@@ -282,3 +282,69 @@ fn crm_document_literals_materialize_for_browser_and_server() {
         )) if domain == "acme.com"
     ));
 }
+
+#[test]
+fn crm_association_materializes_for_browser_and_server() {
+    let company_id = "0198a1b2-c3d4-7e5f-8061-728394a5b700";
+    let contact_id = "0198a1b2-c3d4-7e5f-8061-728394a5b701";
+    let value = json!({
+        "crmAssociation": {"company": company_id},
+        "documentFilter": {"or": {
+            "left": {"literal": {"crmAssociated": {"contact": contact_id}}},
+            "right": {"literal": {"nameContains": "Renewal"}}
+        }}
+    });
+    let ast = materialize_graphql_filter(value.clone()).unwrap();
+    let input: GraphqlEntityFilterAst = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        serde_json::to_value(&ast).unwrap(),
+        serde_json::to_value(input.into_ast().unwrap()).unwrap()
+    );
+
+    assert_eq!(
+        ast.crm_association,
+        Some(CrmAssociation::Company(
+            Uuid::parse_str(company_id).unwrap()
+        ))
+    );
+    let Some(Expr::Or(left, right)) = ast.document_filter.as_deref() else {
+        panic!("expected an OR of the association and the name literal")
+    };
+    assert!(matches!(
+        left.as_ref(),
+        Expr::Literal(DocumentLiteral::CrmAssociated(CrmAssociation::Contact(id)))
+            if id.to_string() == contact_id
+    ));
+    assert!(matches!(
+        right.as_ref(),
+        Expr::Literal(DocumentLiteral::NameContains(name)) if name == "Renewal"
+    ));
+    assert!(
+        materialize_graphql_filter(json!({"crmAssociation": {"company": "not-a-uuid"}})).is_err()
+    );
+}
+
+#[test]
+fn contacts_are_opt_in_and_normalize_full_email_filters() {
+    assert!(
+        materialize_graphql_filter(json!({}))
+            .unwrap()
+            .crm_contact_filter
+            .is_none()
+    );
+    let ast = materialize_graphql_filter(json!({
+        "crmContactFilter": { "and": {
+            "left": { "literal": { "teamId": "00000000-0000-0000-0000-000000000011" } },
+            "right": { "literal": { "email": "  Pat+Alias@Example.com " } }
+        } }
+    }))
+    .unwrap();
+    let tree = serde_json::to_value(ast.crm_contact_filter).unwrap();
+    assert_eq!(tree["&"][1]["l"]["email"], "pat+alias@example.com");
+    assert!(
+        materialize_graphql_filter(
+            json!({ "crmContactFilter": { "literal": { "include": false } } })
+        )
+        .is_err()
+    );
+}

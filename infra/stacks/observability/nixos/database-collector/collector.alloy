@@ -1,0 +1,269 @@
+local.file "writer_dsn" {
+	filename  = sys.env("CREDENTIALS_DIRECTORY") + "/writer_dsn"
+	is_secret = true
+}
+
+local.file "replica_dsn" {
+	filename  = sys.env("CREDENTIALS_DIRECTORY") + "/replica_dsn"
+	is_secret = true
+}
+
+// A separate exporter per endpoint avoids upstream multi-DSN collector limitations.
+// Query IDs stay in metrics; statement text and activity samples go to Loki.
+prometheus.exporter.postgres "writer" {
+	data_source_names  = [local.file.writer_dsn.content]
+	enabled_collectors = ["database", "locks", "replication", "replication_slot", "stat_bgwriter", "stat_database", "stat_progress_vacuum", "stat_user_tables", "statio_user_tables", "wal", "long_running_transactions", "stat_activity_autovacuum", "stat_statements"]
+
+	stat_statements {
+		include_query     = false
+		limit             = 200
+		exclude_users     = ["grafana_monitor", "rdsadmin"]
+		exclude_databases = ["postgres", "template0", "template1", "rdsadmin"]
+	}
+}
+
+prometheus.exporter.postgres "replica" {
+	data_source_names  = [local.file.replica_dsn.content]
+	enabled_collectors = ["database", "locks", "replication", "replication_slot", "stat_bgwriter", "stat_database", "stat_progress_vacuum", "stat_user_tables", "statio_user_tables", "wal", "long_running_transactions", "stat_activity_autovacuum", "stat_wal_receiver", "stat_statements"]
+
+	stat_statements {
+		include_query     = false
+		limit             = 200
+		exclude_users     = ["grafana_monitor", "rdsadmin"]
+		exclude_databases = ["postgres", "template0", "template1", "rdsadmin"]
+	}
+}
+
+discovery.relabel "writer" {
+	targets = prometheus.exporter.postgres.writer.targets
+
+	rule {
+		target_label = "db_instance"
+		replacement  = "macro-db-dev"
+	}
+
+	rule {
+		target_label = "db_role"
+		replacement  = "writer"
+	}
+}
+
+discovery.relabel "replica" {
+	targets = prometheus.exporter.postgres.replica.targets
+
+	rule {
+		target_label = "db_instance"
+		replacement  = "macro-db-dev-read-replica"
+	}
+
+	rule {
+		target_label = "db_role"
+		replacement  = "replica"
+	}
+}
+
+prometheus.scrape "postgres" {
+	targets         = array.concat(discovery.relabel.writer.output, discovery.relabel.replica.output)
+	job_name        = "integrations/postgres"
+	scrape_interval = "60s"
+	scrape_timeout  = "15s"
+	forward_to      = [prometheus.relabel.database.receiver]
+}
+
+prometheus.relabel "database" {
+	// Don't retain exporter connection strings as labels, even if redacted upstream.
+	rule {
+		action = "labeldrop"
+		regex  = "server"
+	}
+
+	rule {
+		source_labels = ["db_instance"]
+		target_label  = "instance"
+	}
+	forward_to = [prometheus.remote_write.ohio.receiver]
+}
+
+prometheus.exporter.self "collector" { }
+
+discovery.relabel "collector" {
+	targets = prometheus.exporter.self.collector.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "observability/database-collector"
+	}
+}
+
+prometheus.scrape "collector" {
+	targets         = discovery.relabel.collector.output
+	job_name        = "observability/database-collector"
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.ohio.receiver]
+}
+
+prometheus.remote_write "ohio" {
+	external_labels = {deployment_environment = "dev", aws_region = "us-east-1"}
+
+	endpoint {
+		url = "https://otlp.macro-internal.com/api/v1/write"
+
+		basic_auth {
+			username      = "metrics"
+			password_file = sys.env("CREDENTIALS_DIRECTORY") + "/otlp_token"
+		}
+
+		queue_config {
+			max_shards           = 2
+			capacity             = 2500
+			max_samples_per_send = 1000
+		}
+	}
+
+	wal {
+		min_keepalive_time = "5m"
+		max_keepalive_time = "24h"
+	}
+}
+
+// Reuse the existing exporter; do not autodiscover or connect to other databases.
+database_observability.postgres "writer" {
+	data_source_name   = local.file.writer_dsn.content
+	targets            = prometheus.exporter.postgres.writer.targets
+	forward_to         = [loki.relabel.writer.receiver]
+	disable_collectors = ["explain_plans", "schema_details"]
+	exclude_users      = ["grafana_monitor", "rdsadmin", "db-o11y"]
+	exclude_databases  = ["postgres", "template0", "template1", "rdsadmin"]
+
+	query_details {
+		collect_interval = "1m"
+		statements_limit = 200
+	}
+
+	query_samples {
+		collect_interval        = "15s"
+		disable_query_redaction = false
+		exclude_current_user    = true
+	}
+}
+
+loki.relabel "writer" {
+	forward_to = [loki.process.database_queries.receiver]
+
+	rule {
+		target_label = "instance"
+		replacement  = "macro-db-dev"
+	}
+
+	rule {
+		target_label = "db_instance"
+		replacement  = "macro-db-dev"
+	}
+
+	rule {
+		target_label = "db_role"
+		replacement  = "writer"
+	}
+
+	rule {
+		target_label = "deployment_environment"
+		replacement  = "dev"
+	}
+
+	rule {
+		target_label = "job"
+		replacement  = "integrations/postgres-queries"
+	}
+}
+
+// Reuse the existing exporter; do not autodiscover or connect to other databases.
+database_observability.postgres "replica" {
+	data_source_name   = local.file.replica_dsn.content
+	targets            = prometheus.exporter.postgres.replica.targets
+	forward_to         = [loki.relabel.replica.receiver]
+	disable_collectors = ["explain_plans", "schema_details"]
+	exclude_users      = ["grafana_monitor", "rdsadmin", "db-o11y"]
+	exclude_databases  = ["postgres", "template0", "template1", "rdsadmin"]
+
+	query_details {
+		collect_interval = "1m"
+		statements_limit = 200
+	}
+
+	query_samples {
+		collect_interval        = "15s"
+		disable_query_redaction = false
+		exclude_current_user    = true
+	}
+}
+
+loki.relabel "replica" {
+	forward_to = [loki.process.database_queries.receiver]
+
+	rule {
+		target_label = "instance"
+		replacement  = "macro-db-dev-read-replica"
+	}
+
+	rule {
+		target_label = "db_instance"
+		replacement  = "macro-db-dev-read-replica"
+	}
+
+	rule {
+		target_label = "db_role"
+		replacement  = "replica"
+	}
+
+	rule {
+		target_label = "deployment_environment"
+		replacement  = "dev"
+	}
+
+	rule {
+		target_label = "job"
+		replacement  = "integrations/postgres-queries"
+	}
+}
+
+loki.process "database_queries" {
+	forward_to = [loki.write.ohio.receiver]
+	// Activity records are observations. Idle sessions can retain a query-start
+	// timestamp older than Loki accepts; preserve durations in the log body.
+	stage.match {
+		selector = "{job=\"integrations/postgres-queries\",op=~\"query_sample|wait_event\"}"
+
+		stage.template {
+			source   = "observed_at"
+			template = "{{ now | unixEpoch }}"
+		}
+
+		stage.timestamp {
+			source            = "observed_at"
+			format            = "Unix"
+			action_on_failure = "skip"
+		}
+	}
+	// pg_stat_statements normalizes DML, but utility statements can retain literals.
+	// Keep only DML associations and activity/wait samples; SQL is never a stream label.
+	stage.match {
+		selector            = "{job=\"integrations/postgres-queries\",op=\"query_association\"} !~ \"(?i)querytext=\\\"[[:space:]]*(SELECT|INSERT|UPDATE|DELETE|WITH|MERGE)[[:space:](]\""
+		action              = "drop"
+		drop_counter_reason = "postgres_utility_statement"
+	}
+}
+
+loki.write "ohio" {
+	endpoint {
+		url = "https://otlp.macro-internal.com/loki/api/v1/push"
+
+		basic_auth {
+			username      = "metrics"
+			password_file = sys.env("CREDENTIALS_DIRECTORY") + "/otlp_token"
+		}
+	}
+
+	wal {
+		enabled = true
+	}
+}

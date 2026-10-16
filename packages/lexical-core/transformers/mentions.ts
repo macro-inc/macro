@@ -9,6 +9,11 @@ import {
   buildAgentSessionMentionMarkdown,
 } from '../nodes/AgentSessionMentionNode';
 import {
+  $createBookingLinkMentionNode,
+  BookingLinkMentionNode,
+  isMacroBookingUrl,
+} from '../nodes/BookingLinkMentionNode';
+import {
   CONNECT_APP_TAG,
   ConnectAppNode,
   DEFAULT_CONNECT_APP_TARGET,
@@ -20,7 +25,10 @@ import { DateMentionNode } from '../nodes/DateMentionNode';
 import { DocumentCardNode } from '../nodes/DocumentCardNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
-import { PullRequestMentionNode } from '../nodes/PullRequestMentionNode';
+import {
+  isGithubPullRequestUrl,
+  PullRequestMentionNode,
+} from '../nodes/PullRequestMentionNode';
 import { TagMentionNode } from '../nodes/TagMentionNode';
 import { ThemeMentionNode } from '../nodes/ThemeMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
@@ -318,19 +326,28 @@ export const I_PR_MENTION: TextMatchTransformer = {
       id: node.getId(),
       label: node.getLabel(),
       mentionUuid: node.getMentionUuid(),
+      url: node.getUrl(),
     });
     return `<m-pr-mention>${data}</m-pr-mention>`;
   },
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
-      if (!('id' in data) || typeof data.id !== 'string') {
-        throw new Error('Missing field id');
+      // Agents often know only a PR's GitHub URL; the decorator resolves the
+      // Macro entity from it, so either field identifies the PR.
+      const id = typeof data.id === 'string' ? data.id : '';
+      const url =
+        typeof data.url === 'string' && isGithubPullRequestUrl(data.url)
+          ? data.url
+          : undefined;
+      if (!id && !url) {
+        throw new Error('Missing field id or url');
       }
       const prMentionNode = new PullRequestMentionNode(
-        data.id,
+        id,
         typeof data.label === 'string' ? data.label : undefined,
-        typeof data.mentionUuid === 'string' ? data.mentionUuid : undefined
+        typeof data.mentionUuid === 'string' ? data.mentionUuid : undefined,
+        url
       );
       node.replace(prMentionNode);
     } catch (e) {
@@ -350,9 +367,12 @@ export const E_PR_MENTION: ElementTransformer = {
     if (!(node instanceof PullRequestMentionNode)) return null;
 
     const id = node.getId();
-    if (!id) return null;
-
     const label = node.getLabel() || 'Pull request';
+    if (!id) {
+      const url = node.getUrl();
+      return url ? `[${label}](${url})` : null;
+    }
+
     const hostname = currentBrowserHostname();
     if (!hostname) return label;
 
@@ -712,6 +732,71 @@ export const E_DOCUMENT_CARD: ElementTransformer = {
     const hostname = cleanHostname(window.location.hostname);
     const documentUrl = `https://${hostname}/app/${blockType}/${documentId}`;
     return `[${documentName}](${documentUrl})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Booking Link Mentions
+export const I_BOOKING_LINK_MENTION: TextMatchTransformer = {
+  dependencies: [BookingLinkMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-booking-link-mention>(.*?)<\/m-booking-link-mention>/,
+  importRegExp: /<m-booking-link-mention>(.*?)<\/m-booking-link-mention>/,
+  export: (node) => {
+    if (!(node instanceof BookingLinkMentionNode)) return null;
+    const data = JSON.stringify({
+      profileId: node.getProfileId(),
+      slug: node.getSlug(),
+      label: node.getLabel(),
+      url: node.getUrl(),
+    });
+    return `<m-booking-link-mention>${data}</m-booking-link-mention>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      const profileId =
+        typeof data.profileId === 'string' ? data.profileId : '';
+      const url =
+        typeof data.url === 'string' && isMacroBookingUrl(data.url)
+          ? data.url
+          : undefined;
+      if (!profileId && !url) {
+        throw new Error('Missing field profileId or url');
+      }
+      const bookingMentionNode = $createBookingLinkMentionNode({
+        profileId,
+        slug: typeof data.slug === 'string' ? data.slug : undefined,
+        label: typeof data.label === 'string' ? data.label : undefined,
+        url: url || `https://macro.com/app/book/${profileId}`,
+      });
+      node.replace(bookingMentionNode);
+    } catch (e) {
+      console.error('Error in I_BOOKING_LINK_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Booking Link');
+    }
+  },
+};
+
+// External Booking Link Mentions
+export const E_BOOKING_LINK_MENTION: ElementTransformer = {
+  dependencies: [BookingLinkMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof BookingLinkMentionNode)) return null;
+
+    const url = node.getUrl();
+    const label = node.getLabel() || node.getSlug() || 'Booking link';
+
+    return `[${label}](${url})`;
   },
   replace: (
     _parentNode: ElementNode,

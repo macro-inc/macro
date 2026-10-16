@@ -1,6 +1,6 @@
-import { DatabaseMentionPlaceholder } from '@app/features/block-database/components/database-mention-label';
 import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import type { JSX } from 'solid-js';
+import { DatabaseMentionPlaceholder } from '../../database/components/database-mention-label';
 import {
   type AnswerDisplay,
   AnswerDisplayProvider,

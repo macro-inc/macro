@@ -23,6 +23,7 @@ function toItemType(type: EntityRef['type']): ItemType | undefined {
       'agent_session',
       'scheduled_action',
       'initiative',
+      'crm_pipeline',
       // A database and its rows are their own entity kinds, not cloud-storage
       // items.
       'database',

@@ -216,6 +216,8 @@ function MacroToolIcon(props: { name: string }): JSX.Element {
       'ReadProject',
       'ReadPresentation',
       'ReadDesign',
+      'ReadPhotoshopDocument',
+      'ReadIllustratorDocument',
       'ReadWordDocument',
       () => <ReadIcon class="size-4" />
     )

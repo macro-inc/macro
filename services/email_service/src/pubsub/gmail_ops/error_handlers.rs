@@ -1,6 +1,6 @@
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
-use models_email::service::pubsub::{DetailedError, ProcessingError};
+use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 
 /// Handles non-retryable errors by cleaning up the SQS message.
@@ -11,7 +11,13 @@ pub async fn handle_non_retryable_error(
     data: &GmailOpsPubsubMessage,
     e: &DetailedError,
 ) -> anyhow::Result<()> {
-    tracing::error!(error = ?e, payload = ?data.operation, "Non-retryable error processing gmail ops message. The message will be deleted.");
+    // A rate-limited operation is only non-retryable here once it has been
+    // re-enqueued to the retry queue, so deleting it loses nothing.
+    if e.reason == FailureReason::GmailApiRateLimited {
+        tracing::debug!(error = ?e, payload = ?data.operation, "Rate-limited gmail ops message deferred. The message will be deleted.");
+    } else {
+        tracing::error!(error = ?e, payload = ?data.operation, "Non-retryable error processing gmail ops message. The message will be deleted.");
+    }
 
     cleanup_message(&ctx.sqs_worker, message).await?;
     Ok(())

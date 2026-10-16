@@ -72,3 +72,8 @@ export { getGatewayAlb, type GatewayAlb } from './gateway';
 export { GATEWAY_PRIORITIES, GatewayService } from './gateway_priorities';
 
 export * from './service_urls';
+
+export {
+  grafanaTelemetryEnabled,
+  grafanaIngestSecretArn,
+} from './grafana_telemetry';

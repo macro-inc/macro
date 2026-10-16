@@ -1,0 +1,68 @@
+diff --git a/dist-js/index.cjs b/dist-js/index.cjs
+index f1bba4502af349efbde8b94ac1b1773a490f4836..18b6c78e7102523d557430eaae94d839fcef0cb0 100644
+--- a/dist-js/index.cjs
++++ b/dist-js/index.cjs
+@@ -103,21 +103,24 @@ async function fetch(input, init) {
+             danger
+         }
+     });
+-    const abort = () => core.invoke('plugin:http|fetch_cancel', { rid });
++    const abort = () => core.invoke('plugin:http|fetch_cancel', { rid }).catch(() => { });
+     // Optimistically check for abort signal
+     // and avoid doing any work after doing intial work on the Rust side
+     if (signal?.aborted) {
+-        // we don't care about the result of this proimse
+-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+-        abort();
++        // we don't care about the result of this promise
++        void abort();
+         throw new Error(ERROR_REQUEST_CANCELLED);
+     }
+     signal?.addEventListener('abort', () => void abort());
+     const { status, statusText, url, headers: responseHeaders, rid: responseRid } = await core.invoke('plugin:http|fetch_send', {
+         rid
+     });
++    let bodyDropped = false;
+     const dropBody = () => {
+-        return core.invoke('plugin:http|fetch_cancel_body', { rid: responseRid });
++        if (bodyDropped)
++            return Promise.resolve();
++        bodyDropped = true;
++        return core.invoke('plugin:http|fetch_cancel_body', { rid: responseRid }).catch(() => { });
+     };
+     const readChunk = async (controller) => {
+         let data;
+diff --git a/dist-js/index.js b/dist-js/index.js
+index 01f0ea49e0fe45425adcb8596f57e97a92c8c958..f38dbd4b68c3efa578cf6a8309543840a3619c77 100644
+--- a/dist-js/index.js
++++ b/dist-js/index.js
+@@ -101,21 +101,24 @@ async function fetch(input, init) {
+             danger
+         }
+     });
+-    const abort = () => invoke('plugin:http|fetch_cancel', { rid });
++    const abort = () => invoke('plugin:http|fetch_cancel', { rid }).catch(() => { });
+     // Optimistically check for abort signal
+     // and avoid doing any work after doing intial work on the Rust side
+     if (signal?.aborted) {
+-        // we don't care about the result of this proimse
+-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+-        abort();
++        // we don't care about the result of this promise
++        void abort();
+         throw new Error(ERROR_REQUEST_CANCELLED);
+     }
+     signal?.addEventListener('abort', () => void abort());
+     const { status, statusText, url, headers: responseHeaders, rid: responseRid } = await invoke('plugin:http|fetch_send', {
+         rid
+     });
++    let bodyDropped = false;
+     const dropBody = () => {
+-        return invoke('plugin:http|fetch_cancel_body', { rid: responseRid });
++        if (bodyDropped)
++            return Promise.resolve();
++        bodyDropped = true;
++        return invoke('plugin:http|fetch_cancel_body', { rid: responseRid }).catch(() => { });
+     };
+     const readChunk = async (controller) => {
+         let data;

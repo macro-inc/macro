@@ -24,8 +24,8 @@ pub struct SnsPushNotificationEvent {
     pub endpoint_arn: String,
     /// The type of event that occurred.
     pub event_type: EventType,
-    /// the SNS message unique identifier
-    pub message_id: MessageId,
+    /// The SNS message that failed. Only `DeliveryFailure` events carry one.
+    pub message_id: Option<MessageId>,
 }
 
 /// A raw push notification event message received from the queue.

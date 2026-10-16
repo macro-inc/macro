@@ -65,7 +65,7 @@ export function BottomReplyButtons(props: {
       const messageId = props.lastMessage.db_id;
       if (!messageId) return;
       openEmailReplyComposerForMessage({
-        isMobile: viewContext.thread.isMobile(),
+        isTouch: viewContext.thread.isTouch(),
         ctx,
         message: props.lastMessage,
         replyType: type,

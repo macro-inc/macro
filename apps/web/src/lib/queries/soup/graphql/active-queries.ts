@@ -12,6 +12,8 @@ type ActiveGraphqlSoupQuery = {
   refresh: () => Promise<void>;
   /** Only refresh this reader for its matching mutation, never for broad Soup work. */
   target?: () => GraphqlSoupRefreshTarget;
+  /** The REST-shaped filter body, for refreshes scoped to matching lists. */
+  body?: () => unknown;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
@@ -57,10 +59,16 @@ export function registerActiveGraphqlSoupQuery(
  * succeeded. Other callers retain the existing best-effort behavior.
  */
 export async function refreshActiveGraphqlSoupQueries(
-  options: { throwOnError?: boolean; target?: GraphqlSoupRefreshTarget } = {}
+  options: {
+    throwOnError?: boolean;
+    target?: GraphqlSoupRefreshTarget;
+    /** Only refresh list readers whose filter body matches. */
+    where?: (body: unknown) => boolean;
+  } = {}
 ): Promise<void> {
   const applicable = (query: ActiveGraphqlSoupQuery) => {
     if (!query.isEnabled()) return false;
+    if (options.where && !options.where(query.body?.())) return false;
     if (!query.target) return true;
     const target = query.target();
     return (

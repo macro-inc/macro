@@ -120,6 +120,7 @@ fn parse_line(session: AgentSessionId, line: &str) -> AgentSessionLog {
             MacroUserIdStr::try_from_email("eric@example.com").expect("test email parses")
         }),
         content,
+        logged_at: None,
     }
 }
 

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Native link regression</title></head>
+  <body>
+    <h1>Native link regression</h1>
+    <aside id="stopped">
+      <a id="stopped-link" target="_blank" rel="noreferrer" class="truncate hover:underline"
+         href="https://github.com/macro-inc/macro/pull/7858">macro-inc/macro#7858</a>
+    </aside>
+    <p><a id="plain-link" href="https://example.com/plain" target="_blank" rel="noreferrer">Plain popup</a></p>
+    <p><a id="self-link" href="https://example.com/self">Same-frame external link</a></p>
+    <p><a id="prevented-link" href="https://example.com/prevented" target="_blank">Prevented link</a></p>
+    <p><a id="app-link" href="https://macro.com/app/mail?view=all" target="_blank">Macro app link</a></p>
+    <p><a id="relative-link" href="/app/mail?view=all" target="_blank">Relative app link</a></p>
+    <button id="popup" type="button">Programmatic popup</button>
+    <p><a id="standalone-link" href="/billing-lab.html" target="_blank">Standalone HTML document</a></p>
+    <script type="module" src="/links.js"></script>
+  </body>
+</html>

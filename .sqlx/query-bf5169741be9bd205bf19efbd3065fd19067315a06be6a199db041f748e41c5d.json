@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            (SELECT COUNT(*) FROM email_links WHERE id = $1) AS \"links!\",\n            (SELECT COUNT(*) FROM email_settings WHERE link_id = $1) AS \"settings!\",\n            (SELECT COUNT(*) FROM email_gmail_histories WHERE link_id = $1) AS \"gmail_histories!\",\n            (SELECT COUNT(*) FROM email_sync_tokens WHERE link_id = $1) AS \"sync_tokens!\",\n            (SELECT COUNT(*) FROM email_contacts WHERE link_id = $1) AS \"contacts!\",\n            (SELECT COUNT(*) FROM email_labels WHERE link_id = $1) AS \"labels!\",\n            (SELECT COUNT(*) FROM email_threads WHERE link_id = $1) AS \"threads!\",\n            (SELECT COUNT(*) FROM email_messages WHERE link_id = $1) AS \"messages!\",\n            (SELECT COUNT(*) FROM email_message_labels ml\n                JOIN email_labels l ON l.id = ml.label_id WHERE l.link_id = $1) AS \"message_labels!\",\n            (SELECT COUNT(*) FROM email_message_recipients r\n                JOIN email_contacts c ON c.id = r.contact_id WHERE c.link_id = $1) AS \"recipients!\",\n            (SELECT COUNT(*) FROM email_attachments a\n                JOIN email_messages m ON m.id = a.message_id WHERE m.link_id = $1) AS \"attachments!\",\n            (SELECT COUNT(*) FROM email_attachments_sfs s\n                JOIN email_attachments a ON a.id = s.attachment_id\n                JOIN email_messages m ON m.id = a.message_id WHERE m.link_id = $1) AS \"attached_sfs!\",\n            (SELECT COUNT(*) FROM email_user_history WHERE link_id = $1) AS \"user_history!\",\n            (SELECT COUNT(*) FROM email_scheduled_messages WHERE link_id = $1) AS \"scheduled!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "links!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "settings!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "gmail_histories!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "sync_tokens!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "contacts!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "labels!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "threads!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "messages!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "message_labels!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "recipients!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "attachments!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "attached_sfs!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "user_history!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "scheduled!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "bf5169741be9bd205bf19efbd3065fd19067315a06be6a199db041f748e41c5d"
+}

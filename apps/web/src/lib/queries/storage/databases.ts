@@ -331,13 +331,14 @@ export function createDatabase(params: {
 }): ResultAsync<string, ResultError<DatabaseSchemaErrorCode>[]> {
   return storageServiceClient.databases
     .create({ name: params.name })
-    .map(async ({ id }) => {
+    .map(({ id }) => {
       analytics.track('create_entity', {
         entityType: 'database',
         entityId: id,
         source: params.source,
       });
-      await queryClient.invalidateQueries({
+      // Creation is committed. Refresh discovery without blocking the new editor.
+      void queryClient.invalidateQueries({
         queryKey: databasesKeys.list.queryKey,
       });
       return id;

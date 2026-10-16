@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM entity_access\n            WHERE entity_id = $1\n              AND entity_type = 'document'\n              AND source_id = ANY($2)\n              AND access_level = 'owner'\n        ) AS \"is_direct_owner!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_direct_owner!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4d7420904e5228a6850b81a07dd0ed554427c96d43dcbfeb22db55b5517ccc04"
+}

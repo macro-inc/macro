@@ -8,11 +8,13 @@ use agent_trigger::domain::broker_events::{
     AgentSessionRequestedEvent, AgentTriggerEventName, AgentTriggerTopicEvent,
     NewAgentSessionEvent, OpeningMention, SessionMessage,
 };
+use agent_trigger::domain::task_assignment::assignment_instructions;
 use bot_id::BotId;
 use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use strum::IntoEnumIterator as _;
+use trigger_context::TriggerContext;
 use webhook::domain::models::WebhookFilter;
 
 #[cfg(test)]
@@ -43,6 +45,8 @@ pub enum TriggerWork {
         message_id: Uuid,
         /// The mention's text: the first prompt, and the announcement quote.
         content: String,
+        /// Why the agent was called, forwarded with the prompt.
+        context: Option<TriggerContext>,
     },
     /// Open a session somebody asked for from the composer, under the id
     /// they are waiting on. No thread, so nothing is announced anywhere;
@@ -69,6 +73,8 @@ pub enum TriggerWork {
         sender: MacroUserIdStr<'static>,
         /// The message's text.
         content: String,
+        /// Why the agent was called, forwarded with the prompt.
+        context: Option<TriggerContext>,
     },
 }
 
@@ -92,6 +98,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 bot_id,
                 session_id,
                 owner,
+                context: _,
             },
         )) => {
             let sender = MacroUserIdStr::try_from(owner).map_err(|_| Skipped::NotFromUser)?;
@@ -107,14 +114,26 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 reuse_origin_message: true,
                 bot: assigned.bot_id,
                 sender: assigned.actor,
+                // The task travels in the context; the prompt is only what to
+                // do with it. Events from producers that predate the context
+                // carry the whole brief instead.
+                content: match &assigned.context {
+                    Some(_) => assignment_instructions(&assigned.parent),
+                    None => assigned.prompt,
+                },
                 parent: assigned.parent,
                 thread_id: assigned.discussion_id,
                 message_id: assigned.discussion_id,
-                content: assigned.prompt,
+                context: assigned.context,
             })
         }
         AgentTriggerTopicEvent::New(event) => {
-            let Some(OpeningMention { bot_id, message }) = event.mention() else {
+            let Some(OpeningMention {
+                bot_id,
+                message,
+                context,
+            }) = event.mention()
+            else {
                 return Err(Skipped::Unrecognized);
             };
             let sender = message
@@ -132,12 +151,14 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 thread_id: message.thread_id.unwrap_or(message.message_id),
                 message_id: message.message_id,
                 content: message.content,
+                context,
             })
         }
         AgentTriggerTopicEvent::Existing(event) => {
             let Some(SessionMessage {
                 session_id,
                 message,
+                context,
                 ..
             }) = event.session_message()
             else {
@@ -152,6 +173,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 session: session_id,
                 sender,
                 content: message.content,
+                context,
             })
         }
     }

@@ -1,19 +1,12 @@
-import { SettingsCard } from '@app/features/settings/primitives';
 import Clock from '@phosphor/clock.svg';
 import Globe from '@phosphor/globe.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import type {
-  AvailabilitySchedule,
-  SchedulingProfile,
-  SchedulingScope,
-} from '../core/types';
+import type { AvailabilitySchedule, SchedulingProfile } from '../core/types';
 import { WEEKDAYS } from '../core/types';
-import { OwnerBadge } from './owner-badge';
 
 export function AvailabilityPanel(props: {
   profile: SchedulingProfile;
-  owner?: SchedulingScope;
   canEdit: boolean;
   saving: boolean;
   onEdit: (schedule: AvailabilitySchedule) => void;
@@ -26,16 +19,13 @@ export function AvailabilityPanel(props: {
   const usedBy = (id: string) =>
     props.profile.eventTypes.filter((e) => e.scheduleId === id);
   return (
-    <SettingsCard>
+    <div class="divide-y divide-edge-muted border-y border-edge-muted">
       <For
         each={props.profile.schedules}
         fallback={
           <div class="flex flex-col items-center gap-3 px-6 py-8 text-center">
             <Clock class="size-7 text-ink-muted" />
-            <Show when={props.owner}>
-              {(owner) => <OwnerBadge scope={owner()} />}
-            </Show>
-            <h2 class="font-semibold">Set your working hours</h2>
+            <h2 class="text-sm font-medium">Set your working hours</h2>
             <p class="text-sm text-ink-muted">
               Create a schedule to start accepting bookings.
             </p>
@@ -43,7 +33,7 @@ export function AvailabilityPanel(props: {
         }
       >
         {(schedule) => (
-          <article class="px-6 py-4">
+          <article class="py-4">
             <div class="flex flex-wrap items-start justify-between gap-5">
               <button
                 type="button"
@@ -52,10 +42,7 @@ export function AvailabilityPanel(props: {
                 onClick={() => props.onEdit(schedule)}
               >
                 <div class="flex flex-wrap items-center gap-3">
-                  <h2 class="font-semibold">{schedule.name}</h2>
-                  <Show when={props.owner}>
-                    {(owner) => <OwnerBadge scope={owner()} />}
-                  </Show>
+                  <h2 class="text-sm font-medium">{schedule.name}</h2>
                   <Show when={defaultId() === schedule.id}>
                     <span class="rounded-md bg-active px-2 py-0.5 text-xs text-ink-muted">
                       Default
@@ -134,6 +121,6 @@ export function AvailabilityPanel(props: {
           </article>
         )}
       </For>
-    </SettingsCard>
+    </div>
   );
 }

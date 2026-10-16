@@ -75,4 +75,8 @@ once summarization has run; active calls always return `None`. */
   /** Transcript segments ordered by `sequence_num`. */
   transcript: CallRecordTranscriptSegment[];
   userAccessLevel?: CallRecordUserAccessLevel;
+  /** Whether the authenticated viewer has declined this call on any device.
+Set on the single-record read so clients that missed `call_declined`
+can still stop ringing via reconciliation; `false` in list contexts. */
+  viewerHasDeclined?: boolean;
 }

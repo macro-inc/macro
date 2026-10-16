@@ -7,6 +7,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::str::FromStr;
 
+#[cfg(test)]
+mod test;
+
 /// Postgres-backed onboarding repository (MacroDB).
 #[derive(Clone)]
 pub struct PgOnboardingRepo {
@@ -104,6 +107,20 @@ impl OnboardingRepo for PgOnboardingRepo {
         .fetch_one(&self.pool)
         .await?;
         row.try_into()
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_row(&self, user: &MacroUserIdStr<'static>) -> Result<()> {
+        sqlx::query!(
+            r#"
+            DELETE FROM user_onboarding
+            WHERE user_id = $1
+            "#,
+            user.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 }
 

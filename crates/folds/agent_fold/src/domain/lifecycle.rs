@@ -17,13 +17,15 @@
 //!
 //! [`push`]: LifecycleFold::push
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
+use agent_runtime_protocol::domain::action::AgentActionId;
 
 use crate::domain::fold::FoldMachineImpl;
 use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{
     Author, ElicitationRequestId, FoldEvent, FoldedMessage, MessagePart, OwnedFoldEvent,
-    SessionMetadata, TurnId, TurnSignal,
+    ProjectedSegment, SessionMetadata, TurnId, TurnPhase, TurnSignal, phase, project,
 };
 use crate::domain::ports::FoldMachine as _;
 
@@ -47,7 +49,14 @@ pub struct LifecycleFold {
     closed: HashSet<TurnId>,
     /// The pending elicitation after the last push, to diff against.
     pending: Option<(ElicitationRequestId, TurnId)>,
+    /// The shape last reported for each open reply, to diff against. Prose
+    /// still being written is absent from a shape, so a streaming passage
+    /// does not report on every chunk.
+    progress: HashMap<TurnId, ReplyShape>,
 }
+
+/// What [`TurnSignal::Progressed`] last said about a reply.
+type ReplyShape = (Option<TurnPhase>, Vec<ProjectedSegment>);
 
 impl LifecycleFold {
     /// A fold that has folded nothing.
@@ -86,28 +95,48 @@ impl LifecycleFold {
     }
 
     fn observe_message(&mut self, message: &FoldedMessage, signals: &mut Vec<TurnSignal>) {
-        let (Author::Agent, Some(stop)) = (&message.author, &message.stop) else {
-            return;
-        };
-        if !self.closed.insert(message.id) {
+        if !matches!(message.author, Author::Agent) || self.closed.contains(&message.id) {
             return;
         }
-        // The prompt that opened the turn carries the action id; the agent's
-        // reply never does.
-        let action_id = self
-            .inner
-            .messages()
-            .iter()
-            .find(|candidate| {
-                candidate.id == message.id && matches!(candidate.author, Author::User { .. })
-            })
-            .and_then(|prompt| prompt.request_id);
+        let closed = message.stop.is_some();
+        let shape = (
+            phase(&message.parts, closed),
+            project(&message.parts, closed),
+        );
+        let changed = self.progress.get(&message.id) != Some(&shape);
+        if changed {
+            let (phase, segments) = shape.clone();
+            signals.push(TurnSignal::Progressed {
+                turn: message.id,
+                action_id: self.action_id(message),
+                phase,
+                segments,
+            });
+            self.progress.insert(message.id, shape);
+        }
+        let Some(stop) = &message.stop else {
+            return;
+        };
+        self.closed.insert(message.id);
+        self.progress.remove(&message.id);
         signals.push(TurnSignal::TurnEnded {
             turn: message.id,
-            action_id,
+            action_id: self.action_id(message),
             stop: stop.clone(),
             last_text: last_text(message),
         });
+    }
+
+    /// The prompt that opened the turn carries the action id; the agent's
+    /// reply never does.
+    fn action_id(&self, reply: &FoldedMessage) -> Option<AgentActionId> {
+        self.inner
+            .messages()
+            .iter()
+            .find(|candidate| {
+                candidate.id == reply.id && matches!(candidate.author, Author::User { .. })
+            })
+            .and_then(|prompt| prompt.request_id)
     }
 
     fn observe_metadata(&mut self, metadata: &SessionMetadata, signals: &mut Vec<TurnSignal>) {
@@ -131,6 +160,9 @@ impl LifecycleFold {
     }
 
     fn observe_replacement(&mut self, messages: &[FoldedMessage]) {
+        // A replacement is history, not news: the next change to an open
+        // reply reports its whole shape again.
+        self.progress.clear();
         self.closed = messages
             .iter()
             .filter(|message| matches!(message.author, Author::Agent) && message.stop.is_some())

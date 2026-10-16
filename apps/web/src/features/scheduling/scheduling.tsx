@@ -40,7 +40,12 @@ function SchedulingSettingsContent() {
     }) ?? [];
   const scopes = (): SchedulingScope[] => {
     const result: SchedulingScope[] = [
-      { id: user.userId() ?? 'me', name: 'Personal', canEdit: true },
+      {
+        id: user.userId() ?? 'me',
+        name: 'Personal',
+        canEdit: true,
+        canManageBookings: true,
+      },
     ];
     const data = currentTeam();
     if (data) {
@@ -49,7 +54,8 @@ function SchedulingSettingsContent() {
         id: data.team.id,
         name: data.team.name,
         teamId: data.team.id,
-        canEdit: role === 'admin' || role === 'owner',
+        canEdit: role !== undefined,
+        canManageBookings: role === 'admin' || role === 'owner',
       });
     }
     return result;

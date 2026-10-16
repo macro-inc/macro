@@ -1,4 +1,5 @@
-use super::{PaidPlan, StripeOperationError, StripePrices};
+use super::{PaidPlan, StripePrices};
+use teams::domain::model::CustomerError;
 
 fn prices() -> StripePrices {
     StripePrices {
@@ -10,10 +11,13 @@ fn prices() -> StripePrices {
 #[test]
 fn every_purchasable_plan_resolves_to_its_configured_price() {
     assert_eq!(
-        prices().price_id(PaidPlan::Premium).unwrap(),
+        prices().seat_prices().price_id(PaidPlan::Premium).unwrap(),
         "price_premium"
     );
-    assert_eq!(prices().price_id(PaidPlan::Max).unwrap(), "price_max");
+    assert_eq!(
+        prices().seat_prices().price_id(PaidPlan::Max).unwrap(),
+        "price_max"
+    );
 }
 
 #[test]
@@ -23,10 +27,13 @@ fn max_is_unavailable_until_its_price_is_configured() {
         max: None,
     };
     assert!(matches!(
-        prices.price_id(PaidPlan::Max),
-        Err(StripeOperationError::PlanUnavailable)
+        prices.seat_prices().price_id(PaidPlan::Max),
+        Err(CustomerError::PlanUnavailable(PaidPlan::Max))
     ));
-    assert_eq!(prices.price_id(PaidPlan::Premium).unwrap(), "price_premium");
+    assert_eq!(
+        prices.seat_prices().price_id(PaidPlan::Premium).unwrap(),
+        "price_premium"
+    );
 }
 
 #[test]

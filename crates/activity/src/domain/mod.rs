@@ -9,6 +9,7 @@ pub mod ports;
 pub mod realtime;
 #[cfg(feature = "ai_tools")]
 pub mod service;
+pub mod timeline;
 
 #[cfg(feature = "consumer")]
 pub mod announcements;

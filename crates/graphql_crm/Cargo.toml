@@ -1,0 +1,25 @@
+[package]
+name = "graphql_crm"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true, features = ["dataloader"] }
+crm = { path = "../crm", default-features = false, features = ["ports"] }
+databases = { path = "../databases", default-features = false, features = ["ports"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+graphql_common = { path = "../graphql_common" }
+graphql_properties = { path = "../graphql_properties" }
+macro_user_id = { path = "../macro_user_id" }
+models_properties = { path = "../models_properties" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+chrono = { workspace = true }
+models_databases = { path = "../models_databases" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

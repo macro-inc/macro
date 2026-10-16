@@ -1,5 +1,6 @@
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import type { GetChatResponse } from '@service-cognition/generated/schemas/getChatResponse';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -34,10 +35,14 @@ export async function fetchAndCacheChat(chatId: string) {
   );
 }
 
+function selectChat(data: GetChatResponse) {
+  return data.chat;
+}
+
 export function useChatDataQuery(chatId: Accessor<string>) {
   return useQuery(() => ({
     ...chatQueryOptions(chatId()),
-    select: (data) => data.chat,
+    select: selectChat,
     enabled: !!chatId(),
   }));
 }

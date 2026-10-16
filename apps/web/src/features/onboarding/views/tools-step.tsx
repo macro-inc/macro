@@ -3,16 +3,22 @@ import { createSignal, For, Show } from 'solid-js';
 import { ContinueButton } from '../components/controls';
 import { ToolTile } from '../components/tool-tile';
 import { type Tool, useOnboardingContext } from '../context/onboarding-context';
+import { orderOnboardingTools } from '../primitives/tools';
 
 /** Uses the same searchable, paginated catalog and hosted connection flow as Settings. */
 export function ToolsStep(props: { onContinue: () => void }) {
   const context = useOnboardingContext();
   const catalog = context.createToolCatalog();
   const connected = context.createConnectedTools({ poll: true });
+  const entries = () => orderOnboardingTools(catalog.entries());
   const [busy, setBusy] = createSignal<string>();
 
   const connect = async (tool: Tool) => {
-    if (busy()) return;
+    if (
+      busy() ||
+      !['available', 'disabled'].includes(connected.state(tool.slug))
+    )
+      return;
     setBusy(tool.slug);
     try {
       await context.connectTool(tool);
@@ -42,18 +48,50 @@ export function ToolsStep(props: { onContinue: () => void }) {
         style={{ 'scrollbar-gutter': 'stable' }}
       >
         <div class="grid grid-cols-3 gap-x-2 gap-y-5 sm:grid-cols-4">
-          <For each={catalog.entries()}>
+          <For each={entries()}>
             {(tool) => (
               <ToolTile
                 tool={tool}
                 busy={busy() === tool.slug}
-                disabled={busy() !== undefined || connected() === undefined}
-                connected={connected()?.has(tool.slug) ?? false}
+                disabled={
+                  busy() !== undefined ||
+                  ['loading', 'error'].includes(connected.state(tool.slug))
+                }
+                state={connected.state(tool.slug)}
                 onConnect={() => void connect(tool)}
               />
             )}
           </For>
         </div>
+        <Show
+          when={entries().some(
+            (tool) => connected.state(tool.slug) === 'error'
+          )}
+        >
+          <p role="alert" class="py-4 text-center text-sm text-ink-muted">
+            Couldn't check some connections.{' '}
+            <button type="button" class="underline" onClick={connected.retry}>
+              Retry connection status
+            </button>
+          </p>
+        </Show>
+        <Show
+          when={
+            entries().some((tool) => tool.slug === 'github') &&
+            connected.state('github') === 'account-linked'
+          }
+        >
+          <p class="py-4 text-center text-sm text-ink-muted">
+            GitHub account linked. Choose repositories to sync with Macro.{' '}
+            <button
+              type="button"
+              class="underline"
+              onClick={context.configureGithubRepositories}
+            >
+              Configure GitHub repositories
+            </button>
+          </p>
+        </Show>
         <Show when={catalog.failed()}>
           <p role="alert" class="py-6 text-center text-sm text-ink-muted">
             Couldn't load integrations.{' '}
@@ -71,7 +109,8 @@ export function ToolsStep(props: { onContinue: () => void }) {
           when={
             !catalog.fetching() &&
             !catalog.failed() &&
-            catalog.entries().length === 0
+            entries().length === 0 &&
+            !catalog.hasMore()
           }
         >
           <p class="py-6 text-center text-sm text-ink-muted">

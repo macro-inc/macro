@@ -2,6 +2,7 @@
 //! table or board layout), referring to everything by id.
 
 mod check;
+pub mod eval;
 mod lane_key;
 mod lanes;
 #[cfg(test)]

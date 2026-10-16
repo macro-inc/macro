@@ -71,6 +71,9 @@ export const markConversionFired = (email: string | null): void =>
 export const isLikelyEmail = (value: string): boolean =>
   /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
+/** Must match `SendMobileWelcomeEmailError::PersonalEmail` in the auth service. */
+const WORK_EMAIL_REQUIRED = 'Please use your work email';
+
 export type MobileSignupResult = { ok: true } | { ok: false; message: string };
 
 /**
@@ -110,7 +113,16 @@ export const submitMobileSignup = async (
   }
 
   if (response.status === 400) {
-    return { ok: false, message: 'That email address was not accepted.' };
+    const body = (await response.json().catch(() => null)) as {
+      message?: string;
+    } | null;
+    return {
+      ok: false,
+      message:
+        body?.message === WORK_EMAIL_REQUIRED
+          ? `${WORK_EMAIL_REQUIRED}.`
+          : 'That email address was not accepted.',
+    };
   }
   if (response.status === 429) {
     return { ok: false, message: 'Too many attempts. Please try again later.' };

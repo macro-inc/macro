@@ -6,6 +6,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn admission_request(chat_id: Option<String>) -> HttpSendChatMessageRequest {
     HttpSendChatMessageRequest {
+        speed: agent::ModelSpeed::Standard,
         content: "hello".into(),
         chat_id,
         model: chat::domain::models::FREE_MODEL.into(),

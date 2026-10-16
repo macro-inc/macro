@@ -7,15 +7,23 @@ pub mod pg_collab_surface_repo;
 pub mod surface_init;
 
 /// The collab-surface service over Postgres and the lexical/sync-service
-/// clients.
+/// clients. It serves the public API once given the forms domain's ids
+/// ([`CollabSurfaceServiceImpl::with_form_ids`]); without them, only
+/// [`OwnedSurfaceService`].
+///
+/// [`CollabSurfaceServiceImpl::with_form_ids`]: crate::domain::service::CollabSurfaceServiceImpl::with_form_ids
+/// [`OwnedSurfaceService`]: crate::domain::ports::OwnedSurfaceService
 #[cfg(feature = "postgres")]
-pub type PgCollabSurfaceService = crate::domain::service::CollabSurfaceServiceImpl<
-    pg_collab_surface_repo::PgCollabSurfaceRepo,
-    surface_init::LexicalSyncSurfaceInitializer,
-    document_ids::PgDocumentIds,
->;
+pub type PgCollabSurfaceService<Forms = crate::domain::service::OwnedSurfacesOnly> =
+    crate::domain::service::CollabSurfaceServiceImpl<
+        pg_collab_surface_repo::PgCollabSurfaceRepo,
+        surface_init::LexicalSyncSurfaceInitializer,
+        document_ids::PgDocumentIds,
+        Forms,
+    >;
 
-/// Compose [`PgCollabSurfaceService`] from the host's pool and shared clients.
+/// Compose the owned-surface [`PgCollabSurfaceService`] from the host's pool
+/// and shared clients.
 #[cfg(feature = "postgres")]
 pub fn pg_collab_surface_service(
     pool: sqlx::PgPool,

@@ -102,17 +102,24 @@ function updateSoupEntity<T extends SoupEntityTag>(
   // list refetching on mount): the fetch dies and nothing retries it.
   // Skip cold initial fetches (data === undefined); cancelling those can leave
   // the query stuck pending, which is why cancelSoupQueries has the same guard.
-  for (const queryKey of cancelRefetches ? dependentKeys : []) {
-    if (
-      partialMatchKey(queryKey, soupKeys.items._def) ||
-      partialMatchKey(queryKey, soupKeys.astItems._def)
-    ) {
-      queryClient.cancelQueries({
-        queryKey,
-        exact: true,
-        predicate: (query) => query.state.data !== undefined,
-      });
-    }
+  // Hash the keys once and cancel in a single cache pass: an `exact` cancel
+  // per key re-hashes that key against every cached query.
+  const cancelHashes = new Set(
+    (cancelRefetches ? dependentKeys : [])
+      .filter(
+        (queryKey) =>
+          partialMatchKey(queryKey, soupKeys.items._def) ||
+          partialMatchKey(queryKey, soupKeys.astItems._def)
+      )
+      .map(
+        (queryKey) => queryClient.defaultQueryOptions({ queryKey }).queryHash
+      )
+  );
+  if (cancelHashes.size > 0) {
+    queryClient.cancelQueries({
+      predicate: (query) =>
+        query.state.data !== undefined && cancelHashes.has(query.queryHash),
+    });
   }
   const previousDependents = dependentKeys.map(
     (key: QueryKey) =>
@@ -858,10 +865,6 @@ export function buildSingleEntityFilter(
       ...base,
       calendar_event_filters: { calendar_event_ids: [entityId] },
     }))
-    .with('reminder', () => ({
-      ...base,
-      reminder_filters: { ids: [entityId] },
-    }))
     .with('initiative', () => ({
       ...base,
       initiative_filters: { initiative_ids: [entityId] },
@@ -872,6 +875,9 @@ export function buildSingleEntityFilter(
     }))
     .with('databaseRow', () => {
       throw new Error('Database rows are read through GraphQL Soup only');
+    })
+    .with('crmContact', () => {
+      throw new Error('CRM contacts are read through GraphQL Soup only');
     })
     .exhaustive();
 }

@@ -21,6 +21,9 @@ pub(super) fn service(
         entity_access_management_service: (),
         macro_event_broker: NoopMacroEventBroker,
         sent_undo_delay_secs: 0,
+        sender_provider: std::sync::Arc::new(
+            crate::domain::senders::UnavailableEmailSenderProvider,
+        ),
     }
 }
 

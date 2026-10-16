@@ -4,6 +4,7 @@
 use axum::{Json, extract::State};
 use chrono::{DateTime, Utc};
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
+use tracing::Level;
 
 use crate::domain::{
     ai_projection_service::{AiProjectionService, requires_professional_features},
@@ -95,7 +96,7 @@ impl From<UserAiProjection> for ProjectionStateResponse {
         (status = 500, body = model_error_response::ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip_all, err)]
+#[tracing::instrument(skip_all, err(level = Level::WARN))]
 pub async fn handler<T: AiProjectionService, Auth: MacroAuthorizationService>(
     State(state): State<AiProjectionRouterState<T, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,

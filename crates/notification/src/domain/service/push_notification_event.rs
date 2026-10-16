@@ -78,13 +78,15 @@ where
                     .delete_endpoint(&event.endpoint_arn)
                     .await?;
 
-                self.digest_failure_sm
-                    .mark_message_as_failed(event.message_id.clone())
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "failed to record delivery failure in digest state machine");
-                    })
-                    .ok();
+                if let Some(message_id) = &event.message_id {
+                    self.digest_failure_sm
+                        .mark_message_as_failed(message_id.clone())
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(error=?e, "failed to record delivery failure in digest state machine");
+                        })
+                        .ok();
+                }
             }
             EventType::EndpointDeleted => {}
         }

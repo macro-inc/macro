@@ -10,5 +10,5 @@ export type ColumnChangeOneOfOnefourKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ColumnChangeOneOfOnefourKind = {
-  delete_option: 'delete_option',
+  set_formula: 'set_formula',
 } as const;

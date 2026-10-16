@@ -1,3 +1,5 @@
+import { is_date } from 'ssf';
+import { parseTypedDate, typedDateText } from './cell-dates';
 import type { SpreadsheetCell } from './spreadsheet-document';
 
 const numericInput = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
@@ -13,19 +15,53 @@ function isPercentCell(cell?: SpreadsheetCell) {
   return format.includes('%');
 }
 
-/** User input in percentage cells uses percentage points; API/import values stay raw. */
-export function normalizeCellInput(value: string, cell?: SpreadsheetCell) {
-  const trimmed = value.trim();
-  return isPercentCell(cell) &&
-    numericInput.test(trimmed) &&
-    Number.isFinite(Number(trimmed))
-    ? `${trimmed}%`
-    : value;
+function isDateCell(cell?: SpreadsheetCell) {
+  return (
+    cell?.format === 'date' ||
+    (cell?.format !== 'text' &&
+      !!cell?.numberFormat &&
+      is_date(cell.numberFormat))
+  );
 }
 
-/** Show an existing numeric percentage in the editor without changing its value. */
-export function cellEditValue(cell?: SpreadsheetCell) {
+/**
+ * The edit for what a user typed into a cell. Percentage cells take
+ * percentage points, and a date becomes its serial number shown as a date:
+ * in the cell's own date format, or else in one like the typed text.
+ * API and import values stay raw.
+ */
+export function cellInputEdit(
+  value: string,
+  cell: SpreadsheetCell | undefined,
+  locale: string
+): Partial<SpreadsheetCell> {
+  if (cell?.format === 'text') return { value };
+  const trimmed = value.trim();
+  if (
+    isPercentCell(cell) &&
+    numericInput.test(trimmed) &&
+    Number.isFinite(Number(trimmed))
+  )
+    return { value: `${trimmed}%` };
+  const date = parseTypedDate(value, locale);
+  if (!date) return { value };
+  if (isDateCell(cell)) return { value: String(date.serial) };
+  return {
+    value: String(date.serial),
+    format: 'date',
+    ...(date.numberFormat && { numberFormat: date.numberFormat }),
+  };
+}
+
+/** Show an existing number the way it would be typed: dates as dates, and
+ * percentages without changing their value. */
+export function cellEditValue(
+  cell: SpreadsheetCell | undefined,
+  locale: string
+) {
   const value = cell?.value ?? '';
+  if (isDateCell(cell) && numericInput.test(value.trim()))
+    return typedDateText(Number(value), locale) ?? value;
   if (!isPercentCell(cell) || !numericInput.test(value.trim())) return value;
   const percent = Number(value) * 100;
   if (!Number.isFinite(percent)) return value;

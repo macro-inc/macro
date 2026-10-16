@@ -505,9 +505,10 @@ export function operationCategoryForRequest(
       'read-records-by-keys',
       'search',
       'entity-filter',
+      'calendar-range',
       () => 'read' as const
     )
-    .with('write', 'hydrate', () => 'write' as const)
+    .with('write', 'hydrate', 'calendar-commit', () => 'write' as const)
     .with(
       'enqueue-optimistic-mutation',
       'claim-next-mutation',
@@ -526,6 +527,7 @@ export function operationCategoryForRequest(
       'teardown',
       'clear',
       'current-storage-generation',
+      'inspect-mutations',
       () => 'lifecycle' as const
     )
     .exhaustive();
@@ -537,6 +539,7 @@ export function isStorageTransactionRequest(
   return [
     'write',
     'hydrate',
+    'calendar-commit',
     'enqueue-optimistic-mutation',
     'claim-next-mutation',
     'defer-optimistic-write',

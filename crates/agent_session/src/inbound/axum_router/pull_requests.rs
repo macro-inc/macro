@@ -19,7 +19,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::{AgentSessionApiError, AgentSessionRouterState};
-use crate::domain::pull_request_links::{SessionPullRequestLink, SessionPullRequestLinks};
+use crate::domain::pull_request_links::{
+    PullRequestSessions, SessionPullRequestLink, SessionPullRequestLinks,
+};
 
 /// Pull request routes, mounted below `/agent-sessions`.
 pub fn agent_session_pull_request_router<T, Access, Auth, S>(
@@ -42,6 +44,10 @@ where
             "/by-pull-request",
             post(sessions_for_pull_request::<T, Access, Auth>),
         )
+        .route(
+            "/by-pull-requests",
+            post(sessions_for_pull_requests::<T, Access, Auth>),
+        )
         .with_state(state)
 }
 
@@ -51,6 +57,22 @@ where
 pub struct PullRequestUrl {
     /// The pull request's GitHub URL, such as `https://github.com/owner/repo/pull/12`.
     pub url: String,
+}
+
+/// GitHub pull requests, by URL.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PullRequestUrls {
+    /// Pull request GitHub URLs, at most 100.
+    pub urls: Vec<String>,
+}
+
+/// The sessions associated with each requested pull request.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PullRequestsSessionsResponse {
+    /// One entry per requested pull request, in request order.
+    pub pull_requests: Vec<PullRequestSessions>,
 }
 
 /// The pull requests associated with a session.
@@ -202,5 +224,38 @@ pub async fn sessions_for_pull_request<
             .into_iter()
             .map(|session| session.as_uuid())
             .collect(),
+    }))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent-sessions/by-pull-requests",
+    tag = "agent-sessions",
+    operation_id = "agent_sessions_for_pull_requests",
+    request_body = PullRequestUrls,
+    responses(
+        (status = 200, body = PullRequestsSessionsResponse),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// List the sessions associated with each of up to 100 pull requests that the caller can view,
+/// with the thread each session was started from.
+#[tracing::instrument(skip_all, err(Debug))]
+pub async fn sessions_for_pull_requests<
+    T: SessionPullRequestLinks,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    Json(request): Json<PullRequestUrls>,
+) -> Result<Json<PullRequestsSessionsResponse>, AgentSessionApiError> {
+    Ok(Json(PullRequestsSessionsResponse {
+        pull_requests: state
+            .service
+            .sessions_for_pull_requests(&caller.authorization.user.macro_user_id, &request.urls)
+            .await?,
     }))
 }

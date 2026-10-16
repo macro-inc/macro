@@ -42,11 +42,20 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityAnnouncemen
         let mut recipients = Vec::with_capacity(rows.len());
         for &(kind, id, subject) in rows {
             if let std::collections::hash_map::Entry::Vacant(entry) = audiences.entry((kind, id)) {
-                let users = match self.audience.entity_audience(kind, id).await {
-                    Ok(users) => users,
-                    Err(error) => {
-                        tracing::warn!(?error, entity_type = ?kind, entity_id = id, "activity audience lookup failed");
-                        Vec::new()
+                // A form's grantees are mostly its respondents (View: a channel
+                // it was posted in, a public form's signed-in visitors), and its
+                // activity names who responded and when, which only its editors
+                // may read through the timeline. Its rows reach their subject
+                // alone; editors read the rest through that Edit-gated timeline.
+                let users = if kind == EntityType::Form {
+                    Vec::new()
+                } else {
+                    match self.audience.entity_audience(kind, id).await {
+                        Ok(users) => users,
+                        Err(error) => {
+                            tracing::warn!(?error, entity_type = ?kind, entity_id = id, "activity audience lookup failed");
+                            Vec::new()
+                        }
                     }
                 };
                 entry.insert(users);

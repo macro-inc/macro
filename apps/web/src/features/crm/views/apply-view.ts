@@ -1,4 +1,3 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Query } from '../../next-soup/filters/filter-store';
 import { useCrmWorkspace } from '../context/workspace-context';
 import { createApplyCrmView } from '../primitives/apply-view';
@@ -23,7 +22,5 @@ export function useApplyCrmView() {
       if (ids.length > 0 !== view.soup.predicates.isActive('company-owner'))
         view.soup.predicates.toggle({ and: ['company-owner'] });
     },
-    setViewMode: view.setViewMode,
-    defaultMode: () => (isTouchDevice() ? 'list' : 'board'),
   });
 }

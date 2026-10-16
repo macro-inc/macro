@@ -1,6 +1,9 @@
 /**
  * Normalized GraphQL cache — JS glue.
  * Design doc: apps/web/docs/graphql-normalized-cache-plan.md
+ *
+ * The reactive document query, `createLiveQuery`, is imported from
+ * `./solid/create-live-query`; it is not re-exported here.
  */
 
 export {
@@ -63,6 +66,15 @@ export type {
   CacheRequest,
   CacheResponse,
   CacheRevision,
+  CalendarCommitArgs,
+  CalendarCommitCacheResult,
+  CalendarFreshness,
+  CalendarLinkWatermarkWire,
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
+  CalendarSpanKind,
+  CalendarSpanWire,
+  CalendarWatermarkUpdateWire,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,

@@ -12,7 +12,10 @@ use serde::Deserialize;
 
 use crate::{MacroAuthorizationError, MacroAuthorizationService, MacroUserAuthentication};
 
-use super::{MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user, rejection};
+use super::{
+    MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
+    log_authorization_failure, rejection,
+};
 
 #[cfg(feature = "local_auth")]
 maybe_env_vars! {
@@ -149,6 +152,6 @@ fn authorization_rejection(error: Report<MacroAuthorizationError>) -> MacroAutho
         | MacroAuthorizationError::BotScopeNotAuthorized
         | MacroAuthorizationError::Unavailable => "unauthorized",
     };
-    tracing::error!(error=?error, "credential authorization failed");
+    log_authorization_failure(&error, "credential authorization failed");
     rejection(message)
 }

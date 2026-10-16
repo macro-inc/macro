@@ -107,6 +107,12 @@ pub struct EmailInboxDetails {
     pub is_primary: bool,
     /// Latest initial backfill status, when one exists.
     pub latest_backfill_status: Option<EmailBackfillStatus>,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    pub needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    pub calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    pub has_calendar_data: bool,
     /// Link creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Link last-updated timestamp.
@@ -141,6 +147,12 @@ pub struct UserEmailLink {
     pub settings: UserEmailLinkSettings,
     /// Whether this is the owner's primary inbox.
     pub is_primary: bool,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    pub needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    pub calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    pub has_calendar_data: bool,
     /// Link creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Link last-updated timestamp.
@@ -167,6 +179,9 @@ impl UserEmailLink {
             needs_reauth: details.needs_reauth,
             settings: details.settings,
             is_primary: details.is_primary,
+            needs_calendar_permission: details.needs_calendar_permission,
+            calendar_disabled: details.calendar_disabled,
+            has_calendar_data: details.has_calendar_data,
             created_at: details.created_at,
             updated_at: details.updated_at,
         }

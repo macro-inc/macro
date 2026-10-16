@@ -4,6 +4,7 @@ import {
   enableCalendarPromptWeb,
   enableCalendarSearchUi,
   enableCalendarTeamOoo,
+  enableCalendarTeamSharing,
   enableCalendarUi,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
@@ -46,4 +47,10 @@ export function useCalendarPromptAllowed(): Accessor<boolean> {
 export function useCalendarTeamOooFlag(): Accessor<boolean> {
   const flag = useFeatureFlag(enableCalendarTeamOoo);
   return () => flag().enabled;
+}
+
+export function useCalendarTeamSharingFlag(): Accessor<boolean> {
+  const calendarUi = useCalendarUiFlag();
+  const flag = useFeatureFlag(enableCalendarTeamSharing);
+  return () => calendarUi() && flag().enabled;
 }

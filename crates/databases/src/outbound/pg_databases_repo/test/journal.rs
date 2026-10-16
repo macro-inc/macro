@@ -456,7 +456,7 @@ async fn every_committed_batch_of_the_guest_list_is_journaled_with_its_inverse(p
                 json!({
                     "formatVersion": 1,
                     "incomplete": false,
-                    "restoredColumns": {wedding.plus_ones.to_string(): {"kind": {"type": "number"}, "infer_type": false}},
+                    "restoredColumns": {wedding.plus_ones.to_string(): {"kind": {"type": "number"}, "infer_type": false, "nullable": true}},
                     "ops": [
                         {
                             "kind": "column",

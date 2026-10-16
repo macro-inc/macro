@@ -128,6 +128,10 @@ describe('mobile bubble scroll transition', () => {
     expect(overlay.hidden).toBe(true);
     expect(source.style.visibility).toBe('');
     scroll(450);
+    step();
+    expect(overlay.hidden).toBe(true);
+    expect(source.style.visibility).toBe('');
+    scroll(499);
     scroll(500);
     expect(frames.size).toBe(1);
     expect(effects[0].currentTime).toBe(0);
@@ -144,13 +148,13 @@ describe('mobile bubble scroll transition', () => {
   });
   it('clamps finished effects and restores sources and pending work on disposal', () => {
     const { section, source, scroll } = setup();
-    scroll(940);
+    scroll(990);
     step();
     expect(effects[1].currentTime).toBe(1300);
-    scroll(950);
+    scroll(1000);
     step();
     expect(effects[1].currentTime).toBe(1300);
-    scroll(960);
+    scroll(1010);
     expect(frames.size).toBe(1);
     dispose();
     expect(frames.size).toBe(0);

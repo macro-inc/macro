@@ -1,9 +1,10 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import PlusIcon from '@phosphor/plus.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { createSignal, Show } from 'solid-js';
 import { TagTree } from './components/tag-tree';
-import type { TagTreeNode } from './core/tag-tree';
+import type { TagTreeNode, TreeTag } from './core/tag-tree';
 import { TagEditorDialog } from './TagEditorDialog';
 import { useTagTree } from './tag-sets-context';
 
@@ -16,7 +17,17 @@ export type SidebarTagsSectionProps = {
   onOpenChange: (open: boolean) => void;
   /** Runs after a row is chosen, for hosts that show the section in a menu. */
   onNavigate?: () => void;
+  /**
+   * Tag sets the section lists. New tags are created in the first scope, and
+   * the editor offers team sharing only when `team` is included. Defaults to
+   * personal and team.
+   */
+  scopes?: readonly TagScope[];
 };
+
+function nodeScope(node: TagTreeNode): TreeTag['scope'] | undefined {
+  return node.tag?.scope ?? node.children.map(nodeScope).find(Boolean);
+}
 
 /**
  * A sidebar row is a destination, not a checkbox: choosing a tag shows that
@@ -38,7 +49,15 @@ export function selectSidebarTag(
  * sets from the nearest `TagSetsProvider`.
  */
 export function SidebarTagsSection(props: SidebarTagsSectionProps) {
-  const tree = useTagTree();
+  const fullTree = useTagTree();
+  const tree = () => {
+    const scopes = props.scopes;
+    if (!scopes) return fullTree();
+    return fullTree().filter((node) => {
+      const scope = nodeScope(node);
+      return scope !== undefined && scopes.includes(scope);
+    });
+  };
   const [expanded, setExpanded] = createSignal<Record<string, boolean>>({});
   const containsActiveTag = (node: TagTreeNode): boolean =>
     Boolean(node.tag && props.activeIds.includes(node.tag.id)) ||
@@ -52,7 +71,10 @@ export function SidebarTagsSection(props: SidebarTagsSectionProps) {
   const teamQuery = useCurrentTeamQuery();
   const [creating, setCreating] = createSignal(false);
   const teamAvailable = () =>
-    teamQuery.isSuccess && Boolean(teamQuery.data?.team);
+    (props.scopes?.includes('team') ?? true) &&
+    teamQuery.isSuccess &&
+    Boolean(teamQuery.data?.team);
+  const createScope = () => props.scopes?.[0] ?? 'user';
 
   return (
     <CollapsibleSection.Root
@@ -95,7 +117,7 @@ export function SidebarTagsSection(props: SidebarTagsSectionProps) {
       </CollapsibleSection.Content>
       <TagEditorDialog
         open={creating()}
-        mode={{ type: 'create', initialScope: 'user' }}
+        mode={{ type: 'create', initialScope: createScope() }}
         teamAvailable={teamAvailable()}
         onClose={() => setCreating(false)}
       />

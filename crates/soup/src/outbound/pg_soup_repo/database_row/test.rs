@@ -330,3 +330,85 @@ async fn core_rows_stay_out_of_soup_even_with_a_stray_database_grant(pool: PgPoo
         .is_empty()
     );
 }
+
+/// A form over the CRM's Deals table, granting the stranger `level`.
+async fn grant_the_stranger_a_crm_form(pool: &PgPool, level: &str, trashed: bool) {
+    let form_id = Uuid::now_v7();
+    let stranger = stranger();
+    sqlx::query!(
+        r#"
+        INSERT INTO forms (id, name, owner_id, database_id, table_id, trashed_at)
+        VALUES ($1, 'Deal intake', 'macro|owner@databases.test', $2, $3, CASE WHEN $4 THEN now() END)
+        "#,
+        form_id,
+        CRM,
+        DEALS,
+        trashed,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'form', $2, 'user', ($3::text)::"AccessLevel")
+        "#,
+        form_id,
+        stranger.as_ref(),
+        level,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn stranger_reads(pool: &PgPool) -> (Vec<Uuid>, Vec<Uuid>) {
+    let listed = page(
+        pool,
+        stranger(),
+        rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS)))),
+    )
+    .await
+    .iter()
+    .map(Identify::id)
+    .collect();
+    let entities =
+        [DEAL_1, DEAL_2].map(|id| EntityType::DatabaseRow.with_entity_string(id.to_string()));
+    let hydrated = by_ids(
+        pool,
+        AdvancedSortParams {
+            user_id: stranger(),
+            entities: &entities,
+        },
+    )
+    .await
+    .unwrap()
+    .iter()
+    .map(Identify::id)
+    .collect();
+    (listed, hydrated)
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_form_editor_reads_the_rows_of_the_forms_database(pool: PgPool) {
+    grant_the_stranger_a_crm_form(&pool, "edit", false).await;
+
+    assert_eq!(
+        stranger_reads(&pool).await,
+        (vec![DEAL_3, DEAL_2, DEAL_1], vec![DEAL_2, DEAL_1])
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_form_respondent_reads_no_rows(pool: PgPool) {
+    grant_the_stranger_a_crm_form(&pool, "view", false).await;
+
+    assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_trashed_form_owner_reads_no_rows(pool: PgPool) {
+    grant_the_stranger_a_crm_form(&pool, "owner", true).await;
+
+    assert_eq!(stranger_reads(&pool).await, (Vec::new(), Vec::new()));
+}

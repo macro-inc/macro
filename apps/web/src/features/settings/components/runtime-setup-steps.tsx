@@ -1,7 +1,9 @@
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 
-function SetupStep(props: {
+/** One numbered step in a connection guide; steps share a connecting rail. */
+export function SetupStep(props: {
   number: number;
   title: string;
   children: JSX.Element;
@@ -24,21 +26,43 @@ function SetupStep(props: {
   );
 }
 
+/** An external link out of a setup step, e.g. to download or a dashboard. */
+export function SetupLink(props: { href: string; children: JSX.Element }) {
+  return (
+    <a
+      href={props.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      class="inline-flex w-fit items-center gap-1.5 rounded-lg border border-edge-muted px-3 py-2 text-xs font-medium text-ink hover:bg-ink/5 focus-visible:outline-accent"
+    >
+      {props.children} <ArrowUpRightIcon aria-hidden="true" class="size-3.5" />
+    </a>
+  );
+}
+
+/** The bordered box around a guide's input, matching the pairing-code field. */
+export function SetupField(props: { class?: string; children: JSX.Element }) {
+  return (
+    <div
+      class={cn(
+        'flex min-w-0 items-center gap-2 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2 transition-colors focus-within:border-accent',
+        props.class
+      )}
+    >
+      {props.children}
+    </div>
+  );
+}
+
 /** Installation instructions surrounding the live pairing-code form. */
 export function RuntimeSetupSteps(props: { children: JSX.Element }) {
   return (
     <ol aria-label="Runtime setup steps" class="list-none">
       <SetupStep number={1} title="Install macrod">
         <p>Download the macrod archive for your computer, then extract it.</p>
-        <a
-          href="https://github.com/macro-inc/macro/releases"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex w-fit items-center gap-1.5 rounded-lg border border-edge-muted px-3 py-2 text-xs font-medium text-ink hover:bg-ink/5 focus-visible:outline-accent"
-        >
-          Download macrod{' '}
-          <ArrowUpRightIcon aria-hidden="true" class="size-3.5" />
-        </a>
+        <SetupLink href="https://github.com/macro-inc/macro/releases">
+          Download macrod
+        </SetupLink>
       </SetupStep>
       <SetupStep number={2} title="Run macrod">
         <p>Open a terminal in the extracted folder and run:</p>

@@ -10,12 +10,9 @@ import { EventType } from '@service-storage/generated/schemas/eventType';
 import type { TeamOutOfOfficeItem } from '@service-storage/generated/schemas/teamOutOfOfficeItem';
 import { parseISO } from 'date-fns';
 import { type Accessor, createMemo } from 'solid-js';
-import type { CalendarEvent } from '../types';
+import { type CalendarEvent, TEAM_OOO_SOURCE_ID } from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 import { useCalendarTeamOooFlag } from './use-calendar-ui-flag';
-
-/** Visibility-source id gating the whole team out-of-office overlay. */
-export const TEAM_OOO_SOURCE_ID = 'team-ooo';
 
 /** Prefix of every per-teammate visibility-source id. */
 const TEAM_OOO_SOURCE_PREFIX = 'team-ooo:';
@@ -59,6 +56,10 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
     id: JSON.stringify([item.eventId, item.occurrenceKey]),
     eventId: item.eventId,
     occurrenceKey: item.occurrenceKey,
+    teamProjection: {
+      ownerId: item.ownerId,
+      kind: item.title === undefined ? 'busy' : 'details',
+    },
     isCancelled: false,
     isReadOnly: true,
     attendees: [],
@@ -74,7 +75,6 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
 
 export interface TeamOooEventData {
   events: Accessor<CalendarEvent[]>;
-  visibleEvents: Accessor<CalendarEvent[]>;
   eventsById: Accessor<Map<string, CalendarEvent>>;
 }
 
@@ -107,21 +107,21 @@ export function useTeamOooEvents(
     // Pending reads suspend, and placeholder data belongs to the previous
     // range. Neither can supply events for the current viewport.
     if (
-      !teamOooEnabled() ||
+      !isOverlayVisible() ||
       !isRangeSupported() ||
       !query.isSuccess ||
+      query.isPaused ||
       query.isPlaceholderData
     ) {
       return [];
     }
     return query.data.map(mapTeamOooItem);
   });
-  const visibleEvents = createMemo(() => (isOverlayVisible() ? events() : []));
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))
   );
 
-  return { events, visibleEvents, eventsById };
+  return { events, eventsById };
 }
 
 /** One teammate absence window for list surfaces. */
@@ -165,7 +165,7 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   const windows = createMemo<TeamOooWindow[]>(() => {
     // Read data only on success so a pending query never hits the suspending
     // resource read and an errored refetch never surfaces stale rows.
-    if (!query.isSuccess) return [];
+    if (!query.isSuccess || query.isPaused) return [];
     return query.data.map((item) => {
       const time = item.time;
       const [start, end, allDay] =
@@ -189,6 +189,6 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   return {
     windows,
     isPending: () => query.isPending,
-    isError: () => query.isError,
+    isError: () => query.isError || query.isPaused,
   };
 }

@@ -10,9 +10,13 @@ import type { ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MobileDockRow } from './MobileDockRow';
 
-const { navigate, toggleSettings } = vi.hoisted(() => ({
+const { navigate, toggleSettings, reviewsFlag } = vi.hoisted(() => ({
   navigate: vi.fn(),
   toggleSettings: vi.fn(),
+  reviewsFlag: { enabled: false },
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => reviewsFlag,
 }));
 vi.mock('@app/features/command/mobile/MobileSearchInput', () => ({
   MobileAskAiButton: () => null,
@@ -52,6 +56,7 @@ vi.mock('./mobile-dock-views', () => ({
 let drawerStyles: HTMLStyleElement;
 beforeEach(() => {
   // Supply browser motion defaults missing in jsdom for Corvu's presence tracking.
+  reviewsFlag.enabled = false;
   drawerStyles = document.createElement('style');
   drawerStyles.textContent =
     '[data-corvu-drawer-content], [data-corvu-drawer-overlay] { transition-duration: 0s; animation-name: none; }';
@@ -90,6 +95,18 @@ describe('dock overflow drawer', () => {
     ).toBe('page');
     fireEvent.click(drawer.getByRole('button', { name: 'Files' }));
     expect(navigate).toHaveBeenCalledExactlyOnceWith('documents');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('opens Reviews from More when enabled without adding a dock button', async () => {
+    reviewsFlag.enabled = true;
+    render(() => <MobileDockRow />);
+    expect(screen.queryByRole('button', { name: 'Reviews' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'More views' }));
+    const drawer = within(screen.getByRole('dialog', { name: 'More views' }));
+    fireEvent.click(drawer.getByRole('button', { name: 'Reviews' }));
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('reviews');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 

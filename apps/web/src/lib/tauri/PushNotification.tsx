@@ -311,7 +311,9 @@ function usePushNotifications(
 
   createEffect(() => {
     if (!onPushNotification) return;
-    if (deviceType === 'ios' && !registrationResult()?.success) return;
+    // Delivered notifications can be tapped before APNs registration finishes
+    // or when registration fails. Attach the listener so native buffered taps
+    // can navigate independently of acquiring a token for future pushes.
     void startWatch();
   });
 

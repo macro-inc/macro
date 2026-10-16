@@ -34,7 +34,9 @@ pub mod database_access;
 pub mod database_row_access;
 pub mod document_access;
 pub mod foreign_entity_access;
+pub mod form_access;
 pub mod initiative_access;
+pub mod pipeline_access;
 pub mod project_access;
 pub mod scheduled_action_access;
 pub mod team_access;
@@ -91,6 +93,9 @@ pub async fn get_user_source_ids(
 }
 
 /// Grabs the source ids available to a bot operating in its owning team's scope.
+///
+/// A direct agent conversation is not among them, although the persona takes
+/// part in it: what is shared there belongs to the person it is with.
 #[tracing::instrument(skip(pool), err)]
 #[cfg_attr(
     not(test),
@@ -132,6 +137,12 @@ pub async fn get_team_scope_source_ids(
         JOIN comms_channel_participants cp
           ON cp.user_id = $1
          AND cp.left_at IS NULL
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM comms_channel_agents ca
+            WHERE ca.channel_id = cp.channel_id
+              AND ca.kind = 'direct'
+        )
         "#,
         bot_id.as_ref(),
         bot_id.as_uuid(),
@@ -159,6 +170,9 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
     entity_id: &uuid::Uuid,
     entity_type: EntityType,
 ) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
+    if entity_type == EntityType::ForeignEntity {
+        return foreign_entity_access::get_foreign_entity_users(pool, entity_id).await;
+    }
     // because we don't store entity_access per email we need to also grab the owner
     // of the email to append to the list, plus any primary that delegates the inbox
     // via macro_user_links (shared inbox)

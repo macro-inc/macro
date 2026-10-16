@@ -74,7 +74,11 @@ export function FileDetailBreadcrumbItem(props: {
               onClick={item.onSelect}
             >
               <EntityIcon
-                targetType={props.blockType}
+                targetType={
+                  props.blockType === 'unknown'
+                    ? (props.documentMetadata.fileType ?? props.blockType)
+                    : props.blockType
+                }
                 size="xs"
                 class="shrink-0"
               />

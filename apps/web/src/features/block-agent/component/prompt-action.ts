@@ -7,7 +7,7 @@
  */
 
 import type { InputAttachmentData } from '@channel/Input';
-import { staticFileIdEndpoint } from '@core/constant/servers';
+import { staticFileReferenceEndpoint } from '@core/constant/servers';
 import type {
   AgentPromptAction,
   PromptAttachment,
@@ -19,7 +19,7 @@ import type {
  */
 function promptAttachmentOf(attachment: InputAttachmentData): PromptAttachment {
   return {
-    uri: staticFileIdEndpoint(attachment.id),
+    uri: staticFileReferenceEndpoint(attachment.id),
     name: attachment.name,
     ...(attachment.mimeType ? { mimeType: attachment.mimeType } : {}),
     ...(attachment.size !== undefined ? { size: attachment.size } : {}),

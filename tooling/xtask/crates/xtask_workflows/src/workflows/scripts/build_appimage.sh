@@ -1,4 +1,10 @@
 set -euo pipefail
+
+# Vite inlines this into the bundle at build time; without it the shipped
+# desktop app never initializes PostHog and every feature flag reads as off.
+# `--impure` below is what lets Nix evaluation see it.
+: "${VITE_POSTHOG_API_KEY:?must be set from the POSTHOG_API_KEY secret so desktop feature flags work}"
+
 restart_nix_daemon() {
   echo "::warning::Restarting nix-daemon before retrying AppImage build."
   sudo systemctl restart nix-daemon.service 2>/dev/null || true
@@ -28,8 +34,12 @@ build_appimage() {
   # Nix daemon can otherwise run unsandboxed under /nix/var/nix/builds,
   # where linuxdeploy sees host libraries/tools and can fail with only
   # `failed to run linuxdeploy` in Tauri's default output.
+  # --impure only relaxes *evaluation* purity, so the frontend derivation can
+  # read VITE_POSTHOG_API_KEY from the environment; the build sandbox below is
+  # unaffected.
   nix build \
     "${fallback_args[@]}" \
+    --impure \
     --option sandbox true \
     --option sandbox-build-dir /build \
     --option download-attempts 10 \

@@ -50,7 +50,7 @@ use scheduled_action::{
             ExecutionResource, ExecutionResourceType, MAX_ACTION_TIME, ScheduledAction,
             ScheduledActionUpdate,
         },
-        ports::{ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner},
+        ports::{RoutineRun, ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner},
         service::ScheduledActionServiceImpl,
     },
     inbound::{
@@ -113,6 +113,7 @@ impl CurrentOwnerAccess for FakeAccess {
                 EventEntityType::Document => EntityType::Document,
                 EventEntityType::Channel => EntityType::Channel,
                 EventEntityType::EmailThread => EntityType::EmailThread,
+                EventEntityType::Call => EntityType::Call,
             },
         };
         let access = match event.entity_type() {
@@ -135,6 +136,16 @@ impl CurrentOwnerAccess for FakeAccess {
                 .unwrap(),
             ),
             EventEntityType::EmailThread => EventAccessCapability::EmailThread(
+                EntityAccessReceipt::try_new_authenticated_user(
+                    owner.clone(),
+                    entity,
+                    EntityPermission::AccessLevel {
+                        access_level: AccessLevel::View,
+                    },
+                )
+                .unwrap(),
+            ),
+            EventEntityType::Call => EventAccessCapability::Call(
                 EntityAccessReceipt::try_new_authenticated_user(
                     owner.clone(),
                     entity,
@@ -176,8 +187,9 @@ impl ScheduledAgentRunner for FakeRunner {
         &self,
         action: &ScheduledAction,
         _: &ExecutionHandle,
-        event: Option<&EventReference>,
+        firing: RoutineRun<'_>,
     ) -> anyhow::Result<()> {
+        let event = firing.event();
         self.calls
             .lock()
             .unwrap()

@@ -33,6 +33,7 @@ export function SendButton(props: SendButtonProps) {
       variant="strong"
       size={local.appearance === 'composer' ? 'icon-composer' : 'icon-sm'}
       draggable={false}
+      data-send-button
       aria-label={local['aria-label'] ?? 'Send'}
       tooltip={local.tooltip ?? 'Send'}
       class={cn(

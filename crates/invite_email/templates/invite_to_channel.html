@@ -10,7 +10,11 @@
     />
     <meta name="color-scheme" content="light" />
     <meta name="supported-color-schemes" content="light" />
+    {% if is_direct_message %}
+    <title>{{ sender_display() }} sent you a message on Macro</title>
+    {% else %}
     <title>You're invited to join #{{ channel_name }}</title>
+    {% endif %}
     <!--[if mso]>
       <noscript
         ><xml
@@ -53,7 +57,11 @@
         mso-hide: all;
       "
     >
+      {% if is_direct_message %}
+      {{ sender_display() }} sent you a message on Macro.
+      {% else %}
       An invitation to join a channel on Macro.
+      {% endif %}
     </div>
     <table
       role="presentation"
@@ -160,8 +168,12 @@
                     color: #525252;
                   "
                 >
+                  {% if is_direct_message %}
+                  {{ sender_display() }} sent you a message on Macro.
+                  {% else %}
                   {{ sender_display() }} has invited you to join
                   <strong>#{{ channel_name }}</strong> on Macro.
+                  {% endif %}
                 </p>
                 {% if let Some(content) = message_content %}
                 <table
@@ -196,8 +208,12 @@
                     color: #525252;
                   "
                 >
+                  {% if is_direct_message %}
+                  Sign up to read and reply.
+                  {% else %}
                   A shared space for your team to talk, share work, and move
                   things forward.
+                  {% endif %}
                 </p>
                 {% endif %}
                 <table
@@ -230,7 +246,7 @@
                           text-decoration: none;
                           mso-padding-alt: 0;
                         "
-                        >Join channel</a
+                        >{% if is_direct_message %}View message{% else %}Join channel{% endif %}</a
                       >
                     </td>
                   </tr>

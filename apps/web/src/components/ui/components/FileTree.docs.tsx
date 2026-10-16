@@ -21,7 +21,7 @@ const REPOSITORY: ExampleFile[] = [
     owner: 'backend',
   },
   { path: 'crates/macro_inbox/Cargo.toml', bytes: 700, owner: 'backend' },
-  { path: 'docs/STYLE_GUIDE.md', bytes: 15_000 },
+  { path: 'docs/development/style-guide.md', bytes: 15_000 },
   { path: 'justfile', bytes: 2600 },
   { path: 'README.md', bytes: 3100 },
 ];

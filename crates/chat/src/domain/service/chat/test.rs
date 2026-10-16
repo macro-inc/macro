@@ -13,12 +13,13 @@ use model_owner::Owner;
 use super::*;
 use crate::domain::models::{ChatResponse, PatchChatMessageArgs};
 
-const CHAT_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
+pub(super) const CHAT_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
 const NEW_CHAT_ID: &str = "0197f776-6e7b-7c69-a251-780ae754d3e4";
-const PROJECT_ID: &str = "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+pub(super) const PROJECT_ID: &str = "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
 const OWNER: &str = "macro|owner@example.com";
 const OTHER_USER: &str = "macro|other@example.com";
-const TEAM_ID: uuid::Uuid = uuid::Uuid::from_u128(0x7ea3_0000_0000_0000_0000_0000_0000_0001);
+pub(super) const TEAM_ID: uuid::Uuid =
+    uuid::Uuid::from_u128(0x7ea3_0000_0000_0000_0000_0000_0000_0001);
 const MESSAGE_ID: &str = "message-id";
 const TOOL_CALL_ID: &str = "tool-call-id";
 const TOOL_NAME: &str = "test_tool";
@@ -38,8 +39,12 @@ struct MessagePersistence {
 }
 
 #[derive(Clone, Default)]
-struct StubChatRepo {
+pub(super) struct StubChatRepo {
     metadata_project_id: Option<String>,
+    /// Owner `get_metadata` reports; `None` is [`OWNER`].
+    metadata_owner: Option<Owner>,
+    metadata_deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    metadata_missing: bool,
     message_persistence: Arc<Mutex<MessagePersistence>>,
     team_default: Option<models_permissions::share_permission::TeamLinkShareDefault>,
     received_owners: Arc<Mutex<Vec<Owner>>>,
@@ -48,6 +53,7 @@ struct StubChatRepo {
     team_share_facts: Option<TeamShareFacts>,
     team_share_facts_loads: Arc<Mutex<usize>>,
     received_patch: Arc<Mutex<Option<PatchChatRepoArgs>>>,
+    permanently_deleted: Arc<Mutex<Vec<String>>>,
     fail_create: bool,
     fail_copy_chat: bool,
     fail_delete: bool,
@@ -63,6 +69,34 @@ impl StubChatRepo {
             metadata_project_id: Some(PROJECT_ID.to_string()),
             ..Self::default()
         }
+    }
+
+    /// A chat in [`PROJECT_ID`] stored under `owner`, trashed at `deleted_at`.
+    pub(super) fn storing(owner: Owner, deleted_at: Option<chrono::DateTime<chrono::Utc>>) -> Self {
+        Self {
+            metadata_owner: Some(owner),
+            metadata_deleted_at: deleted_at,
+            ..Self::with_project()
+        }
+    }
+
+    pub(super) fn missing() -> Self {
+        Self {
+            metadata_missing: true,
+            ..Self::default()
+        }
+    }
+
+    pub(super) fn failing_permanent_delete(owner: Owner) -> Self {
+        Self {
+            fail_permanently_delete: true,
+            ..Self::storing(owner, None)
+        }
+    }
+
+    /// Chat ids `permanently_delete` removed, in call order.
+    pub(super) fn permanently_deleted(&self) -> Vec<String> {
+        self.permanently_deleted.lock().unwrap().clone()
     }
 
     fn with_team_share_facts(facts: TeamShareFacts) -> Self {
@@ -141,17 +175,23 @@ impl ChatRepo for StubChatRepo {
     }
 
     async fn get_metadata(&self, chat_id: &str) -> Result<Chat> {
+        if self.metadata_missing {
+            return Err(ChatErr::NotFound);
+        }
         Ok(Chat {
             id: chat_id.to_string(),
             name: "Source Chat".to_string(),
-            user_id: Owner::from_principal_str(OWNER).unwrap(),
+            user_id: self
+                .metadata_owner
+                .clone()
+                .unwrap_or_else(|| Owner::from_principal_str(OWNER).unwrap()),
             model: None,
             project_id: self.metadata_project_id.clone(),
             created_at: None,
             updated_at: None,
             token_count: None,
             is_persistent: true,
-            deleted_at: None,
+            deleted_at: self.metadata_deleted_at,
         })
     }
 
@@ -204,10 +244,14 @@ impl ChatRepo for StubChatRepo {
         Ok(())
     }
 
-    async fn permanently_delete(&self, _chat_id: &str) -> Result<()> {
+    async fn permanently_delete(&self, chat_id: &str) -> Result<()> {
         if self.fail_permanently_delete {
             return Err(Self::repo_err());
         }
+        self.permanently_deleted
+            .lock()
+            .unwrap()
+            .push(chat_id.to_string());
         Ok(())
     }
 
@@ -284,7 +328,7 @@ impl ChatRepo for StubChatRepo {
 // -- Stub EntityAccessManagementService --
 
 #[derive(Clone)]
-struct StubEntityAccessManagement;
+pub(super) struct StubEntityAccessManagement;
 
 impl EntityAccessManagementService for StubEntityAccessManagement {
     async fn add_entity_to_project(
@@ -318,14 +362,14 @@ impl EntityAccessManagementService for StubEntityAccessManagement {
 // -- Recording event broker --
 
 #[derive(Clone, Debug, PartialEq)]
-struct PublishedChatEvent {
+pub(super) struct PublishedChatEvent {
     topic: &'static str,
-    key: String,
-    envelope: serde_json::Value,
+    pub(super) key: String,
+    pub(super) envelope: serde_json::Value,
 }
 
 #[derive(Clone, Default)]
-struct RecordingEventBroker {
+pub(super) struct RecordingEventBroker {
     events: Arc<Mutex<Vec<PublishedChatEvent>>>,
     fail_scheduling: bool,
 }
@@ -338,7 +382,7 @@ impl RecordingEventBroker {
         }
     }
 
-    fn events(&self) -> Vec<PublishedChatEvent> {
+    pub(super) fn events(&self) -> Vec<PublishedChatEvent> {
         self.events.lock().unwrap().clone()
     }
 }
@@ -410,7 +454,7 @@ fn tool_message_content() -> ChatMessageContent {
     ])
 }
 
-fn owner() -> MacroUserIdStr<'static> {
+pub(super) fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(OWNER.to_string()).expect("valid user id")
 }
 
@@ -422,7 +466,7 @@ fn view_receipt(chat_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
     EntityAccessReceipt::dangerously_assert_authenticated_user(owner(), chat_id, EntityType::Chat)
 }
 
-fn build_service<B: MacroEventBroker>(
+pub(super) fn build_service<B: MacroEventBroker>(
     repo: StubChatRepo,
     event_broker: B,
 ) -> ChatServiceImpl<StubChatRepo, (), StubEntityAccessManagement, B> {

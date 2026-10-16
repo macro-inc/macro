@@ -146,6 +146,15 @@ pub struct RoutineDetails {
     /// Most recent runs, up to fifty, including status and transcript references.
     pub runs: Vec<serde_json::Value>,
 }
+/// A run started on demand; it continues after the call returns.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineRunStarted {
+    /// The routine that is running.
+    pub routine_id: Uuid,
+    /// The chat or agent session the run writes to, when the scheduler reports one.
+    pub resource: Option<serde_json::Value>,
+}
 /// Owning-service capability: authorization remains in the scheduler, never the tools.
 #[async_trait]
 pub trait RoutineService: Send + Sync {
@@ -173,4 +182,8 @@ pub trait RoutineService: Send + Sync {
         id: Uuid,
         enabled: bool,
     ) -> Result<RoutineInfo>;
+    /// Permanently delete an owned routine and its schedule.
+    async fn delete(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<()>;
+    /// Start an owned routine now, outside its schedule.
+    async fn run_now(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<RoutineRunStarted>;
 }

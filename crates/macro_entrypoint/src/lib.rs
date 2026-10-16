@@ -3,6 +3,7 @@
 //! This is used to provide consistent behaviour with e.g. tracing configurations
 
 mod datadog_fmt;
+mod grafana;
 mod shutdown;
 
 #[cfg(test)]
@@ -36,6 +37,7 @@ maybe_env_vars! {
     pub struct RustLog;
     pub struct OtelExporterOtlpEndpoint;
     pub struct OtelTraceFilter;
+    pub struct GrafanaOtlpEndpoint;
 }
 
 /// Build an [`EnvFilter`] from `RUST_LOG`, honoring values injected via `APP_SECRETS_JSON`.
@@ -120,7 +122,41 @@ pub struct InitializedEntrypoint {
     logger_provider: Option<SdkLoggerProvider>,
 }
 
+/// Failure to flush telemetry before a serverless runtime freezes.
+#[derive(Debug, thiserror::Error)]
+pub enum TelemetryFlushError {
+    /// The blocking flush task could not finish.
+    #[error("telemetry flush task failed")]
+    Task(#[from] tokio::task::JoinError),
+    /// The trace exporter could not flush.
+    #[error("trace flush failed")]
+    Traces(#[source] opentelemetry_sdk::error::OTelSdkError),
+    /// The log exporter could not flush.
+    #[error("log flush failed")]
+    Logs(#[source] opentelemetry_sdk::error::OTelSdkError),
+}
+
 impl InitializedEntrypoint {
+    /// Flush completed telemetry before a serverless runtime freezes, without
+    /// shutting down providers needed by subsequent warm invocations.
+    ///
+    /// Run the blocking SDK flush off the async executor so gRPC can progress
+    /// even on a single-threaded runtime. Call after invocation spans close.
+    pub async fn force_flush(&self) -> Result<(), TelemetryFlushError> {
+        let tracer = self.tracer_provider.clone();
+        let logger = self.logger_provider.clone();
+        let (traces, logs) = tokio::task::spawn_blocking(move || {
+            (
+                tracer.map(|provider| provider.force_flush()),
+                logger.map(|provider| provider.force_flush()),
+            )
+        })
+        .await?;
+        traces.transpose().map_err(TelemetryFlushError::Traces)?;
+        logs.transpose().map_err(TelemetryFlushError::Logs)?;
+        Ok(())
+    }
+
     /// Gracefully shut down the OpenTelemetry providers.
     /// This should be called before the application exits to ensure all traces and logs are flushed.
     pub fn shutdown(&self) {
@@ -167,7 +203,8 @@ impl MacroEntrypoint {
                 // LGTM stack), so local logs are queryable next to the traces
                 // they belong to.
                 let export_otel = OtelExporterOtlpEndpoint::new().is_some();
-                let tracer_provider = export_otel.then(|| init_opentelemetry("local".to_string()));
+                let tracer_provider =
+                    export_otel.then(|| init_opentelemetry("local".to_string(), None));
                 let logger_provider = export_otel.then(|| init_otel_logs("local".to_string()));
 
                 if let Some(provider) = tracer_provider.as_ref() {
@@ -241,7 +278,10 @@ impl MacroEntrypoint {
                 let env = DdEnv::new()
                     .map(|e| e.to_string())
                     .unwrap_or_else(|_| "unknown".to_string());
-                let tracer_provider = init_opentelemetry(env);
+                let grafana_endpoint = matches!(self.env, Environment::Develop)
+                    .then(GrafanaOtlpEndpoint::new)
+                    .flatten();
+                let tracer_provider = init_opentelemetry(env, grafana_endpoint.as_deref());
 
                 let tracer = tracer_provider.tracer(service_name());
                 let rust_log_filter = rust_log_env_filter();
@@ -350,7 +390,10 @@ fn otel_resource(deployment_environment: String) -> opentelemetry_sdk::Resource 
         .build()
 }
 
-fn init_opentelemetry(deployment_environment: String) -> SdkTracerProvider {
+fn init_opentelemetry(
+    deployment_environment: String,
+    grafana_endpoint: Option<&str>,
+) -> SdkTracerProvider {
     // W3C trace-context propagation: lets macro_tower_layers parent request
     // spans under an incoming `traceparent` (e.g. from the web app), and
     // service clients propagate context onward.
@@ -364,10 +407,40 @@ fn init_opentelemetry(deployment_environment: String) -> SdkTracerProvider {
         .build()
         .expect("failed to create OTLP span exporter");
 
-    SdkTracerProvider::builder()
+    let mut provider = SdkTracerProvider::builder()
         .with_batch_exporter(exporter)
-        .with_resource(otel_resource(deployment_environment))
-        .build()
+        .with_resource(otel_resource(deployment_environment));
+
+    // Keep the original exporter and its queue independent. The second batch
+    // processor copies the same finished spans without changing IDs or sampling.
+    if let Some(endpoint) = grafana_endpoint.filter(|endpoint| !endpoint.trim().is_empty()) {
+        match opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(endpoint)
+            .with_timeout(std::time::Duration::from_secs(2))
+            .build()
+        {
+            Ok(exporter) => {
+                // At most one in-flight and one queued batch: two two-second
+                // exports fit within the SDK's five-second shutdown timeout.
+                let processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(
+                    grafana::GrafanaSpanExporter(exporter),
+                )
+                .with_batch_config(
+                    opentelemetry_sdk::trace::BatchConfigBuilder::default()
+                        .with_max_queue_size(512)
+                        .with_max_export_batch_size(512)
+                        .build(),
+                )
+                .build();
+                provider = provider.with_span_processor(processor);
+            }
+            // Tracing is not installed yet. Optional export must not prevent startup.
+            Err(error) => eprintln!("Grafana trace exporter unavailable: {error}"),
+        }
+    }
+
+    provider.build()
 }
 
 /// OTLP log export for the [`OpenTelemetryTracingBridge`]: tracing events

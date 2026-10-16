@@ -145,6 +145,11 @@ fn static_file_service_url_parses() {
 }
 
 #[test]
+fn static_file_public_url_parses() {
+    assert_parses_for_all_environments(StaticFilePublicUrl::default_for_environment);
+}
+
+#[test]
 fn agent_harness_service_url_parses() {
     assert_parses_for_all_environments(AgentHarnessServiceUrl::default_for_environment);
 }
@@ -754,6 +759,10 @@ fn exported_service_url_override_names_are_derived_from_env_var_names() {
     assert_eq!(
         StaticFileServiceUrl::local().override_env_var_name(),
         "OVERRIDE_STATIC_FILE_SERVICE_URL",
+    );
+    assert_eq!(
+        StaticFilePublicUrl::local().override_env_var_name(),
+        "OVERRIDE_STATIC_FILE_PUBLIC_URL",
     );
     assert_eq!(
         AgentHarnessEgressUrl::local().override_env_var_name(),

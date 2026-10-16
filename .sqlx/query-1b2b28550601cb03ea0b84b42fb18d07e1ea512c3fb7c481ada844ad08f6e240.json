@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_agent_coding_preferences\n                (user_id, create_tasks, open_pull_requests, modified_at)\n            VALUES ($1, $2, $3, NOW())\n            ON CONFLICT (user_id) DO UPDATE\n            SET create_tasks = EXCLUDED.create_tasks,\n                open_pull_requests = EXCLUDED.open_pull_requests,\n                modified_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1b2b28550601cb03ea0b84b42fb18d07e1ea512c3fb7c481ada844ad08f6e240"
+}

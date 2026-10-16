@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import { downloadFile } from '@filesystem/download';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
@@ -6,6 +5,7 @@ import DownloadIcon from '@phosphor/download-simple.svg';
 import PencilIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
+import WebhookIcon from '@phosphor/webhooks-logo.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { ImportTable } from '@service-storage/generated/schemas/importTable';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
@@ -13,19 +13,21 @@ import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
-import { CsvImportDialog } from '../components/csv-import-dialog';
+import { toast } from '../../../lib/core/component/Toast/Toast';
+import { CsvImportDialog } from '../../database/components/csv-import-dialog';
 import {
   type DatabaseCsv,
   type DatabaseCsvFailure,
   databaseCsvMessage,
   MAX_CSV_BYTES,
   parseDatabaseCsv,
-} from '../core/csv';
-import { isDatabaseNameTaken } from '../core/property-creation';
+} from '../../database/core/csv';
+import { isDatabaseNameTaken } from '../../database/core/property-creation';
 import {
   type DatabaseEntityFailure,
   databaseEntityMessage,
-} from '../core/write-failure';
+} from '../../database/core/write-failure';
+import { WebhooksDialog } from '../component/WebhooksDialog';
 import {
   exportDatabaseTableCsv,
   importDatabaseTable,
@@ -47,6 +49,7 @@ export function DatabasePageActions(props: {
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal('');
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
+  const [webhooksOpen, setWebhooksOpen] = createSignal(false);
   let fileInput: HTMLInputElement | undefined;
   let menuButton: HTMLButtonElement | undefined;
   let focusTitleAfterClose = false;
@@ -170,6 +173,13 @@ export function DatabasePageActions(props: {
                 <UploadIcon class="size-4 shrink-0" />
                 Import CSV
               </Dropdown.Item>
+              <Dropdown.Item
+                disabled={!props.table}
+                onSelect={() => setWebhooksOpen(true)}
+              >
+                <WebhookIcon class="size-4 shrink-0" />
+                Webhooks
+              </Dropdown.Item>
             </Show>
             <Dropdown.Sub>
               <Dropdown.SubTrigger disabled={exporting()}>
@@ -210,6 +220,16 @@ export function DatabasePageActions(props: {
             initialName={value().name}
             onImport={importFile}
             onClose={() => setDraft(undefined)}
+            returnFocus={menuButton}
+          />
+        )}
+      </Show>
+      <Show when={webhooksOpen() && props.table}>
+        {(table) => (
+          <WebhooksDialog
+            databaseId={props.detail.database.id}
+            table={table()}
+            onClose={() => setWebhooksOpen(false)}
             returnFocus={menuButton}
           />
         )}

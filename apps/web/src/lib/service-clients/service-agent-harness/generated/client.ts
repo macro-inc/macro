@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentConversationsDto,
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
@@ -15,6 +16,7 @@ import type {
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
+  CodingPreferencesBody,
   CompleteRequest,
   ControlRequest,
   ControlResponse,
@@ -30,16 +32,22 @@ import type {
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
+  PullRequestsSessionsResponse,
   PullRequestUrl,
+  PullRequestUrls,
   RenameAgentSessionRequest,
+  RetryAgentConversationTurnRequest,
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
+  StartFreshAgentConversationRequest,
   StartResponse,
   StatusResponse,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  WarmAgentSessionRequest,
+  WarmAgentSessionResponse,
 } from './schemas';
 
 /**
@@ -124,6 +132,322 @@ export const discoverAgentCapabilitiesHandler = async (
     status: res.status,
     headers: res.headers,
   } as discoverAgentCapabilitiesHandlerResponse;
+};
+
+/**
+ * @summary Read what the caller's new coding sessions are told to do beyond their assignment.
+ */
+export type getAgentCodingPreferencesResponse200 = {
+  data: CodingPreferencesBody;
+  status: 200;
+};
+
+export type getAgentCodingPreferencesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentCodingPreferencesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentCodingPreferencesResponseSuccess =
+  getAgentCodingPreferencesResponse200 & {
+    headers: Headers;
+  };
+export type getAgentCodingPreferencesResponseError = (
+  | getAgentCodingPreferencesResponse401
+  | getAgentCodingPreferencesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentCodingPreferencesResponse =
+  | getAgentCodingPreferencesResponseSuccess
+  | getAgentCodingPreferencesResponseError;
+
+export const getGetAgentCodingPreferencesUrl = () => {
+  return `/agent-coding-preferences`;
+};
+
+export const getAgentCodingPreferences = async (
+  options?: RequestInit
+): Promise<getAgentCodingPreferencesResponse> => {
+  const res = await fetch(getGetAgentCodingPreferencesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentCodingPreferencesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentCodingPreferencesResponse;
+};
+
+/**
+ * @summary Replace the caller's coding preferences.
+ */
+export type putAgentCodingPreferencesResponse200 = {
+  data: CodingPreferencesBody;
+  status: 200;
+};
+
+export type putAgentCodingPreferencesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentCodingPreferencesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentCodingPreferencesResponseSuccess =
+  putAgentCodingPreferencesResponse200 & {
+    headers: Headers;
+  };
+export type putAgentCodingPreferencesResponseError = (
+  | putAgentCodingPreferencesResponse401
+  | putAgentCodingPreferencesResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentCodingPreferencesResponse =
+  | putAgentCodingPreferencesResponseSuccess
+  | putAgentCodingPreferencesResponseError;
+
+export const getPutAgentCodingPreferencesUrl = () => {
+  return `/agent-coding-preferences`;
+};
+
+export const putAgentCodingPreferences = async (
+  codingPreferencesBody: CodingPreferencesBody,
+  options?: RequestInit
+): Promise<putAgentCodingPreferencesResponse> => {
+  const res = await fetch(getPutAgentCodingPreferencesUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(codingPreferencesBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentCodingPreferencesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentCodingPreferencesResponse;
+};
+
+/**
+ * @summary The agent conversations in a channel the caller may see. Ordinary channels
+and other people's conversations list none.
+ */
+export type listAgentConversationsResponse200 = {
+  data: AgentConversationsDto;
+  status: 200;
+};
+
+export type listAgentConversationsResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type listAgentConversationsResponseSuccess =
+  listAgentConversationsResponse200 & {
+    headers: Headers;
+  };
+export type listAgentConversationsResponseError =
+  listAgentConversationsResponse503 & {
+    headers: Headers;
+  };
+
+export type listAgentConversationsResponse =
+  | listAgentConversationsResponseSuccess
+  | listAgentConversationsResponseError;
+
+export const getListAgentConversationsUrl = (channelId: string) => {
+  return `/agent-conversations/${channelId}`;
+};
+
+export const listAgentConversations = async (
+  channelId: string,
+  options?: RequestInit
+): Promise<listAgentConversationsResponse> => {
+  const res = await fetch(getListAgentConversationsUrl(channelId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentConversationsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentConversationsResponse;
+};
+
+/**
+ * @summary Start a fresh agent context, retaining the channel transcript.
+ */
+export type startFreshAgentConversationResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type startFreshAgentConversationResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type startFreshAgentConversationResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type startFreshAgentConversationResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type startFreshAgentConversationResponseSuccess =
+  startFreshAgentConversationResponse204 & {
+    headers: Headers;
+  };
+export type startFreshAgentConversationResponseError = (
+  | startFreshAgentConversationResponse404
+  | startFreshAgentConversationResponse409
+  | startFreshAgentConversationResponse503
+) & {
+  headers: Headers;
+};
+
+export type startFreshAgentConversationResponse =
+  | startFreshAgentConversationResponseSuccess
+  | startFreshAgentConversationResponseError;
+
+export const getStartFreshAgentConversationUrl = (
+  channelId: string,
+  botId: string
+) => {
+  return `/agent-conversations/${channelId}/${botId}/start-fresh`;
+};
+
+export const startFreshAgentConversation = async (
+  channelId: string,
+  botId: string,
+  startFreshAgentConversationRequest: StartFreshAgentConversationRequest,
+  options?: RequestInit
+): Promise<startFreshAgentConversationResponse> => {
+  const res = await fetch(getStartFreshAgentConversationUrl(channelId, botId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(startFreshAgentConversationRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startFreshAgentConversationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startFreshAgentConversationResponse;
+};
+
+/**
+ * @summary Explicitly retry a failed message in the conversation's current session.
+ */
+export type retryAgentConversationTurnResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type retryAgentConversationTurnResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type retryAgentConversationTurnResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type retryAgentConversationTurnResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type retryAgentConversationTurnResponseSuccess =
+  retryAgentConversationTurnResponse204 & {
+    headers: Headers;
+  };
+export type retryAgentConversationTurnResponseError = (
+  | retryAgentConversationTurnResponse404
+  | retryAgentConversationTurnResponse409
+  | retryAgentConversationTurnResponse503
+) & {
+  headers: Headers;
+};
+
+export type retryAgentConversationTurnResponse =
+  | retryAgentConversationTurnResponseSuccess
+  | retryAgentConversationTurnResponseError;
+
+export const getRetryAgentConversationTurnUrl = (
+  channelId: string,
+  botId: string,
+  source: string
+) => {
+  return `/agent-conversations/${channelId}/${botId}/turns/${source}/retry`;
+};
+
+export const retryAgentConversationTurn = async (
+  channelId: string,
+  botId: string,
+  source: string,
+  retryAgentConversationTurnRequest: RetryAgentConversationTurnRequest,
+  options?: RequestInit
+): Promise<retryAgentConversationTurnResponse> => {
+  const res = await fetch(
+    getRetryAgentConversationTurnUrl(channelId, botId, source),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(retryAgentConversationTurnRequest),
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryAgentConversationTurnResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryAgentConversationTurnResponse;
 };
 
 /**
@@ -628,6 +952,73 @@ export const agentSessionsForPullRequest = async (
 };
 
 /**
+ * @summary List the sessions associated with each of up to 100 pull requests that the caller can view,
+with the thread each session was started from.
+ */
+export type agentSessionsForPullRequestsResponse200 = {
+  data: PullRequestsSessionsResponse;
+  status: 200;
+};
+
+export type agentSessionsForPullRequestsResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type agentSessionsForPullRequestsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type agentSessionsForPullRequestsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type agentSessionsForPullRequestsResponseSuccess =
+  agentSessionsForPullRequestsResponse200 & {
+    headers: Headers;
+  };
+export type agentSessionsForPullRequestsResponseError = (
+  | agentSessionsForPullRequestsResponse400
+  | agentSessionsForPullRequestsResponse401
+  | agentSessionsForPullRequestsResponse500
+) & {
+  headers: Headers;
+};
+
+export type agentSessionsForPullRequestsResponse =
+  | agentSessionsForPullRequestsResponseSuccess
+  | agentSessionsForPullRequestsResponseError;
+
+export const getAgentSessionsForPullRequestsUrl = () => {
+  return `/agent-sessions/by-pull-requests`;
+};
+
+export const agentSessionsForPullRequests = async (
+  pullRequestUrls: PullRequestUrls,
+  options?: RequestInit
+): Promise<agentSessionsForPullRequestsResponse> => {
+  const res = await fetch(getAgentSessionsForPullRequestsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pullRequestUrls),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentSessionsForPullRequestsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentSessionsForPullRequestsResponse;
+};
+
+/**
  * No per-id access extractor: a chip has to render for a session the caller
 cannot open, so access is answered per id in the body rather than
 enforced on the request. The caller learns the fields a chip shows for
@@ -698,6 +1089,53 @@ export const previewAgentSessions = async (
 };
 
 /**
+ * @summary Prepare MCP connections without sending a prompt or creating a visible list row.
+ */
+export type warmAgentSessionHandlerResponse200 = {
+  data: WarmAgentSessionResponse;
+  status: 200;
+};
+
+export type warmAgentSessionHandlerResponseSuccess =
+  warmAgentSessionHandlerResponse200 & {
+    headers: Headers;
+  };
+
+export type warmAgentSessionHandlerResponse =
+  warmAgentSessionHandlerResponseSuccess;
+
+export const getWarmAgentSessionHandlerUrl = () => {
+  return `/agent-sessions/warm`;
+};
+
+export const warmAgentSessionHandler = async (
+  warmAgentSessionRequest: WarmAgentSessionRequest,
+  options?: RequestInit
+): Promise<warmAgentSessionHandlerResponse> => {
+  const res = await fetch(getWarmAgentSessionHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(warmAgentSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: warmAgentSessionHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as warmAgentSessionHandlerResponse;
+};
+
+/**
+ * A caller holding no grant is answered 401; an id with no session behind it
+at all is answered 404. They used to be the same answer, which left a
+client that read a session before its create had landed unable to tell a
+race it should retry from a refusal it should not.
  * @summary Get an agent session by id.
  */
 export type getAgentSessionResponse200 = {
@@ -715,6 +1153,11 @@ export type getAgentSessionResponse403 = {
   status: 403;
 };
 
+export type getAgentSessionResponse404 = {
+  data: string;
+  status: 404;
+};
+
 export type getAgentSessionResponse500 = {
   data: string;
   status: 500;
@@ -726,6 +1169,7 @@ export type getAgentSessionResponseSuccess = getAgentSessionResponse200 & {
 export type getAgentSessionResponseError = (
   | getAgentSessionResponse401
   | getAgentSessionResponse403
+  | getAgentSessionResponse404
   | getAgentSessionResponse500
 ) & {
   headers: Headers;
@@ -838,6 +1282,11 @@ export type setAgentSessionArchivedResponse403 = {
   status: 403;
 };
 
+export type setAgentSessionArchivedResponse409 = {
+  data: string;
+  status: 409;
+};
+
 export type setAgentSessionArchivedResponse500 = {
   data: string;
   status: 500;
@@ -850,6 +1299,7 @@ export type setAgentSessionArchivedResponseSuccess =
 export type setAgentSessionArchivedResponseError = (
   | setAgentSessionArchivedResponse401
   | setAgentSessionArchivedResponse403
+  | setAgentSessionArchivedResponse409
   | setAgentSessionArchivedResponse500
 ) & {
   headers: Headers;

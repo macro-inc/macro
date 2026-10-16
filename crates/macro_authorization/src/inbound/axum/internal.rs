@@ -8,7 +8,10 @@ use crate::{
     InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError, MacroAuthorizationService,
 };
 
-use super::{MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user, rejection};
+use super::{
+    MacroAuthorizationRejection, MacroAuthorizationState, authenticated_user,
+    log_authorization_failure, rejection,
+};
 
 /// Header carrying the shared key for standard internal service authorization.
 pub const INTERNAL_API_KEY_HEADER: &str = "x-internal-auth-key";
@@ -103,6 +106,6 @@ fn header_string(headers: &HeaderMap, name: Option<&str>) -> Option<String> {
 fn internal_authorization_rejection(
     error: Report<MacroAuthorizationError>,
 ) -> MacroAuthorizationRejection {
-    tracing::error!(error=?error.current_context(), "internal authorization failed");
+    log_authorization_failure(&error, "internal authorization failed");
     rejection("unauthorized")
 }

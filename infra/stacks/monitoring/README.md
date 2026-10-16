@@ -121,3 +121,40 @@ services; creating the monitor alone does not add that telemetry.
 Neither new alert detects successful responses that apply no edits, or failures
 during periods without editing requests. The end-to-end canary remains a
 follow-up.
+
+## GraphQL soup rollout coverage
+
+`monitors/graphql-soup.ts` declares 15 new monitors for the `enable-graphql-soup`
+rollout: GraphQL latency, errors and volume, websocket upgrades,
+cloud-storage-service capacity and 5xx, macro-db-prod connections and CPU, the
+gateway ALB, and web-app cache logs. A `pulumi preview` after they are added
+should show exactly those 15 creates and nothing else.
+
+Resolver errors still return HTTP 200, so the error monitors are proxies. Add
+per-operation error and latency monitors once the server emits operation names
+and error counts.
+
+## Notification retention coverage
+
+`monitors/notification-retention.ts` adds **nine monitors and one dashboard**:
+per-environment consumer backlog, unhealthy telemetry, missing telemetry, and
+failed delete publication, plus a cross-environment retention trace-flush alarm.
+The dashboard URL is exported as `notificationRetentionDashboardUrl`.
+
+Deploy the notification consumer instrumentation in DSS before these monitors;
+otherwise the missing-telemetry alerts intentionally fire. This monitoring stack
+still requires a separate, explicitly approved manual deployment. The preview
+must not change adopted monitors.
+
+Consumers are intentionally ungrouped and do not commit offsets, so native MSK
+consumer-group lag is not meaningful. The new logs expose broker high watermark
+minus application position, not committed position. Unknown/stale measurements
+are omitted rather than graphed as zero. Alerts are per consumer instance so one
+healthy process cannot mask a lagging one; retired-instance alerts resolve on
+missing data, while a separate monitor catches loss of all telemetry in an env.
+The initial backlog thresholds (warning 100, critical 1000 averaged over five
+minutes) need review against live baselines before production cleanup.
+
+These signals do not acknowledge delivery through PostgreSQL NOTIFY or WebSockets.
+See [the rollout runbook](../../../docs/runbooks/notification-retention.md) for
+limitations and the post-deploy verification gates.

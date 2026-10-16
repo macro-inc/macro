@@ -185,11 +185,15 @@
     },
     "notification-service": {
       "source_paths": [
-        "services/notification_service/**"
+        "services/notification_service/**",
+        "services/notification_retention_handler/**"
       ],
       "stack_path": "infra/stacks/notification-service/**",
       "deploy_binaries": [
         "notification_service"
+      ],
+      "deploy_lambdas": [
+        "notification_retention_handler"
       ]
     },
     "organization-retention": {

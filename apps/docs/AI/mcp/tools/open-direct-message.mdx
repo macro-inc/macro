@@ -1,0 +1,16 @@
+---
+title: OpenDirectMessage
+description: >-
+  Find the user's direct-message conversation with one or more people, creating
+  it if it does not exist yet, and return its channel id.
+---
+
+# OpenDirectMessage
+
+Find the user's direct-message conversation with one or more people, creating it if it does not exist yet, and return its channel id. One person opens a 1:1 DM; several open a group DM with exactly that set of people. Use this before SendChannelMessage when the user asks to message someone directly and no channel id is known. Find people with ListTeamMembers.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `participants` | string[] | Yes | The other people in the conversation, as Macro user ids (`macro\|<email>`) or emails. Do not include the user. |

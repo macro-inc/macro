@@ -2,6 +2,7 @@ import GitBranchIcon from '@phosphor/git-branch.svg';
 import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import { cn } from '@ui';
+import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { SessionCodeDetails } from '../core/session-code-details';
@@ -9,6 +10,8 @@ import type { SessionCodeDetails } from '../core/session-code-details';
 export function AgentSessionCodeDetails(props: {
   details: SessionCodeDetails;
   onOpenPullRequest?: (event: MouseEvent) => void;
+  /** Status indicator to render at the start of the details line. */
+  statusIndicator?: JSX.Element;
 }) {
   const context = () =>
     [props.details.repository, props.details.branch]
@@ -33,6 +36,7 @@ export function AgentSessionCodeDetails(props: {
       data-agent-code-details
       class="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-ink-extra-muted"
     >
+      {props.statusIndicator}
       <Show when={props.details.pullRequest}>
         {(pr) => (
           <a

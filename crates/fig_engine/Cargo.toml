@@ -9,7 +9,11 @@ version = "0.1.0"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+default = ["bindings"]
+# The web app's API (`wasm`, on wasm32). Engines that build their own browser
+# modules on this crate (psd_engine, ai_engine) leave it out, so Figma's
+# exports and the code only they reach stay out of those modules.
+bindings = []
 # The `fig_render` developer CLI (page renders, document dumps, fidelity
 # scoring against the thumbnails Figma embeds in its files).
 cli = ["dep:clap"]

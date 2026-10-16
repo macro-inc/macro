@@ -7,6 +7,8 @@ type QueryClient = Pick<Client, 'query'>;
 export type ChannelNotificationReader = {
   enabled: boolean;
   fetching: boolean;
+  /** A heterogeneous unread indicator also needs non-channel edge membership. */
+  scope?: 'all-entities';
   /** Omitted for channel lists, which can gain previously absent channels. */
   channelId?: string;
   filtered: boolean;
@@ -181,22 +183,45 @@ export class ChannelNotificationRefresh {
             reader.notificationIds.includes(patch.entityId)
           )
         );
-        // A deletion contains no parent channel. Unknown IDs require recovery
-        // across enabled readers; known IDs affect only their cached owners.
-        for (const job of owners.length ? owners : this.jobs.values()) {
+        // A deletion contains no parent channel. Heterogeneous witnesses may
+        // depend on a deleted *seen* thread reason they never selected, so they
+        // must recover even when another reader owns the deleted notification.
+        const affected = owners.length
+          ? new Set([
+              ...owners,
+              ...[...this.jobs.values()].filter((job) =>
+                [...job.readers].some(
+                  (reader) => reader.scope === 'all-entities'
+                )
+              ),
+            ])
+          : this.jobs.values();
+        for (const job of affected) {
           if (this.enabled(job)) this.invalidate(job);
         }
       } else if (patch.graphqlTypeName === 'GraphqlSoupChannel') {
         this.invalidateChannel(patch.entityId);
       } else return;
     } else {
-      if (patch.notification.entityType !== 'CHANNEL') return;
-      this.invalidateChannel(
-        patch.notification.entityId,
-        normalized && patch.__typename === 'GraphqlUpdatedNotification'
-          ? patch.notification.id
-          : undefined
-      );
+      if (patch.notification.entityType === 'CHANNEL') {
+        this.invalidateChannel(
+          patch.notification.entityId,
+          normalized && patch.__typename === 'GraphqlUpdatedNotification'
+            ? patch.notification.id
+            : undefined
+        );
+      } else {
+        // A changed normalized state can remove the only bounded witness; a
+        // new notification can add an entity absent from the current page.
+        for (const job of this.jobs.values()) {
+          if (
+            [...job.readers].some(
+              (reader) => reader.enabled && reader.scope === 'all-entities'
+            )
+          )
+            this.invalidate(job);
+        }
+      }
     }
     this.schedule();
   }

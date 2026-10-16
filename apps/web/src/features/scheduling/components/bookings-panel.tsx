@@ -19,7 +19,7 @@ export type BookingsPanelProps = {
   bookings: Booking[];
   events: EventType[];
   members: SchedulingMember[];
-  canEdit: boolean;
+  canManageBookings: boolean;
   busyId: string;
   currentUserId: string;
   onApprove: (id: string) => void;
@@ -82,10 +82,13 @@ function BookingRow(
       const member = props.members.find((m) => m.id === id);
       return member?.name || member?.email || 'Calendar host';
     });
+  const isHost = () => props.booking.hosts.includes(props.currentUserId);
+  // Hosts move or cancel the meetings they host; approving stays with admins.
   const canManage = () =>
-    props.canEdit &&
-    (props.booking.status === 'pending' ||
-      (props.booking.status === 'confirmed' && !isPast()));
+    (props.canManageBookings && props.booking.status === 'pending') ||
+    ((props.canManageBookings || isHost()) &&
+      props.booking.status === 'confirmed' &&
+      !isPast());
   const meetingUrl = () => {
     try {
       const url = new URL(props.booking.location);
@@ -278,9 +281,7 @@ function BookingRow(
                   { value: 'hostNoShow', label: 'Host no-show' },
                 ]}
                 disabled={
-                  (!props.canEdit &&
-                    !props.booking.hosts.includes(props.currentUserId)) ||
-                  !!props.busyId
+                  (!props.canManageBookings && !isHost()) || !!props.busyId
                 }
                 onChange={(value) => {
                   if (

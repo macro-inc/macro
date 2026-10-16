@@ -279,6 +279,11 @@ const SETTINGS: Setting[] = [
     keywords: 'token secret developer authentication',
   },
   {
+    tab: 'Desktop App',
+    title: 'Desktop app version and download',
+    keywords: 'download mac macos linux version latest release updated',
+  },
+  {
     tab: 'Mobile App',
     title: 'Get the mobile app',
     keywords: 'download phone ios android qr code',

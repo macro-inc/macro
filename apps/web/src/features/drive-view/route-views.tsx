@@ -8,6 +8,7 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { lazy } from 'solid-js';
 import { DriveView, type DriveViewProps } from './drive-view';
+import { DriveViewSkeleton } from './drive-view-skeleton';
 
 const DriveCallDetail = lazy(async () => ({
   default: (await import('./views/DriveCallDetail')).DriveCallDetail,
@@ -26,7 +27,7 @@ export const DriveRouteView = withAuth(() => {
       <DriveView initialFacets={props().initialFacets} />
     </AppView>
   );
-});
+}, DriveViewSkeleton);
 
 export function DriveCallRouteView() {
   const params = useRouteParams(driveCallRoute);

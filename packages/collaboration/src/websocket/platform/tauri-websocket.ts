@@ -51,9 +51,16 @@ interface RecoverResponse {
 }
 
 /**
- * Tauri WebSocket wrapper that implements MinimalWebSocket interface
+ * Tauri WebSocket wrapper that implements MinimalWebSocket interface.
+ * The static state constants let it stand in for the `WebSocket` constructor
+ * (e.g. graphql-ws's `webSocketImpl`).
  */
-class TauriWebSocketWrapper implements MinimalWebSocket {
+export class TauriWebSocketWrapper implements MinimalWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
   private socketId: number | null = null; // plugin connection id
   private _readyState: number = 0; // CONNECTING
   private _url: string;
@@ -61,6 +68,7 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
   private _extensions: string = '';
   private _binaryType: BinaryType = 'blob';
   private _bufferedAmount: number = 0;
+  private closeReported = false;
 
   // Event handlers
   onclose: ((this: WebSocket, ev: CloseEvent) => any) | null = null;
@@ -85,20 +93,18 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
   readonly CLOSED: 3 = 3;
 
   constructor(url: string, protocols?: string | string[]) {
+    // The plugin does not report which of several offered subprotocols the
+    // server selected, so only a single one can be negotiated safely.
+    const offered = protocols === undefined ? [] : [protocols].flat();
+    if (offered.length > 1) {
+      throw new SyntaxError('Tauri WebSocket supports at most one subprotocol');
+    }
     this._url = url;
-    this.initializeWebSocket(url, protocols);
+    this.initializeWebSocket(url, offered[0]);
   }
 
-  private async initializeWebSocket(
-    url: string,
-    protocols?: string | string[]
-  ) {
+  private async initializeWebSocket(url: string, protocol?: string) {
     try {
-      // The Tauri websocket plugin does not support subprotocol negotiation, so
-      // we keep the shared factory signature for compatibility but do not
-      // forward `protocols` to the plugin connect call.
-      void protocols;
-
       // We call invoke() directly and pre-register our handler BEFORE the
       // connection is made, so messages sent by the server immediately after
       // the handshake cannot be dropped (see module comment above).
@@ -118,7 +124,6 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
             this.handleMessage(messageData);
           })
           .with({ type: 'Close' }, ({ data }) => {
-            this._readyState = this.CLOSED;
             const closeEvent = new CloseEvent('close', {
               code: data?.code || 1000,
               reason: data?.reason || '',
@@ -138,6 +143,9 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
       // Register BEFORE invoke so any message that arrives during the handshake
       // is dispatched to our handler rather than dropped into an empty Set.
       listeners.add(handleMessage);
+      this.removeListener = () => {
+        listeners.delete(handleMessage);
+      };
 
       // Unwrap the { seq, message } replay envelope, deduplicating messages
       // that are delivered both live and via recover().
@@ -173,13 +181,22 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
       const id = await invoke<number>('plugin:websocket|connect', {
         url,
         onMessage,
+        // The plugin's handshake fails unless the server selects this
+        // protocol, so a completed connect has negotiated it.
+        ...(protocol && {
+          config: { headers: [['Sec-WebSocket-Protocol', protocol]] },
+        }),
       });
       this.socketId = id;
 
-      this.removeListener = () => {
-        listeners.delete(handleMessage);
-      };
+      if (this._readyState !== this.CONNECTING) {
+        // Closed while connecting: that closure is already reported, so drop
+        // the late connection instead of opening it.
+        this.disconnectSocket().catch(() => {});
+        return;
+      }
 
+      this._protocol = protocol ?? '';
       this._readyState = this.OPEN;
 
       // Recover messages received by the Rust side while the webview was
@@ -196,6 +213,8 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
       const openEvent = new Event('open');
       this.handleOpen(openEvent);
     } catch (error) {
+      // A close() during the failed connect has already reported the closure.
+      if (this._readyState !== this.CONNECTING) return;
       console.error(`Failed to initialize Tauri WebSocket to ${url}:`, error);
       this._readyState = this.CLOSED;
       const errorEvent = new Event('error');
@@ -227,6 +246,12 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
   }
 
   private handleClose(event: CloseEvent) {
+    // One closure can be observed more than once (a local close and the
+    // server's echoed close frame); report it once.
+    if (this.closeReported) return;
+    this.closeReported = true;
+    this._readyState = this.CLOSED;
+    this.removeListener?.();
     this.teardownVisibilityListener();
     if (this.onclose) {
       this.onclose.call(this as any, event);
@@ -389,33 +414,37 @@ class TauriWebSocketWrapper implements MinimalWebSocket {
     });
   }
 
-  /** Closes the plugin connection with a normal-closure frame. */
-  private async disconnectSocket(): Promise<void> {
-    await this.sendMessage({
-      type: 'Close',
-      data: {
-        code: 1000,
-        reason: 'Disconnected by client',
-      },
-    });
+  /** Closes the plugin connection with a close frame. */
+  private async disconnectSocket(
+    code = 1000,
+    reason = 'Disconnected by client'
+  ): Promise<void> {
+    await this.sendMessage({ type: 'Close', data: { code, reason } });
   }
 
-  close(_code?: number, _reason?: string): void {
-    if (this.socketId !== null && this._readyState === this.OPEN) {
+  close(code = 1000, reason = ''): void {
+    if (this._readyState === this.CONNECTING) {
+      // Like a browser socket, abandoning the handshake reports an abnormal
+      // closure; the pending connect drops its connection if it completes.
       this._readyState = this.CLOSING;
-
-      // Tauri WebSocket disconnect doesn't take parameters, so we just disconnect
-      this.disconnectSocket()
-        .catch((error: any) => {
-          console.error('Error closing Tauri WebSocket:', error);
-        })
-        .finally(() => {
-          this._readyState = this.CLOSED;
-          if (this.removeListener) {
-            this.removeListener();
-          }
-        });
+      queueMicrotask(() =>
+        this.handleClose(
+          new CloseEvent('close', { code: 1006, reason, wasClean: false })
+        )
+      );
+      return;
     }
+    if (this.socketId === null || this._readyState !== this.OPEN) return;
+    this._readyState = this.CLOSING;
+    this.disconnectSocket(code, reason)
+      .catch((error: any) => {
+        console.error('Error closing Tauri WebSocket:', error);
+      })
+      .finally(() => {
+        this.handleClose(
+          new CloseEvent('close', { code, reason, wasClean: true })
+        );
+      });
   }
 
   private handleSendRejection(error: unknown) {

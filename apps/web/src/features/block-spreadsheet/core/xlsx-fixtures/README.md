@@ -16,7 +16,7 @@ Additional generated-in-test workbooks exercise the 1904 date system, stored Exc
 
 ## Real-world corpus
 
-`real-world/` holds published workbooks that Excel, LibreOffice and other producers wrote: financial models (project finance, DCF, LBO, loan schedules, three-statement models), small-business and government statistics workbooks, and files from open-source spreadsheet test suites. `corpus.ts` lists them from `real-world/manifest.json` and fails if a workbook has no recorded provenance. `../xlsx-corpus.test.ts` imports, recalculates and round-trips each one and snapshots the results.
+`real-world/` holds published workbooks that Excel, LibreOffice and other producers wrote: financial models (project finance, DCF, LBO, loan schedules, three-statement models), small-business and government statistics workbooks, and files from open-source spreadsheet test suites. `corpus.ts` lists them from `real-world/manifest.json` and fails if a workbook has no recorded provenance. `../xlsx-corpus-suite.ts` imports, recalculates and round-trips each one and snapshots the results, split across `../xlsx-corpus-1.test.ts` through `../xlsx-corpus-4.test.ts` so the workbooks run in parallel.
 
 Every file is redistributable. `manifest.json` records each file's source page and license:
 
@@ -49,3 +49,7 @@ Notices:
 - U.S. federal works (SEC, Census, BLS, BEA, IRS, SBA, GSA) are in the public domain; the FRED export carries BLS series data.
 
 Templates whose terms forbid redistribution (Microsoft Create, Vertex42, Breaking Into Wall Street, Damodaran, SBDC) were used only for local testing and are not committed. Add a file by copying it here unmodified and adding its `file`, `title`, `source` and `license` to the manifest; set `skipCalculation` with a reason only when the engine cannot finish it.
+
+`upgraded-from-xls.xlsx` is a legacy Excel 97 workbook (`services/convert_service/fixtures/legacy/budget.xls`) converted to `.xlsx` by LibreOffice with the `Calc MS Excel 2007 XML` filter, exactly as the convert service upgrades uploaded `.xls` files. `../xlsx-upgraded-legacy.test.ts` checks that it imports into a native spreadsheet with its sheets, formulas, merges and number formats.
+
+`poi-simple-macro.xlsm` and `poi-excel-with-attachments.xlsm` are Excel-written macro-enabled workbooks with real VBA projects, from the Apache POI test data (`test-data/spreadsheet/SimpleMacro.xlsm` and `ExcelWithAttachments.xlsm` at https://github.com/apache/poi, Apache-2.0). The second also has comments, embedded Word and PowerPoint objects and Cyrillic sheet names. `../xlsm-import.test.ts` checks that both import with their macros dropped and export as macro-free `.xlsx`.

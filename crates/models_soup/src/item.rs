@@ -2,13 +2,13 @@ use crate::agent_session::SoupAgentSession;
 use crate::calendar_event::SoupCalendarEvent;
 use crate::call_record::SoupCallRecord;
 use crate::crm_company::SoupCrmCompany;
+use crate::crm_contact::SoupCrmContact;
 use crate::database_row::SoupDatabaseRow;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
 use crate::initiative::SoupInitiative;
 use crate::project::SoupProject;
-use crate::reminder::SoupReminder;
 use crate::{
     chat::SoupChat,
     comms::{SoupChannel, SoupChannelThread},
@@ -48,10 +48,10 @@ pub enum SoupItem<T = ()> {
     CalendarEvent(SoupCalendarEvent<T>),
     /// CRM company item.
     CrmCompany(SoupCrmCompany<T>),
+    /// Team-owned CRM contact.
+    CrmContact(SoupCrmContact<T>),
     /// Foreign entity item.
     ForeignEntity(SoupForeignEntity),
-    /// Reminder item.
-    Reminder(SoupReminder<T>),
     /// Agent session item.
     AgentSession(SoupAgentSession<T>),
     /// Database row item.
@@ -89,14 +89,14 @@ impl<T> SoupItem<T> {
             SoupItem::CalendarEvent(event) => {
                 EntityType::CalendarEvent.with_entity_string(event.id.to_string())
             }
+            SoupItem::CrmContact(contact) => {
+                EntityType::CrmContact.with_entity_string(contact.id.to_string())
+            }
             SoupItem::CrmCompany(company) => {
                 EntityType::CrmCompany.with_entity_string(company.id.to_string())
             }
             SoupItem::ForeignEntity(foreign_entity) => {
                 EntityType::ForeignEntity.with_entity_string(foreign_entity.id.to_string())
-            }
-            SoupItem::Reminder(reminder) => {
-                EntityType::Reminder.with_entity_string(reminder.id.to_string())
             }
             SoupItem::AgentSession(session) => {
                 EntityType::AgentSession.with_entity_string(session.id.to_string())
@@ -125,8 +125,8 @@ impl<T> SoupItem<T> {
                 .last_reminder_fired_at
                 .map_or(event.updated_at, |fired| fired.max(event.updated_at)),
             SoupItem::CrmCompany(company) => company.updated_at,
+            SoupItem::CrmContact(contact) => contact.last_interaction,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
-            SoupItem::Reminder(reminder) => reminder.updated_at,
             SoupItem::AgentSession(session) => session.updated_at,
             SoupItem::DatabaseRow(row) => row.updated_at,
         }
@@ -211,6 +211,16 @@ impl<T> SoupItem<T> {
             (SoupItem::CalendarEvent(event), _) => event
                 .last_reminder_fired_at
                 .map_or(event.updated_at, |fired| fired.max(event.updated_at)),
+            (SoupItem::CrmContact(contact), SimpleSortMethod::CreatedAt) => {
+                contact.first_interaction
+            }
+            (SoupItem::CrmContact(contact), SimpleSortMethod::ViewedAt) => {
+                contact.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::CrmContact(contact), SimpleSortMethod::ViewedUpdated) => {
+                contact.viewed_at.unwrap_or(contact.last_interaction)
+            }
+            (SoupItem::CrmContact(contact), _) => contact.last_interaction,
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
             (SoupItem::CrmCompany(company), SimpleSortMethod::ViewedAt) => {
                 company.viewed_at.unwrap_or_default()
@@ -223,10 +233,6 @@ impl<T> SoupItem<T> {
                 foreign_entity.created_at
             }
             (SoupItem::ForeignEntity(foreign_entity), _) => foreign_entity.updated_at,
-            // Reminders always order by when they fire, whatever sort was asked
-            // for — the same way emails always use their precomputed sort_ts.
-            // No other ordering means anything for a reminder.
-            (SoupItem::Reminder(reminder), _) => reminder.next_run_at,
             (SoupItem::AgentSession(session), SimpleSortMethod::ViewedAt) => {
                 session.viewed_at.unwrap_or_default()
             }
@@ -285,8 +291,8 @@ impl<T> SoupItem<T> {
                 c.id.to_string(),
                 PropertiesEntityType::Company,
             )),
+            SoupItem::CrmContact(_) => None,
             SoupItem::ForeignEntity(_) => None,
-            SoupItem::Reminder(_) => None,
             // Agent sessions have no properties entity type yet.
             SoupItem::AgentSession(_) => None,
             SoupItem::DatabaseRow(row) => Some(EntityReference::new(
@@ -491,6 +497,35 @@ impl<T> SoupItem<T> {
                 last_reminder_fired_at,
                 extra: f(extra),
             }),
+            SoupItem::CrmContact(SoupCrmContact {
+                id,
+                team_id,
+                company_id,
+                company_name,
+                email,
+                name,
+                hidden,
+                first_interaction,
+                last_interaction,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra,
+            }) => SoupItem::CrmContact(SoupCrmContact {
+                id,
+                team_id,
+                company_id,
+                company_name,
+                email,
+                name,
+                hidden,
+                first_interaction,
+                last_interaction,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra: f(extra),
+            }),
             SoupItem::CrmCompany(SoupCrmCompany {
                 id,
                 team_id,
@@ -519,29 +554,6 @@ impl<T> SoupItem<T> {
             SoupItem::ForeignEntity(soup_foreign_entity) => {
                 SoupItem::ForeignEntity(soup_foreign_entity)
             }
-            SoupItem::Reminder(SoupReminder {
-                id,
-                description,
-                referenced_entity,
-                schedule,
-                next_run_at,
-                enabled,
-                completed_at,
-                created_at,
-                updated_at,
-                extra,
-            }) => SoupItem::Reminder(SoupReminder {
-                id,
-                description,
-                referenced_entity,
-                schedule,
-                next_run_at,
-                enabled,
-                completed_at,
-                created_at,
-                updated_at,
-                extra: f(extra),
-            }),
             SoupItem::AgentSession(SoupAgentSession {
                 id,
                 name,
@@ -623,8 +635,8 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::Call(record) => record.call_id,
             SoupItem::CalendarEvent(event) => event.id,
             SoupItem::CrmCompany(company) => company.id,
+            SoupItem::CrmContact(contact) => contact.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
-            SoupItem::Reminder(reminder) => reminder.id,
             SoupItem::AgentSession(session) => session.id,
             SoupItem::DatabaseRow(row) => row.id,
         }

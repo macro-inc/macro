@@ -425,7 +425,7 @@ button:is(
   color: var(--c1);
   font-family: 'display';
   font-size: clamp(40px, 5vw, 56px);
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.035em;
   line-height: 1.02;
   margin: 0;
@@ -594,7 +594,7 @@ button:is(
   color: var(--c0);
   font-family: 'display';
   font-size: 52px;
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.035em;
   line-height: 1;
 }
@@ -730,7 +730,7 @@ button:is(
   color: var(--c1);
   font-family: 'display';
   font-size: clamp(34px, 4vw, 46px);
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.035em;
   line-height: 1.06;
   margin: 0;
@@ -814,7 +814,7 @@ button:is(
   color: var(--a0);
   font-family: 'display';
   font-size: 34px;
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   line-height: 1;
   margin: 0;
 }
@@ -831,7 +831,7 @@ button:is(
   color: var(--c0);
   font-family: 'display';
   font-size: clamp(52px, 6vw, 66px);
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.045em;
   line-height: 1;
 }
@@ -1107,7 +1107,7 @@ button:is(
   color: var(--c1);
   font-family: 'display';
   font-size: 44px;
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.015em;
   line-height: 1.2;
   margin: 0;
@@ -1198,7 +1198,7 @@ button:is(
   color: var(--c1);
   font-family: 'display';
   font-size: 44px;
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.015em;
   line-height: 1.2;
   margin: 0;
@@ -1398,7 +1398,7 @@ button:is(
   color: var(--c0);
   font-family: 'display';
   font-size: 44px;
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.015em;
   line-height: 1.2;
 }
@@ -1530,7 +1530,7 @@ button:is(
   display: grid;
   font-family: 'display';
   font-size: 18px;
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   gap: 24px;
   grid-template-columns: minmax(0, 1fr) auto;
   line-height: 1.12;
@@ -1733,7 +1733,7 @@ button:is(
   color: var(--c1);
   font-family: 'display';
   font-size: clamp(39px, 5vw, 51px);
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.015em;
   line-height: 1.08;
   margin: 0;

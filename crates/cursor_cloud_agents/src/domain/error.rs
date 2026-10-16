@@ -57,7 +57,7 @@ pub struct PromptRefusal {
     /// One plain sentence or two, no report decorations.
     pub message: String,
     /// The refusal as a rendered notice, when there is more to say than a line.
-    pub notice: Option<FailureNotice>,
+    pub notice: Option<Box<FailureNotice>>,
 }
 
 impl PromptRefusal {
@@ -127,7 +127,7 @@ impl UsageLimitExceeded {
         let notice = self.notice();
         PromptRefusal {
             message: format!("{} {}", notice.title, notice.body),
-            notice: Some(notice),
+            notice: Some(Box::new(notice)),
         }
     }
 }

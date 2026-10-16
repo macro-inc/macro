@@ -23,6 +23,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use tracing::instrument::WithSubscriber as _;
 
+mod first_output;
+
 struct Fixture {
     service: AgentSessionServiceImpl<
         InMemoryAgentSessionRepo,
@@ -185,6 +187,7 @@ async fn only_the_first_prompt_is_selected_for_automatic_naming() {
                 )
                 .expect("a set-model frame builds"),
         ),
+        logged_at: None,
     }]);
     assert_eq!(
         initial_prompt_for_rename(&folds, session, &prompt).await,
@@ -421,6 +424,36 @@ async fn archive_is_persisted_published_and_blocks_rename() {
 }
 
 #[tokio::test]
+async fn a_conversations_current_session_is_not_archived() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    repo.answer_conversation(session);
+    let realtime = RecordingRealtime::default();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+
+    assert!(matches!(
+        service.set_archived(&owner_access(session), true).await,
+        Err(AgentSessionError::AnswersConversation(id)) if id == session
+    ));
+    assert!(!repo.get(session).await.expect("get session").is_archived);
+    assert!(realtime.updated().is_empty());
+    // Unarchiving is never refused.
+    service
+        .set_archived(&owner_access(session), false)
+        .await
+        .expect("unarchive session");
+}
+
+#[tokio::test]
 async fn manual_rename_rejects_blank_and_overlong_names() {
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_session();
@@ -568,6 +601,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.get(id).await
     }
 
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
+        self.repo.find(id).await
+    }
+
     async fn preview(
         &self,
         viewer: &MacroUserIdStr<'static>,
@@ -650,6 +687,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_archived(id, is_archived).await
     }
 
+    async fn is_current_conversation_session(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.is_current_conversation_session(id).await
+    }
+
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
         self.repo.set_name_if_default(id, name).await
     }
@@ -668,6 +709,23 @@ impl AgentSessionRepo for BlockingPromptLogs {
         size: SandboxSize,
     ) -> Result<()> {
         self.repo.set_user_sandbox_size(user_id, size).await
+    }
+
+    async fn user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<CodingPreferences> {
+        self.repo.user_coding_preferences(user_id).await
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        preferences: CodingPreferences,
+    ) -> Result<()> {
+        self.repo
+            .set_user_coding_preferences(user_id, preferences)
+            .await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
@@ -1156,14 +1214,14 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
 
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt("keep dispatching"),
             action_id: AgentActionId::mint(),
             completed,
             span: tracing::info_span!("test.command"),
             enqueued_at: tokio::time::Instant::now(),
-        })
+        }))
         .await
         .unwrap();
     entered.notified().await;
@@ -1240,14 +1298,14 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
     release.notify_one();
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt("keep working"),
             action_id: AgentActionId::mint(),
             completed,
             span: tracing::info_span!("test.command"),
             enqueued_at: tokio::time::Instant::now(),
-        })
+        }))
         .await
         .unwrap();
     entered.notified().await;
@@ -1300,6 +1358,7 @@ fn any_event(session: AgentSessionId) -> AgentSessionLog {
         content: Message::ToServer(ToServerMessage::Event {
             event: agent_runtime_protocol::domain::schema::v0::SystemEvent::AcpReady,
         }),
+        logged_at: None,
     }
 }
 
@@ -1900,14 +1959,14 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
     );
     let (completed, completion) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt("must remain unsent"),
             action_id: AgentActionId::mint(),
             completed,
             span: tracing::Span::none(),
             enqueued_at: tokio::time::Instant::now(),
-        })
+        }))
         .await
         .unwrap();
     let queued = actor.next_input().await;
@@ -2079,14 +2138,14 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
     let action_id = AgentActionId::mint();
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionMessage::Action(SessionCommand {
             user_id: None,
             action: AgentAction::prompt("what time is it?"),
             action_id,
             completed,
             span: command_span,
             enqueued_at: tokio::time::Instant::now(),
-        })
+        }))
         .await
         .unwrap();
     let prompt = outbound_rx.recv().await.expect("prompt is dispatched");
@@ -2155,6 +2214,157 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
     assert!(input.contains("what time is it?"), "{input}");
 }
 
+/// A command dequeued before the handshake finished says how long it waited
+/// for it; one dequeued on a live session waited for nothing.
+#[tokio::test]
+async fn a_command_span_records_its_wait_for_the_handshake() {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let entered = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let logs = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: entered.clone(),
+        release: release.clone(),
+        hang_disconnect: false,
+        fail_restore_log: None,
+    };
+    let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
+    let (inbound_tx, inbound_rx) = mpsc::channel(8);
+    let (commands, command_rx) = mpsc::channel(8);
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let actor = SessionActor::new(
+        session,
+        None,
+        "/workspace".to_owned(),
+        Vec::new(),
+        crate::domain::session::PermissionPolicy::AutoAccept,
+        RecordingTransport {
+            outbound: outbound_tx,
+            inbound: inbound_rx,
+        },
+        logs,
+        command_rx,
+        handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    let active = Arc::new(ActiveSessions::new());
+    let (stopped_tx, _) = watch::channel(false);
+    let claim = claim_for_test(&repo, session).await;
+    let task = tokio::spawn(
+        run_session(
+            actor,
+            Arc::downgrade(&active),
+            Arc::new(()),
+            stopped_tx,
+            CancellationToken::new(),
+            repo.clone(),
+            claim,
+            Arc::new(crate::domain::ports::NoOpTurnObserver),
+        )
+        .with_current_subscriber(),
+    );
+    let send_prompt = |name: &'static str| {
+        let (completed, result) = oneshot::channel();
+        let command = SessionMessage::Action(SessionCommand {
+            user_id: None,
+            action: AgentAction::prompt(name),
+            action_id: AgentActionId::mint(),
+            completed,
+            span: tracing::info_span!(
+                "agent.session.command",
+                agent.command.name = name,
+                agent.command.queue_wait_ms = tracing::field::Empty,
+                agent.session.runtime_phase_at_dequeue = tracing::field::Empty,
+                agent.command.handshake_wait_ms = tracing::field::Empty,
+            ),
+            enqueued_at: tokio::time::Instant::now(),
+        });
+        (command, result)
+    };
+
+    // Queued before the runtime is even ready: it waits out the handshake.
+    let (early, early_result) = send_prompt("early");
+    commands.send(early).await.unwrap();
+    open_test_session(&inbound_tx, &mut outbound_rx, session).await;
+    entered.notified().await;
+    release.notify_one();
+    outbound_rx
+        .recv()
+        .await
+        .expect("early prompt is dispatched");
+    early_result
+        .await
+        .unwrap()
+        .expect("early delivery completes");
+
+    let (live, live_result) = send_prompt("live");
+    commands.send(live).await.unwrap();
+    entered.notified().await;
+    release.notify_one();
+    outbound_rx.recv().await.expect("live prompt is dispatched");
+    live_result.await.unwrap().expect("live delivery completes");
+
+    drop(inbound_tx);
+    task.await.unwrap();
+    provider.force_flush().expect("flush");
+    let spans = exporter.get_finished_spans().expect("finished spans");
+    let attribute = |name: &str, key: &str| {
+        let span = spans
+            .iter()
+            .find(|span| {
+                span.name == "agent.session.command"
+                    && span.attributes.iter().any(|kv| {
+                        kv.key.as_str() == "agent.command.name" && kv.value.as_str() == name
+                    })
+            })
+            .unwrap_or_else(|| panic!("no {name} command span: {spans:#?}"));
+        span.attributes
+            .iter()
+            .find(|kv| kv.key.as_str() == key)
+            .map(|kv| kv.value.clone())
+    };
+    assert!(matches!(
+        attribute("early", "agent.session.runtime_phase_at_dequeue")
+            .expect("phase recorded")
+            .as_str()
+            .as_ref(),
+        "booting" | "handshaking"
+    ));
+    assert!(matches!(
+        attribute("early", "agent.command.handshake_wait_ms"),
+        Some(opentelemetry::Value::I64(wait)) if wait >= 0
+    ));
+    assert_eq!(
+        attribute("live", "agent.session.runtime_phase_at_dequeue")
+            .expect("phase recorded")
+            .as_str(),
+        "live"
+    );
+    assert_eq!(
+        attribute("live", "agent.command.handshake_wait_ms"),
+        Some(opentelemetry::Value::I64(0))
+    );
+    assert!(matches!(
+        attribute("live", "agent.command.queue_wait_ms"),
+        Some(opentelemetry::Value::I64(_))
+    ));
+}
+
 mod initial_model;
 mod owner_binding;
 mod turn_projection;
@@ -2180,12 +2390,21 @@ mod fold_signals {
             signals.extend(logs.append(frame).await.expect("append succeeds").signals);
         }
 
+        // Progress is reported while the turn runs; its end comes once, last.
+        let (ends, progress): (Vec<_>, Vec<_>) = signals
+            .iter()
+            .partition(|signal| !matches!(signal, TurnSignal::Progressed { .. }));
+        assert!(!progress.is_empty(), "{signals:#?}");
         assert!(
             matches!(
-                signals.as_slice(),
+                ends.as_slice(),
                 [TurnSignal::TurnEnded { stop: FoldStop::EndTurn, last_text: Some(text), .. }]
                     if !text.is_empty()
             ),
+            "{signals:#?}"
+        );
+        assert!(
+            matches!(signals.last(), Some(TurnSignal::TurnEnded { .. })),
             "{signals:#?}"
         );
     }
@@ -2210,6 +2429,7 @@ mod fold_signals {
                 content: Message::ToServer(ToServerMessage::Event {
                     event: SystemEvent::AcpReady,
                 }),
+                logged_at: None,
             })
             .await
             .expect("append succeeds");
@@ -2241,6 +2461,7 @@ fn streamed_frame(text: &str) -> AgentSessionLog {
             )
             .unwrap(),
         ))),
+        logged_at: None,
     }
 }
 
@@ -2349,6 +2570,7 @@ async fn system_events_flush_pending_frames_through() {
             content: Message::ToServer(ToServerMessage::Event {
                 event: SystemEvent::AcpReady,
             }),
+            logged_at: None,
         },
     )
     .await
@@ -2508,6 +2730,7 @@ async fn a_load_boundary_lands_after_the_frames_buffered_before_it() {
             )
             .unwrap(),
         ))),
+        logged_at: None,
     };
     let initialization_log_id = AgentSessionLogWriter::append(&mut logs, initialize)
         .await
@@ -2526,6 +2749,7 @@ async fn a_load_boundary_lands_after_the_frames_buffered_before_it() {
                 Ok(serde_json::json!({})),
             ),
         ))),
+        logged_at: None,
     };
     let response_id = AgentSessionLogWriter::append_with_boundary(
         &mut logs,

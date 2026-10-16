@@ -33,9 +33,9 @@ import {
   useCanComment,
   useCanEdit,
   useGetPermissions,
+  useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
-import { idToEmail } from '@core/user/util';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -65,7 +65,6 @@ import {
 } from './context/fig-viewer-context';
 import type { FigData } from './definition';
 import { createDesignCollabSession } from './queries/fig-collab';
-import { useFigComments } from './queries/fig-comments';
 import { saveFigFile } from './queries/fig-file';
 import { useFigLibrarySource } from './queries/fig-libraries';
 import { shareFigEngine } from './queries/fig-sharing';
@@ -77,6 +76,7 @@ import {
 import { createFontSource } from './queries/font-source';
 import { openFigEngine, prepareFigEngine } from './queries/prepare-engine';
 import { FigViewer } from './views/fig-viewer';
+import { useMacroComments } from './views/macro-comments';
 
 /**
  * ⌘K on a design opens the command menu, which then offers the design
@@ -342,13 +342,14 @@ export default function FigBlock(props: { share?: string; present?: string }) {
   const permissions = useGetPermissions();
   const canEdit = useCanEdit();
   const canComment = useCanComment();
+  const isOwner = useIsDocumentOwner();
   const userId = useUserId();
-  const comments = useFigComments({
+  const comments = useMacroComments({
     documentId,
     userId,
     canComment,
+    canModerate: isOwner,
     displayName,
-    email: idToEmail,
   });
   const openShare = useShareModal(() => ({
     id: documentId,

@@ -1,7 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
+import { subscribeNativeNetworkStatus } from '@core/mobile/native-network-status';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client, OperationResult } from '@urql/core';
+import type { Result } from 'neverthrow';
 import {
   channelNotificationRefresh,
   disposeChannelNotificationRefresh,
@@ -18,8 +20,22 @@ import { createChannelListUpdatesHandler } from './graphql-channel-list-updates'
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 
-/** Maximum reconnect attempts for the Soup updates websocket. */
-export const SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS = 5;
+/**
+ * Transient failures retry without limit. graphql-ws never resets its retry
+ * count after giving up, so an exhausted client would wait `2^retries` seconds
+ * before every later attempt; the wait is capped instead (see
+ * `waitToRetryGraphqlSoupWebSocket`).
+ */
+export const SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS = Number.POSITIVE_INFINITY;
+
+const MAX_RETRY_DELAY_MS = 60_000;
+
+/** The cookie refresh failed for a transient reason, such as an outage. */
+export class GraphqlSoupWebSocketAuthUnavailableError extends Error {
+  constructor() {
+    super('Unable to refresh GraphQL websocket cookie');
+  }
+}
 
 const RETRYABLE_WEBSOCKET_CLOSE_CODES = new Set([
   1001, // endpoint is temporarily going away
@@ -41,9 +57,57 @@ export function shouldRetryGraphqlSoupWebSocket(error: unknown): boolean {
     );
   }
 
-  // Browser websocket network failures arrive as Events. Errors thrown while
-  // resolving auth or processing the protocol are not retryable.
+  if (error instanceof GraphqlSoupWebSocketAuthUnavailableError) return true;
+
+  // Browser websocket network failures arrive as Events. Other errors thrown
+  // while resolving auth or processing the protocol are not retryable.
   return typeof Event !== 'undefined' && error instanceof Event;
+}
+
+/**
+ * Calls `listener` when the app returns to the foreground or regains
+ * connectivity, when a waiting reconnect should stop waiting.
+ */
+function onReconnectOpportunity(listener: () => void): () => void {
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') listener();
+  };
+  let subscribed = false;
+  const unsubscribeNative = subscribeNativeNetworkStatus((status) => {
+    // The first call reports the current status, not a change.
+    if (subscribed && status === 'online') listener();
+  });
+  subscribed = true;
+  document.addEventListener('visibilitychange', onVisible);
+  addEventListener('online', listener);
+  return () => {
+    unsubscribeNative();
+    document.removeEventListener('visibilitychange', onVisible);
+    removeEventListener('online', listener);
+  };
+}
+
+/**
+ * Waits before reconnect attempt `retries`: graphql-ws's randomized
+ * exponential backoff, capped at a minute, and cut short when the app returns
+ * to the foreground or regains connectivity.
+ */
+export function waitToRetryGraphqlSoupWebSocket(
+  retries: number
+): Promise<void> {
+  const delay =
+    Math.min(1000 * 2 ** retries, MAX_RETRY_DELAY_MS) +
+    300 +
+    Math.random() * 2_700;
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      stopListening();
+      resolve();
+    };
+    const timer = setTimeout(finish, delay);
+    const stopListening = onReconnectOpportunity(finish);
+  });
 }
 
 /** Converts a DSS HTTP origin into its Soup GraphQL websocket endpoint. */
@@ -67,7 +131,7 @@ type GraphqlSoupWebSocketAuth = {
   dssHost: string;
   bearerTokenAuth: boolean;
   getApiToken: () => Promise<string>;
-  refreshCookieAuth: () => Promise<void>;
+  refreshCookieAuth: () => Promise<Result<void, { code: string }[]>>;
 };
 
 /** Creates the reconnect-safe URL resolver used by graphql-ws. */
@@ -84,8 +148,15 @@ export function createGraphqlSoupWebSocketUrlResolver({
       return buildGraphqlSoupWebSocketUrl(dssHost, apiToken);
     }
 
-    // Browsers authenticate the websocket upgrade with the refreshed cookie.
-    await refreshCookieAuth();
+    // The websocket upgrade authenticates with the refreshed cookie. Only a
+    // rejected session is final; a refresh lost to an outage retries.
+    const refreshed = await refreshCookieAuth();
+    if (refreshed.isErr()) {
+      if (refreshed.error.some((error) => error.code === 'UNAUTHORIZED')) {
+        throw new Error('GraphQL websocket session was rejected');
+      }
+      throw new GraphqlSoupWebSocketAuthUnavailableError();
+    }
     return buildGraphqlSoupWebSocketUrl(dssHost);
   };
 }
@@ -144,8 +215,23 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   let unsubscribes: Array<() => void> = [];
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
   let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
+  let generation = 0;
+  let signaledFailure = false;
+  let stopWatchingForReattach: (() => void) | undefined;
+
+  // graphql-ws retries transient failures itself and gives up only on ones a
+  // timer cannot fix (a rejected session, a protocol error). Reattach the set
+  // when the app returns to the foreground or regains connectivity instead.
+  const reattachOnNextOpportunity = () => {
+    stopWatchingForReattach ??= onReconnectOpportunity(() =>
+      lifecycle.replace(currentClient, currentHost)
+    );
+  };
 
   const unsubscribeAll = () => {
+    generation += 1;
+    stopWatchingForReattach?.();
+    stopWatchingForReattach = undefined;
     for (const unsubscribe of unsubscribes) unsubscribe();
     unsubscribes = [];
     activity?.dispose();
@@ -191,7 +277,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           : LIVE_UPDATE_SUBSCRIPTIONS.filter(
               ({ document }) => document !== SoupUpdatesDocument
             );
-      let signaledFailure = false;
+      const setGeneration = generation;
       unsubscribes = subscriptions.map(({ document, errorMessage }) => {
         const subscription = client
           .subscription(document, {})
@@ -224,11 +310,16 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 });
               }
             }
+            // urql ends a subscription with a final `hasNext: false` result.
+            if (result.hasNext === false && setGeneration === generation) {
+              reattachOnNextOpportunity();
+            }
           });
         return () => subscription.unsubscribe();
       });
     },
     connected: () => {
+      signaledFailure = false;
       activity?.reconnect();
       channels?.reconnect();
     },

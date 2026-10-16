@@ -188,7 +188,7 @@ export default defineConfig({
           /^DocumentTopicEvent$/,
           /^ChannelTopicEvent$/,
           /^Document(Created|Updated|Deleted|Copied)Metadata$/,
-          /^Channel(Created|Updated|Deleted)Metadata$/,
+          /^Channel(Created|Updated|Deleted|PictureChanged)Metadata$/,
           /^ChannelParticipant(Added|Removed)Metadata$/,
           /^MessageTopicEvent$/,
           /^Message(Posted|Patched|Deleted|Mentioned)Metadata$/,

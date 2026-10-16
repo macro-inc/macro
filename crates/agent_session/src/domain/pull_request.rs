@@ -1,12 +1,14 @@
 //! Associating a pull request with a session, regardless of its harness.
 
 use std::pin::Pin;
+use std::sync::Arc;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{AgentSessionError, Result};
 use super::model::{AgentSessionId, SessionClaim};
 use super::ports::{AgentSessionRealtime, AgentSessionRepo};
+use super::session_task::SessionTasks;
 use tracing::Instrument;
 
 #[cfg(test)]
@@ -41,12 +43,18 @@ pub trait SessionPullRequestRepo: Send + Sync {
 pub struct SessionPullRequestService<R, Rt> {
     repo: R,
     realtime: Rt,
+    tasks: Arc<dyn SessionTasks>,
 }
 
 impl<R, Rt> SessionPullRequestService<R, Rt> {
-    /// Build the service using the same store and publisher as session logs.
-    pub fn new(repo: R, realtime: Rt) -> Self {
-        Self { repo, realtime }
+    /// Build the service using the same store and publisher as session logs, linking each
+    /// recorded pull request to the session's task.
+    pub fn new(repo: R, realtime: Rt, tasks: Arc<dyn SessionTasks>) -> Self {
+        Self {
+            repo,
+            realtime,
+            tasks,
+        }
     }
 }
 
@@ -66,6 +74,7 @@ where
             "agent.session.set_pull_request",
             agent.session.id = %session,
             outcome = tracing::field::Empty,
+            task_link = tracing::field::Empty,
         );
         Box::pin(
             async move {
@@ -87,6 +96,17 @@ where
                             tracing::warn!(?error, "could not publish session metadata update");
                         }
                     }
+                    // The recorded PR stands even when its task link fails: the link is
+                    // idempotent and retried by the next set_pull_request or link_task.
+                    let task_link = self
+                        .tasks
+                        .link_session_pull_request(session, owner)
+                        .await
+                        .inspect_err(|error| {
+                            tracing::error!(error = ?error, "could not link session pull request to its task");
+                        });
+                    tracing::Span::current()
+                        .record("task_link", if task_link.is_ok() { "ok" } else { "failed" });
                     Ok(url)
                 }
                 .await;

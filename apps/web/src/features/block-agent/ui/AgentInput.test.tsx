@@ -6,14 +6,33 @@ import {
   createEditor,
   type LexicalEditor,
 } from 'lexical';
+
 /**
  * @vitest-environment jsdom
  */
 
+import { preloadAgentFold } from '@core/agent-fold/client';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_INPUT_TEXT_AREA_ID, AgentInput } from './AgentInput';
+
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+
+vi.mock('@core/agent-fold/client', () => ({
+  preloadAgentFold: vi.fn(async () => {}),
+}));
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -73,6 +92,10 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: { disabled?: boolean; initialValue?: string }) => (
     <div data-testid="agent-input-editor" data-disabled={props.disabled}>
       {props.initialValue}
+      {/* Decorators portal their popups (the paste viewer) out of the editor. */}
+      <Portal>
+        <pre data-testid="portaled-text">Pasted text</pre>
+      </Portal>
     </div>
   ),
 }));
@@ -107,6 +130,7 @@ vi.mock('@phosphor/spinner-gap.svg', () => ({
 }));
 
 beforeEach(() => {
+  vi.mocked(preloadAgentFold).mockClear();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -121,6 +145,16 @@ beforeEach(() => {
   editor.enter = undefined;
   editor.change = undefined;
   vi.mocked(isTouchDevice).mockReturnValue(false);
+});
+
+it('preloads on document-chat composer focus without submitting its context', () => {
+  const send = vi.fn();
+  render(() => <AgentInput initialInput="Document context" onSend={send} />);
+  expect(preloadAgentFold).not.toHaveBeenCalled();
+  fireEvent.focusIn(screen.getByTestId('agent-input-editor'));
+  expect(preloadAgentFold).toHaveBeenCalledOnce();
+  expect(send).not.toHaveBeenCalled();
+  expect(editor.clear).not.toHaveBeenCalled();
 });
 
 it('seeds context without sending it and submits it only on Send', () => {
@@ -364,6 +398,22 @@ describe('attachments', () => {
   });
 });
 
+it('leaves presses in portaled editor popups to the browser so their text can be selected', () => {
+  const { container } = render(() => <AgentInput onSend={vi.fn()} />);
+  const press = (target: Element, type: string) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const padding = container.querySelector('[data-composer-compact]')!;
+  const portaled = screen.getByTestId('portaled-text');
+  expect(container.contains(portaled)).toBe(false);
+  for (const type of ['pointerdown', 'mousedown']) {
+    expect(press(padding, type)).toBe(true);
+    expect(press(portaled, type)).toBe(false);
+  }
+});
+
 it('expands for a short quote and collapses when replaced with a paragraph', () => {
   const { container } = render(() => <AgentInput onSend={vi.fn()} />);
   const layout = container.querySelector('[data-composer-compact]');
@@ -386,4 +436,21 @@ it('expands for a short quote and collapses when replaced with a paragraph', () 
     { discrete: true }
   );
   expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+});
+
+it('keeps an attached image and text unsent while the selected model is text-only', () => {
+  const send = vi.fn();
+  render(() => (
+    <AgentInput
+      onSend={send}
+      supportsImages={false}
+      attachments={[{ id: 'image', name: 'test.png', kind: 'image' }]}
+    />
+  ));
+  expect(screen.getByRole('status').textContent).toContain(
+    'does not support images'
+  );
+  editor.enter?.();
+  expect(send).not.toHaveBeenCalled();
+  expect(editor.clear).not.toHaveBeenCalled();
 });

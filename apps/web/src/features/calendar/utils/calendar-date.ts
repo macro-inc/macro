@@ -39,6 +39,17 @@ export function isSameLocalDate(first: Date, second: Date) {
   );
 }
 
+/** An imported timed instant has no duration; all-day dates remain intervals. */
+export function isTimedPointEvent(event: {
+  allDay: boolean;
+  start: string;
+  end: string;
+}): boolean {
+  if (event.allDay) return false;
+  const start = Date.parse(event.start);
+  return Number.isFinite(start) && start === Date.parse(event.end);
+}
+
 /**
  * Projects a timed span that occupies multiple local dates into date-only
  * bounds suitable for FullCalendar's all-day row.

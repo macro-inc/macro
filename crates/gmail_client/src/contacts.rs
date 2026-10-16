@@ -27,7 +27,10 @@ pub(crate) async fn get_self_connection(
 }
 
 /// Fetches all pages of the user's contacts and returns raw People resources.
-#[tracing::instrument(skip(client, access_token, sync_token), err)]
+///
+/// Failures log at WARN: expired sync tokens and links granted without the
+/// contacts scopes are routine, and the contacts sync recovers or skips them.
+#[tracing::instrument(skip(client, access_token, sync_token), err(level = "warn"))]
 pub(crate) async fn list_connections(
     client: &GmailClient,
     access_token: &str,
@@ -81,7 +84,9 @@ pub(crate) async fn list_connections(
 }
 
 /// Fetches all pages of "Other Contacts" and returns raw People resources.
-#[tracing::instrument(skip(client, access_token, sync_token), err)]
+///
+/// Failures log at WARN for the same reasons as [`list_connections`].
+#[tracing::instrument(skip(client, access_token, sync_token), err(level = "warn"))]
 pub(crate) async fn list_other_contacts(
     client: &GmailClient,
     access_token: &str,

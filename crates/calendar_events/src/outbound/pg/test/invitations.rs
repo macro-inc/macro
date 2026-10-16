@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::invitations::{
-    CalendarInvitationResolver, CalendarInvitationService, InvitationIdentity,
-    InvitationResolution, InvitationRevision,
+    CalendarInvitationRepository, CalendarInvitationResolver, CalendarInvitationService,
+    InvitationIdentity, InvitationResolution, InvitationRevision,
 };
 
 fn revision(sequence: u32, cancelled: bool) -> InvitationRevision {
@@ -97,6 +97,129 @@ async fn invitation_accounts_are_authorized_and_ambiguity_never_guesses(pool: Pg
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn invitation_delegation_is_scoped_to_the_granted_inbox(pool: PgPool) {
+    let viewer = "macro|invite-delegate@example.com";
+    let owner = "macro|invite-owner@example.com";
+    insert_user(&pool, viewer).await;
+    insert_user(&pool, owner).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let delegated_link = insert_link(&pool, owner).await;
+    let private_link = insert_link(&pool, owner).await;
+    let delegated_event = event(&pool, &repo, owner, delegated_link).await;
+    // The same owner and UID must not expose another inbox or cause ambiguity.
+    event(&pool, &repo, owner, private_link).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+        VALUES ($1, $2, $3)
+        "#,
+        viewer,
+        owner,
+        delegated_link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let email = sqlx::query_scalar!(
+        "SELECT email_address FROM email_links WHERE id = $1",
+        delegated_link
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let resolver = CalendarInvitationResolver::new(repo);
+    for preferred_link in [delegated_link, Uuid::nil()] {
+        let result = resolver
+            .resolve(viewer, &[identity(preferred_link)])
+            .await
+            .unwrap();
+        assert!(
+            matches!(&result[0], InvitationResolution::Resolved {
+                event, responding_email, can_respond: true, can_join: true, ..
+            } if event.id == delegated_event && responding_email == &email),
+            "{result:?}"
+        );
+    }
+    assert!(matches!(
+        resolver
+            .resolve("macro|unrelated@example.com", &[identity(delegated_link)])
+            .await
+            .unwrap()[0],
+        InvitationResolution::Disconnected
+    ));
+
+    sqlx::query!(
+        "DELETE FROM macro_user_links WHERE primary_macro_id = $1 AND link_id = $2",
+        viewer,
+        delegated_link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        resolver
+            .resolve(viewer, &[identity(delegated_link)])
+            .await
+            .unwrap()[0],
+        InvitationResolution::Disconnected
+    ));
+
+    // Having an active account of one's own must not bypass the revoked grant.
+    let own_link = insert_link(&pool, viewer).await;
+    persist_complete_grant(&pool, own_link, 1).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    provider_ids(&repo, own_link).await;
+    let candidates = repo
+        .invitation_candidates(viewer, &[identity(delegated_link)])
+        .await
+        .unwrap();
+    assert!(candidates[0].is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn invitation_delegation_preserves_connection_and_sync_states(pool: PgPool) {
+    let viewer = "macro|invite-sync-delegate@example.com";
+    let owner = "macro|invite-sync-owner@example.com";
+    insert_user(&pool, viewer).await;
+    insert_user(&pool, owner).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let link = insert_link(&pool, owner).await;
+    persist_complete_grant(&pool, link, 1).await;
+    provider_ids(&repo, link).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+        VALUES ($1, $2, $3)
+        "#,
+        viewer,
+        owner,
+        link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let resolver = CalendarInvitationResolver::new(repo);
+    for (status, expected) in [
+        ("pending", "still_syncing"),
+        ("syncing", "still_syncing"),
+        ("ready", "no_match"),
+        ("disabled", "disconnected"),
+        ("reauth_required", "disconnected"),
+    ] {
+        sqlx::query!(
+            "UPDATE calendar_accounts SET sync_status = $1 WHERE email_link_id = $2",
+            status,
+            link,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let result = resolver.resolve(viewer, &[identity(link)]).await.unwrap();
+        assert_eq!(serde_json::to_value(&result[0]).unwrap()["kind"], expected);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool: PgPool) {
     let viewer = "macro|instance-reader@example.com";
     insert_user(&pool, viewer).await;
@@ -113,6 +236,8 @@ async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool:
         time_zone: None,
     };
     upsert.overrides.push(CalendarEventOverride {
+        visibility: None,
+        transparency: None,
         sequence: Some(8),
         source_updated_at: Some(Utc::now()),
         recurrence_id: original.clone(),
@@ -171,6 +296,8 @@ async fn master_invitation_does_not_compare_revisions_with_first_exception(pool:
     let first = &mut upsert.occurrences[0];
     first.recurrence_id = Some(first.occurrence_key.clone());
     upsert.overrides.push(CalendarEventOverride {
+        visibility: None,
+        transparency: None,
         sequence: Some(8),
         source_updated_at: Some(Utc::now()),
         recurrence_id: first.occurrence_key.clone(),

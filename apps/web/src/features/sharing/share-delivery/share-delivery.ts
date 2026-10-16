@@ -27,11 +27,11 @@ import { changeChannelAccess } from './queries/channel-access';
 
 export type {
   ChannelAccessLevel,
-  OwnerOnlyKind,
+  RestrictedKind,
   ShareItem,
   ShareKind,
 } from './core/share-item';
-export { isOwnerOnlyToSend, parseChannelAccessLevel } from './core/share-item';
+export { isSendRestricted, parseChannelAccessLevel } from './core/share-item';
 export type {
   ShareForm,
   ShareSubmitResult,

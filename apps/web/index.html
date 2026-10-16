@@ -26,10 +26,119 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
     <link rel="manifest" href="/manifest.json" />
+    <!-- The first API calls wait for the bundle; open their connection meanwhile. -->
+    <link
+      rel="preconnect"
+      href="%GATEWAY_ORIGIN%"
+      crossorigin="use-credentials"
+    />
+    <!--
+      Boot shell: the app frame's background in the saved theme, painted with
+      the HTML so the screen is never blank while the bundle downloads and
+      starts — the rail column and, in the desktop app, the content card. It
+      draws no app content; the first route shell to mount fades it out (see
+      dismissBootShell).
+    -->
+    <style>
+      #boot-shell {
+        --bs-page: oklch(0.17 0 0);
+        --bs-panel: oklch(0.17 0 0);
+        --bs-ink: oklch(1 0 0);
+        --bs-edge: color-mix(in oklch, var(--bs-ink) 8%, transparent);
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        box-sizing: border-box;
+        background: var(--bs-panel);
+        color: var(--bs-ink);
+        transition: opacity 180ms ease-out;
+        pointer-events: none;
+      }
+      @media (prefers-color-scheme: light) {
+        #boot-shell {
+          --bs-page: oklch(0.964 0 0);
+          --bs-panel: oklch(1 0 0);
+          --bs-ink: oklch(0.16 0 0);
+        }
+      }
+      #boot-shell[data-leaving] {
+        opacity: 0;
+      }
+      /* SidebarRail's 56px column. */
+      .bs-rail {
+        width: 56px;
+        flex: none;
+        border-right: 1px solid var(--bs-edge);
+      }
+      .bs-content {
+        flex: 1;
+        min-width: 0;
+      }
+      /* The desktop app's bordered content card (SplitLayout's bento inset). */
+      #boot-shell[data-desktop] .bs-rail {
+        border-right: 0;
+      }
+      #boot-shell[data-desktop] .bs-content {
+        margin: 6px 6px 6px 0;
+        border: 1px solid var(--bs-edge);
+        border-radius: 6px;
+      }
+      .bs-mark {
+        width: 44px;
+        height: 44px;
+        margin: auto;
+        fill: color-mix(in oklch, var(--bs-ink) 18%, transparent);
+      }
+      /* Touch devices have no rail. */
+      @media (pointer: coarse) {
+        #boot-shell {
+          background: var(--bs-page);
+        }
+        .bs-rail {
+          display: none;
+        }
+      }
+    </style>
   </head>
 
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="boot-shell" aria-hidden="true"></div>
+    <script>
+      // Paint the boot shell in the saved theme. Signed-out visitors land on a
+      // sign-in page, so they see the mark instead of the app frame.
+      try {
+        const shell = document.getElementById("boot-shell");
+        const nativeOs = window.__TAURI_OS_PLUGIN_INTERNALS__?.os_type;
+        if (nativeOs && nativeOs !== "ios" && nativeOs !== "android") {
+          shell.dataset.desktop = "";
+        }
+        // Match RootFrame's native macOS overlay-titlebar clearance before JS loads.
+        if (nativeOs === "macos") shell.style.paddingTop = "40px";
+        let theme = null;
+        try {
+          theme = JSON.parse(localStorage.getItem("html-color-theme") || "null");
+        } catch {}
+        if (theme && theme.color) {
+          document.body.style.backgroundColor = theme.color;
+          shell.style.setProperty("--bs-page", theme.color);
+          shell.style.setProperty("--bs-panel", theme.panel || theme.color);
+          // Saves from older builds have no ink; infer it from page lightness.
+          const lightness = parseFloat(/oklch\(\s*([\d.]+)/.exec(theme.color)?.[1]);
+          const ink = theme.ink || (lightness > 0.6 ? "oklch(0.16 0 0)" : lightness >= 0 ? "oklch(1 0 0)" : "");
+          if (ink) shell.style.setProperty("--bs-ink", ink);
+        }
+        if (localStorage.getItem("macro:login") !== "true") {
+          shell.style.background = "var(--bs-page)";
+          shell.innerHTML = `<svg class="bs-mark" viewBox="0 0 24 24"><path d="m6.25 4.038-2.242.879v5.818l-1.756-1.658-2.242.879v6.677c0 .257.106.502.292.678l2.794 2.642 2.244-.879v-5.818l7.084 6.697 2.244-.879v-5.818l7.086 6.698 2.24-.879v-6.677c0-.257-.104-.502-.292-.678l-8.124-7.682-2.244.879v5.818z"/></svg>`;
+        } else {
+          shell.innerHTML = `<div class="bs-rail"></div><div class="bs-content"></div>`;
+        }
+      } catch (err) {
+        console.error("Failed to draw boot shell: ", err);
+      }
+    </script>
     <div id="root" class="h-[calc(var(--dvh,1dvh)*100)]"></div>
     <div id="modal" class="z-modal"></div>
     <!--
@@ -38,18 +147,6 @@
     <script type="module" src="/src/index.tsx"></script>
     <script>
       window.__START_TIME__ = performance.now();
-    </script>
-    <!-- Sets blank page to theme surface color to prevent background color flash -->
-    <script>
-      try {
-        let htmlColorString = localStorage.getItem("html-color-theme");
-        if (htmlColorString) {
-          let htmlColor = JSON.parse(htmlColorString);
-          document.body.style.backgroundColor = htmlColor.color;
-        }
-      } catch (err) {
-        console.error("Failed parse macro-selected-theme: ", err);
-      }
     </script>
   </body>
 </html>

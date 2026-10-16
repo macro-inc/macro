@@ -23,11 +23,11 @@ pub mod commands;
 mod engine;
 
 pub use engine::{
-    AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
-    DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
-    EntityFilterRequest, EntityFilterResult, InitialMutationClaimWire, PredicateBaselineEntry,
-    PredicateFilterResult, ReadResultWire, RecordSelectionResultWire,
-    RollbackOptimisticWriteResultWire, WriteResultWire,
+    AffectedOperationsResultWire, CalendarRangeResultWire, ClaimedMutationWire,
+    CommitOptimisticWriteResultWire, DeferOptimisticWriteResultWire, EngineHandle,
+    EnqueueOptimisticMutationResultWire, EntityFilterRequest, EntityFilterResult,
+    InitialMutationClaimWire, PredicateBaselineEntry, PredicateFilterResult, ReadResultWire,
+    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteResultWire,
 };
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose
@@ -47,6 +47,9 @@ pub const MUTATION_SETTLED_EVENT: &str = "graphql-cache://mutation-settled";
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpsAffectedEvent {
+    /// Composed record changes, including optimistic rollback.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     /// Registered operation ids (`"{clientId}:{urqlKey}"`) to re-execute.
     pub op_ids: Vec<String>,
     /// Changed entity keys, for diagnostics/advanced consumers.
@@ -107,13 +110,19 @@ impl CacheState {
     }
 }
 
-fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[String]) {
+fn emit_ops_affected<R: Runtime>(
+    app: &AppHandle<R>,
+    op_ids: &[String],
+    keys: &[String],
+    field_changes: Option<&Vec<cache_core::field_changes::RecordFieldChange>>,
+) {
     if op_ids.is_empty() {
         return;
     }
     app.emit(
         OPS_AFFECTED_EVENT,
         OpsAffectedEvent {
+            field_changes: field_changes.cloned(),
             op_ids: op_ids.to_vec(),
             keys: keys.to_vec(),
         },

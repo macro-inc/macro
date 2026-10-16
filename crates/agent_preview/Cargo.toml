@@ -17,8 +17,8 @@ entity_access = { path = "../entity_access", default-features = false, features 
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 http-body-util = { workspace = true }
-hyper = { version = "1", features = ["client", "http1"] }
-hyper-util = { version = "0.1", features = ["tokio"] }
+hyper = { workspace = true, features = ["client", "http1"] }
+hyper-util = { workspace = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
 russh = { version = "0.63.3", default-features = false, features = ["ring"] }

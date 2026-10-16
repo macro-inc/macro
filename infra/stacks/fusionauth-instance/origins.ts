@@ -5,7 +5,12 @@ import { AUTHENTICATION_SERVICE_DOMAIN } from './constants';
  * Creates an array of allowed origins for the fusionauth application depending on stack
  */
 export const ALLOWED_ORIGINS = () => {
-  const allowedOrigins = [AUTHENTICATION_SERVICE_DOMAIN];
+  const allowedOrigins = [
+    AUTHENTICATION_SERVICE_DOMAIN,
+    'https://platform.openai.com',
+    'https://platform.claude.com',
+    'https://console.anthropic.com',
+  ];
 
   switch (stack) {
     case 'local':
@@ -27,6 +32,7 @@ export const ALLOWED_ORIGINS = () => {
         'https://chatgpt.com',
         'https://chat.openai.com',
         'https://cursor.com',
+        'https://www.cursor.com',
       ];
     case 'dev':
       return [
@@ -51,6 +57,7 @@ export const ALLOWED_ORIGINS = () => {
         'https://chatgpt.com',
         'https://chat.openai.com',
         'https://cursor.com',
+        'https://www.cursor.com',
       ];
     case 'prod':
       return [
@@ -66,6 +73,7 @@ export const ALLOWED_ORIGINS = () => {
         'https://chatgpt.com',
         'https://chat.openai.com',
         'https://cursor.com',
+        'https://www.cursor.com',
       ];
   }
 

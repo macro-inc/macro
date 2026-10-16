@@ -131,11 +131,15 @@ async fn inner_process_message(
             seed_sent_contact::seed_sent_contact(ctx, scope, &link).await
         }
         BackfillOperation::PopulateCrmContact(scope) => {
-            let link = fetch_link(ctx, scope.link_id).await?;
+            let Some(link) = fetch_link_if_present(ctx, scope.link_id).await? else {
+                return Ok(());
+            };
             populate_crm_contact::populate_crm_contact(ctx, &link, &scope.payload).await
         }
         BackfillOperation::DepopulateCrmContact(scope) => {
-            let link = fetch_link(ctx, scope.link_id).await?;
+            let Some(link) = fetch_link_if_present(ctx, scope.link_id).await? else {
+                return Ok(());
+            };
             depopulate_crm_contact::depopulate_crm_contact(ctx, &link, &scope.payload).await
         }
         BackfillOperation::PopulateCrmForUser(payload) => {
@@ -217,6 +221,28 @@ async fn fetch_link(ctx: &PubSubContext, link_id: Uuid) -> Result<link::Link, Pr
             source: e,
         })),
     }
+}
+
+/// Looks up the link a link-scoped CRM message was fanned out for.
+///
+/// Returns `None` once the link is deleted: link teardown already removed the
+/// link's CRM rows, so messages still queued for it have nothing left to do.
+async fn fetch_link_if_present(
+    ctx: &PubSubContext,
+    link_id: Uuid,
+) -> Result<Option<link::Link>, ProcessingError> {
+    let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e,
+            })
+        })?;
+    if link.is_none() {
+        tracing::debug!(%link_id, "Link was deleted; dropping link-scoped CRM message");
+    }
+    Ok(link)
 }
 
 /// Extracts backfill message from the SQS message body

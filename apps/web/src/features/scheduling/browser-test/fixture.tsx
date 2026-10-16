@@ -205,12 +205,13 @@ function Fixture() {
   const capabilities: SchedulingCapabilities = {
     userId: () => 'macro|alex@example.com',
     scopes: () => [
-      { id: 'me', name: 'Personal', canEdit: true },
+      { id: 'me', name: 'Personal', canEdit: true, canManageBookings: true },
       {
         id: 'team',
         teamId: 'team',
         name: 'Design team',
         canEdit: !readOnlyTeam(),
+        canManageBookings: !readOnlyTeam(),
       },
     ],
     members: () => [
@@ -262,7 +263,7 @@ function Fixture() {
           const booking = bookings().find((b) => b.id === id);
           if (
             !booking ||
-            (!scope().canEdit &&
+            (!scope().canManageBookings &&
               !booking.hosts.includes('macro|alex@example.com'))
           )
             throw new Error('Forbidden');
@@ -362,7 +363,6 @@ function Fixture() {
                     setSettingsTab(result.tab);
                     setSelectedResult({ ...result });
                   }}
-                  onLogout={() => setNotice('Preview only')}
                 />
               </ViewShell.Aside>
               <ViewShell.Main>
@@ -420,7 +420,11 @@ function Fixture() {
                   timeZone: r.timeZone,
                   hosts: e.hosts,
                   status: e.requiresConfirmation ? 'pending' : 'confirmed',
-                  location: 'Google Meet',
+                  location: e.macroCall
+                    ? 'https://macro.com/app/meet/join/0123456789abcdef0123456789abcdef'
+                    : e.googleMeet
+                      ? 'Google Meet'
+                      : e.location,
                   answers: r.answers,
                 };
                 setBookings([...bookings(), booking]);

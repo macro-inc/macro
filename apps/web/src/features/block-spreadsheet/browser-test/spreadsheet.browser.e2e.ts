@@ -52,6 +52,47 @@ test('completes formulas and inserts a pointer-selected range without losing the
   await expect(page.locator('[data-address="C2"]')).toHaveText('30');
 });
 
+test('color-codes the referenced ranges and their formula text while editing', async ({
+  page,
+}) => {
+  await page.locator('[data-address="C2"]').dblclick();
+  const input = page.getByRole('textbox', { name: 'Edit C2' });
+  await input.fill('=B2+SUM(B2:B3)*$b$2');
+  const highlights = page.locator('[data-formula-highlight]');
+  await expect(highlights).toHaveCount(3);
+  const colors = await highlights.evaluateAll((elements) =>
+    elements.map((element) => getComputedStyle(element).borderTopColor)
+  );
+  expect(colors[0]).toBe(colors[2]);
+  expect(colors[1]).not.toBe(colors[0]);
+  const cell = await page.locator('[data-address="B2"]').boundingBox();
+  const box = await highlights.first().boundingBox();
+  expect(Math.abs((box?.x ?? 0) - (cell?.x ?? 0))).toBeLessThan(2);
+  expect(Math.abs((box?.y ?? 0) - (cell?.y ?? 0))).toBeLessThan(2);
+
+  const formulaBar = page.getByRole('textbox', { name: 'Formula bar' });
+  for (const editor of [input, formulaBar]) {
+    const mirror = editor.locator(
+      'xpath=following-sibling::*[@data-formula-mirror]'
+    );
+    await expect(mirror).toHaveText('=B2+SUM(B2:B3)*$b$2');
+    const coloredText = await mirror
+      .locator('span span')
+      .evaluateAll((spans) =>
+        spans
+          .filter((span) => (span as HTMLElement).style.color)
+          .map((span) => [span.textContent, getComputedStyle(span).color])
+      );
+    expect(coloredText.map(([text]) => text)).toEqual(['B2', 'B2:B3', '$b$2']);
+    expect(coloredText.map(([, color]) => color)).toEqual(colors);
+    expect(await mirror.boundingBox()).toEqual(await editor.boundingBox());
+  }
+
+  await input.press('Enter');
+  await expect(highlights).toHaveCount(0);
+  await expect(page.locator('[data-formula-mirror]')).toHaveCount(0);
+});
+
 test('keeps function insertion, find, and paste menu focus usable from the ribbon', async ({
   page,
 }) => {
@@ -177,6 +218,85 @@ test('view options toggle display directly and return focus to the selected cell
   await expect(formulaBar).toBeVisible();
   await expect(formulaBar).toHaveValue('=SUM(B2:B3)');
   await expect(grid).toBeFocused();
+});
+
+test('saves gridlines with each sheet and keeps them through Excel', async ({
+  page,
+}) => {
+  const option = page.getByRole('menuitemcheckbox', {
+    name: 'Gridlines',
+    exact: true,
+  });
+  async function toggleGridlines() {
+    await page
+      .getByRole('button', { name: 'View options', exact: true })
+      .click();
+    await option.click();
+    await page.keyboard.press('Escape');
+  }
+  const cell = page.locator('[data-address="C3"]');
+  const hidden = 'rgba(0, 0, 0, 0)';
+  await page.getByRole('button', { name: 'Add sheet', exact: true }).click();
+  await expect(
+    page.getByRole('tab', { name: 'Sheet2', exact: true })
+  ).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Sheet1', exact: true }).click();
+  await expect(cell).not.toHaveCSS('border-bottom-color', hidden);
+
+  await toggleGridlines();
+  await expect(cell).toHaveCSS('border-bottom-color', hidden);
+  expect(
+    await page.evaluate(() =>
+      window.spreadsheetFixture
+        .snapshot()
+        .map((sheet) => [sheet.name, sheet.metadata?.gridlines])
+    )
+  ).toEqual([
+    ['Sheet1', false],
+    ['Sheet2', undefined],
+  ]);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(cell).not.toHaveCSS('border-bottom-color', hidden);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(cell).toHaveCSS('border-bottom-color', hidden);
+
+  await page.getByRole('tab', { name: 'Sheet2', exact: true }).click();
+  await expect(cell).not.toHaveCSS('border-bottom-color', hidden);
+  await page.getByRole('tab', { name: 'Sheet1', exact: true }).click();
+  await expect(cell).toHaveCSS('border-bottom-color', hidden);
+
+  const downloaded = page.waitForEvent('download');
+  await menu(page, 'Import and export', 'Download as Excel (.xlsx)');
+  const path = await (await downloaded).path();
+  if (!path) throw new Error('Workbook download missing');
+  const exported = new ExcelJS.Workbook();
+  await exported.xlsx.readFile(path);
+  expect(exported.getWorksheet('Sheet1')!.views[0]?.showGridLines).toBe(false);
+  expect(exported.getWorksheet('Sheet2')!.views[0]?.showGridLines).not.toBe(
+    false
+  );
+
+  const input = new ExcelJS.Workbook();
+  input
+    .addWorksheet('No gridlines', { views: [{ showGridLines: false }] })
+    .getCell('A1').value = 'Imported';
+  await page.getByLabel('Import spreadsheet file').setInputFiles({
+    name: 'no-gridlines.xlsx',
+    mimeType:
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: Buffer.from(await input.xlsx.writeBuffer()),
+  });
+  await page
+    .getByRole('button', { name: 'Import workbook', exact: true })
+    .click();
+  await expect(page.locator('[data-address="A1"]')).toHaveText('Imported');
+  await expect(cell).toHaveCSS('border-bottom-color', hidden);
+
+  await page.evaluate(() => window.spreadsheetFixture.setReadonly(true));
+  await page.getByRole('button', { name: 'View options', exact: true }).click();
+  await expect(option).toHaveAttribute('aria-checked', 'false');
+  await expect(option).toBeDisabled();
+  await page.keyboard.press('Escape');
 });
 
 test('creates and renames sheets, recalculates cross-sheet formulas, and protects viewer edits', async ({
@@ -326,6 +446,71 @@ test('imports independent XLSX through the file picker and exports real formulas
     formula: "'O''Brien Tax'!A1*2",
     result: 25,
   });
+});
+
+test('imports a macro-enabled .xlsm without its macros and exports a macro-free .xlsx', async ({
+  page,
+}) => {
+  const chooser = page.waitForEvent('filechooser');
+  await menu(page, 'Import and export', 'Import…');
+  await (await chooser).setFiles(
+    fileURLToPath(
+      new URL('../core/xlsx-fixtures/poi-simple-macro.xlsm', import.meta.url)
+    )
+  );
+  const dialog = page.getByRole('dialog', { name: 'Import Excel workbook' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('VBA macros are not imported.');
+  await page.getByRole('radio', { name: /Replace workbook/ }).check();
+  await page.getByRole('button', { name: 'Import workbook' }).click();
+  await expect(page.getByRole('tab')).toHaveCount(3);
+  await expect(page.locator('[data-address="A1"]')).toHaveText(
+    'This is a macro workbook'
+  );
+
+  const downloaded = page.waitForEvent('download');
+  await menu(page, 'Import and export', 'Download as Excel (.xlsx)');
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toBe('Spreadsheet fixture.xlsx');
+  const path = await download.path();
+  if (!path) throw new Error('The workbook download was not saved.');
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(path);
+  expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+    'Sheet1',
+    'Sheet2',
+    'Sheet3',
+  ]);
+  expect(workbook.getWorksheet('Sheet1')?.getCell('A1').value).toBe(
+    'This is a macro workbook'
+  );
+  const { unzipSync } = await import('fflate');
+  const { readFileSync } = await import('node:fs');
+  expect(
+    Object.keys(unzipSync(readFileSync(path))).filter((name) =>
+      /vba/i.test(name)
+    )
+  ).toEqual([]);
+});
+
+test('explains that legacy .xls workbooks convert when uploaded', async ({
+  page,
+}) => {
+  const chooser = page.waitForEvent('filechooser');
+  await menu(page, 'Import and export', 'Import…');
+  await (await chooser).setFiles({
+    name: 'budget.xls',
+    mimeType: 'application/vnd.ms-excel',
+    buffer: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]),
+  });
+  await expect(
+    page.getByText(
+      'Legacy .xls workbooks are converted when uploaded. Upload the file, then choose Edit in Macro.'
+    )
+  ).toBeVisible();
+  await expect(
+    page.getByRole('dialog', { name: 'Import Excel workbook' })
+  ).toHaveCount(0);
 });
 
 test('undo restores the original workbook after replacing it with an Excel import', async ({
@@ -591,6 +776,49 @@ test('double-click renames tabs and right-click actions target the clicked sheet
     ).toBeDisabled();
 });
 
+test('dragging a tab reorders sheets, keeps formulas, and undoes', async ({
+  page,
+}) => {
+  const add = page.getByRole('button', { name: 'Add sheet', exact: true });
+  await add.click();
+  await edit(page, 'A1', '=Sheet1!B4*2');
+  await add.click();
+  const tabs = page.getByRole('tab');
+  await expect(tabs).toHaveText(['Sheet1', 'Sheet2', 'Sheet3']);
+
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
+  const first = await tab('Sheet1').boundingBox();
+  const third = await tab('Sheet3').boundingBox();
+  if (!first || !third) throw new Error('Tabs are not laid out.');
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(third.x + third.width - 4, third.y + 4, { steps: 8 });
+  await expect(page.locator('[data-sheet-drop-indicator]')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(tabs).toHaveText(['Sheet2', 'Sheet3', 'Sheet1']);
+  await expect(tab('Sheet1')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-address="B4"]')).toHaveText('30');
+
+  await tab('Sheet2').click();
+  await expect(page.locator('[data-address="A1"]')).toHaveText('60');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(tabs).toHaveText(['Sheet1', 'Sheet2', 'Sheet3']);
+
+  await tab('Sheet3').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move left', exact: true }).click();
+  await expect(tabs).toHaveText(['Sheet1', 'Sheet3', 'Sheet2']);
+  await expect(tab('Sheet3')).toBeFocused();
+
+  await page.evaluate(() => window.spreadsheetFixture.setReadonly(true));
+  const before = await tab('Sheet1').boundingBox();
+  if (!before) throw new Error('Tabs are not laid out.');
+  await page.mouse.move(before.x + 8, before.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(before.x + 400, before.y + 8, { steps: 8 });
+  await page.mouse.up();
+  await expect(tabs).toHaveText(['Sheet1', 'Sheet3', 'Sheet2']);
+});
+
 test('imports, edits and exports an independent financial workbook using real workers', async ({
   page,
 }) => {
@@ -786,6 +1014,103 @@ test('mention editing switches back from formulas and leaves other inputs focusa
   await expect(
     page.getByRole('textbox', { name: 'Formula bar', exact: true })
   ).toBeFocused();
+});
+
+test('@ dates enter date values that formulas and Excel read as dates', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date(2026, 9, 16, 12));
+  await page.goto('/?mentions');
+  await expect(page.locator('[data-address="B4"]')).toHaveText('30');
+  await page.locator('[data-address="A6"]').dblclick();
+  const editor = page.getByRole('textbox', { name: 'Edit A6', exact: true });
+  await editor.pressSequentially('@tod');
+  await page.getByRole('button', { name: 'Pick today' }).click();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveText('10/16/2026 ');
+  await expect(editor.locator('[data-cell-mention]')).toHaveCount(0);
+  await editor.press('Enter');
+  await expect(page.locator('[data-address="A6"]')).toHaveText('10/16/2026');
+  // Stored like a typed date: its serial number, shown as a date.
+  expect(
+    await page.evaluate(() => window.spreadsheetFixture.snapshot()[0].cells.A6)
+  ).toEqual({ value: '46311', format: 'date' });
+
+  for (const [address, formula] of [
+    ['B6', '=A6+30'],
+    ['C6', '=DATEDIF(A6,B6,"d")'],
+  ]) {
+    await page.locator(`[data-address="${address}"]`).dblclick();
+    await page
+      .getByRole('textbox', { name: `Edit ${address}`, exact: true })
+      .pressSequentially(formula);
+    await page.keyboard.press('Enter');
+  }
+  await expect(page.locator('[data-address="B6"]')).toHaveText('11/15/2026');
+  await expect(page.locator('[data-address="C6"]')).toHaveText('30');
+
+  const downloaded = page.waitForEvent('download');
+  await menu(page, 'Import and export', 'Download as Excel (.xlsx)');
+  const path = await (await downloaded).path();
+  if (!path) throw new Error('Workbook download missing');
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(path);
+  const cell = workbook.worksheets[0].getCell('A6');
+  expect(cell.value).toEqual(new Date(Date.UTC(2026, 9, 16)));
+  expect(cell.numFmt).toMatch(/[dy]/);
+});
+
+test('@date opens a calendar that picks a day by keyboard or pointer while the cell keeps its draft', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date(2026, 9, 16, 12));
+  await page.goto('/?mentions');
+  await expect(page.locator('[data-address="B4"]')).toHaveText('30');
+  const picker = page.locator('[data-cell-date-picker]');
+
+  await page.locator('[data-address="A6"]').dblclick();
+  let editor = page.getByRole('textbox', { name: 'Edit A6', exact: true });
+  await editor.pressSequentially('@date');
+  await expect(picker).toBeVisible();
+  await expect(picker.locator('[data-active]')).toHaveText('16');
+  await editor.press('ArrowRight');
+  await expect(picker.locator('[data-active]')).toHaveText('17');
+  await editor.press('Enter');
+  await expect(picker).toBeHidden();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveText('10/17/2026 ');
+  await editor.press('Enter');
+  await expect(page.locator('[data-address="A6"]')).toHaveText('10/17/2026');
+
+  // Around other text, the date stays text.
+  await page.locator('[data-address="A7"]').dblclick();
+  editor = page.getByRole('textbox', { name: 'Edit A7', exact: true });
+  await editor.pressSequentially('Due @date');
+  await picker
+    .getByRole('gridcell', { name: '15', exact: true, disabled: false })
+    .click();
+  await expect(picker).toBeHidden();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveText('Due 10/15/2026 ');
+  await editor.press('Enter');
+  await expect(page.locator('[data-address="A7"]')).toHaveText(
+    'Due 10/15/2026'
+  );
+
+  await page.locator('[data-address="A8"]').dblclick();
+  editor = page.getByRole('textbox', { name: 'Edit A8', exact: true });
+  await editor.pressSequentially('@date');
+  await expect(picker).toBeVisible();
+  await editor.press('Escape');
+  await expect(picker).toBeHidden();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveText('@date');
+
+  const cells = await page.evaluate(
+    () => window.spreadsheetFixture.snapshot()[0].cells
+  );
+  expect(cells.A6).toEqual({ value: '46312', format: 'date' });
+  expect(cells.A7).toEqual({ value: 'Due 10/15/2026 ' });
 });
 
 test('header menu keyboard navigation keeps the targeted row selected', async ({

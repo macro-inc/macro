@@ -1,10 +1,11 @@
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import type { CacheHost } from '@graphql-cache/host/types';
 import type { Property } from '@property/types';
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest';
 import { createInitiativeInput, createProjectMutation } from './create-project';
-import { projectKeys } from './keys';
 
 const mock = vi.hoisted(() => ({ refetch: vi.fn() }));
 vi.mock('@queries/soup/cache', () => ({ refetchSoupEntity: mock.refetch }));
@@ -56,6 +57,7 @@ it('sends drafted values with the create and leaves unset ones to the server', (
   expect(
     createInitiativeInput({
       name: 'Launch',
+      description: '  Ship it  ',
       shareWithTeam: false,
       properties: [
         {
@@ -74,6 +76,7 @@ it('sends drafted values with the create and leaves unset ones to the server', (
     })
   ).toEqual({
     name: 'Launch',
+    description: 'Ship it',
     shareWithTeam: false,
     propertyValues: [
       {
@@ -96,7 +99,7 @@ it('sends drafted values with the create and leaves unset ones to the server', (
   });
 });
 
-it('resolves as soon as the server answers, seeding the detail and refreshing lists in the background', async () => {
+it('resolves as soon as the server answers and refreshes lists in the background', async () => {
   const cache = new QueryClient();
   const create = vi.fn(async () => ok(detail));
   // A list refresh that never settles must not hold the create.
@@ -108,6 +111,7 @@ it('resolves as soon as the server answers, seeding the detail and refreshing li
 
   const project = await mutation.mutateAsync({
     name: 'Launch',
+    description: '  ',
     shareWithTeam: true,
     properties: [],
   });
@@ -123,13 +127,7 @@ it('resolves as soon as the server answers, seeding the detail and refreshing li
     ownTouch: true,
     refreshGraphql: true,
   });
-  // Opening the new project reads the seeded detail instead of the network.
-  expect(
-    cache.getQueryData(projectKeys.detail('viewer', 'project').queryKey)
-  ).toMatchObject({
-    project: { id: 'project', access: 'owner' },
-    properties: [],
-  });
+  cache.clear();
 });
 
 it('rejects without refreshing when the server refuses the create', async () => {
@@ -145,9 +143,90 @@ it('rejects without refreshing when the server refuses the create', async () => 
   await expect(
     mutation.mutateAsync({
       name: 'Launch',
+      description: '',
       shareWithTeam: true,
       properties: [],
     })
   ).rejects.toThrow();
   expect(mock.refetch).not.toHaveBeenCalled();
+});
+
+it('seeds the live query edge from an authoritative create without overwriting its fields', async () => {
+  const cache = new QueryClient();
+  const host = { ...createNoopCacheHost(), disabled: false };
+  const write = vi.spyOn(host, 'writeQuery');
+  const mutation = createRoot((dispose) => {
+    onTestFinished(dispose);
+    return createProjectMutation(
+      { create: async () => ok(detail) },
+      cache,
+      () => 'viewer',
+      () => host
+    );
+  });
+  await mutation.mutateAsync({
+    name: 'Launch',
+    description: '',
+    shareWithTeam: true,
+    properties: [],
+  });
+  expect(write).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      operationName: 'Initiative',
+      variables: { initiativeId: 'project' },
+      data: {
+        user: {
+          id: 'viewer',
+          initiative: { __typename: 'GraphqlSoupInitiative', id: 'project' },
+        },
+      },
+    })
+  );
+  cache.clear();
+});
+
+it('does not seed or refresh a create response after a storage reset', async () => {
+  const cache = new QueryClient();
+  let reset!: Parameters<CacheHost['onCacheGenerationChanged']>[0];
+  const unsubscribe = vi.fn();
+  const host: CacheHost = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    onCacheGenerationChanged: (callback) => {
+      reset = callback;
+      return unsubscribe;
+    },
+  };
+  const write = vi.spyOn(host, 'writeQuery');
+  let finish!: () => void;
+  const create = vi.fn(async () => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return ok(detail);
+  });
+  const mutation = createRoot((dispose) => {
+    onTestFinished(dispose);
+    return createProjectMutation(
+      { create },
+      cache,
+      () => 'viewer',
+      () => host
+    );
+  });
+  const pending = mutation.mutateAsync({
+    name: 'Launch',
+    description: '',
+    shareWithTeam: true,
+    properties: [],
+  });
+  await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+  reset({ storage: 'reset' });
+  finish();
+  await pending;
+  expect(write).not.toHaveBeenCalled();
+  expect(cache.getQueryCache().getAll()).toHaveLength(0);
+  expect(mock.refetch).not.toHaveBeenCalled();
+  expect(unsubscribe).toHaveBeenCalledOnce();
+  cache.clear();
 });

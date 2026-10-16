@@ -19,7 +19,7 @@ use uuid::Uuid;
 use super::super::test::{
     CALL_ARCHIVED, CALL1, CH1, CH2, USER_A, give_user_a_team, repo, team_entity_access_count,
 };
-use crate::domain::models::{CallError, EditCallRecordRepoArgs};
+use crate::domain::models::{CallError, CallRecordPage, EditCallRecordRepoArgs};
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 
@@ -851,7 +851,15 @@ async fn list_read_reports_live_toggle_and_canonical_state(
     set_team_share(&repo, CALL_ARCHIVED, Some(AccessLevel::View)).await?;
 
     let records = repo
-        .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
+        .get_call_records_by_user(
+            USER_A.deref().copied(),
+            10,
+            &None,
+            CallRecordPage {
+                by_start: false,
+                after: None,
+            },
+        )
         .await?;
 
     // Live: the pending toggle (now off), no canonical level yet.

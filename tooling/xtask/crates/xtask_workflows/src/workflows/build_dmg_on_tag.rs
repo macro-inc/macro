@@ -1,42 +1,54 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
 //! Nix. Called from [`super::build_desktop_on_tag`].
 
-use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
+use gh_workflow::{Event, Expression, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
-use crate::workflows::{build_appimage_on_tag, steps, vars};
+use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
+
+#[cfg(test)]
+mod test;
+
+const NIX_CACHE_SIZE_GB: u16 = 100;
 
 /// Build the reusable workflow.
 pub fn build_dmg() -> Workflow {
     Workflow::new("Build macOS DMG")
-        .on(
-            Event::default().workflow_call(WorkflowCall::default().add_input(
-                "ref",
-                WorkflowCallInput {
-                    description: "Git ref to check out and build".into(),
-                    required: true,
-                    input_type: "string".into(),
-                    default: None,
-                },
-            )),
-        )
+        .on(Event::default().workflow_call(
+            WorkflowCall::default()
+                .add_input(
+                    "ref",
+                    WorkflowCallInput {
+                        description: "Git ref to check out and build".into(),
+                        required: true,
+                        input_type: "string".into(),
+                        default: None,
+                    },
+                )
+                .secrets(build_appimage_on_tag::desktop_build_secrets()),
+        ))
         .add_job("build-dmg", build_dmg_job("${{ inputs.ref }}"))
-        .add_job(
-            "publish-dmg",
-            publish_dmg_job("${{ inputs.ref }}").add_needs("build-dmg"),
-        )
 }
 
 /// Build the macOS DMG job, checking out and naming artifacts from `ref_expr`.
 pub fn build_dmg_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build macOS DMG")
-        .runs_on("macos-15")
+        .runs_on(vec![
+            format!("{}-with-cache", runners::Runner::MacOsArmLarge),
+            "nscloud-cache-tag-macro-desktop-macos".to_owned(),
+            format!("nscloud-cache-size-{NIX_CACHE_SIZE_GB}gb"),
+        ])
+        .add_env(("DESKTOP_NIX_CACHE_SIZE_GB", NIX_CACHE_SIZE_GB.to_string()))
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
+        .add_step(steps::mount_macos_nix_cache_volume())
         .add_step(steps::install_nix_macos())
+        .add_step(configure_nix_cache())
         .add_step(configure_signing_identity())
         .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(build_appimage_on_tag::prepare_desktop_release(ref_expr))
         .add_step(nix_build_dmg())
+        .add_step(save_nix_cache())
         .add_step(collect_dmg())
         .add_step(validate_signed_dmg())
         .add_step(notarize_dmg())
@@ -44,10 +56,6 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
             "macro-dmg-${{ steps.metadata.outputs.safe_tag }}",
             xtask_paths::runtime_path!("artifacts/*"),
         ))
-}
-
-fn publish_dmg_job(ref_expr: &str) -> Job {
-    build_appimage_on_tag::publish_job(ref_expr, xtask_paths::runtime_path!("release-artifacts/*"))
 }
 
 fn assert_arm64() -> Step<Run> {
@@ -80,6 +88,25 @@ fn nix_build_dmg() -> Step<Run> {
     Step::new("Build DMG with Nix")
         .run(include_str!("scripts/build_dmg.sh"))
         .shell("bash")
+        .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
+}
+
+fn configure_nix_cache() -> Step<Run> {
+    Step::new("Configure macOS Nix binary cache")
+        .run(include_str!("scripts/configure_macos_nix_cache.sh"))
+        .id("nix-cache")
+        .shell("bash")
+        .continue_on_error(true)
+}
+
+fn save_nix_cache() -> Step<Run> {
+    Step::new("Prune and save macOS Nix build dependencies")
+        .run(include_str!("scripts/save_macos_nix_cache.sh"))
+        .shell("bash")
+        .if_condition(Expression::new(
+            "!cancelled() && steps.nix-cache.outcome == 'success'",
+        ))
+        .continue_on_error(true)
 }
 
 fn collect_dmg() -> Step<Run> {

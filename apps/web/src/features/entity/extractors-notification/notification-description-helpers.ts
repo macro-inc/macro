@@ -104,6 +104,8 @@ export function getActionVerb(type: NotificationType): string {
       .with('mentioned_in_document_comment', () => 'mentioned you in a comment')
       .with('replied_to_document_comment_thread', () => 'replied to a comment')
       .with('initiative_discussion', () => 'commented')
+      .with('entity_access_requested', () => 'requested access')
+      .with('entity_access_granted', () => 'granted access')
       .with('commented_on_document', 'crm_discussion', () => 'commented')
       .with('channel_message_reply', () => 'replied')
       .with('channel_message_send', () => 'sent a message')
@@ -154,6 +156,12 @@ export function getTypeNoun(type: NotificationType, count: number): string {
       count === 1 ? 'reply' : 'replies'
     )
     .with('initiative_discussion', () => (count === 1 ? 'comment' : 'comments'))
+    .with('entity_access_requested', () =>
+      count === 1 ? 'access request' : 'access requests'
+    )
+    .with('entity_access_granted', () =>
+      count === 1 ? 'access grant' : 'access grants'
+    )
     .with('commented_on_document', 'crm_discussion', () =>
       count === 1 ? 'comment' : 'comments'
     )

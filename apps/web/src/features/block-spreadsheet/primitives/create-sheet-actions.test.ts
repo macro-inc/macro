@@ -498,6 +498,7 @@ describe('spreadsheet menu actions', () => {
     state.actions.setReplacement('replace');
     state.actions.replace(true);
     state.actions.borders('all');
+    state.actions.indent(1);
     state.actions.clearFormatting();
     state.actions.trimWhitespace();
     state.actions.insertFunction('SUM');

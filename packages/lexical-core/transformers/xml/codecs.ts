@@ -67,6 +67,7 @@ const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   heading: 1,
   quote: 1,
   list: 1,
+  'task-list': 1,
   listitem: 1,
   table: 1,
   tablerow: 1,
@@ -89,6 +90,7 @@ const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   'contact-mention': 1,
   'group-mention': 1,
   'pr-mention': 1,
+  'booking-link-mention': 1,
   'agent-session-mention': 1,
   'tag-mention': 1,
   'theme-mention': 1,
@@ -225,7 +227,7 @@ export function serializeNode(node: SerNode): FxpNode {
         ...(n.checked && { checked: 'true' }),
       })
     )
-    .with({ type: 'list' }, (n) =>
+    .with({ type: 'list' }, { type: 'task-list' }, (n) =>
       container(n.listType === 'number' ? 'ol' : 'ul', n, {
         ...(n.listType === 'check' && { listType: 'check' }),
         ...(n.start !== 1 && { start: String(n.start) }),
@@ -374,6 +376,19 @@ export function serializeNode(node: SerNode): FxpNode {
         [],
         nodeAttrs(n, {
           ...(n.id && { prId: n.id }),
+          ...(n.label && { label: n.label }),
+          ...(n.url && { url: n.url }),
+        })
+      )
+    )
+    .with({ type: 'booking-link-mention' }, (n) =>
+      el(
+        'booking-link-mention',
+        [],
+        nodeAttrs(n, {
+          profileId: n.profileId,
+          url: n.url,
+          ...(n.slug && { slug: n.slug }),
           ...(n.label && { label: n.label }),
         })
       )

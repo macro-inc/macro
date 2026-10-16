@@ -10,6 +10,7 @@ use super::models::{
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::Report;
 use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
 
@@ -28,6 +29,8 @@ pub trait BotRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Agent, Self::Err>> + Send;
 
     /// Replace an owned agent and its selected channel memberships atomically.
+    /// The direct agent conversations it takes part in are not among them and
+    /// are left as they are.
     fn update_agent(
         &self,
         bot_id: BotId,
@@ -39,13 +42,15 @@ pub trait BotRepo: Send + Sync + 'static {
     ///
     /// Own and team-owned agents are included, plus selected-channel agents
     /// installed in a channel the caller belongs to — the same personas they
-    /// can `@` mention there.
+    /// can `@` mention there. A direct agent conversation is not such a
+    /// channel.
     fn list_manageable_agents(
         &self,
         caller: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<Agent>, Self::Err>> + Send;
 
     /// Check whether the caller is an active member of every supplied channel.
+    /// A direct agent conversation never counts: it is not a channel to select.
     fn user_has_channels(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -94,7 +99,8 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
 
-    /// Get an active persisted agent by bot id.
+    /// Get an active persisted agent by bot id. Its channels are the ones it
+    /// was put in, without the direct agent conversations it takes part in.
     fn get_agent(
         &self,
         bot_id: BotId,
@@ -113,14 +119,28 @@ pub trait BotRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<HarnessFacts>, Self::Err>> + Send;
 
-    /// Check whether a bot is an active channel participant.
+    /// Check whether a bot is an active channel participant. A direct agent
+    /// conversation counts: a mention in one of its threads still reaches
+    /// the persona.
     fn bot_active_in_channel(
         &self,
         channel_id: Uuid,
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Whether the user and bot share at least one active channel.
+    /// Check whether a bot may post in a channel on its own: it is an active
+    /// participant, and the channel is not a direct agent conversation. Its
+    /// owner or any member of its team holds the bot's tokens, not just the
+    /// person a direct conversation is with.
+    fn bot_may_post_in_channel(
+        &self,
+        channel_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether the user and bot share at least one active channel, other than a
+    /// direct agent conversation: only the people a persona already serves
+    /// have one, so it never makes the persona available.
     fn user_shares_channel_with_bot(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -158,14 +178,16 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Remove bot reach from a channel.
+    /// Remove bot reach from a channel. A direct agent conversation keeps its
+    /// persona, so removing it from one finds nothing to remove.
     fn remove_bot_from_channel(
         &self,
         channel_id: Uuid,
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// List active channels containing a bot.
+    /// List active channels containing a bot, without the direct agent
+    /// conversations it takes part in.
     fn list_bot_channels(
         &self,
         bot_id: BotId,
@@ -205,6 +227,7 @@ pub trait BotRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<BotTokenCandidate>, Self::Err>> + Send;
 
     /// Lookup a channel-scoped token candidate by hashing the presented raw token.
+    /// A direct agent conversation accepts no token.
     fn channel_token_candidate(
         &self,
         channel_id: Uuid,
@@ -214,6 +237,17 @@ pub trait BotRepo: Send + Sync + 'static {
     /// Mark a token as used.
     fn mark_token_used(&self, token_id: Uuid)
     -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Eligibility for private conversations with an agent persona.
+pub trait AgentDmEligibility: Send + Sync + 'static {
+    /// Require a runnable persona owned by the caller or their current team.
+    /// Channel placement does not confer or restrict private DM eligibility.
+    fn authorize_agent_dm(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<(), BotError>> + Send;
 }
 
 /// Bot service.
@@ -353,7 +387,8 @@ pub trait BotService: Send + Sync + 'static {
         token_id: Uuid,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 
-    /// Ensure that a bot is an active participant in a channel.
+    /// Ensure that a bot may post in a channel on its own: it is an active
+    /// participant, and the channel is not a direct agent conversation.
     fn ensure_bot_in_channel(
         &self,
         bot_id: BotId,
@@ -362,6 +397,8 @@ pub trait BotService: Send + Sync + 'static {
 
     /// Authorize an autonomous bot's channel messages using its active channel
     /// membership alone. The receipt names no acting user and reaches no other entity.
+    /// A direct agent conversation authorizes none, and is refused as a
+    /// channel the bot is not in.
     fn channel_message_access(
         &self,
         bot_id: BotId,
@@ -392,6 +429,19 @@ pub trait McpAppCatalog: Send + Sync + 'static {
     /// `true` when `slug` is a connectable Pipedream app.
     fn is_connectable_app(&self, slug: &str)
     -> impl Future<Output = Result<bool, BotError>> + Send;
+}
+
+/// Every bot a team has owned, for removing the team.
+///
+/// `bots.team_id` is the only link from a team bot to its team, and it
+/// cascades when the team row is deleted, so ask before deleting the team.
+pub trait TeamBotRoster: Send + Sync + 'static {
+    /// The bots of `team_id` in id order, soft-deleted bots included. An
+    /// unknown team has none.
+    fn team_bot_ids(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<BotId>, Report>> + Send;
 }
 
 /// Bot service error.

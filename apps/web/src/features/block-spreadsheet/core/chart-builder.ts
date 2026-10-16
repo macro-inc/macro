@@ -30,7 +30,28 @@ export const CHART_TYPES = [
   },
   { id: 'bar', label: 'Bar', kind: 'bar' },
   { id: 'bar-stacked', label: 'Stacked bar', kind: 'bar', grouping: 'stacked' },
+  {
+    id: 'bar-percent',
+    label: '100% stacked bar',
+    kind: 'bar',
+    grouping: 'percentStacked',
+    catalog: true,
+  },
   { id: 'line', label: 'Line', kind: 'line' },
+  {
+    id: 'line-stacked',
+    label: 'Stacked line',
+    kind: 'line',
+    grouping: 'stacked',
+    catalog: true,
+  },
+  {
+    id: 'line-percent',
+    label: '100% stacked line',
+    kind: 'line',
+    grouping: 'percentStacked',
+    catalog: true,
+  },
   { id: 'area', label: 'Area', kind: 'area' },
   {
     id: 'area-stacked',
@@ -38,9 +59,18 @@ export const CHART_TYPES = [
     kind: 'area',
     grouping: 'stacked',
   },
+  {
+    id: 'area-percent',
+    label: '100% stacked area',
+    kind: 'area',
+    grouping: 'percentStacked',
+    catalog: true,
+  },
   { id: 'pie', label: 'Pie', kind: 'pie' },
   { id: 'doughnut', label: 'Doughnut', kind: 'doughnut' },
   { id: 'scatter', label: 'Scatter', kind: 'scatter' },
+  // Columns for every series but the last, which is a line on its own axis.
+  { id: 'combo', label: 'Combo', kind: 'column', combo: true, catalog: true },
   { id: 'radar', label: 'Radar', kind: 'radar', more: true },
   {
     id: 'radar-filled',
@@ -58,6 +88,13 @@ export const CHART_TYPES = [
   kind: ChartKind;
   grouping?: ChartGrouping;
   filled?: true;
+  /** Columns plus a line on the secondary axis. */
+  combo?: true;
+  /**
+   * Listed in Edit chart. Kept out of the insert menu so that menu, and its
+   * submenu, still fit on screen.
+   */
+  catalog?: true;
   more?: true;
 }[];
 export type ChartTypeId = (typeof CHART_TYPES)[number]['id'];
@@ -68,6 +105,7 @@ const definitionOf = (type: ChartTypeId): ChartType | undefined =>
 const groupingOf = (type: ChartType) =>
   'grouping' in type ? type.grouping : undefined;
 const filledOf = (type: ChartType) => 'filled' in type && type.filled;
+const comboOf = (type: ChartType) => 'combo' in type && type.combo;
 /** Kinds whose series all belong in one plot. */
 const SINGLE_PLOT: readonly ChartKind[] = [
   'radar',
@@ -79,11 +117,25 @@ const isRound = (kind: ChartKind) => kind === 'pie' || kind === 'doughnut';
 /** Kinds that plot numbers on both axes. */
 const isXy = (kind: ChartKind) => kind === 'scatter' || kind === 'bubble';
 
+/** Columns together with a line, as a combination chart. */
+function isCombo(chart: SheetChart): boolean {
+  return (
+    chart.plots.length > 1 &&
+    chart.plots.every(
+      (plot) => plot.kind === 'column' || plot.kind === 'line'
+    ) &&
+    chart.plots.some((plot) => plot.kind === 'column') &&
+    chart.plots.some((plot) => plot.kind === 'line')
+  );
+}
+
 /** The type a chart's first plot shows, as Macro offers it. */
 export function chartType(chart: SheetChart): ChartTypeId | undefined {
+  if (isCombo(chart)) return 'combo';
   const plot = chart.plots[0];
   return CHART_TYPES.find(
     (type) =>
+      !comboOf(type) &&
       type.kind === plot?.kind &&
       groupingOf(type) ===
         (plot.grouping === 'clustered' ? undefined : plot.grouping) &&
@@ -101,6 +153,8 @@ export function chartTypeProblem(
 ): string | undefined {
   if (definitionOf(type)?.kind === 'stock' && (series < 3 || series > 4))
     return 'A stock chart needs three or four series: high, low and close, or open, high, low and close.';
+  if (type === 'combo' && series < 2)
+    return 'A combo chart needs at least two series: columns, and a line on the secondary axis.';
 }
 
 export type CellBounds = {
@@ -341,8 +395,34 @@ export function chartFromLayout(
       ...(bubble && at + 1 < lines && { sizes: add(line(at + 1)) }),
       ...(color && { color }),
       // Prices are drawn by their high-low lines and bars, not series lines.
-      ...(definition.kind === 'stock' && { noLine: true }),
+      // A scatter chart plots markers; connecting them would invent an order.
+      ...((definition.kind === 'stock' || definition.kind === 'scatter') && {
+        noLine: true as const,
+      }),
     });
+  }
+  const shell = {
+    ...(previous?.title && { title: previous.title }),
+    ...(previous
+      ? previous.legend && { legend: previous.legend }
+      : (series.length > 1 ||
+          isRound(definition.kind) ||
+          definition.kind === 'surface' ||
+          comboOf(definition)) && { legend: 'bottom' as const }),
+    references,
+    ...(previous?.colors && { colors: previous.colors }),
+  };
+  // The last series uses its own axis, as Excel's column-and-line chart does.
+  if (comboOf(definition)) {
+    const line = series.at(-1);
+    if (!line || series.length < 2) return;
+    return {
+      ...shell,
+      plots: [
+        { kind: 'column', series: series.slice(0, -1) },
+        { kind: 'line', secondary: true, series: [line] },
+      ],
+    };
   }
   const plot: ChartPlot = {
     kind: definition.kind,
@@ -354,17 +434,7 @@ export function chartFromLayout(
     }),
     series,
   };
-  return {
-    ...(previous?.title && { title: previous.title }),
-    ...(previous
-      ? previous.legend && { legend: previous.legend }
-      : (series.length > 1 ||
-          isRound(definition.kind) ||
-          definition.kind === 'surface') && { legend: 'bottom' as const }),
-    plots: [plot],
-    references,
-    ...(previous?.colors && { colors: previous.colors }),
-  };
+  return { ...shell, plots: [plot] };
 }
 
 /** How many series a block of cells makes in a chart of a type. */
@@ -437,10 +507,11 @@ export function withChartType(
   const definition = definitionOf(type);
   if (!definition) return chart;
   const kind = definition.kind;
-  // Stock series have no lines of their own; other kinds draw theirs.
+  // Stock and scatter series have no lines of their own; other kinds draw theirs.
   const shown = (series: ChartSeries, from: ChartKind): ChartSeries => {
-    if (kind === 'stock') return { ...series, noLine: true };
-    if (from !== 'stock') return series;
+    if (kind === 'stock' || kind === 'scatter')
+      return { ...series, noLine: true };
+    if (from !== 'stock' && from !== 'scatter') return series;
     const { noLine: _noLine, ...rest } = series;
     return rest;
   };
@@ -448,6 +519,17 @@ export function withChartType(
     plot.series.map((series) => shown(series, plot.kind))
   );
   if (chartTypeProblem(type, all.length)) return;
+  if (comboOf(definition)) {
+    const line = all.at(-1);
+    if (!line) return;
+    return {
+      ...chart,
+      plots: [
+        { kind: 'column', series: all.slice(0, -1) },
+        { kind: 'line', secondary: true, series: [line] },
+      ],
+    };
+  }
   const flags = (count: number) => ({
     ...('grouping' in definition && { grouping: definition.grouping }),
     ...(filledOf(definition) && { filled: true as const }),

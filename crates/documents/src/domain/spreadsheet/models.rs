@@ -40,7 +40,7 @@ pub enum SpreadsheetVerticalAlign {
     Bottom,
 }
 
-/// Number interpretation and display; currency is USD and dates use UTC.
+/// Number interpretation and display; currency and accounting are USD and dates use UTC.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SpreadsheetNumberFormat {
@@ -50,11 +50,13 @@ pub enum SpreadsheetNumberFormat {
     Number,
     /// Currency.
     Currency,
+    /// Accounting: $ at the cell's left edge, negatives in parentheses, zero as a dash.
+    Accounting,
     /// Percent.
     Percent,
-    /// Date.
+    /// Date, shown as m/d/yyyy unless numberFormat gives another date code.
     Date,
-    /// Time.
+    /// Time, shown as h:mm:ss AM/PM unless numberFormat gives another time code.
     Time,
     /// Scientific.
     Scientific,
@@ -101,7 +103,10 @@ pub enum SpreadsheetBorderStyle {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetStyle {
-    /// Exact Excel number format, up to 512 characters.
+    /// Exact Excel number format, up to 512 characters; it overrides the display of `format`.
+    /// Show dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,
+    /// mm/dd/yyyy, dd/mm/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with
+    /// format=time and a code such as h:mm AM/PM.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub number_format: Option<String>,
     /// Exact Excel font name, up to 128 characters.
@@ -159,6 +164,10 @@ pub struct SpreadsheetStyle {
     /// Horizontal alignment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub horizontal_align: Option<SpreadsheetHorizontalAlign>,
+    /// Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the
+    /// left edge, or from the right edge of right-aligned cells. Centered cells ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indent: Option<u8>,
     /// Vertical alignment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vertical_align: Option<SpreadsheetVerticalAlign>,
@@ -183,6 +192,9 @@ pub struct SpreadsheetStyle {
     /// How to interpret and display the input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<SpreadsheetNumberFormat>,
+    /// Show the cell's TRUE/FALSE value as a checkbox; false removes it and keeps the value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkbox: Option<bool>,
 }
 
 /// Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.
@@ -229,6 +241,16 @@ pub struct SpreadsheetColumnWidth {
     pub column: String,
     /// Width in pixels, 8 through 640.
     pub width: u16,
+}
+
+/// A dropdown choice's color. Cells showing the choice draw it as a chip of this color.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpreadsheetDropdownColor {
+    /// The choice, matched to cell text ignoring case.
+    pub item: String,
+    /// Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.
+    pub color: String,
 }
 
 /// One operation in an atomic workbook edit. All operations validate before any write.
@@ -313,6 +335,41 @@ pub enum SpreadsheetOperation {
         sheet_id: String,
         /// Column widths to set.
         columns: Vec<SpreadsheetColumnWidth>,
+    },
+    /// Add an in-cell dropdown (list data validation) to a rectangle, replacing any validation there.
+    /// Give exactly one of items or source. Cell values are unchanged; set them separately.
+    SetDropdown {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle, for example C2:C200.
+        range: String,
+        /// Typed choices, without commas, at most 253 characters in total.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        items: Option<Vec<String>>,
+        /// Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
+        /// Defaults to true: reject typed entries that are not a choice. False only suggests the choices.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reject_invalid: Option<bool>,
+        /// Optional color per choice, shown as a colored chip in cells and in the open list. With typed items, each must name one of them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        colors: Option<Vec<SpreadsheetDropdownColor>>,
+    },
+    /// Remove dropdowns and any other data validation from a rectangle.
+    ClearValidation {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle.
+        range: String,
+    },
+    /// Turn a rectangle into checkboxes backed by TRUE/FALSE values: blank cells become FALSE
+    /// (unchecked) and other values are kept. Check or uncheck them with set_cells TRUE or FALSE.
+    InsertCheckboxes {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle, for example D2:D50.
+        range: String,
     },
 }
 
@@ -441,8 +498,42 @@ pub struct SpreadsheetReadRange {
     pub range: String,
     /// Cells with their sources and current results.
     pub cells: Vec<SpreadsheetReadCell>,
+    /// Dropdowns and other data validation rules overlapping this range.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub validations: Vec<SpreadsheetReadValidation>,
     /// True when a narrower follow-up read is needed to see every cell.
     pub truncated: bool,
+}
+
+/// A data validation rule; list rules are dropdowns.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetReadValidation {
+    /// Cells the rule covers, as space-separated A1 ranges.
+    pub range: String,
+    /// Rule kind: list, whole, decimal, date, time, textLength, custom, or any.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// A dropdown's typed choices.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<String>>,
+    /// A dropdown's source range.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Comparison for number, date, time and text-length rules.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operator: Option<String>,
+    /// Rule formulas, without the leading =.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formulas: Option<Vec<String>>,
+    /// Whether a list rule shows its dropdown arrow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropdown: Option<bool>,
+    /// Whether entries that break the rule are rejected.
+    pub reject_invalid: bool,
+    /// A dropdown's choice colors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colors: Option<Vec<SpreadsheetDropdownColor>>,
 }
 
 /// One hypothetical formula result.

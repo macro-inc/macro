@@ -1,0 +1,232 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/ios_release_drift.rs
+name: iOS Release Drift
+'on':
+  pull_request:
+    types:
+    - synchronize
+jobs:
+  drift:
+    if: contains(github.event.pull_request.labels.*.name, 'ios-update') && github.event.pull_request.head.repo.full_name == github.repository
+    name: iOS Release Drift
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    timeout-minutes: 15
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - id: detect
+      name: Detect native changes in this push
+      run: |
+        # --- native tree ------------------------------------------------------------
+        # Hash identifying "the iOS native code" at a commit: every tracked blob under
+        # apps/web/tauri except the paths that never reach the iOS binary. Android-only
+        # code is recognised by Tauri's naming convention — a path component that is
+        # `android`, starts with `android_` / `android.`, or contains `.android.`
+        # (the android_* plugins, every android/ directory, android.rs / android.json,
+        # android_tls.rs, tauri.android.conf.json; the Rust ones are all behind
+        # cfg(target_os = "android")) — plus the desktop updater manifest and editor
+        # config. Plus one thing outside that tree: the version of the client cache
+        # wasm package (crates/client/cache-wasm/Cargo.toml). The app compiles the
+        # cache crates natively, and the team bumps that version when a cache change
+        # must ship, so the bump — not every edit under crates/client — is the native
+        # signal. The release stamps uploaded builds with the hash, the merge gate
+        # compares the live build's stamp against the merge result's, and the drift /
+        # head guards compare commits with it. Must match nativeTreeHash() in
+        # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
+        # detection (web_app_check_main/ios_native_check.rs).
+        NATIVE_TREE_PATH=apps/web/tauri
+        CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
+        export NATIVE_TREE_EXCLUDE='(^|/)android([_./]|$)|\.android\.|^desktop-release\.json$|^\.helix/'
+
+        # native_tree_hash <commit>: prints the hash, fails if the path is missing.
+        # (--full-tree: ls-tree otherwise narrows its output to the current directory,
+        # which would silently hash nothing when run from apps/web.)
+        native_tree_hash() {
+          git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
+          {
+            git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+              | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+            echo "cache-wasm-version $(cache_wasm_version "$1")"
+          } | git hash-object --stdin
+        }
+
+        # cache_wasm_version <commit>: the `version` of the client cache wasm package
+        # at that commit ("none" before the package existed).
+        cache_wasm_version() {
+          git show "$1:${CACHE_WASM_MANIFEST}" 2>/dev/null \
+            | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none
+        }
+
+        # native_tree_fetch <sha>: make a commit that is not in this checkout (a new
+        # PR head, GitHub's test merge commit, the pre-push head) available to
+        # native_tree_hash. Checkouts here don't persist credentials, so authenticate
+        # the way actions/checkout does. Fails if the commit is unreachable (a
+        # force-pushed-away head).
+        native_tree_fetch() {
+          local auth
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            fetch -q --depth=1 origin "$1"
+        }
+        # ----------------------------------------------------------------------------
+        set -euo pipefail
+        # A push landed on a PR that carries ios-update. Compare the native tree
+        # before and after the push. Only native changes matter — web-only commits
+        # ship over the air after the merge. A force-push that discarded the old
+        # head counts as changed: nothing proves the released build still matches.
+        if native_tree_fetch "$BEFORE_SHA" && before_tree=$(native_tree_hash "$BEFORE_SHA"); then :; else
+          before_tree=unknown
+        fi
+        native_tree_fetch "$AFTER_SHA"
+        after_tree=$(native_tree_hash "$AFTER_SHA")
+        echo "native tree before: ${before_tree}"
+        echo "native tree after:  ${after_tree}"
+        if [[ "$before_tree" == "$after_tree" ]]; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "No native changes in this push; the release stays valid."
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "Native code changed; the released build is stale."
+        fi
+      shell: bash
+      env:
+        BEFORE_SHA: ${{ github.event.before }}
+        AFTER_SHA: ${{ github.event.after }}
+    - name: Cancel in-progress release runs for this PR
+      if: steps.detect.outputs.changed == 'true'
+      run: |
+        set -euo pipefail
+        runs=$(gh run list --repo "$GH_REPO" --workflow ios-app-store-release.yml \
+          --branch "$HEAD_REF" --json databaseId,status \
+          --jq '.[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting") | .databaseId')
+        if [[ -z "$runs" ]]; then
+          echo "No release run in progress."
+          exit 0
+        fi
+        for run_id in $runs; do
+          echo "Cancelling release run ${run_id} (it would upload a build of the old head)."
+          gh run cancel "$run_id" --repo "$GH_REPO" || true
+        done
+        # Wait for them to stop: a run already inside `submit` could
+        # otherwise submit after the withdrawal below looked for nothing.
+        deadline=$(( $(date +%s) + 180 ))
+        for run_id in $runs; do
+          while [[ "$(gh run view "$run_id" --repo "$GH_REPO" --json status --jq .status)" != "completed" ]]; do
+            if (( $(date +%s) > deadline )); then
+              echo "::warning::Release run ${run_id} is still not completed; withdrawing anyway."
+              break
+            fi
+            sleep 10
+          done
+        done
+      shell: bash
+      env:
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
+    - name: Setup Bun
+      if: steps.detect.outputs.changed == 'true'
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - name: Fetch App Store Connect credentials from Doppler
+      if: steps.detect.outputs.changed == 'true'
+      run: |
+        set -euo pipefail
+        # Fetch the App Store Connect credentials from Doppler (ios-release/prd) —
+        # the same shape as the DMG workflow's notarization step — and hand them to
+        # later steps the way the iOS scripts expect them:
+        #   APPLE_API_KEY / APPLE_API_ISSUER            exported via GITHUB_ENV
+        #   ~/.appstoreconnect/private_keys/AuthKey_<ID>.p8   the private key, where
+        #     altool, tauri (APPLE_API_KEY_PATH default) and ios-app-store.mjs look
+        # With IOS_DISTRIBUTION_CERTIFICATE=1 the optional Apple Distribution .p12 is
+        # decoded to $RUNNER_TEMP and exported as APPLE_DISTRIBUTION_CERTIFICATE_PATH
+        # / _PASSWORD for the signing step.
+        if [ -z "${DOPPLER_TOKEN:-}" ]; then
+          echo "DOPPLER_TOKEN is empty: the IOS_RELEASE_DOPPLER_TOKEN secret is missing, or this is a fork PR (secrets are not available to forks; a maintainer must run the release from a branch in this repository, or add skip-ios-update if the change is non-breaking)." >&2
+          exit 1
+        fi
+
+        umask 077
+        secrets=$(mktemp)
+        trap 'rm -f "$secrets"' EXIT
+        curl --fail --silent --show-error --retry 3 \
+          --header "Authorization: Bearer $DOPPLER_TOKEN" \
+          'https://api.doppler.com/v3/configs/config/secrets/download?project=ios-release&config=prd&format=json' \
+          > "$secrets"
+
+        required() {
+          jq -er --arg name "$1" '.[$name] | strings | select(length > 0)' "$secrets" \
+            || { echo "ios-release/prd is missing $1" >&2; exit 1; }
+        }
+        key_id=$(required APPLE_API_KEY_ID)
+        issuer=$(required APPLE_API_ISSUER)
+
+        key_dir="$HOME/.appstoreconnect/private_keys"
+        mkdir -p "$key_dir"
+        key_path="$key_dir/AuthKey_${key_id}.p8"
+        required APPLE_API_PRIVATE_KEY > "$key_path"
+        echo "::add-mask::$issuer"
+        {
+          echo "APPLE_API_KEY=$key_id"
+          echo "APPLE_API_ISSUER=$issuer"
+        } >> "$GITHUB_ENV"
+        echo "Wrote App Store Connect API key $key_id to $key_path"
+
+        if [ "${IOS_DISTRIBUTION_CERTIFICATE:-}" = "1" ]; then
+          certificate=$(jq -r '.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 // empty' "$secrets")
+          if [ -z "$certificate" ]; then
+            echo "No APPLE_DISTRIBUTION_CERTIFICATE_BASE64 in ios-release/prd; the build will" \
+              "rely on Xcode cloud signing via the API key."
+            exit 0
+          fi
+          certificate_path="$RUNNER_TEMP/apple-distribution.p12"
+          printf '%s' "$certificate" | base64 --decode > "$certificate_path" 2>/dev/null \
+            || printf '%s' "$certificate" | base64 -D > "$certificate_path"
+          password=$(jq -r '.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD // empty' "$secrets")
+          [ -z "$password" ] || echo "::add-mask::$password"
+          {
+            echo "APPLE_DISTRIBUTION_CERTIFICATE_PATH=$certificate_path"
+            echo "APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
+          echo "Wrote Apple Distribution certificate to $certificate_path"
+        fi
+      shell: bash
+      env:
+        DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
+    - id: withdraw
+      name: Withdraw the PR's App Store submission
+      if: steps.detect.outputs.changed == 'true'
+      run: bun scripts/ios-app-store.mjs withdraw --pr "$PR_NUMBER"
+      working-directory: apps/web
+    - name: Remove the ios-update label
+      if: always() && steps.detect.outputs.changed == 'true'
+      run: gh pr edit "$PR_NUMBER" --repo "$GH_REPO" --remove-label ios-update
+      shell: bash
+    - name: Comment on the PR
+      if: always() && steps.detect.outputs.changed == 'true'
+      run: |
+        set -euo pipefail
+        bump='cd apps/web && doppler run --project ios-release --config prd -- just ios-bump'
+        if [[ "$WITHDRAW_OUTCOME" != "success" ]]; then
+          body="🚨 Native changes were pushed to this PR after its App Store release started, but withdrawing the App Review submission **failed** (see the [workflow run](${RUN_URL})). If a submission is pending, remove it from review in App Store Connect by hand so the stale build cannot go live. The \`ios-update\` label was removed; when the PR is ready again, bump (\`${bump}\`), commit, push, and re-add \`ios-update\`."
+        elif [[ -n "$LIVE" ]]; then
+          body="🚨 Native changes were pushed to this PR after Apple had already approved iOS ${LIVE}, so that build is (or is about to be) live with native code this PR no longer matches. Bump (\`${bump}\`), commit, re-add the \`ios-update\` label, and ship the follow-up as soon as possible. The label was removed."
+        else
+          body="📱 Native code changed after this PR's App Store release started, so the release was stopped: any in-progress build was cancelled and any pending App Review submission withdrawn (nothing stale can go live), and the \`ios-update\` label was removed. When the PR is ready again, bump (\`${bump}\`; the marketing version stays, the build number moves), commit, push, and re-add \`ios-update\`."
+        fi
+        gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$body"
+      shell: bash
+      env:
+        LIVE: ${{ steps.withdraw.outputs.live }}
+        WITHDRAW_OUTCOME: ${{ steps.withdraw.outcome }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

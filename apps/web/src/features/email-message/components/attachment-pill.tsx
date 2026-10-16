@@ -1,7 +1,6 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import X from '@phosphor/x.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -19,10 +18,19 @@ type EmailAttachmentPillProps = {
 export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
   let parentDiv!: HTMLDivElement;
 
-  const fileType = () =>
-    props.attachment.mimeType
-      ? (mimeToFileExtTypeMap.get(props.attachment.mimeType) as FileType)
-      : undefined;
+  const fileType = () => {
+    const mimeType = props.attachment.mimeType
+      ?.split(';')[0]
+      .trim()
+      .toLowerCase();
+    if (
+      props.attachment.fileName.toLowerCase().endsWith('.ics') ||
+      mimeType === 'application/ics'
+    ) {
+      return 'ics';
+    }
+    return mimeType ? mimeToFileExtTypeMap.get(mimeType) : undefined;
+  };
 
   return (
     <div
@@ -42,10 +50,7 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
         }}
       >
         <Show when={fileType() !== undefined || props.attachment.mimeType}>
-          <EntityIcon
-            targetType={fileType() ?? (props.attachment.mimeType as FileType)}
-            size="xs"
-          />
+          <EntityIcon targetType={fileType()} size="xs" />
         </Show>
         <span class="ph-no-capture truncate ml-1">
           {props.attachment.fileName}

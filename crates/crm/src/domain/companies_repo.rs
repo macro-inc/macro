@@ -45,6 +45,27 @@ pub struct CrmCompanySoupCursor {
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
 pub trait CompaniesRepository: Clone + Send + Sync + 'static {
+    /// List authorized contacts across enabled teams. Apply visibility and
+    /// predicates before choosing one record per lowercased full email (latest
+    /// interaction, then highest ID). Deduplicate before seeking/limiting. An
+    /// ID-only filter is exact hydration and retains each requested record.
+    fn list_contacts_for_soup(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+        viewer_id: &str,
+        query: &super::contact_listing::CrmContactListQuery,
+    ) -> impl Future<Output = Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError>> + Send;
+
+    /// Resolve `record` to the records its associated items match, under the
+    /// same visibility as the scope's contact listings: CRM-enabled teams
+    /// only, and hidden companies and contacts are visible only to the owning
+    /// team's admins and owners. `None` when the record is not visible.
+    fn resolve_association(
+        &self,
+        scope: super::contact_listing::CrmContactListScope<'_>,
+        record: super::association::CrmAssociation,
+    ) -> impl Future<Output = Result<Option<super::association::CrmRecordAssociation>, CrmError>> + Send;
+
     /// Idempotently records that `email` (which lives on `domain`) was seen
     /// from the mailbox identified by `link_id`, for the team `team_id`.
     /// Performs the company/domain/contact/contact_source upserts in a single

@@ -5,6 +5,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArchiveIcon from '@phosphor/archive.svg';
 import BellIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ClockIcon from '@phosphor/clock.svg';
@@ -16,6 +17,7 @@ import UsersThreeIcon from '@phosphor/users-three.svg';
 import SignalIcon from '@phosphor/wave-sine.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
+import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
@@ -27,6 +29,9 @@ import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { EmailInboxList } from './EmailInboxSelector';
 
+// Email is personal, so the sidebar lists only the user's own tags.
+const SIDEBAR_TAG_SCOPES: readonly TagScope[] = ['user'];
+
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   important: SignalIcon,
   noise: NoiseIcon,
@@ -37,6 +42,7 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   calendar: CalendarBlankIcon,
   drafts: FileIcon,
   shared: UsersThreeIcon,
+  archived: ArchiveIcon,
   all: EnvelopeIcon,
 };
 
@@ -144,6 +150,7 @@ export function EmailSidebar() {
             onActiveIdsChange={showTags}
             open={isSidebarSectionOpen('tags')}
             onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+            scopes={SIDEBAR_TAG_SCOPES}
           />
         </div>
       </ViewSidebar.Content>

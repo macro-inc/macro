@@ -156,8 +156,8 @@ export function SavingsCalculator() {
       </div>
       <p class="pricing-savings-note">
         Yearly totals use 12 months at the lowest per-seat price on each tool’s
-        pricing page in {PRICES_CHECKED}. Macro’s paid plan is $40 per seat a
-        month for your first 5 seats, then $80.
+        pricing page in {PRICES_CHECKED}. Macro is priced at Pro, $40 per seat a
+        month.
       </p>
     </div>
   );

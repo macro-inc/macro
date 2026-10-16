@@ -1,0 +1,25 @@
+---
+title: EditPipeline
+description: >-
+  Change a CRM pipeline itself: rename it, share it with the team or make it
+  private (owner only), add, rename or remove fields, and add, rename or remove
+  stages and other select options.
+---
+
+# EditPipeline
+
+Change a CRM pipeline itself: rename it, share it with the team or make it private (owner only), add, rename or remove fields, and add, rename or remove stages and other select options. Stages are the options of the Stage field: to add a stage use addOptions on "Stage"; to rename one use renameOptions. Removing a field deletes its values from every entry, and removing a stage or option empties it on the entries holding it, so do that only when the user asked. New options go after the existing ones. Field changes apply together, all or nothing. Returns the pipeline with its fields as they are now.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pipelineId` | string | Yes | The pipeline's id from ListPipelines. |
+| `name` | string | No | A new name for the pipeline. |
+| `sharedWithTeam` | boolean | No | true lets the user's team see and edit it; false makes it private to its owner. Only the owner can change this. |
+| `addFields` | ToolNewField[] | No | Fields to add after the existing ones. |
+| `renameFields` | ToolRename[] | No | Fields to rename. |
+| `removeFields` | string[] | No | Names of fields to delete with their values. The Company or Contact field cannot be removed. |
+| `addOptions` | ToolAddOptions[] | No | Stages or other select options to add. |
+| `renameOptions` | ToolRenameOption[] | No | Stages or other select options to relabel. |
+| `removeOptions` | ToolRemoveOption[] | No | Stages or other select options to delete. |

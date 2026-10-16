@@ -27,6 +27,7 @@ export type ProjectListGroupBy = 'none' | 'status' | 'priority' | 'assignee';
 export type ProjectListActivation = { event?: MouseEvent; newSplit?: boolean };
 
 export type ProjectCollectionSnapshot = {
+  layout?: 'list' | 'gantt';
   search: string;
   status: string;
   priority: string;
@@ -53,6 +54,9 @@ export function createProjectCollection(capabilities: {
   captureState?: (read: Accessor<ProjectCollectionSnapshot>) => void;
 }) {
   const initial = capabilities.initialState;
+  const [layout, setLayout] = createSignal<'list' | 'gantt'>(
+    initial?.layout ?? 'list'
+  );
   const [search, setSearch] = createSignal(initial?.search ?? '');
   const query = debouncedDependent(search, 150);
   const [status, setStatus] = createSignal(initial?.status ?? '');
@@ -193,6 +197,7 @@ export function createProjectCollection(capabilities: {
     },
   });
   capabilities.captureState?.(() => ({
+    layout: layout(),
     search: search(),
     status: status(),
     priority: priority(),
@@ -206,6 +211,8 @@ export function createProjectCollection(capabilities: {
     focusKey: list.focus.key(),
   }));
   return {
+    layout,
+    setLayout: (value: 'list' | 'gantt') => setLayout(value),
     state,
     search,
     setSearch,

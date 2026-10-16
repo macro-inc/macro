@@ -1,11 +1,11 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use crate::pubsub::publish_email_event;
 use anyhow::Context;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, ThreadReadMetadata};
-use email_service::pubsub::publish_email_event;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::label::system_labels;

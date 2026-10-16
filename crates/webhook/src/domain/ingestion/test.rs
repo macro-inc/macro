@@ -1382,6 +1382,7 @@ fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::Agen
                 attachments: vec![],
                 created_at: timestamp(),
             },
+            context: None,
         }),
     ))
 }
@@ -1400,6 +1401,7 @@ fn agent_trigger_requested_event()
                 uuid::Uuid::from_u128(0x5E55),
             ),
             owner: "macro|asker@example.com".to_owned(),
+            context: None,
         }),
     ))
 }
@@ -1426,6 +1428,7 @@ fn agent_trigger_document_event()
                 attachments: vec![],
                 created_at: timestamp(),
             },
+            context: None,
         }),
     ))
 }
@@ -1453,6 +1456,7 @@ fn agent_trigger_existing_event()
                 attachments: vec![],
                 created_at: timestamp(),
             },
+            context: None,
         }),
     ))
 }
@@ -1489,6 +1493,7 @@ fn agent_trigger_task_assignment_event() -> Event<AgentTriggerTopicEvent> {
             discussion_id: uuid::Uuid::from_u128(2),
             actor: user_id("macro|asker@example.com"),
             prompt: "Complete the assigned task".to_owned(),
+            context: None,
         }),
     ))
 }

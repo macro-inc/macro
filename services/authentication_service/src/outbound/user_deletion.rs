@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Duration};
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_authorization::INTERNAL_API_KEY_HEADER;
 use macro_user_id::user_id::MacroUserIdStr;
+use onboarding::domain::ports::OnboardingRepo;
 use rootcause::{
     Report,
     prelude::{IntoRootcause, ResultExt},
@@ -15,12 +16,13 @@ use uuid::Uuid;
 
 use crate::service::user::delete_user::UserDeletionGateway;
 
-/// HTTP, in-process team service, Stripe, and database adapter composed at
-/// authentication-service startup.
-pub struct UserDeletionAdapter<T: TeamService> {
+/// HTTP, in-process team service, onboarding repository, Stripe, and database
+/// adapter composed at authentication-service startup.
+pub struct UserDeletionAdapter<T: TeamService, O: OnboardingRepo> {
     db: PgPool,
     documents: Arc<DocumentStorageServiceClient>,
     teams: Arc<T>,
+    onboarding: O,
     stripe: Arc<stripe::Client>,
     client: reqwest::Client,
     internal_key: String,
@@ -28,17 +30,22 @@ pub struct UserDeletionAdapter<T: TeamService> {
     scheduled_action_url: String,
 }
 
-impl<T: TeamService> UserDeletionAdapter<T> {
+impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
     /// Construct a bounded HTTP client. Redirects must not turn a failed
     /// internal DELETE into an unrelated successful response.
     ///
     /// `internal_key` is the fleet-wide internal service key that the agent
     /// harness and scheduled-action services validate. This service's own
     /// inbound key is a different secret and is rejected by them.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one argument per owning service; the composition root wires them once"
+    )]
     pub fn new(
         db: PgPool,
         documents: Arc<DocumentStorageServiceClient>,
         teams: Arc<T>,
+        onboarding: O,
         stripe: Arc<stripe::Client>,
         internal_key: String,
         harness_url: String,
@@ -48,6 +55,7 @@ impl<T: TeamService> UserDeletionAdapter<T> {
             db,
             documents,
             teams,
+            onboarding,
             stripe,
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(300))
@@ -59,6 +67,7 @@ impl<T: TeamService> UserDeletionAdapter<T> {
         })
     }
 
+    #[tracing::instrument(skip(self, base, user), fields(user = %user), err)]
     async fn delete_owned(
         &self,
         base: &str,
@@ -77,15 +86,17 @@ impl<T: TeamService> UserDeletionAdapter<T> {
             .send()
             .await
             .context_with(|| format!("failed to delete user's {resource}"))?;
-        if response.status() != reqwest::StatusCode::NO_CONTENT {
+        let status = response.status();
+        if status != reqwest::StatusCode::NO_CONTENT {
+            tracing::error!(%status, "owning service rejected user cleanup request");
             return Err(rootcause::report!("user cleanup did not complete")
-                .attach(format!("{resource}: {}", response.status())));
+                .attach(format!("{resource}: {status}")));
         }
         Ok(())
     }
 }
 
-impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
+impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdapter<T, O> {
     async fn delete_scheduled_actions(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.delete_owned(&self.scheduled_action_url, "scheduled-actions", user)
             .await
@@ -96,6 +107,7 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
             .await
     }
 
+    #[tracing::instrument(skip(self, user), fields(user = %user), err)]
     async fn leave_teams(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.teams
             .remove_user_from_all_teams(user)
@@ -105,6 +117,7 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, user), fields(user = %user), err)]
     async fn delete_items(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.documents
             .delete_all_user_items(user.as_ref())
@@ -114,17 +127,31 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, user), fields(user = %user), err)]
+    async fn delete_onboarding(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
+        self.onboarding
+            .delete_row(user)
+            .await
+            .map_err(|error| Report::new(error).into_dynamic())
+            .context("failed to delete user onboarding")?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, user), fields(user = %user), err)]
     async fn delete_profile(
         &self,
         user: &MacroUserIdStr<'static>,
         account: &Uuid,
     ) -> Result<(), Report> {
-        macro_db_client::user::delete_user::delete_user(&self.db, user.as_ref(), account)
-            .await
-            .context("failed to delete user profile")?;
+        let deleted =
+            macro_db_client::user::delete_user::delete_user(&self.db, user.as_ref(), account)
+                .await
+                .context("failed to delete user profile")?;
+        tracing::info!(organization_id = ?deleted.organization_id, "deleted user profile row");
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn delete_billing_customer(&self, account: &Uuid) -> Result<(), Report> {
         let customer_id =
             match macro_db_client::macro_user::get_macro_user(&self.db, &account.to_string()).await
@@ -137,12 +164,14 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
                         Some(sqlx::Error::RowNotFound)
                     ) =>
                 {
+                    tracing::info!("account row already gone; no billing customer to delete");
                     None
                 }
                 Err(error) => Err(error.into_rootcause())
                     .context("failed to load account for billing cleanup")?,
             };
         let Some(customer_id) = customer_id else {
+            tracing::info!("account has no billing customer; skipping customer deletion");
             return Ok(());
         };
         let customer_id: stripe::CustomerId = match customer_id.parse() {
@@ -160,12 +189,15 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
 
         stripe::Customer::delete(&self.stripe, &customer_id)
             .await
-            .map(drop)
+            .map(|_| {
+                tracing::info!(stripe_customer_id = %customer_id, "deleted stripe customer");
+            })
             .or_else(|error| match error {
                 // Already deleted, for example by an earlier attempt.
                 stripe::StripeError::Stripe(request)
                     if matches!(request.code, Some(stripe::ErrorCode::ResourceMissing)) =>
                 {
+                    tracing::info!(stripe_customer_id = %customer_id, "stripe customer already deleted");
                     Ok(())
                 }
                 error => Err(Report::new(error).into_dynamic()),
@@ -174,6 +206,7 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn delete_account(&self, account: &Uuid) -> Result<(), Report> {
         macro_db_client::macro_user::delete_macro_user(&self.db, account)
             .await

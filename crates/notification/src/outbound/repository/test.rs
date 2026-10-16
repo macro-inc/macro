@@ -1,3 +1,4 @@
+mod publication;
 mod state;
 
 use crate::domain::models::{Notification, request::NotificationCategory};
@@ -1344,6 +1345,10 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
         .await
         .unwrap();
     assert!(result.is_some());
+
+    pool.complete_notification_publication(notification_id)
+        .await
+        .unwrap();
 
     // Second creation with same ID should return None
     let result = pool

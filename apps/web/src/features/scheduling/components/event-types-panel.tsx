@@ -1,4 +1,3 @@
-import { SettingsCard } from '@app/features/settings/primitives';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import External from '@phosphor/arrow-square-out.svg';
 import Clock from '@phosphor/clock.svg';
@@ -9,7 +8,6 @@ import { Button, ToggleSwitch } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EventType, SchedulingScope } from '../core/types';
 import { TextInput } from './fields';
-import { OwnerBadge } from './owner-badge';
 
 export function EventTypesPanel(props: {
   events: EventType[];
@@ -46,7 +44,7 @@ export function EventTypesPanel(props: {
           />
         </div>
       </Show>
-      <SettingsCard>
+      <div class="divide-y divide-edge-muted border-y border-edge-muted">
         <For
           each={filtered()}
           fallback={
@@ -66,9 +64,9 @@ export function EventTypesPanel(props: {
           }
         >
           {(event) => (
-            <article class="px-6 py-4">
-              <div class="flex flex-wrap items-center gap-x-6 gap-y-4">
-                <div class="min-w-48 flex-1">
+            <article class="py-4">
+              <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <div class="min-w-44 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -80,24 +78,16 @@ export function EventTypesPanel(props: {
                         {event.title}
                       </h2>
                     </button>
-                    <Show when={props.owner}>
-                      {(owner) => <OwnerBadge scope={owner()} />}
-                    </Show>
                   </div>
                   <p class="mt-1 truncate text-xs text-ink-muted">
                     /{event.slug}
                   </p>
-                  <Show when={event.description}>
-                    <p class="mt-2 line-clamp-1 text-sm text-ink-muted">
-                      {event.description}
-                    </p>
-                  </Show>
-                  <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                    <span class="inline-flex items-center gap-1 rounded-md border border-edge-muted px-2 py-1">
+                  <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+                    <span class="inline-flex items-center gap-1">
                       <Clock class="size-3" />
                       {event.durationMinutes}m
                     </span>
-                    <span class="rounded-md border border-edge-muted px-2 py-1">
+                    <span>
                       {event.mode === 'roundRobin'
                         ? 'Round robin'
                         : event.mode === 'collective'
@@ -126,7 +116,7 @@ export function EventTypesPanel(props: {
                   />
                   <a
                     aria-label={`Preview ${event.title}`}
-                    class="rounded-lg border border-edge-muted p-2 text-ink-muted hover:bg-hover"
+                    class="rounded-md p-2 text-ink-muted outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink"
                     href={props.link(event)}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -134,7 +124,7 @@ export function EventTypesPanel(props: {
                     <External class="size-4" />
                   </a>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="icon-md"
                     label={`Copy link for ${event.title}`}
                     onClick={() => props.onCopy(event)}
@@ -146,14 +136,14 @@ export function EventTypesPanel(props: {
                     <DropdownMenu>
                       <DropdownMenu.Trigger
                         as={Button}
-                        variant="outline"
+                        variant="ghost"
                         size="icon-md"
                         label={`Options for ${event.title}`}
                       >
                         <Dots class="size-5" />
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
-                        <DropdownMenu.Content class="z-action-menu min-w-40 rounded-lg border border-edge-muted bg-menu p-1 text-sm shadow-lg">
+                        <DropdownMenu.Content class="menu-surface z-action-menu min-w-40 p-1 text-sm">
                           <DropdownMenu.Item
                             class="rounded px-3 py-2 outline-none data-highlighted:bg-hover"
                             onSelect={() => props.onEdit(event)}
@@ -201,7 +191,7 @@ export function EventTypesPanel(props: {
             </article>
           )}
         </For>
-      </SettingsCard>
+      </div>
     </div>
   );
 }

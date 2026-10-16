@@ -37,6 +37,20 @@ impl MockNotifRepo {
 }
 
 impl NotificationRepository for MockNotifRepo {
+    async fn notification_is_withdrawn(
+        &self,
+        _notification_id: uuid::Uuid,
+    ) -> Result<bool, Report> {
+        unreachable!("this service does not deliver queued workflow notifications")
+    }
+
+    async fn complete_notification_publication(
+        &self,
+        _notification_id: uuid::Uuid,
+    ) -> Result<(), Report> {
+        unreachable!("this service does not publish notifications")
+    }
+
     async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {
         self.deleted_endpoints
             .lock()
@@ -358,7 +372,7 @@ async fn test_delivery_failure_deletes_device_and_sns_endpoint() {
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
         event_type: EventType::DeliveryFailure,
-        message_id: MessageId(String::new()),
+        message_id: Some(MessageId(String::new())),
     };
 
     service.handle_event(&event).await.unwrap();
@@ -380,7 +394,7 @@ async fn test_endpoint_deleted_only_deletes_device() {
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
         event_type: EventType::EndpointDeleted,
-        message_id: MessageId(String::new()),
+        message_id: None,
     };
 
     service.handle_event(&event).await.unwrap();
@@ -402,7 +416,7 @@ async fn test_device_deletion_failure_propagates_error() {
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
         event_type: EventType::DeliveryFailure,
-        message_id: MessageId(String::new()),
+        message_id: Some(MessageId(String::new())),
     };
 
     let result = service.handle_event(&event).await;
@@ -425,7 +439,7 @@ async fn test_sns_deletion_failure_propagates_error() {
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
         event_type: EventType::DeliveryFailure,
-        message_id: MessageId(String::new()),
+        message_id: Some(MessageId(String::new())),
     };
 
     let result = service.handle_event(&event).await;
@@ -445,12 +459,35 @@ async fn test_delivery_failure_calls_digest_state_machine() {
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
         event_type: EventType::DeliveryFailure,
-        message_id: MessageId("msg-123".to_string()),
+        message_id: Some(MessageId("msg-123".to_string())),
     };
 
     service.handle_event(&event).await.unwrap();
 
     assert_eq!(service.digest_failure_sm.get_calls(), vec!["msg-123"]);
+}
+
+#[tokio::test]
+async fn test_delivery_failure_without_message_id_skips_digest_state_machine() {
+    let repository = MockNotifRepo::new();
+    let sns_manager = MockSnsManager::new();
+    let digest_sm = MockDigestFailureStateMachine::new();
+    let service = PushNotificationEventService::new(repository, sns_manager, digest_sm);
+
+    let event = SnsPushNotificationEvent {
+        endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
+        event_type: EventType::DeliveryFailure,
+        message_id: None,
+    };
+
+    service.handle_event(&event).await.unwrap();
+
+    assert!(service.digest_failure_sm.get_calls().is_empty());
+    assert_eq!(
+        service.repository.get_deleted(),
+        vec![event.endpoint_arn.clone()]
+    );
+    assert_eq!(service.sns_manager.get_deleted(), vec![event.endpoint_arn]);
 }
 
 #[tokio::test]
@@ -463,7 +500,7 @@ async fn test_endpoint_deleted_does_not_call_digest_state_machine() {
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
         event_type: EventType::EndpointDeleted,
-        message_id: MessageId("msg-456".to_string()),
+        message_id: Some(MessageId("msg-456".to_string())),
     };
 
     service.handle_event(&event).await.unwrap();
@@ -484,7 +521,7 @@ async fn test_digest_state_machine_failure_does_not_propagate() {
     let event = SnsPushNotificationEvent {
         endpoint_arn: "arn:aws:sns:us-east-1:123:endpoint/APNS/app/device1".to_string(),
         event_type: EventType::DeliveryFailure,
-        message_id: MessageId("msg-789".to_string()),
+        message_id: Some(MessageId("msg-789".to_string())),
     };
 
     let result = service.handle_event(&event).await;

@@ -1,0 +1,22 @@
+---
+title: FindPipelineEntries
+description: >-
+  Find deals (entries) in a CRM pipeline: which companies or contacts are in
+  which stage, who owns them, their revenue and other fields.
+---
+
+# FindPipelineEntries
+
+Find deals (entries) in a CRM pipeline: which companies or contacts are in which stage, who owns them, their revenue and other fields. Filter by field values (e.g. Stage is Demo or Trial, Owner is me), by company or contact name/domain/email with `search`, or by record id; sort by any field (Stage sorts in pipeline order). Returns each entry's entryId, the record it tracks (id and name) and its filled-in fields, plus, over every match, the count per stage (and per option of each single-select field) and the total of each number field such as Revenue: use these for questions like "how many deals are in Negotiation" or "what is the pipeline worth". To find where a company or contact is across all pipelines ("what stage is Acme in?"), leave out pipelineId and pass its name as `search` (or its recordIds). Get pipeline ids and field names from ListPipelines.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `pipelineId` | string | No | The pipeline's id from ListPipelines. Leave it out to look in every pipeline by `search` or `recordIds`; filters and sorting need a pipelineId. |
+| `filters` | ToolFieldValue[] | No | Only entries whose fields hold these values; all filters must match. Options and people match exactly (labels ignore case), text matches a substring, dates match the day. Example: [\{"field": "Stage", "values": ["Demo", "Trial"]}, \{"field": "Owner", "value": "me"}]. |
+| `recordIds` | string[] | No | Only entries tracking these CRM company or contact ids. |
+| `search` | string | No | Text the tracked company's name or domain, or the contact's name or email, must contain, ignoring case (e.g. "acme"). |
+| `sortBy` | string | No | A field name to order entries by, e.g. "Revenue" or "Stage". Empty fields come last. |
+| `descending` | boolean | No | Sort largest, latest or furthest stage first. Defaults to false. |
+| `limit` | integer | No | Most entries to return. Defaults to 50; max 200. |

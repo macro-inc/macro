@@ -10,11 +10,14 @@ import { type MutationCallbacks, withCallbacks } from '../utils';
 import { teamKeys } from './keys';
 import { invalidateUserTeams } from './teams';
 
+function fetchUserInvites() {
+  return throwOnErr(() => authServiceClient.getUserInvites());
+}
+
 export function useUserInvitesQuery() {
   return useQuery(() => ({
     queryKey: teamKeys.userInvites.queryKey,
-    queryFn: async () =>
-      await throwOnErr(() => authServiceClient.getUserInvites()),
+    queryFn: fetchUserInvites,
   }));
 }
 

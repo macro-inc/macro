@@ -30,6 +30,7 @@ type ComposeToolProps = {
 };
 
 type SendEmailSnapshot = {
+  attachments: string[];
   body: string;
   bcc: Array<{ email: string; name: string | null }>;
   cc: Array<{ email: string; name: string | null }>;
@@ -57,6 +58,7 @@ function createSendEmailSnapshot(data: SendEmail): SendEmailSnapshot {
     subject: data.subject ?? '',
     replyingToId: data.replyingToId ?? null,
     includeSignature: data.includeSignature ?? null,
+    attachments: (data.attachments ?? []).map((item) => item.documentId),
   };
 }
 

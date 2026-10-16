@@ -270,6 +270,11 @@ impl McpToolSet {
         }
     }
 
+    /// Whether this toolset owns a mangled name, without cloning its catalog.
+    pub fn contains_tool(&self, name: &str) -> bool {
+        self.tools.contains_key(&MangledName(name.to_owned()))
+    }
+
     /// Returns `true` when no tools were discovered.
     pub fn is_empty(&self) -> bool {
         self.tools.is_empty()

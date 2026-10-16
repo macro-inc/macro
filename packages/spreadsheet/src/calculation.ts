@@ -12,6 +12,12 @@ import {
   type ConditionalAppearance,
   readConditionalAppearance,
 } from './conditional-formatting';
+import {
+  type GoalSeekRequest,
+  type GoalSeekResult,
+  goalSeekInput,
+  solveGoalSeek,
+} from './goal-seek';
 import { displayNumber, numericLiteral } from './number-display';
 import { type SheetPivotLayout, sheetPivotLayouts } from './pivot-layout';
 import {
@@ -25,13 +31,15 @@ import {
   type SpreadsheetCells,
 } from './spreadsheet-document';
 import type { WorkbookSheetMetadata } from './workbook-metadata';
-import { changeWorkbookAxis } from './workbook-structure';
+import { changeWorkbookAxis, moveWorkbookRange } from './workbook-structure';
 
 export type CalculatedCell = {
   display: string;
   number?: number;
   error?: string;
   warning?: string;
+  /** The number shows as a calendar date. */
+  date?: boolean;
   /** Included only for callers requesting typed results. */
   type?: 'blank' | 'number' | 'text' | 'boolean' | 'error';
   value?: string | number | boolean | null;
@@ -78,8 +86,17 @@ export type SpreadsheetCalculator = {
     context?: CalculationContext
   ) => CompletionContext;
   changeAxis: typeof changeWorkbookAxis;
+  moveRange: typeof moveWorkbookRange;
   /** An incremental calculation for a workbook that is edited repeatedly. */
   session: () => WorkbookCalculationSession;
+  /**
+   * Goal Seek on a private copy of `sheets`. The caller's workbook is
+   * unchanged; the returned input is what a later edit would write.
+   */
+  goalSeek: (
+    sheets: CalculationSheet[],
+    request: GoalSeekRequest
+  ) => GoalSeekResult;
   dispose: () => void;
 };
 
@@ -145,11 +162,12 @@ function dateMentionSerial(iso: string): number {
 }
 
 /**
- * IronCalc assigns date and time number formats to typed dates and to formulas
- * that operate on them, as Excel does. Honor those for cells without an
- * explicit Macro format; other inferred formats stay general.
+ * Whether an Excel number format shows a date or a time of day. IronCalc
+ * assigns such formats to typed dates and to formulas that operate on them,
+ * as Excel does. Cells without an explicit Macro format honor those; other
+ * inferred formats stay general.
  */
-function inferredFormat(numberFormat: string): 'date' | 'time' | undefined {
+function dateTimeFormat(numberFormat: string): 'date' | 'time' | undefined {
   const tokens = numberFormat.replace(/"[^"]*"|\\.|\[[^\]]*\]/g, '');
   if (/[dy]/i.test(tokens)) return 'date';
   if (/[hs]/i.test(tokens)) return 'time';
@@ -911,8 +929,10 @@ function enterCell(
     }
   }
   if (!enteredArray) model.setUserInput(sheetIndex, row + 1, column + 1, input);
-  // A date pill is a date value: formulas referencing it inherit the format.
-  if (dateMention) model.updateRangeStyle(area, 'num_fmt', 'm/d/yyyy');
+  // A date pill or a number formatted as a date is a date value: formulas
+  // referencing it inherit the format.
+  if (dateMention || (cell.format === 'date' && numericLiteral.test(value)))
+    model.updateRangeStyle(area, 'num_fmt', 'm/d/yyyy');
   // Typed exponents get a 3-digit scientific format that formulas would
   // inherit; numeric literals never need an inferred display format.
   else if (!literal && /e/i.test(value) && numericLiteral.test(value))
@@ -974,7 +994,7 @@ function readCell(
   // The engine infers display formats for typed dates and for formulas that
   // refer to them, as Excel does.
   const engineFormat = entered.inferable.has(address)
-    ? inferredFormat(model.getCellNumberFormat(sheetIndex, row + 1, column + 1))
+    ? dateTimeFormat(model.getCellNumberFormat(sheetIndex, row + 1, column + 1))
     : undefined;
   // IronCalc also formats a difference of two dates as a date, so
   // formula results only count as dates from 2000 onwards; a day
@@ -983,10 +1003,12 @@ function readCell(
     engineFormat !== 'date' ||
     !cell?.value.startsWith('=') ||
     number >= MIN_FORMULA_DATE_SERIAL;
-  let formatted = displayNumber(
-    number,
-    engineFormat && dateLike ? { ...cell!, format: engineFormat } : cell
-  );
+  const shown =
+    engineFormat && dateLike ? { ...cell!, format: engineFormat } : cell;
+  let formatted = displayNumber(number, shown);
+  const date = cell?.numberFormat
+    ? dateTimeFormat(cell.numberFormat) === 'date'
+    : shown?.format === 'date';
   let warning: string | undefined;
   if (cell?.numberFormat) {
     try {
@@ -1000,6 +1022,7 @@ function readCell(
     display: formatted,
     ...(warning && { warning }),
     number,
+    ...(date && { date }),
     ...(includeTypes && { type: 'number' as const, value: number }),
   };
 }
@@ -1194,6 +1217,7 @@ function sameCalculatedCell(left: CalculatedCell, right: CalculatedCell) {
     left.number === right.number &&
     left.error === right.error &&
     left.warning === right.warning &&
+    left.date === right.date &&
     left.type === right.type &&
     left.value === right.value &&
     left.spill?.rows === right.spill?.rows &&
@@ -1221,8 +1245,150 @@ export type WorkbookCalculationSession = {
     changes: Record<string, Record<string, SpreadsheetCell | null>>,
     options?: { includeTypes?: boolean }
   ) => Record<string, Record<string, CalculatedCell | null>>;
+  /**
+   * Goal Seek on a copy of the loaded model. The loaded workbook and its
+   * cached results stay as they were.
+   */
+  goalSeek: (request: GoalSeekRequest) => GoalSeekResult;
   dispose: () => void;
 };
+
+function goalSeekLabel(sheetName: string, address: string) {
+  const quote = /[^A-Za-z0-9_]/.test(sheetName);
+  const sheet = quote ? `'${sheetName.replaceAll("'", "''")}'` : sheetName;
+  return `${sheet}!${address}`;
+}
+
+function isFormulaCell(cell: SpreadsheetCell | undefined) {
+  return !!cell && cell.format !== 'text' && cell.value.startsWith('=');
+}
+
+/** Adjust one numeric cell until a formula cell reaches `request.goal`. */
+function goalSeekOnModel(
+  model: Model,
+  sheets: CalculationSheet[],
+  request: GoalSeekRequest
+): GoalSeekResult {
+  const setSheet = sheets.findIndex((sheet) => sheet.id === request.setSheetId);
+  const changeSheet = sheets.findIndex(
+    (sheet) => sheet.id === request.changeSheetId
+  );
+  if (setSheet < 0 || changeSheet < 0)
+    return { status: 'invalid', message: 'Choose cells in this workbook.' };
+  const setPosition = parseCellAddress(request.setAddress);
+  const changePosition = parseCellAddress(request.changeAddress);
+  if (!setPosition || !changePosition)
+    return { status: 'invalid', message: 'Enter a cell such as B12.' };
+  if (!Number.isFinite(request.goal))
+    return { status: 'invalid', message: 'Enter a number for the goal.' };
+  const setLabel = goalSeekLabel(sheets[setSheet].name, request.setAddress);
+  const changeLabel = goalSeekLabel(
+    sheets[changeSheet].name,
+    request.changeAddress
+  );
+  if (setSheet === changeSheet && request.setAddress === request.changeAddress)
+    return {
+      status: 'invalid',
+      message: 'Set cell and the changing cell have to be different cells.',
+    };
+  const setSource = sheets[setSheet].cells[request.setAddress];
+  const changeSource = sheets[changeSheet].cells[request.changeAddress];
+  if (!isFormulaCell(setSource))
+    return {
+      status: 'invalid',
+      message: `${setLabel} needs a formula. Goal Seek changes another cell until that formula reaches the goal.`,
+    };
+  if (isFormulaCell(changeSource))
+    return {
+      status: 'invalid',
+      message: `${changeLabel} contains a formula. Choose a cell that holds a number.`,
+    };
+  if (changeSource?.format === 'text' && changeSource.value !== '')
+    return {
+      status: 'invalid',
+      message: `${changeLabel} is plain text. Choose a cell that holds a number.`,
+    };
+  if (
+    setPosition.row >= sheets[setSheet].rowCount ||
+    changePosition.row >= sheets[changeSheet].rowCount
+  )
+    return { status: 'invalid', message: 'That cell is outside the sheet.' };
+
+  const setRow = setPosition.row + 1;
+  const setColumn = setPosition.column + 1;
+  const changeRow = changePosition.row + 1;
+  const changeColumn = changePosition.column + 1;
+  const readSet = () => {
+    if (model.getCellType(setSheet, setRow, setColumn) !== 1) return;
+    const value = model.getCellNumber(setSheet, setRow, setColumn);
+    return value !== undefined && Number.isFinite(value) ? value : undefined;
+  };
+  if (
+    changeSource &&
+    changeSource.value !== '' &&
+    model.getCellType(changeSheet, changeRow, changeColumn) !== 1
+  )
+    return {
+      status: 'invalid',
+      message: `${changeLabel} needs to hold a number.`,
+    };
+  let guess = 0;
+  const current = model.getCellNumber(changeSheet, changeRow, changeColumn);
+  if (current !== undefined && Number.isFinite(current)) guess = current;
+
+  const evaluate = (input: number) => {
+    model.pauseEvaluation();
+    try {
+      model.setUserInput(
+        changeSheet,
+        changeRow,
+        changeColumn,
+        goalSeekInput(input)
+      );
+    } catch {
+      throw new Error('GOAL_SEEK_CHANGE_FAILED');
+    } finally {
+      model.resumeEvaluation();
+    }
+    model.evaluate();
+    return readSet();
+  };
+
+  let outcome: ReturnType<typeof solveGoalSeek>;
+  try {
+    outcome = solveGoalSeek({ goal: request.goal, guess, evaluate });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'GOAL_SEEK_CHANGE_FAILED')
+      return {
+        status: 'invalid',
+        message: `Goal Seek could not change ${changeLabel}. Choose a cell that holds a number.`,
+      };
+    throw error;
+  }
+  if (!outcome || outcome.status === 'unchanged') {
+    if (outcome?.status === 'unchanged')
+      return {
+        status: 'invalid',
+        message: `Changing ${changeLabel} does not change ${setLabel}.`,
+      };
+    return {
+      status: 'invalid',
+      message: `The formula in ${setLabel} does not produce a number Goal Seek can adjust.`,
+    };
+  }
+  const input = goalSeekInput(outcome.input);
+  return {
+    status: outcome.status,
+    input,
+    value: Number(input),
+    result: outcome.result,
+    evaluations: outcome.evaluations,
+    setSheetId: request.setSheetId,
+    setAddress: request.setAddress,
+    changeSheetId: request.changeSheetId,
+    changeAddress: request.changeAddress,
+  };
+}
 
 function createWorkbookCalculationSession(): WorkbookCalculationSession {
   let workbook: EngineWorkbook | undefined;
@@ -1324,6 +1490,26 @@ function createWorkbookCalculationSession(): WorkbookCalculationSession {
         throw error;
       }
     },
+    goalSeek(request) {
+      if (!workbook)
+        return {
+          status: 'invalid',
+          message: 'Calculate the sheet before using Goal Seek.',
+        };
+      let clone: Model | undefined;
+      try {
+        // A copy keeps trial values out of the workbook the editor is showing.
+        clone = Model.fromBytes(workbook.model.toBytes(), 'en');
+        return goalSeekOnModel(clone, workbook.sheets, request);
+      } catch (error) {
+        return {
+          status: 'invalid',
+          message: error instanceof Error ? error.message : 'Goal Seek failed.',
+        };
+      } finally {
+        if (clone) freeModel(clone);
+      }
+    },
     dispose,
   };
 }
@@ -1362,6 +1548,7 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
 
   return {
     changeAxis: changeWorkbookAxis,
+    moveRange: moveWorkbookRange,
     session() {
       if (disposed) throw new Error('The spreadsheet calculator is disposed.');
       return createWorkbookCalculationSession();
@@ -1388,6 +1575,15 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
       ]).sheet1;
     },
     calculateWorkbook,
+    goalSeek(sheets, request) {
+      if (disposed) throw new Error('The spreadsheet calculator is disposed.');
+      const workbook = buildWorkbook(sheets);
+      try {
+        return goalSeekOnModel(workbook.model, workbook.sheets, request);
+      } finally {
+        freeModel(workbook.model);
+      }
+    },
     copy(copies, context) {
       if (disposed) throw new Error('The spreadsheet calculator is disposed.');
       const model = new Model('Macro copy', 'en', 'UTC', 'en');

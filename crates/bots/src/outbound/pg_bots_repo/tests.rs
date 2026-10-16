@@ -18,6 +18,8 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
 
+mod agent_dm;
+
 const USER_OWNER: &str = "macro|bot-owner@example.com";
 const USER_OTHER: &str = "macro|bot-other@example.com";
 const TEAM_MEMBER: &str = "macro|bot-team-member@example.com";

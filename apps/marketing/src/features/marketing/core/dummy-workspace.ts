@@ -39,6 +39,7 @@ export type WorkspaceComment = {
   documentId?: string;
   replyTo?: string;
   reactions?: string[];
+  emojiReactions?: { emoji: string; users: string[] }[];
 };
 export type WorkspaceTask = {
   id: string;
@@ -50,6 +51,7 @@ export type WorkspaceTask = {
   creator: HomepagePersonId;
   tags: string[];
   channel: string;
+  relatedDocumentIds?: string[];
   steps: { id: string; text: string; done: boolean }[];
   comments: WorkspaceComment[];
 };
@@ -236,7 +238,7 @@ export function dummyData(): DummyData {
         ...demoEmails,
         {
           id: 'feedback',
-          sender: 'Maya Chen',
+          sender: 'Maya',
           subject: 'Feedback from the pilot team',
           snippet:
             'The shared inbox is already saving us a few hours every week.',
@@ -246,7 +248,7 @@ export function dummyData(): DummyData {
         },
         {
           id: 'assets',
-          sender: 'Julia Westphal',
+          sender: 'Julia',
           subject: 'Final launch assets',
           snippet: 'The new screenshots and product walkthrough are ready.',
           time: '8:10 AM',
@@ -255,7 +257,7 @@ export function dummyData(): DummyData {
         },
         {
           id: 'research',
-          sender: 'Alex Rivera',
+          sender: 'Alex',
           subject: 'Notes from our customer interviews',
           snippet:
             'I pulled together the themes we heard across the five sessions.',
@@ -266,7 +268,7 @@ export function dummyData(): DummyData {
         },
         {
           id: 'coffee',
-          sender: 'Sam Parker',
+          sender: 'Sam',
           subject: 'Coffee next week?',
           snippet:
             'Would love to hear how the launch went. Tuesday works for me.',

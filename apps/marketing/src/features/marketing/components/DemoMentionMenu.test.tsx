@@ -68,7 +68,7 @@ it('shows standard groups, filters, and inserts through controlled input without
   fireEvent.input(editor, { target: { value: 'Please ask @julia' } });
   expect(screen.getAllByRole('option')).toHaveLength(1);
   fireEvent.keyDown(editor, { key: 'Enter' });
-  expect(draft()).toBe('Please ask @Julia Westphal ');
+  expect(draft()).toBe('Please ask @Julia ');
   expect(send).not.toHaveBeenCalled();
   expect(screen.queryByRole('listbox')).toBeNull();
   fireEvent.input(editor, { target: { value: `${draft()}to review this` } });
@@ -180,13 +180,13 @@ it('supports opted-in legacy demos without changing their style scope', () => {
 it('uses the real menu category drilldown and return behavior', () => {
   const { editor } = composer();
   fireEvent.input(editor, { target: { value: '@' } });
-  fireEvent.click(screen.getByRole('button', { name: 'View all (10)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'View all (9)' }));
   expect(screen.queryByText('People')).toBeNull();
-  expect(screen.getAllByRole('option')).toHaveLength(10);
+  expect(screen.getAllByRole('option')).toHaveLength(9);
   fireEvent.click(screen.getByRole('button', { name: '← Back to everything' }));
   expect(screen.getByText('People')).toBeTruthy();
   fireEvent.keyDown(editor, { key: 'ArrowRight' });
-  expect(screen.getAllByRole('option')).toHaveLength(6);
+  expect(screen.getAllByRole('option')).toHaveLength(7);
   fireEvent.keyDown(editor, { key: 'ArrowLeft' });
   expect(screen.getByText('Channels')).toBeTruthy();
 });

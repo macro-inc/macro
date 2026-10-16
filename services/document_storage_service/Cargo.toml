@@ -27,6 +27,8 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+access_requests = { path = "../../crates/access_requests" }
+async-trait = { workspace = true }
 ai_billing = { path = "../../crates/ai_billing" }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
@@ -58,7 +60,7 @@ base64 = { workspace = true }
 bots = { path = "../../crates/bots" }
 bot_id = { path = "../../crates/bot_id" }
 bytes = { workspace = true }
-calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "notify", "postgres"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
 ] }
@@ -102,11 +104,23 @@ databases = { path = "../../crates/databases", features = [
   "inbound",
   "postgres",
 ] }
+database_webhooks = { path = "../../crates/database_webhooks", features = [
+  "inbound",
+  "postgres",
+] }
+forms = { path = "../../crates/forms", features = [
+  "entity_mutation",
+  "gateway",
+  "inbound",
+  "postgres",
+] }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
 doppler-config = { workspace = true }
 dynamodb_client = { path = "../../crates/dynamodb_client" }
-email = { path = "../../crates/email", features = ["outbound", "ports"] }
+email = { path = "../../crates/email", features = ["outbound", "ports", "gmail_senders"] }
+gmail_client = { path = "../../crates/gmail_client" }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
 embedding = { path = "../../crates/embedding" }
 entity_access = { path = "../../crates/entity_access", features = [
   "inbound",
@@ -138,11 +152,15 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "service",
 ] }
 graphql_soup = { path = "../../crates/graphql_soup" }
+graphql_crm = { path = "../../crates/graphql_crm" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
+graphql_calendar = { path = "../../crates/graphql_calendar" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 import = { path = "../../crates/import" }
 initiative = { path = "../../crates/initiative", features = ["inbound", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
@@ -253,6 +271,8 @@ task_dedup = { path = "../../crates/task_dedup" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
 tokio-util = { workspace = true, features = ["rt"] }
+tokio-tungstenite-signal = { workspace = true }
+tungstenite-signal = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["compression-gzip"] }
 tracing = { workspace = true }
@@ -270,12 +290,15 @@ webhook = { path = "../../crates/webhook", features = [
   "outbound",
   "worker",
 ] }
+work_feed = { path = "../../crates/work_feed", features = ["outbound"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
+flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 ordered-float = { workspace = true }
 
 [package.metadata.cargo-machete]

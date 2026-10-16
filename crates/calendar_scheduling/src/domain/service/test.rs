@@ -203,6 +203,7 @@ struct Calendar {
     lose_move_response: AtomicBool,
     lose_cancel_response: AtomicBool,
     events: Mutex<HashMap<Uuid, Uuid>>,
+    busy: Mutex<Vec<BusyRange>>,
 }
 impl Calendars for Arc<Calendar> {
     async fn creation_calendar(&self, host: &str) -> Result<Uuid, Error> {
@@ -215,7 +216,7 @@ impl Calendars for Arc<Calendar> {
         _: DateTime<Utc>,
         _: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
-        Ok(vec![])
+        Ok(self.busy.lock().unwrap().clone())
     }
     async fn create(&self, record: &BookingRecord, _: &EventType) -> Result<(Uuid, String), Error> {
         let id = *self
@@ -247,6 +248,9 @@ impl Calendars for Arc<Calendar> {
 }
 struct Members;
 impl Directory for Members {
+    async fn user_teams(&self, _: &str) -> Result<Vec<Uuid>, Error> {
+        Ok(vec![])
+    }
     async fn members(&self, _: Uuid) -> Result<Vec<TeamMember>, Error> {
         Ok(vec![
             TeamMember {
@@ -284,6 +288,7 @@ fn profile(team: Option<Uuid>) -> Profile {
         description: String::new(),
         duration_minutes: 30,
         location: String::new(),
+        macro_call: false,
         google_meet: false,
         enabled: true,
         schedule_id: schedule.id,
@@ -339,7 +344,7 @@ async fn team_permissions_and_host_membership_are_server_enforced() {
     let team = Some(Uuid::new_v4());
     let p = profile(team);
     assert!(matches!(
-        service.save("member", team, p.clone()).await,
+        service.save("stranger", team, p.clone()).await,
         Err(Error::Forbidden)
     ));
     assert!(matches!(
@@ -352,8 +357,8 @@ async fn team_permissions_and_host_membership_are_server_enforced() {
         service.save("admin", team, bad).await,
         Err(Error::Invalid(_))
     ));
-    assert!(service.save("admin", team, p).await.is_ok());
-    assert!(service.settings("member", team).await.is_ok());
+    assert!(service.save("member", team, p).await.is_ok());
+    assert!(service.settings("admin", team).await.is_ok());
 }
 #[tokio::test]
 async fn personal_calendar_cannot_impersonate_another_host() {
@@ -446,6 +451,42 @@ async fn concurrent_round_robin_bookings_use_distinct_hosts_and_calendars() {
     ));
     assert_eq!(cal.creates.load(Ordering::SeqCst), 2);
 }
+#[tokio::test]
+async fn pending_approval_ignores_points_but_rejects_reversed_calendar_facts() {
+    let calendars = Arc::new(Calendar::default());
+    let service = TestService::new(Arc::new(Memory::default()), calendars.clone(), Members);
+    let profile = service.save("admin", None, profile(None)).await.unwrap();
+    let mut record = service
+        .book(profile.id, profile.event_types[0].id, request())
+        .await
+        .unwrap();
+    record.booking.status = BookingStatus::Pending;
+    record.calendar_event_id = None;
+    let id = record.booking.id;
+    let point = record.booking.starts_at + Duration::minutes(5);
+    let host = record.booking.hosts[0].clone();
+    service
+        .repository
+        .bookings
+        .lock()
+        .unwrap()
+        .insert(id, record);
+    *calendars.busy.lock().unwrap() = vec![BusyRange {
+        host,
+        start: point,
+        end: point - Duration::seconds(1),
+    }];
+    assert!(matches!(
+        service.approve("admin", id).await,
+        Err(Error::CalendarUnavailable)
+    ));
+    calendars.busy.lock().unwrap()[0].end = point;
+    assert_eq!(
+        service.approve("admin", id).await.unwrap().status,
+        BookingStatus::Confirmed
+    );
+}
+
 #[tokio::test]
 async fn pending_booking_can_be_approved_after_link_is_removed() {
     let service = TestService::new(
@@ -555,6 +596,9 @@ async fn visitor_time_zone_uses_the_visitors_local_date() {
 async fn approval_rechecks_assigned_hosts_even_after_link_removal() {
     struct ChangingMembers(Arc<Mutex<Vec<TeamMember>>>);
     impl Directory for ChangingMembers {
+        async fn user_teams(&self, _: &str) -> Result<Vec<Uuid>, Error> {
+            Ok(vec![])
+        }
         async fn members(&self, _: Uuid) -> Result<Vec<TeamMember>, Error> {
             Ok(self.0.lock().unwrap().clone())
         }
@@ -598,6 +642,45 @@ async fn approval_rechecks_assigned_hosts_even_after_link_removal() {
         service.approve("admin", b.booking.id).await,
         Err(Error::Forbidden)
     ));
+}
+
+#[tokio::test]
+async fn hosts_manage_the_team_meetings_they_host() {
+    let store = Arc::new(Memory::default());
+    let service = TestService::new(store.clone(), Arc::new(Calendar::default()), Members);
+    let team = Some(Uuid::new_v4());
+    let mut p = profile(team);
+    p.event_types[0].hosts = vec!["member".into()];
+    let p = service.save("admin", team, p).await.unwrap();
+    let r = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    let set_hosts = |hosts: &[&str]| {
+        let mut data = store.bookings.lock().unwrap();
+        data.get_mut(&r.booking.id).unwrap().booking.hosts =
+            hosts.iter().map(|host| host.to_string()).collect();
+    };
+    set_hosts(&["admin"]);
+    assert!(matches!(
+        service.manage("member", r.booking.id).await,
+        Err(Error::Forbidden)
+    ));
+    assert!(matches!(
+        service.cancel(r.booking.id, None, Some("member")).await,
+        Err(Error::Forbidden)
+    ));
+    set_hosts(&["member"]);
+    assert!(service.manage("admin", r.booking.id).await.is_ok());
+    assert!(service.manage("member", r.booking.id).await.is_ok());
+    assert_eq!(
+        service
+            .cancel(r.booking.id, None, Some("member"))
+            .await
+            .unwrap()
+            .status,
+        BookingStatus::Cancelled
+    );
 }
 
 #[tokio::test]
@@ -1135,3 +1218,51 @@ async fn stale_team_events_can_be_repaired_one_at_a_time() {
         Err(Error::Invalid(_))
     ));
 }
+
+#[tokio::test]
+async fn attaching_booking_targets_requires_current_access_and_an_enabled_saved_event() {
+    let service = TestService::new(
+        Arc::new(Memory::default()),
+        Arc::new(Calendar::default()),
+        Members,
+    );
+    let saved = service.save("admin", None, profile(None)).await.unwrap();
+    let event = saved.event_types[0].id;
+    assert!(
+        service
+            .validate_attachment("admin", saved.id, event)
+            .await
+            .is_ok()
+    );
+    assert!(matches!(
+        service
+            .validate_attachment("stranger", saved.id, event)
+            .await,
+        Err(Error::Forbidden)
+    ));
+    assert!(matches!(
+        service
+            .validate_attachment("admin", saved.id, Uuid::new_v4())
+            .await,
+        Err(Error::NotFound)
+    ));
+    let mut disabled = saved.clone();
+    disabled.event_types[0].enabled = false;
+    service.save("admin", None, disabled).await.unwrap();
+    assert!(matches!(
+        service.validate_attachment("admin", saved.id, event).await,
+        Err(Error::NotFound)
+    ));
+}
+
+impl AttachmentReadiness for Arc<Calendar> {
+    async fn ready(&self, _: &str) -> Result<(), Error> {
+        Ok(())
+    }
+}
+mod booking_links;
+
+mod management;
+
+#[cfg(all(feature = "client", feature = "inbound"))]
+mod http_administration;

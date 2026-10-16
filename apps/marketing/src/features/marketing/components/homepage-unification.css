@@ -1,7 +1,7 @@
 .homepage-unification { position: relative; isolation: isolate; overflow-x: clip; width: min(780px, calc(100% - 40px)); margin: 0 auto; padding: 80px 0 28px; color: var(--color-ink); }
 .homepage-unification .feature-flow { height: clamp(280px, 36vw, 370px); }
 .unification-copy { position: relative; max-width: 680px; margin: 72px auto 0; text-align: center; }
-.unification-copy h2, .unification-before { margin: 0; font-family: 'Roboto Slab Variable', display, serif; font-weight: 315; font-size: 48px; line-height: 1.12; letter-spacing: -.025em; }
+.unification-copy h2, .unification-before { margin: 0; font-family: 'Roboto Slab Variable', display, serif; font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); font-size: 48px; line-height: 1.12; letter-spacing: -.025em; }
 .unification-before { position: absolute; inset: 0 0 auto; visibility: hidden; }
 .unification-subtext { margin: 24px 0 0; font-size: 14px; line-height: 1.8; color: var(--color-ink-muted); }
 .unification-subtext-desktop { display: none; }

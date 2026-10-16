@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_messages\n            (id, parent_entity_type, parent_entity_id, sender_id, content)\n           VALUES ($1, 'document', 'doc-with-discussion', 'macro|user-a@test.com', 'discussion')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d4acdd029935389e603e8ccb57e4490f2cbd478479778c9abd42ed6c1c4da784"
+}

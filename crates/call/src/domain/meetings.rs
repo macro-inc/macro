@@ -77,6 +77,9 @@ pub struct Meeting {
     pub channel_call_id: Option<Uuid>,
 }
 
+/// Longest accepted meeting title, in characters.
+pub const MAX_MEETING_TITLE_CHARS: usize = 200;
+
 /// Inputs for creating a meeting without starting its RTC room.
 #[derive(Debug, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -100,10 +103,13 @@ impl CreateMeetingRequest {
             .unwrap_or_else(|| "Macro call".to_string())
             .trim()
             .to_string();
-        if title.is_empty() || title.chars().count() > 200 || title.chars().any(char::is_control) {
-            return Err(CallError::InvalidRequest(
-                "Meeting title must contain 1–200 characters".to_string(),
-            ));
+        if title.is_empty()
+            || title.chars().count() > MAX_MEETING_TITLE_CHARS
+            || title.chars().any(char::is_control)
+        {
+            return Err(CallError::InvalidRequest(format!(
+                "Meeting title must contain 1–{MAX_MEETING_TITLE_CHARS} characters"
+            )));
         }
         match (self.scheduled_start, self.scheduled_end) {
             (None, None) => {}

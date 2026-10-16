@@ -1,9 +1,10 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest,
-            SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField,
-            TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
+            AdvancedSortParams, CrmPropertyEdge, GroupedSortRequest, NotifiedEntity,
+            NotifiedSoupRequest, SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration,
+            SoupPropertiesField, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
+            WorkFeedCandidateRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -22,6 +23,7 @@ use system_properties::SystemPropertyKey;
 mod agent_session;
 mod calendar_event;
 mod candidate_gates;
+mod crm_association;
 mod database_row;
 mod expanded;
 pub mod grouping;
@@ -29,6 +31,7 @@ mod initiative;
 mod notified;
 mod touched;
 mod unexpanded;
+mod work_feed;
 
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
@@ -304,6 +307,14 @@ impl SoupRepo for PgSoupRepo {
         .await
     }
 
+    async fn crm_property_edges<'a>(
+        &self,
+        company_ids: &'a [uuid::Uuid],
+        contact_ids: &'a [uuid::Uuid],
+    ) -> Result<Vec<CrmPropertyEdge>, Self::Err> {
+        crm_association::property_edges(&self.pool.0, company_ids, contact_ids).await
+    }
+
     async fn touched_soup_page<'a>(
         &self,
         req: TouchedSoupRequest<'a>,
@@ -316,6 +327,13 @@ impl SoupRepo for PgSoupRepo {
         req: NotifiedSoupRequest<'a>,
     ) -> Result<Vec<NotifiedEntity>, Self::Err> {
         notified::notified_soup_page(&self.pool.0, req).await
+    }
+
+    async fn work_feed_soup_page<'a>(
+        &self,
+        req: WorkFeedCandidateRequest<'a>,
+    ) -> Result<Vec<WorkFeedCandidate>, Self::Err> {
+        work_feed::work_feed_soup_page(&self.pool.0, req).await
     }
 }
 
@@ -423,12 +441,12 @@ pub(crate) async fn populate_properties(
                 SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
                 SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::CrmContact(_) => None,
                 SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
                 SoupItem::CalendarEvent(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Channel(_)
                 | SoupItem::ChannelThread(_)
                 | SoupItem::ForeignEntity(_)
-                | SoupItem::Reminder(_)
                 | SoupItem::AgentSession(_) => None,
                 SoupItem::DatabaseRow(x) => properties_map.get(&x.id.to_string()),
             }

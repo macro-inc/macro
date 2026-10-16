@@ -1,3 +1,4 @@
+import type { DraftAttempt } from '@app/features/email-compose/core/local-draft';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import {
   executeOptimisticMutation,
@@ -44,8 +45,8 @@ import {
  * becoming a primary key. `threadDbId` is a stable local handle for new
  * standalone drafts, or the existing conversation ID for replies.
  *
- * The `sender*` and `optimistic*` fields are client-only — they feed the
- * optimistic draft entity and are stripped from the mutation variables.
+ * Sender email is persisted on the wire as well as the optimistic entity.
+ * Sender metadata and optimistic-only fields are stripped from the variables.
  */
 export type GraphqlSaveEmailDraftArgs = Omit<
   SaveEmailDraftInput,
@@ -55,7 +56,7 @@ export type GraphqlSaveEmailDraftArgs = Omit<
   /** Sending inbox id for the optimistic entity's `linkId` — the input's
    * `linkId` is deliberately absent when sending from the primary inbox. */
   senderLinkId: string;
-  /** Sending address for the optimistic entity's `from`. */
+  /** Verified sending address, persisted and used by the optimistic entity. */
   senderEmail: string;
   /** Plain (non-base64) editor HTML for the optimistic entity's
    * `bodyHtmlSanitized` — responses carry that field unencoded. Unsanitized
@@ -71,6 +72,8 @@ export type GraphqlSaveEmailDraftArgs = Omit<
   senderIsSignal?: boolean;
   /** Original queue coalescing key survives adoption of server IDs. */
   mutationUuid?: string;
+  clientMetadata?: DraftAttempt;
+  localRevision?: number;
 };
 
 /** Maps a REST-shaped contact to the mutation's input shape. */
@@ -93,6 +96,9 @@ export type SaveEmailDraftFailureCode =
   | 'INBOX_NOT_FOUND'
   | 'UNAUTHORIZED'
   | 'INVALID'
+  | 'INVALID_SENDER'
+  | 'NEEDS_REAUTH'
+  | 'SEND_AS_UNAVAILABLE'
   | 'INTERNAL'
   | 'NETWORK';
 
@@ -116,6 +122,9 @@ export function draftFailureCode(
     case 'INBOX_NOT_FOUND':
     case 'UNAUTHORIZED':
     case 'INVALID':
+    case 'INVALID_SENDER':
+    case 'NEEDS_REAUTH':
+    case 'SEND_AS_UNAVAILABLE':
       return code;
     default:
       return 'INTERNAL';
@@ -241,13 +250,14 @@ export async function executeGraphqlSaveEmailDraft(
   // Strip the client-only fields; only schema fields may reach the wire.
   const {
     senderLinkId: _senderLinkId,
-    senderEmail: _senderEmail,
     optimisticBodyHtml: _optimisticBodyHtml,
     existingDraft: _existingDraft,
     existingThread: _existingThread,
     newThreadOwnerId: _newThreadOwnerId,
     senderIsSignal: _senderIsSignal,
     mutationUuid: _mutationUuid,
+    clientMetadata: _clientMetadata,
+    localRevision: _localRevision,
     ...input
   } = args;
   const variables: SaveEmailDraftMutationVariables = { input };
@@ -295,6 +305,7 @@ export async function executeGraphqlSaveEmailDraft(
       // draft instead of one per debounce tick. The delete reuses the key —
       // a discard supersedes any still-queued save.
       uuid: args.mutationUuid ?? String(args.draftId),
+      clientMetadata: args.clientMetadata,
       identityBindings: [
         {
           localKey: `GraphqlSoupEmailMessage:${args.draftId}`,
@@ -369,6 +380,7 @@ export type GraphqlDeleteEmailDraftArgs = {
   threadDbId: string;
   existingThread?: DraftThread;
   mutationUuid?: string;
+  clientMetadata?: DraftAttempt;
 };
 
 /**
@@ -425,6 +437,7 @@ export async function executeGraphqlDeleteEmailDraft(
       // still-queued save of this draft — the replaced entry never replays,
       // and the delete itself is an idempotent no-op if nothing was created.
       uuid: args.mutationUuid ?? args.draftId,
+      clientMetadata: args.clientMetadata,
       identityBindings: [
         {
           localKey: `GraphqlSoupEmailMessage:${args.draftId}`,

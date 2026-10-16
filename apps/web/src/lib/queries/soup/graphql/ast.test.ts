@@ -269,83 +269,6 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
-  it('maps the reminder opt-in so reminders are not silently dropped', () => {
-    // `includeReminders` is what opts a query into reminders at all. Dropping
-    // it leaves the server on its default (exclude), which reads as an empty
-    // Reminders view rather than an error.
-    const input = makeInput({
-      include: { includeReminders: true },
-    });
-
-    expect(input).toMatchObject({
-      initial: {
-        filters: { reminderFilter: { literal: { include: true } } },
-      },
-    });
-  });
-
-  it('maps the completed and fired reminder literals', () => {
-    const input = makeInput({
-      include: {
-        includeReminders: true,
-        reminderCompleted: false,
-        reminderFired: true,
-      },
-    });
-
-    expect(input).toMatchObject({
-      initial: {
-        filters: {
-          // Literal order follows FIELD_CONFIG, which puts the opt-in last.
-          reminderFilter: {
-            and: {
-              left: { literal: { completed: false } },
-              right: {
-                and: {
-                  left: { literal: { fired: true } },
-                  right: { literal: { include: true } },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('maps reminder id and entity literals', () => {
-    const input = makeGraphqlSoupInput({
-      params: { limit: 100, sort_method: 'updated_at' },
-      body: {
-        remf: {
-          '&': [{ l: { id: 'reminder-1' } }, { l: { ent: 'document:doc-1' } }],
-        },
-      } as never,
-    });
-
-    expect(input).toMatchObject({
-      initial: {
-        filters: {
-          reminderFilter: {
-            and: {
-              left: { literal: { id: 'reminder-1' } },
-              right: { literal: { entity: 'document:doc-1' } },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('throws for unknown reminder literals so callers can fall back', () => {
-    expect(() =>
-      makeGraphqlSoupInput({
-        params: { limit: 100, sort_method: 'updated_at' },
-        body: { remf: { l: { enabled: true } } } as never,
-      })
-    ).toThrow('Unsupported GraphQL Soup AST');
-  });
-
   it('maps calendar event id filters', () => {
     const input = makeGraphqlSoupInput({
       params: { limit: 100, sort_method: 'updated_at' },
@@ -404,6 +327,51 @@ describe('makeGraphqlSoupInput', () => {
         },
       },
     });
+  });
+
+  it('translates the CRM record scope, record literals, and name search', () => {
+    const company = '0198a1b2-c3d4-7e5f-8061-728394a5b700';
+    const contact = '0198a1b2-c3d4-7e5f-8061-728394a5b701';
+    const body = {
+      crma: { company },
+      df: {
+        '&': [{ l: { crm: { contact } } }, { l: { nc: 'Renewal' } }],
+      },
+    };
+    expect(
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: body as never,
+      })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          crmAssociation: { company },
+          documentFilter: {
+            and: {
+              left: { literal: { crmAssociated: { contact } } },
+              right: { literal: { nameContains: 'Renewal' } },
+            },
+          },
+        },
+      },
+    });
+    // Grouped CRM Tasks keep the scope on the grouped transport too.
+    expect(
+      makeGraphqlGroupedSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { crma: { contact }, df: { l: { dst: 'task' } } } as never,
+        groupBy: { type: 'property', propertyDefinitionId: 'status' },
+      })
+    ).toMatchObject({
+      initial: { filters: { crmAssociation: { contact } } },
+    });
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { crma: { team: company } } as never,
+      })
+    ).toThrow('Unsupported GraphQL Soup AST');
   });
 
   it('throws for unsupported calendar literals so callers can fall back', () => {

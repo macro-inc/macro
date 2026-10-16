@@ -2,6 +2,7 @@
 // bun run scripts/generate-api-schema.ts <service-name> // generate for specific service
 // bun run scripts/generate-api-schema.ts               // generate for all services
 // bun run scripts/generate-api-schema.ts --check       // verify types are up to date (for CI)
+// bun run scripts/generate-api-schema.ts --print-cargo-bins // print the `--bin` args phase 1 builds (for CI)
 //
 // This script generates OpenAPI schemas by running the local Rust binaries
 // instead of fetching from deployed services.
@@ -37,7 +38,12 @@ const getServiceClientsDir = () =>
 	path.resolve(import.meta.dirname, "../src/lib/service-clients");
 // Parse arguments
 const getTargetServices = () =>
-	process.argv.slice(2).filter((arg) => arg !== "--check");
+	process.argv
+		.slice(2)
+		.filter((arg) => arg !== "--check" && arg !== "--print-cargo-bins");
+
+const openApiBinArgs = (crateNames: string[]) =>
+	crateNames.flatMap((crate) => ["--bin", `${crate}_openapi`]);
 
 // Build all OpenAPI binaries in a single cargo invocation (cargo parallelizes internally).
 async function buildOpenApiBinaries(
@@ -46,7 +52,7 @@ async function buildOpenApiBinaries(
 ): Promise<void> {
 	if (crateNames.length === 0) return;
 
-	const binArgs = crateNames.flatMap((crate) => ["--bin", `${crate}_openapi`]);
+	const binArgs = openApiBinArgs(crateNames);
 
 	console.log(`Building ${crateNames.length} OpenAPI binaries...`);
 	console.log(`cargo build args: ${binArgs.join(" ")}`);
@@ -215,6 +221,13 @@ async function main() {
 	const crateNames = servicesToProcess
 		.map((s) => serviceToCrate[s.name])
 		.filter((crate): crate is string => !!crate);
+
+	// CI builds these together with other schema binaries in one cargo
+	// invocation, so the phase 1 build below finds them fresh.
+	if (process.argv.includes("--print-cargo-bins")) {
+		console.log(openApiBinArgs(crateNames).join(" "));
+		return;
+	}
 
 	console.log(`\nProcessing ${servicesToProcess.length} service(s)...\n`);
 

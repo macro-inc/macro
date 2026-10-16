@@ -18,6 +18,9 @@ use notification_hex::domain::{
 use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Notification ingress adapter for channel notification effects.
 #[derive(Clone)]
 pub struct NotificationChannelSender<I> {
@@ -70,18 +73,23 @@ async fn send_invite_notifications(
         message_content,
         common,
     } = delivery;
+    let notification = ChannelInviteMetadata {
+        invited_by: invited_by_user_id.clone(),
+        channel_name: common.channel_name,
+        is_direct_message: matches!(
+            common.channel_type,
+            model_notifications::ChannelType::DirectMessage
+        ),
+        sender_profile_picture_url,
+        message_content,
+    };
     let _ = tokio::try_join!(
         ingress.send_notification(
             SendNotificationRequestBuilder {
                 notification_entity: model_entity::EntityType::Channel
                     .with_entity_string(channel_id.to_string()),
                 secondary_notification_entity: None,
-                notification: ChannelInviteMetadata {
-                    invited_by: invited_by_user_id.clone(),
-                    channel_name: common.channel_name.clone(),
-                    sender_profile_picture_url: sender_profile_picture_url.clone(),
-                    message_content: message_content.clone(),
-                },
+                notification: notification.clone(),
                 sender_id: Some(invited_by_user_id.clone()),
                 recipient_ids: registered_recipient_ids,
             }
@@ -94,12 +102,7 @@ async fn send_invite_notifications(
                 notification_entity: model_entity::EntityType::Channel
                     .with_entity_string(channel_id.to_string()),
                 secondary_notification_entity: None,
-                notification: ChannelInviteMetadata {
-                    invited_by: invited_by_user_id.clone(),
-                    channel_name: common.channel_name.clone(),
-                    sender_profile_picture_url,
-                    message_content,
-                },
+                notification,
                 sender_id: Some(invited_by_user_id.clone()),
                 recipient_ids: unregistered_recipient_ids,
             }

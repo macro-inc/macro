@@ -45,6 +45,7 @@ use super::ports::{
 };
 use super::upload::{build_destination_map, build_root_folder};
 
+mod purge_owned;
 #[cfg(test)]
 mod tests;
 
@@ -198,6 +199,16 @@ where
             .get_projects_for_user(user_id.as_ref())
             .await
             .map_err(|error| internal_error(error, "unable to list projects"))
+    }
+
+    async fn list_accessible_projects(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Project>, ProjectError> {
+        self.repo
+            .get_accessible_projects_for_user(user_id.as_ref())
+            .await
+            .map_err(|error| internal_error(error, "unable to list accessible projects"))
     }
 
     async fn list_pending_projects(
@@ -661,7 +672,7 @@ where
         let event_owner = actor.clone();
         let event_name = args.root_folder_name.clone();
         let event_parent_project_id = args.parent_id.clone();
-        let root_folder = build_root_folder(&args.root_folder_name, args.content)
+        let root_folder = build_root_folder(&args.root_folder_name, args.content, &args.folders)
             .map_err(|error| internal_error(error, "unable to prepare folder upload"))?;
 
         // The uploaded projects and documents all share the owner's team-derived

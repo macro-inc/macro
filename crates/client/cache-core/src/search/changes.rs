@@ -21,6 +21,7 @@ const PRESENTATION_FIELDS: &[&str] = &[
     "subType",
     "channelType",
     "participants",
+    "senders",
 ];
 
 /// Retains only the projection/row fields needed for a before/after comparison.

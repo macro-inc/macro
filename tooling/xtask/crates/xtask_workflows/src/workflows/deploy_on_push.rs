@@ -1,6 +1,8 @@
 //! `Deploy on Push` — the single push-to-main dev deploy pipeline. Mirrors the
 //! production release flow: cloud storage first, then the sync service and web
-//! app, with every stage deploying unconditionally.
+//! app, with every stage deploying unconditionally. The web app *builds* in
+//! parallel with the backend; only its upload waits, so the frontend still
+//! goes live last.
 //!
 //! Nothing is path-gated, deliberately. The pipeline serializes on one
 //! concurrency group, and GitHub cancels a *pending* run as soon as a newer one
@@ -71,6 +73,7 @@ pub fn deploy_on_push() -> Workflow {
         )
         .add_job("deploy-cloud-storage", deploy_cloud_storage())
         .add_job("deploy-sync-service", deploy_sync_service())
+        .add_job("build-web-app", build_web_app())
         .add_job("deploy-web-app", deploy_web_app())
 }
 
@@ -108,6 +111,20 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
         "#})?,
     );
 
+    let web_build = crate::workflows::job_mut(root, "build-web-app")?;
+    web_build.remove("runs-on");
+    web_build.insert(
+        "with".into(),
+        crate::workflows::yaml_fragment("environment: dev")?,
+    );
+    web_build.insert(
+        "secrets".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+            POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        "#})?,
+    );
+
     let web_app = crate::workflows::job_mut(root, "deploy-web-app")?;
     web_app.remove("runs-on");
     web_app.insert(
@@ -115,6 +132,7 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
         crate::workflows::yaml_fragment(indoc::indoc! {r#"
             notify: false
             environment: dev
+            prebuilt: true
         "#})?,
     );
     web_app.insert(
@@ -148,10 +166,22 @@ fn deploy_sync_service() -> Job {
         .uses("./.github/workflows/deploy_sync_service.yml")
 }
 
-/// Same ordering rationale as [`deploy_sync_service`].
+/// No `needs`: the build only reads the commit, so it overlaps the backend's
+/// ~15 minutes instead of adding ~4 after them.
+fn build_web_app() -> Job {
+    Job::default()
+        .name("Build Web App")
+        .uses("./.github/workflows/build_web_app.yml")
+}
+
+/// Same ordering rationale as [`deploy_sync_service`]; uploads the dist that
+/// [`build_web_app`] left in this run.
 fn deploy_web_app() -> Job {
     Job::default()
         .name("Deploy Web App")
-        .needs(vec!["deploy-cloud-storage".to_string()])
+        .needs(vec![
+            "deploy-cloud-storage".to_string(),
+            "build-web-app".to_string(),
+        ])
         .uses("./.github/workflows/deploy_web_app.yml")
 }

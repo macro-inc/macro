@@ -6,7 +6,9 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use connection::domain::models::{ConnectionError, InvalidationEvent};
 use connection::domain::ports::ConnectionService;
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, EntityType, ViewAccessLevel,
+};
 use entity_access::domain::ports::NoOpEntityAccessService;
 use entity_mutation::{DeleteEntityPermanently, UpdateEntitySharePolicy};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
@@ -932,6 +934,7 @@ const ARCHIVED_EVENT_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_7
 const ARCHIVED_EVENT_CHANNEL_ID: Uuid = Uuid::from_u128(0x4f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a91);
 const ARCHIVED_EVENT_ROOM_NAME: &str = "archived-event-room";
 const ARCHIVED_EVENT_CREATOR: &str = "macro|archiver@example.com";
+const ARCHIVED_EVENT_JOINER: &str = "macro|joiner@example.com";
 const ARCHIVED_EVENT_PARTICIPANT: &str = "participant@example.com";
 const RECORDING_READY_EGRESS_ID: &str = "recording-ready-egress";
 const RECORDING_READY_FILE_URL: &str =
@@ -963,7 +966,7 @@ fn active_call_for_archived_event(created_by: &str, egress_id: Option<&str>) -> 
 
 fn archived_call_for_event(
     created_by: &str,
-    participant_count: usize,
+    participants: &[&str],
     has_recording: bool,
 ) -> ArchivedCall {
     ArchivedCall {
@@ -974,7 +977,7 @@ fn archived_call_for_event(
         ended_at: archived_event_ended_at(),
         duration_ms: 183_000,
         has_recording,
-        participant_count,
+        participants: participants.iter().map(ToString::to_string).collect(),
     }
 }
 
@@ -1067,6 +1070,7 @@ fn assert_archived_event(
     event_broker: &RecordingEventBroker,
     archive_reason: &str,
     participant_count: usize,
+    participants: &[&str],
     has_recording: bool,
 ) {
     let events = event_broker.events();
@@ -1099,6 +1103,7 @@ fn assert_archived_event(
                 "ended_at": "2026-07-27T18:04:05Z",
                 "duration_ms": 183_000,
                 "participant_count": participant_count,
+                "participants": participants,
                 "has_recording": has_recording,
                 "archive_reason": archive_reason,
             },
@@ -1109,7 +1114,11 @@ fn assert_archived_event(
 #[tokio::test]
 async fn participant_left_publishes_last_participant_archived_event() {
     let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
-    let archived_call = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 4, false);
+    let archived_call = archived_call_for_event(
+        ARCHIVED_EVENT_CREATOR,
+        &[ARCHIVED_EVENT_CREATOR, ARCHIVED_EVENT_JOINER],
+        false,
+    );
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name()
         .times(1)
@@ -1156,7 +1165,13 @@ async fn participant_left_publishes_last_participant_archived_event() {
         .await
         .expect("participant-left webhook succeeds");
 
-    assert_archived_event(&event_broker, "last_participant_left", 4, false);
+    assert_archived_event(
+        &event_broker,
+        "last_participant_left",
+        2,
+        &[ARCHIVED_EVENT_CREATOR, ARCHIVED_EVENT_JOINER],
+        false,
+    );
 }
 
 #[tokio::test]
@@ -1165,7 +1180,15 @@ async fn room_finished_publishes_room_finished_archived_event() {
         "macro|stale-active-creator@example.com",
         Some("archived-event-egress"),
     );
-    let archived_call = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 3, true);
+    let archived_call = archived_call_for_event(
+        ARCHIVED_EVENT_CREATOR,
+        &[
+            ARCHIVED_EVENT_CREATOR,
+            ARCHIVED_EVENT_JOINER,
+            "malformed-participant",
+        ],
+        true,
+    );
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name()
         .times(1)
@@ -1189,7 +1212,14 @@ async fn room_finished_publishes_room_finished_archived_event() {
         .await
         .expect("room-finished webhook succeeds");
 
-    assert_archived_event(&event_broker, "room_finished", 3, true);
+    // A malformed stored participant still counts, but is left off the list.
+    assert_archived_event(
+        &event_broker,
+        "room_finished",
+        3,
+        &[ARCHIVED_EVENT_CREATOR, ARCHIVED_EVENT_JOINER],
+        true,
+    );
 }
 
 #[tokio::test]
@@ -1219,7 +1249,8 @@ async fn failed_archive_does_not_publish_archived_event() {
 #[tokio::test]
 async fn malformed_archived_creator_skips_event_without_undoing_archival() {
     let active_call = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
-    let archived_call = archived_call_for_event("malformed-user-id", 1, false);
+    let archived_call =
+        archived_call_for_event("malformed-user-id", &[ARCHIVED_EVENT_CREATOR], false);
     let mut repo = MockCallRepository::new();
     repo.expect_get_call_by_room_name()
         .times(1)
@@ -1528,6 +1559,7 @@ fn call_record_for_mutation() -> CallRecord {
         is_active: false,
         status: None,
         user_access_level: None,
+        viewer_has_declined: false,
         participants: Vec::new(),
         guests: Vec::new(),
         transcript: Vec::new(),
@@ -2442,6 +2474,10 @@ async fn graphql_team_sharing_still_rejects_active_calls() {
     repo.expect_resolve_channel_name()
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(None) }));
+    // Loading an active call record resolves the viewer's decline state.
+    repo.expect_has_declined()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(false) }));
     let event_broker = RecordingEventBroker::default();
     let service = build_mutation_service(repo, event_broker.clone());
 
@@ -2666,6 +2702,7 @@ fn summarized_call_record(custom_name: Option<&str>) -> CallRecord {
         is_active: false,
         status: None,
         user_access_level: None,
+        viewer_has_declined: false,
         participants: Vec::new(),
         guests: Vec::new(),
         transcript: vec![CallRecordTranscriptSegment {
@@ -3328,7 +3365,7 @@ fn active_call(call_id: Uuid) -> Call {
 fn resolve_ring_status_reports_ended_when_no_active_call() {
     let call_id = Uuid::from_u128(1);
     assert_eq!(
-        resolve_ring_status(None, &call_id, false),
+        resolve_ring_status(None, &call_id, false, false),
         RingStatus::Ended
     );
 }
@@ -3338,7 +3375,7 @@ fn resolve_ring_status_reports_ended_when_a_newer_call_replaced_the_polled_one()
     let polled = Uuid::from_u128(1);
     let newer = active_call(Uuid::from_u128(2));
     assert_eq!(
-        resolve_ring_status(Some(&newer), &polled, true),
+        resolve_ring_status(Some(&newer), &polled, true, true),
         RingStatus::Ended,
         "a different active call in the room means the polled ring is dead"
     );
@@ -3349,8 +3386,29 @@ fn resolve_ring_status_reports_answered_when_user_is_a_participant() {
     let call_id = Uuid::from_u128(1);
     let call = active_call(call_id);
     assert_eq!(
-        resolve_ring_status(Some(&call), &call_id, true),
+        resolve_ring_status(Some(&call), &call_id, true, false),
         RingStatus::Answered
+    );
+}
+
+#[test]
+fn resolve_ring_status_reports_declined_when_user_declined_elsewhere() {
+    let call_id = Uuid::from_u128(1);
+    let call = active_call(call_id);
+    assert_eq!(
+        resolve_ring_status(Some(&call), &call_id, false, true),
+        RingStatus::Declined
+    );
+}
+
+#[test]
+fn resolve_ring_status_prefers_answered_over_an_earlier_decline() {
+    let call_id = Uuid::from_u128(1);
+    let call = active_call(call_id);
+    assert_eq!(
+        resolve_ring_status(Some(&call), &call_id, true, true),
+        RingStatus::Answered,
+        "a user who declined on one device and then joined on another is in the call"
     );
 }
 
@@ -3359,9 +3417,250 @@ fn resolve_ring_status_reports_ringing_when_user_has_not_joined() {
     let call_id = Uuid::from_u128(1);
     let call = active_call(call_id);
     assert_eq!(
-        resolve_ring_status(Some(&call), &call_id, false),
+        resolve_ring_status(Some(&call), &call_id, false, false),
         RingStatus::Ringing
     );
+}
+
+const DECLINE_CALL_ID: Uuid = Uuid::from_u128(0x0198a1b2_c3d4_7e5f_8061_728394a5b6d0);
+const DECLINE_CHANNEL_ID: Uuid = Uuid::from_u128(0x3f6f8b0a_6f9f_4a3f_9c3a_2b1e5d4c7a91);
+const DECLINE_ROOM: &str = "decline-room";
+
+fn declinable_call() -> Call {
+    Call {
+        id: DECLINE_CALL_ID,
+        channel_id: Some(DECLINE_CHANNEL_ID),
+        room_name: DECLINE_ROOM.to_string(),
+        created_by: STARTED_EVENT_CREATOR.to_string(),
+        created_at: started_event_timestamp(),
+        egress_id: None,
+    }
+}
+
+fn expect_recorded_decline(repo: &mut MockCallRepository, expected_user: &'static str) {
+    repo.expect_record_decline()
+        .withf(move |call_id, user_id| {
+            *call_id == DECLINE_CALL_ID && user_id.as_ref() == user(expected_user).as_ref()
+        })
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+}
+
+fn build_ring_token_service(
+    repo: MockCallRepository,
+    rtc_client: MockCallRtcClient,
+    connection_service: RecordingConnectionService,
+) -> impl CallService {
+    let service: CallServiceImpl<_, _, _, _, _, _, NoopCallSummarizer> = CallServiceImpl::new(
+        repo,
+        rtc_client,
+        connection_service,
+        NoOpEntityAccessService,
+        StubNotificationIngress,
+        StubRecordingStorage,
+        "wss://livekit.example.com",
+    );
+    service
+}
+
+fn ring_token_client(identity: &'static str, room: Option<&'static str>) -> MockCallRtcClient {
+    let mut rtc_client = MockCallRtcClient::new();
+    rtc_client
+        .expect_verify_access_token()
+        .times(1)
+        .returning(move |_| {
+            Ok(VerifiedRingToken {
+                identity: user(identity).as_ref().to_string(),
+                room: room.map(str::to_string),
+            })
+        });
+    rtc_client
+}
+
+#[tokio::test]
+async fn decline_call_records_decline_and_notifies_only_the_declining_user() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_id()
+        .withf(|call_id| *call_id == DECLINE_CALL_ID)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(declinable_call())) }));
+    expect_recorded_decline(&mut repo, "callee@example.com");
+    let connection_service = RecordingConnectionService::default();
+    let service = build_get_or_create_service(
+        repo,
+        connection_service.clone(),
+        RecordingEventBroker::default(),
+        false,
+    );
+
+    service
+        .decline_call(&DECLINE_CALL_ID, user("callee@example.com"))
+        .await
+        .expect("declining an active call succeeds");
+
+    let messages = connection_service.messages();
+    let [message] = messages.as_slice() else {
+        panic!("expected exactly one channel message")
+    };
+    assert_eq!(message.message_type, "call_declined");
+    assert_eq!(
+        message.users,
+        vec![user("callee@example.com").as_ref().to_string()],
+        "only the declining user's own devices are told to stop ringing"
+    );
+    assert_eq!(
+        message.message,
+        json!({
+            "channel_id": DECLINE_CHANNEL_ID,
+            "call_id": DECLINE_CALL_ID,
+            "user_id": user("callee@example.com").as_ref(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn decline_call_without_an_active_call_is_not_found() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_id()
+        .withf(|call_id| *call_id == DECLINE_CALL_ID)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_record_decline().times(0);
+    let connection_service = RecordingConnectionService::default();
+    let service = build_get_or_create_service(
+        repo,
+        connection_service.clone(),
+        RecordingEventBroker::default(),
+        false,
+    );
+
+    let result = service
+        .decline_call(&DECLINE_CALL_ID, user("callee@example.com"))
+        .await;
+
+    assert!(matches!(result, Err(CallError::NotFound(_))));
+    assert!(connection_service.messages().is_empty());
+}
+
+#[tokio::test]
+async fn decline_call_ignores_a_stale_call_id_after_the_channel_moved_on() {
+    let mut repo = MockCallRepository::new();
+    let stale_call_id = Uuid::from_u128(0xdead);
+    repo.expect_get_call_by_id()
+        .withf(move |call_id| *call_id == stale_call_id)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_record_decline().times(0);
+    let connection_service = RecordingConnectionService::default();
+    let service = build_get_or_create_service(
+        repo,
+        connection_service.clone(),
+        RecordingEventBroker::default(),
+        false,
+    );
+
+    let result = service
+        .decline_call(&stale_call_id, user("callee@example.com"))
+        .await;
+
+    assert!(matches!(result, Err(CallError::NotFound(_))));
+    assert!(connection_service.messages().is_empty());
+}
+
+#[tokio::test]
+async fn decline_ring_declines_for_the_token_identity() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .withf(|room| room == DECLINE_ROOM)
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(declinable_call())) }));
+    expect_recorded_decline(&mut repo, "callee@example.com");
+    let connection_service = RecordingConnectionService::default();
+    let service = build_ring_token_service(
+        repo,
+        ring_token_client("callee@example.com", Some(DECLINE_ROOM)),
+        connection_service.clone(),
+    );
+
+    service
+        .decline_ring(&DECLINE_CALL_ID, "voip-token")
+        .await
+        .expect("declining a ringing call succeeds");
+
+    let messages = connection_service.messages();
+    let [message] = messages.as_slice() else {
+        panic!("expected exactly one channel message")
+    };
+    assert_eq!(message.message_type, "call_declined");
+    assert_eq!(
+        message.users,
+        vec![user("callee@example.com").as_ref().to_string()]
+    );
+}
+
+#[tokio::test]
+async fn decline_ring_rejects_a_token_without_a_room_grant() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_record_decline().times(0);
+    let service = build_ring_token_service(
+        repo,
+        ring_token_client("callee@example.com", None),
+        RecordingConnectionService::default(),
+    );
+
+    let result = service.decline_ring(&DECLINE_CALL_ID, "voip-token").await;
+
+    assert!(matches!(result, Err(CallError::Auth)));
+}
+
+#[tokio::test]
+async fn decline_ring_ignores_a_call_the_room_has_moved_on_from() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(declinable_call())) }));
+    repo.expect_record_decline().times(0);
+    let connection_service = RecordingConnectionService::default();
+    let service = build_ring_token_service(
+        repo,
+        ring_token_client("callee@example.com", Some(DECLINE_ROOM)),
+        connection_service.clone(),
+    );
+
+    let stale_call_id = Uuid::from_u128(0xdead);
+    let result = service.decline_ring(&stale_call_id, "voip-token").await;
+
+    assert!(matches!(result, Err(CallError::NotFound(_))));
+    assert!(connection_service.messages().is_empty());
+}
+
+#[tokio::test]
+async fn get_ring_status_reports_declined_for_the_token_identity() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_by_room_name()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(declinable_call())) }));
+    repo.expect_is_participant()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(false) }));
+    repo.expect_has_declined()
+        .withf(|call_id, user_id| {
+            *call_id == DECLINE_CALL_ID && user_id == user("callee@example.com").as_ref()
+        })
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(true) }));
+    let service = build_ring_token_service(
+        repo,
+        ring_token_client("callee@example.com", Some(DECLINE_ROOM)),
+        RecordingConnectionService::default(),
+    );
+
+    let response = service
+        .get_ring_status(&DECLINE_CALL_ID, "voip-token")
+        .await
+        .expect("ring status resolves");
+
+    assert_eq!(response.status, RingStatus::Declined);
 }
 
 #[cfg(feature = "outbound")]
@@ -3778,7 +4077,8 @@ async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
     let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, None);
     active.channel_id = None;
     let second_leg = active.clone();
-    let mut archived = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 1, true);
+    let mut archived =
+        archived_call_for_event(ARCHIVED_EVENT_CREATOR, &[ARCHIVED_EVENT_CREATOR], true);
     archived.channel_id = None;
     let guest_id = GuestId::generate();
 
@@ -3879,7 +4179,8 @@ async fn last_guest_leaving_archives_call_and_stops_recording() {
     let token = meeting.share_token.clone();
     let mut active = active_call_for_archived_event(ARCHIVED_EVENT_CREATOR, Some("recording"));
     active.channel_id = None;
-    let mut archived = archived_call_for_event(ARCHIVED_EVENT_CREATOR, 1, true);
+    let mut archived =
+        archived_call_for_event(ARCHIVED_EVENT_CREATOR, &[ARCHIVED_EVENT_CREATOR], true);
     archived.channel_id = None;
     let guest_id = GuestId::generate();
     let identity = guest_id.to_string();
@@ -4046,4 +4347,57 @@ async fn call_record_query_service_reads_the_people_on_a_call() {
             .unwrap(),
         people
     );
+}
+
+fn reader_receipt() -> EntityAccessReceipt<ViewAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user("reader@example.com"),
+        &MUTATED_EVENT_CALL_ID.to_string(),
+        EntityType::Call,
+    )
+}
+
+#[tokio::test]
+async fn call_record_reader_names_the_channel_as_the_reader_sees_it() {
+    use crate::domain::ports::CallRecordReader;
+
+    let record = call_record_for_mutation();
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .return_once(move |call_id| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            Box::pin(async move { Ok(Some(record)) })
+        });
+    repo.expect_resolve_channel_name()
+        .times(1)
+        .returning(|channel_id, user_id| {
+            assert_eq!(*channel_id, MUTATED_EVENT_CHANNEL_ID);
+            assert_eq!(user_id.as_ref(), "macro|reader@example.com");
+            Box::pin(async { Ok(Some("eng".to_string())) })
+        });
+
+    let record = super::CallRecordQueryServiceImpl::new(repo)
+        .get_call_record(reader_receipt())
+        .await
+        .unwrap();
+    assert_eq!(record.call_id, MUTATED_EVENT_CALL_ID);
+    assert_eq!(record.channel_name.as_deref(), Some("eng"));
+}
+
+#[tokio::test]
+async fn call_record_reader_reports_a_deleted_record_as_not_found() {
+    use crate::domain::ports::CallRecordReader;
+
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(None) }));
+
+    assert!(matches!(
+        super::CallRecordQueryServiceImpl::new(repo)
+            .get_call_record(reader_receipt())
+            .await,
+        Err(CallError::NotFound(_))
+    ));
 }

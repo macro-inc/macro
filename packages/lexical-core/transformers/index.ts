@@ -1,4 +1,5 @@
 import type { Transformer } from '@lexical/markdown';
+import { I_AGENT_ACTIVITY } from './agentActivity';
 import { I_AGENT_CONTEXT } from './agentContext';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
@@ -16,6 +17,7 @@ import {
 import { I_MAGIC_CHIP } from './magicChip';
 import {
   E_AGENT_SESSION_MENTION,
+  E_BOOKING_LINK_MENTION,
   E_CONTACT_MENTION,
   E_DATE_MENTION,
   E_DOCUMENT_CARD,
@@ -26,6 +28,7 @@ import {
   E_USER_MENTION,
   I_AGENT_SESSION_CARD,
   I_AGENT_SESSION_MENTION,
+  I_BOOKING_LINK_MENTION,
   I_CONNECT_APP,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
@@ -52,7 +55,7 @@ import {
   SEARCH_MATCH,
 } from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
-import { I_VIDEO } from './video';
+import { I_VIDEO, VIDEO_LINK } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
 export { isConversionOnlyTransformer };
@@ -69,6 +72,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
   I_HTML_RENDER,
   PRESERVE_LINES,
+  VIDEO_LINK, // Must be before LINK_XML to catch video URLs
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
   SEARCH_MATCH,
@@ -81,12 +85,14 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DOCUMENT_MENTION,
   I_DOCUMENT_CARD,
   I_PR_MENTION,
+  I_BOOKING_LINK_MENTION,
   I_AGENT_SESSION_CARD,
   I_AGENT_SESSION_MENTION,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_AGENT_ACTIVITY,
   I_REPLY_TARGET_NODE,
   I_AGENT_CONTEXT,
   I_TABLE_NODE,
@@ -110,6 +116,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   I_DATABASE_QUERY,
   HR,
   MARK_XML,
+  VIDEO_LINK,
   I_VIDEO,
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
@@ -123,8 +130,10 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   I_DOCUMENT_CARD, // for internal representation
   E_DOCUMENT_CARD,
   I_PR_MENTION,
+  I_BOOKING_LINK_MENTION,
   I_AGENT_SESSION_MENTION,
   E_PR_MENTION,
+  E_BOOKING_LINK_MENTION,
   E_AGENT_SESSION_MENTION,
   E_CONTACT_MENTION,
   E_DATE_MENTION,
@@ -153,6 +162,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_HTML_RENDER,
   E_PASTE_NODE,
   PRESERVE_LINES,
+  VIDEO_LINK, // Must be before LINK_XML to catch video URLs
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
   SEARCH_MATCH,
@@ -174,16 +184,19 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_DOCUMENT_CARD,
   E_DOCUMENT_CARD,
   I_PR_MENTION,
+  I_BOOKING_LINK_MENTION,
   I_AGENT_SESSION_CARD,
   I_AGENT_SESSION_MENTION,
   E_AGENT_SESSION_MENTION,
   E_PR_MENTION,
+  E_BOOKING_LINK_MENTION,
   I_CONTACT_MENTION,
   E_CONTACT_MENTION,
   I_DATE_MENTION,
   E_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_AGENT_ACTIVITY,
   I_REPLY_TARGET_NODE,
   I_AGENT_CONTEXT,
   I_MACRO_QUOTE,

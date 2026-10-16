@@ -1,3 +1,5 @@
+import { useClaudeAgentsAccess } from '@core/claude/flag';
+import { useCodexAgentsAccess } from '@core/codex/flag';
 import { isClaudeBotId } from '@core/constant/claudeAgent';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
@@ -12,7 +14,6 @@ import {
   isMacroAiId,
   isMacroCoderId,
   isMacroNewId,
-  macroCoderMentionUser,
   macroMentionUser,
 } from './macroAi';
 import { useChatV3AgentsFlag } from './use-chat-v3-agents-flag';
@@ -21,8 +22,9 @@ import { useChatV3AgentsFlag } from './use-chat-v3-agents-flag';
  * Built-in agent entries shared by every message composer. Account setup does
  * not hide a mention: the harness answers with a connection prompt in the
  * thread when setup is needed, so replies link to Settings → Harness rather
- * than the entry disappearing. The built-in Cursor entry follows the Cursor
- * rollout flag. Mentions are re-tagged as bot mentions at send time.
+ * than the entry disappearing. The built-in Cursor, Codex, and Claude entries
+ * follow their rollout flags. Mentions are re-tagged as bot mentions at send
+ * time.
  *
  * Macro gets exactly one entry. Both Macro bots are dropped from the incoming
  * list first, so a stray participant or channel-bot row cannot put a second
@@ -34,26 +36,29 @@ export function useAgentMentionUsers(
   enabled: Accessor<boolean> = () => true
 ): Accessor<IUser[]> {
   const canUseCursor = useCursorAgentsAccess();
+  const canUseCodex = useCodexAgentsAccess();
+  const canUseClaude = useClaudeAgentsAccess();
   const canUseAgents = useChatV3AgentsFlag();
 
   return () => {
-    if (!enabled()) return users();
-    const base = users().filter(
+    // Old participants and saved bot rows must not restore the retired coder.
+    const mentionable = users().filter((user) => !isMacroCoderId(user.id));
+    if (!enabled()) return mentionable;
+    const base = mentionable.filter(
       (user) =>
         (canUseCursor() || !isCursorBotId(user.id)) &&
+        (canUseCodex() || !isCodexBotId(user.id)) &&
+        (canUseClaude() || !isClaudeBotId(user.id)) &&
         !isMacroAiId(user.id) &&
         !isMacroNewId(user.id)
     );
-    if (canUseAgents() && !base.some((user) => isMacroCoderId(user.id))) {
-      base.unshift(macroCoderMentionUser());
-    }
     if (canUseCursor() && !base.some((user) => isCursorBotId(user.id))) {
       base.unshift(cursorMentionUser());
     }
-    if (!base.some((user) => isCodexBotId(user.id))) {
+    if (canUseCodex() && !base.some((user) => isCodexBotId(user.id))) {
       base.unshift(codexMentionUser());
     }
-    if (!base.some((user) => isClaudeBotId(user.id))) {
+    if (canUseClaude() && !base.some((user) => isClaudeBotId(user.id))) {
       base.unshift(claudeMentionUser());
     }
     base.unshift(macroMentionUser(canUseAgents()));

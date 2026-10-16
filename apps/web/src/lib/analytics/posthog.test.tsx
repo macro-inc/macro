@@ -32,16 +32,31 @@ async function receiveFlags(
   await new Promise((resolve) => setTimeout(resolve));
 }
 
+/** The flag request got no answer: blocked, offline, or PostHog is down. */
+async function failToReachPostHog(cached?: FeatureFlagResult) {
+  posthog.getFeatureFlagResult.mockReturnValue(cached);
+  const callback = posthog.onFeatureFlags.mock.calls[0]?.[0];
+  if (!callback) throw new Error('PostHog provider is not mounted');
+  callback([], {}, { errorsLoading: true });
+  await new Promise((resolve) => setTimeout(resolve));
+}
+
 function flagResult(enabled: boolean, payload?: string): FeatureFlagResult {
   return { key: channelTags.key, enabled, variant: undefined, payload };
 }
 
-function renderFlag(flag: RemoteFlag = channelTags) {
+function renderFlag(
+  flag: RemoteFlag = channelTags,
+  opts: { enabledWhenUnreachable?: boolean } = {}
+) {
   let result!: ReturnType<typeof useFeatureFlag<string>>;
   const mount = vi.fn();
   const Probe = () => {
     mount();
-    result = useFeatureFlag<string>(flag, { fallbackPayload: 'fallback' });
+    result = useFeatureFlag<string>(flag, {
+      fallbackPayload: 'fallback',
+      ...opts,
+    });
     return (
       <ShowFeatureFlag flag={flag}>
         <button>New label</button>
@@ -149,6 +164,48 @@ describe('reactive PostHog flags', () => {
     expect(view.result().enabled).toBe(false);
     expect(screen.queryByRole('button', { name: 'New label' })).toBeNull();
     expect(view.mount).toHaveBeenCalledOnce();
+  });
+
+  it('treats an unreachable PostHog as flags-off by default', async () => {
+    const view = renderFlag();
+
+    await failToReachPostHog();
+    expect(view.result()).toEqual({
+      enabled: false,
+      payload: 'fallback',
+      loading: false,
+    });
+  });
+
+  it('lets a reader stay on while PostHog is unreachable, until it answers off', async () => {
+    const view = renderFlag(channelTags, { enabledWhenUnreachable: true });
+    expect(view.result().enabled).toBe(false);
+
+    await failToReachPostHog();
+    expect(view.result()).toEqual({
+      enabled: true,
+      payload: 'fallback',
+      loading: false,
+    });
+
+    await receiveFlags(flagResult(false));
+    expect(view.result().enabled).toBe(false);
+
+    // The earlier "off" is still what PostHog last said.
+    await failToReachPostHog(flagResult(false));
+    expect(view.result().enabled).toBe(false);
+    expect(view.mount).toHaveBeenCalledOnce();
+  });
+
+  it('does not turn a missing flag on when PostHog did answer', async () => {
+    const view = renderFlag(channelTags, { enabledWhenUnreachable: true });
+
+    await receiveFlags(undefined);
+    expect(view.result()).toEqual({
+      enabled: false,
+      payload: 'fallback',
+      loading: false,
+    });
   });
 
   it.each([false, true])(

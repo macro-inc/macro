@@ -9,6 +9,8 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   mentioned_in_document_comment: 'MENTION',
   replied_to_document_comment_thread: 'REPLY',
   commented_on_document: 'COMMENT',
+  entity_access_requested: 'ACCESS REQUEST',
+  entity_access_granted: 'ACCESS GRANTED',
   initiative_discussion: 'COMMENT',
   crm_discussion: 'COMMENT',
   channel_invite: 'INVITE',

@@ -1,8 +1,10 @@
 //! Shared channel AI tool input/output types.
 use messages::domain::{
     models::MessageListItem,
-    models::{CountedReaction, Message, MessageAttachment},
+    models::{CountedReaction, Message, MessageAttachment, NewAttachment},
 };
+
+use crate::domain::media_upload::ChannelMediaKind;
 
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
@@ -35,6 +37,66 @@ pub enum ToolMessageKind {
     TopLevelMessage,
     /// A reply inside a top-level message's thread.
     ThreadReply,
+}
+
+/// How an attachment on a sent message renders.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ChannelAttachmentKind {
+    /// An inline image uploaded with CreateChannelMediaUpload.
+    Image,
+    /// An inline, playable video uploaded with CreateChannelMediaUpload.
+    Video,
+    /// A Macro document, shown as a file chip.
+    Document,
+}
+
+impl ChannelAttachmentKind {
+    fn entity_type(self) -> &'static str {
+        match self {
+            Self::Image => ChannelMediaKind::Image.attachment_entity_type(),
+            Self::Video => ChannelMediaKind::Video.attachment_entity_type(),
+            Self::Document => "document",
+        }
+    }
+}
+
+/// An attachment to send with a channel message.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelMessageAttachmentInput {
+    /// The attachmentId from CreateChannelMediaUpload, or a document ID.
+    #[schemars(
+        description = "The attachmentId returned by CreateChannelMediaUpload (after its upload succeeded), or the ID of a Macro document."
+    )]
+    pub id: String,
+    /// How the attachment renders.
+    #[schemars(
+        description = "image or video for media from CreateChannelMediaUpload (use the kind it returned); document for a Macro document ID."
+    )]
+    pub kind: ChannelAttachmentKind,
+    /// Optional pixel width of an image or video, used to lay it out before it loads.
+    #[serde(default)]
+    #[schemars(
+        description = "Optional pixel width of an image or video, used to lay it out before it loads."
+    )]
+    pub width: Option<i32>,
+    /// Optional pixel height of an image or video.
+    #[serde(default)]
+    #[schemars(description = "Optional pixel height of an image or video.")]
+    pub height: Option<i32>,
+}
+
+impl From<&ChannelMessageAttachmentInput> for NewAttachment {
+    fn from(input: &ChannelMessageAttachmentInput) -> Self {
+        let media = input.kind != ChannelAttachmentKind::Document;
+        Self {
+            entity_type: input.kind.entity_type().to_string(),
+            entity_id: input.id.trim().to_string(),
+            width: input.width.filter(|_| media),
+            height: input.height.filter(|_| media),
+        }
+    }
 }
 
 /// A reaction summary on a message.

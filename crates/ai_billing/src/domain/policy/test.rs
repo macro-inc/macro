@@ -345,7 +345,7 @@ fn new_credits_cannot_reclassify_captured_or_settled_sources() {
 }
 
 #[test]
-fn captured_suspension_and_zero_cap_deny_only_new_postpaid() {
+fn legacy_opt_in_never_authorizes_new_postpaid_but_prepaid_still_works() {
     let mut settings = BillingSettings {
         overage_enabled: true,
         overage_limit_cents: 500,
@@ -353,12 +353,12 @@ fn captured_suspension_and_zero_cap_deny_only_new_postpaid() {
     };
     assert_eq!(
         PostpaidAuthorization::from_settings(&settings).unwrap(),
-        PostpaidAuthorization::Enabled { limit: money(500) }
+        PostpaidAuthorization::Disabled
     );
     settings.overage_suspended_at = Some(Utc::now());
     let mut auth = authorization(true);
     auth.postpaid = PostpaidAuthorization::from_settings(&settings).unwrap();
-    assert_eq!(auth.postpaid, PostpaidAuthorization::Suspended);
+    assert_eq!(auth.postpaid, PostpaidAuthorization::Disabled);
     assert!(matches!(
         reserve(
             AiPricing::testing(),

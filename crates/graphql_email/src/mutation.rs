@@ -4,8 +4,8 @@ use async_graphql::{Context, ErrorExtensions, ID, InputObject, Object, OutputTyp
 use chrono::Utc;
 use email::domain::{
     models::{
-        ContactInfo, CreateDraftInput, DeletedUserDraft, EmailErr, Message, SavedUserDraft,
-        UpdateThreadLabelsResult,
+        ContactInfo, CreateDraftInput, CreatedDraft, DeletedUserDraft, EmailErr, Message,
+        SavedUserDraft, UpdateThreadLabelsResult,
     },
     ports::EmailService,
 };
@@ -16,11 +16,22 @@ use graphql_common::{parse_id, require_authenticated_user};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+mod send;
+use send::{SendEmailMessageInput, SendEmailMessagePayload};
+
 #[cfg(test)]
 mod test;
 
 /// Domain-facing capability required by email thread mutations.
 pub trait EmailMutationService: Send + Sync + 'static {
+    /// Send from a caller-accessible inbox, with server-side sender validation.
+    fn send_email_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        link_id: Option<Uuid>,
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
+
     /// Mark an accessible email thread as seen by the authenticated user.
     fn mark_email_thread_seen(
         &self,
@@ -74,6 +85,15 @@ impl<S> EmailMutationService for S
 where
     S: EmailService,
 {
+    async fn send_email_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        link_id: Option<Uuid>,
+        input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        self.send_message_for_user(user_id, link_id, input).await
+    }
+
     async fn mark_email_thread_seen(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -230,6 +250,8 @@ impl From<SaveEmailDraftContactInput> for ContactInfo {
 /// existing draft.
 #[derive(InputObject)]
 pub struct SaveEmailDraftInput {
+    /// Verified sender address for the selected inbox. Absent selects its primary address.
+    pub sender_email: Option<String>,
     /// Draft handle: a client-generated ID, or a server ID from a fetched
     /// draft. Resolved scoped to the caller's inboxes, and bound to the
     /// server row the save settles on, so replays converge on one draft.
@@ -353,7 +375,8 @@ where
 fn saved_draft_message(saved: SavedUserDraft) -> Message {
     let SavedUserDraft {
         draft,
-        link,
+        link: _,
+        sender,
         created_at,
         updated_at,
         labels,
@@ -390,11 +413,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
             || !attachments_draft.is_empty()
             || !attachments_forwarded.is_empty(),
         scheduled_send_time: draft.send_time,
-        from: Some(ContactInfo {
-            email: String::from(link.email_address),
-            name: None,
-            photo_url: None,
-        }),
+        from: Some(sender),
         to: draft.to,
         cc: draft.cc,
         bcc: draft.bcc,
@@ -415,8 +434,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
 
 /// Error taxonomy for the draft mutations (save and delete), mirroring the
 /// REST `CreateDraftError` mapping with machine-readable `extensions.code`
-/// values the client's offline queue can branch on. Repository failures are
-/// retryable: a write may have committed before loading its response failed.
+/// values the client can use to offer recovery without blocking its mutation queue.
 fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
     let (message, code) = match error {
         EmailErr::MessageAlreadySent(_) => {
@@ -429,25 +447,33 @@ fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
         EmailErr::MessageNotFound(_) => ("referenced email message not found", "NOT_FOUND"),
         EmailErr::ThreadNotFound => ("email thread not found", "NOT_FOUND"),
         EmailErr::InboxNotFound => ("email inbox not found", "INBOX_NOT_FOUND"),
+        EmailErr::InvalidSender => (
+            "address is not a verified sender for this inbox",
+            "INVALID_SENDER",
+        ),
+        EmailErr::SendAsPermissionRequired => (
+            "reconnect this inbox to use its sender addresses",
+            "NEEDS_REAUTH",
+        ),
+        EmailErr::SendAsUnavailable => (
+            "email sender addresses are unavailable",
+            "SEND_AS_UNAVAILABLE",
+        ),
         EmailErr::CannotReplyToDraft => ("cannot reply to a draft", "INVALID"),
         EmailErr::Base64DecodeError(_) | EmailErr::Utf8Error(_) => {
             ("email draft body is invalid", "INVALID")
         }
         EmailErr::Unauthorized => ("not authorized to modify email draft", "UNAUTHORIZED"),
-        EmailErr::RepoErr(_) => {
-            return retryable_email_error(async_graphql::Error::new("email draft mutation failed"));
-        }
         _ => ("email draft mutation failed", "INTERNAL"),
     };
     async_graphql::Error::new(message).extend_with(|_, extensions| extensions.set("code", code))
 }
 
-/// State-setting writes and draft handles are idempotent; an uncertain reply
-/// must not roll back the client after the domain write already committed.
-fn retryable_email_error(error: async_graphql::Error) -> async_graphql::Error {
+/// A failed response may follow a committed write. Preserve its error code so
+/// callers can offer an explicit retry using the original idempotent handle.
+fn internal_email_error(error: async_graphql::Error) -> async_graphql::Error {
     error.extend_with(|_, extensions| {
         extensions.set("code", "INTERNAL");
-        extensions.set("retryable", true);
     })
 }
 
@@ -472,7 +498,7 @@ async fn reload_thread<O: EmailThreadMutationOutput>(
 ) -> async_graphql::Result<O::Thread> {
     O::load_email_thread(ctx, user_id, thread_id)
         .await
-        .map_err(retryable_email_error)?
+        .map_err(internal_email_error)?
         .ok_or_else(|| {
             // The primary-backed lookup completed, but its All Mail projection
             // can omit a trashed thread even after the write committed. Repeating
@@ -593,6 +619,17 @@ where
         reload_thread::<O>(ctx, user_id, thread_id).await
     }
 
+    /// Enqueue a message from a caller-accessible inbox using a verified sender.
+    /// Delivery uses the existing undo window and worker, not the offline mutation queue.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn send_email_message(
+        &self,
+        ctx: &Context<'_>,
+        input: SendEmailMessageInput,
+    ) -> async_graphql::Result<SendEmailMessagePayload> {
+        send::send::<S>(ctx, input).await
+    }
+
     /// Create or update an email draft and return its thread's authoritative
     /// cache record. The client-generated handle resolves through a
     /// caller-scoped mapping to a server-minted row, so a save replayed from
@@ -627,7 +664,7 @@ where
         let draft_id = saved.draft.db_id;
         let thread = reload_thread::<O>(ctx, user_id, saved.draft.thread_db_id)
             .await
-            .map_err(retryable_email_error)?;
+            .map_err(internal_email_error)?;
         Ok(SaveEmailDraftPayload {
             draft_id,
             draft: GraphqlSoupEmailMessage::from_content(EmailContentMessage::from(
@@ -668,7 +705,7 @@ where
         let thread = match deleted.thread_id.filter(|_| !deleted.thread_deleted) {
             Some(id) => O::load_email_thread(ctx, user_id, id)
                 .await
-                .map_err(retryable_email_error)?,
+                .map_err(internal_email_error)?,
             None => None,
         };
         Ok(DeleteEmailDraftPayload {
@@ -698,6 +735,13 @@ fn draft_input_from_graphql(input: SaveEmailDraftInput) -> async_graphql::Result
         .transpose()?;
 
     Ok(CreateDraftInput {
+        sender_email: input
+            .sender_email
+            .map(|address| {
+                macro_user_id::email::EmailStr::try_from(address)
+                    .map_err(|_| draft_mutation_error(&EmailErr::InvalidSender))
+            })
+            .transpose()?,
         db_id: Some(parse_id(input.draft_id, "draftId")?),
         provider_id: input.provider_id,
         replying_to_id: input

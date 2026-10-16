@@ -1,0 +1,17 @@
+---
+title: EditChannelMessage
+description: >-
+  Replace the content of an existing channel message or thread reply.
+---
+
+# EditChannelMessage
+
+Replace the content of an existing channel message or thread reply. Only the message's author can edit it, so this edits messages the user sent and messages this assistant sent for them; channel admins and owners may also edit others' messages. Find message ids with ReadChannelMessages or ReadChannelThread. Use only when the user asks to edit or correct a message.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channelId` | string | Yes | Channel id containing the message. |
+| `messageId` | string | Yes | Id of the message to edit. |
+| `content` | string | Yes | The full replacement message content in macro markdown format. This replaces the whole message, not a fragment of it. |

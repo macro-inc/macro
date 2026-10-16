@@ -81,6 +81,7 @@ model-entity = { path = "../model-entity", optional = true }
 model_owner = { path = "../model_owner" }
 models_permissions = { path = "../models_permissions" }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
+shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
 clap = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
 macro_user_id = { path = "../macro_user_id" }
@@ -93,6 +94,7 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
+trigger_context = { path = "../trigger_context" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }

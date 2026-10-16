@@ -12,6 +12,7 @@ pub mod ai_operations;
 mod build_context;
 mod deferred;
 mod display_results;
+pub mod email_attachments;
 mod import_channels;
 mod mcp_app_catalog;
 mod schemas;
@@ -26,22 +27,26 @@ pub mod user_tool_review;
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
 use bots::inbound::toolset::bot_toolset;
+use calendar_events::inbound::team_toolset::team_calendar_toolset;
 use calendar_events::inbound::toolset::{calendar_toolset, mcp_toolset as calendar_mcp_toolset};
+use calendar_scheduling::inbound::toolset::{
+    booking_link_toolset, booking_management_toolset, mcp_toolset as booking_link_mcp_toolset,
+};
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
-use crm::inbound::toolset::crm_toolset;
+use crm::inbound::toolset::{crm_toolset, pipelines::pipeline_toolset};
 use databases::inbound::toolset::{databases_read_only_toolset, databases_toolset};
 use databases_sql::toolset::{QueryDatabase, databases_sql_toolset};
 use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
+use favorites::inbound::toolset::favorites_toolset;
 use import::inbound::toolset::import_toolset;
 use initiative::inbound::toolset::initiative_toolset;
-use notification::inbound::ai_tool::notification_toolset;
+use notification::inbound::ai_tool::{item_notification_preference_toolset, notification_toolset};
 use projects::inbound::toolset::project_toolset;
 use properties::inbound::toolset::properties_toolset;
-use reminders::inbound::toolset::reminders_toolset;
 use schemas::read;
 use search_tools::{LoadTools, SearchTools};
 use self_knowledge::SelfKnowledge;
@@ -61,37 +66,49 @@ pub use deferred::{DeferredToolSet, deferred_tools};
 pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
 pub use search::search_toolset;
 pub use tool_context::{
-    ChannelSideEffectClients, MaybeToolEventBroker, NoOpCallRtcClient, NoOpConnectionService,
-    NoOpNotificationIngress, NoOpNotificationService, NoOpSnsEndpointManager, NoOpTaskProperties,
-    RequestContext, RoutineToolContext, TaskPropertiesAdapter, ToolActivityToolContext,
-    ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
+    ChannelSideEffectClients, FormsToolConfig, MaybeToolEventBroker, NoOpCallRtcClient,
+    NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
+    NoOpSnsEndpointManager, NoOpTaskProperties, RequestContext, RoutineToolContext,
+    TaskPropertiesAdapter, ToolActivityToolContext, ToolBookingLinkService,
+    ToolBookingLinkToolContext, ToolBookingManagementToolContext, ToolBotService,
+    ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
-    ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
-    ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext, ToolCommsService,
-    ToolCrmService, ToolCrmToolContext, ToolDatabasesService, ToolDatabasesSqlToolContext,
-    ToolDatabasesToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
-    ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
-    ToolEntityCreator, ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService,
-    ToolImageGenerationToolContext, ToolImportService, ToolImportToolContext,
-    ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
-    ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
-    ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolRemindersService,
-    ToolRemindersToolContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
-    ToolSoupService, ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamService,
+    ToolChannelEventDispatcher, ToolChannelMediaUploadToolContext, ToolChannelMessagesService,
+    ToolChannelToolContext, ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext,
+    ToolCommsService, ToolCrmService, ToolCrmToolContext, ToolDatabasesService,
+    ToolDatabasesSqlToolContext, ToolDatabasesToolContext, ToolDocumentService,
+    ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
+    ToolFavoritesService, ToolFavoritesToolContext, ToolForeignEntityService, ToolFormsToolContext,
+    ToolFrecencyService, ToolGithubPullRequestService, ToolImageGenerationToolContext,
+    ToolImportService, ToolImportToolContext, ToolInitiativeToolContext,
+    ToolItemNotificationPreferenceToolContext, ToolMcpSelector, ToolNotificationQueue,
+    ToolNotificationService, ToolNotificationToolContext, ToolPipedreamConnection,
+    ToolPipelineService, ToolPipelineToolContext, ToolPipelineWorkflows, ToolProjectService,
+    ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext,
+    ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
+    ToolTableEventPublisher, ToolTeamCalendarService, ToolTeamCalendarToolContext, ToolTeamService,
     ToolTeamToolContext, ToolUserEmailService, ToolViewOnlyDatabasesSqlToolContext,
-    build_activity_tool_context, build_bot_tool_context, build_calendar_tool_context,
-    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
-    build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
-    build_crm_tool_context, build_databases_sql_tool_context, build_databases_tool_context,
-    build_image_generation_tool_context, build_initiative_tool_context,
-    build_message_service_with_side_effects, build_message_service_without_side_effects,
+    build_activity_tool_context, build_booking_link_tool_context,
+    build_booking_management_tool_context, build_bot_tool_context, build_calendar_tool_context,
+    build_channel_media_upload_tool_context, build_channel_tool_context_with_dispatcher,
+    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
+    build_coding_agent_tool_context, build_crm_tool_context, build_databases_sql_tool_context,
+    build_databases_tool_context, build_favorites_service, build_favorites_tool_context,
+    build_forms_tool_context, build_image_generation_tool_context, build_initiative_tool_context,
+    build_item_notification_preference_tool_context, build_message_service_with_side_effects,
+    build_message_service_without_side_effects, build_pipeline_tool_context,
     build_project_tool_context, build_properties_service, build_properties_service_with_broker,
-    build_properties_tool_context, build_reminders_tool_context, build_routine_tool_context,
-    build_skill_tool_context, build_task_properties_adapter, build_team_repository,
+    build_properties_tool_context, build_routine_tool_context, build_skill_tool_context,
+    build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
     build_team_tool_context,
 };
+pub use tool_context::{ToolConnectorToolContext, build_connector_tool_context};
 #[cfg(any(test, feature = "test-support"))]
-pub use tool_context::{build_image_generation_tool_context_test, no_op_schedule_context};
+pub use tool_context::{
+    build_channel_media_upload_tool_context_test, build_image_generation_tool_context_test,
+    no_op_schedule_context,
+};
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
 /// Database-only capabilities for the in-app database assistant. This excludes
@@ -141,6 +158,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
             image_generation::inbound::toolset::image_generation_toolset(),
         )
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())
+        .add_subtoolset::<ToolFavoritesToolContext>(favorites_toolset())
         .add_subtoolset::<ToolInitiativeToolContext>(initiative_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
         .add_subtoolset::<ToolCallToolContext>(call_toolset())
@@ -149,7 +167,9 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolBotToolContext>(bot_toolset())
         .add_subtoolset::<ToolTeamToolContext>(team_toolset())
         .add_subtoolset::<ToolCrmToolContext>(crm_toolset())
+        .add_subtoolset::<ToolPipelineToolContext>(pipeline_toolset())
         .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
+        .add_subtoolset::<ToolFormsToolContext>(forms::inbound::toolset::authoring_toolset())
         .add_subtoolset::<ToolDatabasesSqlToolContext>(databases_sql_toolset())
         .add_subtoolset::<ToolSkillToolContext>(skill_toolset())
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
@@ -196,6 +216,7 @@ pub const EAGER_TOOLS: &[&str] = &[
     "ContentSearch",
     "CreateDocument",
     "DisplayResults",
+    "DiscoverConnectors",
     "EditDocument",
     "GetThread",
     "ListEntities",
@@ -213,6 +234,7 @@ pub const EAGER_TOOLS: &[&str] = &[
     "SearchTools",
     "SelfKnowledge",
     "SendChannelMessage",
+    "ShareWithChannel",
     "Subagent",
     "TextEditorCodeExecution",
     "WebFetch",
@@ -223,16 +245,24 @@ pub const EAGER_TOOLS: &[&str] = &[
 /// sent to the AI provider.
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
+        .add_subtoolset::<ToolBookingManagementToolContext>(booking_management_toolset())
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
-        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
+        .add_subtoolset::<ToolItemNotificationPreferenceToolContext>(
+            item_notification_preference_toolset(),
+        )
+        .add_subtoolset::<ToolTeamCalendarToolContext>(team_calendar_toolset())
         .add_subtoolset::<RoutineToolContext>(routines::inbound::routine_toolset());
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
-            .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset()),
+            .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
+            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_toolset())
+            .add_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>(),
         AiHost::ChannelBot | AiHost::Mcp => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
-            .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset()),
+            .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())
+            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_mcp_toolset())
+            .add_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>(),
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
@@ -249,6 +279,24 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
             toolset.add_tool::<DisplayResults, ToolServiceContext>()
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,
+    };
+    // A direct upload needs a client that can PUT the bytes itself; in-app
+    // hosts have no network-capable shell, so only MCP clients get it.
+    let toolset = match host {
+        AiHost::Mcp => toolset.add_tool::<
+            channels::inbound::toolset::CreateChannelMediaUpload,
+            ToolChannelMediaUploadToolContext,
+        >(),
+        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset,
+    };
+    // Connector discovery belongs to agent sessions. Their runtime refreshes
+    // the permitted connector list before the next turn after authorization.
+    let toolset = match host {
+        AiHost::AgentSession => toolset.add_tool::<
+            pipedream_mcp::inbound::toolset::DiscoverConnectors,
+            ToolConnectorToolContext,
+        >(),
+        AiHost::Chat | AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     // External MCP clients have no `LoadTools`, so they get every schema.
     let deferred = match host {
@@ -288,7 +336,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 /// sent to AI providers.
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
-        .merge(&tools_for(AiHost::Chat))
+        .merge(&tools_for(AiHost::AgentSession))
         .merge(&read::read_thread())
         .build()
 }

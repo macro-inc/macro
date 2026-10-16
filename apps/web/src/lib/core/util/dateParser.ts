@@ -20,6 +20,30 @@ const WEEKDAYS = [
   'saturday',
 ];
 
+const WEEKDAY_ABBR: Record<string, number> = {
+  sun: 0,
+  sunday: 0,
+  mon: 1,
+  monday: 1,
+  mndy: 1,
+  tue: 2,
+  tues: 2,
+  tuesday: 2,
+  tu: 2,
+  wed: 3,
+  weds: 3,
+  wednes: 3,
+  wednesday: 3,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  thursday: 4,
+  fri: 5,
+  friday: 5,
+  sat: 6,
+  saturday: 6,
+};
+
 const MONTHS = [
   'january',
   'february',
@@ -50,13 +74,27 @@ const MONTH_ABBR = [
   'dec',
 ];
 
+const TOMORROW_ALIASES = new Set([
+  'tomorrow',
+  'tom',
+  'tmrw',
+  'tmr',
+  'tomorow',
+  'tomoro',
+  'tmro',
+]);
+
+const YESTERDAY_ALIASES = new Set(['yesterday', 'yest', 'ystrdy', 'yday']);
+
+const TODAY_ALIASES = new Set(['today', 'tod']);
+
 function parseDateString(input: string): ParsedDate | null {
   const normalized = input.toLowerCase().trim();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   // Today
-  if (normalized === 'today' || normalized === 'tod') {
+  if (TODAY_ALIASES.has(normalized)) {
     return {
       date: new Date(today),
       displayFormat: 'Today',
@@ -65,11 +103,7 @@ function parseDateString(input: string): ParsedDate | null {
   }
 
   // Tomorrow
-  if (
-    normalized === 'tomorrow' ||
-    normalized === 'tom' ||
-    normalized === 'tmrw'
-  ) {
+  if (TOMORROW_ALIASES.has(normalized)) {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     return {
@@ -80,7 +114,7 @@ function parseDateString(input: string): ParsedDate | null {
   }
 
   // Yesterday
-  if (normalized === 'yesterday' || normalized === 'yest') {
+  if (YESTERDAY_ALIASES.has(normalized)) {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     return {
@@ -113,14 +147,35 @@ function parseDateString(input: string): ParsedDate | null {
     };
   }
 
-  // Weekday names
+  // Weekday names - use the abbreviation lookup for broader matching
+  const weekdayIndex = WEEKDAY_ABBR[normalized];
+  if (weekdayIndex !== undefined) {
+    const targetDay = weekdayIndex;
+    const currentDay = today.getDay();
+    let daysToAdd = targetDay - currentDay;
+
+    // If the day has passed this week or it's today, get next week's
+    if (daysToAdd <= 0) {
+      daysToAdd += 7;
+    }
+
+    const targetDate = new Date(today);
+    targetDate.setDate(targetDate.getDate() + daysToAdd);
+
+    return {
+      date: targetDate,
+      displayFormat: formatDate(targetDate),
+      confidence: normalized === WEEKDAYS[weekdayIndex] ? 1 : 0.9,
+    };
+  }
+
+  // Fallback: try prefix matching for weekdays (e.g., "mo" for Monday)
   for (let i = 0; i < WEEKDAYS.length; i++) {
-    if (normalized.startsWith(WEEKDAYS[i].slice(0, 3))) {
+    if (WEEKDAYS[i].startsWith(normalized) && normalized.length >= 2) {
       const targetDay = i;
       const currentDay = today.getDay();
       let daysToAdd = targetDay - currentDay;
 
-      // If the day has passed this week, get next week's
       if (daysToAdd <= 0) {
         daysToAdd += 7;
       }
@@ -131,7 +186,7 @@ function parseDateString(input: string): ParsedDate | null {
       return {
         date: targetDate,
         displayFormat: formatDate(targetDate),
-        confidence: normalized === WEEKDAYS[i] ? 1 : 0.8,
+        confidence: 0.8,
       };
     }
   }
@@ -360,21 +415,27 @@ export function formatTooltipDate(date: Date): string {
 function _getDateSuggestions(input: string): ParsedDate[] {
   const suggestions: ParsedDate[] = [];
   const normalized = input.toLowerCase().trim();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  // Always suggest today and tomorrow if they match
-  if ('today'.startsWith(normalized) && normalized.length > 0) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  // Suggest today if query matches any alias or prefix
+  const todayMatches =
+    [...TODAY_ALIASES].some((alias) => alias.startsWith(normalized)) ||
+    'today'.startsWith(normalized);
+  if (todayMatches && normalized.length > 0) {
     suggestions.push({
-      date: today,
+      date: new Date(today),
       displayFormat: 'Today',
       confidence: 1,
     });
   }
 
-  if ('tomorrow'.startsWith(normalized) && normalized.length > 0) {
-    const tomorrow = new Date();
-    tomorrow.setHours(0, 0, 0, 0);
+  // Suggest tomorrow if query matches any alias or prefix
+  const tomorrowMatches =
+    [...TOMORROW_ALIASES].some((alias) => alias.startsWith(normalized)) ||
+    'tomorrow'.startsWith(normalized);
+  if (tomorrowMatches && normalized.length > 0) {
+    const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     suggestions.push({
       date: tomorrow,
@@ -383,28 +444,39 @@ function _getDateSuggestions(input: string): ParsedDate[] {
     });
   }
 
-  // Weekday suggestions
-  const today = new Date();
+  // Weekday suggestions - check both full names and abbreviations
+  const matchedWeekdays = new Set<number>();
+
+  // Check against abbreviation lookup
+  for (const [abbr, dayIndex] of Object.entries(WEEKDAY_ABBR)) {
+    if (abbr.startsWith(normalized) && normalized.length > 0) {
+      matchedWeekdays.add(dayIndex);
+    }
+  }
+
+  // Also check prefix matching on full weekday names
   for (let i = 0; i < WEEKDAYS.length; i++) {
     if (WEEKDAYS[i].startsWith(normalized) && normalized.length > 1) {
-      const targetDay = i;
-      const currentDay = today.getDay();
-      let daysToAdd = targetDay - currentDay;
-
-      if (daysToAdd <= 0) {
-        daysToAdd += 7;
-      }
-
-      const targetDate = new Date(today);
-      targetDate.setHours(0, 0, 0, 0);
-      targetDate.setDate(targetDate.getDate() + daysToAdd);
-
-      suggestions.push({
-        date: targetDate,
-        displayFormat: formatDate(targetDate),
-        confidence: 0.8,
-      });
+      matchedWeekdays.add(i);
     }
+  }
+
+  for (const targetDay of matchedWeekdays) {
+    const currentDay = today.getDay();
+    let daysToAdd = targetDay - currentDay;
+
+    if (daysToAdd <= 0) {
+      daysToAdd += 7;
+    }
+
+    const targetDate = new Date(today);
+    targetDate.setDate(targetDate.getDate() + daysToAdd);
+
+    suggestions.push({
+      date: targetDate,
+      displayFormat: formatDate(targetDate),
+      confidence: 0.8,
+    });
   }
 
   // Month suggestions

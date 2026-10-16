@@ -32,7 +32,7 @@ import { WafObservability } from './waf-observability';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'cloud-storage-service',
 };
 
@@ -57,6 +57,14 @@ const DATABASE_URL_PROXY = aws.secretsmanager
     secretId: config.require(`macro_db_proxy_secret_key`),
   })
   .apply((secret) => secret.secretString);
+
+// GraphQL email sender discovery resolves the selected inbox's Google grant.
+// This is the existing credential registered in this stack's Doppler config.
+const authenticationServiceSecretKeyArn = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('authentication_service_secret_key'),
+  })
+  .apply((secret) => secret.arn);
 
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
@@ -210,24 +218,12 @@ export const slackImportDlqArn = slackImportQueue.dlq.arn;
 export const slackImportDlqName = slackImportQueue.dlq.name;
 export const slackImportWorkerPolicyArn = slackImportQueue.workerPolicy.arn;
 
-const searchProcessingStack = new pulumi.StackReference(
-  'slack-import-search-processing',
-  { name: `macro-inc/search-processing-service/${stack}` }
-);
 const slackImportWorker = deploySlackImportWorker(
   `slack-import-worker-${stack}`,
   {
     ecsClusterArn: cloudStorageClusterArn,
     vpc: coparse_api_vpc,
     workerPolicyArn: slackImportQueue.workerPolicy.arn,
-    stagingBucketName: bulkUploadBucketName,
-    queueName: slackImportQueue.queue.name,
-    dlqName: slackImportQueue.dlq.name,
-    gatewayUrl: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
-    // This is the processing backfill API, not SearchServiceClient's query API.
-    searchProcessingUrl: searchProcessingStack.requireOutput(
-      'searchProcessingServiceUrl'
-    ),
     tags,
   }
 );
@@ -370,6 +366,7 @@ const cloudStorageService = new CloudStorageService(
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
     secretKeyArns: [
+      authenticationServiceSecretKeyArn,
       jwtSecretKeyArn,
       documentStoragePermissionsKeyArn,
       cloudfrontPrivateKeySecretArn,
@@ -458,12 +455,18 @@ const documentUploadFinalizerEnvVars: DocumentUploadFinalizerLambdaEnvVars = {
   SYNC_SERVICE_URL: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
   RUST_LOG:
     'document_upload_finalizer_handler=info,documents=info,macro_http_request=info',
+  // Selects the stack's convert queue.
+  ENVIRONMENT: stack,
+  DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
+  DOCX_DOCUMENT_UPLOAD_BUCKET: pulumi.interpolate`${docxUploadBucketName}`,
 };
 
 const documentUploadFinalizer = new DocumentUploadFinalizerLambda(
   `document-upload-finalizer-${stack}`,
   {
     documentStorageBucketArn,
+    docxUploadBucketArn,
+    convertQueueArn,
     envVars: documentUploadFinalizerEnvVars,
     vpc: coparse_api_vpc,
     tags,
@@ -492,4 +495,5 @@ attachPolicyToDocxUnzipBucket({
   docxUnzipLambdaRoleArn: docxUnzipHandler.role.arn,
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
+  documentUploadFinalizerRoleArn: documentUploadFinalizer.role.arn,
 });

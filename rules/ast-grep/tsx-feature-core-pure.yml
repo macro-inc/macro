@@ -5,7 +5,7 @@ language: tsx
 severity: warning
 message: Feature core modules stay pure TypeScript — no Solid, urql, queries, generated GraphQL, app modules, or sibling layers.
 note: |-
-  Rule FE-33 in docs/STYLE_GUIDE.md. `core/` owns the feature's vocabulary
+  Rule FE-33 in docs/development/style-guide.md. `core/` owns the feature's vocabulary
   and the functions that describe, group, and summarize it. Wire types,
   clients, reactivity, and UI stay outside so a schema rename or a
   framework upgrade cannot churn core tests. Decode lives in `queries/`,
@@ -15,6 +15,14 @@ note: |-
   The shared @core/util/base64 codec, cron helpers, and dateSearch/parseTime parser are pure utilities and may be reused.
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
+  - apps/web/src/features/access-requests/core/**
+  - apps/web/src/features/agent-activity/core/**
+  - apps/web/src/features/agent-dms/core/**
+  - apps/web/src/features/agent-conversations/core/**
+  - apps/web/src/features/agent-interactions/core/**
+  - apps/web/src/features/billing-lab/core/**
+  - apps/web/src/features/calendar-team/core/**
+  - apps/web/src/features/tasks-view/core/task-board*
   - apps/web/src/features/sharing/share-delivery/core/**
   - apps/web/src/features/routines/core/**
   - apps/web/src/features/scheduling/core/**
@@ -25,6 +33,7 @@ files:
   - apps/web/src/features/projects/core/**
   - apps/web/src/features/channel/Call/chat/core/**
   - apps/web/src/features/block-agent/core/**
+  - apps/web/src/features/block-ai/core/**
   - apps/web/src/features/meetings/core/**
   - apps/web/src/features/block-spreadsheet/core/**
   - apps/web/src/features/property/tags/core/**
@@ -38,6 +47,7 @@ files:
   - apps/web/src/features/block-write/core/**
   - apps/web/src/features/onboarding/core/**
   - apps/web/src/features/auth/core/**
+  - apps/web/src/features/block-form/core/**
 rule:
   kind: string
   regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views|ui|component|context)(/|['"]))

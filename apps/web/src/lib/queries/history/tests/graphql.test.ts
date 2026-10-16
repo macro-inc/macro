@@ -199,44 +199,48 @@ describe('cached GraphQL history', () => {
     }
   });
 
-  it('preserves PDF file types for quick-access navigation and icons', async () => {
-    const documentKey = 'GraphqlSoupDocument:document-pdf';
-    const host = cacheHost(
-      async () => ({
-        documents: [
-          {
-            profile: 'quick-access-v1',
-            recordKey: documentKey,
-            bucket: 'document',
-            searchText: 'example pdf',
-            timestampMs: Date.parse('2025-01-05T00:00:00.000Z'),
-            sourceHash: 'pdf',
-          },
-        ],
-        nextCursor: null,
-      }),
-      async ({ document }) => {
-        expect(document).toMatch(/fileType/);
-        return [
-          {
-            recordKey: documentKey,
-            record: {
-              __typename: 'GraphqlSoupDocument',
-              name: 'Example PDF',
-              fileType: 'pdf',
-              ownerId: 'document-owner',
-              createdAt: '2025-01-01T00:00:00.000Z',
-              subType: null,
+  it.each(['pdf', 'spreadsheet'])(
+    'preserves %s file types for quick-access navigation and icons',
+    async (fileType) => {
+      const id = `document-${fileType}`;
+      const documentKey = `GraphqlSoupDocument:${id}`;
+      const host = cacheHost(
+        async () => ({
+          documents: [
+            {
+              profile: 'quick-access-v1',
+              recordKey: documentKey,
+              bucket: 'document',
+              searchText: `example ${fileType}`,
+              timestampMs: Date.parse('2025-01-05T00:00:00.000Z'),
+              sourceHash: fileType,
             },
-          },
-        ];
-      }
-    );
+          ],
+          nextCursor: null,
+        }),
+        async ({ document }) => {
+          expect(document).toMatch(/fileType/);
+          return [
+            {
+              recordKey: documentKey,
+              record: {
+                __typename: 'GraphqlSoupDocument',
+                name: `Example ${fileType}`,
+                fileType,
+                ownerId: 'document-owner',
+                createdAt: '2025-01-01T00:00:00.000Z',
+                subType: null,
+              },
+            },
+          ];
+        }
+      );
 
-    await expect(readCachedGraphqlHistoryItems(host)).resolves.toMatchObject([
-      { id: 'document-pdf', type: 'document', fileType: 'pdf' },
-    ]);
-  });
+      await expect(readCachedGraphqlHistoryItems(host)).resolves.toMatchObject([
+        { id, type: 'document', fileType },
+      ]);
+    }
+  );
 
   it('omits keys whose minimal name projection is incomplete', async () => {
     const search = vi.fn(

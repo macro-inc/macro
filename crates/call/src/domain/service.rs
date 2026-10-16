@@ -42,7 +42,7 @@ use crate::domain::events::{
     CallStartedMetadata,
 };
 use crate::domain::models::{
-    EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
+    CallRecordPage, EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
     VoipPushPayloadRequest,
 };
 
@@ -58,8 +58,8 @@ use super::models::{
     LeaveCallResponse, RingStatus, RingStatusResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
-    CallRecordQueryService, CallRepository, CallRtcClient, CallService, CallSummarizer,
-    NoOpVoiceRepository, RecordingStorage, VoiceRepository,
+    CallRecordQueryService, CallRecordReader, CallRepository, CallRtcClient, CallService,
+    CallSummarizer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -295,6 +295,23 @@ impl<
             }
         };
 
+        let participants = archived
+            .participants
+            .iter()
+            .filter_map(|participant| {
+                MacroUserIdStr::parse_from_str(participant)
+                    .inspect_err(|error| {
+                        tracing::error!(
+                            error = ?error,
+                            call_id = %archived.call_id,
+                            "failed to parse stored call participant; omitting it from the archived event"
+                        );
+                    })
+                    .ok()
+                    .map(MacroUserIdStr::into_owned)
+            })
+            .collect();
+
         self.publish_call_event(&CallMacroEvent::record_archived(
             CallRecordArchivedMetadata {
                 call_id: archived.call_id,
@@ -303,7 +320,8 @@ impl<
                 started_at: archived.started_at,
                 ended_at: archived.ended_at,
                 duration_ms: Some(archived.duration_ms),
-                participant_count: archived.participant_count,
+                participant_count: archived.participants.len(),
+                participants,
                 has_recording: archived.has_recording,
                 archive_reason,
             },
@@ -416,23 +434,87 @@ impl<
             .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to send call answered event"));
     }
+
+    /// Notify a user's own connections that they declined a call (best-effort).
+    ///
+    /// Same audience as [`Self::send_call_answered_event`]: only the declining
+    /// user's clients, so a decline on one device (e.g. the iPhone lock
+    /// screen) stops the ring on the rest without touching other members.
+    async fn send_call_declined_event(
+        &self,
+        channel_id: &Option<Uuid>,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) {
+        let _ = self
+            .connection_service
+            .send_channel_message(
+                &[user_id.copied()],
+                "call_declined",
+                serde_json::json!({
+                    "channel_id": channel_id,
+                    "call_id": call_id,
+                    "user_id": user_id,
+                }),
+            )
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to send call declined event"));
+    }
+
+    /// Persist a user's decline of `call` and fan it out to their devices.
+    async fn decline_active_call(
+        &self,
+        call: &Call,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), CallError> {
+        self.repo
+            .record_decline(&call.id, user_id.copied())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        self.send_call_declined_event(&call.channel_id, &call.id, user_id)
+            .await;
+        Ok(())
+    }
+
+    /// Resolve the room and identity a VoIP-delivered RTC token authorizes.
+    fn verify_ring_token(
+        &self,
+        bearer_token: &str,
+    ) -> Result<(String, MacroUserIdStr<'static>), CallError> {
+        let verified = self
+            .rtc_client
+            .verify_access_token(bearer_token)
+            .map_err(|e| {
+                tracing::warn!(error=?e, "ring token verification failed");
+                CallError::Auth
+            })?;
+        let room = verified.room.ok_or(CallError::Auth)?;
+        let identity = MacroUserIdStr::parse_from_str(&verified.identity)
+            .map_err(|_| CallError::Auth)?
+            .into_owned();
+        Ok((room, identity))
+    }
 }
 
 /// Decide the per-user ring status from the room's active call (if any),
 /// the call id the client is polling for, and whether the user is an
-/// active participant of that call.
+/// active participant of, or has declined, that call.
 ///
 /// A room whose active call differs from the polled one means the polled
 /// call is over and a newer call replaced it — the stale ring is dead.
+/// Joining outranks an earlier decline: a user who declined on one device
+/// and then picked up on another is in the call.
 fn resolve_ring_status(
     active_call: Option<&Call>,
     requested_call_id: &Uuid,
     is_participant: bool,
+    has_declined: bool,
 ) -> RingStatus {
     match active_call {
         None => RingStatus::Ended,
         Some(call) if call.id != *requested_call_id => RingStatus::Ended,
         Some(_) if is_participant => RingStatus::Answered,
+        Some(_) if has_declined => RingStatus::Declined,
         Some(_) => RingStatus::Ringing,
     }
 }
@@ -1112,22 +1194,44 @@ impl<
         })
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn decline_call(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<(), CallError> {
+        let call = self
+            .repo
+            .get_call_by_id(call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+
+        self.decline_active_call(&call, user_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, bearer_token))]
+    async fn decline_ring(&self, call_id: &Uuid, bearer_token: &str) -> Result<(), CallError> {
+        let (room, identity) = self.verify_ring_token(bearer_token)?;
+
+        let call = self
+            .repo
+            .get_call_by_room_name(&room)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .filter(|call| call.id == *call_id)
+            .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+
+        self.decline_active_call(&call, identity).await
+    }
+
     #[tracing::instrument(err, skip(self, bearer_token))]
     async fn get_ring_status(
         &self,
         call_id: &Uuid,
         bearer_token: &str,
     ) -> Result<RingStatusResponse, CallError> {
-        let verified = self
-            .rtc_client
-            .verify_access_token(bearer_token)
-            .map_err(|e| {
-                tracing::warn!(error=?e, "ring-status token verification failed");
-                CallError::Auth
-            })?;
-        let room = verified.room.ok_or(CallError::Auth)?;
-        let identity =
-            MacroUserIdStr::parse_from_str(&verified.identity).map_err(|_| CallError::Auth)?;
+        let (room, identity) = self.verify_ring_token(bearer_token)?;
 
         let active_call = self
             .repo
@@ -1135,19 +1239,32 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
-        // Only consult participation when the room's active call is the one
-        // being polled — otherwise the answer is Ended regardless.
-        let is_participant = match &active_call {
-            Some(call) if call.id == *call_id => self
-                .repo
-                .is_participant(&call.id, identity.as_ref())
-                .await
-                .map_err(|e| CallError::Internal(e.into()))?,
-            _ => false,
+        // Only consult participation and declines when the room's active call
+        // is the one being polled — otherwise the answer is Ended regardless.
+        let (is_participant, has_declined) = match &active_call {
+            Some(call) if call.id == *call_id => {
+                let is_participant = self
+                    .repo
+                    .is_participant(&call.id, identity.as_ref())
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?;
+                let has_declined = self
+                    .repo
+                    .has_declined(&call.id, identity.as_ref())
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?;
+                (is_participant, has_declined)
+            }
+            _ => (false, false),
         };
 
         Ok(RingStatusResponse {
-            status: resolve_ring_status(active_call.as_ref(), call_id, is_participant),
+            status: resolve_ring_status(
+                active_call.as_ref(),
+                call_id,
+                is_participant,
+                has_declined,
+            ),
         })
     }
 
@@ -1392,31 +1509,10 @@ impl<
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<CallRecord, CallError> {
-        let entity = receipt.entity();
-        if entity.entity_type != EntityType::Call {
-            return Err(CallError::Internal(anyhow::anyhow!(
-                "expected Call entity in receipt, got {:?}",
-                entity.entity_type
-            )));
-        }
-        let call_id = Uuid::parse_str(&entity.entity_id)
-            .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
-
+        let mut record = authorized_call_record(&self.repo, &receipt).await?;
         let user_id = receipt
             .get_authenticated_user()
             .map_err(|_| CallError::Auth)?;
-
-        let mut record = self
-            .repo
-            .get_call_record_by_call_id(&call_id)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?
-            .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
-
-        record.user_access_level = match receipt.entity_permission() {
-            EntityPermission::AccessLevel { access_level } => Some(*access_level),
-            _ => None,
-        };
 
         if let Some(recording_key) = &record.recording_key {
             record.recording_url = self
@@ -1438,13 +1534,15 @@ impl<
                 .ok();
         }
 
-        record.channel_name = match record.channel_id {
-            Some(channel_id) => self
-                .repo
-                .resolve_channel_name(&channel_id, user_id.copied())
+        // Only active calls keep decline rows; archived calls drop them with
+        // the call, and an inactive record already resolves as ended.
+        record.viewer_has_declined = if record.is_active {
+            self.repo
+                .has_declined(&record.call_id, user_id.as_ref())
                 .await
-                .map_err(|e| CallError::Internal(e.into()))?,
-            None => None,
+                .map_err(|e| CallError::Internal(e.into()))?
+        } else {
+            false
         };
 
         Ok(record)
@@ -2291,9 +2389,52 @@ impl CallSummarizer for NoopCallSummarizer {
     }
 }
 
-/// Lightweight implementation of [`CallRecordQueryService`] for read-only
-/// call record queries. Unlike [`CallServiceImpl`], this only requires a
-/// repository — no RTC client, notifications, or entity access.
+/// The record a call receipt authorizes, at the receipt's access level, with
+/// its channel named as the receipt's user sees it.
+async fn authorized_call_record<R: CallRepository>(
+    repo: &R,
+    receipt: &EntityAccessReceipt<ViewAccessLevel>,
+) -> Result<CallRecord, CallError> {
+    let entity = receipt.entity();
+    if entity.entity_type != EntityType::Call {
+        return Err(CallError::Internal(anyhow::anyhow!(
+            "expected Call entity in receipt, got {:?}",
+            entity.entity_type
+        )));
+    }
+    let call_id = Uuid::parse_str(&entity.entity_id)
+        .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call_id in receipt")))?;
+
+    let user_id = receipt
+        .get_authenticated_user()
+        .map_err(|_| CallError::Auth)?;
+
+    let mut record = repo
+        .get_call_record_by_call_id(&call_id)
+        .await
+        .map_err(|e| CallError::Internal(e.into()))?
+        .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+
+    record.user_access_level = match receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => Some(*access_level),
+        _ => None,
+    };
+
+    record.channel_name = match record.channel_id {
+        Some(channel_id) => repo
+            .resolve_channel_name(&channel_id, user_id.copied())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?,
+        None => None,
+    };
+
+    Ok(record)
+}
+
+/// Lightweight implementation of [`CallRecordQueryService`] and
+/// [`CallRecordReader`] for read-only call record queries. Unlike
+/// [`CallServiceImpl`], this only requires a repository — no RTC client,
+/// notifications, or entity access.
 pub struct CallRecordQueryServiceImpl<R: CallRepository> {
     repo: R,
 }
@@ -2312,8 +2453,9 @@ impl<R: CallRepository> CallRecordQueryService for CallRecordQueryServiceImpl<R>
         req: GetCallRecordsRequest,
     ) -> Result<Vec<CallRecord>, CallError> {
         let filter = req.query.filter();
+        let page = CallRecordPage::from_query(&req.query);
         self.repo
-            .get_call_records_by_user(req.user_id.copied(), req.limit, filter)
+            .get_call_records_by_user(req.user_id.copied(), req.limit, filter, page)
             .await
             .map_err(|e| CallError::Internal(e.into()))
     }
@@ -2323,5 +2465,15 @@ impl<R: CallRepository> CallRecordQueryService for CallRecordQueryServiceImpl<R>
             .get_call_record_people(&call_record_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))
+    }
+}
+
+impl<R: CallRepository> CallRecordReader for CallRecordQueryServiceImpl<R> {
+    #[tracing::instrument(err, skip(self))]
+    async fn get_call_record(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<CallRecord, CallError> {
+        authorized_call_record(&self.repo, &receipt).await
     }
 }

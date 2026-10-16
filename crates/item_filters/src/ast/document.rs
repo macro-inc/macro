@@ -1,6 +1,9 @@
 use crate::{
     DocumentFilters,
-    ast::{ExpandErr, date::DateLiteral, email::Email, properties::PropertiesLiteral},
+    ast::{
+        ExpandErr, crm_association::CrmAssociation, date::DateLiteral, email::Email,
+        properties::PropertiesLiteral,
+    },
 };
 use document_sub_type::DocumentSubType;
 use either::Either;
@@ -65,6 +68,16 @@ pub enum DocumentLiteral {
     /// sent by, or addressed to, a matching email address or domain
     #[serde(rename = "eap")]
     EmailAttachmentParticipant(Email),
+    /// the document or task is associated with a CRM record through its
+    /// Companies or Contacts property or a reference to the record. Soup
+    /// resolves the record before querying; it composes with the other
+    /// document literals the way [`DocumentLiteral::Property`] does. Only
+    /// expanded, timestamp-sorted queries accept it.
+    #[serde(rename = "crm")]
+    CrmAssociated(CrmAssociation),
+    /// case-insensitive substring of the document name
+    #[serde(rename = "nc")]
+    NameContains(String),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {

@@ -54,6 +54,8 @@ export type SplitRouteClaim = {
 export type SplitReference = {
   type: string;
   id: string;
+  /** Location within the entity; omitted, hosts take the link's external query keys. */
+  params?: Record<string, string>;
 };
 
 /** Route metadata. Hosts extend this interface through declaration merging. */
@@ -84,6 +86,13 @@ type SplitRouteParamCallback<TParams, TResult> = {
   bivarianceHack(params: TParams): TResult;
 }['bivarianceHack'];
 
+type SplitRouteReferenceCallback<TParams> = {
+  bivarianceHack(
+    params: TParams,
+    query: URLSearchParams
+  ): SplitReference | undefined;
+}['bivarianceHack'];
+
 export type SplitRouteRemountContext = {
   entryId: string;
 };
@@ -110,6 +119,8 @@ export type SplitRouteDefinition<
   path?: string;
   aliases?: readonly string[];
   component?: TComponent;
+  /** Shown in place of `component` while it suspends, such as while its lazy chunk loads. */
+  loading?: TComponent;
   children?: readonly SplitRouteDefinition<TComponent>[];
   params?: TParamsSchema;
   state?: StandardSchemaV1;
@@ -121,10 +132,12 @@ export type SplitRouteDefinition<
     StandardSchemaV1.InferOutput<TParamsSchema>,
     SplitRouteClaim | undefined
   >;
-  /** The entity this route shows, for hosts that link to it; the router never reads it. */
-  toReference?: SplitRouteParamCallback<
-    StandardSchemaV1.InferOutput<TParamsSchema>,
-    SplitReference | undefined
+  /**
+   * The entity a link to this route shows, read from its params and the
+   * link's unprefixed query. For hosts that link to it; the router never reads it.
+   */
+  toReference?: SplitRouteReferenceCallback<
+    StandardSchemaV1.InferOutput<TParamsSchema>
   >;
   /**
    * Pane search namespaces this route adds, or `'*'` for every namespace.

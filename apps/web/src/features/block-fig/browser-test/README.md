@@ -25,10 +25,11 @@ design; saves stay in memory, and `?reload` reopens each one. Test-only
   fixture stands in for Google Fonts and this computer's fonts
   (`font-source.ts`): every family is served as the bundled Inter, and
   "Nowhere Grotesk" is installed locally;
-- `comments`: the in-memory comment store (`memory-comments.ts`, the
-  `FigCommentStore` contract the app fulfils with document discussions):
+- `comments`: the in-memory comment store (`memory-comments.tsx`, the
+  `FigCommentStore` contract the app fulfils with Macro comments, with
+  plain stand-ins for the shared message thread and composer):
   `threads()`, `arrive(author, text, target)` (someone else comments or
-  replies), `notified()` (mentions that would notify), and `people`.
+  replies), `follow(threadId)` (a followed comment link), and `people`.
 
 `?present=<frame id>` opens presenting that frame, as a copied frame link
 does.
@@ -80,9 +81,9 @@ overlay, Back, Close, a link, and a legacy connection, made by
 the arrow keys, the selected frame, copying a frame link and opening it),
 clicking through the prototype (hotspot hints, overlays closing on a click
 outside), editing interactions and flows in the Prototype tab (with the
-connection noodles, undo, and saving), and comments (placing one on a
-frame, @mentions, replies, unread badges, resolving and reopening, and the
-pin following its frame).
+connection noodles, undo, and saving), and the comment tool (placing a
+comment on a frame, replies, unread badges, resolving and reopening, the
+pin following its frame, and following a comment link).
 
 `?libraries` keeps two designs in memory, "Design system"
 (`design-system.fig`, or `&library=<file>`) and a blank "App", with the

@@ -83,6 +83,15 @@ pub struct DetectedAgent {
 }
 
 impl DetectedAgent {
+    /// The name inside its group, where "in herdr" goes without saying.
+    pub fn short_name(&self) -> &'static str {
+        match self.kind {
+            AgentKind::HerdrClaude => "Claude Code",
+            AgentKind::HerdrCodex => "Codex",
+            _ => self.name,
+        }
+    }
+
     /// The installation still to run before `launch` works, if any.
     pub fn pending_install(&self) -> Option<&AdapterInstall> {
         self.install
@@ -102,6 +111,13 @@ pub enum AgentKind {
     OpenClaw,
     OpenCode,
     Custom,
+}
+
+impl AgentKind {
+    /// Whether the agent runs as its own TUI in a herdr tab.
+    pub fn is_herdr(self) -> bool {
+        matches!(self, Self::HerdrClaude | Self::HerdrCodex)
+    }
 }
 
 /// Result of checking one preset against the local machine.

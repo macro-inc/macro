@@ -1,5 +1,7 @@
 //! Bot service implementation.
 
+mod agent_dm;
+
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
@@ -928,9 +930,11 @@ where
     }
 
     async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+        // A direct agent conversation is answered the same as a channel the
+        // bot is not in, so the answer does not tell which channels are one.
         if self
             .repo
-            .bot_active_in_channel(channel_id, bot_id)
+            .bot_may_post_in_channel(channel_id, bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {

@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(git rev-parse --show-toplevel)
+runner=runner.ts
+if [[ ${1:-} == --links ]]; then
+  runner=links-runner.ts
+  shift
+elif [[ ${1:-} == --notifications ]]; then
+  runner=notifications-runner.ts
+  shift
+fi
 for tool in bun unshare ip dbus-run-session xvfb-run WebKitWebDriver; do
   if ! command -v "$tool" >/dev/null; then
     echo "Missing $tool. Run inside: nix develop .#tauri-e2e" >&2
@@ -36,7 +44,7 @@ unshare --user --map-root-user --net --pid --fork --mount-proc --kill-child=SIGK
     ip link set lo up
     export MACRO_E2E_NETNS=1
     exec dbus-run-session -- xvfb-run --auto-servernum --server-args="-screen 0 1440x1000x24 -nolisten tcp" \
-      bun "$1/apps/web/tests/native/runner.ts" "${@:2}"
-  ' bash "$root" "$@" &
+      bun "$1/apps/web/tests/native/$2" "${@:3}"
+  ' bash "$root" "$runner" "$@" &
 child=$!
 wait "$child"

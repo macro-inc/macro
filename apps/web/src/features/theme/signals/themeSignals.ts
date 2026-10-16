@@ -22,8 +22,15 @@ import { isThemeV2, isThemeV3 } from '../utils/themeValidation';
 
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
 
+/** Resolved semantic colors used by index.html before the app loads. */
 export const [htmlColor, setHtmlColor] = makePersisted(
-  createSignal({ color: '' }),
+  createSignal<{
+    color: string;
+    panel?: string;
+    ink?: string;
+    muted?: string;
+    input?: string;
+  }>({ color: '' }),
   { name: 'html-color-theme' }
 );
 

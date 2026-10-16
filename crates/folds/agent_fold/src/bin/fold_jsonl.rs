@@ -138,6 +138,7 @@ fn parse_line(
         agent_session_id: session,
         user_id: None,
         content,
+        logged_at: None,
     })
 }
 

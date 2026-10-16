@@ -16,7 +16,7 @@ mod test;
 use agent_runtime_protocol::domain::action::AgentActionId;
 use bots::domain::models::BotId;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
-use macro_event_topics::{MacroAgentSessionLifecycleTopic, MacroAgentSessionLogTopic};
+use macro_event_topics::MacroAgentSessionLifecycleTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::MessageParent;
@@ -466,39 +466,10 @@ impl MacroEvent for AgentSessionLifecycleMacroEvent {
     }
 }
 
-/// A run of frames appended to a session's log, published to
-/// [`MacroAgentSessionLogTopic`] and keyed by session id.
-///
-/// The connection gateway pushes the same run to the viewers this process
-/// knows about; this is for a process that serves viewers of its own, such
-/// as the GraphQL subscription in document storage. Each entry is exactly
-/// the stored row, so a subscriber folds the same bytes a reader of the
-/// durable log does.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "event_type", content = "metadata")]
-pub enum AgentSessionLogTopicEvent {
-    /// Frames were appended to the log, in log order.
-    #[serde(rename = "agent_session_log.appended")]
-    Appended(LogAppendedMetadata),
-}
-
-impl AgentSessionLogTopicEvent {
-    /// The session the frames belong to.
-    #[must_use]
-    pub fn session_id(&self) -> AgentSessionId {
-        match self {
-            Self::Appended(metadata) => metadata.agent_session_id,
-        }
-    }
-}
-
-impl TopicEvent for AgentSessionLogTopicEvent {
-    type Topic = MacroAgentSessionLogTopic;
-
-    const SCHEMA_VERSION: u8 = 1;
-}
-
-/// The frames one flush appended, as the log stored them.
+/// The frames one flush appended, as the log stored them: what the harness
+/// hands to a process serving viewers of its own, such as the GraphQL
+/// subscription in document storage. Each entry is exactly the stored row, so
+/// a subscriber folds the same bytes a reader of the durable log does.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogAppendedMetadata {
     /// The session the frames belong to.
@@ -520,9 +491,9 @@ pub struct LogAppendedEntry {
     pub content: Message,
 }
 
-impl From<&LogAppended> for AgentSessionLogTopicEvent {
+impl From<&LogAppended> for LogAppendedMetadata {
     fn from(event: &LogAppended) -> Self {
-        Self::Appended(LogAppendedMetadata {
+        Self {
             agent_session_id: event.agent_session_id,
             entries: event
                 .entries
@@ -534,7 +505,7 @@ impl From<&LogAppended> for AgentSessionLogTopicEvent {
                     content: stored.entry.content.clone(),
                 })
                 .collect(),
-        })
+        }
     }
 }
 
@@ -553,49 +524,9 @@ impl LogAppendedMetadata {
                     agent_session_id,
                     user_id: entry.user_id,
                     content: entry.content,
+                    logged_at: Some(entry.created_at),
                 },
             })
             .collect()
-    }
-}
-
-/// Publishable event for [`MacroAgentSessionLogTopic`], keyed by session id
-/// so one session's frames stay in order on one partition.
-#[derive(Debug, Clone)]
-pub struct AgentSessionLogMacroEvent {
-    key: String,
-    event: Event<AgentSessionLogTopicEvent>,
-}
-
-impl AgentSessionLogMacroEvent {
-    /// Wrap a run of frames for publication.
-    #[must_use]
-    pub fn new(event: AgentSessionLogTopicEvent) -> Self {
-        Self {
-            key: event.session_id().to_string(),
-            event: Event::new(event),
-        }
-    }
-
-    /// The run this event carries.
-    #[must_use]
-    pub fn into_payload(self) -> AgentSessionLogTopicEvent {
-        self.event.event
-    }
-}
-
-impl MacroEvent for AgentSessionLogMacroEvent {
-    type EventPayload = AgentSessionLogTopicEvent;
-
-    fn key(&self) -> &str {
-        &self.key
-    }
-
-    fn event(&self) -> &Event<Self::EventPayload> {
-        &self.event
-    }
-
-    fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
-        Self { key, event }
     }
 }

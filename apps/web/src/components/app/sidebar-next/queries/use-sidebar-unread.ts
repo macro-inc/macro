@@ -1,6 +1,6 @@
 import { buildEmailQuery } from '@app/features/email-view/queries/email-query';
 import { soupItemMatchesHomeTab } from '@app/features/home/queries/home-item-filter';
-import { useHomeEntitiesQuery } from '@app/features/home/queries/use-home-query';
+import { useHomeUnreadQuery } from '@app/features/home/queries/use-home-unread-query';
 import {
   compileToAst,
   defineQueryFilters,
@@ -15,8 +15,15 @@ import { notificationStateFromGraphql } from '@notifications/notification-state'
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { createMemo } from 'solid-js';
+
+// Module scope: cached query meta outlives the hook that registered it.
+const signalInsertFilter: SoupApiItemFilter = (item) =>
+  soupItemMatchesHomeTab(item, 'signal');
 
 /** Presence in the loaded unread page, never a total or a pagination loop. */
 export function useSidebarUnread() {
@@ -37,10 +44,7 @@ export function useSidebarUnread() {
     }),
     () => graphqlFlag().enabled
   );
-  const home = useHomeEntitiesQuery({
-    tab: 'signal',
-    facets: { read: ['unread'] },
-  });
+  const homeUnread = useHomeUnreadQuery(() => graphqlFlag().enabled);
   const email = useSoupAstItemsQuery(
     () =>
       buildEmailQuery({
@@ -50,16 +54,12 @@ export function useSidebarUnread() {
         facetContext: EMPTY_TAG_FACET_CONTEXT,
       }),
     () => ({
-      meta: { insertFilter: (item) => soupItemMatchesHomeTab(item, 'signal') },
+      meta: { insertFilter: signalInsertFilter },
     })
   );
 
   // Guard resource reads so loading a badge cannot suspend the app shell.
   // Re-check cached rows: optimistic read/done changes can leave them in a page.
-  const homeUnread = createMemo(() => {
-    if (home.query.isLoading) return false;
-    return home.hasUnreadEntity(home.query.data?.entities ?? []);
-  });
   const emailUnread = createMemo(() => {
     if (email.isLoading) return false;
     return (email.data?.entities ?? []).some(

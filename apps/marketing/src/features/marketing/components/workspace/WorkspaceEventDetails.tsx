@@ -99,7 +99,7 @@ export function WorkspaceEventDetails(props: {
                 <span class="block text-[10px] text-ink-extra-muted">
                   Organizer
                 </span>
-                Jacob Beckerman
+                Jacob
               </span>
             </div>
             <div class="sample-event-detail-row mt-6">

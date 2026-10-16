@@ -4,7 +4,7 @@ import { type Accessor, createMemo, createSignal, type Setter } from 'solid-js';
 import {
   type DatabaseViewSelection,
   readViewSelection,
-} from '../core/view-selection';
+} from '../../database/core/view-selection';
 
 export function createDatabaseViewSelection(
   userId: Accessor<string | undefined>,

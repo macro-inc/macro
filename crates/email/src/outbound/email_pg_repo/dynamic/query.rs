@@ -542,7 +542,7 @@ fn build_query(
                 )
             END AS is_important,
             c.email_address AS sender_email,
-            c.name AS sender_name,
+            COALESCE(lmp.from_name, c.name) AS sender_name,
             c.sfs_photo_url as sender_photo_url,
             el.macro_id AS owner_id,
             el.id AS link_id
@@ -664,6 +664,7 @@ fn build_query(
                    m.subject,
                    m.snippet,
                    m.from_contact_id,
+                   m.from_name,
                    m.is_draft
             FROM email_messages m
             WHERE m.thread_id = t.id

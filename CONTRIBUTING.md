@@ -46,13 +46,13 @@ No generated boilerplate, no exhaustive file-by-file change lists.
 
 You do not need the local stack if you only change the frontend.
 
-If you only change the frontend, run the [frontend against hosted services](docs/RUNNING_LOCALLY.md#run-the-frontend-against-hosted-services).
+If you only change the frontend, run the [frontend against hosted services](docs/development/running-locally.md#run-the-frontend-against-hosted-services).
 
-If you change a backend service, the database, or behavior that must stay on your machine, [run the local stack](docs/RUNNING_LOCALLY.md#run-the-local-stack).
+If you change a backend service, the database, or behavior that must stay on your machine, [run the local stack](docs/development/running-locally.md#run-the-local-stack).
 
 ## Before you push
 
-- Follow the [style guide](docs/STYLE_GUIDE.md).
+- Follow the [style guide](docs/development/style-guide.md).
 - Format and lint: `cargo fmt` and `just clippy` for Rust changes.
 - Run the tests for the crates you touched: `cargo test -p <crate>`.
 - If you changed SQL queries or migrations, run `just prepare_db` from the

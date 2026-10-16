@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_credit_reload\n            SET status = ($2::text)::ai_credit_reload_status, updated_at = NOW()\n            WHERE stripe_invoice_id = $1\n              AND status <> 'paid'\n              AND status <> ($2::text)::ai_credit_reload_status\n            RETURNING user_id, amount_cents\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "39fca497572c002c867196ee262bae22e85e5ec9c68753b6a18fdb5935afe93d"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at)\n            SELECT $1, user_id, joined_at, left_at\n            FROM call_participants\n            WHERE call_id = $2\n            RETURNING user_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6ffb1830d2f531af477fdf40cc8269f4d0e4027101768ad0173331063445a415"
+}

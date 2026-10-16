@@ -5,9 +5,8 @@ import {
   ALLOWED_ORIGINS,
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
-  datadogAgentContainer,
+  withTelemetry,
   EcsDeploymentFailureAlarm,
-  fargateLogRouterSidecarContainer,
   QueueAlarms,
   serviceLoadBalancer,
 } from '../../packages/resources';
@@ -559,9 +558,7 @@ export class StaticFileService extends pulumi.ComponentResource {
           executionRole: {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
-          containers: {
-            log_router: fargateLogRouterSidecarContainer,
-            datadog_agent: datadogAgentContainer,
+          containers: withTelemetry(BASE_NAME, {
             service: {
               name: SERVICE_NAME,
               image: image.image.imageUri,
@@ -598,7 +595,7 @@ export class StaticFileService extends pulumi.ComponentResource {
                 },
               ],
             },
-          },
+          }),
           runtimePlatform: {
             operatingSystemFamily: `${args.platform.family.toUpperCase()}`,
             cpuArchitecture: `${

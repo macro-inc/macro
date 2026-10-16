@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::{
-    domain::pull_request::SessionPullRequests,
-    inbound::toolset::{SessionToolContext, SetPullRequest},
+    domain::{pull_request::SessionPullRequests, session_task::SessionTasks},
+    inbound::toolset::{LinkTask, SessionToolContext, SetPullRequest, TaskPullRequestsTool},
 };
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use axum::{
@@ -32,13 +32,17 @@ use authenticated_session::AuthenticatedSession;
 mod test;
 
 fn toolset() -> AsyncToolCollection<SessionToolContext> {
-    AsyncToolCollection::new().add_tool::<SetPullRequest, SessionToolContext>()
+    AsyncToolCollection::new()
+        .add_tool::<SetPullRequest, SessionToolContext>()
+        .add_tool::<LinkTask, SessionToolContext>()
+        .add_tool::<TaskPullRequestsTool, SessionToolContext>()
 }
 
 /// Build the internal endpoint with per-request session authentication.
 pub fn router<A: AgentSessionRepo + 'static>(
     authority: Arc<A>,
     service: Arc<dyn SessionPullRequests>,
+    tasks: Arc<dyn SessionTasks>,
     host: String,
 ) -> Router {
     let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
@@ -54,6 +58,7 @@ pub fn router<A: AgentSessionRepo + 'static>(
         move || {
             Ok(InternalTools {
                 service: service.clone(),
+                tasks: tasks.clone(),
             })
         },
         Arc::new(LocalSessionManager::default()),
@@ -71,6 +76,7 @@ async fn authenticate(session: AuthenticatedSession, mut request: Request, next:
 
 struct InternalTools {
     service: Arc<dyn SessionPullRequests>,
+    tasks: Arc<dyn SessionTasks>,
 }
 
 impl ServerHandler for InternalTools {
@@ -81,10 +87,7 @@ impl ServerHandler for InternalTools {
             env!("CARGO_PKG_VERSION"),
         )
         .with_title("Macro Internal MCP");
-        info.instructions = Some(
-            "When you create or start working on a pull request, register its URL with Macro using macro_internal.set_pull_request. \
-             Save any screenshot or screen recording meant for the user into your artifacts directory and refer to it in prose by file name only, never by a sandbox path: Macro re-hosts uploaded artifacts and cannot reach files anywhere else.".into(),
-        );
+        info.instructions = Some(prompt::pull_requests::internal_mcp_instructions());
         info
     }
 
@@ -138,6 +141,7 @@ impl ServerHandler for InternalTools {
             .try_tool_call(
                 SessionToolContext {
                     service: self.service.clone(),
+                    tasks: self.tasks.clone(),
                     session: grant.id,
                 },
                 RequestContext::new(owner.clone()),

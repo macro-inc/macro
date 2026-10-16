@@ -22,6 +22,7 @@ agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
 arboard = { workspace = true }
 bot_id = { path = "../bot_id" }
+trigger_context = { path = "../trigger_context" }
 chrono = { workspace = true }
 clap = { workspace = true }
 crossterm = { workspace = true }

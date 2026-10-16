@@ -5,7 +5,7 @@ language: typescript
 severity: error
 message: Don't cast to ItemType — parse the string with stringToItemType from @service-storage/client.
 note: |-
-  Rule FE-31 in docs/STYLE_GUIDE.md. Entity-type strings arrive in several
+  Rule FE-31 in docs/development/style-guide.md. Entity-type strings arrive in several
   stored spellings (email threads alone are `email`, `thread`, and
   `email_thread`), so a cast smuggles a value no preview fetcher handles.
   stringToItemType in src/lib/service-clients/service-storage/itemType.ts is

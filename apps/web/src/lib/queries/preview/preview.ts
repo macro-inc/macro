@@ -8,7 +8,7 @@ import { authKeys } from '@queries/auth/keys';
 import type { UserInfoData } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
 import { createMemo } from 'solid-js';
 import { queryClient } from '../client';
@@ -153,6 +153,22 @@ function useItemPreviewQuery(
   };
 }
 
+// Cached callbacks must only close over plain request values, never hook state.
+function channelMessagePreviewQueryOptions(
+  itemId: string,
+  channelId: string,
+  messageId: string,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: previewKeys.item(itemId)._ctx.channelMessage(channelId, messageId)
+      .queryKey,
+    queryFn: ({ signal }) => fetchMessageContext(channelId, messageId, signal),
+    staleTime: PREVIEW_STALE_TIME,
+    enabled,
+  });
+}
+
 export function useItemPreview(item: Accessor<ItemEntity>) {
   const previewQuery = useItemPreviewQuery(item);
 
@@ -160,19 +176,15 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
     const item_ = item();
     const channelId = item_.type === 'channel' ? item_.id : '';
     const messageId = item_.type === 'channel' ? (item_.messageId ?? '') : '';
-    return {
-      queryKey: previewKeys
-        .item(item_.id)
-        ._ctx.channelMessage(channelId, messageId).queryKey,
-      queryFn: ({ signal }) =>
-        fetchMessageContext(channelId, messageId, signal),
-      staleTime: PREVIEW_STALE_TIME,
-      enabled:
-        !previewQuery.usesGraphql() &&
+    return channelMessagePreviewQueryOptions(
+      item_.id,
+      channelId,
+      messageId,
+      !previewQuery.usesGraphql() &&
         !!channelId &&
         !!messageId &&
-        previewQuery.isSuccess(),
-    };
+        previewQuery.isSuccess()
+    );
   });
 
   const preview = createMemo(() => {

@@ -250,4 +250,24 @@ describe('active GraphQL Soup queries', () => {
     unregisterSuccess();
     consoleError.mockRestore();
   });
+  it('limits a scoped refresh to readers whose filter body matches', async () => {
+    const scoped = vi.fn(async () => {});
+    const other = vi.fn(async () => {});
+    const unbodied = vi.fn(async () => {});
+    register({
+      isEnabled: () => true,
+      refresh: scoped,
+      body: () => ({ crma: { company: 'c' } }),
+    });
+    register({ isEnabled: () => true, refresh: other, body: () => ({}) });
+    register({ isEnabled: () => true, refresh: unbodied });
+
+    await refreshActiveGraphqlSoupQueries({
+      where: (body) =>
+        typeof body === 'object' && body !== null && 'crma' in body,
+    });
+    expect(scoped).toHaveBeenCalledOnce();
+    expect(other).not.toHaveBeenCalled();
+    expect(unbodied).not.toHaveBeenCalled();
+  });
 });

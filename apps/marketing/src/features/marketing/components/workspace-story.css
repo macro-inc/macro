@@ -45,7 +45,7 @@
 .homepage-feature-heading { margin-bottom: 56px; text-align: center; }
 .homepage-feature-title { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 20px; }
 #coding-agents .homepage-feature-title { flex-direction: column; }
-.homepage-feature-heading h2 { text-wrap: balance; margin: 0; color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; font-size: clamp(28px, 3.2vw, 40px); font-weight: 315; line-height: 1.25; letter-spacing: -.035em; }
+.homepage-feature-heading h2 { text-wrap: balance; margin: 0; color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; font-size: clamp(28px, 3.2vw, 40px); font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); line-height: 1.25; letter-spacing: -.035em; }
 .homepage-section-break { display: flex; align-items: center; gap: 24px; width: 100%; color: var(--color-ink-placeholder); font: 400 14px/1.65 'Inter Variable', Inter, sans-serif; }
 .homepage-section-break > span { flex: 1; height: 1px; background: color-mix(in srgb, var(--color-ink) 16%, transparent); }
 .homepage-section-break p { flex: 0 1 440px; min-width: 0; margin: 0; color: inherit; text-wrap: balance; }

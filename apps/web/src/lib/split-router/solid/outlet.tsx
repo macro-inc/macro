@@ -3,6 +3,7 @@ import {
   createMemo,
   type JSX,
   Show,
+  Suspense,
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -52,7 +53,18 @@ function RouteOutlet(props: { fallback?: OutletFallback }) {
     <Show keyed when={match()} fallback={fallback()}>
       {(resolved) => (
         <PaneContext.Provider value={context}>
-          <Dynamic component={resolved.component as Component} />
+          {/* Only routes with their own loading view get a boundary, so the
+              rest suspend to their enclosing boundary as before. */}
+          <Show
+            when={resolved.loading as Component | undefined}
+            fallback={<Dynamic component={resolved.component as Component} />}
+          >
+            {(loading) => (
+              <Suspense fallback={<Dynamic component={loading()} />}>
+                <Dynamic component={resolved.component as Component} />
+              </Suspense>
+            )}
+          </Show>
         </PaneContext.Provider>
       )}
     </Show>

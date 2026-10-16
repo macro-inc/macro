@@ -6,5 +6,5 @@ use crate::types::StaticPrompt;
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
     "Coding agents",
     include_str!("coding_agents.txt"),
-    "Select an available coding persona and start a session for repository work.",
+    "Select an available coding persona and start a session for repository work. Pull-request tasks require a ready, CI-passing pull request rather than a draft.",
 );

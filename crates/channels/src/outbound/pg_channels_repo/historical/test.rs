@@ -168,7 +168,7 @@ async fn concurrent_live_and_import_dm_creation_share_one_channel(pool: PgPool) 
                     .get_or_create_dm(
                         Sender::new_from_user(pair().hi().clone()),
                         GetOrCreateDmRequest {
-                            recipient_id: pair().lo().clone(),
+                            recipient_id: Sender::new_from_user(pair().lo().clone()),
                         },
                     )
                     .await

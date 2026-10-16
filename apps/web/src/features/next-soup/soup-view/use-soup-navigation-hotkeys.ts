@@ -8,7 +8,7 @@ import { withSplitPanelOwner } from '@components/app/split-layout/layoutUtils';
 import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { EntityData } from '@entity';
+import { type EntityData, isTaskEntity } from '@entity/types/entity';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
@@ -304,11 +304,16 @@ export const useSoupNavigationHotkeys = (
   }).withGroup(group);
 
   registerHotkey({
-    hotkey: ['arrowleft'],
+    hotkey: ['arrowleft', 'h'],
     scopeId,
     description: 'Collapse item',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      if (
+        event?.key.toLowerCase() === 'h' &&
+        (!soup.focus.row() || !isTaskEntity(soup.focus.row()!.original))
+      )
+        return false;
       const groupHandled = toggleFocusedGroupHeader(false);
       if (groupHandled !== undefined) return groupHandled;
 

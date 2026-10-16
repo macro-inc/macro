@@ -1,3 +1,4 @@
+export { nativeUpdateDescription } from './native-updates';
 export type {
   PendingShareFile,
   UploadPendingShareFileArgs,

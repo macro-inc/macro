@@ -158,7 +158,7 @@ function ChannelResult(props: { onOpen: () => void; updated: boolean }) {
                       <Envelope class="size-4" /> Email thread <span>Live</span>
                     </span>
                     <strong>Next steps for our team</strong>
-                    <span>Dana Whitfield · Jacob Beckerman</span>
+                    <span>Dana · Jacob</span>
                     <span class="mail-shared-thread-preview">
                       {props.updated
                         ? incomingReply
@@ -316,7 +316,7 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
                 <Show when={opened() && phase() >= 7}>
                   <div class="mail-arrived-reply glass-input">
                     <header>
-                      <strong>Dana Whitfield</strong>
+                      <strong>Dana</strong>
                       <span>Just now</span>
                     </header>
                     <p>{incomingReply}</p>

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, list_hidden, for_warming FROM agent_session ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "list_hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "for_warming",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7eb2d80285937c2ea4634b7fb61a3e029b2ba0bf0fe6205bda2197f9e2228653"
+}

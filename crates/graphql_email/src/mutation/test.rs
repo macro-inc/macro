@@ -6,6 +6,7 @@ use email::domain::models::{AttachmentDraft, AttachmentForwarded, MessageAttachm
 use super::*;
 
 mod archive;
+mod senders;
 
 struct QueryRoot;
 
@@ -55,6 +56,7 @@ enum CapturedMutation {
 #[derive(Default)]
 struct CapturingEmailMutationService {
     calls: Mutex<Vec<CapturedMutation>>,
+    send_inputs: Mutex<Vec<(Option<String>, Option<bool>)>>,
     draft_fails_as_already_sent: std::sync::atomic::AtomicBool,
     delete_reports_missing: std::sync::atomic::AtomicBool,
     attachment_load_fails: bool,
@@ -70,6 +72,22 @@ struct CapturingEmailMutationService {
 const TEST_THREAD_ID: Uuid = Uuid::from_u128(0x7ead);
 
 impl EmailMutationService for CapturingEmailMutationService {
+    async fn send_email_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        link_id: Option<Uuid>,
+        input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        self.send_inputs.lock().unwrap().push((
+            input
+                .sender_email
+                .as_ref()
+                .map(|email| email.0.as_ref().to_owned()),
+            input.include_signature,
+        ));
+        Ok(self.save_email_draft(user_id, link_id, input).await?.draft)
+    }
+
     async fn set_email_thread_archived(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -162,6 +180,16 @@ impl EmailMutationService for CapturingEmailMutationService {
             ));
         }
         Ok(SavedUserDraft {
+            sender: ContactInfo {
+                email: input
+                    .sender_email
+                    .map(|email| email.0.as_ref().to_owned())
+                    .unwrap_or_else(|| {
+                        String::from(test_sending_link(link_id.unwrap_or_default()).email_address)
+                    }),
+                name: None,
+                photo_url: None,
+            },
             draft: email::domain::models::CreatedDraft {
                 db_id: input.db_id.unwrap_or_default(),
                 provider_id: input.provider_id,
@@ -631,13 +659,13 @@ async fn save_email_draft_does_not_return_a_message_when_attachment_loading_fail
             .as_ref()
             .unwrap()
             .get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
+        None
     );
     assert!(response.data.into_json().unwrap().is_null());
 }
 
 #[tokio::test]
-async fn save_email_draft_can_retry_when_the_post_save_thread_reload_fails() {
+async fn save_email_draft_reports_internal_error_when_the_post_save_thread_reload_fails() {
     let service = Arc::new(CapturingEmailMutationService {
         thread_load_fails: true,
         ..Default::default()
@@ -656,10 +684,7 @@ async fn save_email_draft_can_retry_when_the_post_save_thread_reload_fails() {
         extensions.get("code"),
         Some(&async_graphql::Value::from("INTERNAL"))
     );
-    assert_eq!(
-        extensions.get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
-    );
+    assert_eq!(extensions.get("retryable"), None);
     assert!(response.data.into_json().unwrap().is_null());
 }
 

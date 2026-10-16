@@ -1,8 +1,11 @@
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
+import CaretCircleDown from '@phosphor/caret-circle-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import ChartBar from '@phosphor/chart-bar.svg';
+import CheckSquare from '@phosphor/check-square.svg';
 import Clipboard from '@phosphor/clipboard-text.svg';
+import Crosshair from '@phosphor/crosshair.svg';
 import Download from '@phosphor/download-simple.svg';
 import Eraser from '@phosphor/eraser.svg';
 import Eye from '@phosphor/eye.svg';
@@ -95,14 +98,18 @@ export function PasteMenu(props: SpreadsheetToolbarProps) {
 export function InsertMenu(props: SpreadsheetToolbarProps) {
   return (
     <ActionMenu
-      label="Insert chart or image"
+      label="Insert chart, image or checkbox"
       icon={<ChartBar class="size-[18px]" />}
       disabled={props.readonly || !props.onInsertChart}
       onRestoreFocus={props.onRestoreFocus}
     >
       <Dropdown.Group>
         <Dropdown.GroupLabel>Chart of the selected cells</Dropdown.GroupLabel>
-        <For each={CHART_TYPES.filter((type) => !('more' in type))}>
+        <For
+          each={CHART_TYPES.filter(
+            (type) => !('more' in type) && !('catalog' in type)
+          )}
+        >
           {(type) => (
             <Dropdown.Item
               closeOnSelect
@@ -119,7 +126,11 @@ export function InsertMenu(props: SpreadsheetToolbarProps) {
           </Dropdown.SubTrigger>
           <Dropdown.SubContent>
             <Dropdown.Group>
-              <For each={CHART_TYPES.filter((type) => 'more' in type)}>
+              <For
+                each={CHART_TYPES.filter(
+                  (type) => 'more' in type && !('catalog' in type)
+                )}
+              >
                 {(type) => (
                   <Dropdown.Item
                     closeOnSelect
@@ -138,6 +149,13 @@ export function InsertMenu(props: SpreadsheetToolbarProps) {
         <Dropdown.Item closeOnSelect onSelect={() => props.onInsertImage?.()}>
           <ImageIcon class="size-4 shrink-0" />
           Image…
+        </Dropdown.Item>
+        <Dropdown.Item
+          closeOnSelect
+          onSelect={() => props.onCommand('insert-checkbox')}
+        >
+          <CheckSquare class="size-4 shrink-0" />
+          Checkbox
         </Dropdown.Item>
         <Show when={props.onSelectDrawings}>
           <Dropdown.Item
@@ -164,6 +182,7 @@ export function ViewMenu(props: SpreadsheetToolbarProps) {
       <Dropdown.Group>
         <Dropdown.CheckboxItem
           checked={props.showGridlines}
+          disabled={props.readonly}
           onChange={() => props.onCommand('toggle-gridlines')}
         >
           Gridlines
@@ -217,6 +236,22 @@ export function DataFormatMenu(props: SpreadsheetToolbarProps) {
         >
           <TextAlignLeft class="size-4" />
           Trim whitespace
+        </Dropdown.Item>
+        <Dropdown.Item
+          closeOnSelect
+          disabled={props.readonly}
+          onSelect={() => props.onCommand('dropdown')}
+        >
+          <CaretCircleDown class="size-4" />
+          Dropdown…
+        </Dropdown.Item>
+        <Dropdown.Item
+          closeOnSelect
+          disabled={props.readonly}
+          onSelect={() => props.onCommand('goal-seek')}
+        >
+          <Crosshair class="size-4" />
+          Goal Seek…
         </Dropdown.Item>
       </Dropdown.Group>
       <Dropdown.Group>

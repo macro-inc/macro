@@ -19,3 +19,8 @@ import './synthetics';
 
 // Declared here first.
 import './monitors/ai-editing';
+import './monitors/graphql-soup';
+import { notificationRetentionDashboard } from './monitors/notification-retention';
+
+export const notificationRetentionDashboardUrl =
+  notificationRetentionDashboard.url;

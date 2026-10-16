@@ -106,7 +106,9 @@ export interface CacheEngineRuntimeOptions {
   memoryTelemetryIntervalMs?: number;
 }
 
-const withVersion = <T extends { coordinatorVersion: 6 }>(
+const withVersion = <
+  T extends { coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION },
+>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({

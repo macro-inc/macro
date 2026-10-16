@@ -59,20 +59,28 @@ function InlineTaskPropertyValues(props: { properties: Accessor<Property[]> }) {
   });
   return (
     <Show when={statusOptionId() || priorityOptionId() || firstAssigneeId()}>
-      <span class="inline-flex items-center gap-1 mx-1 align-middle relative top-[-0.05em]">
+      <span
+        data-inline-task-properties
+        class="inline-flex items-center gap-[0.25em] mx-[0.25em] align-middle relative top-[-0.05em]"
+      >
         <Show when={statusOptionId()}>
-          {(id) => <PropertyValueIcon optionId={id()} class="size-3" />}
+          {(id) => (
+            <PropertyValueIcon optionId={id()} class="size-[0.75em] shrink-0" />
+          )}
         </Show>
         <Show when={priorityOptionId()}>
-          {(id) => <PropertyValueIcon optionId={id()} class="size-3" />}
+          {(id) => (
+            <PropertyValueIcon optionId={id()} class="size-[0.75em] shrink-0" />
+          )}
         </Show>
         <Show when={firstAssigneeId()}>
           {(id) => (
-            <span class="inline-flex ml-0.5 size-3.25">
+            <span class="inline-flex ml-[0.125em] size-[0.8125em] shrink-0">
               <UserIcon
                 id={id()}
                 isDeleted={false}
                 size="fill"
+                class="[&>span]:text-[50cqw]"
                 suppressClick
                 showTooltip={false}
               />

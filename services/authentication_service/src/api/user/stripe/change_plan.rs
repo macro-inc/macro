@@ -29,15 +29,9 @@ pub struct ChangePlanResponse {
     pub plan: PaidPlan,
 }
 
-/// Moves the caller's own seat between paid plans.
-///
-/// On a team billed per seat this moves only the caller's seat (team admins
-/// and the owner may do so; teammates' seats are managed from team
-/// settings). Members of a free team, and solo subscribers, get the price on
-/// their own subscription's seat item swapped. The proration is invoiced
-/// immediately either way; roles and the AI allowance follow at once on a
-/// team and from the `customer.subscription.updated` webhook for a personal
-/// subscription.
+/// Changes the caller's paid plan. Upgrades are prorated immediately;
+/// downgrades retain the active plan until renewal. Selecting the active plan
+/// cancels a pending downgrade without charging or resetting usage.
 #[utoipa::path(
     post,
     path = "/user/stripe/plan",
@@ -49,7 +43,7 @@ pub struct ChangePlanResponse {
         (status = 402, description = "The team has no active subscription", body = ErrorResponse),
         (status = 403, description = "Only team admins change plans on a team", body = ErrorResponse),
         (status = 404, description = "No active subscription", body = ErrorResponse),
-        (status = 409, description = "Already on this plan, or more than one active subscription", body = ErrorResponse),
+        (status = 409, description = "More than one active subscription", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -92,73 +86,6 @@ pub async fn change_plan(
         }
     }
 
-    let stripe_customer_id = macro_db_client::user::get::get_stripe_customer_id_by_user_id(
-        &ctx.db,
-        &user.authorization.user.macro_user_id,
-    )
-    .await?
-    .ok_or(StripeOperationError::MissingStripeId)?;
-    let customer_id: stripe::CustomerId = stripe_customer_id.parse()?;
-
-    let mut list_subscriptions = stripe::ListSubscriptions::new();
-    list_subscriptions.customer = Some(customer_id);
-    list_subscriptions.limit = Some(10);
-    let subscriptions = stripe::Subscription::list(&ctx.stripe_client, &list_subscriptions).await?;
-
-    // Only this customer's own seat: a team subscription on the same customer
-    // (the caller owns a team) carries `team_id` and is repriced per seat
-    // from team settings, never here. Two live personal subscriptions (a
-    // checkout raced the webhook that cancels duplicates) is ambiguous, and
-    // repricing whichever Stripe listed first could hit the one about to be
-    // cancelled; refuse rather than guess.
-    let mut personal = subscriptions.data.into_iter().filter(|sub| {
-        !sub.metadata.contains_key("team_id")
-            && matches!(
-                sub.status,
-                stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing
-            )
-    });
-    let subscription = personal
-        .next()
-        .ok_or(StripeOperationError::NoSubscription)?;
-    if personal.next().is_some() {
-        return Err(StripeOperationError::AmbiguousSubscription);
-    }
-
-    let seat_prices = ctx.stripe_prices.seat_price_ids();
-    let seat_item = subscription
-        .items
-        .data
-        .iter()
-        .find(|item| {
-            item.price
-                .as_ref()
-                .is_some_and(|price| seat_prices.iter().any(|id| *id == price.id.as_str()))
-        })
-        .ok_or(StripeOperationError::NoSubscription)?;
-
-    let current_plan = seat_item
-        .price
-        .as_ref()
-        .and_then(|price| ctx.stripe_prices.plan_for_price(price.id.as_str()))
-        .ok_or(StripeOperationError::NoSubscription)?;
-    if current_plan == req.plan {
-        return Err(StripeOperationError::AlreadyOnPlan);
-    }
-
-    let target_price = ctx.stripe_prices.price_id(req.plan)?.to_string();
-    let params = stripe::UpdateSubscription {
-        items: Some(vec![stripe::UpdateSubscriptionItems {
-            id: Some(seat_item.id.to_string()),
-            price: Some(target_price),
-            ..Default::default()
-        }]),
-        proration_behavior: Some(
-            stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice,
-        ),
-        ..Default::default()
-    };
-    stripe::Subscription::update(&ctx.stripe_client, &subscription.id, params).await?;
-
-    Ok(Json(ChangePlanResponse { plan: req.plan }))
+    let plan = ctx.subscription_plan.change(user_id, req.plan).await?;
+    Ok(Json(ChangePlanResponse { plan }))
 }

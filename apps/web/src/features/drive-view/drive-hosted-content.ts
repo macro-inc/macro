@@ -1,4 +1,4 @@
-import type { SplitLocation, SplitRouteMatch } from '@app/lib/split-router';
+import type { SplitRouteMatch } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import type { DriveLocation } from './core/types';
@@ -43,7 +43,6 @@ export function driveHostedContent(
   content: { type: string; id: string },
   options: {
     allowDocuments: boolean;
-    search?: SplitLocation['search'];
   }
 ): SplitContent | undefined {
   const document = options.allowDocuments
@@ -51,17 +50,4 @@ export function driveHostedContent(
     : undefined;
   if (document)
     return driveDocumentContent({ kind: 'tab', tab: 'owned' }, document);
-  if (content.type !== 'call') return;
-
-  return {
-    type: 'component',
-    id: 'documents',
-    entryMetadata: {
-      route: paneRoute(
-        { id: 'drive', params: {} },
-        { id: 'drive-call', params: { callId: content.id } }
-      ),
-      ...(options.search ? { search: options.search } : {}),
-    },
-  };
 }

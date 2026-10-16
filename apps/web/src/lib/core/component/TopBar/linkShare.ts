@@ -5,7 +5,7 @@ import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/
 
 export const NO_LINK_SHARE = 'NONE' as const;
 
-export type ShareItemType = ItemType | 'initiative';
+export type ShareItemType = ItemType | 'initiative' | 'crm_pipeline';
 
 const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ShareItemType> =
   new Set<ShareItemType>([
@@ -15,6 +15,7 @@ const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ShareItemType> =
     'project',
     'agent_session',
     'initiative',
+    'crm_pipeline',
   ]);
 
 export function isTeamShareSupportedForItem(itemType: ShareItemType): boolean {
@@ -32,6 +33,8 @@ export function getShareItemNoun(itemType: ShareItemType): string {
       return 'folder';
     case 'initiative':
       return 'project';
+    case 'crm_pipeline':
+      return 'pipeline';
     default:
       return itemType;
   }
@@ -115,6 +118,10 @@ export const CALL_TEAM_SHARE_SCOPE_OPTIONS = (
 }));
 
 export function teamShareScopeOptionsForItem(itemType: ShareItemType) {
+  if (itemType === 'crm_pipeline')
+    return TEAM_SHARE_SCOPE_OPTIONS.filter(
+      (option) => option.value === 'NONE' || option.value === 'edit'
+    );
   return itemType === 'call'
     ? CALL_TEAM_SHARE_SCOPE_OPTIONS
     : TEAM_SHARE_SCOPE_OPTIONS;

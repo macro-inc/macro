@@ -58,7 +58,9 @@ describe('project routes in Tasks', () => {
       expect(claimOf(manifest, route)).toBe(`block:initiative:${projectId}`);
       const leaf = route.matches.at(-1)!;
       expect(
-        manifest.byId.get(leaf.id)?.definition.toReference?.(leaf.params)
+        manifest.byId
+          .get(leaf.id)
+          ?.definition.toReference?.(leaf.params, new URLSearchParams())
       ).toEqual({ type: 'initiative', id: projectId });
     }
   );

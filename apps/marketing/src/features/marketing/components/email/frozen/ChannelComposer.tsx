@@ -16,14 +16,19 @@ import { Layout } from './ComposerLayout';
 
 // The actual ChannelInput layout, ComposerSurface, InputActionButton and
 // SendAction presentation with a website-local draft instead of app commands.
+export type ChannelComposerHandle = { setText: (text: string) => void };
+
 export function ChannelComposer(props: {
   onSend: (message: string) => void;
   label?: string;
   placeholder?: string;
   leadingAction?: JSX.Element;
+  attachmentIcon?: JSX.Element;
   accessory?: JSX.Element;
   agent?: boolean;
   richMentions?: boolean;
+  compact?: boolean;
+  onReady?: (handle: ChannelComposerHandle | undefined) => void;
 }) {
   const [draft, setDraft] = createSignal('');
   const [attachments, setAttachments] = createSignal<string[]>([]);
@@ -35,6 +40,16 @@ export function ChannelComposer(props: {
     input.style.height = `${Math.min(input.scrollHeight, 200)}px`;
   };
   onMount(() => {
+    props.onReady?.({
+      setText: (text) => {
+        if (!input) return;
+        if (input instanceof HTMLTextAreaElement) input.value = text;
+        else input.textContent = text;
+        setDraft(text);
+        queueMicrotask(resize);
+      },
+    });
+    onCleanup(() => props.onReady?.(undefined));
     const observer = new ResizeObserver(resize);
     if (input?.parentElement) observer.observe(input.parentElement);
     onCleanup(() => observer.disconnect());
@@ -91,10 +106,11 @@ export function ChannelComposer(props: {
       <Layout
         data-agent-composer={props.agent || undefined}
         oneLineInput={
-          !draft().includes('\n') &&
-          (input?.tagName === 'DIV'
-            ? (input.textContent?.length ?? 0)
-            : draft().length) < 70
+          props.compact ??
+          (!draft().includes('\n') &&
+            (input?.tagName === 'DIV'
+              ? (input.textContent?.length ?? 0)
+              : draft().length) < 70)
         }
       >
         <Layout.Body>
@@ -183,7 +199,7 @@ export function ChannelComposer(props: {
               label="Attach files"
               onClick={() => filePicker?.click()}
             >
-              <Paperclip />
+              {props.attachmentIcon ?? <Paperclip />}
             </InputActionButton>
           )}
         </Layout.ActionsLeft>

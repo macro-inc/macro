@@ -45,6 +45,17 @@ pub struct GithubLink {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
+/// Whether a user's GitHub link can be used.
+#[derive(Debug, Clone)]
+pub enum GithubLinkStatus {
+    /// The user has not linked a GitHub account.
+    NotLinked,
+    /// The user linked a GitHub account, but its token no longer works.
+    ReauthenticationRequired,
+    /// The user's GitHub link has a working token.
+    Linked(GithubLink),
+}
+
 /// GitHub OAuth token exchange response
 #[derive(Debug, Deserialize)]
 pub struct GithubExchangeTokenResponse {

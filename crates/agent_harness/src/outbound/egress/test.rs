@@ -508,3 +508,41 @@ fn external_runtime_uses_host_reachable_urls_with_the_existing_session_credentia
     }
     assert_eq!(sandbox.base_url, "https://egress.macro.com");
 }
+
+#[tokio::test]
+async fn native_provider_wins_without_hiding_other_hosted_apps() {
+    let mut native = custom_server("https://mcp.linear.app/mcp", "Linear", true);
+    native.credentials = Some(
+        serde_json::from_value(serde_json::json!({"client_id":"test","token_response":null}))
+            .unwrap(),
+    );
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![
+            connection("linear", true),
+            connection("stripe", true),
+            connection("slack", true),
+            connection("slack_v2", true),
+        ])),
+        Arc::new(FixedServers(vec![native])),
+        "https://egress.macro.com",
+    );
+    let provisioned = provisioner
+        .provision(
+            AgentSessionId::new(),
+            &MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            &AgentMcpServers::OwnerConnections,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        provisioned
+            .sandbox
+            .mcp_servers
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        ["stripe", "slack"]
+    );
+    assert_eq!(provisioned.sandbox.custom_servers.len(), 1);
+    assert_eq!(provisioned.sandbox.custom_servers[0].name, "Linear");
+}

@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/result';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { authServiceClient } from '@service-auth/client';
@@ -21,6 +21,8 @@ export type GithubLink = {
 
 type UseGithubLinkStatusQueryOptions = {
   enabled?: boolean | (() => boolean);
+  refetchInterval?: number;
+  refetchOnMount?: 'always';
 };
 
 function hasReauthenticationError(
@@ -48,11 +50,11 @@ export async function fetchGithubLinkStatus(): Promise<GithubLink> {
     };
   }
 
-  return {
-    status: hasReauthenticationError(response.error)
-      ? 'reauthentication_required'
-      : 'unlinked',
-  };
+  if (hasReauthenticationError(response.error))
+    return { status: 'reauthentication_required' };
+  if (response.error.some((error) => error.code === 'NOT_FOUND'))
+    return { status: 'unlinked' };
+  throw new ThrownResultError(response.error);
 }
 
 export function githubLinkStatusQueryOptions() {
@@ -76,6 +78,8 @@ export function useGithubLinkStatusQuery(
     return {
       ...githubLinkStatusQueryOptions(),
       enabled,
+      refetchInterval: options?.refetchInterval,
+      refetchOnMount: options?.refetchOnMount,
     };
   });
 }

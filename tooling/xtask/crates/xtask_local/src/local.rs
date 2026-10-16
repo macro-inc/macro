@@ -976,7 +976,8 @@ fn evict_other_collector(stage: &Stage, wanted_service: &str) {
 /// Start a profile-gated service from the base compose file under the global
 /// `macro` project (one per machine, shared across instances, left running
 /// across invocations) — the pattern the trace collectors and headless Chrome
-/// share.
+/// share. Keep other containers in the shared project: the base compose file
+/// does not include generated infrastructure services such as LocalStack.
 fn start_global_compose_service(
     stage: &Stage,
     profile: &str,
@@ -994,7 +995,6 @@ fn start_global_compose_service(
         .arg(profile)
         .arg("up")
         .arg("-d")
-        .arg("--remove-orphans")
         .arg(service);
     stage.run(&format!("Starting {profile} {label}"), &mut up)
 }

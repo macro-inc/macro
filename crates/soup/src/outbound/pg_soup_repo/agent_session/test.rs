@@ -457,3 +457,64 @@ async fn hidden_sessions_stay_out_of_broad_lists(pool: PgPool) -> anyhow::Result
 
     Ok(())
 }
+
+/// Hidden unthreaded DM contexts use the same broad-list visibility boundary
+/// as inline mentions, without losing owner access by ID.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hidden_dm_contexts_are_omitted_from_home_and_agents_but_open_by_id(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    let dm = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'direct_message', $2)",
+        dm,
+        OWNER
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'owner')", dm, OWNER)
+        .execute(&pool).await?;
+    sqlx::query!("INSERT INTO comms_channel_agents (channel_id, bot_id, kind, user_id) VALUES ($1, $2, 'direct', $3)", dm, BOT_ID, OWNER)
+        .execute(&pool).await?;
+    sqlx::query!("INSERT INTO agent_conversation_sessions (session_id, channel_id, bot_id) VALUES ($1, $2, $3)", fixture.shared, dm, BOT_ID)
+        .execute(&pool).await?;
+    // The session domain's enabled policy persists these two flags.
+    sqlx::query!(
+        "UPDATE agent_session SET list_hidden = TRUE, for_warming = FALSE WHERE id = $1",
+        fixture.shared
+    )
+    .execute(&pool)
+    .await?;
+    for literal in [
+        AgentSessionLiteral::Include,
+        AgentSessionLiteral::Owner(Owner::from_principal_str(OWNER)?),
+    ] {
+        let listed = cursor_soup(&pool, request(OWNER, Some(Expr::val(literal)))).await?;
+        assert_eq!(ids(&listed), vec![fixture.private]);
+    }
+    let named = cursor_soup(
+        &pool,
+        request(
+            OWNER,
+            Some(Expr::val(AgentSessionLiteral::Id(fixture.shared))),
+        ),
+    )
+    .await?;
+    assert_eq!(ids(&named), vec![fixture.shared]);
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.shared.to_string())];
+    let opened = by_ids(
+        &pool,
+        AdvancedSortParams {
+            entities: &entities,
+            user_id: MacroUserIdStr::parse_from_str(OWNER)?,
+        },
+    )
+    .await?;
+    assert_eq!(ids(&opened), vec![fixture.shared]);
+    let channel = sqlx::query_scalar!("SELECT id FROM comms_channels WHERE id = $1", dm)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(channel, dm);
+    Ok(())
+}

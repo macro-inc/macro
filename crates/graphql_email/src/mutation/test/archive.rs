@@ -32,15 +32,12 @@ async fn missing_post_write_thread_does_not_block_the_mutation_queue_with_retrie
             extensions.get("code"),
             Some(&async_graphql::Value::from("NOT_FOUND"))
         );
-        assert_ne!(
-            extensions.get("retryable"),
-            Some(&async_graphql::Value::Boolean(true))
-        );
+        assert_eq!(extensions.get("retryable"), None);
     }
 }
 
 #[tokio::test]
-async fn archive_reply_failure_is_retryable_after_the_write_commits() {
+async fn archive_reply_failure_does_not_request_retries_after_the_write_commits() {
     let service = Arc::new(CapturingEmailMutationService {
         thread_load_fails: true,
         ..Default::default()
@@ -57,7 +54,7 @@ async fn archive_reply_failure_is_retryable_after_the_write_commits() {
             .as_ref()
             .unwrap()
             .get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
+        None
     );
 }
 

@@ -37,9 +37,9 @@ use model_entity::Entity;
 use super::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
     DocumentError, DocumentTeamShare, DocumentTeamShareResponse, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument, OwnerTeam, TaskBranchName,
-    TeamTaskMetadata,
+    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestTasksResponse,
+    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument,
+    OwnerTeam, TaskBranchName, TaskIdentity, TeamTaskMetadata, TeamTaskNumber,
 };
 
 /// Repository for accessing document data from the database.
@@ -217,6 +217,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<Option<TeamTaskMetadata>, Self::Err>> + Send;
 
+    /// Get a task's team number and team slug, when it is a team task.
+    fn get_team_task_number(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<TeamTaskNumber>, Self::Err>> + Send;
+
     /// Get the document ID assigned to a task number within a team.
     fn get_document_id_by_team_task_number(
         &self,
@@ -236,6 +242,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         task_short_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Get `(github_key, task_short_id)` links for the pull requests `github_keys`, oldest first.
+    fn get_github_pull_request_task_links(
+        &self,
+        github_keys: &[String],
+    ) -> impl Future<Output = Result<Vec<(String, String)>, Self::Err>> + Send;
 
     /// Load persisted ownership, membership and explicit sharing facts for policy.
     ///
@@ -524,12 +536,28 @@ pub trait DocumentService: Send + Sync + 'static {
         document_name: String,
     ) -> impl Future<Output = Result<TaskBranchName, DocumentError>> + Send;
 
+    /// Identify a task document: its title, short id and team number.
+    /// Returns a bad request if the document is not a task.
+    fn get_task_identity(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> impl Future<Output = Result<TaskIdentity, DocumentError>> + Send;
+
     /// Get GitHub pull requests associated with a task document.
     fn get_task_github_pull_requests(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         document_context: &DocumentBasic,
     ) -> impl Future<Output = Result<GithubPullRequestsResponse, DocumentError>> + Send;
+
+    /// Get the tasks linked to each GitHub pull request in `github_keys` that `user_id` can
+    /// see, in request order.
+    fn get_github_pull_request_tasks(
+        &self,
+        user_id: &str,
+        github_keys: Vec<String>,
+    ) -> impl Future<Output = Result<GithubPullRequestTasksResponse, DocumentError>> + Send;
 
     /// Edit a document's metadata and share permissions.
     ///

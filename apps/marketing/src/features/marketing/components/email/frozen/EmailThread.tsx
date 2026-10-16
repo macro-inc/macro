@@ -27,7 +27,7 @@ export function EmailThread(props: {
 }) {
   const [details, setDetails] = createSignal(false);
   const sent = () => props.email.folder === 'sent';
-  const sender = () => (sent() ? 'Jacob Beckerman' : props.email.sender);
+  const sender = () => (sent() ? 'Jacob' : props.email.sender);
   return (
     <div class="mail-thread">
       <Show when={!props.hideHeader}>
@@ -114,10 +114,7 @@ export function EmailThread(props: {
               <div class="py-3 border-y border-ink-muted/8 text-xs text-ink-muted">
                 From: {sender()}
                 <br />
-                To:{' '}
-                {sent()
-                  ? props.email.sender
-                  : 'Jacob Beckerman <jacob@macro.com>'}
+                To: {sent() ? props.email.sender : 'Jacob <jacob@macro.com>'}
               </div>
             </Show>
             <div class="mail-message-text text-base text-ink pr-4">

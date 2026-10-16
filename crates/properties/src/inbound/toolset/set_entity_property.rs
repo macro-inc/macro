@@ -56,7 +56,7 @@ A task can belong to one project:
 - Project (00000001-0000-0000-0000-000000000014): entity, single. Use entity_ref with entity_type='initiative' and the project UUID; send no value field to remove the task from its project. Setting it requires edit access to the task and the project, and the project's agents are assigned to the task.
 
 CRM companies (entity_type='company', entity_id=the company UUID) always have these system properties:
-- Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids.
+- Stage (00000001-0000-0000-0000-000000000010): select_string, single. Use option_id. Default options: Lead (00000001-0000-0000-0010-000000000001), Qualified (...0002), Demo (...0003), Trial (...0004), Negotiation (...0005), Customer (...0006), Churned (...0007). Teams can customize their stages, so prefer calling GetCompany or GetEntityProperties first to get the valid stage option ids. This is the company's own Stage, not a deal's stage in a CRM pipeline: move pipeline deals with UpdatePipelineEntries.
 - Owner (00000001-0000-0000-0000-000000000011): entity, single. Use entity_ref with entity_type='user' and entity_id='macro|email@domain.com'.
 - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
 Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.

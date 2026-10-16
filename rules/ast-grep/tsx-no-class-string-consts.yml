@@ -3,7 +3,7 @@ language: tsx
 severity: warning
 message: Don't hoist Tailwind class strings into named constants — shared markup+styling is a component, not a string.
 note: |-
-  Rule FE-30 in docs/STYLE_GUIDE.md. A named class-string constant
+  Rule FE-30 in docs/development/style-guide.md. A named class-string constant
   (`const DAY_CELL_CLASS = 'aspect-square w-full shrink-0'`) is a
   component's render detail leaking into module scope: it can't carry
   structure, props, or behavior, and every consumer re-implements the

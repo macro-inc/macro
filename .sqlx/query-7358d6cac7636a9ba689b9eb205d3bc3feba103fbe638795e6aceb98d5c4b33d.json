@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ep.entity_type AS \"entity_type!: EntityType\", ep.entity_id AS \"entity_id!\"\n        FROM UNNEST($1::text[]) AS company(id)\n        JOIN entity_properties ep\n            ON ep.property_definition_id = '00000001-0000-0000-0000-00000000000c'\n           AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', company.id))\n        UNION\n        SELECT ep.entity_type, ep.entity_id\n        FROM UNNEST($2::text[]) AS contact(id)\n        JOIN entity_properties ep\n            ON ep.property_definition_id = '00000001-0000-0000-0000-000000000013'\n           AND ep.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', contact.id))\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type!: EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK",
+                "CALL_RECORD",
+                "CALENDAR_EVENT",
+                "INITIATIVE",
+                "CONTACT",
+                "DATABASE_ROW"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "7358d6cac7636a9ba689b9eb205d3bc3feba103fbe638795e6aceb98d5c4b33d"
+}

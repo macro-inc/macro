@@ -1,7 +1,13 @@
 //! This module provides the inbound adapter for ai tools using the notifications service
 
+mod mute_notifications;
 #[cfg(test)]
 mod test;
+
+pub use mute_notifications::{
+    ItemNotificationPreferenceToolContext, MuteAction, MuteNotifications,
+    MuteNotificationsResponse, item_notification_preference_toolset,
+};
 
 use crate::domain::{
     models::{

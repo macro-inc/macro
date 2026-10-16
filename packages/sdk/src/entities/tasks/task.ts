@@ -13,6 +13,19 @@ import type { Team } from '../teams/team';
 const STATUS_PROPERTY_ID = '00000001-0000-0000-0000-000000000002';
 const COMPLETED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000004';
 
+/** The `owner/repo/pull/number` key of a GitHub pull request URL. */
+function pullRequestKey(url: string): string {
+  const match = url.match(
+    /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/([1-9][0-9]*)\/?(?:[?#].*)?$/i,
+  );
+  if (!match) {
+    throw new Error(
+      `Expected a GitHub pull request URL like https://github.com/owner/repo/pull/1, got ${url}`,
+    );
+  }
+  return `${match[1]}/${match[2]}/pull/${match[3]}`;
+}
+
 /**
  * A Macro task: a document with sub-type `task`. Inherits the full document
  * surface ({@link Document.rename}, move, delete, restore, content, events)
@@ -51,6 +64,24 @@ export class Task extends Document {
       }),
     );
     return new Task(client, documentId);
+  }
+
+  /**
+   * The tasks the GitHub pull request at `url` references (as `MACRO-<id>` in
+   * its text, branch, or comments), oldest link first. Empty when the caller
+   * cannot see the pull request; tasks the caller cannot open still appear.
+   */
+  static async forPullRequest(
+    client: MacroClient,
+    url: string,
+  ): Promise<Task[]> {
+    const githubKey = pullRequestKey(url);
+    const { pullRequests } = unwrap(
+      await client.storage.getGithubPullRequestTasks({
+        body: { githubKeys: [githubKey] },
+      }),
+    );
+    return (pullRequests[0]?.taskIds ?? []).map((id) => new Task(client, id));
   }
 
   /**

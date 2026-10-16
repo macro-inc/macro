@@ -157,6 +157,7 @@ export function createCalendarEventFormController(
     initialValues: options.initialValue,
     state,
     recurrenceTimeZone: options.recurrenceTimeZone,
+    isEdit: options.isEdit,
   });
 
   const isOutOfOffice = () => state().eventType === 'out_of_office';

@@ -25,7 +25,7 @@ const kestrel: SampleCompany = {
   emails: [
     {
       id: 'kestrel-pricing',
-      sender: 'Jacob Beckerman',
+      sender: 'Jacob',
       subject: 'Re: Pricing for a 30-person team',
       snippet: 'Happy to walk you through it. Does Friday at 2 work?',
       time: '10:08 AM',

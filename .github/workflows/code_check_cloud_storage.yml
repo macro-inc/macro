@@ -19,12 +19,12 @@ env:
     - main
 jobs:
   path-check:
-    runs-on: namespace-profile-linux-small
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=nextest-filter
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      doppler_candidates: ${{ steps.filter.outputs.doppler_candidates }}
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
       skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
-      doppler_config_bins: ${{ steps.doppler-bins.outputs.doppler_config_bins }}
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -65,6 +65,13 @@ jobs:
             - '.github/actions/setup-sccache/**'
             - '.github/services-config.json'
             - .github/workflows/code_check_cloud_storage.yml
+          doppler_candidates:
+            - '.github/services-config.json'
+            - '**/src/config.rs'
+            - '**/src/doppler_config.rs'
+            - '**/Cargo.toml'
+            - 'tooling/xtask/crates/xtask_doppler_bins/**'
+            - .github/workflows/code_check_cloud_storage.yml
     - name: compute changed files
       if: steps.filter.outputs.should_run == 'true'
       run: |
@@ -77,8 +84,26 @@ jobs:
         if [ -z "${GITHUB_BASE_REF:-}" ]; then
           compare_rev="$(git rev-parse HEAD~1)"
         else
-          git fetch origin "$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
-          if ! compare_rev="$(git merge-base "origin/${GITHUB_BASE_REF}" HEAD)"; then
+          git fetch --no-tags origin "$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
+
+          # The checkout holds only the PR merge commit and its two parents. Normally
+          # the first parent is on the base branch, so the merge-base is immediate.
+          # Stacked PRs can arrive with a merge commit built on another branch's tip;
+          # deepen the PR side until its history reaches the base branch instead of
+          # falling back to the full suite.
+          compare_rev=""
+          for deepen in 0 200 2000; do
+            if [ "$deepen" -gt 0 ]; then
+              echo "No merge-base with origin/${GITHUB_BASE_REF} yet; deepening PR history by ${deepen}"
+              git fetch --no-tags --deepen="$deepen" origin "$GITHUB_SHA" || break
+            fi
+            if compare_rev="$(git merge-base "origin/${GITHUB_BASE_REF}" HEAD)"; then
+              break
+            fi
+            compare_rev=""
+          done
+
+          if [ -z "$compare_rev" ]; then
             echo "Unable to find merge-base for origin/${GITHUB_BASE_REF}; falling back to full test suite" >&2
             : > /tmp/changed-files
             exit 0
@@ -88,52 +113,87 @@ jobs:
         printf '%s\n' "$compare_rev" > /tmp/base-revision
         git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
       shell: bash
-    - id: doppler-bins
-      name: compute affected Doppler config bins
-      if: steps.filter.outputs.should_run == 'true'
-      run: |
-        set -euo pipefail
-
-        doppler_config_bins="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- doppler-bins /tmp/changed-files)"
-        {
-          echo 'doppler_config_bins<<__DOPPLER_CONFIG_BINS__'
-          if [ -n "$doppler_config_bins" ]; then
-            printf '%s\n' "$doppler_config_bins"
-          fi
-          echo '__DOPPLER_CONFIG_BINS__'
-        } >> "$GITHUB_OUTPUT"
-      shell: bash
+    - name: Mount nextest-filter binary cache
+      if: steps.filter.outputs.should_run == 'true' && ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository)
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: /home/runner/.cache/macro-nextest-filter
+      continue-on-error: true
     - id: nextest-filter
       name: compute nextest package filter
       if: steps.filter.outputs.should_run == 'true'
       run: |
         set -euo pipefail
 
-        # Writes `rust_packages` for the check/test jobs:
-        #   all  — compile and run the whole workspace
-        #   none — no Rust packages to lint/test (Nix-only, top-level JSON, docs, …)
-        #   <names> — space-separated workspace packages (changed + reverse deps)
+        # Writes for the check/test jobs:
+        #   rust_packages — all | none | space-separated packages (changed + reverse deps)
+        #   skip_tests    — true keeps clippy on rust_packages while the live-Postgres
+        #                   test job stays skipped (`.sqlx`-only or clippy.toml-only diffs)
         #
-        # `skip_tests=true` keeps clippy on a package set while the live-Postgres
-        # test job stays skipped (used for `.sqlx`-only diffs).
-        #
-        # Root Cargo/toolchain/config edits force `all`. Cargo.lock is handled by
-        # determinator's old/new graph comparison. flake.nix, the Nix shell action,
-        # and this workflow file used to live on the full-suite list and turned every
-        # dev-shell tweak into a full-suite rebuild.
+        # Toolchain and cargo/nextest config edits force `all`. Root Cargo.toml and
+        # Cargo.lock go to the xtask: determinator's old/new graph comparison scopes
+        # lockfile, member, and workspace-dependency changes, and the xtask returns
+        # `all` for any other root-manifest edit (profiles, lints, patches, …).
+        # Cross.toml and deny.toml configure other tools and select nothing here.
+        # clippy.toml changes lint results but not test outcomes (handled below).
+        # flake.nix, the Nix shell action, and this workflow file used to live on the
+        # full-suite list and turned every dev-shell tweak into a full-suite rebuild.
 
-        echo "skip_tests=false" >> "$GITHUB_OUTPUT"
+        # The filter runs as a release binary cached per source tree: a debug build
+        # spends ~20 s in guppy on this runner, and compiling it took ~40 s more. The
+        # key covers every input of the build, so a hit is exactly what `cargo build`
+        # would produce. FILTER_CACHE_DIR is a Namespace cache volume for same-repo
+        # PRs and a plain scratch directory for forks.
+        filter_bin=""
+        ensure_filter_bin() {
+          [ -n "$filter_bin" ] && return 0
+          local key bin_dir staging
+          key="$(git rev-parse \
+            HEAD:tooling/xtask/crates/xtask_nextest_filter \
+            HEAD:tooling/xtask/crates/xtask_graph \
+            HEAD:tooling/xtask/crates/xtask_paths \
+            HEAD:Cargo.lock \
+            HEAD:rust-toolchain.toml | sha256sum | cut -c1-16)"
+          bin_dir="$FILTER_CACHE_DIR/bin/$key"
+          filter_bin="$bin_dir/xtask_nextest_filter"
+          if [ -x "$filter_bin" ]; then
+            echo "Using cached nextest-filter build $key"
+            touch "$bin_dir"
+            return 0
+          fi
+
+          echo "Building nextest-filter $key"
+          CARGO_TARGET_DIR="$FILTER_CACHE_DIR/target" \
+            cargo build --release --locked --quiet -p xtask_nextest_filter
+          staging="$(mktemp -d "$FILTER_CACHE_DIR/bin/.staging.XXXXXX")"
+          cp "$FILTER_CACHE_DIR/target/release/xtask_nextest_filter" "$staging/"
+          # Another job may have published the same key meanwhile; either copy works.
+          mv -T "$staging" "$bin_dir" 2>/dev/null || rm -rf "$staging"
+          # Drop builds no PR has used for a week (every Cargo.lock change adds one).
+          find "$FILTER_CACHE_DIR/bin" -mindepth 1 -maxdepth 1 -type d -mtime +7 \
+            -exec rm -rf {} + || true
+        }
+        mkdir -p "$FILTER_CACHE_DIR/bin"
+
+        emit() {
+          echo "rust_packages=$1" >> "$GITHUB_OUTPUT"
+          echo "skip_tests=$2" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
 
         if [ ! -s /tmp/changed-files ]; then
           echo "Unknown or empty change set; running all tests"
-          echo "rust_packages=all" >> "$GITHUB_OUTPUT"
-          exit 0
+          emit all false
         fi
 
-        if grep -qE '^(Cargo\.toml|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*)$' /tmp/changed-files; then
-          echo "Workspace-level Cargo/toolchain change detected; running all tests"
-          echo "rust_packages=all" >> "$GITHUB_OUTPUT"
-          exit 0
+        if grep -qE '^(rust-toolchain\.toml|\.cargo/.*|\.config/.*)$' /tmp/changed-files; then
+          echo "Toolchain or cargo config change detected; running all tests"
+          emit all false
+        fi
+
+        clippy_config_changed=false
+        if grep -qx 'clippy\.toml' /tmp/changed-files; then
+          clippy_config_changed=true
         fi
 
         # The test job compiles queries against live Postgres (SQLX_OFFLINE is unset
@@ -142,22 +202,33 @@ jobs:
         # still compile against the cache rather than skip the check job.
         if ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
           echo "Only .sqlx changes detected; clippy all, skip live-Postgres tests"
-          echo "rust_packages=all" >> "$GITHUB_OUTPUT"
-          echo "skip_tests=true" >> "$GITHUB_OUTPUT"
-          exit 0
+          emit all true
         fi
 
-        packages="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files "$(< /tmp/base-revision)")"
+        ensure_filter_bin
+        packages="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)")"
+
+        # One package list drives both clippy and tests, so a clippy.toml edit can
+        # only skip tests when nothing else selected a package.
+        if [ "$clippy_config_changed" = true ]; then
+          if [ -z "$packages" ] || [ "$packages" = "none" ]; then
+            echo "Only clippy.toml affects Rust; clippy all, skip live-Postgres tests"
+            emit all true
+          fi
+          echo "clippy.toml changed alongside package changes; running all tests"
+          emit all false
+        fi
 
         if [ -z "$packages" ] || [ "$packages" = "none" ]; then
           echo "No package-specific Rust changes detected; running no tests"
-          echo "rust_packages=none" >> "$GITHUB_OUTPUT"
-          exit 0
+          emit none false
         fi
 
         echo "rust packages: $packages"
-        echo "rust_packages=$packages" >> "$GITHUB_OUTPUT"
+        emit "$packages" false
       shell: bash
+      env:
+        FILTER_CACHE_DIR: /home/runner/.cache/macro-nextest-filter
   check:
     needs:
     - path-check
@@ -211,47 +282,6 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
-    - name: validate Doppler configs
-      if: needs.path-check.outputs.doppler_config_bins != ''
-      run: |
-        set -euo pipefail
-
-        if [ -z "${DOPPLER_TOKEN:-}" ]; then
-          echo "DOPPLER_TOKEN secret is required to validate Doppler configs" >&2
-          exit 1
-        fi
-
-        if [ -z "${RUSTC_WRAPPER:-}" ]; then
-          echo "RUSTC_WRAPPER is required so Doppler config binaries build through sccache" >&2
-          exit 1
-        fi
-
-        bins=()
-        cargo_args=(build --locked --all-features)
-        while IFS= read -r bin; do
-          if [ -z "$bin" ]; then
-            continue
-          fi
-
-          bins+=("$bin")
-          cargo_args+=(--bin "$bin")
-        done <<< "$DOPPLER_CONFIG_BINS"
-
-        if [ "${#bins[@]}" -eq 0 ]; then
-          echo "No Doppler config binaries to validate"
-          exit 0
-        fi
-
-        echo "Building affected Doppler config binaries with RUSTC_WRAPPER=$RUSTC_WRAPPER"
-        printf '  %s\n' "${bins[@]}"
-
-        cargo "${cargo_args[@]}"
-        for bin in "${bins[@]}"; do
-          "./target/debug/$bin"
-        done
-      env:
-        DOPPLER_CONFIG_BINS: ${{ needs.path-check.outputs.doppler_config_bins }}
-        DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
     - name: fmt
       run: cargo fmt --check
     - name: clippy
@@ -306,6 +336,161 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
+  doppler-config:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.doppler_candidates == 'true'
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    env:
+      RUSTFLAGS: '-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold'
+      RUSTDOCFLAGS: '-Dwarnings'
+      SQLX_OFFLINE: 'true'
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+        fetch-depth: '2'
+    - name: compute changed files
+      run: |
+        set -euo pipefail
+
+        # Compare against the merge-base so a deleted file still appears. `--no-renames`
+        # turns a rename into a delete+add pair so the old path is attributed to its
+        # package (otherwise git reports only the new name).
+
+        if [ -z "${GITHUB_BASE_REF:-}" ]; then
+          compare_rev="$(git rev-parse HEAD~1)"
+        else
+          git fetch --no-tags origin "$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
+
+          # The checkout holds only the PR merge commit and its two parents. Normally
+          # the first parent is on the base branch, so the merge-base is immediate.
+          # Stacked PRs can arrive with a merge commit built on another branch's tip;
+          # deepen the PR side until its history reaches the base branch instead of
+          # falling back to the full suite.
+          compare_rev=""
+          for deepen in 0 200 2000; do
+            if [ "$deepen" -gt 0 ]; then
+              echo "No merge-base with origin/${GITHUB_BASE_REF} yet; deepening PR history by ${deepen}"
+              git fetch --no-tags --deepen="$deepen" origin "$GITHUB_SHA" || break
+            fi
+            if compare_rev="$(git merge-base "origin/${GITHUB_BASE_REF}" HEAD)"; then
+              break
+            fi
+            compare_rev=""
+          done
+
+          if [ -z "$compare_rev" ]; then
+            echo "Unable to find merge-base for origin/${GITHUB_BASE_REF}; falling back to full test suite" >&2
+            : > /tmp/changed-files
+            exit 0
+          fi
+        fi
+
+        printf '%s\n' "$compare_rev" > /tmp/base-revision
+        git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
+      shell: bash
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: rust
+        path: /nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - id: doppler-bins
+      name: compute affected Doppler config bins
+      run: |
+        set -euo pipefail
+
+        doppler_config_bins="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- doppler-bins /tmp/changed-files)"
+        {
+          echo 'doppler_config_bins<<__DOPPLER_CONFIG_BINS__'
+          if [ -n "$doppler_config_bins" ]; then
+            printf '%s\n' "$doppler_config_bins"
+          fi
+          echo '__DOPPLER_CONFIG_BINS__'
+        } >> "$GITHUB_OUTPUT"
+      shell: bash
+    - name: validate Doppler configs
+      if: steps.doppler-bins.outputs.doppler_config_bins != ''
+      run: |
+        set -euo pipefail
+
+        if [ -z "${DOPPLER_TOKEN:-}" ]; then
+          echo "DOPPLER_TOKEN secret is required to validate Doppler configs" >&2
+          exit 1
+        fi
+
+        if [ -z "${RUSTC_WRAPPER:-}" ]; then
+          echo "RUSTC_WRAPPER is required so Doppler config binaries build through sccache" >&2
+          exit 1
+        fi
+
+        bins=()
+        cargo_args=(build --locked --all-features)
+        while IFS= read -r bin; do
+          if [ -z "$bin" ]; then
+            continue
+          fi
+
+          bins+=("$bin")
+          cargo_args+=(--bin "$bin")
+        done <<< "$DOPPLER_CONFIG_BINS"
+
+        if [ "${#bins[@]}" -eq 0 ]; then
+          echo "No Doppler config binaries to validate"
+          exit 0
+        fi
+
+        echo "Building affected Doppler config binaries with RUSTC_WRAPPER=$RUSTC_WRAPPER"
+        printf '  %s\n' "${bins[@]}"
+
+        cargo "${cargo_args[@]}"
+        for bin in "${bins[@]}"; do
+          "./target/debug/$bin"
+        done
+      env:
+        DOPPLER_CONFIG_BINS: ${{ steps.doppler-bins.outputs.doppler_config_bins }}
+        DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   test:
     needs:
     - path-check
@@ -318,7 +503,7 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
       postgres:
-        image: pgvector/pgvector:pg18
+        image: pgvector/pgvector:pg14
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -379,9 +564,9 @@ jobs:
       run: sccache --start-server
     - name: configure postgres for concurrent tests
       run: |
-        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg18" { print $1; exit }')"
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
         if [ -z "$postgres_container" ]; then
-          echo "pgvector/pgvector:pg18 service container not found" >&2
+          echo "pgvector/pgvector:pg14 service container not found" >&2
           docker ps
           exit 1
         fi
@@ -400,7 +585,7 @@ jobs:
         done
         docker exec "$postgres_container" psql -U user -d macrodb -c "SHOW max_locks_per_transaction;"
     - name: prepare tests
-      run: just setup_test_envs && just initialize_dbs
+      run: just setup_test_envs && just initialize_dbs && just setup_test_template
     - name: run tests
       run: |
         set -euo pipefail
@@ -454,6 +639,7 @@ jobs:
     needs:
     - path-check
     - check
+    - doppler-config
     - test
     if: always()
     name: Cloud Storage Status Check
@@ -463,11 +649,13 @@ jobs:
       run: |
         echo "path-check: ${{ needs.path-check.result }}"
         echo "check: ${{ needs.check.result }}"
+        echo "doppler-config: ${{ needs.doppler-config.result }}"
         echo "test: ${{ needs.test.result }}"
 
         # Fail if any job failed (skipped and success are both OK)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.check.result }}" == "failure" ]] || \
+           [[ "${{ needs.doppler-config.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]]; then
           echo "❌ One or more jobs failed"
           exit 1

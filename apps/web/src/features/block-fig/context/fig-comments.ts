@@ -1,18 +1,29 @@
 /**
- * Where a design's comments live, injected by the block (document
- * discussions in the app, an in-memory store in the browser fixture), so
- * the viewer's comment UI has no app dependencies.
+ * Where a design's comments live and how they are written and shown,
+ * injected by the block (Macro comments in the app, an in-memory store in
+ * the browser fixture), so the viewer's comment tool has no app
+ * dependencies. The viewer owns the pins, the thread list, and where a
+ * thread opens; the store supplies the thread and composer inside them.
  */
 
-import type { Accessor } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 import type {
   FigCommentAnchor,
   FigCommentThread,
   FigPerson,
 } from '../core/comments';
 
+export interface FigCommentComposerProps {
+  /** Where the new thread pins. */
+  anchor: FigCommentAnchor;
+  /** The thread was posted; it opens beside its pin. */
+  onPosted: (threadId: string) => void;
+  /** The composer was closed without posting. */
+  onCancel: () => void;
+}
+
 export interface FigCommentStore {
-  /** Every thread on the design, as it is now. */
+  /** Every thread pinned on the design, as it is now. */
   threads: Accessor<FigCommentThread[]>;
   /** The person commenting; `undefined` when not signed in. */
   me: Accessor<FigPerson | undefined>;
@@ -21,21 +32,16 @@ export interface FigCommentStore {
   /** When this person last read a thread (ms), for unread badges. */
   seenAt: (threadId: string) => number | undefined;
   markSeen: (threadId: string) => void;
-  /** Starts a thread; resolves to its id. */
-  create: (
-    anchor: FigCommentAnchor,
-    text: string,
-    mentions: FigPerson[]
-  ) => Promise<string>;
-  reply: (
-    threadId: string,
-    text: string,
-    mentions: FigPerson[]
-  ) => Promise<void>;
   setResolved: (threadId: string, resolved: boolean) => Promise<void>;
-  deleteThread: (threadId: string) => Promise<void>;
-  /** Loads every reply of a thread (lists may hold only the first few). */
-  load?: (threadId: string) => void;
-  /** People who can be mentioned, matching `query`. */
-  people: (query: string) => FigPerson[];
+  /** A thread's comments with their replies and the reply box. */
+  Thread: Component<{ threadId: string }>;
+  /** The box that starts a thread. */
+  Composer: Component<FigCommentComposerProps>;
+  /** Comments on the whole design (pinned nowhere), below the list. */
+  Discussion?: Component;
+  /**
+   * The comment a link opened: its pinned thread, or `null` for one in the
+   * discussion. A new value each time a link is followed.
+   */
+  linked?: Accessor<{ threadId: string | null } | undefined>;
 }

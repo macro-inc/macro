@@ -15,6 +15,7 @@ mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
+mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
 mod cargo_workspace_dependency_check;
@@ -34,9 +35,13 @@ mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
-mod docs_check;
 mod ensure_daytona_snapshot;
+mod export_ci_telemetry;
+mod ios_app_store_release;
+mod ios_native_check_label;
 mod ios_preview;
+mod ios_release_drift;
+mod ios_release_watch;
 mod path_validation;
 mod publish_sdk;
 mod pulumi_preview_pr;
@@ -106,6 +111,11 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
+        slug: "export_ci_telemetry",
+        file_name: "export-ci-telemetry.yml",
+        render_yaml: || render_gh_workflow(export_ci_telemetry::export_ci_telemetry)(),
+    },
+    WorkflowFile {
         slug: "assign_author",
         file_name: "assign-author.yml",
         render_yaml: || render_gh_workflow(assign_author::assign_author)(),
@@ -139,6 +149,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "code_check_infra",
         file_name: "code_check_infra.yml",
         render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
+    },
+    WorkflowFile {
+        slug: "build_web_app",
+        file_name: "build_web_app.yml",
+        render_yaml: || render_patched(build_web_app::build_web_app, build_web_app::patch),
     },
     WorkflowFile {
         slug: "cancel_stuck_cloud_storage_deploys",
@@ -276,6 +291,26 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(release_sdk::release_sdk)(),
     },
     WorkflowFile {
+        slug: "ios_app_store_release",
+        file_name: "ios-app-store-release.yml",
+        render_yaml: || render_gh_workflow(ios_app_store_release::ios_app_store_release)(),
+    },
+    WorkflowFile {
+        slug: "ios_native_check_label",
+        file_name: "ios-native-check-label.yml",
+        render_yaml: || render_gh_workflow(ios_native_check_label::ios_native_check_label)(),
+    },
+    WorkflowFile {
+        slug: "ios_release_drift",
+        file_name: "ios-release-drift.yml",
+        render_yaml: || render_gh_workflow(ios_release_drift::ios_release_drift)(),
+    },
+    WorkflowFile {
+        slug: "ios_release_watch",
+        file_name: "ios-release-watch.yml",
+        render_yaml: || render_gh_workflow(ios_release_watch::ios_release_watch)(),
+    },
+    WorkflowFile {
         slug: "pulumi_preview_pr",
         file_name: "pulumi_preview_pr.yml",
         render_yaml: || {
@@ -324,11 +359,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
-    },
-    WorkflowFile {
-        slug: "docs_check",
-        file_name: "docs-check.yml",
-        render_yaml: || render_gh_workflow(docs_check::docs_check)(),
     },
 ];
 

@@ -6,7 +6,7 @@ import { ShaWorker } from './sha-cleanup-worker';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'sha-cleanup',
 };
 

@@ -30,19 +30,23 @@ export function MobileReplyToolbar(props: {
   editingDisabled: boolean;
   scheduleSummary?: JSX.Element;
   scheduleControl?: JSX.Element;
+  status?: JSX.Element;
 }) {
   return (
     <div
       data-corvu-no-drag=""
       class="sticky top-0 inset-x-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-y-2 bg-surface p-3 pt-0"
     >
-      <ToolbarButton
-        label={props.discardLabel}
-        onClick={props.onDiscard}
-        disabled={props.editingDisabled}
-      >
-        <Trash class="size-(--mobile-chrome-icon-size)" />
-      </ToolbarButton>
+      <div class="flex items-center">
+        {props.status}
+        <ToolbarButton
+          label={props.discardLabel}
+          onClick={props.onDiscard}
+          disabled={props.editingDisabled}
+        >
+          <Trash class="size-(--mobile-chrome-icon-size)" />
+        </ToolbarButton>
+      </div>
       {props.scheduleSummary}
       <div class="ml-auto flex items-center gap-2">
         {props.scheduleControl}

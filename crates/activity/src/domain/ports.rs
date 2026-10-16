@@ -79,6 +79,21 @@ pub trait ActivityRealtimePublisher: Send + Sync {
     fn publish_invalidated(&self) -> impl Future<Output = ()> + Send;
 }
 
+/// Announce through both publishers, in order; each remains best-effort.
+impl<A: ActivityRealtimePublisher, B: ActivityRealtimePublisher> ActivityRealtimePublisher
+    for (A, B)
+{
+    async fn publish_recorded(&self, activities: &[Activity]) {
+        self.0.publish_recorded(activities).await;
+        self.1.publish_recorded(activities).await;
+    }
+
+    async fn publish_invalidated(&self) {
+        self.0.publish_invalidated().await;
+        self.1.publish_invalidated().await;
+    }
+}
+
 /// Resolves who may currently see an entity's activity.
 ///
 /// Used at publish time to widen realtime delivery beyond the acting

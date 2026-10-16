@@ -7,7 +7,9 @@ use crate::domain::{
         SettledDraftIds, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
         UpsertedContacts, UserProvider,
     },
-    ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
+    ports::{
+        DraftAttachmentRepo, EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId,
+    },
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -522,5 +524,17 @@ impl EmailRepo for EmailPgRepo {
 
     async fn list_email_filters(&self, link_id: Uuid) -> Result<Vec<EmailFilter>, Self::Err> {
         email_filter::list_email_filters(&self.pool, link_id).await
+    }
+}
+
+impl DraftAttachmentRepo for EmailPgRepo {
+    type Err = sqlx::Error;
+
+    async fn insert_draft_attachment(
+        &self,
+        link_id: Uuid,
+        attachment: &AttachmentDraft,
+    ) -> Result<(), Self::Err> {
+        message::insert_draft_attachment(&self.pool, link_id, attachment).await
     }
 }

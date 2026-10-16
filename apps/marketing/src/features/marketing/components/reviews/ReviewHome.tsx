@@ -36,11 +36,12 @@ import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { ViewSidebar } from '../DemoViewSidebar';
 import { ProductWorkspace } from '../product/ProductWorkspace';
 import { WorkspaceAgents } from '../workspace/WorkspaceAgents';
+import { GITHUB_TASK, githubHistory, githubTask } from './githubProject';
 import { PrIcon, PullRequestView } from './ReviewPullRequest';
 import {
   type DemoPullRequest,
-  invitePr,
   onboardingPr,
+  signInPr,
 } from './review-fixtures';
 
 /** One single-line HomeListEntity row and the item it opens. */
@@ -62,20 +63,20 @@ export type HomeGroup = { label: string; rows: HomeRow[] };
 export const reviewRequestRow: HomeRow = {
   id: 'pr-491',
   kind: 'pr',
-  label: `${invitePr.title} #${invitePr.number}`,
+  label: `${signInPr.title} #${signInPr.number}`,
   time: '11:36 AM',
   unread: true,
-  pr: invitePr,
+  pr: signInPr,
 };
 
 const row = {
   engineers: {
-    id: 'channel-engineers',
+    id: 'channel-website',
     kind: 'channel',
-    label: 'engineers',
+    label: 'website',
     time: '11:17 AM',
     unread: true,
-    open: { view: 'messages', id: 'engineers' },
+    open: { view: 'messages', id: 'website' },
   },
   dm: {
     id: 'dm-teo',
@@ -126,9 +127,9 @@ const row = {
   invite: {
     id: 'task-invite',
     kind: 'task',
-    label: 'Fix the team invite handoff',
+    label: 'Fix mobile sign-in',
     time: '8:31 AM',
-    open: { view: 'tasks', id: 'invite' },
+    open: { view: 'tasks', id: GITHUB_TASK },
   },
 } satisfies Record<string, HomeRow>;
 
@@ -158,6 +159,21 @@ export function createHomeInbox(options: {
   pending?: string[];
 }) {
   const w = createDummyWorkspace('home');
+  w.setData('channels', (channels) => [
+    ...channels,
+    {
+      id: 'website',
+      messages: githubHistory.map((message) => ({ ...message })),
+    },
+  ]);
+  w.setData('tasks', (tasks) => [
+    ...tasks,
+    {
+      ...githubTask,
+      steps: githubTask.steps.map((step) => ({ ...step })),
+      comments: [...githubTask.comments],
+    },
+  ]);
   w.setData('documents', (doc) => doc.id === 'plan', 'comments', [
     {
       id: 'plan-screenshots',

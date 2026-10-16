@@ -68,6 +68,15 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getOutput('gmailOpsQueueArn')
     .apply((v) => v as string);
 
+  // `SendEmail` stages attachments in the email service's bucket; the hosts
+  // read its name from `ATTACHMENT_BUCKET` and need write access to it. The
+  // name is fixed by `stacks/email-service/attachments-bucket.ts`, so the ARN
+  // is derived here rather than read from that stack's outputs, which keeps
+  // these services deployable ahead of an email-service deploy.
+  const emailAttachmentsBucketArn: pulumi.Output<string> = pulumi.output(
+    `arn:aws:s3:::macro-email-attachments-${stack}`
+  );
+
   const notificationIngressQueueArn: pulumi.Output<string> =
     notificationServiceStack
       .getOutput('notificationIngressQueueArn')
@@ -111,7 +120,11 @@ export function getAiToolsInfra(): AiToolsInfra {
       searchEventQueueArn,
       contactsQueueArn,
     ],
-    bucketArns: [documentStorageBucketArn, docxUploadBucketArn],
+    bucketArns: [
+      documentStorageBucketArn,
+      docxUploadBucketArn,
+      emailAttachmentsBucketArn,
+    ],
   };
 }
 

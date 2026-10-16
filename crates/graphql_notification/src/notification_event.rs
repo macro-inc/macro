@@ -1234,6 +1234,10 @@ impl GraphqlAgentSessionMentionedMetadata {
 /// Typed GraphQL union containing every supported notification event payload.
 #[derive(Union)]
 pub enum GraphqlNotifEvent {
+    /// Shared access workflow.
+    EntityAccessGranted(GraphqlEntityAccessGrantedMetadata),
+    /// Shared access workflow.
+    EntityAccessRequested(GraphqlEntityAccessRequestedMetadata),
     /// Channel mention metadata.
     ChannelMention(GraphqlChannelMentionMetadata),
     /// Document mention metadata.
@@ -1297,6 +1301,12 @@ impl From<NotifEvent> for GraphqlNotifEvent {
         match value {
             NotifEvent::ChannelMention(metadata) => {
                 Self::ChannelMention(GraphqlChannelMentionMetadata(metadata))
+            }
+            NotifEvent::EntityAccessRequested(metadata) => {
+                Self::EntityAccessRequested(GraphqlEntityAccessRequestedMetadata(metadata))
+            }
+            NotifEvent::EntityAccessGranted(metadata) => {
+                Self::EntityAccessGranted(GraphqlEntityAccessGrantedMetadata(metadata))
             }
             NotifEvent::DocumentMention(metadata) => {
                 Self::DocumentMention(GraphqlDocumentMentionMetadata(metadata))
@@ -1375,6 +1385,70 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::AgentSessionMentioned(metadata) => {
                 Self::AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata(metadata))
             }
+        }
+    }
+}
+
+/// Shared entity access notification metadata.
+pub struct GraphqlEntityAccessRequestedMetadata(model_notifications::EntityAccessRequestedMetadata);
+
+/// Metadata for a request to view, comment on, or edit a shared item.
+#[Object]
+impl GraphqlEntityAccessRequestedMetadata {
+    /// Stable access request id.
+    async fn request_id(&self) -> ID {
+        ID(self.0.request_id.to_string())
+    }
+    /// Request revision.
+    async fn revision(&self) -> i32 {
+        self.0.revision
+    }
+    /// Entity display name.
+    async fn entity_name(&self) -> &str {
+        &self.0.entity_name
+    }
+    /// Document file extension, when applicable.
+    async fn file_type(&self) -> Option<&str> {
+        self.0.file_type.as_deref()
+    }
+    /// Requested or granted access.
+    async fn access_level(&self) -> &str {
+        match self.0.access_level {
+            model_notifications::RequestedAccessLevel::View => "view",
+            model_notifications::RequestedAccessLevel::Comment => "comment",
+            model_notifications::RequestedAccessLevel::Edit => "edit",
+        }
+    }
+}
+
+/// Shared entity access notification metadata.
+pub struct GraphqlEntityAccessGrantedMetadata(model_notifications::EntityAccessGrantedMetadata);
+
+/// Metadata for an approved access request and its granted permission.
+#[Object]
+impl GraphqlEntityAccessGrantedMetadata {
+    /// Stable access request id.
+    async fn request_id(&self) -> ID {
+        ID(self.0.request_id.to_string())
+    }
+    /// Request revision.
+    async fn revision(&self) -> i32 {
+        self.0.revision
+    }
+    /// Entity display name.
+    async fn entity_name(&self) -> &str {
+        &self.0.entity_name
+    }
+    /// Document file extension, when applicable.
+    async fn file_type(&self) -> Option<&str> {
+        self.0.file_type.as_deref()
+    }
+    /// Requested or granted access.
+    async fn access_level(&self) -> &str {
+        match self.0.access_level {
+            model_notifications::RequestedAccessLevel::View => "view",
+            model_notifications::RequestedAccessLevel::Comment => "comment",
+            model_notifications::RequestedAccessLevel::Edit => "edit",
         }
     }
 }

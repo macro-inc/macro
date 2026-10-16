@@ -31,6 +31,7 @@ function decodeToolEntityType(raw: string): ActivityEntityType {
     .with('channel', () => 'channel' as const)
     .with('user', () => 'user' as const)
     .with('database', () => 'database' as const)
+    .with('form', () => 'form' as const)
     .otherwise((value) => ({ kind: 'unsupported' as const, raw: value }));
 }
 
@@ -73,6 +74,7 @@ function activityAction(action: Activity['action']): ActivityAction {
     .with({ type: 'callStarted' }, () => ({
       kind: 'call-started' as const,
     }))
+    .with({ type: 'responded' }, () => ({ kind: 'responded' as const }))
     .with({ type: 'unknown' }, ({ tag }) => ({
       kind: 'unknown' as const,
       tag,

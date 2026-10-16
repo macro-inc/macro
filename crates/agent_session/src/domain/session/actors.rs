@@ -59,9 +59,20 @@ pub(crate) struct SessionCommand {
     pub(crate) enqueued_at: Instant,
 }
 
+/// What reaches a session's actor through its command channel. One channel,
+/// so a server change and the prompt behind it arrive in the order sent.
+pub(crate) enum SessionMessage {
+    /// Deliver an action.
+    Action(SessionCommand),
+    /// Hand the agent these MCP servers from now on.
+    ReplaceMcpServers(Vec<McpServer>),
+}
+
 pub(crate) struct SessionCompletion {
     completed: oneshot::Sender<Result<()>>,
     span: tracing::Span,
+    /// When the command was dequeued, if the runtime was not live yet.
+    dequeued_before_live: Option<Instant>,
 }
 
 /// Whether a [`SessionActor`] has more steps to take.
@@ -85,7 +96,7 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     outbound: Connector::Sender,
     inbound: Connector::Receiver,
     logs: Logs,
-    commands: mpsc::Receiver<SessionCommand>,
+    commands: mpsc::Receiver<SessionMessage>,
     /// This connection's handshake gate: published to when this session runs
     /// the handshake, watched for when another session runs it.
     handshake: watch::Sender<HandshakeStatus>,
@@ -125,7 +136,7 @@ where
         permission_policy: PermissionPolicy,
         connector: Connector,
         logs: Logs,
-        commands: mpsc::Receiver<SessionCommand>,
+        commands: mpsc::Receiver<SessionMessage>,
         handshake: watch::Sender<HandshakeStatus>,
         turn_observer: Arc<dyn SessionTurnObserver>,
         tool_catalog: Arc<dyn SessionToolCatalog>,
@@ -235,20 +246,21 @@ where
                 }
             },
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
+                Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
+                Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
                         "agent.command.queue_wait_ms",
-                        enqueued_at.elapsed().as_millis() as u64,
+                        elapsed_ms(enqueued_at),
                     );
-                    span.record(
-                        "agent.session.runtime_phase_at_dequeue",
-                        self.machine.status().as_ref(),
-                    );
+                    let status = self.machine.status();
+                    span.record("agent.session.runtime_phase_at_dequeue", status.as_ref());
+                    let dequeued_before_live = (!matches!(status, RuntimeStatus::Live { .. }))
+                        .then(Instant::now);
                     Input::Command {
                         from: user_id,
                         action,
                         action_id,
-                        token: SessionCompletion { completed, span },
+                        token: SessionCompletion { completed, span, dequeued_before_live },
                     }
                 },
                 // The service dropped every handle; nobody can reach us.
@@ -301,7 +313,13 @@ where
             match effect {
                 Effect::Send { from, mut message } => {
                     let command_span = effects.front().and_then(|effect| match effect {
-                        Effect::Complete { token, .. } => Some(token.span.clone()),
+                        Effect::Complete { token, .. } => {
+                            token.span.record(
+                                "agent.command.handshake_wait_ms",
+                                token.dequeued_before_live.map_or(0, elapsed_ms),
+                            );
+                            Some(token.span.clone())
+                        }
                         _ => None,
                     });
                     // Before delivery, so the turn's span starts when the
@@ -380,6 +398,7 @@ where
                             agent_session_id: self.machine.id(),
                             user_id: None,
                             content: Message::ToServer(message),
+                            logged_at: None,
                         },
                         boundary,
                     );
@@ -429,6 +448,7 @@ where
                                 agent_session_id: self.machine.id(),
                                 user_id: None,
                                 content: Message::ToRuntime(context.request.clone()),
+                                logged_at: None,
                             })
                             .await?
                             .log_id;
@@ -568,6 +588,7 @@ where
                 agent_session_id: self.machine.id(),
                 user_id: from,
                 content: Message::ToRuntime(message.clone()),
+                logged_at: None,
             })
             .await?;
         if acp_method(&message) == Some("initialize") {
@@ -592,6 +613,7 @@ where
                 agent_session_id: self.machine.id(),
                 user_id,
                 content,
+                logged_at: None,
             })
             .await?;
         self.forward_signals(appended.signals);
@@ -636,6 +658,9 @@ where
                         "agent session elicitation cleared"
                     );
                 }
+                // A reply's shape changes several times a turn; the turn's
+                // own span already covers it, so this is not logged.
+                TurnSignal::Progressed { .. } => {}
             }
             self.turn_observer.signal(self.machine.id(), signal);
         }
@@ -730,6 +755,11 @@ where
             effects.push_back(stop);
         }
     }
+}
+
+/// Milliseconds as i64: a u64 reaches OTel as a string.
+fn elapsed_ms(since: Instant) -> i64 {
+    i64::try_from(since.elapsed().as_millis()).unwrap_or(i64::MAX)
 }
 
 fn acp_method(message: &ToRuntimeMessage) -> Option<&str> {

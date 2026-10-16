@@ -35,6 +35,7 @@ vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: class extends Error {},
   watchAgentSessionLog: () => ({
     cached: logSource.cached(),
+    cacheMiss: () => undefined,
     fetched: logSource.fetched(),
     stop: () => {},
   }),

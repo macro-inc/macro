@@ -1,10 +1,14 @@
+import { createSearchParams } from '@app/lib/split-router';
 import {
   RedirectSplit,
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
-import { lazy } from 'solid-js';
+import { lazy, untrack } from 'solid-js';
+import type { CrmRouteSearch } from './context/workspace-context';
+import { pipelineIdOfTab, pipelineTab } from './core/navigation';
+import { crmSearch } from './crm-route';
 import {
   CRM_VIEW_URL_PARAM,
   decodeCrmViewParam,
@@ -18,10 +22,55 @@ export const CompaniesRouteView = withAuth(() => {
   if (!isFeatureEnabled(enableCrm))
     return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
   usePageViewTracking('companies');
+  const [search, setSearch] = createSearchParams(crmSearch);
+  const pipelineRequest = () =>
+    search.pipeline
+      ? { pipelineId: search.pipeline, seek: search.seek }
+      : undefined;
+  const requested = untrack(pipelineRequest);
   const crmView = new URLSearchParams(window.location.search).get(
     CRM_VIEW_URL_PARAM
   );
+  const routeSearch: CrmRouteSearch = {
+    tab: () => search.tab,
+    setTab: (
+      tab: string,
+      options?: { replace?: boolean; clearPipelineRequest?: boolean }
+    ) => {
+      const nextTab = tab || 'active';
+      const clearRequest =
+        options?.clearPipelineRequest ||
+        (untrack(() => search.pipeline) !== '' &&
+          pipelineIdOfTab(nextTab) !== untrack(() => search.pipeline));
+      setSearch(
+        clearRequest
+          ? { tab: nextTab, pipeline: '', seek: '' }
+          : { tab: nextTab },
+        {
+          mode: 'merge',
+          history: options?.replace ? 'replace' : 'push',
+        }
+      );
+    },
+  };
   return (
-    <Crm initialView={crmView ? decodeCrmViewParam(crmView) : undefined} />
+    <Crm
+      initialView={
+        requested
+          ? { kind: 'crm', activeTab: pipelineTab(requested.pipelineId) }
+          : crmView
+            ? decodeCrmViewParam(crmView)
+            : undefined
+      }
+      pipelineRequest={{
+        current: pipelineRequest,
+        release: () =>
+          setSearch(
+            { pipeline: '', seek: '' },
+            { mode: 'merge', history: 'replace' }
+          ),
+      }}
+      routeSearch={routeSearch}
+    />
   );
 });

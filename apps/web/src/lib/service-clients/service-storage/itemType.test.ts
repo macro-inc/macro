@@ -58,6 +58,7 @@ describe('stringToItemType', () => {
     'project',
     'channel',
     'crm_company',
+    'crm_pipeline',
     'initiative',
   ])('parses %s as itself', (raw) => {
     expect(stringToItemType(raw)).toBe(raw);

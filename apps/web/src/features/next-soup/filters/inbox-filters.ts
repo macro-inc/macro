@@ -42,9 +42,15 @@ const DEPRIORITY_LABELS = [
   },
 ];
 
-const getLabelTokens = (
-  labels?: Array<{ id?: string; providerLabelId?: string; name?: string }>
-): string[] => {
+type SignalEmail = {
+  labels?: readonly {
+    id?: string;
+    providerLabelId?: string | null;
+    name?: string | null;
+  }[];
+};
+
+const getLabelTokens = (labels?: SignalEmail['labels']): string[] => {
   if (!labels?.length) return [];
 
   const tokens: string[] = [];
@@ -59,7 +65,7 @@ const getLabelTokens = (
 
 type EmailEntity = Extract<EntityData, { type: 'email' }>;
 
-function getEmailSignalInfo(entity: EmailEntity): {
+function getEmailSignalInfo(entity: SignalEmail): {
   hasPriority: boolean;
   hasDepriority: boolean;
 } {
@@ -81,7 +87,7 @@ function getEmailSignalInfo(entity: EmailEntity): {
 }
 
 /** Check if email is signal (important) */
-function isSignalEmail(entity: EmailEntity): boolean {
+export function isSignalEmail(entity: SignalEmail): boolean {
   const { hasPriority, hasDepriority } = getEmailSignalInfo(entity);
   // Signal = has priority indicators OR no depriority indicators
   return hasPriority || !hasDepriority;
@@ -135,16 +141,13 @@ export function signalFilter(entity: EntityData): boolean {
       // Foreign entities (e.g. GitHub PRs) are gated by the inbox query on the
       // user's not-done notifications, so they're signal whenever returned.
       return true;
-    case 'reminder':
-      // A reminder that has fired is gated into the Inbox by its notification,
-      // same as the other notification-driven types.
-      return true;
     case 'calendar_event':
       // Calendar events are gated into the Inbox by their event-alarm
       // notifications, same as reminders.
       return true;
     case 'database':
-      // Databases are not Soup entities and never reach the Inbox.
+    case 'form':
+      // Databases and forms are not Soup entities and never reach the Inbox.
       return false;
   }
 }

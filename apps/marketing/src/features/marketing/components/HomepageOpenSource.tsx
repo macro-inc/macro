@@ -1,5 +1,6 @@
 import { createMediaQuery } from '@solid-primitives/media';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import { pinnedPalette } from '../../setup/sitePalette';
 import { animateDemoEntrance } from './animateDemoEntrance';
 import { HomepageDemoCarousel } from './HomepageDemoCarousel';
 import { HomepageGithub } from './HomepageGithub';
@@ -26,6 +27,24 @@ function DesktopHomepageOpenSource(props: {
       scroller = scroller.parentElement;
     }
     onCleanup(animateDemoEntrance(section, scroller));
+    // Load the workspace as it nears the viewport. Not loading="lazy": WebKit
+    // ignores history.replaceState in lazy frames, so the router throws on boot
+    // and Safari is left with the unstyled prerendered page.
+    const nearby = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        nearby.disconnect();
+        // The sample workspace follows the OS color scheme on its own; a
+        // palette pinned with `?theme=` carries over.
+        const pinned = pinnedPalette();
+        frame.src = pinned
+          ? `/demo?embedded=true&theme=${pinned}`
+          : '/demo?embedded=true';
+      },
+      { rootMargin: '1250px 0px' }
+    );
+    nearby.observe(section);
+    onCleanup(() => nearby.disconnect());
     if (!props.showSidebarBreakdown) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     const card = connection.querySelector<HTMLElement>(
@@ -105,10 +124,9 @@ function DesktopHomepageOpenSource(props: {
                 </Show>
                 <iframe
                   ref={frame}
-                  src="/demo?embedded=true"
-                  loading="lazy"
                   title="Embedded Macro sample workspace"
-                  onLoad={() => setLoaded(true)}
+                  // Ignore the initial about:blank load before src is set.
+                  onLoad={() => frame.src && setLoaded(true)}
                 />
               </div>
             </div>

@@ -68,7 +68,7 @@ export function QueryDatabasePicker(props: {
       </Tooltip>
       <Popover.Portal>
         <Popover.Content
-          class="z-action-menu flex w-72 max-w-[calc(100vw-1rem)] min-h-0 flex-col rounded-lg border border-edge bg-menu text-ink shadow-menu outline-none"
+          class="menu-surface z-action-menu flex w-72 max-w-[calc(100vw-1rem)] min-h-0 flex-col outline-none"
           style={{
             'max-height':
               'min(24rem, var(--kb-popper-content-available-height, calc(100dvh - 1rem)), calc(100dvh - 1rem))',

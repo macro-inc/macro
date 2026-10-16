@@ -1,4 +1,5 @@
 import { queryClient } from '@queries/client';
+import { refreshActiveGraphqlPreviewQueries } from '../preview/active-queries';
 import { agentSessionKeys } from './keys';
 import { refreshAgentSessionLists } from './list-sync';
 import type {
@@ -14,6 +15,7 @@ export function handleAgentSessionRenamed(
   event: AgentSessionRenamedEvent
 ): void {
   for (const listener of renameListeners) listener(event);
+  void refreshActiveGraphqlPreviewQueries(event.agentSessionId);
   void refreshAgentSessionLists(event.agentSessionId);
 }
 
@@ -46,6 +48,7 @@ export async function handleAgentSessionUpdated(
   await Promise.all([
     queryClient.invalidateQueries(filters),
     refreshAgentSessionLists(event.agentSessionId),
+    refreshActiveGraphqlPreviewQueries(event.agentSessionId),
   ]);
 }
 
@@ -53,5 +56,8 @@ export async function handleAgentSessionUpdated(
 export async function invalidateAgentSessionMetadata(): Promise<void> {
   const filters = { queryKey: agentSessionKeys.detail._def };
   await queryClient.cancelQueries(filters);
-  await queryClient.invalidateQueries(filters);
+  await Promise.all([
+    queryClient.invalidateQueries(filters),
+    refreshActiveGraphqlPreviewQueries(),
+  ]);
 }

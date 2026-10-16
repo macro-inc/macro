@@ -2,16 +2,16 @@ import type { BlockAlias, BlockName } from '@core/block';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { HotkeyRegistrationOptions } from '@core/hotkey/types';
 
+export type CreatableName = BlockName | BlockAlias | 'initiative';
+
 /**
- * What a create-menu entry makes.
- *
- * Every block, plus the things the menu can create that have no block of their
- * own. A reminder is one: it is not a document type, it opens no split, and
- * `EntityIcon` already knows the name — which is why it is a member here rather
- * than in `BlockAliasRegistry`, where it would leak into `fileTypeToBlockName`,
- * split content types and `NonDocumentBlockTypes`.
+ * Shows a created item in the surface that asked to create it, which stays
+ * mounted while the item is created. Returning false opens it in a split.
  */
-export type CreatableName = BlockName | BlockAlias | 'reminder' | 'initiative';
+export type OpenCreatedItem = (item: {
+  blockName: BlockName | BlockAlias;
+  id: string;
+}) => boolean;
 
 export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;

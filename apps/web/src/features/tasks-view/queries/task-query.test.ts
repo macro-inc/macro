@@ -53,3 +53,56 @@ describe('task reference scope', () => {
     ]);
   });
 });
+
+describe('task CRM scope', () => {
+  it('scopes the list to the record without a property-only filter', () => {
+    const query = buildTaskQuery({
+      ...options,
+      facets: {},
+      crm: { type: 'company', id: 'company-1' },
+    });
+    expect(query.body.crma).toEqual({ company: 'company-1' });
+    expect(query.body.propf).toBeUndefined();
+    expect(query.body.df).toEqual({ l: { dst: 'task' } });
+    // Grouping and sort still apply to the scoped list.
+    expect(query.groupBy).toEqual({
+      type: 'property',
+      propertyDefinitionId: '00000001-0000-0000-0000-000000000002',
+    });
+  });
+
+  it('searches by name inside the same scope', () => {
+    const query = buildTaskQuery({
+      ...options,
+      facets: {},
+      crm: { type: 'contact', id: 'contact-1' },
+      nameContains: 'renewal',
+    });
+    expect(query.body.crma).toEqual({ contact: 'contact-1' });
+    expect(query.body.df).toEqual({
+      '&': [{ l: { dst: 'task' } }, { l: { nc: 'renewal' } }],
+    });
+  });
+});
+
+it('uses the initiative Project property for board columns without changing legacy list grouping', () => {
+  const boardQuery = buildTaskQuery({
+    ...options,
+    groupBy: 'project',
+    board: true,
+  });
+  const listQuery = buildTaskQuery({ ...options, groupBy: 'project' });
+  const sortedBoardQuery = buildTaskQuery({ ...options, board: true });
+
+  expect(boardQuery.groupBy).toEqual({
+    type: 'property',
+    propertyDefinitionId: '00000001-0000-0000-0000-000000000014',
+  });
+  expect(listQuery.groupBy).toEqual({
+    type: 'project',
+  });
+  expect(sortedBoardQuery.params).toMatchObject({
+    sort_method: 'updated_at',
+    sort_direction: 'asc',
+  });
+});

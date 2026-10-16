@@ -12,12 +12,15 @@ import {
   LoroDoc,
   type PeerID,
   type Side,
+  type UndoConfig,
+  UndoManager,
   type VersionVector,
 } from 'loro-crdt';
 import { err, ok, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
 import type { ResultError } from '../internal/result';
 import { logSyncService } from './logger';
+import { LoroManagerError } from './manager-error';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import {
   disposeTelemetryFor,
@@ -26,19 +29,7 @@ import {
   telemetrySpan,
 } from './telemetry';
 
-export enum LoroManagerError {
-  ImportFailed = 'IMPORT_FAILED',
-  /** The update arrived ahead of its causal dependencies. Loro holds it and
-   *  applies it automatically once the gap fills — not a failure. */
-  ImportPending = 'IMPORT_PENDING',
-  NotInitialized = 'NOT_INITIALIZED',
-  InitializeFailed = 'INITIALIZE_FAILED',
-  SyncFailed = 'SYNC_FAILED',
-  ExportFailed = 'EXPORT_FAILED',
-  GetCursorPosFailed = 'GET_CURSOR_POS_FAILED',
-  GetContainerByIdFailed = 'GET_CONTAINER_BY_ID_FAILED',
-  UnknownLoroError = 'UNKNOWN_LORO_ERROR',
-}
+export { LoroManagerError };
 
 export enum LoroStateTag {
   Initialize = 'INITIALIZE',
@@ -161,6 +152,12 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   get doc(): LoroDoc {
     return this._doc;
   }
+
+  /** An undo manager over this document, so callers need not import loro eagerly. */
+  createUndoManager(config: UndoConfig): UndoManager {
+    return new UndoManager(this._doc, config);
+  }
+
   /** The inner Mirror, once initialized. */
   get mirror(): Mirror<S> | undefined {
     return this._mirror;

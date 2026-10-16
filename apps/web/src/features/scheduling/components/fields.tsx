@@ -1,6 +1,6 @@
-import { TimezoneSelect } from '@app/features/reminders/TimezoneSelect';
 import { Checkbox, cn, Select } from '@ui';
 import { type JSX, Show, splitProps } from 'solid-js';
+import { TimezoneSelect } from './TimezoneSelect';
 
 export function Field(props: {
   label: string;

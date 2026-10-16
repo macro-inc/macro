@@ -116,7 +116,7 @@ export type ListsSource = {
 
 export type CrmEmailScope = 'team' | 'me';
 export type CrmEmailSignal = 'signal' | 'all';
-/** A paged soup list: email threads, files or calls of a CRM record. */
+/** A paged soup list: email threads, files, calls or references of a CRM record. */
 export type ItemListSource = {
   /** True until the first page is readable (including disabled queries). */
   readonly isPending: boolean;
@@ -126,7 +126,15 @@ export type ItemListSource = {
   readonly data: { entities: import('@entity').EntityData[] } | undefined;
   readonly hasNextPage: boolean;
   readonly isFetchingNextPage: boolean;
+  /**
+   * The query failed, on its first page or on a refetch; distinct from an
+   * empty list, and any loaded rows are no longer current.
+   */
+  readonly isError: boolean;
+  /** A continuation page failed; the loaded pages remain current. */
+  readonly isFetchNextPageError: boolean;
   fetchNextPage(): Promise<unknown>;
+  refetch(): Promise<unknown>;
 };
 export type CompanyPropertySave = {
   properties: {
@@ -154,16 +162,4 @@ export type ExportDefinitionsSource = {
   readonly isSuccess: boolean;
   readonly isError: boolean;
   readonly data: ExportDefinition[];
-};
-
-export type PeopleSource = {
-  people: Accessor<import('../core/people').CrmPerson[]>;
-  query: {
-    readonly isError: boolean;
-    readonly isFetching: boolean;
-    readonly hasNextPage: boolean;
-    readonly isFetchNextPageError: boolean;
-    fetchNextPage(): Promise<unknown>;
-    refetch(): Promise<unknown>;
-  };
 };

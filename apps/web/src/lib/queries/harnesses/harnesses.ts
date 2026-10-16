@@ -6,7 +6,7 @@ import {
   type HarnessPairing,
   storageServiceClient,
 } from '@service-storage/client';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { harnessKeys } from './keys';
 
 export type ApproveHarnessPairingParams = {
@@ -20,18 +20,21 @@ export type DeleteHarnessParams = {
   harnessId: string;
 };
 
+// Cached callbacks outlive the hooks; keep hook scope out of these closures.
+const harnessesQueryOptions = queryOptions({
+  queryKey: harnessKeys.list.queryKey,
+  queryFn: async (): Promise<Harness[]> =>
+    await throwOnErr(() => storageServiceClient.getHarnesses()),
+  refetchInterval: 15_000,
+});
+
 /**
  * The macrod harnesses registered for the signed-in user (and their team).
  * Refetched on a short interval so the connected indicator tracks the daemon
  * heartbeat without a manual refresh.
  */
 export function useHarnessesQuery() {
-  return useQuery(() => ({
-    queryKey: harnessKeys.list.queryKey,
-    queryFn: async (): Promise<Harness[]> =>
-      await throwOnErr(() => storageServiceClient.getHarnesses()),
-    refetchInterval: 15_000,
-  }));
+  return useQuery(() => harnessesQueryOptions);
 }
 
 export function invalidateHarnesses() {
@@ -46,15 +49,17 @@ export function invalidateHarnesses() {
  * expired code), not a transient failure.
  */
 export function useHarnessPairingQuery(code: () => string | undefined) {
-  return useQuery(() => ({
-    queryKey: harnessKeys.pairing(code() ?? '').queryKey,
+  return useQuery(() => harnessPairingQueryOptions(code() ?? ''));
+}
+
+function harnessPairingQueryOptions(code: string) {
+  return queryOptions({
+    queryKey: harnessKeys.pairing(code).queryKey,
     queryFn: async (): Promise<HarnessPairing> =>
-      await throwOnErr(() =>
-        storageServiceClient.getHarnessPairing({ code: code() ?? '' })
-      ),
-    enabled: (code() ?? '').length > 0,
+      await throwOnErr(() => storageServiceClient.getHarnessPairing({ code })),
+    enabled: code.length > 0,
     retry: false,
-  }));
+  });
 }
 
 export function useApproveHarnessPairingMutation() {

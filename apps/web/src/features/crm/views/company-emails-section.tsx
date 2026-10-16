@@ -13,6 +13,7 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
   const domains = createMemo(
     () => props.company?.domains.map((domain) => domain.domain) ?? []
   );
+  const [search, setSearch] = createSignal('');
   const [view, setView] = createSignal<EmailView>('team');
   const [signalView, setSignalView] = createSignal<EmailSignalView>('all');
   const emailsQuery = useCompanyEmailsQuery(domains, view, signalView);
@@ -29,6 +30,8 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
   return (
     <RecordSection
       title="Emails"
+      search={search()}
+      onSearchChange={setSearch}
       actions={
         <>
           <TabsInset
@@ -52,6 +55,7 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
     >
       <RecordItemList
         source={emailsQuery}
+        search={search()}
         pending={!props.company}
         empty={emptyMessage()}
       />

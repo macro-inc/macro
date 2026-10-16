@@ -121,7 +121,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
                 </Select.Value>
                 <Select.Icon />
               </Select.Trigger>
-              <Select.Content>
+              <Select.Content portalScope="local">
                 <Select.Listbox />
               </Select.Content>
             </Select>

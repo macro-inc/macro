@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id AS \"pipeline_id!\", r.id AS \"row_id!\",\n                      reference.value ->> 'entity_id' AS \"record_id!\"\n               FROM crm_pipeline_entities p\n               JOIN database_columns c ON c.id = p.primary_column_id\n               JOIN entity_properties ep\n                 ON ep.property_definition_id = c.property_definition_id\n                AND ep.entity_type = 'DATABASE_ROW'\n               JOIN database_rows r ON r.id::text = ep.entity_id AND r.table_id = p.table_id\n               CROSS JOIN LATERAL jsonb_array_elements(ep.values -> 'value') AS reference(value)\n               WHERE p.id = ANY($1) AND p.trashed_at IS NULL\n                 AND reference.value ->> 'entity_id' = ANY($2)\n               ORDER BY p.id, r.position, r.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pipeline_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "row_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "record_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "d7da40a043996376a51fa2fc49c7dc2486762d4a6c7fc1ddb35c5bfe6b1cdd1e"
+}

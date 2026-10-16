@@ -415,7 +415,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
 
     /// Create a notification record in the database.
     ///
-    /// Returns `Some(notification_id)` if created, `None` if it already exists (idempotent).
+    /// Returns new or unpublished recipient rows; completed or withdrawn notifications return None.
     fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
         request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
@@ -423,6 +423,18 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         service_name: &str,
         apns_collapse_key: Option<&str>,
     ) -> impl std::future::Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
+
+    /// Whether a resolved workflow has withdrawn this notification before delivery.
+    fn notification_is_withdrawn(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<bool, Report>> + Send;
+
+    /// Record successful delivery-queue publication; retries remain pending until this succeeds.
+    fn complete_notification_publication(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
     /// Update the sent status for recipients who received the notification.
     fn update_sent_status<'a>(
@@ -686,7 +698,59 @@ impl NotificationDbOps for PgPool {
         let sender_id = request.sender_id.as_ref().map(|id| id.to_string());
         let typename = request.notification.tag.as_ref();
 
-        // Insert notification
+        super::withdrawal::lock_notification(&mut tx, notification_id).await?;
+        let withdrawn = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM notification_withdrawal WHERE notification_id = $1) AS "exists!""#, notification_id).fetch_one(tx.as_mut()).await?;
+        if withdrawn {
+            return Ok(None);
+        }
+
+        let existing = sqlx::query_scalar!(
+            "SELECT publication_complete FROM notification WHERE id = $1",
+            notification_id
+        )
+        .fetch_optional(tx.as_mut())
+        .await?;
+        if let Some(complete) = existing {
+            if complete {
+                return Ok(None);
+            }
+            let recipients = sqlx::query!(
+                r#"SELECT user_id, sent, state AS "state: NotificationState",
+                    created_at::timestamptz AS "created_at!", seen_at::timestamptz AS viewed_at,
+                    created_at::timestamptz AS "updated_at!", deleted_at::timestamptz AS deleted_at
+                FROM user_notification WHERE notification_id = $1"#,
+                notification_id
+            )
+            .fetch_all(tx.as_mut())
+            .await?;
+            let metadata = Arc::new(request.notification.content);
+            let rows = recipients
+                .into_iter()
+                .map(|recipient| {
+                    Ok(UserNotificationRow {
+                        owner_id: MacroUserIdStr::try_from(recipient.user_id)?,
+                        notification_id,
+                        notification_event_type: typename.to_string(),
+                        entity: request.notification_entity.clone().into_owned(),
+                        sent: recipient.sent,
+                        state: recipient.state,
+                        created_at: recipient.created_at,
+                        viewed_at: recipient.viewed_at,
+                        updated_at: recipient.updated_at,
+                        deleted_at: recipient.deleted_at,
+                        notification_metadata: metadata.clone(),
+                        sender_id: request.sender_id.clone().map(CowLike::into_owned),
+                    })
+                })
+                .collect::<Result<Vec<_>, Report>>()?;
+            tx.commit().await?;
+            return Ok(Some(rows));
+        }
+        if request.recipient_ids.is_empty() {
+            return Ok(None);
+        }
+
+        // Insert notification and a pending publication checkpoint together.
         let result = sqlx::query!(
             r#"
             INSERT INTO notification (
@@ -699,9 +763,10 @@ impl NotificationDbOps for PgPool {
                 sender_id,
                 apns_collapse_key,
                 secondary_event_item_id,
-                secondary_event_item_type
+                secondary_event_item_type,
+                publication_complete
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
             ON CONFLICT (id) DO NOTHING
             "#,
             notification_id,
@@ -770,6 +835,23 @@ impl NotificationDbOps for PgPool {
             .collect();
 
         Ok(Some(rows))
+    }
+
+    async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
+        Ok(sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM notification_withdrawal WHERE notification_id = $1) AS "exists!""#,
+            notification_id
+        ).fetch_one(self).await?)
+    }
+
+    async fn complete_notification_publication(&self, notification_id: Uuid) -> Result<(), Report> {
+        sqlx::query!(
+            "UPDATE notification SET publication_complete = true WHERE id = $1",
+            notification_id
+        )
+        .execute(self)
+        .await?;
+        Ok(())
     }
 
     async fn update_sent_status<'a>(
@@ -1602,6 +1684,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         self.db
             .create_notification(request, notification_id, service_name, apns_collapse_key)
+            .await
+    }
+
+    async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
+        self.db.notification_is_withdrawn(notification_id).await
+    }
+
+    async fn complete_notification_publication(&self, notification_id: Uuid) -> Result<(), Report> {
+        self.db
+            .complete_notification_publication(notification_id)
             .await
     }
 

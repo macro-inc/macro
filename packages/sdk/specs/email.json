@@ -4747,7 +4747,7 @@
               "endsAt": {
                 "type": "string",
                 "format": "date-time",
-                "description": "Exclusive end instant."
+                "description": "Exclusive end instant; equal to the start for an imported point event."
               },
               "kind": {
                 "type": "string",
@@ -5016,7 +5016,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "Viewer has no active owned Google-backed calendar.",
+            "description": "Viewer has no active owned or delegated Google-backed calendar.",
             "required": ["kind"],
             "properties": {
               "kind": {
@@ -5071,7 +5071,7 @@
           },
           {
             "type": "object",
-            "description": "More than one owned account could respond; never guess.",
+            "description": "More than one authorized account could respond; never guess.",
             "required": ["kind"],
             "properties": {
               "kind": {

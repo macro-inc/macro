@@ -1,0 +1,18 @@
+---
+title: CreateContact
+description: >-
+  Add a contact person to a company in the user's team CRM, as Add Contact on a
+  company does.
+---
+
+# CreateContact
+
+Add a contact person to a company in the user's team CRM, as Add Contact on a company does. The email's domain must be one of the company's domains. Find the company with ListCompanies, or add it first with CreateCompany.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `companyId` | string | Yes | The CRM company id to add the contact to. |
+| `name` | string | Yes | The contact's name. |
+| `email` | string | Yes | The contact's email address, e.g. "jane@acme.com". |

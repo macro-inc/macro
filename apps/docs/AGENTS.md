@@ -3,9 +3,15 @@
 
 # Documentation project instructions
 
+## What it is
+
+The customer-facing documentation site for Macro, served at docs.macro.com
+and built on [Mintlify](https://mintlify.com). It covers the hosted
+product for end users, plus the MCP tool reference pages AI surfaces
+expose.
+
 ## About this project
 
-- This is the documentation site for [Macro](https://macro.com), served at docs.macro.com, built on [Mintlify](https://mintlify.com)
 - Pages are MDX files with YAML frontmatter
 - Configuration lives in `docs.json`
 - Run `mint dev` to preview locally

@@ -5,12 +5,12 @@
 //! # Architecture
 //!
 //! - **domain**: domain models, ports, and the service implementation.
-//! - **inbound**: driving adapters (Axum HTTP router).
+//! - **inbound**: driving adapters (Axum HTTP router and AI toolset).
 //! - **outbound**: driven adapters (Postgres repository).
 
 pub mod domain;
 
-#[cfg(feature = "inbound")]
+#[cfg(any(feature = "inbound", feature = "ai_tools"))]
 pub mod inbound;
 
 #[cfg(feature = "outbound")]

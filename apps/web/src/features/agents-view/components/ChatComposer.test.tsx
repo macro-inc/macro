@@ -1,5 +1,6 @@
 import { createSessionComposerDraft } from '@app/features/block-agent/primitives/session-composer-draft';
 import type { InputAttachmentData } from '@channel/Input/types';
+import { preloadAgentFold } from '@core/agent-fold/client';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
@@ -11,9 +12,26 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import { createSignal } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
+
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+
+vi.mock('@core/agent-fold/client', () => ({
+  preloadAgentFold: vi.fn(async () => {}),
+}));
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -80,7 +98,13 @@ vi.mock(
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: { placeholder?: string }) => (
-    <div data-testid="editor">{props.placeholder}</div>
+    <div data-testid="editor">
+      {props.placeholder}
+      {/* Decorators portal their popups (the paste viewer) out of the editor. */}
+      <Portal>
+        <pre data-testid="portaled-text">Pasted text</pre>
+      </Portal>
+    </div>
   ),
 }));
 
@@ -140,6 +164,25 @@ function type(text: string) {
 }
 
 describe('Chat session input', () => {
+  it('preloads the fold only when focused without sending or changing the draft', () => {
+    const send = vi.fn();
+    const change = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft="Keep this draft"
+        onDraftChange={change}
+        onSend={send}
+        selector={null}
+      />
+    ));
+    expect(preloadAgentFold).not.toHaveBeenCalled();
+    fireEvent.focusIn(screen.getByTestId('editor'));
+    expect(preloadAgentFold).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalled();
+    expect(change).not.toHaveBeenCalled();
+    expect(editor.clear).not.toHaveBeenCalled();
+  });
+
   it('seeds the supplied context without sending it', () => {
     const send = vi.fn();
     render(() => (
@@ -403,6 +446,22 @@ describe('Chat session input', () => {
     screen.getByRole('textbox', { name: 'Filter models' }).dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
   });
+
+  it('leaves presses in portaled editor popups to the browser so their text can be selected', () => {
+    render(() => <ChatSessionInput onSend={vi.fn()} />);
+    const press = (target: Element, type: string) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const surface = document.querySelector('[data-agent-composer="chat"]')!;
+    const portaled = screen.getByTestId('portaled-text');
+    expect(surface.contains(portaled)).toBe(false);
+    for (const type of ['pointerdown', 'mousedown']) {
+      expect(press(surface, type)).toBe(true);
+      expect(press(portaled, type)).toBe(false);
+    }
+  });
 });
 
 it('expands for a short quote and collapses when replaced with a paragraph', () => {
@@ -642,3 +701,49 @@ it.each(['Repository', 'Branch'])(
     expect(screen.getByTestId('editor')).toBe(input);
   }
 );
+
+it('blocks existing images on text-only models and preserves the draft until switching back', () => {
+  const send = vi.fn();
+  const [supportsImages, setSupportsImages] = createSignal(false);
+  const attachment: InputAttachmentData = {
+    id: 'image',
+    name: 'test.png',
+    kind: 'image',
+  };
+  render(() => (
+    <ChatSessionInput
+      onSend={send}
+      supportsImages={supportsImages()}
+      attachments={[attachment]}
+    />
+  ));
+  type('Describe this');
+  expect(screen.getByRole('status').textContent).toContain(
+    'does not support images'
+  );
+  expect(
+    screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
+  ).toBe(true);
+  editor.enter?.(undefined, 'Describe this');
+  expect(send).not.toHaveBeenCalled();
+  expect(editor.clear).not.toHaveBeenCalled();
+  setSupportsImages(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(send).toHaveBeenCalledWith('Describe this', [attachment]);
+});
+
+it('refuses pasted images for text-only models but still accepts documents', () => {
+  const attach = vi.fn();
+  render(() => (
+    <ChatSessionInput
+      onSend={vi.fn()}
+      onAttachFiles={attach}
+      supportsImages={false}
+    />
+  ));
+  const document = new File(['hello'], 'note.txt', { type: 'text/plain' });
+  // Missing browser MIME types still use the image extension.
+  const image = new File(['image'], 'picture.PNG');
+  editor.paste?.([image, document], []);
+  expect(attach).toHaveBeenCalledWith([document]);
+});

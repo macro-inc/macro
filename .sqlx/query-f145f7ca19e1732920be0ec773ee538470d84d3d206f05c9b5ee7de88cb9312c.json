@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access(entity_id, entity_type, source_id, source_type, access_level)\n            VALUES ($1, $2, $3, 'user', $4)\n            ON CONFLICT (entity_id, entity_type, source_id, source_type) WHERE granted_from_project_id IS NULL\n            DO UPDATE SET access_level = CASE WHEN $5 THEN GREATEST(entity_access.access_level, EXCLUDED.access_level) ELSE EXCLUDED.access_level END, updated_at = now()\n            WHERE entity_access.access_level <> 'owner'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f145f7ca19e1732920be0ec773ee538470d84d3d206f05c9b5ee7de88cb9312c"
+}

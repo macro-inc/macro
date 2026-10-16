@@ -9,6 +9,7 @@
 //! meet them.
 
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
@@ -93,4 +94,7 @@ pub struct AgentSessionLog {
     pub user_id: Option<MacroUserIdStr<'static>>,
     /// The logged frame.
     pub content: Message,
+    /// When the log stored the entry. `None` for a frame not stored yet: one
+    /// being appended, or one this client speculated.
+    pub logged_at: Option<DateTime<Utc>>,
 }

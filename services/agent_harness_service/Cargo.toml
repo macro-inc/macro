@@ -22,6 +22,7 @@ roles_and_permissions = { path = "../../crates/roles_and_permissions", default-f
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
+call = { path = "../../crates/call", default-features = false, features = ["outbound"] }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
 agent_changes = { path = "../../crates/agent_changes" }
@@ -32,10 +33,12 @@ agent_inmem = { path = "../../crates/agent_inmem" }
 ai_tools = { path = "../../crates/ai_tools" }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
 agent_session = { path = "../../crates/agent_session", features = ["ai_tools"] }
+agent_session_realtime = { path = "../../crates/agent_session_realtime" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 rmcp = { workspace = true }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
 aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
@@ -63,6 +66,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
 ] }
 mcp_client = { path = "../../crates/mcp_client" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
+prompt = { path = "../../crates/prompt" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
@@ -84,6 +88,7 @@ system_properties = { path = "../../crates/system_properties" }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }
+model_owner = { path = "../../crates/model_owner" }
 axum = { workspace = true }
 axum-extra = { workspace = true, features = ["typed-header"] }
 aws-sdk-secretsmanager = { workspace = true }
@@ -117,7 +122,9 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+agent = { path = "../../crates/agent" }
 agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
+async-trait = { workspace = true }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }

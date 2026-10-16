@@ -47,7 +47,8 @@ pub(super) async fn thread_metadata_by_ids(
         SELECT
             id AS "thread_id!",
             link_id,
-            latest_inbound_message_ts
+            latest_inbound_message_ts,
+            reminder_returned_at
         FROM email_threads
         WHERE id = ANY($1)
         "#,
@@ -75,14 +76,14 @@ pub(super) async fn thread_mail_projections_by_ids(
     // pre-aggregated `rules` lateral; `draft_sender_is_signal` (domain
     // service/user.rs) mirrors its sender-override precedence. Change all four
     // together.
+    //
+    // The share check tests each source table on its own. A union of the
+    // viewer's sources has no distinct estimate, and the planner then probes
+    // `entity_access` once per source, thousands of times for some viewers,
+    // instead of once per requested thread.
     let rows = sqlx::query!(
         r#"
-        WITH user_source_ids AS (
-            SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp
-            WHERE cp.user_id = $2 AND cp.left_at IS NULL
-            UNION ALL SELECT team_id::text FROM team_user WHERE user_id = $2
-            UNION ALL SELECT $2::text
-        ), message_facts AS (
+        WITH message_facts AS (
             SELECT m.id, m.thread_id, m.is_draft, m.is_read,
                 m.is_draft AND m.provider_id IS NULL AS macro_draft,
                 (('INBOX' = ANY(labels.provider_names) AND NOT 'SENT' = ANY(labels.provider_names))
@@ -116,7 +117,7 @@ pub(super) async fn thread_mail_projections_by_ids(
                 CASE WHEN NOT 'TRASH' = ANY(labels.names) THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
                 CASE WHEN NOT 'TRASH' = ANY(labels.names) THEN jsonb_build_object(
                     'id', m.id, 'subject', m.subject, 'snippet', m.snippet, 'is_draft', m.is_draft,
-                    'sender_email', c.email_address, 'sender_name', c.name, 'sender_photo_url', c.sfs_photo_url
+                    'sender_email', c.email_address, 'sender_name', COALESCE(m.from_name, c.name), 'sender_photo_url', c.sfs_photo_url
                 ) END AS preview
             FROM email_messages m
             LEFT JOIN email_contacts c ON c.id = m.from_contact_id
@@ -163,24 +164,27 @@ pub(super) async fn thread_mail_projections_by_ids(
             t.has_calendar_attachment,
             EXISTS (SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id = t.id AND ea.entity_type = 'email_thread'
-                  AND ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+                  AND (ea.source_id = $2
+                    OR ea.source_id IN (SELECT team_id::text FROM team_user WHERE user_id = $2)
+                    OR ea.source_id IN (SELECT cp.channel_id::text FROM comms_channel_participants cp
+                        WHERE cp.user_id = $2 AND cp.left_at IS NULL))
             ) AS "has_thread_share!",
             CASE WHEN am.id IS NOT NULL THEN jsonb_build_object(
                 'id', am.id, 'subject', am.subject, 'snippet', am.snippet, 'is_draft', am.is_draft,
-                'sender_email', ac.email_address, 'sender_name', ac.name, 'sender_photo_url', ac.sfs_photo_url
+                'sender_email', ac.email_address, 'sender_name', COALESCE(am.from_name, ac.name), 'sender_photo_url', ac.sfs_photo_url
             ) END AS "all_preview?: Json<EmailPreview>",
             CASE WHEN dm.id IS NOT NULL THEN jsonb_build_object(
                 'id', dm.id, 'subject', dm.subject, 'snippet', dm.snippet, 'is_draft', dm.is_draft,
-                'sender_email', dc.email_address, 'sender_name', dc.name, 'sender_photo_url', dc.sfs_photo_url
+                'sender_email', dc.email_address, 'sender_name', COALESCE(dm.from_name, dc.name), 'sender_photo_url', dc.sfs_photo_url
             ) END AS "draft_preview?: Json<EmailPreview>",
             CASE WHEN sm.id IS NOT NULL THEN jsonb_build_object(
                 'id', sm.id, 'subject', sm.subject, 'snippet', sm.snippet, 'is_draft', sm.is_draft,
-                'sender_email', sc.email_address, 'sender_name', sc.name, 'sender_photo_url', sc.sfs_photo_url
+                'sender_email', sc.email_address, 'sender_name', COALESCE(sm.from_name, sc.name), 'sender_photo_url', sc.sfs_photo_url
             ) END AS "sent_preview?: Json<EmailPreview>"
         FROM email_threads t
         LEFT JOIN draft_states ds ON ds.thread_id = t.id
         LEFT JOIN LATERAL (
-            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
+            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id, m.from_name
             FROM email_messages m WHERE m.thread_id = t.id AND NOT EXISTS (
                 SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
                 WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
@@ -188,7 +192,7 @@ pub(super) async fn thread_mail_projections_by_ids(
         ) am ON TRUE
         LEFT JOIN email_contacts ac ON ac.id = am.from_contact_id
         LEFT JOIN LATERAL (
-            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
+            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id, m.from_name
             FROM email_messages m WHERE m.thread_id = t.id AND m.is_draft AND NOT EXISTS (
                 SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
                 WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
@@ -196,7 +200,7 @@ pub(super) async fn thread_mail_projections_by_ids(
         ) dm ON TRUE
         LEFT JOIN email_contacts dc ON dc.id = dm.from_contact_id
         LEFT JOIN LATERAL (
-            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
+            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id, m.from_name
             FROM email_messages m WHERE m.thread_id = t.id AND m.is_sent AND NOT EXISTS (
                 SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
                 WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'

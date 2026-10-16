@@ -67,12 +67,45 @@ import {
   TAG_DEFINITION,
   TAGS,
 } from './fixtures/filter-corpus';
+import {
+  ALL_INBOXES,
+  emailMatchesSelection,
+  intersects,
+} from './fixtures/filter-oracle';
 import { USER_ID } from './fixtures/mail';
 
 const corpus = filterCorpus();
 const byKey = new Map(corpus.map((row) => [key(row), row]));
 const tagContext = createTagFacetContext(matrixTagSets);
-const ALL_INBOXES = '__all_inboxes__';
+// Audit every UI tab, including those whose membership is not a Soup predicate.
+// Keep separate-source tabs visible in the report rather than testing their
+// dormant placeholder query as if it implemented the actual view.
+const emailTabSources = {
+  important: 'soup',
+  noise: 'soup',
+  favorites: 'soup',
+  sent: 'soup',
+  scheduled: 'scheduled-message-service',
+  reminders: 'reminder-collection',
+  calendar: 'soup',
+  drafts: 'soup',
+  shared: 'soup',
+  archived: 'soup',
+  all: 'soup',
+} as const satisfies Record<
+  (typeof EMAIL_TABS)[number]['id'],
+  'soup' | 'scheduled-message-service' | 'reminder-collection'
+>;
+const taskTabSources = {
+  'my-tasks': 'soup',
+  'created-by-me': 'soup',
+  'team-tasks': 'soup',
+  projects: 'project-collection',
+} as const satisfies Record<
+  (typeof TASK_TABS)[number]['id'],
+  'soup' | 'project-collection'
+>;
+
 const ordered = (ids: string[]) => [...ids].sort();
 function key(row: FixtureRow) {
   return `${row.api.__typename}:${row.id}`;
@@ -80,9 +113,6 @@ function key(row: FixtureRow) {
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
-const intersects = (selected: string[], values: readonly string[]) =>
-  selected.length === 0 || selected.some((value) => values.includes(value));
-
 function subsets(values: readonly string[]): string[][] {
   return values.reduce<string[][]>(
     (sets, value) => [...sets, ...sets.map((set) => [...set, value])],
@@ -156,46 +186,31 @@ function translate(query: ReturnType<typeof buildEmailQuery>) {
     })
   );
 }
-function emailMatch(
-  row: FixtureRow,
-  tab: string,
-  selection: Record<string, string[]>
-): boolean {
-  if (row.kind !== 'email') return false;
-  if (
-    tab === 'shared'
-      ? !row.shared || row.owner === USER_ID
-      : !LINKS.includes(row.linkId!)
-  )
-    return false;
-  if (tab === 'important' && (!row.signal || !row.inbox)) return false;
-  if (tab === 'noise' && (row.signal || !row.inbox)) return false;
-  if (tab === 'drafts' && !row.draft) return false;
-  if (tab === 'sent' && !row.sent) return false;
-  if (tab === 'calendar' && !row.calendar) return false;
-  if (
-    (selection.inboxes[0] !== ALL_INBOXES &&
-      !selection.inboxes.includes(row.linkId!)) ||
-    !intersects(selection.tags, row.tags)
-  )
-    return false;
-  if (
-    (selection.read[0] === 'read' && !row.read) ||
-    (selection.read[0] === 'unread' && row.read)
-  )
-    return false;
-  if (
-    (selection.done[0] === 'done' && row.inbox) ||
-    (selection.done[0] === 'not-done' && !row.inbox)
-  )
-    return false;
-  return selection.calendar.length === 0 || row.calendar === true;
-}
-
 function* cases(scope?: Scope): Generator<Case> {
   const sharedCreators = scope === 'files-shared-creators';
   const view = sharedCreators ? 'files' : scope;
   // Coverage is exhaustive over the finite fixture domains, not pairwise.
+  assert(
+    EMAIL_TABS.map((tab) => tab.id).join() ===
+      Object.keys(emailTabSources).join(),
+    'Classify new Email tabs by their production data source'
+  );
+  assert(
+    TASK_TABS.map((tab) => tab.id).join() ===
+      Object.keys(taskTabSources).join(),
+    'Classify new Tasks tabs by their production data source'
+  );
+  assert(
+    EMAIL_FACETS.map((facet) => facet.id).join() ===
+      'read,done,attachments,calendar,tags',
+    'Add new Email facets to the matrix'
+  );
+  assert(
+    EMAIL_FILTER_GROUPS.find((group) => group.id === 'calendar')!
+      .options.map((option) => option.id)
+      .join() === 'has-calendar-invite',
+    'Add new calendar options to the matrix'
+  );
   assert(
     TASK_STATUS_OPTIONS.map((o) => o.id).join() === STATUS.join(),
     'Update status fixture domains for new UI options'
@@ -232,7 +247,9 @@ function* cases(scope?: Scope): Generator<Case> {
       'attachment-pdf,attachment-image,attachment-document',
     'Add new attachment types to matrix fixtures'
   );
-  for (const tab of !view || view === 'email' ? EMAIL_TABS : []) {
+  for (const tab of !view || view === 'email'
+    ? EMAIL_TABS.filter((tab) => emailTabSources[tab.id] === 'soup')
+    : []) {
     for (const selection of combinations({
       read: staticChoices('read'),
       done: staticChoices('done'),
@@ -257,7 +274,7 @@ function* cases(scope?: Scope): Generator<Case> {
       });
       const expected: FixtureRow[] = [];
       for (const row of corpus) {
-        if (emailMatch(row, tab.id, selection)) expected.push(row);
+        if (emailMatchesSelection(row, tab.id, selection)) expected.push(row);
       }
       yield {
         view: 'email',
@@ -269,7 +286,9 @@ function* cases(scope?: Scope): Generator<Case> {
       };
     }
   }
-  for (const tab of !view || view === 'tasks' ? TASK_TABS : []) {
+  for (const tab of !view || view === 'tasks'
+    ? TASK_TABS.filter((tab) => taskTabSources[tab.id] === 'soup')
+    : []) {
     for (const selection of combinations({
       status: subsets(STATUS),
       priority: subsets(PRIORITY),
@@ -401,13 +420,21 @@ let iterator: Generator<Case> | undefined;
 const records = new Map<string, MailItemFieldsFragment>();
 let revision: string | undefined;
 const expectedSelectionCounts = {
-  email: 20_160,
+  email: 25_920,
   tasks: 98_304,
-  files: 69_632,
+  files: 139_264,
   channels: 3,
 };
 const progress = {
   scope: 'all' as Scope | 'all',
+  outsidePredicateMatrix: {
+    email: Object.entries(emailTabSources).filter(
+      ([, source]) => source !== 'soup'
+    ),
+    tasks: Object.entries(taskTabSources).filter(
+      ([, source]) => source !== 'soup'
+    ),
+  },
   evaluated: 0,
   nativeElapsedMs: 0,
   nativeRequests: 0,

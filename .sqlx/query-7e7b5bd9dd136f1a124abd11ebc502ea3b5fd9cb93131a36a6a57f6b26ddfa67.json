@@ -1,0 +1,61 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH visible AS (\n                SELECT id AS link_id FROM email_links WHERE macro_id = $1\n                UNION\n                SELECT link_id FROM macro_user_links WHERE primary_macro_id = $1\n            ),\n            since AS (\n                SELECT position.link_id, position.seq\n                FROM unnest($2::uuid[], $3::bigint[]) AS position(link_id, seq)\n            )\n            SELECT\n                visible.link_id AS \"link_id!\",\n                COALESCE(counter.seq, 0) AS \"counter!\",\n                COALESCE(\n                    (\n                        SELECT min(retained.seq) - 1\n                        FROM calendar_change_log retained\n                        WHERE retained.link_id = visible.link_id\n                    ),\n                    counter.seq,\n                    0\n                ) AS \"floor!\",\n                change.seq AS \"seq?\",\n                change.kind AS \"kind?\",\n                change.event_id AS \"event_id?\",\n                change.calendar_id AS \"calendar_id?\"\n            FROM visible\n            LEFT JOIN calendar_change_counters counter ON counter.link_id = visible.link_id\n            LEFT JOIN since ON since.link_id = visible.link_id\n            LEFT JOIN LATERAL (\n                SELECT log.seq, log.kind, log.event_id, log.calendar_id\n                FROM calendar_change_log log\n                WHERE log.link_id = visible.link_id\n                  AND since.seq IS NOT NULL\n                  AND log.seq > since.seq\n                ORDER BY log.seq\n                LIMIT $4\n            ) change ON true\n            ORDER BY visible.link_id, change.seq\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "counter!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "floor!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "seq?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind?",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "event_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "calendar_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Int8Array",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "7e7b5bd9dd136f1a124abd11ebc502ea3b5fd9cb93131a36a6a57f6b26ddfa67"
+}

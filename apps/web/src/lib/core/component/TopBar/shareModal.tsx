@@ -4,17 +4,13 @@ import {
   useDocumentAccessLevelQuery,
   useDocumentMetadataQuery,
 } from '@queries/storage/document-metadata';
-import {
-  type DialogHandle,
-  type ManagedDialogInput,
-  openDialog,
-  useImperativeDialog,
-} from '@ui';
+import { type DialogHandle, type ManagedDialogInput, openDialog } from '@ui';
 import {
   type Accessor,
   type ComponentProps,
   createEffect,
   createSignal,
+  getOwner,
   Suspense,
 } from 'solid-js';
 import { getPermissions } from '../SharePermissions';
@@ -35,7 +31,9 @@ function SuspendedShareModal(props: ShareModalProps) {
 
 /** Opens the share modal outside of any component, e.g. from a list action. */
 export function openShareModal(props: ShareModalInput): DialogHandle {
-  return openDialog(SuspendedShareModal, props);
+  return openDialog(SuspendedShareModal, props, {
+    key: `share:${props.itemType}:${props.id}`,
+  });
 }
 
 /**
@@ -50,7 +48,7 @@ export function useShareModal(
   props: Accessor<ShareModalInput | undefined>,
   options: { onClose?: () => void } = {}
 ): () => void {
-  const dialog = useImperativeDialog(SuspendedShareModal);
+  const owner = getOwner();
   const [pending, setPending] = createSignal(false);
 
   const notifyClosed = async (handle: DialogHandle) => {
@@ -61,7 +59,12 @@ export function useShareModal(
 
   const openWith = (initial: ShareModalInput) => {
     setPending(false);
-    void notifyClosed(dialog.open(() => props() ?? initial));
+    void notifyClosed(
+      openDialog(SuspendedShareModal, () => props() ?? initial, {
+        owner,
+        key: `share:${initial.itemType}:${initial.id}`,
+      })
+    );
   };
 
   createEffect(() => {

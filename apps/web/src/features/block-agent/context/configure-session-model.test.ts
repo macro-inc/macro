@@ -51,6 +51,17 @@ const flush = async () => {
 };
 
 describe('combined model and effort selection', () => {
+  it('can confirm effort without changing the runtime model', async () => {
+    const f = fixture();
+    const result = configureSessionModel(f.session, undefined, selection);
+    await flush();
+    expect(f.issue.mock.calls).toEqual([
+      [{ type: 'setConfigOption', ...selection }],
+    ]);
+    f.confirm(1);
+    await result;
+  });
+
   it('waits for the model confirmation before issuing the opaque effort, then waits for effort confirmation', async () => {
     const f = fixture();
     let finished = false;
@@ -107,4 +118,29 @@ describe('combined model and effort selection', () => {
     f.confirm(1);
     await result;
   });
+});
+
+it('confirms speed independently of reasoning effort before the caller sends a prompt', async () => {
+  const f = fixture();
+  f.snapshot.metadata.configOptions.push({
+    ...f.config,
+    id: 'speed',
+    currentValue: 'standard',
+    options: [{ value: 'standard' }, { value: 'ultrafast' }],
+  });
+  let finished = false;
+  const result = configureSessionModel(f.session, undefined, {
+    configId: 'speed',
+    value: 'ultrafast',
+  }).then(() => {
+    finished = true;
+  });
+  await flush();
+  expect(f.issue.mock.calls).toEqual([
+    [{ type: 'setConfigOption', configId: 'speed', value: 'ultrafast' }],
+  ]);
+  expect(finished).toBe(false);
+  f.confirm(1);
+  await result;
+  expect(finished).toBe(true);
 });

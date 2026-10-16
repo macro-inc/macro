@@ -1,8 +1,13 @@
 //! Toolset inbound adapter for projects.
 
 mod create_project;
+mod duplicate_item;
+mod entity_receipts;
 mod move_to_project;
+mod move_to_trash;
 mod read_project;
+mod rename_item;
+mod update_sharing;
 
 #[cfg(test)]
 mod test;
@@ -12,34 +17,90 @@ use std::sync::Arc;
 use ai_toolset::AsyncToolCollection;
 use bot_id::BotId;
 use entity_access::domain::ports::EntityAccessService;
-use entity_mutation::MoveEntity;
+use entity_mutation::{
+    DuplicateEntity, MoveEntity, RenameEntity, TrashEntity, UpdateEntitySharePolicy,
+};
 
 use crate::domain::ports::ProjectService;
 
 pub use create_project::{CreateProject, CreateProjectResponse};
+pub use duplicate_item::{DuplicableEntityType, DuplicateItem, DuplicateItemResponse};
 pub use move_to_project::{MoveToProject, MoveToProjectResponse, MoveableEntityType};
+pub use move_to_trash::{MoveToTrash, MoveToTrashResponse, TrashableEntityType};
 pub use read_project::{ProjectItem, ProjectItemType, ReadProject, ReadProjectResponse};
+pub use rename_item::{RenameItem, RenameItemResponse, RenameableEntityType};
+pub use update_sharing::{
+    ShareAccess, ShareLinkScope, SharingChannel, SharingEntityType, UpdateSharing,
+    UpdateSharingResponse,
+};
+
+/// The entity capabilities project tools dispatch projects to.
+pub trait ProjectCapabilities:
+    ProjectService + MoveEntity + RenameEntity + TrashEntity + UpdateEntitySharePolicy
+{
+}
+
+impl<T> ProjectCapabilities for T where
+    T: ProjectService + MoveEntity + RenameEntity + TrashEntity + UpdateEntitySharePolicy
+{
+}
+
+/// The entity capabilities project tools dispatch documents to.
+pub trait DocumentCapabilities:
+    MoveEntity + TrashEntity + DuplicateEntity + UpdateEntitySharePolicy + Send + Sync + 'static
+{
+}
+
+impl<T> DocumentCapabilities for T where
+    T: MoveEntity + TrashEntity + DuplicateEntity + UpdateEntitySharePolicy + Send + Sync + 'static
+{
+}
+
+/// The entity capabilities project tools dispatch AI chats to.
+pub trait ChatCapabilities:
+    MoveEntity
+    + RenameEntity
+    + TrashEntity
+    + DuplicateEntity
+    + UpdateEntitySharePolicy
+    + Send
+    + Sync
+    + 'static
+{
+}
+
+impl<T> ChatCapabilities for T where
+    T: MoveEntity
+        + RenameEntity
+        + TrashEntity
+        + DuplicateEntity
+        + UpdateEntitySharePolicy
+        + Send
+        + Sync
+        + 'static
+{
+}
 
 /// Service context for project AI tools.
 ///
-/// The move services are the per-domain [`MoveEntity`] capability impls the
-/// `MoveToProject` tool dispatches to, mirroring the DSS entity-mutation
-/// router.
+/// The document and chat services are the per-domain entity-mutation
+/// capability impls the move, trash, duplicate, rename, and sharing tools
+/// dispatch to, mirroring the DSS entity-mutation router.
 pub struct ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>
 where
-    PSvc: ProjectService + MoveEntity,
+    PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
-    DSvc: MoveEntity + Send + Sync + 'static,
-    CSvc: MoveEntity + Send + Sync + 'static,
+    DSvc: DocumentCapabilities,
+    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     /// The project service instance.
     pub service: Arc<PSvc>,
     /// The entity access service — used to mint access receipts.
     pub entity_access_service: Arc<ESvc>,
-    /// Move capability for documents.
+    /// Move, trash, duplicate, and sharing capabilities for documents.
     pub document_move_service: Arc<DSvc>,
-    /// Move capability for AI chats.
+    /// Move, rename, trash, duplicate, and sharing capabilities for AI chats.
     pub chat_move_service: Arc<CSvc>,
     /// Move capability for email threads.
     pub email_move_service: Arc<EmSvc>,
@@ -50,10 +111,10 @@ where
 
 impl<PSvc, ESvc, DSvc, CSvc, EmSvc> Clone for ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>
 where
-    PSvc: ProjectService + MoveEntity,
+    PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
-    DSvc: MoveEntity + Send + Sync + 'static,
-    CSvc: MoveEntity + Send + Sync + 'static,
+    DSvc: DocumentCapabilities,
+    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
@@ -70,10 +131,10 @@ where
 
 impl<PSvc, ESvc, DSvc, CSvc, EmSvc> ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>
 where
-    PSvc: ProjectService + MoveEntity,
+    PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
-    DSvc: MoveEntity + Send + Sync + 'static,
-    CSvc: MoveEntity + Send + Sync + 'static,
+    DSvc: DocumentCapabilities,
+    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     /// Create a new project tool context.
@@ -105,14 +166,18 @@ where
 pub fn project_toolset<PSvc, ESvc, DSvc, CSvc, EmSvc>()
 -> AsyncToolCollection<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
 where
-    PSvc: ProjectService + MoveEntity,
+    PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
-    DSvc: MoveEntity + Send + Sync + 'static,
-    CSvc: MoveEntity + Send + Sync + 'static,
+    DSvc: DocumentCapabilities,
+    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     AsyncToolCollection::new()
         .add_tool::<CreateProject, ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>()
         .add_tool::<ReadProject, ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>()
         .add_tool::<MoveToProject, ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>()
+        .add_tool::<MoveToTrash, ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>()
+        .add_tool::<DuplicateItem, ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>()
+        .add_tool::<RenameItem, ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>()
+        .add_tool::<UpdateSharing, ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>()
 }

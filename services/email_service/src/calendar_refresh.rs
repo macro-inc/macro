@@ -2,6 +2,7 @@
 
 use calendar_events::domain::ports::CalendarRefreshNotifier;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::pubsub::util::cg_refresh_calendar;
@@ -24,15 +25,18 @@ impl ConnectionGatewayCalendarRefresh {
 }
 
 impl CalendarRefreshNotifier for ConnectionGatewayCalendarRefresh {
-    async fn calendar_changed(&self, owner_id: &str, email_link_id: Uuid) {
+    async fn calendar_changed(&self, owner_id: &str, email_link_id: Uuid, team_ooo_changed: bool) {
         // Spawned so the mutation response never waits on the gateway: the
         // client has no request timeout and the fan-out posts serially per
         // recipient, while the write this announces is already committed.
         let client = self.client.clone();
         let db = self.db.clone();
         let owner_id = owner_id.to_string();
-        tokio::spawn(async move {
-            cg_refresh_calendar(&client, &db, &owner_id, email_link_id).await;
-        });
+        tokio::spawn(
+            async move {
+                cg_refresh_calendar(&client, &db, &owner_id, email_link_id, team_ooo_changed).await;
+            }
+            .in_current_span(),
+        );
     }
 }

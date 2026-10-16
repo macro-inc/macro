@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  meetingPlaceLabel,
   newEventType,
   newSchedule,
   validateEvent,
@@ -30,5 +31,22 @@ describe('scheduling form validation', () => {
       'Duration'
     );
     expect(validateEvent(event, [])).toBeUndefined();
+  });
+  it('defaults a new link to a Macro call', () => {
+    const event = newEventType('schedule', ['host'], false);
+    expect(event.macroCall).toBe(true);
+    expect(event.googleMeet).toBe(false);
+    expect(meetingPlaceLabel(event)).toBe('Macro call');
+    expect(
+      meetingPlaceLabel({ ...event, macroCall: false, googleMeet: true })
+    ).toBe('Google Meet');
+    expect(
+      meetingPlaceLabel({
+        ...event,
+        macroCall: false,
+        googleMeet: false,
+        location: 'Studio 4',
+      })
+    ).toBe('Studio 4');
   });
 });

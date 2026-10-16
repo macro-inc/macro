@@ -3,7 +3,7 @@ import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { storageServiceClient } from '@service-storage/client';
 import type { StoredGithubPullRequest } from '@service-storage/generated/schemas/storedGithubPullRequest';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import type { PrRef } from '../util/prKey';
@@ -44,6 +44,7 @@ function prForeignEntityDataFromStored(
       description: pullRequest.description,
       checks: pullRequest.checks,
       comments: pullRequest.comments,
+      draft: pullRequest.draft,
       deletions: pullRequest.deletions,
       displayName: prDisplayName(prRef),
       foreignEntityId: pullRequest.id,
@@ -60,7 +61,7 @@ function prForeignEntityDataFromStored(
 }
 
 export function prForeignEntityQueryOptions(id: string) {
-  return {
+  return queryOptions({
     queryKey: prForeignEntityQueryKey(id),
     queryFn: async (): Promise<PrForeignEntityData> =>
       prForeignEntityDataFromStored(
@@ -70,7 +71,7 @@ export function prForeignEntityQueryOptions(id: string) {
       ),
     staleTime: PR_STALE_TIME,
     retry: 1,
-  };
+  });
 }
 
 export function usePrForeignEntityQuery(id: Accessor<string>) {

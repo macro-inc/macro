@@ -1,6 +1,7 @@
 import type { Span } from '@macro-inc/observability';
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
 import { logSyncService, type WalContext } from './logger';
+import { RecoverableDatabase } from './recoverable-database';
 import type { RawUpdate } from './shared';
 import type { LiveSyncSource } from './source';
 import { telemetrySpan } from './telemetry';
@@ -60,72 +61,91 @@ interface WALSchema<T> extends DBSchema {
   };
 }
 
-export class BrowserWALStore<T> implements WALStore<T> {
-  /** Resolves to the open IDB database, shared across all operations. */
-  private _db: Promise<IDBPDatabase<WALSchema<T>>>;
+function upgradeWAL<T>(db: IDBPDatabase<WALSchema<T>>): void {
+  const store = db.createObjectStore('updates', {
+    keyPath: 'id',
+    autoIncrement: true,
+  });
+  store.createIndex('scopeId', 'scopeId');
+}
 
-  private db(): Promise<IDBPDatabase<WALSchema<T>>> {
-    return this._db;
-  }
+export class BrowserWALStore<T> implements WALStore<T> {
+  private readonly database: RecoverableDatabase<WALSchema<T>>;
 
   constructor(
     dbName: string,
     private readonly scopeId: string
   ) {
-    this._db = BrowserWALStore.openDb<T>(dbName);
-  }
-
-  private static openDb<U>(
-    dbName: string
-  ): Promise<IDBPDatabase<WALSchema<U>>> {
-    return idbOpen<WALSchema<U>>(dbName, DB_VERSION, {
-      upgrade(db) {
-        const store = db.createObjectStore('updates', {
-          keyPath: 'id',
-          autoIncrement: true,
-        });
-        store.createIndex('scopeId', 'scopeId');
-      },
-    });
+    this.database = new RecoverableDatabase(dbName, DB_VERSION, upgradeWAL);
   }
 
   /** List every scopeId that currently has at least one entry. Uses a
    *  unique-key cursor on the `scopeId` index, so it doesn't load entries. */
   static async listScopeIds(dbName: string): Promise<string[]> {
-    const db = await BrowserWALStore.openDb<unknown>(dbName);
-    const scopeIds: string[] = [];
-    let cursor = await db
-      .transaction('updates')
-      .store.index('scopeId')
-      .openKeyCursor(null, 'nextunique');
-    while (cursor) {
-      scopeIds.push(cursor.key);
-      cursor = await cursor.continue();
+    const db = await idbOpen<WALSchema<unknown>>(dbName, DB_VERSION, {
+      upgrade: upgradeWAL,
+    });
+    try {
+      const scopeIds: string[] = [];
+      let cursor = await db
+        .transaction('updates')
+        .store.index('scopeId')
+        .openKeyCursor(null, 'nextunique');
+      while (cursor) {
+        scopeIds.push(cursor.key);
+        cursor = await cursor.continue();
+      }
+      return scopeIds;
+    } finally {
+      db.close();
     }
-    return scopeIds;
   }
 
   public async append(update: T): Promise<void> {
-    const db = await this.db();
-    await db.add('updates', {
+    const entry = {
       scopeId: this.scopeId,
       update,
       delivered: false,
       createdAt: Date.now(),
-    });
+    };
+    for (let attempt = 0; ; attempt++) {
+      const tx = await this.database.transaction('updates', 'readwrite');
+      // A rejected request alone does not prove rollback. Wait for the native
+      // transaction outcome before deciding whether replay is safe.
+      const aborted = new Promise<boolean>((resolve) => {
+        tx.addEventListener('abort', () => resolve(true), { once: true });
+        tx.addEventListener('complete', () => resolve(false), { once: true });
+      });
+      try {
+        // Wrap synchronous request errors too, so tx.done is always observed.
+        const write = async () => tx.store.add(entry);
+        await Promise.all([write(), tx.done]);
+        return;
+      } catch (error) {
+        const rolledBack = await aborted;
+        if (
+          attempt === 1 ||
+          !rolledBack ||
+          (tx.error !== null && tx.error.name !== 'AbortError') ||
+          !(error instanceof DOMException) ||
+          error.name !== 'AbortError'
+        ) {
+          throw tx.error ?? error;
+        }
+      }
+    }
   }
 
   public async getAll(): Promise<WALEntry<T>[]> {
-    const db = await this.db();
-    return db.getAllFromIndex('updates', 'scopeId', this.scopeId) as Promise<
+    const tx = await this.database.transaction('updates', 'readonly');
+    return tx.store.index('scopeId').getAll(this.scopeId) as Promise<
       WALEntry<T>[]
     >;
   }
 
   public async markDelivered(ids: number[]): Promise<void> {
     if (ids.length === 0) return;
-    const db = await this.db();
-    const tx = db.transaction('updates', 'readwrite');
+    const tx = await this.database.transaction('updates', 'readwrite');
     const store = tx.objectStore('updates');
     for (const id of ids) {
       const row = await store.get(id);
@@ -135,13 +155,8 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   public async pruneDelivered(): Promise<void> {
-    const db = await this.db();
-    const entries = await db.getAllFromIndex(
-      'updates',
-      'scopeId',
-      this.scopeId
-    );
-    const tx = db.transaction('updates', 'readwrite');
+    const entries = await this.getAll();
+    const tx = await this.database.transaction('updates', 'readwrite');
     const store = tx.objectStore('updates');
     for (const row of entries) {
       if (row.delivered && row.id !== undefined) {
@@ -152,14 +167,9 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   public async pruneExpired(ttlMs: number): Promise<number> {
-    const db = await this.db();
-    const entries = await db.getAllFromIndex(
-      'updates',
-      'scopeId',
-      this.scopeId
-    );
+    const entries = await this.getAll();
     const cutoff = Date.now() - ttlMs;
-    const tx = db.transaction('updates', 'readwrite');
+    const tx = await this.database.transaction('updates', 'readwrite');
     const store = tx.objectStore('updates');
     let deleted = 0;
     for (const row of entries) {
@@ -173,9 +183,7 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   public async count(): Promise<number> {
-    const db = await this.db();
-    return (await db.getAllFromIndex('updates', 'scopeId', this.scopeId))
-      .length;
+    return (await this.getAll()).length;
   }
 }
 
@@ -229,6 +237,7 @@ export class WALSyncer<T> {
   /** True if append was called while a flush was in progress. Causes flush
    *  to re-run after completing so those entries aren't stranded. */
   private hasNewPending = false;
+  private reportedFailures = new Map<'initialization' | 'flush', string>();
   public pendingFlush: Promise<void> = Promise.resolve();
   private cleanupFns: Array<() => void> = [];
   private deliveryOutage:
@@ -245,14 +254,14 @@ export class WALSyncer<T> {
    * Exists so that we can not "do stuff" until we have pruned expired entries
    * (like when snapshot loading occurs right after construction for example).
    */
-  private readonly readyPromise: Promise<void>;
+  private readyPromise?: Promise<void>;
 
   constructor(
     private readonly store: WALStore<T>,
     private readonly push: (items: T[]) => Promise<boolean>,
     private readonly label?: string
   ) {
-    this.readyPromise = this.setup();
+    void this.ready();
   }
 
   /* Right now just drops expired entries. */
@@ -269,7 +278,22 @@ export class WALSyncer<T> {
   }
 
   public ready(): Promise<void> {
+    if (!this.readyPromise) {
+      this.readyPromise = this.setup();
+      void this.observeSetup(this.readyPromise);
+    }
     return this.readyPromise;
+  }
+
+  private async observeSetup(setup: Promise<void>): Promise<void> {
+    try {
+      await setup;
+      this.reportedFailures.delete('initialization');
+    } catch (error) {
+      // Retry only on the next caller's request, sharing any in-flight setup.
+      if (this.readyPromise === setup) this.readyPromise = undefined;
+      this.reportFailure('initialization', error);
+    }
   }
 
   public async append(item: T): Promise<void> {
@@ -295,8 +319,41 @@ export class WALSyncer<T> {
         message: `WAL flush: triggered (isFlushing=${this.isFlushing})`,
       });
     if (this.isFlushing) return this.pendingFlush;
+    this.isFlushing = true;
     this.pendingFlush = this.doFlush();
+    // Observe the same promise we return: awaited callers still see failures,
+    // while timer/reconnect callers cannot create unhandled rejections.
+    void this.observeFlush(this.pendingFlush);
     return this.pendingFlush;
+  }
+
+  private async observeFlush(flush: Promise<void>): Promise<void> {
+    try {
+      await flush;
+      this.reportedFailures.delete('flush');
+    } catch (error) {
+      this.reportFailure('flush', error);
+    }
+  }
+
+  private reportFailure(
+    stage: 'initialization' | 'flush',
+    error: unknown
+  ): void {
+    const details = {
+      errName: error instanceof Error ? error.name : undefined,
+      errMessage: error instanceof Error ? error.message : String(error),
+      errStack: error instanceof Error ? error.stack : undefined,
+    };
+    const fingerprint = JSON.stringify(details);
+    if (this.reportedFailures.get(stage) === fingerprint) return;
+    this.reportedFailures.set(stage, fingerprint);
+    logSyncService({
+      documentId: this.label ?? 'unknown',
+      level: 'error',
+      context: { misc: { ...details, 'wal.stage': stage } },
+      message: `WAL ${stage} failed; retrying on the next trigger`,
+    });
   }
 
   public pruneDelivered(): Promise<void> {
@@ -327,13 +384,11 @@ export class WALSyncer<T> {
   }
 
   private async doFlush(): Promise<void> {
-    await this.ready();
-
-    this.isFlushing = true;
     this.hasNewPending = false;
     let succeeded = true;
 
     try {
+      await this.ready();
       const entries = await this.store.getAll();
       const undelivered = entries.filter((e) => !e.delivered);
       if (undelivered.length === 0) return; // nothing to do
@@ -373,6 +428,7 @@ export class WALSyncer<T> {
     }
 
     if (succeeded && this.hasNewPending) {
+      this.isFlushing = true;
       this.pendingFlush = this.doFlush();
       return this.pendingFlush;
     }

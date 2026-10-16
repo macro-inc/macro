@@ -12,6 +12,9 @@ vi.mock('@queries/soup/search', () => ({
   validateSearchServiceText: (text: string) => text.length >= 3,
 }));
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: vi.fn() }));
+vi.mock('@queries/channel/detail', () => ({
+  createChannelDetailQuery: vi.fn(),
+}));
 vi.mock('@app/features/soup/search/context', () => ({
   useOptionalSearchContext: () => undefined,
 }));
@@ -35,6 +38,7 @@ function setup(initialText = '', initialScope: ChannelsSourceScope = 'search') {
     const [text, setText] = createSignal(initialText);
     const [scope, setScope] = createSignal(initialScope);
     const [enabled, setEnabled] = createSignal(true);
+    const [extra, setExtra] = createSignal<ChannelEntity[]>([]);
     const [rows, setRows] = createSignal([localChannel, localDm]);
     const [remote, setRemote] = createStore<{
       data: ChannelEntity[];
@@ -111,9 +115,11 @@ function setup(initialText = '', initialScope: ChannelsSourceScope = 'search') {
       scope,
       enabled,
       source: () => local,
+      additionalLocalChannels: extra,
     });
     return {
       source,
+      setExtra,
       local,
       request,
       queryEnabled,
@@ -139,6 +145,26 @@ describe('shared channel search source', () => {
   afterEach(() => {
     dispose?.();
     vi.useRealTimers();
+  });
+
+  it('finds an agent persona outside the loaded page and keeps it out of channel-only results', async () => {
+    const s = setup('archivist', 'direct_messages');
+    s.setExtra([channel('agent-dm', 'Archivist', true)]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(ids(s.source)).toEqual(['agent-dm']);
+    s.setScope('channels');
+    expect(ids(s.source)).toEqual([]);
+  });
+
+  it('deduplicates a persona already in the visible page before local and remote matching', async () => {
+    const s = setup('alpha');
+    s.setExtra([{ ...localDm, name: 'Alpha persona' }]);
+    s.setRemote('data', [localDm]);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(ids(s.source).filter((id) => id === localDm.id)).toHaveLength(1);
+    expect(s.source.items().find((row) => row.id === localDm.id)?.name).toBe(
+      localDm.name
+    );
   });
 
   it('shows the ordinary list for an empty query and restores it on clear', async () => {

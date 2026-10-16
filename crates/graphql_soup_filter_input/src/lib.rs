@@ -25,7 +25,9 @@ use item_filters::{
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
+        crm_association::CrmAssociation,
         crm_company::CrmCompanyLiteral,
+        crm_contact::CrmContactLiteral,
         database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
@@ -37,7 +39,6 @@ use item_filters::{
         initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
-        reminder::ReminderLiteral,
     },
 };
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
@@ -360,6 +361,9 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 pub struct GraphqlEntityFilterAst {
     /// Restrict results to the authenticated viewer's favorites when true.
     favorites_only: Option<bool>,
+    /// Restrict every entity type to items associated with this CRM record.
+    /// Requires an expanded, timestamp-sorted query.
+    crm_association: Option<GraphqlCrmAssociation>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
     /// The document filter to apply.
@@ -378,12 +382,13 @@ pub struct GraphqlEntityFilterAst {
     call_filter: Option<GraphqlCallExpr>,
     /// The crm company filter to apply.
     crm_company_filter: Option<GraphqlCrmCompanyExpr>,
+    /// Opt-in CRM contact filters, applied before contacts are collapsed by
+    /// normalized email address.
+    crm_contact_filter: Option<GraphqlCrmContactExpr>,
     /// The foreign entity filter to apply.
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
     /// The GitHub pull request filter to apply, on top of the foreign entity filter.
     github_pull_request_filter: Option<GraphqlGithubPullRequestExpr>,
-    /// The reminder filter to apply.
-    reminder_filter: Option<GraphqlReminderExpr>,
     /// The agent session filter to apply.
     agent_session_filter: Option<GraphqlAgentSessionExpr>,
     /// The initiative filter to apply. Initiatives are opt-in.
@@ -408,6 +413,10 @@ impl GraphqlEntityFilterAst {
     fn into_ast_unchecked(self) -> InputResult<EntityFilterAst> {
         Ok(EntityFilterAst {
             favorites_only: self.favorites_only,
+            crm_association: self
+                .crm_association
+                .map(GraphqlCrmAssociation::into_ast)
+                .transpose()?,
             calendar_event_filter: optional_tree(self.calendar_event_filter)?,
             document_filter: optional_tree(self.document_filter)?,
             project_filter: optional_tree(self.project_filter)?,
@@ -421,9 +430,9 @@ impl GraphqlEntityFilterAst {
             channel_thread_filter: optional_tree(self.channel_thread_filter)?,
             call_filter: optional_tree(self.call_filter)?,
             crm_company_filter: optional_tree(self.crm_company_filter)?,
+            crm_contact_filter: optional_tree(self.crm_contact_filter)?,
             foreign_entity_filter: optional_tree(self.foreign_entity_filter)?,
             github_pull_request_filter: optional_tree(self.github_pull_request_filter)?,
-            reminder_filter: optional_tree(self.reminder_filter)?,
             agent_session_filter: optional_tree(self.agent_session_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
             initiative_filter: optional_tree(self.initiative_filter)?,
@@ -531,6 +540,13 @@ filter_expr_input!(
     "CallFilterExpr"
 );
 filter_expr_input!(
+    GraphqlCrmContactExpr,
+    GraphqlCrmContactBinaryExpr,
+    GraphqlCrmContactLiteral,
+    CrmContactLiteral,
+    "CrmContactFilterExpr"
+);
+filter_expr_input!(
     GraphqlCrmCompanyExpr,
     GraphqlCrmCompanyBinaryExpr,
     GraphqlCrmCompanyLiteral,
@@ -550,13 +566,6 @@ filter_expr_input!(
     GraphqlGithubPullRequestLiteral,
     GithubPullRequestLiteral,
     "GithubPullRequestFilterExpr"
-);
-filter_expr_input!(
-    GraphqlReminderExpr,
-    GraphqlReminderBinaryExpr,
-    GraphqlReminderLiteral,
-    ReminderLiteral,
-    "ReminderFilterExpr"
 );
 filter_expr_input!(
     GraphqlAgentSessionExpr,
@@ -681,6 +690,33 @@ enum GraphqlDocumentLiteral {
     Property(GraphqlFilterPropertiesLiteral),
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
+    /// Associated with a CRM record through its Companies or Contacts
+    /// property or a reference to the record. Requires an expanded,
+    /// timestamp-sorted query.
+    CrmAssociated(GraphqlCrmAssociation),
+    /// Case-insensitive substring of the document name.
+    NameContains(String),
+}
+
+/// GraphQL input naming the CRM record an association filter restricts to.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlCrmAssociation {
+    /// Items associated with the company or any of its contacts.
+    Company(ID),
+    /// Items associated with the contact.
+    Contact(ID),
+}
+
+impl GraphqlCrmAssociation {
+    /// Convert this value into the ast representation.
+    fn into_ast(self) -> InputResult<CrmAssociation> {
+        Ok(match self {
+            Self::Company(id) => CrmAssociation::Company(parse_id(id, "company")?),
+            Self::Contact(id) => CrmAssociation::Contact(parse_id(id, "contact")?),
+        })
+    }
 }
 
 impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
@@ -713,6 +749,8 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
             Self::EmailAttachmentParticipant(value) => {
                 DocumentLiteral::EmailAttachmentParticipant(value.into_ast()?)
             }
+            Self::CrmAssociated(record) => DocumentLiteral::CrmAssociated(record.into_ast()?),
+            Self::NameContains(name) => DocumentLiteral::NameContains(name),
         };
         Ok(Expr::val(literal))
     }
@@ -1142,47 +1180,6 @@ impl GraphqlCallStatus {
     }
 }
 
-/// GraphQL input representing the reminder literal.
-#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-enum GraphqlReminderLiteral {
-    /// Opt this query into reminders at all. Reminders are off by default, so
-    /// without this (or an `id`/`entity`) Soup omits them entirely — a filter
-    /// of only `completed` would otherwise silently match nothing. Must be
-    /// `true`; there is no literal for excluding reminders, that is the default.
-    Include(bool),
-    /// The id option.
-    Id(ID),
-    /// The referenced entity, as `"{type}:{id}"`.
-    Entity(String),
-    /// Whether the owner has marked the reminder done.
-    Completed(bool),
-    /// Whether the reminder has come due and is awaiting its owner.
-    Fired(bool),
-}
-
-impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
-    /// Convert this value into the expr representation.
-    fn into_expr(self) -> InputResult<Expr<ReminderLiteral>> {
-        let literal = match self {
-            // `include: false` is the default, not a literal — accepting it
-            // would opt the query in, the opposite of what was asked.
-            Self::Include(false) => {
-                return Err(InputError::new(
-                    "reminder `include` must be true; omit the filter to exclude reminders",
-                ));
-            }
-            Self::Include(true) => ReminderLiteral::Include,
-            Self::Id(id) => ReminderLiteral::Id(parse_id(id, "id")?),
-            Self::Entity(entity) => ReminderLiteral::Entity(entity),
-            Self::Completed(completed) => ReminderLiteral::Completed(completed),
-            Self::Fired(fired) => ReminderLiteral::Fired(fired),
-        };
-        Ok(Expr::val(literal))
-    }
-}
-
 /// GraphQL input representing the agent session literal.
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
@@ -1453,5 +1450,41 @@ impl GraphqlGithubPullRequestReviewStatus {
             Self::Approved => GithubPullRequestReviewStatus::Approved,
             Self::ChangesRequested => GithubPullRequestReviewStatus::ChangesRequested,
         }
+    }
+}
+
+/// GraphQL contact predicates over authorized team records.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlCrmContactLiteral {
+    /// Include visible contacts. Must be true.
+    Include(bool),
+    /// Exact team-owned contact ID.
+    Id(ID),
+    /// Owning company ID.
+    CompanyId(ID),
+    /// Owning team ID.
+    TeamId(ID),
+    /// Full email address, matched case-insensitively.
+    Email(String),
+    /// Literal name/email search text.
+    Search(String),
+    /// Effective hidden state, subject to the viewer's role on each team.
+    Hidden(bool),
+}
+
+impl IntoFilterExpr<CrmContactLiteral> for GraphqlCrmContactLiteral {
+    fn into_expr(self) -> InputResult<Expr<CrmContactLiteral>> {
+        Ok(Expr::val(match self {
+            Self::Include(true) => CrmContactLiteral::Include,
+            Self::Include(false) => return Err(InputError::new("contact include must be true")),
+            Self::Id(id) => CrmContactLiteral::Id(parse_id(id, "id")?),
+            Self::CompanyId(id) => CrmContactLiteral::CompanyId(parse_id(id, "companyId")?),
+            Self::TeamId(id) => CrmContactLiteral::TeamId(parse_id(id, "teamId")?),
+            Self::Email(email) => CrmContactLiteral::Email(email.trim().to_lowercase()),
+            Self::Search(query) => CrmContactLiteral::Search(query.trim().to_owned()),
+            Self::Hidden(hidden) => CrmContactLiteral::Hidden(hidden),
+        }))
     }
 }

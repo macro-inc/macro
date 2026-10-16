@@ -1,11 +1,9 @@
-import { BulkDeleteFailure } from '@app/features/entity/queries/bulk-delete-result';
 import type { EntityData } from '@entity';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   openBulkEditModal: vi.fn(),
-  bulkDeleteMutateAsync: vi.fn(async () => []),
   splitManager: undefined as object | undefined,
   removeHistory: vi.fn(),
   success: vi.fn(),
@@ -30,9 +28,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
 // The real barrel reaches the query clients, which open websockets under jsdom.
 vi.mock('@entity', () => ({
   isEmailEntity: (entity: EntityData) => entity.type === 'email',
-  createBulkDeleteDssItemsMutation: () => ({
-    mutateAsync: mocks.bulkDeleteMutateAsync,
-  }),
 }));
 vi.mock('../utils', () => ({
   restoreSoupFocus: mocks.restoreFocus,
@@ -75,34 +70,6 @@ beforeEach(() => {
 });
 
 describe('makeDeleteAction.execute', () => {
-  const reminder = entity('reminder', { ownerId: '' });
-
-  it('deletes a reminder without a confirmation step', async () => {
-    await execute([reminder]);
-
-    expect(mocks.bulkDeleteMutateAsync).toHaveBeenCalledWith([reminder]);
-    expect(mocks.openBulkEditModal).not.toHaveBeenCalled();
-  });
-
-  it('reports and removes history only for reminders that succeeded in a partial batch', async () => {
-    const deleted = entity('reminder', { id: 'deleted-reminder' });
-    const failed = entity('reminder', { id: 'failed-reminder' });
-    mocks.bulkDeleteMutateAsync.mockRejectedValueOnce(
-      new BulkDeleteFailure([deleted, failed], [true, false])
-    );
-    mocks.splitManager = {};
-    const onDeleted = vi.fn();
-    const action = makeDeleteAction({ userId: () => ME, onDeleted });
-    await action.execute([deleted, failed]);
-    await vi.waitFor(() => expect(onDeleted).toHaveBeenCalledWith([deleted]));
-    expect(mocks.success).not.toHaveBeenCalled();
-    const predicate = mocks.removeHistory.mock.calls[0][1] as (entry: {
-      id: string;
-    }) => boolean;
-    expect(predicate({ id: deleted.id })).toBe(true);
-    expect(predicate({ id: failed.id })).toBe(false);
-  });
-
   it('still confirms for everything else', async () => {
     await execute([entity('document')]);
 
@@ -122,19 +89,6 @@ describe('makeDeleteAction.execute', () => {
     ];
     onFinish();
     expect(onDeleted).toHaveBeenCalledWith([doc]);
-  });
-
-  // A mixed selection confirms only the entities the modal actually lists;
-  // the reminders in it are already gone by then.
-  it('splits a mixed selection, confirming only the non-reminders', async () => {
-    const doc = entity('document', { id: 'doc-1' });
-
-    await execute([reminder, doc]);
-
-    expect(mocks.bulkDeleteMutateAsync).toHaveBeenCalledWith([reminder]);
-    expect(mocks.openBulkEditModal).toHaveBeenCalledWith(
-      expect.objectContaining({ entities: [doc] })
-    );
   });
 
   // The confirmation modal deletes through the DSS mutation, which cannot
@@ -536,12 +490,5 @@ describe('makeDeleteAction.canExecute', () => {
     expect(canExecute(entity('channel'))).toBe(false);
     expect(canExecute(entity('channel_message'))).toBe(false);
     expect(canExecute(entity('channel_thread'))).toBe(false);
-  });
-
-  // Reminders carry no owner id, so the ownership check would reject them.
-  // The API only ever returns the caller's own, so there is nobody else's to
-  // delete.
-  it('allows deleting a reminder despite it carrying no owner id', () => {
-    expect(canExecute(entity('reminder', { ownerId: '' }))).toBe(true);
   });
 });

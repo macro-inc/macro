@@ -2,7 +2,6 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { isMobile } from '@core/mobile/isMobile';
 import {
   blockMetadataSignal,
   blockTextSignal,
@@ -23,7 +22,6 @@ import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
 import { type CodeBlockMode, CodeContent } from './CodeContent';
 import { CodeMarkdown } from './CodeMarkdown';
-import { CodeModeControl } from './CodeModeControl';
 import { TopBar } from './TopBar';
 
 const UploadedWorkbook = lazy(
@@ -62,10 +60,11 @@ export default function BlockCode() {
           <SidePanel.Layout defaultOpen={false} floating>
             <FileSidePanelSections />
             <div class="flex size-full min-w-0 flex-col items-end overflow-hidden">
-              <TopBar />
-              <Show when={isHtmlFile() && !isMobile()}>
-                <CodeModeControl mode={mode()} onModeChange={setMode} />
-              </Show>
+              <TopBar
+                isHtmlFile={isHtmlFile()}
+                mode={mode()}
+                onModeChange={setMode}
+              />
               <div class="relative min-h-0 min-w-0 w-full flex-1 overflow-hidden">
                 <Show
                   when={spreadsheet()}

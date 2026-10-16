@@ -19,12 +19,23 @@ export type TaskReferenceScope = {
   entityId: string;
 };
 
+/**
+ * Scopes a task list to tasks associated with a CRM record. The server
+ * resolves the membership: the record's Companies or Contacts property, a
+ * reference to the record, or (for a company) either for any of its contacts.
+ */
+export type TaskCrmScope = {
+  type: 'company' | 'contact';
+  id: string;
+};
+
 export type TaskDetailTarget = {
   id: string;
   fallbackName?: string;
 };
 
 export type TasksViewState = {
+  layout: 'list' | 'board' | 'gantt';
   tab: TasksTab;
   search: string;
   groupBy: TaskGroupBy;

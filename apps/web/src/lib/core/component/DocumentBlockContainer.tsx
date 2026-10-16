@@ -1,3 +1,5 @@
+import { DocumentAccessDenied } from '@app/features/access-requests/access-requests';
+import { NonDocumentBlockTypes, useBlockId, useBlockName } from '@core/block';
 import { BlockContainer } from '@core/component/BlockContainer';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
@@ -23,6 +25,8 @@ export function DocumentBlockContainer(
     loadingFallback?: JSX.Element;
   }>
 ) {
+  const documentId = useBlockId();
+  const isDocument = !NonDocumentBlockTypes.includes(useBlockName());
   const blockData = blockDataSignal.get;
   const blockError = blockErrorSignal.get;
   const setLoadRetry = blockLoadRetrySignal.set;
@@ -62,7 +66,12 @@ export function DocumentBlockContainer(
               {local.loadingFallback ?? <LoadingPanel />}
             </Match>
             <Match when={blockError() === 'UNAUTHORIZED'}>
-              <Unauthorized />
+              <Show when={isDocument} fallback={<Unauthorized />}>
+                <DocumentAccessDenied
+                  documentId={documentId}
+                  onAccessGranted={retryLoad}
+                />
+              </Show>
             </Match>
             <Match when={blockError() === 'MISSING'}>
               <NotFound />

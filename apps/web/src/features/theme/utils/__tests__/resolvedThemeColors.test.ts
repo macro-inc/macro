@@ -3,6 +3,39 @@ import { describe, expect, it } from 'vitest';
 import { resolveThemeColors } from '../resolvedThemeColors';
 
 describe('resolved theme colors', () => {
+  it('resolves first-paint semantic colors including theme overrides', () => {
+    const colors = resolveThemeColors(
+      {
+        'surface-0': 'oklch(0.2 0 0)',
+        'surface-1': 'oklch(0.3 0 0)',
+        page: 'var(--color-surface-1)',
+        panel: 'var(--color-surface-0)',
+        ink: 'oklch(0.9 0 0)',
+        'ink-muted': 'oklch(0.7 0 0)',
+        input: 'var(--color-panel)',
+      },
+      'dark'
+    );
+    expect(colors.page.l).toBeCloseTo(0.3);
+    expect(colors.panel.l).toBeCloseTo(0.2);
+    expect(colors.ink.l).toBeCloseTo(0.9);
+    expect(colors['ink-muted'].l).toBeCloseTo(0.7);
+    expect(colors.input).toEqual(colors.panel);
+  });
+
+  it.each(['light', 'dark'] as const)(
+    'uses the %s theme panel assignment for first paint',
+    (mode) => {
+      const colors = resolveThemeColors({}, mode);
+      expect(colors.panel.l).toBeCloseTo(mode === 'dark' ? 0.17 : 1);
+      if (mode === 'dark') {
+        expect(colors.input).toEqual(colors['surface-2']);
+      } else {
+        expect(colors.input.alpha).toBe(0);
+      }
+    }
+  );
+
   it('normalizes valid hue angles without clamping their color', () => {
     const colors = resolveThemeColors(
       {

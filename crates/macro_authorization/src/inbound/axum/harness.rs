@@ -6,7 +6,10 @@ use rootcause::Report;
 
 use crate::{HarnessAuthentication, MacroAuthorizationError, MacroAuthorizationService};
 
-use super::{MacroAuthorizationRejection, MacroAuthorizationState, rejection, status_rejection};
+use super::{
+    MacroAuthorizationRejection, MacroAuthorizationState, log_authorization_failure, rejection,
+    status_rejection,
+};
 
 /// Header carrying a harness authentication token.
 pub const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
@@ -75,6 +78,6 @@ fn harness_authorization_rejection(
             status_rejection(StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
         }
     };
-    tracing::error!(error=?error, "harness authorization failed");
+    log_authorization_failure(&error, "harness authorization failed");
     rejection
 }

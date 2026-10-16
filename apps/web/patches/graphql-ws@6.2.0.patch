@@ -1,0 +1,32 @@
+diff --git a/dist/client.cjs b/dist/client.cjs
+index 631b9dc694859136f0f32e869ec6156d8dbc0877..fb1433fb0170f6fb38a94a6ed8889040e2a2a57b 100644
+--- a/dist/client.cjs
++++ b/dist/client.cjs
+@@ -251,7 +251,10 @@ function createClient(options) {
+             );
+           }
+         };
+-      })()
++      })().catch((error) => {
++        connecting = void 0;
++        denied(error);
++      })
+     )));
+     if (socket.readyState === WebSocketImpl.CLOSING) await throwOnClose;
+     let release = () => {
+diff --git a/dist/client.js b/dist/client.js
+index 6cabb00d5d76261235626c41bf5bdd6204ae1da8..39e2d33f71f3027b878a251a4b5ac7bee6902bf5 100644
+--- a/dist/client.js
++++ b/dist/client.js
+@@ -250,7 +250,10 @@ function createClient(options) {
+             );
+           }
+         };
+-      })()
++      })().catch((error) => {
++        connecting = void 0;
++        denied(error);
++      })
+     )));
+     if (socket.readyState === WebSocketImpl.CLOSING) await throwOnClose;
+     let release = () => {

@@ -11,6 +11,8 @@ const clients = vi.hoisted(() => ({
   updateAgentSessionSharePermissions: vi.fn(),
   updateDatabaseSharePermissions: vi.fn(),
   updateInitiativeSharePermissions: vi.fn(),
+  updateFormSharePermissions: vi.fn(),
+  updatePipelineSharePermissions: vi.fn(),
 }));
 
 vi.mock('@service-storage/client', () => ({
@@ -34,6 +36,12 @@ vi.mock('@queries/storage/databases', () => ({
 }));
 vi.mock('@queries/initiative/share-permissions', () => ({
   updateInitiativeSharePermissions: clients.updateInitiativeSharePermissions,
+}));
+vi.mock('@queries/storage/forms', () => ({
+  updateFormSharePermissions: clients.updateFormSharePermissions,
+}));
+vi.mock('@app/features/crm/sharing-adapter', () => ({
+  updatePipelineSharePermissions: clients.updatePipelineSharePermissions,
 }));
 
 const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -132,6 +140,22 @@ describe('changeChannelAccess', () => {
       kind: 'initiative',
       calls: {
         updateInitiativeSharePermissions: [
+          ['item-1', { channelSharePermissions: [replace] }],
+        ],
+      },
+    },
+    {
+      kind: 'form',
+      calls: {
+        updateFormSharePermissions: [
+          [{ id: 'item-1', channelSharePermissions: [replace] }],
+        ],
+      },
+    },
+    {
+      kind: 'crm_pipeline',
+      calls: {
+        updatePipelineSharePermissions: [
           ['item-1', { channelSharePermissions: [replace] }],
         ],
       },

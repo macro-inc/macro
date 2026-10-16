@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM comms_channel_agents\n                WHERE channel_id = $1\n                  AND kind = 'direct'\n            ) AS \"direct!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "direct!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d0637875bf74b4073e8f0bb9ad0b91436fce3a06baeec244e008f6e5a4e254ac"
+}

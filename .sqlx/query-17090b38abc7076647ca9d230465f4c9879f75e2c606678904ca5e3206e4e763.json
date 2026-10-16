@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            time_zone, default_reminders, name, color, access_role, is_primary, is_deleted,\n            (snapshot_normalization_version < 1 OR EXISTS (\n                SELECT 1 FROM calendar_event_sources source\n                WHERE source.calendar_id = calendars.id\n                  AND source.provider_access_role IS DISTINCT FROM calendars.access_role\n            )) AS \"needs_verification!\"\n        FROM calendars\n        WHERE account_id = $1 AND provider_calendar_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "default_reminders",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "color",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "access_role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_primary",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_deleted",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "needs_verification!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "17090b38abc7076647ca9d230465f4c9879f75e2c606678904ca5e3206e4e763"
+}

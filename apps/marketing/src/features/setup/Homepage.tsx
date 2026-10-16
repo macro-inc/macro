@@ -1,5 +1,6 @@
 import { createSignal } from 'solid-js';
 import { HomepageScrollCue } from '../marketing/components/HomepageScrollCue';
+import { routePhoneToMobileSignup } from '../marketing/core/navigation';
 import { HomepageSections } from '../marketing/components/HomepageSections';
 import { HomepageUnification } from '../marketing/components/HomepageUnification';
 import { OnboardingShell } from './components/OnboardingShell';
@@ -34,7 +35,11 @@ export function Homepage() {
           onContinue={() => {}}
           action={
             <div class="homepage-hero-action mt-6 flex justify-center pb-5">
-              <a class="site-nav-start homepage-hero-cta" href="/app/signup">
+              <a
+                class="site-nav-start homepage-hero-cta"
+                href="/app/signup"
+                onClick={routePhoneToMobileSignup}
+              >
                 Get Started
               </a>
             </div>

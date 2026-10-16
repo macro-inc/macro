@@ -253,6 +253,11 @@ export type ChannelInviteMetadata = {
      */
     invitedBy: string;
     /**
+     * Whether this is a direct message rather than a channel invitation.
+     * Older notification payloads retain channel-invitation wording.
+     */
+    isDirectMessage?: boolean;
+    /**
      * Message content to show in the invite email, when the invite was triggered by a message.
      */
     messageContent?: string | null;
@@ -530,9 +535,61 @@ export type Entity = {
 };
 
 /**
+ * A person granted you access to a shared entity.
+ */
+export type EntityAccessGrantedMetadata = {
+    /**
+     * Requested or granted permission.
+     */
+    accessLevel: RequestedAccessLevel;
+    /**
+     * Shared item's name.
+     */
+    entityName: string;
+    /**
+     * Document file type for routing.
+     */
+    fileType?: string | null;
+    /**
+     * Stable request identity.
+     */
+    requestId: string;
+    /**
+     * Revision that generated this notification.
+     */
+    revision: number;
+};
+
+/**
+ * A person requested access to a shared entity.
+ */
+export type EntityAccessRequestedMetadata = {
+    /**
+     * Requested or granted permission.
+     */
+    accessLevel: RequestedAccessLevel;
+    /**
+     * Shared item's name.
+     */
+    entityName: string;
+    /**
+     * Document file type for routing.
+     */
+    fileType?: string | null;
+    /**
+     * Stable request identity.
+     */
+    requestId: string;
+    /**
+     * Revision that generated this notification.
+     */
+    revision: number;
+};
+
+/**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
 
 /**
  * A plain old json error response for use with axum.
@@ -996,6 +1053,18 @@ export type NotifEvent = {
     tag: 'commented_on_document';
 } | {
     /**
+     * Someone requested more access to a shared entity.
+     */
+    content: EntityAccessRequestedMetadata;
+    tag: 'entity_access_requested';
+} | {
+    /**
+     * An owner granted requested access.
+     */
+    content: EntityAccessGrantedMetadata;
+    tag: 'entity_access_granted';
+} | {
+    /**
      * Someone commented, replied, or mentioned the recipient on a project.
      */
     content: InitiativeDiscussionMetadata;
@@ -1305,6 +1374,11 @@ export type RepliedToDocumentCommentThreadMetadata = {
      */
     threadId: CommentRef;
 };
+
+/**
+ * Permission level used by an access request, excluding ownership.
+ */
+export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
 
 /**
  * Metadata for when a user is assigned to a task

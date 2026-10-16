@@ -2,6 +2,7 @@
 
 use calendar_events::domain::ports::CalendarRefreshNotifier;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::pubsub_util::cg_refresh_calendar;
@@ -14,25 +15,60 @@ use crate::pubsub_util::cg_refresh_calendar;
 pub struct ConnectionGatewayCalendarRefresh {
     client: ConnectionGatewayClient,
     db: sqlx::PgPool,
+    team_sharing_enabled: bool,
 }
 
 impl ConnectionGatewayCalendarRefresh {
     /// Construct the adapter.
-    pub fn new(client: ConnectionGatewayClient, db: sqlx::PgPool) -> Self {
-        Self { client, db }
+    pub fn new(
+        client: ConnectionGatewayClient,
+        db: sqlx::PgPool,
+        team_sharing_enabled: bool,
+    ) -> Self {
+        Self {
+            client,
+            db,
+            team_sharing_enabled,
+        }
     }
 }
 
 impl CalendarRefreshNotifier for ConnectionGatewayCalendarRefresh {
-    async fn calendar_changed(&self, owner_id: &str, email_link_id: Uuid) {
+    async fn calendar_changed(&self, owner_id: &str, email_link_id: Uuid, team_ooo_changed: bool) {
         // Spawned so the mutation response never waits on the gateway: the
         // client has no request timeout and the fan-out posts serially per
         // recipient, while the write this announces is already committed.
         let client = self.client.clone();
         let db = self.db.clone();
         let owner_id = owner_id.to_string();
-        tokio::spawn(async move {
-            cg_refresh_calendar(&client, &db, &owner_id, email_link_id).await;
-        });
+        let team_sharing_enabled = self.team_sharing_enabled;
+        tokio::spawn(
+            async move {
+                cg_refresh_calendar(
+                    &client,
+                    &db,
+                    &owner_id,
+                    email_link_id,
+                    team_sharing_enabled,
+                    team_ooo_changed,
+                )
+                .await;
+            }
+            .in_current_span(),
+        );
+    }
+}
+
+impl calendar_events::domain::team::CalendarTeamNotifier for ConnectionGatewayCalendarRefresh {
+    async fn sharing_changed(&self, user_id: &str) {
+        let client = self.client.clone();
+        let db = self.db.clone();
+        let user_id = user_id.to_owned();
+        tokio::spawn(
+            async move {
+                crate::pubsub_util::cg_refresh_team_calendar(&client, &db, &[user_id], true).await;
+            }
+            .in_current_span(),
+        );
     }
 }

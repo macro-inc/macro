@@ -56,6 +56,10 @@ pub struct CallRecordArchivedMetadata {
     pub duration_ms: Option<i64>,
     /// Number of distinct participants over the call's lifetime.
     pub participant_count: usize,
+    /// Macro accounts that joined the call over its lifetime. Empty in events
+    /// published before this field existed.
+    #[serde(default)]
+    pub participants: Vec<MacroUserIdStr<'static>>,
     /// Whether the call has an associated recording.
     pub has_recording: bool,
     /// Reason the call was archived.

@@ -4,11 +4,15 @@ use crate::domain::{
     ports::{Calendars, Directory},
 };
 use calendar_events::domain::{
+    meeting_links::create_event_with_macro_call,
     models::{
         CalendarAttendeeInput, CalendarEventDraft, CalendarSyncStatus, ConferenceChange, EventTime,
         EventTransparency, OccurrenceRange,
     },
-    ports::{CalendarCreationRecoveryService, CalendarDeletionScope, CalendarOccurrenceService},
+    ports::{
+        CalendarCreationRecoveryService, CalendarDeletionScope, CalendarOccurrenceService,
+        MeetingLinkProvider, UnavailableMeetingLinks,
+    },
 };
 use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
@@ -16,23 +20,97 @@ use teams::domain::{model::TeamRole, team_repo::TeamRepository};
 use uuid::Uuid;
 
 /// Adapter composed from existing domain services, never their outbound implementations.
-pub struct MacroCalendars<O, M> {
+pub struct MacroCalendars<O, M, L = UnavailableMeetingLinks> {
     occurrences: Arc<O>,
     mutations: Arc<M>,
+    meeting_links: Arc<L>,
     management_origin: Option<String>,
 }
-impl<O, M> MacroCalendars<O, M> {
-    /// Wire the host's calendar domain capabilities.
+impl<O, M> MacroCalendars<O, M, UnavailableMeetingLinks> {
+    /// Wire the host's calendar domain capabilities without Macro call creation.
     pub fn new(occurrences: Arc<O>, mutations: Arc<M>, management_origin: Option<String>) -> Self {
+        Self::with_meeting_links(
+            occurrences,
+            mutations,
+            Arc::new(UnavailableMeetingLinks),
+            management_origin,
+        )
+    }
+}
+impl<O, M, L> MacroCalendars<O, M, L> {
+    /// Wire calendar capabilities and the meeting service that mints Macro calls.
+    pub fn with_meeting_links(
+        occurrences: Arc<O>,
+        mutations: Arc<M>,
+        meeting_links: Arc<L>,
+        management_origin: Option<String>,
+    ) -> Self {
         Self {
             occurrences,
             mutations,
+            meeting_links,
             management_origin,
         }
     }
 }
-impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
-    for MacroCalendars<O, M>
+impl<O, M, L> MacroCalendars<O, M, L>
+where
+    O: CalendarOccurrenceService,
+    M: CalendarCreationRecoveryService,
+    L: MeetingLinkProvider,
+{
+    async fn create_macro_call(
+        &self,
+        organizer: &str,
+        calendar_id: Option<Uuid>,
+        draft: CalendarEventDraft,
+    ) -> Result<(Uuid, String), Error> {
+        let created = create_event_with_macro_call(
+            &*self.mutations,
+            &*self.meeting_links,
+            organizer,
+            None,
+            calendar_id,
+            draft,
+        )
+        .await
+        .map_err(|error| {
+            tracing::error!(error = ?error, "scheduling macro call creation failed");
+            Error::CalendarUnavailable
+        })?;
+        let minted = created.meeting_link.url;
+        if carries_url(
+            created.event.location.as_deref(),
+            created.event.description.as_deref(),
+            &minted,
+        ) {
+            return Ok((created.event.id, minted));
+        }
+        // An idempotent replay returned the event written earlier. Drop the
+        // meeting minted for this attempt and keep the link already on it.
+        if let Err(error) = self
+            .meeting_links
+            .cancel_meeting_link(organizer, created.meeting_link.id)
+            .await
+        {
+            tracing::warn!(
+                error = ?error,
+                meeting_id = %created.meeting_link.id,
+                "failed to cancel a macro call minted for an existing booking event"
+            );
+        }
+        let url = first_macro_call_url(
+            created.event.location.as_deref(),
+            created.event.description.as_deref(),
+        )
+        .or(created.event.conference_url)
+        .or(created.event.location)
+        .unwrap_or_default();
+        Ok((created.event.id, url))
+    }
+}
+impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: MeetingLinkProvider>
+    Calendars for MacroCalendars<O, M, L>
 {
     async fn creation_calendar(&self, host: &str) -> Result<Uuid, Error> {
         self.mutations
@@ -86,10 +164,10 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
             if rows.len() > 2000 {
                 return Err(Error::CalendarUnavailable);
             }
-            events.extend(
-                rows.into_iter()
-                    .map(|(event, occurrence)| (host.clone(), event, occurrence)),
-            );
+            events.extend(rows.into_iter().map(|listing| {
+                let (event, occurrence) = listing.into_occurrence_event();
+                (host.clone(), event, occurrence)
+            }));
         }
         let excluded_uid = events
             .iter()
@@ -111,6 +189,12 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
                 || event.transparency == EventTransparency::Transparent
                 || declined
             {
+                continue;
+            }
+            if !occurrence.time.is_valid() {
+                return Err(Error::CalendarUnavailable);
+            }
+            if !occurrence.time.has_positive_duration() {
                 continue;
             }
             let (start, end) = match occurrence.time {
@@ -205,9 +289,19 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
             visibility: None,
             transparency: None,
             reminders: None,
-            conference: event.google_meet.then_some(ConferenceChange::GoogleMeet),
+            conference: (!event.macro_call && event.google_meet)
+                .then_some(ConferenceChange::GoogleMeet),
             out_of_office: None,
         };
+        if event.macro_call {
+            if event.google_meet {
+                tracing::error!("booking link requested both a Macro call and Google Meet");
+                return Err(Error::CalendarUnavailable);
+            }
+            return self
+                .create_macro_call(organizer, record.calendar_id, draft)
+                .await;
+        }
         let result = self
             .mutations
             .create_event(organizer, None, record.calendar_id, draft)
@@ -295,6 +389,14 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
 /// Membership adapter over the owning teams repository port.
 pub struct MacroDirectory<T>(pub T);
 impl<T: TeamRepository> Directory for MacroDirectory<T> {
+    async fn user_teams(&self, user: &str) -> Result<Vec<Uuid>, Error> {
+        let user = user.try_into().map_err(|_| Error::Forbidden)?;
+        self.0
+            .get_user_teams(&user)
+            .await
+            .map(|teams| teams.into_iter().map(|team| *team.id()).collect())
+            .map_err(|_| Error::Unavailable)
+    }
     async fn members(&self, team: Uuid) -> Result<Vec<TeamMember>, Error> {
         Ok(self
             .0
@@ -309,3 +411,56 @@ impl<T: TeamRepository> Directory for MacroDirectory<T> {
             .collect())
     }
 }
+
+impl<O, M, L> crate::domain::ports::AttachmentReadiness for MacroCalendars<O, M, L>
+where
+    O: CalendarOccurrenceService,
+    M: calendar_events::domain::ports::CalendarMutationService,
+    L: Send + Sync + 'static,
+{
+    async fn ready(&self, host: &str) -> Result<(), Error> {
+        let calendars = self
+            .mutations
+            .list_visible_calendars(host)
+            .await
+            .map_err(|_| Error::CalendarUnavailable)?;
+        if calendars.iter().any(|c| c.sync_error.is_some())
+            || !calendars.iter().any(|c| c.is_primary && c.is_writable)
+            || self
+                .occurrences
+                .sync_status(host)
+                .await
+                .map_err(|_| Error::CalendarUnavailable)?
+                != CalendarSyncStatus::Ready
+        {
+            return Err(Error::CalendarUnavailable);
+        }
+        Ok(())
+    }
+}
+
+fn carries_url(location: Option<&str>, description: Option<&str>, url: &str) -> bool {
+    location.is_some_and(|value| value.contains(url))
+        || description.is_some_and(|value| value.contains(url))
+}
+
+/// The join link already written into an event, including inside the
+/// generated HTML paragraph.
+fn first_macro_call_url(location: Option<&str>, description: Option<&str>) -> Option<String> {
+    for text in [location, description].into_iter().flatten() {
+        for token in text.split(|character: char| {
+            character.is_whitespace() || matches!(character, '"' | '\'' | '<' | '>' | '&')
+        }) {
+            let token = token.trim_end_matches(|character: char| {
+                matches!(character, '.' | ',' | ')' | ']' | ';')
+            });
+            if token.starts_with("http") && token.contains("/meet/join/") {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod test;

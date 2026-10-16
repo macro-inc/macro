@@ -1,12 +1,19 @@
+import { toIconTabItems } from '@channel/Channel/channel-tab-icons';
+import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
+import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
+import type { TabItem } from '@core/component/Tabs';
+import { TabsInset } from '@core/component/TabsInset';
 import { useChannelName } from '@core/context/channels';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import { Show } from 'solid-js';
 
 type TopProps = {
   channelType: ChannelType;
@@ -17,6 +24,9 @@ type TopProps = {
 
 type ChannelTopLeftProps = TopProps & {
   lockRename?: boolean;
+  tabs?: readonly TabItem[];
+  activeTab?: ChannelTabId;
+  onTabChange?: (value: ChannelTabId) => void;
 };
 
 export function ChannelTopLeft(props: ChannelTopLeftProps) {
@@ -26,6 +36,11 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
     blockId,
     props.channelName ?? 'New Channel'
   );
+
+  const iconTabList = () =>
+    toIconTabItems(props.tabs ?? [], 'size-4 touch:size-6');
+
+  const hasTabsMenu = () => !!(props.tabs?.length && props.onTabChange);
 
   return (
     <SplitHeaderLeft>
@@ -48,6 +63,21 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
         </div>
       </HeaderIsland>
+      <Show when={!isTouchDevice() && hasTabsMenu() && props.activeTab}>
+        <CollapsibleHeaderItem
+          id="channel-tabs"
+          priority={1}
+          containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
+        >
+          {(isCollapsed) => (
+            <TabsInset
+              list={isCollapsed() ? iconTabList() : [...(props.tabs ?? [])]}
+              value={props.activeTab}
+              onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
+            />
+          )}
+        </CollapsibleHeaderItem>
+      </Show>
     </SplitHeaderLeft>
   );
 }

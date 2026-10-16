@@ -29,7 +29,7 @@ inbound = [
   "ports",
 ]
 outbound = ["dep:sqlx", "dep:macro_uuid", "dep:entity_registry", "dep:model_owner", "dep:rootcause", "ports"]
-ports = ["dep:entity_access", "entity_access/ports", "dep:tokio", "messages/ports"]
+ports = ["dep:entity_access", "entity_access/ports", "dep:rootcause", "dep:tokio", "messages/ports"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]

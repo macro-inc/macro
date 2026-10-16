@@ -7,7 +7,7 @@ use worker::{Date, Method, Request, Response, Result, WebSocket};
 
 use super::{DocumentSyncSession, WebSocketMetadata, Wsm, response, status_codes};
 use crate::{
-    auth::{TokenFrom, is_internal, surface_access},
+    auth::{TokenFrom, WriteAccess, is_internal, surface_access},
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     state::DocumentState,
@@ -53,9 +53,11 @@ impl WebSocketMetadata {
             }
     }
 
-    pub(super) fn can_edit(&self) -> bool {
-        self.grant_active(self.session_kind, now_seconds())
-            && self.access_level.can_edit_for(self.session_kind)
+    pub(super) fn write_access(&self) -> WriteAccess {
+        if !self.grant_active(self.session_kind, now_seconds()) {
+            return WriteAccess::None;
+        }
+        self.access_level.write_access_for(self.session_kind)
     }
 }
 

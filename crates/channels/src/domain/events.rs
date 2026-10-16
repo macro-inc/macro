@@ -28,6 +28,8 @@ pub struct ReactionNotificationContext {
 pub enum ChannelEvent {
     /// A channel picture was set, replaced, or removed.
     PictureChanged {
+        /// User who changed the picture.
+        actor: MacroUserIdStr<'static>,
         /// Channel whose picture changed.
         channel_id: Uuid,
         /// Active participants whose sessions should refresh the picture.

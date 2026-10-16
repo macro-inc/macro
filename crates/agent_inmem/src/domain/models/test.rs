@@ -4,12 +4,20 @@ use chat::domain::models::CHAT_MODELS;
 #[test]
 fn advertised_models_keep_chat_then_append_routed() {
     let models = advertised_models();
+    assert_eq!(
+        models
+            .iter()
+            .filter(|model| **model == "google/gemini-3.8-flash")
+            .count(),
+        1
+    );
     assert_eq!(&models[..CHAT_MODELS.len()], CHAT_MODELS);
     assert_eq!(
         &models[CHAT_MODELS.len()..],
         ROUTED_MODELS
             .iter()
             .map(|(model, _)| *model)
+            .filter(|model| !CHAT_MODELS.contains(model))
             .collect::<Vec<_>>()
             .as_slice()
     );
@@ -48,6 +56,28 @@ fn routed_models_use_known_providers() {
         assert!(
             matches!(provider, "cerebras" | "fireworks" | "google"),
             "unregistered provider in {model}"
+        );
+    }
+}
+
+#[test]
+fn every_advertised_model_has_an_explicit_image_capability() {
+    for model in advertised_models() {
+        assert!(
+            super::supports_images(model).is_some(),
+            "missing capability: {model}"
+        );
+    }
+}
+
+/// Summaries start at a share of the model's window, so a model without one
+/// would be summarized against a guess.
+#[test]
+fn every_advertised_model_has_a_context_window() {
+    for model in advertised_models() {
+        assert!(
+            super::context_window(model).is_some(),
+            "missing context window: {model}"
         );
     }
 }

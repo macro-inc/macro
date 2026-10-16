@@ -85,6 +85,10 @@ describe('independent financial workbook regression', () => {
       expect(values.B23.display).toBe('36:00');
       expect(sheets[1].cells.B24.value).toBe('60');
       expect(values.B24.display).toBe('02/29/1900');
+      expect(sheets[1].cells.B18).toMatchObject({
+        horizontalAlign: 'right',
+        indent: 1,
+      });
       // A value edit and formatting edit must survive export without destroying import metadata.
       writeSpreadsheetCells(
         reopened,
@@ -114,6 +118,10 @@ describe('independent financial workbook regression', () => {
       expect(dcf.getCell('B18').border.bottom).toMatchObject({
         style: 'double',
         color: { argb: 'FF123456' },
+      });
+      expect(dcf.getCell('B18').alignment).toMatchObject({
+        horizontal: 'right',
+        indent: 1,
       });
       expect(dcf.getCell('A1').isMerged).toBe(true);
       expect(dcf.getRow(1).height).toBe(32);

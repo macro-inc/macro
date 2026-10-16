@@ -16,6 +16,7 @@ import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
@@ -116,6 +117,10 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     requestedInbox()?.needs_reauth ||
     requestedInbox()?.needs_calendar_permission;
   const contacts = useContacts();
+  // The tool mints the Macro call when it executes, so the composer offers the
+  // choice under the same flag as the calendar's own event composer.
+  const quickCalls = useQuickCallsFlag();
+  const macroCallsEnabled = () => quickCalls().enabled && !quickCalls().loading;
   const [operation, setOperation] = createSignal<'create' | 'reject'>();
   let finalized = false;
 
@@ -270,7 +275,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
           </Show>
           <EventForm
             controller={controller}
-            macroCallsEnabled={false}
+            macroCallsEnabled={macroCallsEnabled()}
             class="min-w-0"
             disabled={
               finalized || !props.sink.canAct() || operation() === 'reject'

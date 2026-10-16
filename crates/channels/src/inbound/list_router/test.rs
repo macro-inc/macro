@@ -92,6 +92,13 @@ impl ChannelListService for FakeChannelListService {
         Ok(Vec::new())
     }
 
+    async fn get_reference_sources(
+        &self,
+        _targets: &[crate::domain::models::ReferenceTarget],
+    ) -> Result<Vec<crate::domain::models::ReferenceSource>, Report> {
+        Ok(Vec::new())
+    }
+
     async fn get_names(
         &self,
         _names: HashSet<MacroUserIdStr<'_>>,
@@ -200,6 +207,7 @@ async fn standard_internal_credentials_pass_acting_user_to_channel_list_service(
 fn list_channel(id: Uuid, updated_at_seconds: i64) -> ChannelWithLatest {
     let timestamp = Utc.timestamp_opt(updated_at_seconds, 0).unwrap();
     ChannelWithLatest {
+        agent_dm: None,
         channel: ChannelWithParticipants {
             channel: ChannelListItem {
                 id,

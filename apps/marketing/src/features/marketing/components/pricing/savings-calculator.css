@@ -19,7 +19,7 @@
 .pricing-savings-price span { margin-left: 2px; color: var(--ps-ink-muted); font-size: 12px; font-weight: 400; }
 .pricing-savings-summary { position: sticky; top: 96px; align-self: start; display: flex; flex-direction: column; gap: 28px; padding: 28px; border: 1px solid var(--ps-edge-muted); border-radius: 20px; background: var(--ps-panel); }
 .pricing-savings-result { display: flex; flex-direction: column; gap: 6px; margin: 0; color: var(--ps-ink-muted); font: 400 14px/1.6 Inter, body; text-wrap: balance; }
-.pricing-savings-result strong { margin: 4px 0 2px; overflow-wrap: anywhere; color: var(--ps-ink); font: 315 52px/1.05 display; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.pricing-savings-result strong { margin: 4px 0 2px; overflow-wrap: anywhere; color: var(--ps-ink); font: calc(315 + var(--cream-slab-weight-increase, 0)) 52px/1.05 display; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
 .pricing-savings-seats { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 24px; border-bottom: 1px solid var(--ps-edge-muted); color: var(--ps-ink-muted); font: 400 14px/1.5 Inter, body; }
 .pricing-savings-stepper { display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--ps-edge-muted); border-radius: 999px; }
 .pricing-savings-stepper button { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--ps-ink-muted); }

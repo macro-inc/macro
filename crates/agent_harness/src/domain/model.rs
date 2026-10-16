@@ -16,8 +16,13 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
+use trigger_context::TriggerContext;
 mod session_origin;
 pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
+mod coding_preferences;
+pub use coding_preferences::{
+    CREATE_TASKS_INSTRUCTIONS, OPEN_PULL_REQUESTS_INSTRUCTIONS, with_coding_preferences,
+};
 
 /// How a channel message's attached files are named to an agent.
 ///
@@ -195,6 +200,14 @@ impl AgentKind {
         !matches!(self, Self::InMemory | Self::ClaudeCloud)
     }
 
+    /// Whether this kind's runtime starts on the session row's model by itself.
+    /// The others are sent a model chosen at creation over ACP, before their
+    /// first prompt.
+    #[must_use]
+    pub const fn starts_on_session_model(self) -> bool {
+        matches!(self, Self::InMemory | Self::Cursor | Self::ClaudeCloud)
+    }
+
     /// Whether a deployment provisions this kind's runtimes itself.
     ///
     /// Membership is about who provisions, not whether *this* deployment is
@@ -203,6 +216,16 @@ impl AgentKind {
     #[must_use]
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
+    }
+
+    /// Whether this kind's agent is handed the session's whole egress server
+    /// list ([`SandboxEgress::acp_servers`]) when it attaches - the list a
+    /// live session is refreshed to when the owner's connections change.
+    /// Codex is handed none, and an external runtime only the internal and
+    /// preview servers.
+    #[must_use]
+    pub fn takes_egress_mcp_servers(self) -> bool {
+        !matches!(self, Self::CodexCloud | Self::External)
     }
 
     /// Whether this kind's sessions work in a repository.
@@ -266,6 +289,7 @@ pub struct ReplyPersona {
 }
 
 /// Stored facts used by the domain to choose a session permission policy.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PermissionPolicyConfig {
     /// A fixed system bot with no editable persona configuration.
     Fixed(AgentKind),
@@ -334,8 +358,115 @@ pub(crate) use agent_egress::domain::model::is_macro_staff;
 
 /// Where a prompt came from, when it came from somewhere the session should
 /// answer back into.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplyPlacement {
+    /// Answer inside the source discussion, the behavior of existing mentions.
+    #[default]
+    Thread,
+    /// Answer in the channel's main timeline, as an agent conversing there does.
+    Timeline,
+}
+
+impl ReplyPlacement {
+    /// Whether this is the default placement used by existing serialized origins.
+    pub fn is_thread(&self) -> bool {
+        *self == Self::Thread
+    }
+
+    /// Convert a source root to the message API's optional reply target.
+    pub fn thread_id(self, root: Uuid) -> Option<Uuid> {
+        match self {
+            Self::Thread => Some(root),
+            Self::Timeline => None,
+        }
+    }
+
+    /// How a turn answered here is shown.
+    pub fn voice_style(self) -> VoiceStyle {
+        match self {
+            Self::Thread => VoiceStyle::Turn,
+            Self::Timeline => VoiceStyle::Segments,
+        }
+    }
+}
+
+/// How an agent's reply is shown where it was asked.
+///
+/// The same turn reads either way; what differs is how many messages it
+/// takes. A thread carries one reply per mention, so the reply is one message
+/// that grows. A private conversation reads like talking to a teammate, so
+/// each passage the agent writes is its own message as soon as it is
+/// finished, with the steps it took after it attached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VoiceStyle {
+    /// One message per turn, posted when the turn starts and updated in place.
+    Turn,
+    /// One message per passage, posted when the passage is finished; nothing
+    /// is posted until the agent has something to say or do.
+    Segments,
+}
+
+/// One message of an agent's reply, as it should read now.
+///
+/// The domain decides which segments a message shows and whether it is
+/// news; the announcer chooses the words around them and composes the
+/// nodes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyPresentation {
+    /// The session the reply speaks for.
+    pub session_id: AgentSessionId,
+    /// The bot the session speaks as; the message is posted as it.
+    pub bot_id: BotId,
+    /// Who prompted the turn; the bot writes on their current capability.
+    pub triggered_by: MacroUserIdStr<'static>,
+    /// Where the reply is shown.
+    pub parent: messages::domain::models::MessageParent,
+    /// The thread it is shown in; `None` for a timeline.
+    pub thread_id: Option<Uuid>,
+    /// The message's id, allocated before it is first posted so posting it
+    /// again finds the same message.
+    pub message_id: Uuid,
+    /// The turn the segments belong to.
+    pub turn: agent_fold::domain::model::TurnId,
+    /// The segments the message shows, in order.
+    pub segments: Vec<agent_fold::domain::model::ProjectedSegment>,
+    /// Lead with a link to the session.
+    pub link: bool,
+    /// Show that the turn is still running after the segments.
+    pub pending: bool,
+    /// How the turn ended, on the reply's last message once it has.
+    pub outcome: Option<ReplyOutcome>,
+    /// Whether this update is news: the reply's last message, once the turn
+    /// has ended.
+    pub notify: bool,
+}
+
+/// An agent session typing through the bot that speaks for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentTypingUpdate {
+    /// The session whose turn is running.
+    pub session_id: AgentSessionId,
+    /// The bot the session speaks as.
+    pub bot_id: BotId,
+    /// Who prompted the turn; the bot types on their current capability.
+    pub triggered_by: MacroUserIdStr<'static>,
+    /// Where the reply will appear.
+    pub parent: messages::domain::models::MessageParent,
+    /// The thread it will appear in; `None` for a timeline.
+    pub thread_id: Option<Uuid>,
+    /// Whether the agent is typing.
+    pub active: bool,
+    /// What the agent is doing.
+    pub phase: agent_fold::domain::model::TurnPhase,
+}
+
+/// Source message and placement of one agent response.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
+    /// Ordinary mentions reply in a thread; agent conversations answer in the timeline.
+    #[serde(default, skip_serializing_if = "ReplyPlacement::is_thread")]
+    pub reply_placement: ReplyPlacement,
     /// Update the existing agent response instead of posting a reply.
     #[serde(default)]
     pub reuse_origin_message: bool,
@@ -345,109 +476,6 @@ pub struct AnnounceOrigin {
     pub thread_id: Uuid,
     /// The message that triggered the prompt.
     pub message_id: Uuid,
-}
-
-/// One message supplied as untrusted prompt context.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextMessage {
-    /// Message id.
-    pub id: Uuid,
-    /// Sender identifier as the message service represents it.
-    pub sender_id: String,
-    /// Readable name of the sender.
-    pub author: String,
-    /// Message body.
-    pub content: String,
-    /// When the message was posted.
-    pub posted_at: chrono::DateTime<chrono::Utc>,
-}
-
-/// Messages of one discussion, oldest first.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextThread {
-    /// Root message of the discussion.
-    pub root_id: Uuid,
-    /// Live messages, the root first when it is included.
-    pub messages: Vec<ContextMessage>,
-    /// Whether some messages of the discussion were left out.
-    pub messages_omitted: bool,
-}
-
-/// What a prompt answers. Without this the agent has to guess which of the
-/// surrounding messages "fix this" means.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ReplyTarget {
-    /// The author quote-replied to one message.
-    Quote {
-        /// The quoted message.
-        message_id: Uuid,
-        /// The discussion holding the quoted message.
-        thread_id: Uuid,
-        /// The one-line preview the quote renders.
-        preview: String,
-        /// The quoted message in full. Absent when it lives in another
-        /// conversation or could not be read.
-        message: Option<ContextMessage>,
-    },
-    /// The prompt was posted as a reply in a discussion.
-    Thread {
-        /// Root of that discussion.
-        root_id: Uuid,
-    },
-    /// The prompt was posted at the top level of a channel and replies to
-    /// no particular message.
-    None,
-}
-
-/// Where in a document a comment thread sits. An annotation id alone names a
-/// location the agent has no way to resolve: the document body it can read
-/// carries no marks or highlights, so the text the comment covers travels
-/// with the id.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CommentAnchor {
-    /// A cell or rectangular range in a native spreadsheet.
-    Spreadsheet {
-        /// Stable sheet identity within the workbook.
-        sheet_id: String,
-        /// Sheet name when the discussion was created.
-        sheet_name: String,
-        /// A1 cell or range, such as B4 or B4:C9.
-        range: String,
-    },
-
-    /// A comment mark in a markdown document.
-    Mark {
-        /// Lexical mark the thread is attached to.
-        mark_id: String,
-        /// The marked text as it read when the comment was posted. Absent on
-        /// threads anchored before snapshots were captured.
-        marked_text: Option<String>,
-        /// The mark as the document reads now. Absent when the document no longer
-        /// carries it or the lookup failed, leaving the snapshot as the fallback.
-        current: Option<MarkedPassage>,
-    },
-    /// A highlight on a PDF.
-    PdfHighlight {
-        /// Highlight annotation the thread is attached to.
-        anchor_id: String,
-        /// The text the highlight covers, read from the highlight. Absent when
-        /// the highlight carries none.
-        marked_text: Option<String>,
-    },
-    /// A point pinned on a PDF page, which covers no text.
-    PdfPin {
-        /// Pin annotation the thread is attached to.
-        anchor_id: String,
-    },
-}
-
-/// A comment mark resolved against the live document, both fields bounded.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MarkedPassage {
-    /// The text the mark covers.
-    pub marked_text: String,
-    /// The block or blocks containing the mark, windowed around it.
-    pub surrounding_text: String,
 }
 
 /// Whose access a session runs with, and who sent the prompt being composed.
@@ -460,24 +488,6 @@ pub struct PromptPeople {
     pub owner: MacroUserIdStr<'static>,
     /// The prompt's sender; absent when a bot sent it on nobody's behalf.
     pub sender: Option<MacroUserIdStr<'static>>,
-}
-
-/// What the conversation an agent was summoned from contributes to its prompt.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ConversationContext {
-    /// The document location, when the prompt came from an anchored comment.
-    pub anchor: Option<CommentAnchor>,
-    /// What the prompt answers.
-    pub reply_target: Option<ReplyTarget>,
-    /// The prompting message, marked where it appears in the context.
-    pub prompt_message_id: Option<Uuid>,
-    /// The discussion the prompt was posted in, through the prompt itself.
-    /// Absent for a top-level channel message.
-    pub thread: Option<ContextThread>,
-    /// Other recent channel activity, grouped by discussion, oldest first.
-    /// For a top-level channel prompt this is the primary context and ends
-    /// with the prompt.
-    pub channel: Vec<ContextThread>,
 }
 
 /// Do something in a session that already exists.
@@ -498,6 +508,10 @@ pub struct DeliverAction {
     /// channel passes `Some`, and is still suppressed - the harness only
     /// learns the session's channel when it runs.
     pub announce: Option<AnnounceOrigin>,
+    /// Why the agent is being asked, rendered ahead of a prompt. Absent for
+    /// prompts driven from the session itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<TriggerContext>,
 }
 
 /// One operation executed by the harness for an agent session.
@@ -509,6 +523,8 @@ pub struct DeliverAction {
 /// it.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum HarnessCommand {
+    /// Open or continue the durably reserved session of an agent's conversation.
+    ConversationMessage(OpenSession),
     /// Open a new session.
     Open(OpenSession),
     /// Act on a session that already exists.
@@ -588,6 +604,7 @@ impl DeliverAction {
             action,
             actor,
             announce,
+            context: None,
         }
     }
 
@@ -603,6 +620,7 @@ impl DeliverAction {
             action: event.action,
             actor: event.actor,
             announce: None,
+            context: event.context,
         }
     }
 }
@@ -630,6 +648,10 @@ pub struct AnnouncePrompt {
 /// Facts required to announce one prompt into its originating context.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
+    /// Preallocated reply id for a durably journaled conversation turn.
+    pub reply_message_id: Option<Uuid>,
+    /// Whether the answer is a thread reply or a top-level channel message.
+    pub reply_placement: ReplyPlacement,
     /// Update the existing agent response instead of posting a reply.
     pub reuse_origin_message: bool,
     /// Agent session represented by the announcement.
@@ -715,7 +737,7 @@ pub struct AnnouncedMessage {
 /// either. So the reply says so ([`Self::NeedsInput`],
 /// [`Self::AwaitingApproval`]) and returns to pending once nothing is
 /// waiting ([`Self::Resumed`]).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ReplyOutcome {
     /// The agent answered; its last message, whole.
     Answered(String),
@@ -807,6 +829,12 @@ pub struct ResolvedReply {
     pub triggered_by: MacroUserIdStr<'static>,
     /// What the reply should say now.
     pub outcome: ReplyOutcome,
+    /// The turn the reply answers.
+    pub turn: agent_fold::domain::model::TurnId,
+    /// The reply's segments, when this replica watched the turn run: the
+    /// passages and steps the reply shows. Empty when it did not, and the
+    /// reply is then told from `outcome` alone.
+    pub segments: Vec<agent_fold::domain::model::ProjectedSegment>,
 }
 
 /// Values required to provision a new session container.
@@ -902,6 +930,20 @@ impl SandboxEgress {
     /// The `Authorization` value presented on every proxied call.
     pub fn authorization_header(&self) -> String {
         format!("Bearer {}", self.session_token)
+    }
+
+    /// The session token [`Self::acp_servers`] stamped on `servers`, read
+    /// back off the internal server every rendering of the list carries.
+    pub fn session_token_in(servers: &[AcpMcpServer]) -> Option<String> {
+        servers.iter().find_map(|server| match server {
+            AcpMcpServer::Http(server) if server.name == INTERNAL_MCP_NAME => server
+                .headers
+                .iter()
+                .find(|header| header.name.eq_ignore_ascii_case("authorization"))
+                .and_then(|header| header.value.strip_prefix("Bearer "))
+                .map(str::to_owned),
+            _ => None,
+        })
     }
 
     /// The sandbox environment this becomes.

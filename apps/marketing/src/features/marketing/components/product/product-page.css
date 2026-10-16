@@ -6,18 +6,17 @@
 .product-page .homepage-section-break p { max-width: 100%; margin-inline: 0; white-space: pre-line; text-wrap: wrap; }
 .product-page .feature-page-visual { width: min(872px, calc(100% - 48px)); }
 .product-page .feature-page-jump-links { width: min(872px, calc(100% - 48px)); margin-inline: auto; border: 0; padding-block: 12px 32px; }
-.product-page .email-feature-graphic { width: 180px; height: 112px; color: #b8b8b3; }
-.product-prose { width: min(var(--product-measure), 100%); margin: 28px auto 0; padding-inline: 24px; color: #a3a3a3; font: 400 15px/1.85 'Inter Variable', Inter, sans-serif; }
+.product-page .email-feature-graphic { width: 180px; height: 112px; color: var(--color-ink-muted); }
+.product-prose { width: min(var(--product-measure), 100%); margin: 28px auto 0; padding-inline: 24px; color: var(--color-ink-muted); font: 400 15px/1.85 'Inter Variable', Inter, sans-serif; }
 .product-prose p + p { margin-top: 18px; }
 .product-page .feature-page-reading { width: min(var(--product-measure), 100%); }
 .product-page .feature-page-reading-rule { display: none; }
 .product-page .feature-page-comparison, .product-page > .homepage-feature-end { width: min(872px, calc(100% - 48px)); margin-inline: auto; }
 .product-demo-stage { position: relative; isolation: isolate; }
-.product-demo-stage::before { content: ''; position: absolute; pointer-events: none; z-index: -1; inset: -24px -32px; background: radial-gradient(#ffffff18 .6px, transparent .6px) 0 0 / 12px 12px; mask-image: radial-gradient(ellipse, #0008, transparent 70%); }
+.product-demo-stage::before { content: ''; position: absolute; pointer-events: none; z-index: -1; inset: -24px -32px; background: radial-gradient(color-mix(in srgb, var(--color-ink) 9%, transparent) .6px, transparent .6px) 0 0 / 12px 12px; mask-image: radial-gradient(ellipse, #0008, transparent 70%); }
 .product-page .product-demo { height: var(--demo-h, 580px); border-radius: 16px; overflow: hidden; background-color: var(--color-panel); box-shadow: var(--glass-shadow); }
 .product-demo > .dummy-main { height: 100%; }
 .product-demo .sample-chat-log { padding: 32px; }
-.product-demo .sample-message-row { margin-bottom: 22px; }
 .product-demo .sample-details { display: none; }
 .product-demo .sample-detail-layout[data-panel-open=true] .sample-details { display: block; }
 .product-demo-request { margin-bottom: 28px; }

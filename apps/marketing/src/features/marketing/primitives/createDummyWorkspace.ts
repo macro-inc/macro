@@ -26,6 +26,7 @@ export function createDummyWorkspace(initial: WorkspaceView = 'home') {
   const [calendarDate, setCalendarDate] = createSignal(sampleToday);
   const [calendarMode, setCalendarMode] = createSignal<'Week' | 'Day'>('Week');
   const [showPersonal, setShowPersonal] = createSignal(true);
+  const [agentMode, setAgentMode] = createSignal<'work' | 'code'>('work');
   const [busy, setBusy] = createSignal(false);
   const [agentReplies, setAgentReplies] = createSignal<
     { prompt: string; answer: string }[]
@@ -248,6 +249,7 @@ export function createDummyWorkspace(initial: WorkspaceView = 'home') {
   function reset() {
     clearTimeout(timer);
     setBusy(false);
+    setAgentMode('work');
     setChannel('launch');
     setFileView('My Files');
     setCompanyFilter('All companies');
@@ -260,6 +262,8 @@ export function createDummyWorkspace(initial: WorkspaceView = 'home') {
     open(initial);
   }
   return {
+    agentMode,
+    setAgentMode,
     fileView,
     setFileView,
     companyLayout,

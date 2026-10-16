@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_conversation_settings AS original (session_id, settings) VALUES ($1, $2) ON CONFLICT (session_id) DO UPDATE SET session_id = original.session_id RETURNING settings",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "settings",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8d9d1ec85c4c682923858f1480716eb1d48b5dd16678203168ba3138eee50b76"
+}

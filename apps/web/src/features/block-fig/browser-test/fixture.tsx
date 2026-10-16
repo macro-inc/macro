@@ -58,8 +58,8 @@ declare global {
           text: string,
           target: { threadId: string } | { anchor: FigCommentAnchor }
         ) => string;
-        /** Mentions that would have notified someone. */
-        notified: () => { to: string; threadId: string }[];
+        /** Opens a thread, as following a comment link does. */
+        follow: (threadId: string) => void;
         people: FigPerson[];
       };
     };
@@ -95,7 +95,7 @@ function Fixture() {
     comments: {
       threads: comments.store.threads,
       arrive: comments.arrive,
-      notified: comments.notified,
+      follow: comments.follow,
       people: FIXTURE_PEOPLE,
     },
     fontRequests: fixtureFonts.requests,

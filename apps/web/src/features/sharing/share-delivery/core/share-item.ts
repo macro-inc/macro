@@ -6,7 +6,9 @@ export type ShareKind =
   | 'agent_session'
   | 'database'
   | 'initiative'
-  | 'call';
+  | 'call'
+  | 'form'
+  | 'crm_pipeline';
 
 export const CHANNEL_ACCESS_LEVELS = ['view', 'comment', 'edit'] as const;
 
@@ -45,7 +47,10 @@ export type ChannelAccessError = 'not-allowed' | 'unsupported' | 'failed';
 type KindPolicy = {
   readonly grant: 'after-send' | 'before-send' | 'message-only';
   readonly maxLevel: ChannelAccessLevel;
-  readonly send: 'anyone' | 'owner-only';
+  /** `restricted`: only a sender who can grant access may send it. */
+  readonly send: 'anyone' | 'restricted';
+  /** Recipients cannot hold comment access. */
+  readonly comment?: false;
 };
 
 const KIND_POLICY = {
@@ -53,20 +58,27 @@ const KIND_POLICY = {
   chat: { grant: 'after-send', maxLevel: 'edit', send: 'anyone' },
   project: { grant: 'after-send', maxLevel: 'edit', send: 'anyone' },
   database: { grant: 'after-send', maxLevel: 'edit', send: 'anyone' },
+  form: {
+    grant: 'after-send',
+    maxLevel: 'edit',
+    send: 'anyone',
+    comment: false,
+  },
   email: { grant: 'after-send', maxLevel: 'view', send: 'anyone' },
-  agent_session: { grant: 'after-send', maxLevel: 'edit', send: 'owner-only' },
-  initiative: { grant: 'before-send', maxLevel: 'edit', send: 'owner-only' },
+  agent_session: { grant: 'after-send', maxLevel: 'edit', send: 'restricted' },
+  initiative: { grant: 'before-send', maxLevel: 'edit', send: 'restricted' },
+  crm_pipeline: { grant: 'before-send', maxLevel: 'edit', send: 'restricted' },
   call: { grant: 'message-only', maxLevel: 'view', send: 'anyone' },
 } as const satisfies Record<ShareKind, KindPolicy>;
 
-export type OwnerOnlyKind = {
-  [K in ShareKind]: (typeof KIND_POLICY)[K]['send'] extends 'owner-only'
+export type RestrictedKind = {
+  [K in ShareKind]: (typeof KIND_POLICY)[K]['send'] extends 'restricted'
     ? K
     : never;
 }[ShareKind];
 
-export function isOwnerOnlyToSend(kind: ShareKind): kind is OwnerOnlyKind {
-  return KIND_POLICY[kind].send === 'owner-only';
+export function isSendRestricted(kind: ShareKind): kind is RestrictedKind {
+  return KIND_POLICY[kind].send === 'restricted';
 }
 
 export type ShareAccess =
@@ -80,7 +92,7 @@ export type ShareAccess =
 
 export function shareAccess(item: ShareItem): ShareAccess {
   const policy = KIND_POLICY[item.kind];
-  if (policy.send === 'owner-only' && !item.canGrant)
+  if (policy.send === 'restricted' && !item.canGrant)
     return { t: 'cannot-send' };
   if (policy.grant === 'message-only' || !item.canGrant)
     return { t: 'view-via-message' };
@@ -126,8 +138,9 @@ export function levelChoice(
   );
   if (top === undefined || top === 'view') return undefined;
 
-  const hideComment =
-    !markdownComments && settable.some((entry) => entry.item.markdown);
+  const hideComment = settable.some(
+    (entry) => !takesComment(entry.item, markdownComments)
+  );
   const options = CHANNEL_ACCESS_LEVELS.filter(
     (level) => !isBelow(top, level) && !(hideComment && level === 'comment')
   );
@@ -147,6 +160,11 @@ export function levelChoice(
     .map((entry): ChannelAccessLevel => (entry.item.markdown ? 'edit' : 'view'))
     .reduce(lowerOf, top);
   return { options, initial };
+}
+
+function takesComment(item: ShareItem, markdownComments: boolean): boolean {
+  const policy: KindPolicy = KIND_POLICY[item.kind];
+  return policy.comment !== false && (markdownComments || !item.markdown);
 }
 
 export function parseChannelAccessLevel(

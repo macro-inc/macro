@@ -15,6 +15,9 @@ export interface ChannelInviteMetadata {
   channelName?: string;
   /** The user who sent the invitation */
   invitedBy: string;
+  /** Whether this is a direct message rather than a channel invitation.
+Older notification payloads retain channel-invitation wording. */
+  isDirectMessage?: boolean;
   /** Message content to show in the invite email, when the invite was triggered by a message. */
   messageContent?: ChannelInviteMetadataMessageContent;
   /** The sender's profile picture URL, if available. */

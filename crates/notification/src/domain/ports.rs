@@ -71,8 +71,8 @@ pub trait NotificationRepository: Send + Sync + 'static {
 
     /// Create a notification and user notification records.
     ///
-    /// Returns the notification ID if successful, or None if it already exists
-    /// (idempotent operation).
+    /// Returns new or unpublished recipient rows, or None after publication or withdrawal.
+    /// Retried publication preserves the original recipients and their lifecycle state.
     fn create_notification<'a, T: Serialize + Send + Sync>(
         &self,
         request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
@@ -80,6 +80,18 @@ pub trait NotificationRepository: Send + Sync + 'static {
         service_sender: &str,
         apns_collapse_key: Option<&str>,
     ) -> impl Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
+
+    /// Whether a resolved workflow has withdrawn this notification before delivery.
+    fn notification_is_withdrawn(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<bool, Report>> + Send;
+
+    /// Record successful delivery-queue publication; retries remain pending until this succeeds.
+    fn complete_notification_publication(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
     /// Update the sent status for users who received the notification.
     fn update_sent_status<'a>(
@@ -607,4 +619,13 @@ impl<V: VoipPushSender> VoipPushSender for Option<V> {
             HashSet::new()
         }
     }
+}
+
+/// Permanently suppress a superseded notification, including delayed queue delivery.
+pub trait NotificationWithdrawal: Send + Sync + 'static {
+    /// Record withdrawal before completing any existing recipient notifications.
+    fn withdraw(
+        &self,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }

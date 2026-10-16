@@ -46,10 +46,6 @@ function fallbackBreadcrumbName(target: EntityDetailTarget) {
   return 'Untitled';
 }
 
-function isReminderTarget(target: { type: string }) {
-  return target.type === 'reminder';
-}
-
 function BreadcrumbItem(props: {
   entry: EntityDetailNavigationEntry;
   order: number;
@@ -129,32 +125,11 @@ export function EntityDetailBreadcrumbItem(props: {
   setsSplitDisplayName?: boolean;
 }) {
   return (
-    <Show
-      when={
-        isReminderTarget(props.entry.data)
-          ? undefined
-          : ({
-              id: props.entry.data.id,
-              type: props.entry.data.type,
-            } satisfies ItemEntity)
-      }
-      fallback={
-        <BreadcrumbItem
-          entry={props.entry}
-          order={props.order}
-          name={fallbackBreadcrumbName(props.entry.data)}
-          setsSplitDisplayName={props.setsSplitDisplayName ?? false}
-        />
-      }
-    >
-      {(previewItem) => (
-        <LiveBreadcrumbItem
-          entry={props.entry}
-          order={props.order}
-          previewItem={previewItem()}
-          setsSplitDisplayName={props.setsSplitDisplayName ?? false}
-        />
-      )}
-    </Show>
+    <LiveBreadcrumbItem
+      entry={props.entry}
+      order={props.order}
+      previewItem={{ id: props.entry.data.id, type: props.entry.data.type }}
+      setsSplitDisplayName={props.setsSplitDisplayName ?? false}
+    />
   );
 }

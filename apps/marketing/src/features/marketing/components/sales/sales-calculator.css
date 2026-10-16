@@ -30,7 +30,7 @@
 .sales-calc-lines s { text-decoration-color: color-mix(in srgb, var(--color-ink) 50%, transparent); }
 .sales-calc-lines strong { color: var(--color-ink); font-weight: 500; }
 .sales-calc-saved { display: grid; justify-items: center; gap: 4px; padding-top: 20px; border-top: 1px solid var(--color-edge-muted); color: var(--color-ink-muted); font-size: 14px; text-align: center; }
-.sales-calc-saved strong { color: var(--color-ink); font: 315 clamp(48px, 14vw, 64px)/1.1 'Roboto Slab Variable', display, serif; letter-spacing: -.035em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sales-calc-saved strong { color: var(--color-ink); font: calc(315 + var(--cream-slab-weight-increase, 0)) clamp(48px, 14vw, 64px)/1.1 'Roboto Slab Variable', display, serif; letter-spacing: -.035em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .sales-calc-even { padding-top: 20px; border-top: 1px solid var(--color-edge-muted); color: var(--color-ink-muted); font-size: 15px; line-height: 1.6; text-align: center; text-wrap: balance; }
 .sales-calc-result .homepage-hero-cta { width: 100%; color: #000; }
 /* Beats `.feature-page p { margin: 0 }` without !important. */

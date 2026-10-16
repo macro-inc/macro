@@ -49,6 +49,9 @@ where
             repo_url: request.repo_url,
             session_id,
             owner: request.owner.as_ref().to_owned(),
+            // The requester's prompt follows through the session's control
+            // endpoint, from the app; nothing composes it with this event.
+            context: None,
         });
         self.broker
             .send_event(&event)

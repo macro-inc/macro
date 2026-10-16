@@ -3,61 +3,107 @@
  */
 
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentSettings } from './AgentSettings';
 
+const searchParams = vi.hoisted(() => ({
+  pair: undefined as string | undefined,
+}));
 vi.mock('@solidjs/router', () => ({
-  useSearchParams: () => [{}],
+  useSearchParams: () => [searchParams],
 }));
-
-vi.mock('./components/bring-your-own-agent', () => ({
-  BringYourOwnAgent: () => <div>Bring your own agent</div>,
-}));
-
-// Each section owns a SettingsPage: the scroll container swaps with the tab.
-function FakePage(props: { title: string; navigation: JSX.Element }) {
-  return (
-    <div data-settings-page>
-      {props.navigation}
-      <h1>{props.title}</h1>
-    </div>
-  );
-}
 
 vi.mock('./Agents', () => ({
-  Agents: (props: { navigation: JSX.Element }) => (
-    <FakePage title="Team agents" navigation={props.navigation} />
+  Agents: (props: {
+    onCursor: () => void;
+    onSetUpRuntime: () => void;
+    onManageRuntimes: () => void;
+  }) => (
+    <div>
+      <h1>Agents page</h1>
+      <button type="button" onClick={props.onCursor}>
+        Connect Cursor
+      </button>
+      <button type="button" onClick={props.onSetUpRuntime}>
+        Set up your own agent
+      </button>
+      <button type="button" onClick={props.onManageRuntimes}>
+        Manage paired runtimes
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('./CursorConnectPage', () => ({
+  CursorConnectPage: (props: { onClose: () => void }) => (
+    <div>
+      <h1>Cursor guide</h1>
+      <button type="button" onClick={props.onClose}>
+        Back
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('./RuntimePairingPage', () => ({
+  RuntimePairingPage: (props: { onClose: () => void }) => (
+    <div>
+      <h1>Pairing guide</h1>
+      <button type="button" onClick={props.onClose}>
+        Back
+      </button>
+    </div>
   ),
 }));
 
 vi.mock('./Harness', () => ({
-  Harness: (props: { navigation: JSX.Element }) => (
-    <FakePage title="Built-in runtimes" navigation={props.navigation} />
+  Harness: (props: { onBack?: () => void }) => (
+    <div>
+      <h1>Runtimes page</h1>
+      <button type="button" onClick={props.onBack}>
+        Back
+      </button>
+    </div>
   ),
 }));
 
 afterEach(() => {
   cleanup();
+  searchParams.pair = undefined;
 });
 
-describe('AgentSettings section tabs', () => {
-  it('keeps the scroll offset when the section swaps its page', () => {
+describe('AgentSettings', () => {
+  it('opens each setup page from the agents page and comes back', () => {
     render(() => <AgentSettings />);
-    const page = () =>
-      document.querySelector<HTMLElement>('[data-settings-page]');
-    const first = page();
-    if (!first) throw new Error('no settings page');
-    first.scrollTop = 260;
+    expect(screen.getByRole('heading', { name: 'Agents page' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Runtimes' }));
-    expect(screen.getByText('Built-in runtimes')).toBeTruthy();
-    const second = page();
-    expect(second).not.toBe(first);
-    expect(second?.scrollTop).toBe(260);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Cursor' }));
+    expect(screen.getByRole('heading', { name: 'Cursor guide' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
-    expect(screen.getByText('Team agents')).toBeTruthy();
-    expect(page()?.scrollTop).toBe(260);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set up your own agent' })
+    );
+    expect(screen.getByRole('heading', { name: 'Pairing guide' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Manage paired runtimes' })
+    );
+    expect(screen.getByRole('heading', { name: 'Runtimes page' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(screen.getByRole('heading', { name: 'Agents page' })).toBeTruthy();
+  });
+
+  it('starts on the runtimes page for the Runtimes settings tab', () => {
+    render(() => <AgentSettings initialSection="runtimes" />);
+    expect(screen.getByRole('heading', { name: 'Runtimes page' })).toBeTruthy();
+  });
+
+  it('starts on the runtimes page when a pairing code is in the URL', () => {
+    searchParams.pair = 'KX7M-4QHD';
+    render(() => <AgentSettings />);
+    expect(screen.getByRole('heading', { name: 'Runtimes page' })).toBeTruthy();
   });
 });

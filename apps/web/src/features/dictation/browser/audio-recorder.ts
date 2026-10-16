@@ -7,6 +7,7 @@ import {
   RECORDING_CHUNK_MS,
   type RecorderHandle,
 } from '../core/recording';
+import { VOLUME_INTERVAL_MS } from '../core/volume';
 
 const MIME_TYPES = [
   'audio/webm;codecs=opus',
@@ -17,10 +18,11 @@ const AUDIO_BITS_PER_SECOND = 64_000;
 /** Stop early enough that the final chunk still fits under the server limit. */
 const SIZE_HEADROOM_BYTES = 64 * 1024;
 
-/** A monotonic clock and cancellable deadline, supplied explicitly in tests. */
+/** A monotonic clock and cancellable timers, supplied explicitly in tests. */
 export interface RecordingClock {
   now(): number;
   schedule(callback: () => void, delay: number): () => void;
+  repeat(callback: () => void, interval: number): () => void;
 }
 
 const browserClock: RecordingClock = {
@@ -28,6 +30,10 @@ const browserClock: RecordingClock = {
   schedule: (callback, delay) => {
     const timeout = window.setTimeout(callback, delay);
     return () => window.clearTimeout(timeout);
+  },
+  repeat: (callback, interval) => {
+    const timer = window.setInterval(callback, interval);
+    return () => window.clearInterval(timer);
   },
 };
 
@@ -97,8 +103,8 @@ export class AudioRecorder implements RecorderHandle {
         mimeType,
         audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
       });
-      const readLevel = this.startMeter(stream);
-      recorder.ondataavailable = ({ data }) => this.onChunk(data, readLevel());
+      this.startMeter(stream);
+      recorder.ondataavailable = ({ data }) => this.onChunk(data);
       recorder.onerror = () =>
         this.fail(new Error('Audio recording failed. Please try again.'));
       recorder.onstop = () => this.onStop();
@@ -137,15 +143,22 @@ export class AudioRecorder implements RecorderHandle {
     this.callbacks.onInterrupted();
   }
 
-  private startMeter(stream: MediaStream): () => number {
-    let amplitude = () => 0;
+  /**
+   * Sample on a fixed cadence: iOS Safari delivers MediaRecorder chunks late
+   * and in bursts, so chunk arrival is too uneven to pace the timeline.
+   */
+  private startMeter(stream: MediaStream) {
     this.releaseMeter = createRoot((dispose) => {
       // Library level is 0..100; the analyser is never routed to speakers.
       const [level] = createAmplitudeFromStream(stream);
-      amplitude = level;
-      return dispose;
+      const stopSampling = this.clock.repeat(() => {
+        if (this.state === 'recording') this.callbacks.onLevel?.(level() / 100);
+      }, VOLUME_INTERVAL_MS);
+      return () => {
+        stopSampling();
+        dispose();
+      };
     });
-    return () => amplitude() / 100;
   }
 
   private stopAtLimit() {
@@ -154,7 +167,7 @@ export class AudioRecorder implements RecorderHandle {
     this.stop();
   }
 
-  private onChunk(data: Blob, level: number) {
+  private onChunk(data: Blob) {
     if (!this.recording) return;
     // Delayed/final chunks can exceed the headroom; never retain or upload them.
     if (this.size + data.size > MAX_RECORDING_BYTES) {
@@ -166,7 +179,6 @@ export class AudioRecorder implements RecorderHandle {
     if (data.size) this.chunks.push(data);
     this.size += data.size;
     if (this.state !== 'recording') return;
-    this.callbacks.onLevel?.(level);
     if (
       this.clock.now() - this.startedAt >= MAX_RECORDING_MS ||
       this.size >= MAX_RECORDING_BYTES - SIZE_HEADROOM_BYTES

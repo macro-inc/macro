@@ -1,0 +1,3 @@
+name: database-observability
+runtime: nodejs
+description: Native NixOS PostgreSQL metrics collector in the database region

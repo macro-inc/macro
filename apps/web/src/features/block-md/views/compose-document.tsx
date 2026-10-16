@@ -4,6 +4,7 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import XIcon from '@phosphor/x.svg';
@@ -40,7 +41,8 @@ export function ComposeDocument(props: ComposeDocumentProps) {
   const portalScope = () => (panel.handle.isPopover() ? 'local' : 'block');
 
   const submit = async (expand = false) => {
-    const documentTitle = title().trim() || (expand ? 'New Note' : '');
+    const documentTitle =
+      title().trim() || (expand ? blockNameToDefaultFile('md') : '');
     if (isCreating() || !documentTitle) return;
     const documentContent = content().trim();
     const entries = tags.tagEntries();

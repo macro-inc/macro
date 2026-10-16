@@ -52,6 +52,7 @@ async fn only_the_startup_selection_reply_releases_model_projection() {
             agent_session_id: fx.session,
             user_id: None,
             content,
+            logged_at: None,
         })
         .await
         .unwrap();
@@ -70,6 +71,7 @@ async fn only_the_startup_selection_reply_releases_model_projection() {
             agent_session_id: fx.session,
             user_id: None,
             content,
+            logged_at: None,
         })
         .await
         .unwrap();

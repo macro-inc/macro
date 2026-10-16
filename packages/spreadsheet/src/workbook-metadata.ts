@@ -27,7 +27,7 @@ export type WorkbookSheetMetadata = {
   definedNames?: { name: string; formula: string; local?: boolean }[];
   /** Legacy (Ctrl+Shift+Enter) array formulas: anchor address → fixed range. */
   arrayFormulas?: Record<string, string>;
-  /** False when Excel hid this sheet's gridlines. */
+  /** False when the sheet hides its gridlines (Excel's `showGridLines="0"`). */
   gridlines?: boolean;
   /** Sheet tab color as #RRGGBB. */
   tabColor?: string;

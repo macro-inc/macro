@@ -32,6 +32,25 @@ describe('getExpiresAt', () => {
   });
 });
 
+describe('passwordless code check', () => {
+  test.each([
+    [401, 'UNAUTHORIZED'],
+    [429, 'RATE_LIMITED'],
+    [400, 'HTTP_ERROR'],
+    [500, 'SERVER_ERROR'],
+  ])('reports a %i response as %s', async (status, code) => {
+    const fetch = vi
+      .spyOn(window, 'fetch')
+      .mockResolvedValueOnce(new Response('rejected', { status }));
+    const result = await authServiceClient.passwordlessCallback({
+      code: '424242',
+      email: 'member@acme.com',
+    });
+    expect(result._unsafeUnwrapErr()[0].code).toBe(code);
+    fetch.mockRestore();
+  });
+});
+
 describe('credit checkout', () => {
   const args = {
     amountCents: 2_500,

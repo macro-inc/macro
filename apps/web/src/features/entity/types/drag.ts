@@ -29,7 +29,6 @@ const ENTITY_DRAG_TYPES = [
   'crm_company',
   'crm_contact',
   'routine',
-  'reminder',
   'calendar_event',
   'foreign',
 ] as const satisfies readonly EntityData['type'][];

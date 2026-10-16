@@ -14,12 +14,7 @@ import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import {
-  type EntityData,
-  isDocumentEntity,
-  isEmailEntity,
-  isTaskEntity,
-} from '@entity';
+import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createEffect, onCleanup } from 'solid-js';
@@ -37,7 +32,6 @@ import {
   makeMoveToProjectAction,
   makeMuteAction,
   makeRenameAction,
-  markReminderTargetDone,
 } from './index';
 
 /**
@@ -138,19 +132,6 @@ export const useBlockEntityCommands = (
     return referredFrom === 'home' || referredFrom === 'mail';
   };
 
-  // The canvas block binds 'h' to its hand tool in this same scope
-  // (CanvasController). Canvas keeps the key; the reminder falls back to its
-  // command-menu-only registration there so no shortcut is advertised that the
-  // hand tool would swallow.
-  const canUseReminderHotkey = () => {
-    const entity = getEntity();
-    return !(
-      entity &&
-      isDocumentEntity(entity) &&
-      entity.fileType === 'canvas'
-    );
-  };
-
   /** Follows the list's next row into this split, as the triage flow does. */
   const advanceSplitTo = ({
     entity: nextEntity,
@@ -169,11 +150,8 @@ export const useBlockEntityCommands = (
     });
   };
 
-  // Setting a reminder puts the entity down: it marks it done, so it leaves the
-  // list behind this block and the reminder is what brings it back. Declared
-  // after `advanceSplitTo` so the follow-up advances exactly as 'e' does.
+  // Advance the invoking email view after a confirmed snooze.
   const createReminderAction = makeCreateReminderAction({
-    onCreated: markReminderTargetDone(markDone, advanceSplitTo),
     onEmailSaved: options.onEmailReminderSaved,
   });
 
@@ -504,9 +482,7 @@ export const useBlockEntityCommands = (
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
-    // Set a reminder - 'h'. 'add' rather than the default 'override', so this
-    // and the canvas hand tool coexist in the scope instead of whichever
-    // registered last evicting the other.
+    // Snooze the current email with H.
     registerHotkey({
       hotkey: ['h'],
       hotkeyToken: TOKENS.entity.action.createReminder,
@@ -514,26 +490,10 @@ export const useBlockEntityCommands = (
       description: 'Remind me',
       keyDownHandler: runCreateReminder,
       condition: () => {
-        if (!canUseReminderHotkey()) return false;
         const entity = getEntity();
         return entity !== undefined && createReminderAction.canExecute(entity);
       },
       registrationType: 'add',
-      displayPriority: 10,
-      tags: [HotkeyTags.SelectionModification],
-    }).withGroup(group);
-
-    // Set a reminder without a keybinding on canvas, so it stays reachable
-    // from the command menu
-    registerHotkey({
-      scopeId,
-      description: 'Remind me',
-      keyDownHandler: runCreateReminder,
-      condition: () => {
-        if (canUseReminderHotkey()) return false;
-        const entity = getEntity();
-        return entity !== undefined && createReminderAction.canExecute(entity);
-      },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);

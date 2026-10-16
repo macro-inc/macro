@@ -1,0 +1,46 @@
+[package]
+edition = "2024"
+name = "work_feed"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# Adapters over the services that own the feed's data.
+outbound = [
+  "dep:activity",
+  "dep:email",
+  "dep:soup",
+  "dep:soup_realtime",
+  "dep:models_soup",
+]
+
+[dependencies]
+activity = { path = "../activity", default-features = false, features = ["realtime"], optional = true }
+base64 = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+cowlike = { path = "../cowlike" }
+document_sub_type = { path = "../document_sub_type" }
+email = { path = "../email", default-features = false, features = ["ports"], optional = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+filter_ast = { path = "../filter_ast" }
+futures = { workspace = true }
+item_filters = { path = "../item_filters" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
+models_soup = { path = "../models_soup", optional = true }
+notification = { path = "../notification" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+soup = { path = "../soup", default-features = false, features = ["ports"], optional = true }
+soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"], optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "macros", "rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -14,8 +14,7 @@ use model_entity::{Entity, EntityType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::ProjectToolContext;
-use crate::domain::ports::ProjectService;
+use super::{ChatCapabilities, DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 
 /// The kind of entity to move.
 #[derive(Debug, Deserialize, JsonSchema, Clone, Copy, PartialEq, Eq, Default)]
@@ -224,10 +223,10 @@ impl ToolAnnotated for MoveToProject {
 impl<PSvc, ESvc, DSvc, CSvc, EmSvc> AsyncTool<ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>>
     for MoveToProject
 where
-    PSvc: ProjectService + MoveEntity,
+    PSvc: ProjectCapabilities,
     ESvc: EntityAccessService,
-    DSvc: MoveEntity + Send + Sync + 'static,
-    CSvc: MoveEntity + Send + Sync + 'static,
+    DSvc: DocumentCapabilities,
+    CSvc: ChatCapabilities,
     EmSvc: MoveEntity + Send + Sync + 'static,
 {
     type Output = MoveToProjectResponse;

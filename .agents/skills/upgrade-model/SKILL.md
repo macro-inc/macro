@@ -10,7 +10,7 @@ Upgrades the AI model used in the chat app. There are two model slots:
 - **fast** (Enter): default/fallback model (first entry in `CHAT_MODELS`)
 - **good** (Cmd+Enter): smart mode model (second entry in `CHAT_MODELS`)
 
-The user must specify which slot to upgrade and the new model name (e.g. `Codex-opus-4-6`).
+The user must specify which slot to upgrade and the new model name (e.g. `claude-opus-4-6`).
 
 ## Steps
 
@@ -18,14 +18,14 @@ The user must specify which slot to upgrade and the new model name (e.g. `Codex-
 
 Ask the user (if not already provided):
 - Which slot: `fast` or `good`?
-- What is the new model name? (e.g. `Codex-opus-4-6`)
+- What is the new model name? (e.g. `claude-opus-4-6`)
 
 Derive from the model name:
-- `SERDE_NAME`: the kebab-case model ID sent over the wire (e.g. `Codex-opus-4-6`)
+- `SERDE_NAME`: the kebab-case model ID sent over the wire (e.g. `claude-opus-4-6`)
 - `ENUM_VARIANT`: PascalCase variant name (e.g. `Claude46Opus`)
 - `CONST_NAME`: SCREAMING_SNAKE constant name (e.g. `CLAUDE_46_OPUS`)
-- `CONST_VALUE`: display string used by the frontend/provider (e.g. `Codex-4.6-opus`)
-- `PRETTY_NAME`: human-readable name (e.g. `Codex Opus 4.6`)
+- `CONST_VALUE`: display string used by the frontend/provider (e.g. `claude-4.6-opus`)
+- `PRETTY_NAME`: human-readable name (e.g. `Claude Opus 4.6`)
 
 ### 2. Add model to AI crate (if it doesn't already exist)
 

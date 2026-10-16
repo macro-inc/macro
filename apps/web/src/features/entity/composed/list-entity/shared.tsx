@@ -20,7 +20,11 @@ import type { WithNotification } from '../../types/notification';
 import type { ContentHitData, SearchLocation } from '../../types/search';
 import { isSearchEntity } from '../../types/search';
 
-export interface BaseListEntityProps<E extends EntityData = EntityData> {
+export interface BaseListEntityProps<E extends EntityData = EntityData>
+  extends Pick<
+    JSX.HTMLAttributes<HTMLDivElement>,
+    'role' | 'tabIndex' | 'onKeyDown'
+  > {
   entity: WithNotification<E>;
   onClick?: (event: MouseEvent) => void;
   timestamp?: DateValue | null;
@@ -32,8 +36,14 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   actions?: JSX.Element;
   /** Persistent status/action immediately before the timestamp. */
   leadingAction?: JSX.Element;
-  /** Collection-owned completion of a reminder occurrence. */
-  onToggleReminderDone?: () => Promise<void>;
+  /** Caller-owned marker between the icon and the title, e.g. a priority. */
+  titleLeading?: JSX.Element;
+  /** Caller-owned leading visual inside the standard Soup icon slot. */
+  icon?: JSX.Element;
+  /** Supporting text after the title in the standard content slot. */
+  titleTrailing?: JSX.Element;
+  /** Caller-owned metadata ahead of the entity's own, in wide rows only. */
+  meta?: JSX.Element;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -68,6 +78,12 @@ export interface LayoutProps {
   scheduleStatus?: JSX.Element;
   actions?: JSX.Element;
   leadingAction?: JSX.Element;
+  titleLeading?: JSX.Element;
+  /** Caller-owned leading visual inside the standard Soup icon slot. */
+  icon?: JSX.Element;
+  /** Supporting text after the title in the standard content slot. */
+  titleTrailing?: JSX.Element;
+  meta?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;

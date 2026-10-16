@@ -87,7 +87,7 @@ export const Checkbox = Object.assign(
     const [local, rest] = splitProps(props, ['class']);
     return (
       <KobalteCheckbox
-        class={cn('inline-flex items-center gap-2', local.class)}
+        class={cn('relative inline-flex items-center gap-2', local.class)}
         {...rest}
       />
     );

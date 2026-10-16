@@ -13,7 +13,16 @@ describe('onboardingCheckoutRequest', () => {
     });
   });
 
-  it('requests the trial only for Premium', () => {
+  it('uses standard paid terms for Max', () => {
+    expect(
+      onboardingCheckoutRequest(ONBOARDING, 'max', 'standard')
+    ).toMatchObject({
+      plan: 'max',
+      onboardingTrial: false,
+    });
+  });
+
+  it('requests the trial only for Pro', () => {
     const request = onboardingCheckoutRequest(ONBOARDING, 'max', 'trial');
     expect(request.plan).toBe('max');
     expect(request.onboardingTrial).toBe(false);

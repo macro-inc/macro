@@ -3,6 +3,7 @@ export { create_cluster } from './resources/cluster';
 export { ALLOWED_ORIGINS } from './resources/cors';
 export {
   DATADOG_API_KEY,
+  DATADOG_API_KEY_SECRET_ARN,
   DatadogServiceEntity,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
@@ -37,3 +38,5 @@ export {
 export type { TopicArgs } from './resources/kafka-cluster';
 export { KafkaCluster } from './resources/kafka-cluster';
 export { ServiceTargetGroup } from './resources/service_target_group';
+
+export { withTelemetry } from './resources/telemetry';

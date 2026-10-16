@@ -1,0 +1,28 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 9b1289e66449ca7252cc4bd86922f8f400759460..b97bf015614c638adf4e0272e98db17577892f18 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -769,7 +769,8 @@ function scrollIntoViewport(targetElement, opts) {
+           targetElement
+         );
+         targetElement = scrollParent;
+-        scrollParent = getScrollParent(targetElement);
++        // getScrollParent includes its argument; advance past the parent we just scrolled.
++        scrollParent = getScrollParent(targetElement.parentElement || root);
+       }
+     }
+   }
+diff --git a/dist/index.js b/dist/index.js
+index 503080597f7d15c7dce8f4a057c6faf6a3ad929f..90f9d8f7d7617f34ca323aa4ffe147731b4a651a 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -767,7 +767,8 @@ function scrollIntoViewport(targetElement, opts) {
+           targetElement
+         );
+         targetElement = scrollParent;
+-        scrollParent = getScrollParent(targetElement);
++        // getScrollParent includes its argument; advance past the parent we just scrolled.
++        scrollParent = getScrollParent(targetElement.parentElement || root);
+       }
+     }
+   }

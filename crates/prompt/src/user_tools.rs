@@ -20,7 +20,22 @@ use crate::types::StaticPrompt;
 
 static TITLE: &str = "User Tools";
 
-static INSTRUCTIONS: &str = r##"- User tools are tools that must be executed by a user on the frontend.
+static INSTRUCTIONS: &str = r##"- Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
+  to find existing links and reusable availability. Resolve team and host identities with tools;
+  never ask for IDs, revisions or JSON. Default to personal ownership unless a team is requested.
+  Explain the complete proposal in readable prose: ownership and named hosts, who attends,
+  meeting name and description, duration, location or Google Meet, time zone, weekly hours and
+  date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit,
+  guest questions, and whether bookings are enabled. Group related settings so it is easy to
+  review. Ask whether to proceed, and end the turn. Only after the user's reply approving that
+  proposal, call `CreateBookingLink` or `EditBookingLink`, quoting the reply verbatim in
+  `userConfirmation`. Do not quote the original request or invent approval. These tools save
+  immediately, with no booking review form. Do not use `AskUser` or an elicitation for booking
+  details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
+  conflicts. Share the saved URL with an `<m-booking-link-mention>` chip (see Mentions), not a
+  bare URL. If the same proposal is already approved, do not ask again.
+
+- User tools are tools that must be executed by a user on the frontend.
   A user tool will return "PendingUserExecution" until a user chooses to
   accept / reject the tool.
 
@@ -30,6 +45,11 @@ static INSTRUCTIONS: &str = r##"- User tools are tools that must be executed by 
   edit, and send — writing the email inline in chat does none of that and is wrong. Drafting and
   sending are the same tool: it always creates a draft for the user to confirm before anything is
   sent, so use it even when the user only wants a draft.
+
+- To attach a file, pass the Macro document's id in `SendEmail`'s `attachments`. Only uploaded
+  files attach (PDFs, images, spreadsheets, Word documents); a document written in the Macro
+  editor has no file, so link to it in the body instead. The user can add or remove attachments
+  in the composer before sending.
 
 - `SendConfirmedEmail` and `CreateConfirmedCalendarEvent` send or create immediately, with no
   composer. They are for conversation threads that have no composer, and this chat does, so
@@ -45,7 +65,22 @@ or CreateConfirmedCalendarEvent, which are for surfaces without a composer.";
 /// The user-tools prompt section for composer-capable chat hosts.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
 
-static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `CreateCalendarEvent`, look at where the newest prompt came
+static SESSION_INSTRUCTIONS: &str = r##"- Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
+  to find existing links and reusable availability. Resolve team and host identities with tools;
+  never ask for IDs, revisions or JSON. Default to personal ownership unless a team is requested.
+  Explain the complete proposal in readable prose: ownership and named hosts, who attends,
+  meeting name and description, duration, location or Google Meet, time zone, weekly hours and
+  date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit,
+  guest questions, and whether bookings are enabled. Group related settings so it is easy to
+  review. Ask whether to proceed, and end the turn. Only after the user's reply approving that
+  proposal, call `CreateBookingLink` or `EditBookingLink`, quoting the reply verbatim in
+  `userConfirmation`. Do not quote the original request or invent approval. These tools save
+  immediately, with no booking review form. Do not use `AskUser` or an elicitation for booking
+  details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
+  conflicts. Share the saved URL with an `<m-booking-link-mention>` chip (see Mentions), not a
+  bare URL. If the same proposal is already approved, do not ask again.
+
+- Before reaching for `SendEmail` or `CreateCalendarEvent`, look at where the newest prompt came
   from. The context block names a conversation parent when that prompt was posted in a
   channel or document thread instead of typed in the agent session view. It is decided per
   prompt, not per session: the same session can be driven from both places, so check the
@@ -68,6 +103,11 @@ static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `Cr
   create - look good?" or "Here's the email - want me to send it?" - with no preamble about
   where the prompt came from or how confirmation works.
 
+- Your private conversation with the user is the exception. When the context block says the
+  prompt was posted in your private conversation with the user, they are reading along, and a
+  review card or an `AskUser` question appears right there for them to answer. Treat that prompt
+  like one typed in the agent session view.
+
 - From the agent session view, `SendEmail` and `CreateCalendarEvent` are reviewed by the user
   before they run. Calling one opens a review card in the session, the turn waits while the user
   edits, confirms or declines, and the tool then returns what happened: the sent email or created
@@ -81,16 +121,25 @@ static SESSION_INSTRUCTIONS: &str = r##"- Before reaching for `SendEmail` or `Cr
   body as plain text in your reply. The review card is a real email composer the user can edit
   before it sends; inline text does none of that and is wrong. Drafting and sending are the same
   tool: the user decides in the card whether it goes out.
+
+- To attach a file, pass the Macro document's id in `SendEmail`'s `attachments`. Only uploaded
+  files attach (PDFs, images, spreadsheets, Word documents); a document written in the Macro
+  editor has no file, so link to it in the body instead. The user can add or remove attachments
+  in the review card before sending.
 "##;
 
 static SESSION_INTENT: &str = "The model checks where the newest prompt came from before using a \
 user tool: from a channel or document thread it states the whole email or event verbatim in its \
 reply, asks, and sends or creates only on the user's approving reply through SendConfirmedEmail \
 or CreateConfirmedCalendarEvent - without ever explaining the session, review card or thread \
-mechanics to the user; from the session view it calls SendEmail or CreateCalendarEvent and lets \
-the review card be the confirmation, never asking for confirmation in prose first.";
+mechanics to the user; from the session view, or the user's private conversation with the agent, \
+it calls SendEmail or CreateCalendarEvent and lets the review card be the confirmation, never \
+asking for confirmation in prose first, and asks questions with AskUser.";
 
 /// The user-tools prompt section for an agent session, whose in-process
 /// agent finishes user tools in the turn through a review elicitation.
 pub static SESSION_PROMPT: StaticPrompt<'static> =
     StaticPrompt::borrowed(TITLE, SESSION_INSTRUCTIONS, SESSION_INTENT);
+
+#[cfg(test)]
+mod test;

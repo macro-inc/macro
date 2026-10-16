@@ -10,5 +10,5 @@ export type NotifEventOneOfFivethreeTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfFivethreeTag = {
-  agent_session_mentioned: 'agent_session_mentioned',
+  agent_session_settled: 'agent_session_settled',
 } as const;

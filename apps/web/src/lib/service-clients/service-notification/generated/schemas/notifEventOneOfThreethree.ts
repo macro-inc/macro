@@ -4,14 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CalendarEventReminderMetadata } from './calendarEventReminderMetadata';
+
 import type { NotifEventOneOfThreethreeTag } from './notifEventOneOfThreethreeTag';
+import type { TaskAssignedMetadata } from './taskAssignedMetadata';
 
 /**
- * A calendar event alarm came due.
+ * A user was assigned to a task.
  */
 export type NotifEventOneOfThreethree = {
-  /** A calendar event alarm came due. */
-  content: CalendarEventReminderMetadata;
+  /** A user was assigned to a task. */
+  content: TaskAssignedMetadata;
   tag: NotifEventOneOfThreethreeTag;
 };

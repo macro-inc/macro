@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "trigger_context"
+publish = false
+version = "0.1.0"
+
+# Why an agent was called, as it travels from whatever called it to whoever
+# composes the agent's prompt. Plain data, so the self-hosted daemon and the
+# session control API can carry it without the producers' dependencies.
+[dependencies]
+bot_id = { path = "../bot_id" }
+chrono = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -10,5 +10,5 @@ export type NotifEventOneOfFivefiveTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfFivefiveTag = {
-  channel_message_reaction: 'channel_message_reaction',
+  agent_session_waiting_for_input: 'agent_session_waiting_for_input',
 } as const;

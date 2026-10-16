@@ -1,14 +1,6 @@
-import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import {
-  CallDetailActions,
-  CallDetailContent,
-  CallDetailRoot,
-  useCallDetail,
-} from '@block-call/views/CallDetailView';
-import { SplitPanel } from '@components/app/split-panel';
+import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { CallDetailView } from '@block-call/views/CallDetailView';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
-import { onMount, Show } from 'solid-js';
 import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
 import { useDriveView } from '../context/drive-context';
 import {
@@ -51,44 +43,18 @@ export function DriveCallDetail(props: {
   messageId?: string;
   seek?: string;
 }) {
-  const detail = useCallDetail(() => props.callId);
-  const analytics = useAnalytics();
-  onMount(() => {
-    analytics.pageView('call');
-    analytics.track('open_entity', {
-      entityType: 'call',
-      entityId: props.callId,
-    });
-  });
-
   return (
-    <CallDetailRoot callId={props.callId}>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-        <ViewShell.TopBar class="touch:flex">
-          <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-          <DriveCallBreadcrumb
-            callId={props.callId}
-            name={detail.data()?.name ?? 'Call Recording'}
-          />
-          <Show when={detail.data()}>
-            {(data) => (
-              <CallDetailActions
-                callId={props.callId}
-                record={data().record}
-                name={data().name}
-              />
-            )}
-          </Show>
-        </ViewShell.TopBar>
-        <CallDetailContent
+    <CallDetailView
+      callId={props.callId}
+      transcriptId={props.transcriptId}
+      messageId={props.messageId}
+      seek={props.seek}
+      header={(data) => (
+        <DriveCallBreadcrumb
           callId={props.callId}
-          query={detail.query}
-          data={detail.data()}
-          transcriptId={props.transcriptId}
-          messageId={props.messageId}
-          seek={props.seek}
+          name={data()?.name ?? 'Call Recording'}
         />
-      </div>
-    </CallDetailRoot>
+      )}
+    />
   );
 }

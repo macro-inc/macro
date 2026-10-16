@@ -5,12 +5,28 @@ language: typescript
 severity: warning
 message: Feature queries/ and primitives/ never import components, views, or UI primitives. They produce data and view-state; views render it.
 note: |-
-  Rule FE-33 in docs/STYLE_GUIDE.md. `queries/` adapts wire types and
+  Rule FE-33 in docs/development/style-guide.md. `queries/` adapts wire types and
   builds query factories; `primitives/` consumes feature-owned capabilities
   to produce state and actions with Solid primitives but no JSX. Test adapters
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/access-requests/queries/**
+  - apps/web/src/features/access-requests/primitives/**
+  - apps/web/src/features/agent-activity/queries/**
+  - apps/web/src/features/agent-dms/queries/**
+  - apps/web/src/features/agent-conversations/queries/**
+  - apps/web/src/features/agent-activity/primitives/**
+  - apps/web/src/features/agent-dms/primitives/**
+  - apps/web/src/features/agent-conversations/primitives/**
+  - apps/web/src/features/agent-interactions/queries/**
+  - apps/web/src/features/agent-interactions/primitives/**
+  - apps/web/src/features/billing-lab/queries/**
+  - apps/web/src/features/billing-lab/primitives/**
+  - apps/web/src/features/calendar-team/queries/**
+  - apps/web/src/features/calendar-team/primitives/**
+  - apps/web/src/features/tasks-view/queries/task-board*
+  - apps/web/src/features/tasks-view/primitives/create-task-board*
   - apps/web/src/features/sharing/share-delivery/queries/**
   - apps/web/src/features/sharing/share-delivery/primitives/**
   - apps/web/src/features/routines/queries/**
@@ -35,6 +51,10 @@ files:
   - apps/web/src/features/channel/Call/chat/primitives/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
+  - apps/web/src/features/block-ai/queries/**
+  - apps/web/src/features/block-ai/primitives/**
+  - apps/web/src/features/block-psd/queries/**
+  - apps/web/src/features/block-psd/primitives/**
   - apps/web/src/features/meetings/queries/**
   - apps/web/src/features/meetings/primitives/**
   - apps/web/src/features/block-spreadsheet/queries/**
@@ -59,6 +79,8 @@ files:
   - apps/web/src/features/onboarding/primitives/**
   - apps/web/src/features/auth/primitives/**
   - apps/web/src/features/auth/queries/**
+  - apps/web/src/features/block-form/queries/**
+  - apps/web/src/features/block-form/primitives/**
 rule:
   kind: string
   regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views|ui|component)(/|['"]))

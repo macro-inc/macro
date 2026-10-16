@@ -1,5 +1,5 @@
-import type { DatabaseEntityType } from '@app/features/block-database/core/column-inference';
 import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
+import type { DatabaseEntityType } from '../../database/core/column-inference';
 import type { ReferenceNames } from '../core/answer-cell';
 import type { QueryAnswer } from '../core/query';
 

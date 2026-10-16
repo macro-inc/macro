@@ -88,3 +88,29 @@ export const updateRoutineHandler = createToolRenderer({
     />
   ),
 });
+export const runRoutineHandler = createToolRenderer({
+  name: 'RunRoutine',
+  handleResponse: async () => {
+    await invalidateSchedules();
+  },
+  render: (ctx) => (
+    <RoutineResult
+      label={ctx.response ? 'Started routine' : 'Run routine'}
+      result={ctx.response?.data}
+      renderContext={ctx.renderContext}
+    />
+  ),
+});
+export const deleteRoutineHandler = createToolRenderer({
+  name: 'DeleteRoutine',
+  handleResponse: async () => {
+    await invalidateSchedules();
+  },
+  render: (ctx) => (
+    <RoutineResult
+      label={ctx.response ? 'Deleted routine' : 'Delete routine'}
+      result={ctx.response?.data}
+      renderContext={ctx.renderContext}
+    />
+  ),
+});

@@ -24,6 +24,13 @@ pub struct ImportedUpdate {
     pub touched_nodes: Vec<String>,
 }
 
+/// The Lexical root of a document before and after a client's updates.
+#[derive(Debug, PartialEq)]
+pub struct RootChange {
+    pub before: serde_json::Value,
+    pub after: serde_json::Value,
+}
+
 #[derive(Debug)]
 pub struct DocumentState {
     pub loro_doc: LoroDoc,
@@ -115,6 +122,35 @@ impl DocumentState {
             changed: before != after,
             touched_nodes: self.touched_lexical_ids(&before, &after),
         })
+    }
+
+    /// The Lexical root before and after `updates`, leaving this document
+    /// unchanged. `None` when the updates write outside the root, or depend on
+    /// operations this document lacks and so could not be checked.
+    pub fn root_change(&self, updates: &[&[u8]]) -> Result<Option<RootChange>> {
+        let preview = self.loro_doc.fork();
+        for update in updates {
+            let status = preview
+                .import_with(update, FROM_CLIENT_TAG)
+                .context("failed to import update")?;
+            if status.pending.is_some() {
+                return Ok(None);
+            }
+        }
+        let mut before = deep_json(&self.loro_doc)?;
+        let mut after = deep_json(&preview)?;
+        let (Some(before_root), Some(after_root)) = (
+            before
+                .as_object_mut()
+                .and_then(|value| value.remove("root")),
+            after.as_object_mut().and_then(|value| value.remove("root")),
+        ) else {
+            return Ok(None);
+        };
+        Ok((before == after).then_some(RootChange {
+            before: before_root,
+            after: after_root,
+        }))
     }
 
     /// Diff the two frontiers and return the Lexical node IDs whose backing
@@ -212,6 +248,10 @@ impl DocumentState {
 
         Ok(())
     }
+}
+
+fn deep_json(doc: &LoroDoc) -> Result<serde_json::Value> {
+    serde_json::from_str(&doc.get_deep_value().to_json()).context("failed to read document json")
 }
 
 #[cfg(test)]

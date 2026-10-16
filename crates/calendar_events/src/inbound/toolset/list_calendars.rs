@@ -8,7 +8,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::{CalendarToolContext, mutation_tool_error};
-use crate::domain::ports::{CalendarMutationService, CalendarOccurrenceService};
+use crate::domain::ports::{
+    CalendarMutationService, CalendarOccurrenceService, MeetingLinkProvider,
+};
 
 /// A calendar surfaced to the AI.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -59,17 +61,18 @@ impl ToolAnnotated for ListCalendars {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for ListCalendars
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for ListCalendars
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = ListCalendarsToolResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!("List calendars");

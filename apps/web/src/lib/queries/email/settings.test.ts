@@ -57,6 +57,7 @@ function accounts(signature: string, replySignature = true): MailAccountsQuery {
           isPrimary: true,
           needsReauth: false,
           draftIsSignal: true,
+          sendAs: [],
           settings: {
             signature,
             signatureOnRepliesForwards: replySignature,
@@ -84,6 +85,7 @@ function setupCatalog() {
     clientId: 'settings-test',
     onOpsAffected: () => () => {},
     onCacheGenerationChanged: () => () => {},
+    onMutationSettled: () => () => {},
     claimNextMutation: async () => undefined,
     readQuery: async () => ({ kind: 'hit', data: structuredClone(stored) }),
     writeQuery: async (args) => {
@@ -103,6 +105,7 @@ function setupCatalog() {
     | 'clientId'
     | 'onOpsAffected'
     | 'onCacheGenerationChanged'
+    | 'onMutationSettled'
     | 'claimNextMutation'
     | 'readQuery'
     | 'writeQuery'

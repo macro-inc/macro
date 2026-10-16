@@ -7,6 +7,7 @@
 import type { HttpSendChatMessageRequestAdditionalInstructions } from './httpSendChatMessageRequestAdditionalInstructions';
 import type { HttpSendChatMessageRequestAttachments } from './httpSendChatMessageRequestAttachments';
 import type { HttpSendChatMessageRequestChatId } from './httpSendChatMessageRequestChatId';
+import type { ModelSpeed } from './modelSpeed';
 import type { ToolSet } from './toolSet';
 
 /**
@@ -24,6 +25,8 @@ export interface HttpSendChatMessageRequest {
   content: string;
   /** The model to respond with (`provider/model` id) */
   model: string;
+  /** Inference speed, validated against the selected model. Defaults to standard. */
+  speed?: ModelSpeed;
   /** Which toolset to use. Defaults to `all` */
   toolset?: ToolSet;
 }

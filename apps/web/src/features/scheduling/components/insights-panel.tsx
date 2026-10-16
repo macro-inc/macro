@@ -48,10 +48,10 @@ function InsightSection(props: {
   children: JSX.Element;
 }) {
   return (
-    <section class="min-w-0 overflow-hidden rounded-xl border border-edge-muted bg-panel">
-      <header class="flex flex-wrap items-center justify-between gap-3 border-b border-edge-muted bg-surface-1 px-5 py-4">
+    <section class="min-w-0 overflow-hidden border-t border-edge-muted">
+      <header class="flex flex-wrap items-center justify-between gap-3 py-4">
         <div>
-          <h2 class="text-sm font-semibold">{props.title}</h2>
+          <h2 class="text-sm font-medium">{props.title}</h2>
           <Show when={props.description}>
             <p class="mt-1 text-xs text-ink-muted">{props.description}</p>
           </Show>
@@ -77,7 +77,7 @@ function Metric(props: {
       ? props.value < props.previous
       : props.value > props.previous);
   return (
-    <div class="flex min-w-0 flex-col gap-2 p-5">
+    <div class="flex min-w-0 flex-col gap-2 px-4 py-3">
       <div class="flex items-center gap-1.5 text-sm text-ink-muted">
         <span>{props.label}</span>
         <Tooltip label={props.definition}>
@@ -90,7 +90,7 @@ function Metric(props: {
           </button>
         </Tooltip>
       </div>
-      <p class="text-3xl font-semibold tracking-tight tabular-nums">
+      <p class="text-2xl font-medium tracking-tight tabular-nums">
         {Number.isInteger(props.value)
           ? props.value.toLocaleString()
           : props.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}

@@ -58,12 +58,13 @@ fn thread() -> (EntityKey<'static>, Record) {
 
 #[test]
 fn resumes_only_missing_branches_preserving_aliases_nulls_order_and_dependencies() {
-    let selection = RecordSelection::parse(
+    let selection = RecordSelection::parse(crate::meta::bundled_schema_ref(),
         "fragment Thread on GraphqlSoupEmailThread { id first: messages { id subject } second: messages { id } }",
         "Thread",
     ).unwrap();
     let (thread_key, thread) = thread();
     let mut session = ReadSession::new(
+        crate::meta::bundled_schema_ref(),
         &thread_key,
         "GraphqlSoupEmailThread",
         selection.selection_set(),
@@ -110,13 +111,14 @@ fn resumes_only_missing_branches_preserving_aliases_nulls_order_and_dependencies
 }
 
 #[test]
-fn overwritten_duplicate_selection_cannot_patch_later_output() {
-    let selection = RecordSelection::parse(
+fn duplicate_selections_merge_across_hydration_rounds() {
+    let selection = RecordSelection::parse(crate::meta::bundled_schema_ref(),
         "fragment Thread on GraphqlSoupEmailThread { messages { id subject } ... on GraphqlSoupEmailThread { messages { id } } }",
         "Thread",
     ).unwrap();
     let (thread_key, thread) = thread();
     let mut session = ReadSession::new(
+        crate::meta::bundled_schema_ref(),
         &thread_key,
         "GraphqlSoupEmailThread",
         selection.selection_set(),
@@ -142,6 +144,7 @@ fn overwritten_duplicate_selection_cannot_patch_later_output() {
         panic!("all selected records are present");
     };
     let ReadOutcome::Complete(expected) = denormalize_record(
+        crate::meta::bundled_schema_ref(),
         &thread_key,
         "GraphqlSoupEmailThread",
         selection.selection_set(),
@@ -153,13 +156,17 @@ fn overwritten_duplicate_selection_cannot_patch_later_output() {
         panic!("fully resident read completes");
     };
     assert_eq!(data, expected);
-    assert_eq!(data["messages"][2], serde_json::json!({"id": "cold"}));
+    assert_eq!(
+        data["messages"][2],
+        serde_json::json!({"id": "cold", "subject": "Subject cold"})
+    );
     assert!(deps.contains(&key("cold")));
 }
 
 #[test]
 fn a_field_miss_survives_later_record_hydration() {
     let selection = RecordSelection::parse(
+        crate::meta::bundled_schema_ref(),
         "fragment Thread on GraphqlSoupEmailThread { id messages { id subject } }",
         "Thread",
     )
@@ -169,6 +176,7 @@ fn a_field_miss_survives_later_record_hydration() {
     let mut source = CountingSource::default();
     source.records.insert(thread_key.clone(), thread);
     let mut session = ReadSession::new(
+        crate::meta::bundled_schema_ref(),
         &thread_key,
         "GraphqlSoupEmailThread",
         selection.selection_set(),
@@ -208,7 +216,12 @@ fn resumed_reads_retain_argument_qualified_viewer_fields() {
             fields: [("user".into(), CacheValue::Ref(viewer.clone()))].into(),
         },
     );
-    let mut session = ReadSession::new(&root, meta::QUERY_ROOT_TYPE, &operation.selection_set);
+    let mut session = ReadSession::new(
+        crate::meta::bundled_schema_ref(),
+        &root,
+        meta::bundled_schema_ref().query_root(),
+        &operation.selection_set,
+    );
     let mut deps = QueryDependencies::default();
     let mut plans = ReadPlans::default();
     let variables = serde_json::Map::new();
@@ -293,6 +306,7 @@ fn fixture() -> (
 ) {
     let doc = Document::parse(QUERY).unwrap();
     let records = normalize(
+        crate::meta::bundled_schema_ref(),
         doc.operation(None).unwrap(),
         &Default::default(),
         &json!({"user": {
@@ -327,6 +341,7 @@ fn deleted_links_are_absent_without_hiding_the_page_including_through_aliases() 
             .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
         let mut deps = BTreeSet::new();
         let outcome = denormalize(
+            crate::meta::bundled_schema_ref(),
             doc.operation(None).unwrap(),
             &Default::default(),
             &records,
@@ -346,14 +361,18 @@ fn deleted_links_are_absent_without_hiding_the_page_including_through_aliases() 
         assert!(deps.contains(&local));
         assert!(deps.contains(&target));
 
-        let resolvers = EntityResolverLookup::compile(&[EntityResolver {
-            parent_type: "GraphqlUser".into(),
-            field_name: "emailThread".into(),
-            target_type: "GraphqlSoupEmailThread".into(),
-            argument_path: vec!["input".into(), "threadId".into()],
-        }])
+        let resolvers = EntityResolverLookup::compile(
+            crate::meta::bundled_schema_ref(),
+            &[EntityResolver {
+                parent_type: "GraphqlUser".into(),
+                field_name: "emailThread".into(),
+                target_type: "GraphqlSoupEmailThread".into(),
+                argument_path: vec!["input".into(), "threadId".into()],
+            }],
+        )
         .unwrap();
         let resolved = denormalize_with_entity_resolvers(
+            crate::meta::bundled_schema_ref(),
             doc.operation(None).unwrap(),
             &Default::default(),
             &records,
@@ -365,10 +384,12 @@ fn deleted_links_are_absent_without_hiding_the_page_including_through_aliases() 
 
         // Explicit record reads still report the deleted entity as unavailable.
         let fragment = Document::parse("query { id }").unwrap();
-        assert!(matches!(denormalize_record(
+        assert!(
+            matches!(denormalize_record(crate::meta::bundled_schema_ref(),
             &local, "GraphqlSoupEmailThread", &fragment.operation(None).unwrap().selection_set,
             &Default::default(), &records, &mut BTreeSet::new(),
-        ).unwrap(), ReadOutcome::Miss { field, .. } if field == "deleted cache identity"));
+        ).unwrap(), ReadOutcome::Miss { field, .. } if field == "deleted cache identity")
+        );
     }
 }
 
@@ -379,6 +400,7 @@ fn unknown_records_and_alias_cycles_still_make_the_read_incomplete() {
     let target = EntityKey::entity("GraphqlSoupEmailThread", &["server"]);
     records.insert(local.clone(), alias_record(&target));
     let outcome = denormalize(
+        crate::meta::bundled_schema_ref(),
         doc.operation(None).unwrap(),
         &Default::default(),
         &records,
@@ -388,6 +410,7 @@ fn unknown_records_and_alias_cycles_still_make_the_read_incomplete() {
     assert!(matches!(outcome, ReadOutcome::NeedRecords(keys) if keys.contains(&target)));
     records.insert(target, alias_record(&local));
     let outcome = denormalize(
+        crate::meta::bundled_schema_ref(),
         doc.operation(None).unwrap(),
         &Default::default(),
         &records,
@@ -406,6 +429,7 @@ fn required_singular_links_cannot_return_null_for_a_deleted_record() {
         .fields
         .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
     let outcome = denormalize(
+        crate::meta::bundled_schema_ref(),
         doc.operation(None).unwrap(),
         &Default::default(),
         &records,
@@ -421,6 +445,7 @@ fn required_singular_links_cannot_return_null_for_a_deleted_record() {
 fn resumed_aliases_and_tombstones_preserve_list_positions_and_completed_work() {
     for deleted_id in ["hot", "server"] {
         let selection = RecordSelection::parse(
+            crate::meta::bundled_schema_ref(),
             "fragment Thread on GraphqlSoupEmailThread { messages { id subject } }",
             "Thread",
         )
@@ -438,6 +463,7 @@ fn resumed_aliases_and_tombstones_preserve_list_positions_and_completed_work() {
                 .insert(DELETED_FIELD.into(), CacheValue::Bool(true));
         }
         let mut session = ReadSession::new(
+            crate::meta::bundled_schema_ref(),
             &thread_key,
             "GraphqlSoupEmailThread",
             selection.selection_set(),
@@ -491,11 +517,13 @@ fn resumed_aliases_and_tombstones_preserve_list_positions_and_completed_work() {
 #[test]
 fn alias_cycle_detection_survives_storage_hydration() {
     let selection = RecordSelection::parse(
+        crate::meta::bundled_schema_ref(),
         "fragment Message on GraphqlSoupEmailMessage { id }",
         "Message",
     )
     .unwrap();
     let mut session = ReadSession::new(
+        crate::meta::bundled_schema_ref(),
         &key("local"),
         "GraphqlSoupEmailMessage",
         selection.selection_set(),

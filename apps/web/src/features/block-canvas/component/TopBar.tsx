@@ -33,19 +33,12 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { onMount } from 'solid-js';
 import { URL_PARAMS } from '../constants';
-import { useCanvasDocument } from '../context/canvas-document-context';
-import { useToolManager } from '../signal/toolManager';
-import { useRenderState } from '../store/RenderState';
+import type { CanvasDocumentChrome } from './CanvasDocument';
 
-export function TopBar() {
+export function TopBar(props: { state: CanvasDocumentChrome }) {
   const analytics = useAnalytics();
 
-  const toolManager = useToolManager();
-  const { getLocation } = useRenderState();
-  const [getCurrentSavedFile] =
-    useCanvasDocument().state.signals.currentSavedFile;
   const documentId = useBlockId();
   const fileName = useBlockDocumentName('Unknown Filename');
   const downloadName = useBlockDocumentDownloadName('Unknown Filename');
@@ -62,13 +55,8 @@ export function TopBar() {
   }));
   const copyEntityLink = useCopyLink();
 
-  let ref!: HTMLDivElement;
-  onMount(() => {
-    toolManager.ignoreMouseEvents(ref);
-  });
-
   const downloadDocument = createCallback(async () => {
-    const file = getCurrentSavedFile() ?? canvasFile();
+    const file = props.state.savedFile() ?? canvasFile();
     if (!file) return;
 
     downloadFile(file, downloadName());
@@ -76,7 +64,7 @@ export function TopBar() {
   });
 
   const copyLink = () => {
-    const location = getLocation();
+    const location = props.state.location();
     const params = {
       [URL_PARAMS.x]: location.x.toString(),
       [URL_PARAMS.y]: location.y.toString(),
@@ -127,7 +115,7 @@ export function TopBar() {
   ];
 
   return (
-    <div ref={ref}>
+    <div>
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>

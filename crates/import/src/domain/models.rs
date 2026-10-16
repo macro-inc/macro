@@ -53,7 +53,7 @@ impl ImportSource {
         match self {
             ImportSource::Linear => &["linear"],
             ImportSource::Notion => &["notion"],
-            // Keep the canonical fallback from docs/SLACK_LIVE_CHANNEL_IMPORT.md
+            // Keep the canonical fallback from docs/runbooks/slack-live-channel-import.md
             // until live verification supports switching to `slack_v2`.
             ImportSource::Slack => &["slack", "slack_v2"],
         }

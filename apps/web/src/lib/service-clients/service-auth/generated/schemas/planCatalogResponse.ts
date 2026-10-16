@@ -4,12 +4,17 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AutoReloadDefaults } from './autoReloadDefaults';
 import type { PlanCatalogEntry } from './planCatalogEntry';
 
 /**
  * The plan catalog and the knobs the billing UI offers.
  */
 export interface PlanCatalogResponse {
+  /** Thresholds automatic reload starts from before the payer sets their own. */
+  auto_reload_defaults: AutoReloadDefaults;
+  /** Largest allowed automatic reload target, cents. */
+  auto_reload_target_max_cents: number;
   /** Credit packs a payer may buy, cents. */
   credit_packs_cents: number[];
   /** Largest allowed overage cap, cents. */

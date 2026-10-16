@@ -340,6 +340,9 @@ export type SplitManager = {
     options?: OpenWithSplitOptions
   ) => OpenSplitResult;
 
+  /** Starts loading `content`'s route, as on hover, without opening it. */
+  preloadContent: (content: SplitContent) => void;
+
   /** Set a split as active by its split id  */
   activateSplit: (id: SplitId) => void;
 
@@ -1717,6 +1720,13 @@ export function createSplitLayout(
     replaceAllSplits,
     getSplit,
     openWithSplit,
+    preloadContent: (content) => {
+      try {
+        void router.preload(toLocation(content));
+      } catch {
+        // Speculative: the navigation itself reports content it can't route.
+      }
+    },
     removeSplit,
     swapSplit,
     canSwapSplit,

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH removed AS (\n            DELETE FROM email_message_labels\n            WHERE $3::bool\n              AND message_id = $1::uuid\n              AND label_id NOT IN (SELECT UNNEST($2::uuid[]))\n        )\n        INSERT INTO email_message_labels (message_id, label_id)\n        SELECT $1, label_id FROM UNNEST($2::uuid[]) AS t(label_id)\n        ON CONFLICT (message_id, label_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4d86a34e867a2f184c852a7a3040e4ea0cca6ff307640325618afdf5ba47fae9"
+}

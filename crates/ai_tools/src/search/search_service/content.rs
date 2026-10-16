@@ -15,6 +15,7 @@ use models_search::unified::{
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
+use uuid::Uuid;
 
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +42,12 @@ pub struct ContentSearch {
     pub entity_types: Vec<UnifiedSearchIndex>,
 
     #[schemars(
+        description = "Search only the transcripts of these agent sessions, by id, and nothing else. Use it with your own session id to find the exact words of something said earlier in your conversation, including parts that were summarized to keep it within your context. Omit to search every type."
+    )]
+    #[serde(default)]
+    pub agent_session_ids: Vec<Uuid>,
+
+    #[schemars(
         description = "Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results."
     )]
     #[serde(default)]
@@ -64,6 +71,21 @@ exists in both the personal and team sets is ambiguous — set scope on that ent
 Ignored unless tags is set.")]
     #[serde(default)]
     pub tags_match: TagMatch,
+}
+
+/// Which items a content search reaches: the named agent sessions alone
+/// when it names any, otherwise the requested types.
+fn content_filters(
+    entity_types: &[UnifiedSearchIndex],
+    agent_session_ids: &[Uuid],
+    base: EntityFilters,
+) -> EntityFilters {
+    if agent_session_ids.is_empty() {
+        return entity_filters_from_include(entity_types.to_vec(), base);
+    }
+    let mut filters = entity_filters_from_include(vec![UnifiedSearchIndex::AgentSessions], base);
+    filters.agent_session_filters.ids = agent_session_ids.iter().map(Uuid::to_string).collect();
+    filters
 }
 
 impl ToolAnnotated for ContentSearch {
@@ -138,7 +160,7 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
         let search_request = UnifiedSearchRequest {
             query: self.query.to_owned(),
             match_type: self.match_type.into(),
-            filters: entity_filters_from_include(self.entity_types.clone(), base_filters),
+            filters: content_filters(&self.entity_types, &self.agent_session_ids, base_filters),
             search_on: models_search::SearchOn::Content,
             include_crm: false,
             collapse: None,

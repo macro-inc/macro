@@ -1,4 +1,4 @@
-import { SoupNotificationsDocument } from '@service-storage/graphql/generated/graphql';
+import { ChannelDetailSoupDocument } from '@service-storage/graphql/generated/graphql';
 import type { GraphqlNotificationPatch } from '@service-storage/graphql-soup-websocket';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -32,7 +32,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setup() {
+function setup(query: { isSuccess?: boolean; data?: { id: string }[] } = {}) {
   vi.useFakeTimers();
   vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
   mocks.client.query.mockImplementation(() => ({
@@ -41,7 +41,7 @@ function setup() {
       return {};
     },
   }));
-  mocks.createQuery.mockReturnValue({ refetch: mocks.refetch });
+  mocks.createQuery.mockReturnValue({ refetch: mocks.refetch, ...query });
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [enabled, setEnabled] = createSignal(true);
@@ -59,11 +59,11 @@ function setup() {
   });
 }
 
-describe('complete channel notification edge', () => {
+describe('complete unread channel notification edge', () => {
   it('registers only this channel for read-state reconciliation while enabled', () => {
     const f = setup();
     const options = mocks.createQuery.mock.calls[0][0]();
-    expect(options.query).toBe(SoupNotificationsDocument);
+    expect(options.query).toBe(ChannelDetailSoupDocument);
     expect(options.variables.input.initial.filters.channelFilter).toEqual({
       literal: { channelId: 'channel' },
     });
@@ -88,6 +88,23 @@ describe('complete channel notification edge', () => {
     });
     f.setEnabled(false);
     f.patch();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(mocks.refetch).toHaveBeenCalledOnce();
+  });
+
+  it('refreshes when a known notification is read elsewhere, since read ones leave the edge', async () => {
+    setup({ isSuccess: true, data: [{ id: 'known' }] });
+    channelNotificationRefresh(mocks.client as never).onPatch(
+      {
+        __typename: 'GraphqlUpdatedNotification',
+        notification: {
+          id: 'known',
+          entityType: 'CHANNEL',
+          entityId: 'channel',
+        },
+      } as GraphqlNotificationPatch,
+      true
+    );
     await vi.advanceTimersByTimeAsync(100);
     expect(mocks.refetch).toHaveBeenCalledOnce();
   });

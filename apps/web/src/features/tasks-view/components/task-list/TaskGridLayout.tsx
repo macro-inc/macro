@@ -60,6 +60,7 @@ function buildStubProperty(col: TaskGridColumn): Property {
 
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
+  onFilterByTag?: (optionId: string) => void;
 };
 
 export function TaskGridLayout(props: TaskGridLayoutProps) {
@@ -177,6 +178,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
             entityId={props.entity.id}
             entityType={EntityType.TASK}
             properties={entity().properties}
+            onFilterByTag={props.onFilterByTag}
             class="ml-auto"
           />
         </Entity.Slot>

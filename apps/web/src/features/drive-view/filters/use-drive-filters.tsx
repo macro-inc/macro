@@ -2,7 +2,7 @@ import type { ListFilterGroup } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableDatabases } from '@core/constant/featureFlags';
+import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useContacts } from '@queries/contacts/contacts';
 import { createMemo } from 'solid-js';
@@ -12,6 +12,7 @@ export type DriveFilterGroupId = 'type' | 'created-by' | 'tags' | 'scope';
 
 const typeOptions = [
   { id: 'database', label: 'Database', type: 'database' },
+  { id: 'form', label: 'Form', type: 'form' },
   { id: 'doc-markdown', label: 'Markdown', type: 'md' },
   { id: 'doc-canvas', label: 'Canvas', type: 'canvas' },
   { id: 'doc-spreadsheet', label: 'Spreadsheet', type: 'spreadsheet' },
@@ -33,6 +34,7 @@ export function useDriveFilters() {
 
   const contacts = useContacts();
   const databasesFlag = useFeatureFlag(enableDatabases);
+  const formsFlag = useFeatureFlag(enableForms);
 
   const tagGroup = useTagFilterGroup();
 
@@ -64,22 +66,24 @@ export function useDriveFilters() {
     });
   });
 
-  const showCreators = () => {
+  // Menu structure only depends on location/scope, not the selected facets.
+  // Reading the whole state in `groups` remounts its submenus on each selection.
+  const showCreators = createMemo(() => {
     const { location, scope } = state.value();
 
     if (location.kind === 'folder') return true;
 
     return location.tab !== 'owned' || scope !== 'default';
-  };
+  });
+  const isRecent = createMemo(() => {
+    const location = state.value().location;
+    return location.kind === 'tab' && location.tab === 'recent';
+  });
 
   const groups = createMemo(() => {
     const groups: ListFilterGroup<DriveFilterGroupId, string>[] = [];
 
-    const location = state.value().location;
-
-    const isRecent = location.kind === 'tab' && location.tab === 'recent';
-
-    if (!isRecent) {
+    if (!isRecent()) {
       const tags = tagGroup();
 
       if (tags.options.length > 0) groups.push(tags);
@@ -89,7 +93,9 @@ export function useDriveFilters() {
         label: 'Type',
         options: typeOptions
           .filter(
-            (option) => option.id !== 'database' || databasesFlag().enabled
+            (option) =>
+              (option.id !== 'database' || databasesFlag().enabled) &&
+              (option.id !== 'form' || formsFlag().enabled)
           )
           .map((option) => ({
             id: option.id,

@@ -3,7 +3,8 @@ import { enableUserInfoQuery } from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
+import { resetTeamCalendarSession } from '../calendar/team-cache';
 import { queryClient, queryPersistence } from '../client';
 import { resetGraphqlSoupDoneSession } from '../soup/graphql/done-session';
 import { authKeys } from './keys';
@@ -22,32 +23,38 @@ type UseUserInfoQueryOptions = {
   enabled?: boolean | (() => boolean);
 };
 
+function fetchLegacyUserPermissions() {
+  return throwOnErr(() => authServiceClient.getLegacyUserPermissions());
+}
+
+// Cached callbacks stay at module scope so they never retain the caller.
+function userInfoQueryOptions(enabled: boolean) {
+  return queryOptions({
+    queryKey: authKeys.userInfo.queryKey,
+    queryFn: fetchLegacyUserPermissions,
+    throwOnError: false,
+    staleTime: USER_INFO_STALE_TIME,
+    // Signed-out screens also observe this query. Retrying their cached 401
+    // on mount resets auth to loading, unmounts them, and repeats forever.
+    // Successful login explicitly invalidates the query to refresh identity.
+    retryOnMount: false,
+    // Never pause on navigator.onLine — it reports false during native cold
+    // launches (e.g. woken by a notification tap) while the network is fine,
+    // and a paused auth check renders as "unauthenticated" at the base path.
+    networkMode: 'always',
+    enabled,
+  });
+}
+
 /** Query for the current user's info and permissions. */
 export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
-  return useQuery(() => {
-    const enabled =
+  return useQuery(() =>
+    userInfoQueryOptions(
       typeof options?.enabled === 'function'
         ? options.enabled()
-        : (options?.enabled ?? true);
-    return {
-      queryKey: authKeys.userInfo.queryKey,
-      queryFn: async () =>
-        await throwOnErr(
-          async () => await authServiceClient.getLegacyUserPermissions()
-        ),
-      throwOnError: false,
-      staleTime: USER_INFO_STALE_TIME,
-      // Signed-out screens also observe this query. Retrying their cached 401
-      // on mount resets auth to loading, unmounts them, and repeats forever.
-      // Successful login explicitly invalidates the query to refresh identity.
-      retryOnMount: false,
-      // Never pause on navigator.onLine — it reports false during native cold
-      // launches (e.g. woken by a notification tap) while the network is fine,
-      // and a paused auth check renders as "unauthenticated" at the base path.
-      networkMode: 'always',
-      enabled,
-    };
-  });
+        : (options?.enabled ?? true)
+    )
+  );
 }
 
 /** Invalidate the user info query to trigger a refetch. */
@@ -63,6 +70,7 @@ export function invalidateAllAfterLogin() {
   // Login may replace a session without visiting logout (including native auth).
   // Invalidate old display-intent handles before refetching the new identity.
   resetGraphqlSoupDoneSession();
+  resetTeamCalendarSession();
   enableUserInfoQuery();
   const invalidated = queryClient.invalidateQueries();
   // Rebind this device's push registrations once the refetches above have
@@ -92,10 +100,7 @@ export async function prefetchUserInfo() {
     async () =>
       await queryClient.fetchQuery({
         queryKey: authKeys.userInfo.queryKey,
-        queryFn: async () =>
-          await throwOnErr(
-            async () => await authServiceClient.getLegacyUserPermissions()
-          ),
+        queryFn: fetchLegacyUserPermissions,
         networkMode: 'always',
         // Even a fresh in-memory logout stub is not the new login's identity.
         staleTime: 0,
@@ -107,10 +112,7 @@ export async function prefetchUserInfo() {
 export async function fetchUserInfo() {
   return queryClient.fetchQuery({
     queryKey: authKeys.userInfo.queryKey,
-    queryFn: async () =>
-      await throwOnErr(
-        async () => await authServiceClient.getLegacyUserPermissions()
-      ),
+    queryFn: fetchLegacyUserPermissions,
     networkMode: 'always',
   });
 }

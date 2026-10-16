@@ -1,6 +1,13 @@
 import { getTokens, Model } from '@ironcalc/wasm';
 import { type DrawingPoint, isChartLiteral } from './sheet-drawings';
 import {
+  boundsSqref,
+  type CellBounds,
+  sqrefBounds,
+  subtractBounds,
+} from './sheet-rules';
+import {
+  columnName,
   formatCellAddress,
   parseCellAddress,
   SPREADSHEET_MAX_COLUMNS,
@@ -481,4 +488,278 @@ export function changeWorkbookAxis(
   } finally {
     model.free();
   }
+}
+
+/** Cells dragged to another place on their sheet. */
+export type RangeMove = {
+  sheetId: string;
+  /** The zero-based cells that move. */
+  source: CellBounds;
+  /** How many rows and columns they move by. */
+  rows: number;
+  columns: number;
+};
+
+const containsBounds = (outer: CellBounds, inner: CellBounds) =>
+  inner.top >= outer.top &&
+  inner.bottom <= outer.bottom &&
+  inner.left >= outer.left &&
+  inner.right <= outer.right;
+
+const overlapBounds = (a: CellBounds, b: CellBounds): CellBounds[] => {
+  const overlap = {
+    top: Math.max(a.top, b.top),
+    left: Math.max(a.left, b.left),
+    bottom: Math.min(a.bottom, b.bottom),
+    right: Math.min(a.right, b.right),
+  };
+  return overlap.top <= overlap.bottom && overlap.left <= overlap.right
+    ? [overlap]
+    : [];
+};
+
+/**
+ * A formula whose references to the moved cells point at their new place, as
+ * after Excel's cut and paste. A range follows only when all of it moves;
+ * references to the cells the move replaces become #REF!.
+ */
+function movedReferences(
+  formula: string,
+  currentSheet: string,
+  move: { sheet: string; source: CellBounds; destination: CellBounds },
+  rows: number,
+  columns: number
+): string {
+  const characters = Array.from(formula);
+  let changed = false;
+  for (const { token, start, end } of getTokens(formula).reverse()) {
+    if (typeof token !== 'object') continue;
+    const reference =
+      'Reference' in token
+        ? {
+            sheet: token.Reference.sheet,
+            left: token.Reference,
+            right: token.Reference,
+          }
+        : 'Range' in token
+          ? token.Range
+          : undefined;
+    if (
+      !reference ||
+      (reference.sheet ?? currentSheet).toLowerCase() !==
+        move.sheet.toLowerCase()
+    )
+      continue;
+    const { left, right } = reference;
+    const area = {
+      top: Math.min(left.row, right.row) - 1,
+      left: Math.min(left.column, right.column) - 1,
+      bottom: Math.max(left.row, right.row) - 1,
+      right: Math.max(left.column, right.column) - 1,
+    };
+    const text = characters.slice(start, end).join('');
+    const leading = text.match(/^\s*/)?.[0] ?? '';
+    const body = text.slice(leading.length);
+    const prefix = body.slice(0, body.lastIndexOf('!') + 1);
+    let replacement: string;
+    if (containsBounds(move.source, area)) {
+      const reference = body.slice(prefix.length);
+      const wholeRows = /^\$?\d+:\$?\d+$/.test(reference);
+      const wholeColumns = /^\$?[A-Z]+:\$?[A-Z]+$/i.test(reference);
+      const bound = (point: typeof left) => {
+        const row = `${point.absolute_row ? '$' : ''}${point.row + rows}`;
+        const column = `${point.absolute_column ? '$' : ''}${columnName(point.column - 1 + columns)}`;
+        return wholeRows ? row : wholeColumns ? column : `${column}${row}`;
+      };
+      replacement = `${prefix}${bound(left)}${'Range' in token ? `:${bound(right)}` : ''}`;
+    } else if (containsBounds(move.destination, area)) replacement = '#REF!';
+    else continue;
+    characters.splice(
+      start,
+      end - start,
+      ...Array.from(`${leading}${replacement}`)
+    );
+    changed = true;
+  }
+  return changed ? characters.join('') : formula;
+}
+
+/**
+ * Move a rectangle of cells to another place on its sheet, as Excel's cut and
+ * paste does. Values, formats, notes and data rules go with the cells and
+ * replace what was at the destination. References to the moved cells, from
+ * any sheet's formulas, rules, names, charts and pivot tables, follow them;
+ * references inside moved formulas keep pointing at the same cells.
+ */
+export function moveWorkbookRange(
+  sheets: SpreadsheetWorkbookSheet[],
+  move: RangeMove
+): SpreadsheetWorkbookSheet[] {
+  const { source, rows, columns } = move;
+  const destination = {
+    top: source.top + rows,
+    left: source.left + columns,
+    bottom: source.bottom + rows,
+    right: source.right + columns,
+  };
+  const target = sheets.findIndex((sheet) => sheet.id === move.sheetId);
+  if (
+    target < 0 ||
+    ![
+      source.top,
+      source.left,
+      source.bottom,
+      source.right,
+      rows,
+      columns,
+    ].every(Number.isInteger) ||
+    (!rows && !columns) ||
+    source.top < 0 ||
+    source.left < 0 ||
+    source.top > source.bottom ||
+    source.left > source.right ||
+    destination.top < 0 ||
+    destination.left < 0 ||
+    destination.bottom >= SPREADSHEET_MAX_ROWS ||
+    destination.right >= SPREADSHEET_MAX_COLUMNS
+  )
+    throw new Error('Invalid cell range.');
+  const { name: sheetName, layout } = sheets[target];
+  // Moving every row or column of the sheet's cells moves whole-row and
+  // whole-column references too.
+  const referenced = (area: CellBounds) => ({
+    ...area,
+    bottom:
+      source.top === 0 && source.bottom >= layout.rowCount - 1
+        ? Number.POSITIVE_INFINITY
+        : area.bottom,
+    right:
+      source.left === 0 && source.right >= layout.columnCount - 1
+        ? Number.POSITIVE_INFINITY
+        : area.right,
+  });
+  const rewrite = (formula: string, currentSheet: string) =>
+    movedReferences(
+      formula,
+      currentSheet,
+      {
+        sheet: sheetName,
+        source: referenced(source),
+        destination: referenced(destination),
+      },
+      rows,
+      columns
+    );
+  const shift = (area: CellBounds) => ({
+    top: area.top + rows,
+    left: area.left + columns,
+    bottom: area.bottom + rows,
+    right: area.right + columns,
+  });
+  /** Where a cell of the moved sheet goes; undefined once replaced. */
+  const place = (address: string) => {
+    const { row, column } = parseCellAddress(address)!;
+    const cell = { top: row, left: column, bottom: row, right: column };
+    if (containsBounds(source, cell))
+      return formatCellAddress(row + rows, column + columns);
+    return containsBounds(destination, cell) ? undefined : address;
+  };
+  /** Merges, arrays and pivot tables move whole or not at all. */
+  const placeRange = (range: string, name: string) => {
+    const [area] = sqrefBounds(range);
+    if (containsBounds(source, area)) return boundsSqref([shift(area)]);
+    if (containsBounds(destination, area)) return;
+    if (
+      overlapBounds(area, source).length ||
+      overlapBounds(area, destination).length
+    )
+      throw new Error(`This move would split ${name}.`);
+    return range;
+  };
+  /** A rule that only partly moves is split in two. */
+  const placeRules = <T extends { range: string }>(rules: T[]) =>
+    rules.flatMap((rule) => {
+      const areas = sqrefBounds(rule.range);
+      if (
+        !areas.some(
+          (area) =>
+            overlapBounds(area, source).length ||
+            overlapBounds(area, destination).length
+        )
+      )
+        return [rule];
+      const kept = areas
+        .flatMap((area) => subtractBounds(area, source))
+        .flatMap((area) => subtractBounds(area, destination));
+      const moved = areas
+        .flatMap((area) => overlapBounds(area, source))
+        .map(shift);
+      return [kept, moved]
+        .filter((part) => part.length)
+        .map((part) => ({ ...rule, range: boundsSqref(part) }));
+    });
+  /** The moved sheet's cell ranges, notes and rules after the move. */
+  const placeMetadata = (metadata: WorkbookSheetMetadata) => {
+    const result = { ...metadata };
+    if (result.merges)
+      result.merges = result.merges.flatMap(
+        (range) => placeRange(range, 'a merged cell') ?? []
+      );
+    if (result.arrayFormulas)
+      result.arrayFormulas = Object.fromEntries(
+        Object.values(result.arrayFormulas).flatMap((range) => {
+          const next = placeRange(range, 'an array formula');
+          return next ? [[next.split(':')[0], next]] : [];
+        })
+      );
+    if (result.pivotTables) {
+      result.pivotTables = result.pivotTables.flatMap((pivot) => {
+        const location = placeRange(pivot.location, 'a pivot table');
+        return location ? [{ ...pivot, location }] : [];
+      });
+      if (!result.pivotTables.length) delete result.pivotTables;
+    }
+    if (result.notes)
+      result.notes = Object.fromEntries(
+        Object.entries(result.notes).flatMap(([address, note]) => {
+          const next = place(address);
+          return next ? [[next, note]] : [];
+        })
+      );
+    if (result.validations) result.validations = placeRules(result.validations);
+    if (result.conditionalFormats)
+      result.conditionalFormats = placeRules(result.conditionalFormats);
+    return result;
+  };
+  return sheets.map((sheet, index) => {
+    const cells: SpreadsheetCells = {};
+    for (const [address, cell] of Object.entries(sheet.cells)) {
+      const next = index === target ? place(address) : address;
+      if (!next) continue;
+      const value =
+        cell.value.startsWith('=') && cell.format !== 'text'
+          ? rewrite(cell.value, sheet.name)
+          : cell.value;
+      cells[next] = value === cell.value ? cell : { ...cell, value };
+    }
+    const metadata =
+      sheet.metadata &&
+      withSheetFormulas(
+        sheet.metadata,
+        sheetFormulas(sheet.metadata).map((formula) =>
+          rewrite(formula, sheet.name)
+        )
+      );
+    if (index !== target) return { ...sheet, cells, metadata };
+    return {
+      ...sheet,
+      cells,
+      metadata: metadata && placeMetadata(metadata),
+      layout: {
+        ...sheet.layout,
+        rowCount: Math.max(sheet.layout.rowCount, destination.bottom + 1),
+        columnCount: Math.max(sheet.layout.columnCount, destination.right + 1),
+      },
+    };
+  });
 }

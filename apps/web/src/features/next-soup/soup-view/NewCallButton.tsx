@@ -11,10 +11,12 @@ import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { useNavigate } from '@solidjs/router';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal } from 'solid-js';
 
 export function NewCallButton() {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
   const [selectedOptions, setSelectedOptions] = createSignal<
@@ -82,7 +84,10 @@ export function NewCallButton() {
 
   return (
     <>
-      <NewMeetingButton onChannelCall={() => setIsOpen(true)} />
+      <NewMeetingButton
+        onChannelCall={() => setIsOpen(true)}
+        onInstantCall={() => navigate('/meet/new')}
+      />
       <Dialog
         open={isOpen()}
         onOpenChange={(open) => {

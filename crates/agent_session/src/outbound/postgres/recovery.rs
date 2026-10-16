@@ -40,6 +40,7 @@ impl<B: BotFacts + 'static> StaleSessionRepo for PgAgentSessionRepo<B> {
             content: Message::ToServer(ToServerMessage::Event {
                 event: SystemEvent::Disconnected,
             }),
+            logged_at: None,
         };
         let (direction, content) = message_columns(&log.content)?;
         let status = SessionStatus::Event(SystemEvent::Disconnected);

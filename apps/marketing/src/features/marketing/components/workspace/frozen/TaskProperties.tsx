@@ -1,4 +1,3 @@
-import CursorIcon from '@icon/wide-cursor-ide.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import { Dropdown } from '@ui';
 import { badgeTriggerClasses } from '@ui/components/Badge';
@@ -12,6 +11,7 @@ import {
   type HomepagePersonId,
   homepagePeople,
 } from '../../../core/homepage-demo-people';
+import { ModelIcon } from './model-picker/ProviderIcon';
 import { PropertyValueIcon } from './PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from './property-identifiers';
 
@@ -31,7 +31,7 @@ export const PRIORITY_IDS: Record<TaskPriority, string> = {
 export function PersonIcon(props: { person: HomepagePersonId }) {
   return (
     <Show
-      when={props.person === 'cursor'}
+      when={props.person === 'cursor' || props.person === 'claude'}
       fallback={
         <img
           src={homepagePeople[props.person].photo}
@@ -40,7 +40,10 @@ export function PersonIcon(props: { person: HomepagePersonId }) {
         />
       }
     >
-      <CursorIcon class="size-4 shrink-0 text-ink" aria-hidden="true" />
+      <ModelIcon
+        provider={props.person === 'cursor' ? 'cursor' : 'claude'}
+        class="size-4 text-ink"
+      />
     </Show>
   );
 }

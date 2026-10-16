@@ -1,0 +1,17 @@
+# One channel with the viewer's complete unread edge, for opening it. Read
+# notifications are left out: a busy channel keeps one seen row per message,
+# so the unfiltered edge grows with the channel's whole history.
+query ChannelDetailSoup($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...SoupItemPreviewFields
+				notifications(filter: { states: [UNSEEN] }) {
+					...SoupNotificationFields
+				}
+			}
+			nextCursor
+		}
+	}
+}

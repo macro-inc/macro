@@ -8,6 +8,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AgentsMode } from '../core/mode';
 import {
   type AgentConversationEntity,
   partitionArchived,
@@ -111,7 +112,7 @@ vi.mock('@app/components/view-shell/SidebarCreateButton', () => ({
 }));
 
 describe('mixed Agents sidebar', () => {
-  it('keeps Chat and Code together, marks each kind, and preserves split navigation', () => {
+  it('lists only the conversations of the chosen mode and switches between Work and Code', async () => {
     const conversations: AgentConversationEntity[] = [
       {
         type: 'agent_session',
@@ -123,17 +124,30 @@ describe('mixed Agents sidebar', () => {
         status: 'acp_ready',
       },
       { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
+      {
+        type: 'agent_session',
+        id: 'archived-code',
+        name: 'Old spike',
+        ownerId: 'me',
+        isArchived: true,
+        botId: 'cursor',
+        status: 'disconnected',
+      },
     ];
+    const [mode, setMode] = createSignal<AgentsMode>('chat');
+    const changeMode = vi.fn(setMode);
     const open = vi.fn();
     const create = vi.fn();
     const openPage = vi.fn();
     render(() => (
       <AgentsSidebar
+        mode={mode()}
+        onModeChange={changeMode}
         activePage="new"
         onOpenPage={openPage}
         {...partitionArchived(conversations)}
         modeForConversation={(conversation) =>
-          conversation.id === 'code' ? 'code' : 'chat'
+          conversation.type === 'chat' ? 'chat' : 'code'
         }
         activeConversationId="chat"
         search=""
@@ -152,26 +166,70 @@ describe('mixed Agents sidebar', () => {
       fireEvent.click(screen.getByRole('button', { name: label }));
       expect(openPage).toHaveBeenLastCalledWith(label.toLowerCase());
     }
-    expect(screen.queryByRole('tablist')).toBeNull();
-    const code = screen.getByRole('button', { name: /Fix build/ });
+
+    const work = screen.getByRole('radio', {
+      name: 'Work',
+    }) as HTMLInputElement;
+    expect(work.checked).toBe(true);
     const chat = screen.getByRole('button', { name: /Plan launch/ });
-    expect(code.closest('[data-kind]')?.getAttribute('data-kind')).toBe('code');
     expect(chat.getAttribute('data-kind')).toBe('chat');
     expect(chat.getAttribute('aria-current')).toBe('page');
+    expect(screen.queryByRole('button', { name: /Fix build/ })).toBeNull();
+    expect(screen.queryByText('Archived')).toBeNull();
+    fireEvent.click(chat);
+    expect(open).toHaveBeenLastCalledWith(conversations[1], expect.anything());
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Code' }));
+    expect(changeMode).toHaveBeenCalledWith('code');
+    const code = await screen.findByRole('button', { name: /Fix build/ });
+    expect(code.closest('[data-kind]')?.getAttribute('data-kind')).toBe('code');
+    expect(screen.queryByRole('button', { name: /Plan launch/ })).toBeNull();
+    expect(screen.getByText('Archived')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Old spike/ })).toBeTruthy();
     fireEvent.click(code, { shiftKey: true });
-    expect(open).toHaveBeenCalledWith(
+    expect(open).toHaveBeenLastCalledWith(
       conversations[0],
       expect.objectContaining({ shiftKey: true })
     );
-    fireEvent.click(chat);
-    expect(open).toHaveBeenLastCalledWith(conversations[1], expect.anything());
     fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
     expect(create).toHaveBeenCalledOnce();
+  });
+
+  it('keeps paging while the chosen mode has too few conversations to scroll', () => {
+    const loadMore = vi.fn();
+    render(() => (
+      <AgentsSidebar
+        mode="code"
+        onModeChange={vi.fn()}
+        activePage="new"
+        onOpenPage={vi.fn()}
+        conversations={[
+          { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
+        ]}
+        archived={[]}
+        modeForConversation={() => 'chat'}
+        activeConversationId={undefined}
+        search=""
+        loading={false}
+        error={false}
+        hasNextPage
+        loadingNextPage={false}
+        onNewConversation={vi.fn()}
+        onSearchChange={vi.fn()}
+        onOpenConversation={vi.fn()}
+        onRetry={vi.fn()}
+        onLoadMore={loadMore}
+      />
+    ));
+    expect(loadMore).toHaveBeenCalledOnce();
+    expect(screen.getByText('No coding conversations yet.')).toBeTruthy();
   });
 
   it('opens rename and delete on a session or chat right-click', async () => {
     render(() => (
       <AgentsSidebar
+        mode="chat"
+        onModeChange={vi.fn()}
         activePage="new"
         onOpenPage={vi.fn()}
         {...partitionArchived([
@@ -195,9 +253,7 @@ describe('mixed Agents sidebar', () => {
           },
           { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
         ])}
-        modeForConversation={(conversation) =>
-          conversation.id === 'code' ? 'code' : 'chat'
-        }
+        modeForConversation={() => 'chat'}
         activeConversationId={undefined}
         search=""
         loading={false}
@@ -274,6 +330,8 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
         />
       ) : (
         <AgentsSidebar
+          mode="code"
+          onModeChange={vi.fn()}
           activePage="new"
           onOpenPage={vi.fn()}
           conversations={[entity()]}
@@ -361,7 +419,11 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       view.container.querySelector(
         '[data-agent-session-row] [data-view-sidebar-icon]'
       );
-    expect(icon()?.querySelector('svg') !== null).toBe(surface === 'home');
+    if (surface === 'home') {
+      expect(icon()?.querySelector('svg') !== null).toBe(true);
+    } else {
+      expect(icon()).toBeNull();
+    }
     expect(
       view.container.querySelector('[data-agent-status-indicator]')
     ).toBeNull();
@@ -371,7 +433,9 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
         .getByRole('button', { name: 'Fix build' })
         .getAttribute('aria-description')
     ).toBe('Working');
-    expect(icon()?.querySelector('svg') !== null).toBe(surface === 'home');
+    if (surface === 'home') {
+      expect(icon()?.querySelector('svg') !== null).toBe(true);
+    }
     expect(
       view.container.querySelector('[data-agent-status-indicator]') !== null
     ).toBe(surface === 'sidebar');
@@ -385,6 +449,13 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(
       view.container.querySelector('[data-agent-status-indicator]')
     ).toBeNull();
+  });
+
+  it('hides the leading icon slot in the sidebar for a tighter row', () => {
+    if (surface !== 'sidebar') return;
+    const { view } = setup();
+    const row = view.container.querySelector('[data-agent-session-row]');
+    expect(row?.querySelector('[data-view-sidebar-icon]')).toBeNull();
   });
 
   it('does not claim an unsynced PR is open', () => {
@@ -414,21 +485,27 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(view.container.querySelector('[data-kind="code"]')).toBeTruthy();
   });
 
-  it('combines unread and activity in the Agents left dot while Home keeps its trailing unread dot', () => {
+  it('combines unread and activity in the Agents dot while Home keeps its trailing unread dot', () => {
     unreadFilter.mockReturnValue(true);
     const { view, setEntity } = setup();
     const dot = () => screen.getByLabelText('Unread');
-    const isLeading = () => !!dot().closest('[data-view-sidebar-icon]');
-    expect(isLeading()).toBe(surface === 'sidebar');
+    const isInCodeDetails = () => !!dot().closest('[data-agent-code-details]');
+    const isTrailing = () =>
+      !dot().closest('[data-view-sidebar-icon]') &&
+      !dot().closest('[data-agent-code-details]');
     expect(dot().classList.contains('motion-safe:animate-pulse')).toBe(false);
 
     for (const turnState of ['running', 'blocked', 'idle']) {
       setEntity({ ...conversation, turnState });
       expect(screen.getAllByLabelText('Unread')).toHaveLength(1);
-      expect(isLeading()).toBe(surface === 'sidebar');
       expect(
         view.container.querySelectorAll('[data-agent-status-indicator]')
       ).toHaveLength(surface === 'sidebar' ? 1 : 0);
+      if (surface === 'sidebar') {
+        expect(isInCodeDetails()).toBe(true);
+      } else {
+        expect(isTrailing()).toBe(true);
+      }
       expect(dot().classList.contains('motion-safe:animate-pulse')).toBe(
         surface === 'sidebar' && turnState === 'running'
       );

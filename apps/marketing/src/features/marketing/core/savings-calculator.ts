@@ -5,11 +5,9 @@
  * Competitor prices are their public per-seat rates billed annually (their
  * lowest advertised price), checked against each pricing page in September
  * 2026. Jira publishes a small-team per-user rate rather than an annual one.
- * Macro's paid plan is $40 per seat for a team's first 5 seats, then $80.
+ * Macro is compared at its Pro plan, a flat $40 per seat.
  */
 export const MACRO_SEAT_CENTS = 4000;
-export const MACRO_EXTRA_SEAT_CENTS = 8000;
-export const MACRO_DISCOUNTED_SEATS = 5;
 export const MAX_SEATS = 10_000;
 
 export const PRICES_CHECKED = 'September 2026';
@@ -144,11 +142,9 @@ export function parseSeats(value: string): number | null {
   return Math.min(MAX_SEATS, Math.max(1, seats));
 }
 
-/** Yearly cost of Macro's paid plan: $40 a seat for the first 5, then $80. */
+/** Yearly cost of Macro's Pro plan for a team. */
 export function macroAnnualCost(seats: number): number {
-  const discounted = Math.min(seats, MACRO_DISCOUNTED_SEATS);
-  const extra = seats - discounted;
-  return (discounted * MACRO_SEAT_CENTS + extra * MACRO_EXTRA_SEAT_CENTS) * 12;
+  return seats * MACRO_SEAT_CENTS * 12;
 }
 
 /** Yearly team cost of the selected tools and of Macro. */

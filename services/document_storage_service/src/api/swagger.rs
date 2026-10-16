@@ -195,8 +195,6 @@ use models_soup::project::SoupProject;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
 };
-use reminders::domain::models::{Reminder, ReminderSchedule, RemindersList};
-use reminders::inbound::axum_router::{CreateReminderRequest, UpdateReminderRequest};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
@@ -213,12 +211,14 @@ use utoipa::OpenApi;
     info(
         terms_of_service = "https://macro.com/terms",
     ),
+    modifiers(&FormsApiAddon),
     paths(
         dictation::inbound::axum_router::transcribe_handler,
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
         calendar_events::inbound::axum_router::list_team_out_of_office,
+        calendar_events::inbound::team_router::list_team_calendar,
 
         // annotations
         annotations::get::get_document_anchors_handler,
@@ -247,6 +247,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
         documents_hex::inbound::axum_router::get_github_pull_requests::get_github_pull_requests_handler,
+        documents_hex::inbound::axum_router::get_github_pull_request_tasks::get_github_pull_request_tasks_handler,
         documents_hex::inbound::axum_router::get_short_id::get_short_id_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
@@ -291,6 +292,7 @@ use utoipa::OpenApi;
 
         // messages (channels and documents)
         messages::inbound::axum_router::timeline,
+        messages::inbound::axum_router::timeline_entries,
         messages::inbound::axum_router::create,
         messages::inbound::axum_router::get_message,
         messages::inbound::axum_router::edit,
@@ -370,6 +372,7 @@ use utoipa::OpenApi;
         call::inbound::axum_router::check_active_call_handler,
         call::inbound::axum_router::get_active_calls_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
+        call::inbound::axum_router::decline_call_handler,
         call::inbound::axum_router::get_call_record_handler,
         call::inbound::axum_router::edit_call_record_handler,
         call::inbound::axum_router::edit_call_transcript_handler,
@@ -385,6 +388,7 @@ use utoipa::OpenApi;
         webhook::inbound::axum_router::validate_webhook,
         webhook::inbound::stream_router::stream_events,
         call::inbound::axum_router::ring_status_handler,
+        call::inbound::axum_router::decline_ring_handler,
         call::inbound::axum_router::transcript_handler,
 
         // pins
@@ -438,16 +442,17 @@ use utoipa::OpenApi;
         slack_integration::inbound::axum_router::jobs::finalize,
         slack_integration::inbound::axum_router::jobs::cancel,
 
+        access_requests::inbound::axum_router::state_handler,
+        access_requests::inbound::axum_router::submit_handler,
+        access_requests::inbound::axum_router::cancel_handler,
+        access_requests::inbound::axum_router::resolve_handler,
+        access_requests::inbound::axum_router::direct_handler,
+        access_requests::inbound::axum_router::set_direct_handler,
+        access_requests::inbound::axum_router::remove_direct_handler,
         // reminders
         reminders::inbound::axum_router::get_email_followup_handler,
         reminders::inbound::axum_router::set_email_followup_handler,
-        reminders::inbound::axum_router::list_reminders_handler,
-        reminders::inbound::axum_router::list_reminder_collection_handler,
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
-        reminders::inbound::axum_router::create_reminder_handler,
-        reminders::inbound::axum_router::get_reminder_handler,
-        reminders::inbound::axum_router::update_reminder_handler,
-        reminders::inbound::axum_router::delete_reminder_handler,
         // initiatives
         initiative::inbound::axum_router::list::list_initiatives_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,
@@ -507,6 +512,18 @@ use utoipa::OpenApi;
         sync_service_hex::inbound::axum_router::bulk_wakeup_handler,
 
         // /crm
+        crm::inbound::pipelines::create,
+        crm::inbound::pipelines::list,
+        crm::inbound::pipelines::read,
+        crm::inbound::pipelines::table,
+        crm::inbound::pipelines::rows,
+        crm::inbound::pipelines::query_rows,
+        crm::inbound::pipelines::apply_ops,
+        crm::inbound::pipelines::rename,
+        crm::inbound::pipelines::share,
+        crm::inbound::pipelines::permissions,
+        crm::inbound::pipelines::update_permissions,
+        crm::inbound::pipelines::trash,
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,
@@ -526,6 +543,7 @@ use utoipa::OpenApi;
     ),
     components(
         schemas(
+            access_requests::domain::models::ShareEntity,
             DocumentStorageServiceApiVersion,
             GenericResponse,
             GenericErrorResponse,
@@ -609,6 +627,13 @@ use utoipa::OpenApi;
             calendar_events::inbound::axum_router::CalendarMentionPreviewKind,
             calendar_events::inbound::axum_router::TeamOutOfOfficeItem,
             calendar_events::inbound::axum_router::TeamOutOfOfficeResponse,
+            calendar_events::domain::team::TeamCalendarPage,
+            calendar_events::domain::team::TeamCalendarItem,
+            calendar_events::domain::team::TeamCalendarContent,
+            calendar_events::domain::team::TeamCalendarDetails,
+            calendar_events::domain::team::TeamCalendarMember,
+            calendar_events::domain::team::TeamCalendarSharing,
+            calendar_events::domain::team::TeamCalendarCoverage,
             calendar_events::domain::models::CalendarMentionEvent,
             calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
@@ -648,9 +673,6 @@ use utoipa::OpenApi;
             CreateChannelLabelRequest,
             RenameChannelLabelRequest,
             SetChannelLabelRequest,
-            Reminder,
-            RemindersList,
-            ReminderSchedule,
             // databases
             Database,
             DatabaseTable,
@@ -728,8 +750,6 @@ use utoipa::OpenApi;
             DatabaseQueryDefinition,
             DatabaseSavedQuery,
             DatabaseSaveQueryRequest,
-            CreateReminderRequest,
-            UpdateReminderRequest,
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,
@@ -791,6 +811,8 @@ use utoipa::OpenApi;
             messages::domain::ports::MessageDirection,
             messages::domain::ports::MessageTimelineQuery,
             messages::domain::ports::MessagePage,
+            messages::domain::ports::MessageTimelinePage,
+            messages::domain::ports::MessageTimelineEntry,
             messages::domain::ports::MessagePatch,
             messages::domain::ports::AttachmentChange,
             messages::domain::ports::MessageEvent,
@@ -960,6 +982,9 @@ use utoipa::OpenApi;
             documents_hex::domain::models::GithubPullRequestCheckRun,
             documents_hex::domain::models::GithubPullRequestComment,
             documents_hex::domain::models::GithubPullRequestsResponse,
+            documents_hex::domain::models::GithubPullRequestTasksRequest,
+            documents_hex::domain::models::GithubPullRequestTasks,
+            documents_hex::domain::models::GithubPullRequestTasksResponse,
 
             // Sync service
             sync_service_hex::domain::models::BulkWakeupRequest,
@@ -990,6 +1015,15 @@ use utoipa::OpenApi;
     )
 )]
 pub struct ApiDoc;
+
+struct FormsApiAddon;
+
+impl utoipa::Modify for FormsApiAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        openapi.merge(forms::inbound::axum_router::FormsApi::openapi());
+        openapi.merge(database_webhooks::inbound::axum_router::DatabaseWebhooksApi::openapi());
+    }
+}
 
 #[cfg(test)]
 mod test;

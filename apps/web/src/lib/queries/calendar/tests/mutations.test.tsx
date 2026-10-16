@@ -206,6 +206,50 @@ afterEach(() => {
   testQueryClient.clear();
 });
 
+it('answers and deletes an imported point without rewriting its time', async () => {
+  const point = standaloneItem();
+  const instant = {
+    kind: 'timed' as const,
+    startsAt: '2026-08-06T14:00:00Z',
+    endsAt: '2026-08-06T14:00:00Z',
+    timeZone: null,
+  };
+  point.event.time = instant;
+  point.occurrence.time = instant;
+  for (const range of [viewportA, viewportB]) {
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', range).queryKey,
+      {
+        items: [point],
+        syncStatus: 'ready',
+      }
+    );
+  }
+  rsvpCalendarEventMock.mockResolvedValue(ok({ id: 'event-1' }));
+  deleteCalendarEventMock.mockResolvedValue(ok({}));
+  const actions = renderHook(() => ({
+    rsvp: useRsvpCalendarEventMutation(),
+    remove: useDeleteCalendarEventMutation(),
+  }));
+
+  await actions.rsvp.mutateAsync({ eventId: 'event-1', response: 'accepted' });
+  expect(rsvpCalendarEventMock).toHaveBeenCalledWith('event-1', {
+    response: 'accepted',
+  });
+  for (const range of [viewportA, viewportB]) {
+    expect(viewportData(range)?.items[0]?.occurrence.time).toEqual(instant);
+  }
+  await actions.remove.mutateAsync({ eventId: 'event-1' });
+  expect(deleteCalendarEventMock).toHaveBeenCalledWith('event-1', {
+    calendarId: undefined,
+    scope: undefined,
+    recurrenceId: undefined,
+  });
+  for (const range of [viewportA, viewportB]) {
+    expect(viewportData(range)?.items).toEqual([]);
+  }
+});
+
 describe('useRsvpCalendarEventMutation', () => {
   it('optimistically updates the self attendee across every cached viewport', async () => {
     rsvpCalendarEventMock.mockResolvedValue(ok({ id: 'event-1' }));

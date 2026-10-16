@@ -37,9 +37,11 @@ struct FakeMutationRepo {
 
 struct FakeMutationRepoState {
     channel_id: Uuid,
+    channel_picture_id: Option<Uuid>,
     channel_name: Option<String>,
     channel_type: ChannelType,
     channel_team_id: Option<Uuid>,
+    direct_agent: bool,
     user_team_id: Option<Uuid>,
     user_team_id_lookups: usize,
     join_code: Option<Uuid>,
@@ -60,9 +62,11 @@ impl FakeMutationRepo {
             picture_updates: Arc::default(),
             state: Arc::new(Mutex::new(FakeMutationRepoState {
                 channel_id,
+                channel_picture_id: None,
                 channel_name: Some("Project".to_string()),
                 channel_type: ChannelType::Private,
                 channel_team_id: None,
+                direct_agent: false,
                 user_team_id: None,
                 user_team_id_lookups: 0,
                 join_code: None,
@@ -101,12 +105,15 @@ impl ChannelRepo for FakeMutationRepo {
         &self,
         channel_id: Uuid,
         picture_id: Option<Uuid>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<bool, Self::Err> {
         self.picture_updates
             .lock()
             .unwrap()
             .push((channel_id, picture_id));
-        Ok(())
+        let mut state = self.state.lock().unwrap();
+        let changed = state.channel_picture_id != picture_id;
+        state.channel_picture_id = picture_id;
+        Ok(changed)
     }
 
     type Err = anyhow::Error;
@@ -146,6 +153,10 @@ impl ChannelRepo for FakeMutationRepo {
             org_id: None,
             team_id: state.channel_team_id,
         })
+    }
+
+    async fn is_direct_agent_conversation(&self, _channel_id: Uuid) -> Result<bool, Self::Err> {
+        Ok(self.state.lock().unwrap().direct_agent)
     }
 
     async fn get_or_create_channel_join_code(&self, _channel_id: Uuid) -> Result<Uuid, Self::Err> {
@@ -448,9 +459,17 @@ impl ChannelReferenceSharePermissions for FakeReferenceSharing {
         _actor: MacroUserIdStr<'static>,
         _channel_id: Uuid,
         items: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<crate::domain::models::ReferenceShareResult>, Self::Err> {
+        let results = items
+            .iter()
+            .map(|item| crate::domain::models::ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome: crate::domain::models::ReferenceShareOutcome::Shared,
+            })
+            .collect();
         self.items.lock().unwrap().extend(items);
-        Ok(())
+        Ok(results)
     }
 }
 
@@ -460,6 +479,38 @@ fn mutation_service(
     share: FakeReferenceSharing,
 ) -> ChannelServiceImpl<FakeMutationRepo, FakeEvents, FakeReferenceSharing> {
     ChannelServiceImpl::with_dependencies(repo, events, share)
+}
+
+#[tokio::test]
+async fn share_referenced_items_with_channel_forwards_to_the_share_port() {
+    let share = FakeReferenceSharing::default();
+    let seen = share.items.clone();
+    let service = mutation_service(
+        FakeMutationRepo::new(Uuid::now_v7(), "macro|owner@test.com"),
+        FakeEvents::default(),
+        share,
+    );
+    let channel_id = Uuid::now_v7();
+    let item = ReferencedShareItem::new(
+        Uuid::now_v7().to_string(),
+        crate::domain::models::ReferencedShareItemType::CalendarEvent,
+    );
+    let results = service
+        .share_referenced_items_with_channel(
+            macro_id("macro|owner@test.com"),
+            channel_id,
+            vec![item.clone()],
+        )
+        .await
+        .expect("share port accepts the item");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].entity_id, item.entity_id());
+    assert_eq!(
+        results[0].outcome,
+        crate::domain::models::ReferenceShareOutcome::Shared
+    );
+    assert_eq!(seen.lock().unwrap().as_slice(), &[item]);
 }
 
 fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {
@@ -869,7 +920,9 @@ async fn get_or_create_dm_rejects_self_pair() {
     let error = service
         .get_or_create_dm(
             Sender::new_from_user(user.clone()),
-            GetOrCreateDmRequest { recipient_id: user },
+            GetOrCreateDmRequest {
+                recipient_id: Sender::new_from_user(user),
+            },
         )
         .await
         .unwrap_err();
@@ -906,7 +959,7 @@ async fn get_or_create_dm_returns_get_for_existing_pair() {
         .get_or_create_dm(
             Sender::new_from_user(actor),
             GetOrCreateDmRequest {
-                recipient_id: recipient,
+                recipient_id: Sender::new_from_user(recipient),
             },
         )
         .await
@@ -1272,6 +1325,40 @@ async fn patch_team_channel_conversion_to_private_clears_team_settings() {
         Some(false)
     );
     assert_eq!(state.channel_patches[0].0.auto_join_team, Some(false));
+}
+
+#[tokio::test]
+async fn patch_channel_refuses_to_make_an_agent_dm_a_team_channel() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.channel_type = ChannelType::DirectMessage;
+        state.direct_agent = true;
+        state.user_team_id = Some(Uuid::new_v4());
+    }
+    let svc = mutation_service(
+        repo.clone(),
+        FakeEvents::default(),
+        FakeReferenceSharing::default(),
+    );
+
+    let err = svc
+        .patch_channel(
+            patch_receipt("macro|sender@test.com", channel_id, AccessRole::Owner),
+            PatchChannelRequest {
+                channel_name: None,
+                convert_to_team_channel: Some(true),
+                auto_join_team: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ChannelMutationErr::BadRequest(_)));
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.user_team_id_lookups, 0);
+    assert!(state.channel_patches.is_empty());
 }
 
 #[tokio::test]
@@ -1771,9 +1858,34 @@ async fn channel_picture_can_be_set_replaced_and_removed_by_admins_and_owners() 
         let events = events.events.lock().unwrap();
         assert_eq!(events.len(), 3);
         assert!(events.iter().all(|event| matches!(event,
-            ChannelEvent::PictureChanged { channel_id: id, recipients }
+            ChannelEvent::PictureChanged { channel_id: id, recipients, actor }
                 if *id == channel_id && recipients.contains(&macro_id("macro|sender@test.com"))
+                    && actor == &macro_id("macro|sender@test.com")
         )));
+    }
+}
+
+#[tokio::test]
+async fn repeated_channel_picture_updates_do_not_publish_false_activity() {
+    use entity_access::domain::models::AdminParticipantRole;
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default())
+        .with_picture_files(FakePictureFiles {
+            file: Some(owned_picture_file()),
+            fail: false,
+        });
+    let picture = Some(Uuid::new_v4());
+    for (value, expected_events) in [(None, 0), (picture, 1), (picture, 1), (None, 2), (None, 2)] {
+        let access =
+            EntityAccessReceipt::<AdminParticipantRole>::dangerously_assert_authenticated_user(
+                macro_id("macro|sender@test.com"),
+                &channel_id.to_string(),
+                EntityType::Channel,
+            );
+        svc.set_channel_picture(access, value).await.unwrap();
+        assert_eq!(events.events.lock().unwrap().len(), expected_events);
     }
 }
 

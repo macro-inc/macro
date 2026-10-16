@@ -11,8 +11,11 @@ type TeamContextValue = {
 export const [TeamContextProvider, useTeamContext] =
   createAssertedContextProvider('TeamContext', (): TeamContextValue => {
     const currentTeam = useCurrentTeamQuery();
+    // Guarded: `data` suspends while the team query waits on sign-in, and this
+    // provider wraps the whole app.
     const isMacroTeam = createMemo(
-      () => currentTeam.data?.team.slug === MACRO_TEAM_SLUG
+      () =>
+        currentTeam.isSuccess && currentTeam.data?.team.slug === MACRO_TEAM_SLUG
     );
 
     return {

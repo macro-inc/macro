@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.slug AS \"team_slug!\", tt.task_num\n            FROM team_task tt\n            JOIN team t ON t.id = tt.team_id\n            WHERE tt.document_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_slug!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_num",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b6e125ba0b0f93c18df1b062840b3fd1d35bafd547fc67e264b5f4f0517d5da7"
+}

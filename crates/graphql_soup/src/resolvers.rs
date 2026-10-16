@@ -23,7 +23,7 @@ use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionServic
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    loaders::SoupItemDataLoader,
+    loaders::{AgentSessionEntityLoader, SoupItemDataLoader, SoupUpdateHydrationLoader},
     objects::{
         GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
         SoupEntityEdges, SoupPage, SoupPatch,
@@ -46,7 +46,9 @@ where
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let mut receiver = service.subscribe(macro_user_id.clone());
-    let loader = ctx.data_opt::<SoupItemDataLoader>().cloned();
+    let loader = ctx
+        .data_opt::<SoupUpdateHydrationLoader>()
+        .map(|loader| loader.0.clone());
     const BUFFER_SIZE: usize = 10;
     let mut buf = Vec::with_capacity(BUFFER_SIZE);
 
@@ -125,9 +127,10 @@ where
     }
 }
 
-/// Fetch one agent session the viewer can see, through the same access-
-/// filtered loader the Soup list uses, so a session outside their grants
-/// reads as absent rather than as an error.
+/// Fetch one agent session the viewer can see, through the same access
+/// filter the Soup list uses, so a session outside their grants reads as
+/// absent rather than as an error. Reads the primary: see
+/// [`AgentSessionEntityLoader`].
 pub async fn resolve_soup_agent_session<Edges>(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,
@@ -136,7 +139,7 @@ pub async fn resolve_soup_agent_session<Edges>(
 where
     Edges: SoupEntityEdges,
 {
-    let loader = ctx.data::<SoupItemDataLoader>()?;
+    let loader = &ctx.data::<AgentSessionEntityLoader>()?.0;
     let entity = EntityType::AgentSession.with_entity_string(session_id.to_string());
     let Some(item) = loader.load_one((user_id, entity)).await? else {
         return Ok(None);

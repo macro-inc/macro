@@ -1,48 +1,28 @@
-import { ROUTER_BASE, ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { ROUTER_BASE } from '@app/constants/routerBase';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
-import { HomePreferencesProvider } from '@app/features/home/home-prefs';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
-import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
 import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
-import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
-import { SearchProvider } from '@app/features/soup/search/context';
-import { InteractiveOnboardingModal } from '@app/features/tutorial/InteractiveOnboardingModal';
 import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
-import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
-import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
-import { isMeetingPath } from '@channel/Call/call-link';
 import { CallKitSync } from '@channel/Call/use-callkit';
-import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
-import { Layout } from '@components/app/Layout';
-import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
-import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
+import { dismissBootShell } from '@components/app/boot-shell';
+import { RootFrame } from '@components/app/Layout';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
-import { TeamContextProvider } from '@core/context/team';
-import {
-  UserContextProvider,
-  useUserId,
-  useUserInfo,
-} from '@core/context/user';
-import { initAndStartEmailSync } from '@core/email-link';
+import { UserContextProvider, useUserInfo } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
 import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
-import { isMobile } from '@core/mobile/isMobile';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import {
   getLoginCookieOptions,
@@ -57,27 +37,12 @@ import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
-import {
-  BrowserNotificationModal,
-  createNotificationSource,
-  type UnifiedNotification,
-  useNotificationUpdates,
-  usePlatformNotificationState,
-} from '@notifications';
-import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
+import { BrowserNotificationModal } from '@notifications';
 import {
   invalidateUserInfo,
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
-import { useChatRenameWebsocketSync } from '@queries/chat';
-import { QuerySyncProvider } from '@queries/sync/SyncProvider';
-import { MutationUndoProvider } from '@queries/undo';
-import {
-  useRefreshTrackedEntitiesOnFocus,
-  useReopenTrackedEntitiesOnReconnect,
-} from '@service-connection/client';
-import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -86,7 +51,6 @@ import {
   Router,
   type RouterProps,
   type RouteSectionProps,
-  useLocation,
 } from '@solidjs/router';
 import {
   applyTheme,
@@ -95,17 +59,7 @@ import {
   systemThemeEffect,
 } from '@theme/utils/themeUtils';
 import { detect } from 'detect-browser';
-import {
-  createEffect,
-  createSignal,
-  type JSX,
-  on,
-  onCleanup,
-  onMount,
-  type ParentProps,
-  Show,
-} from 'solid-js';
-import { useReminderAlerts } from '../features/reminders/reminder-alerts';
+import { createEffect, type JSX, on, onCleanup, onMount } from 'solid-js';
 import { AppRouterView } from './app-router-view';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
@@ -167,57 +121,8 @@ const ROUTES: RouteDefinition[] = [
   { path: '/*path', component: AppRouterView },
 ];
 
-function ConfiguredGlobalAppStateProvider(props: ParentProps) {
-  const userId = useUserId();
-  // Initialize global notification helpers
-  const notifInterface = usePlatformNotificationState();
-  useChatRenameWebsocketSync();
-  useReopenTrackedEntitiesOnReconnect();
-  useRefreshTrackedEntitiesOnFocus();
-
-  if (isNativeMobilePlatform()) {
-    useInvalidateQueriesOnReconnect();
-  }
-
-  const onNotification = (notification: UnifiedNotification) => {
-    if (notifInterface === 'not-supported') return;
-    const layoutManager = globalSplitManager();
-    if (!layoutManager) return;
-    maybeHandlePlatformNotification(
-      notification,
-      notifInterface,
-      layoutManager
-    );
-  };
-  const notificationSource = createNotificationSource(
-    connectionGatewayWebsocket,
-    onNotification
-  );
-  useNotificationUpdates(notificationSource);
-  useReminderAlerts(notificationSource);
-
-  const blockOrchestrator = createBlockOrchestrator();
-  usePendingNotificationNavigationEffect(notificationSource);
-
-  return (
-    <GlobalAppStateProvider
-      notificationSource={notificationSource}
-      blockOrchestrator={blockOrchestrator}
-    >
-      <HomePreferencesProvider userId={userId}>
-        {props.children}
-      </HomePreferencesProvider>
-    </GlobalAppStateProvider>
-  );
-}
-
-function SoupBackfillSideEffect(props: { userId: string }) {
-  useSoupBackfills(props.userId);
-  return null;
-}
-
-/** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
-function UserInfoSideEffects() {
+/** Syncs the signed-in user to observability, analytics, and the login cookie. */
+function useUserInfoSideEffects() {
   const analytics = useAnalytics();
   const posthog = usePosthog();
 
@@ -272,12 +177,6 @@ function UserInfoSideEffects() {
       trackSignupCompletion(analytics, { id: user.id });
     })
   );
-
-  return (
-    <Show when={userInfo()?.id} keyed>
-      {(userId) => <SoupBackfillSideEffect userId={userId} />}
-    </Show>
-  );
 }
 
 const clearBodyInlineStyleColor = () => {
@@ -286,96 +185,21 @@ const clearBodyInlineStyleColor = () => {
   document.body.style.backgroundColor = '';
 };
 
-function QuerySyncProviderWithUserId() {
-  const userId = useUserId();
-  return <QuerySyncProvider userId={userId} />;
-}
+/** Longest the boot shell waits for a shell to draw before showing whatever the app has. */
+const BOOT_SHELL_MAX_WAIT_MS = 8000;
 
-function InitialInteractiveOnboardingModal() {
-  const userInfoQuery = useUserInfoQuery();
-  const [open, setOpen] = createSignal(true);
-  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
-
-  const modalOpen = () =>
-    open() &&
-    // Desktop first-run users go through /onboarding instead (Layout redirect).
-    isMobile() &&
-    !isNativeMobilePlatform() &&
-    userInfoQuery.data?.authenticated === true &&
-    (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
-
-  createEffect(() => {
-    if (modalOpen()) {
-      setOnboardingStarted(true);
-    }
+/**
+ * The router's root: the frame every page shares. Each route's shell decides
+ * its own chrome and hands off from index.html's boot shell when it mounts;
+ * the cap keeps an outage from hiding the app's own error states.
+ */
+function AppRouteFrame(props: RouteSectionProps) {
+  useUserInfoSideEffects();
+  onMount(() => {
+    const cap = setTimeout(dismissBootShell, BOOT_SHELL_MAX_WAIT_MS);
+    onCleanup(() => clearTimeout(cap));
   });
-
-  // First-time users (tutorial not yet completed) reach the app without passing
-  // through a login route that inits the email link — e.g. marketing SSO returns to
-  // /app, not /login — so kick off email sync once here. Idempotent on the backend;
-  // AlreadyInitialized is ignored. Keyed by user id (not a bare flag) so a native
-  // mobile logout→login of a different user in the same session still inits.
-  let emailInitForUserId: string | undefined;
-  createEffect(() => {
-    const data = userInfoQuery.data;
-    if (data?.authenticated !== true || data.tutorialComplete !== false) return;
-    if (emailInitForUserId === data.id) return;
-    emailInitForUserId = data.id;
-
-    void initAndStartEmailSync().match(
-      () => {},
-      (err) => {
-        if (err.tag !== 'AlreadyInitialized') {
-          console.error('Failed to init email link for new user', err);
-        }
-      }
-    );
-  });
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
-    if (!nextOpen) {
-      setOnboardingStarted(false);
-    }
-  };
-
-  return (
-    <InteractiveOnboardingModal
-      open={modalOpen()}
-      isFirstTimeOnboarding
-      onOpenChange={handleOpenChange}
-    />
-  );
-}
-
-/** Meeting and booking links have a focused shell and skip app onboarding. */
-function AppRouteLayout(props: RouteSectionProps) {
-  const location = useLocation();
-  return (
-    <Show
-      when={
-        !(
-          location.pathname.startsWith(`${ROUTER_BASE_CONCAT}book/`) ||
-          location.pathname.startsWith(`${ROUTER_BASE_CONCAT}booking/`)
-        )
-      }
-      fallback={
-        <div class="h-dvh overflow-y-auto bg-page text-ink">
-          {props.children}
-        </div>
-      }
-    >
-      <IncomingMeetingInvitationsProvider>
-        <Show
-          when={!isMeetingPath(location.pathname)}
-          fallback={props.children}
-        >
-          <Layout {...props} />
-          <InitialInteractiveOnboardingModal />
-        </Show>
-      </IncomingMeetingInvitationsProvider>
-    </Show>
-  );
+  return <RootFrame>{props.children}</RootFrame>;
 }
 
 export function Root() {
@@ -411,45 +235,33 @@ export function Root() {
                   <IosPushNotificationModal />
                   <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />
-                  <QuerySyncProviderWithUserId />
-                  <UserInfoSideEffects />
-                  <TeamContextProvider>
-                    <ConfiguredGlobalAppStateProvider>
-                      <MutationUndoProvider>
-                        <ChannelsContextProvider>
-                          <CallProvider>
-                            <CallKitSync />
-                            <CallStartedNotifier />
-                            <IncomingCallEvents />
-                            <QuickAccessProvider>
-                              <SearchProvider>
-                                <ChatAttachmentsInit />
-                                <ReactiveFavicon />
-                                <Title>{tabTitle()}</Title>
-                                <MeetingSessionProvider>
-                                  {/* Loading boundaries belong inside Layout so
-                                    a pending resource cannot detach the app shell. */}
-                                  <IsomorphicRouter
-                                    transformUrl={transformShortIdInUrlPathname}
-                                    root={AppRouteLayout}
-                                    rootPreload={rootPreload}
-                                    base={ROUTER_BASE}
-                                  >
-                                    {{
-                                      path: '/',
-                                      component: TauriRouteListener,
-                                      children: ROUTES,
-                                    }}
-                                  </IsomorphicRouter>
-                                </MeetingSessionProvider>
-                                <ToastRegion />
-                              </SearchProvider>
-                            </QuickAccessProvider>
-                          </CallProvider>
-                        </ChannelsContextProvider>
-                      </MutationUndoProvider>
-                    </ConfiguredGlobalAppStateProvider>
-                  </TeamContextProvider>
+                  <ChannelsContextProvider>
+                    <CallProvider>
+                      <CallKitSync />
+                      <CallStartedNotifier />
+                      <IncomingCallEvents />
+                      <QuickAccessProvider>
+                        <Title>{tabTitle()}</Title>
+                        <MeetingSessionProvider>
+                          {/* Loading boundaries belong inside RootFrame so
+                                    a pending resource cannot detach the frame. */}
+                          <IsomorphicRouter
+                            transformUrl={transformShortIdInUrlPathname}
+                            root={AppRouteFrame}
+                            rootPreload={rootPreload}
+                            base={ROUTER_BASE}
+                          >
+                            {{
+                              path: '/',
+                              component: TauriRouteListener,
+                              children: ROUTES,
+                            }}
+                          </IsomorphicRouter>
+                        </MeetingSessionProvider>
+                        <ToastRegion />
+                      </QuickAccessProvider>
+                    </CallProvider>
+                  </ChannelsContextProvider>
                 </EmailLinksContextProvider>
               </UserContextProvider>
             </EntityProvider>

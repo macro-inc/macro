@@ -59,11 +59,18 @@ where
 
     /// Enriched owned or delegated email links accessible to the authenticated user.
     #[tracing::instrument(skip_all, err(Debug))]
-    async fn email_links(&self) -> async_graphql::Result<Vec<GraphqlEmailLink>> {
+    async fn email_links(&self) -> async_graphql::Result<Vec<GraphqlEmailLink<S>>> {
         self.service
             .get_user_email_links(self.user_id.clone())
             .await
-            .map(|links| links.into_iter().map(Into::into).collect())
+            .map(|links| {
+                links
+                    .into_iter()
+                    .map(|link| {
+                        GraphqlEmailLink::new(link, Arc::clone(&self.service), self.user_id.clone())
+                    })
+                    .collect()
+            })
             .map_err(|error| {
                 tracing::error!(
                     error = ?error,

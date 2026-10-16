@@ -1,8 +1,7 @@
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
-import { Button } from '@ui';
 import { Show } from 'solid-js';
-import { FormError, FormInput } from './form-fields';
+import { AuthButton, FormError, FormInput } from './form-fields';
 
 export function EmailForm(props: {
   email: string;
@@ -43,19 +42,14 @@ export function EmailForm(props: {
         />
       </Show>
       <FormError message={props.error} />
-      <Button variant="cta" size="xl" type="submit" disabled={props.sending}>
+      <AuthButton type="submit" disabled={props.sending}>
         Continue
-        <ArrowRight class="size-5" />
-      </Button>
-      <Button
-        variant="outline"
-        size="xl"
-        class="bg-surface"
-        onClick={props.onBack}
-      >
-        <ArrowLeft class="size-5" />
+        <ArrowRight class="size-5 shrink-0" />
+      </AuthButton>
+      <AuthButton variant="secondary" onClick={props.onBack}>
+        <ArrowLeft class="size-5 shrink-0" />
         Back to sign in
-      </Button>
+      </AuthButton>
     </form>
   );
 }

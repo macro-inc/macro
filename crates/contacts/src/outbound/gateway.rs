@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::domain::ports::ContactsNotifier;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -21,12 +24,22 @@ impl ConnectionGatewayNotifier {
 
     #[tracing::instrument(skip(self), err)]
     async fn invalidate_contacts(&self, user_id: &str) -> Result<(), Report> {
-        self.client
-            .post(format!("{}/message/send/user/{}", self.url, user_id))
+        let response = self
+            .client
+            .post(format!(
+                "{}/message/send/user/{}",
+                self.url,
+                urlencoding::encode(user_id)
+            ))
             .json(&serde_json::json!({"message_type": "contacts_invalidation", "message": {}}))
             .send()
-            .await?
-            .error_for_status()?;
+            .await?;
+        let status = response.error_for_status_ref().map(drop);
+        // Read the body even on error statuses: h2 only refunds its small-DATA-frame
+        // budget for frames that are read, and once that budget is spent the client
+        // tears down its own pooled connection (GOAWAY `too_many_data_frames`).
+        response.bytes().await?;
+        status?;
         Ok(())
     }
 }

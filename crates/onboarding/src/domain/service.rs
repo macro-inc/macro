@@ -114,7 +114,7 @@ where
     ) {
         for source in ImportSource::all() {
             // Which stack backs the connector is the selector's call
-            // (Pipedream connectors win over native ones, see `mcp_select`).
+            // (enabled native connectors take precedence, see `mcp_select`).
             let connected = self
                 .mcp_select
                 .connector_connected(user, source.connector_ref())

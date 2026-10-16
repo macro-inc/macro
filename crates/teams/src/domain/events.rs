@@ -6,13 +6,16 @@
 #[cfg(test)]
 mod test;
 
+use bot_id::BotId;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroTeamsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
+use shared_entity_registry::RegisteredEntityType;
 use uuid::Uuid;
 
-use super::model::TeamRole;
+use super::{model::TeamRole, owned_entity_cleanup::OwnedEntityRef};
 
 /// Metadata for [`TeamTopicEvent::Created`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,6 +58,36 @@ pub struct TeamDeletedMetadata {
     pub actor_user_id: MacroUserIdStr<'static>,
     /// Users who belonged to the team when it was deleted.
     pub member_user_ids: Vec<MacroUserIdStr<'static>>,
+    /// Every bot the team had, soft-deleted ones included, in id order.
+    /// Missing on events published before this field existed.
+    #[serde(default)]
+    pub bot_ids: Vec<BotId>,
+    /// Entities the deletion purged because the team or one of its bots owned
+    /// them, in purge order. Entities an earlier, failed attempt purged are
+    /// absent. Missing on events published before this field existed.
+    #[serde(default)]
+    pub owned_entities: Vec<OwnedEntityMetadata>,
+}
+
+/// An entity purged by a team deletion, in [`TeamDeletedMetadata`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnedEntityMetadata {
+    /// Kind of the purged entity.
+    pub entity_type: RegisteredEntityType,
+    /// Identifier of the purged entity.
+    pub id: Uuid,
+    /// The team or bot that owned the entity.
+    pub owner: Owner,
+}
+
+impl From<&OwnedEntityRef> for OwnedEntityMetadata {
+    fn from(entity: &OwnedEntityRef) -> Self {
+        Self {
+            entity_type: entity.entity_type,
+            id: entity.id,
+            owner: entity.owner.as_owner(),
+        }
+    }
 }
 
 /// Metadata for [`TeamTopicEvent::InviteCreated`].

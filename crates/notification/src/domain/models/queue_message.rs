@@ -335,6 +335,11 @@ impl<'a, T, U> QueueMessage<'a, T, U> {
 }
 
 impl<'a, T, U> QueueMessage<'a, T, U> {
+    /// The notification type this message delivers.
+    pub(crate) fn message_type(&self) -> &str {
+        &self.message_type
+    }
+
     /// Consume the message and return its content.
     pub(crate) fn into_inner(self) -> NotificationChannel<'a, T, U> {
         self.content

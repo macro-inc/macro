@@ -100,6 +100,19 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * Why an event-triggered run was skipped before it started.
+ */
+export type ConditionResult = {
+    /**
+     * The classifier's probability, from 0 to 1, that the answer was yes.
+     */
+    probability: number;
+    status: 'not_met';
+} | {
+    status: 'unavailable';
+};
+
+/**
  * Exactly one representation is accepted, even if mixed fields agree or are null.
  */
 export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
@@ -112,9 +125,15 @@ export type EmptyResponse = {
 };
 
 /**
- * An event name AND an entity ID must match within the same filter.
+ * An event name AND an entity ID must match within the same filter. A
+ * condition further requires the event's content to answer it with yes.
  */
 export type EventFilter = {
+    /**
+     * Yes/no question about the triggering content, e.g. "Is this email an
+     * invoice?". The routine runs only when the answer is yes.
+     */
+    condition?: string | null;
     events: Array<EventName>;
     ids?: Array<string> | null;
 };
@@ -128,7 +147,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -148,6 +167,7 @@ export type ExecutionResourceType = 'chat' | 'agent';
  * Null/string column values predate this envelope and refer to legacy chats.
  */
 export type ExecutionResult = {
+    condition?: null | ConditionResult;
     error?: string | null;
     resource?: null | ExecutionResource;
     version: number;

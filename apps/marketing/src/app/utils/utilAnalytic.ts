@@ -317,27 +317,3 @@ export const buildCalLinkWithAttribution = (baseUrl: string): string => {
     return baseUrl;
   }
 };
-
-/**
- * Attach attribution signals to a cal.com embed slug (e.g.
- * `"forms/7045081b-..."` → `"forms/7045081b-...?metadata[fbp]=..."`).
- *
- * The embed's `config.metadata` option did not forward to webhook payloads
- * in testing — likely because cal.com routing forms drop embed-config
- * metadata at the form → event-type handoff. Appending the params to the
- * slug forces them into the iframe URL, which matches the mechanism the
- * link flow proved works.
- *
- * `user_agent` is included here (embed config is not visible in a URL bar).
- */
-export const buildCalSlugWithAttribution = (slug: string): string => {
-  const signals = getCalBookingAttribution();
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(signals)) {
-    params.set(`metadata[${key}]`, value);
-  }
-  const qs = params.toString();
-  if (!qs) return slug;
-  const separator = slug.includes('?') ? '&' : '?';
-  return `${slug}${separator}${qs}`;
-};

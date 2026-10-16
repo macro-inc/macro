@@ -19,6 +19,14 @@ pub const JWT_SIGNING_KEY_ID: &str = "d7d09513-a3f5-401c-9685-34ab6c552453";
 /// The HS256 secret. `macro_auth` reads this as `JWT_SECRET_KEY`.
 pub const JWT_SECRET: &str = "super-secret-jwt-signing-key-for-local-development-only";
 
+/// Public fixture key for local Macro API tokens, including CRM settings calls.
+pub const MACRO_API_TOKEN_PUBLIC_KEY: &str =
+    include_str!("identity/macro-api-token.local.public.pem");
+
+/// Local-only fixture signing key. Never use this identity in a deployed environment.
+pub const MACRO_API_TOKEN_PRIVATE_KEY: &str =
+    include_str!("identity/macro-api-token.local.private.pem");
+
 /// The populate-JWT lambda id (the unlicensed local variant).
 pub const POPULATE_JWT_LAMBDA_ID: &str = "a7f3e8d2-4b91-4c5a-9e6f-1a2b3c4d5e6f";
 

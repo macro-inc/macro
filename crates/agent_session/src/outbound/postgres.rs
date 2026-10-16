@@ -9,13 +9,16 @@ use sqlx::types::Json;
 #[cfg(test)]
 mod test;
 
+mod agent_conversation;
 mod pull_request;
 mod queue;
 mod recovery;
+mod session_task;
 mod sharing;
 mod turn_state;
 mod working_branch;
 
+use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
@@ -33,7 +36,6 @@ use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
-use bot_id::MACRO_NEW_BOT_ID;
 use bots::domain::models::BotId;
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -57,6 +59,7 @@ use std::num::NonZeroUsize;
 pub struct PgAgentSessionRepo<B> {
     pool: PgPool,
     registrar: OwnedEntityRegistrar<B>,
+    list_policy: crate::domain::list_visibility::SessionListPolicy,
 }
 
 impl<B> std::fmt::Debug for PgAgentSessionRepo<B> {
@@ -72,7 +75,20 @@ impl<B: BotFacts> PgAgentSessionRepo<B> {
     /// Create a Postgres agent session repository that registers owners
     /// through `registrar`.
     pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
-        Self { pool, registrar }
+        Self {
+            pool,
+            registrar,
+            list_policy: Default::default(),
+        }
+    }
+
+    /// Configure the session domain's staged DM visibility policy.
+    pub fn with_list_policy(
+        mut self,
+        policy: crate::domain::list_visibility::SessionListPolicy,
+    ) -> Self {
+        self.list_policy = policy;
+        self
     }
 }
 
@@ -226,6 +242,7 @@ struct AgentSessionRow {
     repo_url: Option<String>,
     repo_branch: Option<String>,
     pull_request_url: Option<String>,
+    task_id: Option<String>,
     workspace: String,
     sandbox_size: String,
     instructions: Option<String>,
@@ -267,6 +284,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
                 .transpose()
                 .map_err(anyhow::Error::msg)?,
             pull_request_url: row.pull_request_url,
+            task_id: row.task_id,
             workspace: row.workspace,
             sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
             instructions: row.instructions,
@@ -296,6 +314,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
 impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let CreateAgentSessionParams {
+            purpose,
             id,
             owner_id,
             bot_id,
@@ -339,10 +358,19 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         }
 
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
-        // An inline @macro mention is a one-shot on the message. It stays out
-        // of the agents list and search. Every other session — the agents
-        // composer, coding agents — is a list row.
-        let list_hidden = bot_id == MACRO_NEW_BOT_ID && thread_id.is_some();
+        let conversation = sqlx::query_scalar!(
+            "SELECT EXISTS (SELECT 1 FROM agent_conversation_sessions WHERE session_id = $1) AS \"exists!\"",
+            id.as_uuid(),
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        .context("read session creation provenance")?;
+        let purpose = purpose.for_creation(
+            conversation,
+            thread_id.is_some() || originating_message_id.is_some(),
+        )?;
+        let list_hidden = purpose.list_hidden(bot_id, thread_id, self.list_policy.hide_agent_dms);
+        let warm = purpose == crate::domain::model::SessionPurpose::Warm;
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -350,12 +378,12 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers, repo_branch, list_hidden
+                mcp_scope, mcp_servers, repo_branch, list_hidden, for_warming
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
             RETURNING
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -385,6 +413,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             mcp_servers_json,
             repo_branch.as_ref().map(|branch| branch.as_str()),
             list_hidden,
+            warm,
         )
         .fetch_one(&mut *transaction)
         .await
@@ -461,9 +490,11 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         // row is what Soup's `viewed_at` and the frecency ranking read, so
         // without it a brand-new session would rank below everything the
         // owner has ever opened.
-        upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
-            .await
-            .context("failed to record the agent session in the owner's history")?;
+        if !warm {
+            upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
+                .await
+                .context("failed to record the agent session in the owner's history")?;
+        }
 
         transaction
             .commit()
@@ -474,12 +505,16 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
+        self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -496,10 +531,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to get agent session")?
-        .context("agent session not found")?;
+        .context("failed to get agent session")?;
 
-        Ok(row.try_into()?)
+        Ok(row.map(AgentSession::try_from).transpose()?)
     }
 
     async fn preview(
@@ -587,7 +621,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -628,7 +662,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -662,7 +696,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -698,7 +732,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -709,7 +743,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 ext.last_run_id AS "external_last_run_id?"
             FROM agent_session
             LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
-            WHERE owner_id = $1
+            WHERE owner_id = $1 AND NOT list_hidden
             ORDER BY agent_session.created_at DESC, id DESC
             LIMIT $2
             "#,
@@ -954,6 +988,23 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         Ok(())
     }
 
+    async fn is_current_conversation_session(&self, id: AgentSessionId) -> Result<bool> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM agent_conversation_sessions
+                WHERE session_id = $1
+                  AND is_current
+            ) AS "current!"
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to read whether the session answers a conversation")?)
+    }
+
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
         let mut transaction = self
             .pool
@@ -1041,6 +1092,54 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .execute(&self.pool)
         .await
         .context("failed to persist user sandbox size")?;
+        Ok(())
+    }
+
+    async fn user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<CodingPreferences> {
+        let preferences = sqlx::query!(
+            r#"
+            SELECT create_tasks, open_pull_requests
+            FROM user_agent_coding_preferences
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read user coding preferences")?;
+        Ok(preferences
+            .map(|row| CodingPreferences {
+                create_tasks: row.create_tasks,
+                open_pull_requests: row.open_pull_requests,
+            })
+            .unwrap_or_default())
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        preferences: CodingPreferences,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO user_agent_coding_preferences
+                (user_id, create_tasks, open_pull_requests, modified_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET create_tasks = EXCLUDED.create_tasks,
+                open_pull_requests = EXCLUDED.open_pull_requests,
+                modified_at = NOW()
+            "#,
+            user_id.as_ref(),
+            preferences.create_tasks,
+            preferences.open_pull_requests,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist user coding preferences")?;
         Ok(())
     }
 
@@ -1145,6 +1244,7 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
                 agent_session_id: AgentSessionId::new_from_uuid(row.agent_session_id),
                 user_id: row.user_id,
                 content: parse_message(&row.direction, row.content)?,
+                logged_at: Some(row.created_at),
             },
         })
     }
@@ -1799,3 +1899,6 @@ impl<B: BotFacts + 'static> SessionAudience for PgAgentSessionRepo<B> {
         Ok(viewers)
     }
 }
+
+mod list_visibility;
+mod warm;

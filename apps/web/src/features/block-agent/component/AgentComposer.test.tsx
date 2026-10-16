@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   steerQueued: vi.fn(),
   upload: vi.fn(),
   consumeNotes: vi.fn(),
+  metadata: () =>
+    undefined as { model: string; configOptions: { id: string }[] } | undefined,
   input: undefined as AgentInputProps | undefined,
   model: undefined as AgentModelSelectorProps | undefined,
   queued: undefined as QueuedPromptsProps | undefined,
@@ -48,7 +50,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     selectModel: mocks.selectModel,
     loadFailed: () => false,
     messages: () => [],
-    metadata: () => undefined,
+    metadata: () => mocks.metadata(),
     pending: () => false,
     initialInput: 'Document context',
     queue: {
@@ -87,6 +89,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.resetAllMocks();
   mocks.turn = () => 'idle';
+  mocks.metadata = () => undefined;
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
 });
@@ -193,4 +196,60 @@ it('explicitly sends the queue head and disables it while the turn transitions',
     fireEvent.click(sendNext);
   }
   expect(mocks.sendNext).toHaveBeenCalledTimes(1);
+});
+
+it('retains an unsent draft when speed configuration is rejected', async () => {
+  mocks.session = () => ({ canEdit: true });
+  mocks.metadata = () => ({
+    model: 'openai/gpt-6-astra',
+    configOptions: [{ id: 'speed' }],
+  });
+  mocks.selectModel.mockRejectedValue(new Error('Unavailable'));
+  render(() => <AgentComposer />);
+  mocks.input?.onDraftChange?.('Keep this draft');
+  mocks.input?.onDraftChange?.('');
+  mocks.input?.onSend('Keep this draft', []);
+  await vi.waitFor(() => expect(mocks.input?.draft).toBe('Keep this draft'));
+  expect(mocks.issue).not.toHaveBeenCalled();
+  expect(mocks.consumeNotes).not.toHaveBeenCalled();
+});
+
+it('leaves external agent speed settings alone', () => {
+  mocks.session = () => ({ canEdit: true });
+  mocks.metadata = () => ({
+    model: 'external/model',
+    configOptions: [{ id: 'speed' }],
+  });
+  render(() => <AgentComposer />);
+  mocks.input?.onSend('Use external settings', []);
+  expect(mocks.selectModel).not.toHaveBeenCalled();
+  expect(mocks.issue).toHaveBeenCalledWith({
+    type: 'prompt',
+    prompt: 'Use external settings',
+  });
+});
+
+it('retains the draft if editing access is revoked while applying speed', async () => {
+  const [canEdit, setCanEdit] = createSignal(true);
+  mocks.session = () => ({ canEdit: canEdit() });
+  mocks.metadata = () => ({
+    model: 'openai/gpt-6-astra',
+    configOptions: [{ id: 'speed' }],
+  });
+  let finish!: () => void;
+  mocks.selectModel.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  render(() => <AgentComposer />);
+  mocks.input?.onSend('Keep after permission change', []);
+  setCanEdit(false);
+  finish();
+  await vi.waitFor(() =>
+    expect(mocks.input?.draft).toBe('Keep after permission change')
+  );
+  expect(mocks.issue).not.toHaveBeenCalled();
+  expect(mocks.consumeNotes).not.toHaveBeenCalled();
 });

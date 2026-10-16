@@ -17,6 +17,7 @@ fn message(parts: Vec<MessagePart>) -> FoldedMessage {
         parts: NonEmpty::new(parts).expect("test message has parts"),
         stop: None,
         pending: false,
+        posted_at: None,
     }
 }
 

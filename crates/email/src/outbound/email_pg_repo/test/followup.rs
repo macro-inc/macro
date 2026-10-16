@@ -58,6 +58,13 @@ async fn followup_return_authorizes_the_thread_inbox_and_supports_sent_only(
         "must not invent an inbound message"
     );
     assert!(returned.reminder_returned_at.is_some());
+    let metadata = mailbox.email_repo.thread_metadata_by_ids(&[thread]).await?;
+    assert_eq!(metadata.len(), 1);
+    assert_eq!(
+        metadata[0].reminder_returned_at,
+        returned.reminder_returned_at
+    );
+    assert!(metadata[0].latest_inbound_message_ts.is_none());
     mailbox
         .set_followup_inbox(owner, thread, link, false, None)
         .await?;

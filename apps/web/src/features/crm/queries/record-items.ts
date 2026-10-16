@@ -1,21 +1,15 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
-import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import type { useSoupAstItemsQuery } from '@queries/soup/items';
+import type {
+  SoupAstItemsQuery,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { CrmRecordScope } from '../core/record';
 
-/** The system property that associates entities with this kind of record. */
-export function crmRecordPropertyId(scope: CrmRecordScope): string {
-  return match(scope.type)
-    .with('company', () => SYSTEM_PROPERTY_IDS.COMPANIES)
-    .with('contact', () => SYSTEM_PROPERTY_IDS.CONTACTS)
-    .exhaustive();
-}
-
 type AstNode = Record<string, unknown>;
 
-const leaf = (literal: AstNode): AstNode => ({ l: literal });
+const leaf = (literal: AstNode | string): AstNode => ({ l: literal });
 const or = (nodes: AstNode[]): AstNode =>
   nodes.reduce((acc, node) => ({ '|': [acc, node] }));
 
@@ -33,11 +27,17 @@ const NO_ITEMS = {
   ef: leaf({ ThreadId: NIL_UUID }),
 };
 
-/** The record's Companies/Contacts reference, as a property literal. */
-const associatedLiteral = (scope: CrmRecordScope): AstNode => ({
-  pd: crmRecordPropertyId(scope),
-  v: { er: scope.id },
-});
+/**
+ * The record as a Soup CRM association: items whose Companies or Contacts
+ * property names it, or that reference it. A company also matches through
+ * every one of its contacts; the server expands and authorizes the record.
+ */
+export function crmAssociation(scope: CrmRecordScope) {
+  return match(scope)
+    .with({ type: 'company' }, ({ id }) => ({ company: id }))
+    .with({ type: 'contact' }, ({ id }) => ({ contact: id }))
+    .exhaustive();
+}
 
 /** Email addresses or domains of the people at the record. */
 const participants = (scope: CrmRecordScope): AstNode[] =>
@@ -51,8 +51,8 @@ const participants = (scope: CrmRecordScope): AstNode[] =>
     .exhaustive();
 
 /**
- * Non-task documents associated with the record through its Companies or
- * Contacts property, plus attachments of emails exchanged with its people.
+ * Non-task documents associated with the record, plus attachments of emails
+ * exchanged with its people.
  */
 export function recordFilesBody(scope: CrmRecordScope) {
   return {
@@ -60,7 +60,7 @@ export function recordFilesBody(scope: CrmRecordScope) {
     df: {
       '&': [
         { '!': leaf({ dst: 'task' }) },
-        or([leaf({ prop: associatedLiteral(scope) }), ...participants(scope)]),
+        or([leaf({ crm: crmAssociation(scope) }), ...participants(scope)]),
       ],
     },
   };
@@ -68,11 +68,41 @@ export function recordFilesBody(scope: CrmRecordScope) {
 
 /**
  * Calls associated with the record. Calls are linked to the CRM records of
- * their participants when they end, so the property alone covers both.
+ * their participants when they end, and call threads can mention the record.
  */
 export function recordCallsBody(scope: CrmRecordScope) {
   const { callf: _calls, ...others } = NO_ITEMS;
-  return { ...others, propf: leaf(associatedLiteral(scope)) };
+  return { ...others, crma: crmAssociation(scope) };
+}
+
+/**
+ * Items of any type associated with the record: files, tasks, chats,
+ * projects, email threads, channels, channel messages, calls, events, and
+ * other CRM records whose discussions reference it. Initiatives and database
+ * rows are opt-in Soup sources this body does not request.
+ */
+export function recordReferencesBody(scope: CrmRecordScope) {
+  return {
+    crma: crmAssociation(scope),
+    crmf: leaf('include'),
+    emailView: 'all' as const,
+  };
+}
+
+/**
+ * How a failed record list presents. A failed continuation page keeps the
+ * loaded rows and retries that page. Any other failure, including a refetch
+ * after the record became inaccessible, means the loaded rows are no longer
+ * current: the list shows the failure and retries the query.
+ */
+export function recordListFailure(
+  source: Pick<SoupAstItemsQuery, 'error' | 'isFetchNextPageError'>
+) {
+  const failed = source.error != null;
+  return {
+    isError: failed && !source.isFetchNextPageError,
+    isFetchNextPageError: failed && source.isFetchNextPageError,
+  };
 }
 
 const PARAMS = { limit: 100, sort_method: 'updated_at' } as const;
@@ -88,6 +118,23 @@ export function useRecordFilesQuery(
       return {
         params: PARAMS,
         body: current ? recordFilesBody(current) : NO_ITEMS,
+      };
+    },
+    () => ({ enabled: !!scope() })
+  );
+}
+
+/** Items of any type associated with a CRM record, via `/soup/ast`. */
+export function useRecordReferencesQuery(
+  createQuery: typeof useSoupAstItemsQuery,
+  scope: Accessor<CrmRecordScope | undefined>
+) {
+  return createQuery(
+    () => {
+      const current = scope();
+      return {
+        params: PARAMS,
+        body: current ? recordReferencesBody(current) : NO_ITEMS,
       };
     },
     () => ({ enabled: !!scope() })

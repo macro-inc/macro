@@ -12,7 +12,7 @@
   justify-content: center;
   gap: 10px;
   margin: 0 0 22px;
-  color: #a3a3a3;
+  color: var(--color-ink-muted);
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
@@ -30,7 +30,7 @@
   margin: 0 0 24px;
   font-family: 'Roboto Slab Variable', display, serif;
   font-size: clamp(44px, 5vw, 72px);
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   line-height: 1.06;
   letter-spacing: -.04em;
 }
@@ -40,12 +40,12 @@
 }
 
 .email-page-hero h1 span:last-child {
-  color: #b8b8b8;
+  color: var(--color-ink-muted);
 }
 
 .feature-page .email-page-hero > .email-page-hero-description {
   max-width: 540px;
-  color: #999;
+  color: var(--color-ink-muted);
   font-size: 17px;
   line-height: 1.65;
   text-wrap: pretty;

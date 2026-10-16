@@ -8,10 +8,14 @@ import { recordChannelActivity } from '@service-storage/graphql-channel-activity
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from './keys';
 
+function fetchChannelsActivity() {
+  return throwOnErr(storageServiceClient.getActivity);
+}
+
 export function useChannelsActivityQuery() {
   return useQuery(() => ({
     queryKey: channelKeys.activity.queryKey,
-    queryFn: async () => await throwOnErr(storageServiceClient.getActivity),
+    queryFn: fetchChannelsActivity,
   }));
 }
 

@@ -52,3 +52,77 @@
   .email-desktop-content .dummy-sidebar { top: 42px; }
   .email-desktop-demo .email-desktop-caption { max-width: 290px; margin: 16px auto 0; font-size: 12px; }
 }
+
+.email-desktop-canvas,
+.email-desktop-canvas > [data-deferred-demo] { height:100%; }
+@media (min-width:700px) {
+  .email-desktop-demo[data-desktop-canvas=true] { --desktop-stage-width:min(1052px, 96vw); }
+  .email-desktop-demo[data-desktop-canvas=true] .email-desktop-wallpaper { padding:32px 24px; }
+  .email-desktop-demo[data-desktop-canvas=true] .email-desktop-content { height:calc(640px * var(--workspace-scale)); }
+  .email-desktop-demo[data-desktop-canvas=true] .email-desktop-canvas {
+    width:var(--workspace-width);
+    height:640px;
+    transform:scale(var(--workspace-scale));
+    transform-origin:top left;
+  }
+}
+
+
+/* Opt-in hero frame: lower-page demos keep their own layout. */
+:root body .email-desktop-demo[data-hero-frame=true] {
+  --desktop-stage-width: min(1200px, calc(100vw - 48px));
+}
+:root body .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper {
+  position: relative;
+  isolation: isolate;
+  padding: 50px;
+  border-radius: 16px;
+  background: #191a1e;
+}
+:root body .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url('../../../../assets/desktop/monterey-dark.jpg') center / cover;
+  filter: grayscale(1) brightness(1.6) contrast(1.05);
+}
+:root body .email-desktop-demo[data-hero-frame=true] .email-desktop-window {
+  border-radius: 16px;
+  box-shadow: 0 24px 60px #0006, 0 3px 12px #0003;
+}
+:root body .email-desktop-demo[data-hero-frame=true] .email-desktop-titlebar {
+  height: 36px;
+  background: #171717;
+}
+:root body .email-desktop-demo[data-hero-frame=true] .email-desktop-content {
+  height: 640px;
+}
+:root body .email-desktop-demo[data-hero-frame=true] .email-desktop-content .product-demo {
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+@media (min-width: 700px) {
+  :root body .email-desktop-demo[data-hero-frame=true][data-desktop-canvas=true] .email-desktop-canvas {
+    height: calc(640px / var(--workspace-scale));
+  }
+}
+@media (max-width: 699px) {
+  :root body .email-desktop-demo[data-hero-frame=true] {
+    --desktop-stage-width: calc(100vw - 24px);
+  }
+  :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper {
+    padding: 16px;
+    border-radius: 12px;
+  }
+  :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-window {
+    border-radius: 12px;
+  }
+  :root body .email-desktop-demo[data-hero-frame=true] .email-desktop-content {
+    height: 580px;
+  }
+}

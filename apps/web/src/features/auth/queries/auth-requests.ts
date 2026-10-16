@@ -96,9 +96,10 @@ export async function verifyEmailCode(input: {
 }): Promise<VerifyCodeResult> {
   const result = await authServiceClient.passwordlessCallback(input);
   if (result.isOk()) return { t: 'verified' };
-  return result.error.some((error) => error.code === 'UNAUTHORIZED')
-    ? { t: 'invalid-code' }
-    : { t: 'failed' };
+  const code = result.error[0]?.code;
+  if (code === 'UNAUTHORIZED') return { t: 'invalid-code' };
+  if (code === 'RATE_LIMITED') return { t: 'rate-limited' };
+  return { t: 'failed' };
 }
 
 /** Exchanges the session code an SSO return carries for session cookies. */

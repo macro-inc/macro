@@ -47,6 +47,14 @@ pub(crate) fn disabled_admission() -> std::sync::Arc<dyn AiAdmissionService> {
 struct UnavailableBilling;
 
 impl ai_billing::domain::BillingService for UnavailableBilling {
+    async fn change_plan(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: ai_billing::domain::plan_change::PlanChange,
+    ) -> ai_billing::domain::Result<()> {
+        panic!("this use case must not change plans")
+    }
+
     async fn check_allowance(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -70,6 +78,15 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
         _: &MacroUserIdStr<'_>,
         _: bool,
         _: i64,
+    ) -> ai_billing::domain::Result<ai_billing::domain::UsageSnapshot> {
+        panic!("admission must not change settings")
+    }
+
+    async fn update_auto_reload(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: bool,
+        _: ai_billing::domain::AutoReloadThresholds,
     ) -> ai_billing::domain::Result<ai_billing::domain::UsageSnapshot> {
         panic!("admission must not change settings")
     }
@@ -106,10 +123,18 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
     async fn mark_overage_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
         panic!("admission must not handle invoices")
     }
+
+    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
+        panic!("admission must not handle invoices")
+    }
 }
 
 /// Models advertised by shared test engines.
-pub(crate) const TEST_MODELS: &[&str] = &["anthropic/claude-sonnet-5-5", "other-model"];
+pub(crate) const TEST_MODELS: &[&str] = &[
+    "anthropic/claude-sonnet-5-5",
+    "other-model",
+    chat::domain::models::FREE_MODEL,
+];
 
 /// An engine that plays back a script of parts for every turn.
 pub(crate) struct ScriptedEngine {
@@ -121,10 +146,13 @@ pub(crate) struct ScriptedEngine {
 /// What one turn asked of the engine, as far as tests care.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RecordedTurn {
+    pub(crate) purpose: crate::domain::engine::TurnPurpose,
     /// Model the turn was to run on.
     pub(crate) model: String,
     /// Reasoning effort the turn was to use.
     pub(crate) reasoning_effort: agent::ReasoningEffort,
+    /// Provider speed selected for this turn.
+    pub(crate) speed: agent::ModelSpeed,
     /// The conversation, flattened to text per message.
     pub(crate) messages: Vec<String>,
     /// Every image URL attached across the conversation, in order.
@@ -158,8 +186,10 @@ impl TurnEngine for ScriptedEngine {
             .lock()
             .expect("requests lock")
             .push(RecordedTurn {
+                purpose: request.purpose,
                 model: request.model.clone(),
                 reasoning_effort: request.reasoning_effort,
+                speed: request.speed,
                 messages: request
                     .messages
                     .iter()
@@ -210,5 +240,43 @@ impl TurnEngine for HangingEngine {
             drop(parts);
         });
         receiver
+    }
+}
+
+/// Mutable plan lookup used to exercise upgrades, downgrades, and lookup errors.
+pub(crate) struct TestModelAccess {
+    pub(crate) result: Mutex<
+        Result<
+            crate::domain::model_access::ModelAccess,
+            crate::domain::model_access::ModelAccessError,
+        >,
+    >,
+    pub(crate) owners: Mutex<Vec<model_owner::Owner>>,
+}
+
+impl TestModelAccess {
+    pub(crate) fn new(access: crate::domain::model_access::ModelAccess) -> Self {
+        Self {
+            result: Mutex::new(Ok(access)),
+            owners: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(crate) fn paid() -> Self {
+        Self::new(crate::domain::model_access::ModelAccess::Paid)
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::domain::model_access::InMemModelAccess for TestModelAccess {
+    async fn access(
+        &self,
+        owner: &model_owner::Owner,
+    ) -> Result<
+        crate::domain::model_access::ModelAccess,
+        crate::domain::model_access::ModelAccessError,
+    > {
+        self.owners.lock().unwrap().push(owner.clone());
+        *self.result.lock().unwrap()
     }
 }

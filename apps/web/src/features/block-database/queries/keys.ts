@@ -18,3 +18,8 @@ export const databaseColumnKeys = createQueryKeys('database-columns', {
     queryKey: [databaseId, tableId, columnId, version],
   }),
 });
+
+export const databaseWebhookKeys = createQueryKeys('database-webhooks', {
+  /** A database's webhooks. */
+  list: (databaseId: string) => ({ queryKey: [databaseId] }),
+});

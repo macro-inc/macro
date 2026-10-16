@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM entity_access WHERE source_type = 'user' AND source_id = $1 AND granted_from_project_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e8d361f372c32012ab996980911916b128fc3287de1302281704422a60960d3b"
+}

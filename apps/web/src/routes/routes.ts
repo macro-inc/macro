@@ -9,8 +9,10 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
+import { crmViewReference } from '@app/features/crm/crm-route';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
 import {
+  DRIVE_DETAIL_TYPES,
   DRIVE_DOCUMENT_TYPES,
   driveDocumentBlockType,
 } from '@app/features/drive-view/primitives/drive-route-schema';
@@ -20,10 +22,6 @@ import {
   homeBaseBlockType,
   homePreviewRouteParams,
 } from '@app/features/home/home-route-schema';
-import {
-  HOME_REMINDER_DETAIL_ROUTE_ID,
-  REMINDER_DETAIL_ROUTE_ID,
-} from '@app/features/reminders/reminder-navigation';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
 import {
   ROUTINE_CREATE_ROUTE_ID,
@@ -63,6 +61,13 @@ export const baseRoute = defineRoute({
 export const publicBookingRoute = defineRoute({
   id: 'public-booking',
   path: 'book/:profile/:slug?',
+  externalSearch: '*',
+});
+
+/** A form's respond page, outside the split layout so public forms skip login. */
+export const formRespondRoute = defineRoute({
+  id: 'form-respond',
+  path: 'form/:formId/respond',
   externalSearch: '*',
 });
 
@@ -163,6 +168,12 @@ export const channelInviteRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** Sign-in, onboarding, invite, and handoff pages, without the app's chrome. */
+export const authRoute = defineRoute({ id: 'auth' });
+
+/** Booking pages a visitor opens from a shared link, in the focused shell. */
+export const publicRoute = defineRoute({ id: 'public' });
+
 /** The split layout; its children are the pane routes. */
 export const appRoute = defineRoute({ id: APP_ROUTE_ID });
 
@@ -179,7 +190,7 @@ export const driveCallRoute = defineRoute({
 });
 
 const driveDocumentParams = z.object({
-  documentType: z.enum(DRIVE_DOCUMENT_TYPES),
+  documentType: z.enum(DRIVE_DETAIL_TYPES),
   documentId: z.string().min(1),
 });
 
@@ -360,6 +371,11 @@ export const homeChannelRoute = defineRoute({
 export const homeDocumentRoute = defineRoute({
   ...driveRootDocumentRoute,
   id: 'home-document',
+  // Home previews databases and forms as blocks under `home-preview`.
+  params: z.object({
+    documentType: z.enum(DRIVE_DOCUMENT_TYPES),
+    documentId: z.string().min(1),
+  }),
   externalSearch: (entry: Readonly<Entry>) => {
     const type = routeParams(entry.location.route).documentType;
     if (
@@ -375,14 +391,6 @@ export const homeDocumentRoute = defineRoute({
   },
   remountKey: ({ documentType, documentId }) =>
     `${homeBaseBlockType(documentType)}:${documentId}`,
-});
-
-export const homeReminderRoute = defineRoute({
-  id: HOME_REMINDER_DETAIL_ROUTE_ID,
-  path: 'reminder/:reminderId',
-  params: z.object({ reminderId: z.string().min(1) }),
-  remountKey: ({ reminderId }) => reminderId,
-  claim: ({ reminderId }) => ({ namespace: 'reminder', id: reminderId }),
 });
 
 export const homePreviewRoute = defineRoute({
@@ -427,13 +435,6 @@ export const homeSplitRoute = defineRoute({
   search: '*' as const,
 });
 
-export const gettingStartedRoute = defineRoute({
-  id: 'view-getting-started',
-  path: 'getting-started',
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'getting-started' }),
-});
-
 export const recentRoute = defineRoute({
   id: 'view-recent',
   path: 'recent',
@@ -446,22 +447,6 @@ export const activityRoute = defineRoute({
   path: 'activity',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'activity' }),
-});
-
-/** Lightweight standalone reminder detail at `/app/reminder/:reminderId`. */
-export const reminderDetailRoute = defineRoute({
-  id: REMINDER_DETAIL_ROUTE_ID,
-  path: 'reminder/:reminderId',
-  params: z.object({ reminderId: z.string().min(1) }),
-  remountKey: ({ reminderId }) => reminderId,
-  claim: ({ reminderId }) => ({ namespace: 'reminder', id: reminderId }),
-});
-
-export const remindersRoute = defineRoute({
-  id: 'view-reminders',
-  path: 'reminders',
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'reminders' }),
 });
 
 export const routinesRoute = defineRoute({
@@ -602,6 +587,17 @@ export const callsRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'calls' }),
 });
 
+export const callsCallRoute = defineRoute({
+  id: 'calls-call',
+  path: 'call/:callId',
+  params: z.object({ callId: z.string().min(1) }),
+  search: [callDetailSearch.namespace],
+  externalSearch: [CALL_URL_PARAMS.transcriptId, CALL_URL_PARAMS.messageId],
+  remountKey: ({ callId }) => callId,
+  claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),
+  toReference: ({ callId }) => uuidRouteReference(callId, 'call'),
+});
+
 export const callDetailRoute = defineRoute({
   id: 'call-detail',
   path: 'call/:callId',
@@ -618,6 +614,7 @@ export const companiesRoute = defineRoute({
   search: '*' as const,
   externalSearch: ['crmView'],
   claim: () => ({ namespace: 'component', id: 'companies' }),
+  toReference: (_, query) => crmViewReference(query),
 });
 
 export const foldersRoute = defineRoute({
@@ -649,6 +646,7 @@ export const prDetailRoute = defineRoute({
 const debugComponentIds = [
   'ui',
   'icon-gallery',
+  'create-menu-demo',
   ...(LOCAL_ONLY
     ? [
         'theme-edit-3',

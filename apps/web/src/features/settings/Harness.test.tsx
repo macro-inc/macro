@@ -225,23 +225,23 @@ beforeEach(() => {
 
 describe('Harness', () => {
   it.each([false, true])(
-    'offers Codex settings even when rollout access is %s',
+    'shows Codex settings only within its rollout (access %s)',
     (enabled) => {
       codexAccess.enabled = enabled;
       render(() => <Harness />);
-      expect(screen.getByTestId('codex-harness')).toBeTruthy();
+      expect(Boolean(screen.queryByTestId('codex-harness'))).toBe(enabled);
     }
   );
 
-  it('offers Claude connection when the rollout flag is off', () => {
+  it('hides the Claude connection outside its rollout', () => {
     claudeFlag.enabled = false;
     claudeFlag.source.mockClear();
     try {
       render(() => <Harness />);
       expect(
         screen.queryByRole('region', { name: 'Claude Cloud connection' })
-      ).toBeTruthy();
-      expect(claudeFlag.source).toHaveBeenCalled();
+      ).toBeNull();
+      expect(claudeFlag.source).not.toHaveBeenCalled();
       expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
     } finally {
       claudeFlag.enabled = true;
@@ -326,9 +326,6 @@ describe('Harness', () => {
     ).toBeTruthy();
     expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'Bring your agent to Macro' })
-    ).toBeTruthy();
-    expect(
       screen.getByText(/Uses official Macro tools and MCPs to get the job done/)
     ).toBeTruthy();
   });
@@ -347,17 +344,31 @@ describe('Harness', () => {
 
     expect(mocks.save).not.toHaveBeenCalled();
     expect(mocks.toastFailure).toHaveBeenCalledWith(
-      'Cursor API keys start with crsr_'
+      'Cursor API keys start with grok_ or crsr_'
     );
 
-    fireEvent.input(apiKeyInput, { target: { value: '  crsr_example  ' } });
+    fireEvent.input(apiKeyInput, { target: { value: '  grok_example  ' } });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(mocks.save).toHaveBeenCalledWith('crsr_example');
+      expect(mocks.save).toHaveBeenCalledWith('grok_example');
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Cursor connected');
       expect(apiKeyInput).toHaveProperty('value', '');
     });
+  });
+
+  it('still accepts a Cursor API key minted with the older crsr_ prefix', async () => {
+    render(() => <Harness />);
+
+    fireEvent.input(screen.getByLabelText('API key'), {
+      target: { value: 'crsr_example' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(mocks.save).toHaveBeenCalledWith('crsr_example');
+    });
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
   });
 
   it('shows connection status, the default model picker, and disconnect for connected Cursor', async () => {
@@ -400,7 +411,7 @@ describe('Harness', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
-  it('hides the empty paired runtimes section and keeps the setup guide', () => {
+  it('hides the empty paired runtimes section', () => {
     render(() => <Harness />);
 
     expect(screen.queryByText('No paired runtimes yet')).toBeNull();
@@ -410,28 +421,24 @@ describe('Harness', () => {
     expect(
       screen.queryByRole('button', { name: 'Enter pairing code' })
     ).toBeNull();
-    expect(screen.getByRole('link', { name: /Setup guide/ })).toHaveProperty(
-      'href',
-      'https://docs.macro.com/AI/bring-your-own'
-    );
   });
 
-  it('opens pairing from the bring-your-own card', () => {
+  it('opens pairing from New runtime and returns to the runtimes list', () => {
     render(() => <Harness />);
 
-    expect(screen.getAllByRole('button', { name: 'New runtime' })).toHaveLength(
-      2
-    );
-    const card = screen
-      .getByRole('heading', { name: 'Bring your agent to Macro' })
-      .closest('section')!;
-    fireEvent.click(within(card).getByRole('button', { name: 'New runtime' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New runtime' }));
     expect(screen.getByRole('region', { name: 'New runtime' })).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(
-      screen.getByRole('heading', { name: 'Bring your agent to Macro' })
-    ).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Runtimes' })).toBeTruthy();
+  });
+
+  it('goes back to Agents from the runtimes page', () => {
+    const onBack = vi.fn();
+    render(() => <Harness onBack={onBack} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
+    expect(onBack).toHaveBeenCalledOnce();
   });
 
   it('renders a registered harness row', () => {

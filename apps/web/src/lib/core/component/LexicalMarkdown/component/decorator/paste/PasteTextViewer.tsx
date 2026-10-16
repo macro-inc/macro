@@ -39,7 +39,7 @@ export function PasteTextViewer(props: {
   );
 
   const fullText = () => (
-    <pre class="font-mono text-sm leading-relaxed bg-message p-4 m-0 whitespace-pre-wrap wrap-break-word overflow-auto">
+    <pre class="font-mono text-sm leading-relaxed bg-message p-4 m-0 whitespace-pre-wrap wrap-break-word overflow-auto select-text">
       {props.content}
     </pre>
   );

@@ -1,6 +1,7 @@
 //! Authenticated, bounded HTTP calls to the scheduled-action service.
 use crate::domain::{
-    RoutineConfiguration, RoutineDetails, RoutineInfo, RoutineService, RoutineTarget,
+    RoutineConfiguration, RoutineDetails, RoutineInfo, RoutineRunStarted, RoutineService,
+    RoutineTarget,
 };
 use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
@@ -53,6 +54,16 @@ impl RoutineClient {
         path: &str,
         body: Option<Value>,
     ) -> Result<T> {
+        let body = self.request_bytes(user, method, path, body).await?;
+        serde_json::from_slice(&body).context("Invalid routine service response")
+    }
+    async fn request_bytes(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        method: Method,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<Vec<u8>> {
         let mut request = self
             .client
             .request(method, self.base.join(path)?)
@@ -79,12 +90,13 @@ impl RoutineClient {
                     );
                     body.extend_from_slice(&chunk);
                 }
-                serde_json::from_slice(&body).context("Invalid routine service response")
+                Ok(body)
             }
             400 | 422 => bail!(
                 "Invalid routine configuration or unavailable model/agent. Check the schedule and select an accessible agent from ListAgents using its bot.botId."
             ),
             401 | 403 | 404 => bail!("Routine or target is unavailable to this user."),
+            402 => bail!("The user's AI allowance is exhausted, so the routine cannot run now."),
             409 => bail!("Routine is running or changed. Read it again before editing."),
             _ => bail!(
                 "Routine service is unavailable. Check ListRoutines before retrying a creation."
@@ -191,8 +203,38 @@ impl RoutineService for RoutineClient {
             .await?
             .into())
     }
+    async fn delete(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<()> {
+        self.request_bytes(
+            user,
+            Method::DELETE,
+            &format!("scheduled-actions/{id}"),
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+    async fn run_now(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<RoutineRunStarted> {
+        let execution = self
+            .request::<WireExecution>(
+                user,
+                Method::POST,
+                &format!("scheduled-actions/{id}/execute"),
+                None,
+            )
+            .await?;
+        Ok(RoutineRunStarted {
+            routine_id: execution.action_id,
+            resource: execution.resource,
+        })
+    }
 }
 
+#[derive(Deserialize)]
+struct WireExecution {
+    action_id: Uuid,
+    #[serde(default)]
+    resource: Option<Value>,
+}
 fn configuration_body(config: &RoutineConfiguration, now: DateTime<Utc>) -> Result<Value> {
     config.validate(now)?;
     let (schedule, timezone) = config.schedule.cron(now)?;

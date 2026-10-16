@@ -28,6 +28,8 @@ export type CollapsedInputProps = {
   class?: string;
   /** Extra composer action placed immediately before Send. */
   trailingAction?: JSX.Element;
+  /** Replaces the attach button at the start of the input. */
+  leadingAction?: JSX.Element;
   /**
    * Target of the real input this trigger stands in for. Focused via the
    * `focusInput` directive when the trigger is clicked, so the iOS virtual
@@ -60,16 +62,23 @@ export function CollapsedInput(props: CollapsedInputProps) {
           props.class
         )}
       >
-        <Button
-          variant="ghost"
-          size="icon-composer"
-          class="not-touch:light-mode:text-composer-ink"
-          aria-label="Attach files"
-          label="Attach files"
-          onClick={() => props.onAttach?.()}
+        <Show
+          when={props.leadingAction}
+          fallback={
+            <Button
+              variant="ghost"
+              size="icon-composer"
+              class="not-touch:light-mode:text-composer-ink"
+              aria-label="Attach files"
+              label="Attach files"
+              onClick={() => props.onAttach?.()}
+            >
+              <PaperclipIcon />
+            </Button>
+          }
         >
-          <PaperclipIcon />
-        </Button>
+          {props.leadingAction}
+        </Show>
         <button
           type="button"
           class={cn(

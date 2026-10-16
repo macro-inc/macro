@@ -1,11 +1,15 @@
 import { createSignal, Show } from 'solid-js';
-import { createDummyWorkspace } from '../../primitives/createDummyWorkspace';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
 import { DemoCursor } from '../DemoCursor';
 import { ProductDemo } from '../product/ProductPage';
 import { WorkspaceChannel } from '../workspace/WorkspaceChannel';
 import { DocumentFrame } from './DocumentFrame';
 import { DocumentShareSheet, LAUNCH_MEMBERS } from './DocumentShareSheet';
+import {
+  createDocumentProject,
+  PROJECT_TAGS,
+  PROJECT_TITLE,
+} from './documentProject';
 import { controlPoint, createAnchor } from './documentScene';
 
 /**
@@ -17,34 +21,8 @@ import { controlPoint, createAnchor } from './documentScene';
 export function DocumentSharingDemo() {
   let root!: HTMLDivElement;
   let overlay: HTMLDivElement | undefined;
-  const w = createDummyWorkspace('messages');
-  w.setData('channels', (c) => c.id === 'launch', 'messages', [
-    {
-      id: 'demo-video',
-      person: 'gabriel',
-      body: 'Product demo is recorded. I dropped the link in the announcement draft.',
-      time: '9:12 AM',
-    },
-    {
-      id: 'invite-fix',
-      person: 'teo',
-      body: 'Invite fix is in review. Should land this afternoon.',
-      time: '9:20 AM',
-    },
-    {
-      id: 'announcement',
-      person: 'julia',
-      body: 'Announcement draft is done. I’ll schedule it once Teo’s fix ships.',
-      time: '9:24 AM',
-    },
-    {
-      id: 'plan',
-      person: 'jacob',
-      body: 'Plan for Thursday is up. Comments welcome @[Q3 launch plan](demo-mention:plan)',
-      time: '9:31 AM',
-    },
-  ]);
-  w.open('messages', 'launch');
+  const w = createDocumentProject();
+  w.open('messages', 'website');
   const [phase, setPhase] = createSignal(0);
   const [automatic, setAutomatic] = createSignal(true);
   const [doc, setDoc] = createSignal(false);
@@ -80,11 +58,11 @@ export function DocumentSharingDemo() {
       if (!automatic()) return;
       const selector = [
         undefined,
-        '[data-demo-mention="plan"]',
-        '[data-demo-mention="plan"]',
+        'button.sample-inline-reference',
+        'button.sample-inline-reference',
         '[data-doc-share]',
         '[data-doc-share]',
-        '[data-channel-access] .doc-share-level',
+        undefined,
       ][phase()];
       return selector ? { selector, place: controlPoint } : undefined;
     },
@@ -106,7 +84,7 @@ export function DocumentSharingDemo() {
               onClick={(event) => {
                 if (
                   (event.target as HTMLElement).closest(
-                    '[data-demo-mention="plan"]'
+                    'button.sample-inline-reference'
                   )
                 )
                   setDoc(true);
@@ -117,39 +95,44 @@ export function DocumentSharingDemo() {
           }
         >
           <DocumentFrame
-            title="Q3 launch plan"
-            tags={['Launch', 'Product']}
+            title={PROJECT_TITLE}
+            tags={PROJECT_TAGS}
             onBack={() => {
               setSharing(false);
               setDoc(false);
             }}
-            backLabel="Back to #launch"
+            backLabel="Back to #website"
             onShare={() => setSharing(true)}
           >
-            <h2>Launch checklist</h2>
+            <h2>Before we publish</h2>
             <ul class="md-list md-check">
               <li class="checked md-strike text-ink-extra-muted">
-                Finalize the product story
+                Update the pricing table
               </li>
-              <li>Send the customer email</li>
-              <li>Publish the changelog</li>
+              <li>Check the copy</li>
+              <li>Test signup on mobile</li>
             </ul>
             <h2>Owners</h2>
             <p>
-              Julia owns the announcement and the customer email. Teo owns the
-              deploy and release checks. Jacob owns customer conversations.
+              Julia reviews the copy. Teo checks pricing. Jacob tests signup.
             </p>
           </DocumentFrame>
         </Show>
         <DocumentShareSheet
           open={doc() && sharing()}
-          title="Q3 launch plan"
+          autoFocus={!automatic()}
+          title={PROJECT_TITLE}
           channel={{
             members: LAUNCH_MEMBERS,
             level: 'view',
             fresh: automatic(),
           }}
-          onClose={() => setSharing(false)}
+          onClose={() => {
+            setSharing(false);
+            root
+              .querySelector<HTMLButtonElement>('[data-doc-share]')
+              ?.focus({ preventScroll: true });
+          }}
         />
         <div ref={overlay} class="doc-story-overlay" aria-hidden="true">
           <Show when={automatic() && pointer()}>

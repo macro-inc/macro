@@ -145,8 +145,24 @@ pub fn snapshot(
     _access: &DocumentAccess,
     doc: &LoroDoc,
 ) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
+    export_state(doc, ExportMode::Snapshot)
+}
+
+/// Current state without prior history, at the same editable revision. This
+/// bounds readers' work by live content rather than the document's age.
+pub fn shallow_snapshot(
+    _access: &DocumentAccess,
+    doc: &LoroDoc,
+) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
+    export_state(
+        doc,
+        ExportMode::ShallowSnapshot(Cow::Owned(doc.state_frontiers())),
+    )
+}
+
+fn export_state(doc: &LoroDoc, mode: ExportMode<'_>) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
     let snapshot = doc
-        .export(ExportMode::Snapshot)
+        .export(mode)
         .map_err(|_| DocumentError::Invalid("The document snapshot could not be exported."))?;
     if snapshot.len() > MAX_BINARY_BYTES {
         return Err(DocumentError::TooLarge);

@@ -5,6 +5,7 @@ import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazyNamed } from '@core/util/lazyNamed';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { type ChannelEntity, Entity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -30,6 +31,7 @@ import {
   type JSX,
   Match,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
@@ -86,6 +88,10 @@ const CHANNEL_TABS = [
   { value: 'browse', label: 'All' },
   { value: 'recents', label: 'Recent' },
 ];
+const SlackImportSidebar = lazyNamed(
+  () => import('@app/features/slack-import/slack-import-sidebar'),
+  'SlackImportSidebar'
+);
 const CHANNEL_TABS_WITH_THREADS = [
   ...CHANNEL_TABS,
   { value: 'threads', label: 'Threads' },
@@ -1102,6 +1108,9 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
+      <Suspense>
+        <SlackImportSidebar />
+      </Suspense>
       <ChannelsLiveCallsSidebar />
       <div class="flex min-h-0 flex-1 flex-col">
         <div

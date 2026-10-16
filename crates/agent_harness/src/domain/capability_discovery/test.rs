@@ -172,6 +172,7 @@ async fn unsupported_provider_returns_the_supported_response_shape() {
 
     assert_eq!(result, AgentCapabilities::unsupported());
     assert_eq!(service.in_memory.calls(), 1);
+    assert_eq!(*service.in_memory.targets.lock().unwrap(), vec![caller()]);
     assert_eq!(service.cursor.calls(), 0);
 }
 

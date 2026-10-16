@@ -28,9 +28,14 @@ import { enableEmailSignatures } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
+import { forceDssRuleset, uploadFile } from '@core/util/upload';
 import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
+import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
+import { entityKeys } from '@queries/storage/keys';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
+import { FileTypeMap } from '@service-storage/fileTypeMap';
 import { debounce } from '@solid-primitives/scheduled';
+import { useQueryClient } from '@tanstack/solid-query';
 import { ComposerSurface, cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -42,6 +47,11 @@ import {
   Show,
 } from 'solid-js';
 import type { UserToolReviewSink } from '../user-tool-review';
+import {
+  createDraftAttachments,
+  type DocumentDescription,
+  documentAttachmentFileName,
+} from './draft-attachments';
 
 export type EmailDraftComposerProps = {
   /** The draft as the agent wrote it, or as the user last saved it. */
@@ -79,6 +89,24 @@ function fromEmailRecipients(
 
 function DraftComposerSurface(props: ComponentProps<typeof ComposerSurface>) {
   return <ComposerSurface {...props} as="div" />;
+}
+
+/** Uploads a user-added file as a Macro document, the form the send attaches. */
+async function uploadAttachmentDocument(
+  file: File
+): Promise<{ documentId: string } | undefined> {
+  const result = await uploadFile(file, forceDssRuleset, {
+    hideProgressIndicator: true,
+  });
+  if (
+    result.failed ||
+    result.destination !== 'dss' ||
+    result.type !== 'document'
+  ) {
+    toast.failure(`Failed to attach ${file.name}`);
+    return undefined;
+  }
+  return { documentId: result.documentId };
 }
 
 export function EmailDraftComposer(props: EmailDraftComposerProps) {
@@ -141,6 +169,30 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   >([]);
   let finalized = false;
 
+  const queryClient = useQueryClient();
+  const describeDocument = async (
+    documentId: string
+  ): Promise<DocumentDescription> => {
+    const metadata = await queryClient.fetchQuery({
+      queryKey: entityKeys.documentMetadata(documentId).queryKey,
+      queryFn: () => fetchDocumentMetadata(documentId),
+      staleTime: 60 * 1000,
+    });
+    const fileType = metadata.fileType ?? undefined;
+    return {
+      fileName: documentAttachmentFileName(metadata.documentName, fileType),
+      mimeType: fileType
+        ? FileTypeMap[fileType as keyof typeof FileTypeMap]?.mime
+        : undefined,
+    };
+  };
+  const attachments = createDraftAttachments({
+    initial: props.initialData.attachments,
+    describe: describeDocument,
+    upload: uploadAttachmentDocument,
+    onChange: () => scheduleUpdate(),
+  });
+
   function collectArgs(): SendEmail {
     return {
       to: fromEmailRecipients(recipients().to),
@@ -151,6 +203,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
       replyingToId: props.initialData.replyingToId,
       // Omit to use the backend default policy; false only when dismissed.
       includeSignature: includeSignature() ? undefined : false,
+      attachments: attachments.toToolArgs(),
     };
   }
 
@@ -188,7 +241,8 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   });
 
   async function handleSend() {
-    if (finalized || uiDisabled() || isSending()) return;
+    if (finalized || uiDisabled() || isSending() || attachments.uploading())
+      return;
     if (!validate()) return;
     debouncedEdit.clear();
     setIsSending(true);
@@ -216,7 +270,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     scheduleEnabled: false,
     attachmentFailure: toast.failure,
     subject,
-    attachments: () => [],
+    attachments: attachments.list,
     schedule: {
       state: () => ({ type: 'editing', intent: { type: 'immediate' } }),
       selectedTime: () => undefined,
@@ -240,22 +294,30 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     onContentChange: () => {
       scheduleUpdate();
     },
-    onAddAttachments: (_: DraftFormAttachment[]) => {},
-    onRemoveAttachment: (_: DraftFormAttachment) => {},
+    onAddAttachments: (added: DraftFormAttachment[]) => {
+      if (uiDisabled()) return;
+      attachments.add(added);
+    },
+    onRemoveAttachment: (attachment: DraftFormAttachment) => {
+      if (uiDisabled()) return;
+      attachments.remove(attachment);
+    },
     captureEditor: setEditor,
     onEditorInitialized: (editor) => {
       props.onBodyInitialized?.(prepareEmailBody(editor)?.bodyHtml ?? '');
     },
     onSend: handleSend,
     disabled: () => isSending() || uiDisabled(),
-    primaryActionDisabled: () => isSending() || uiDisabled(),
+    // Send waits for files the user just added to finish becoming documents.
+    primaryActionDisabled: () =>
+      isSending() || uiDisabled() || attachments.uploading(),
     isSending,
     isSavingDraft: () => false,
     hasDraft: () => false,
     hasPaidAccess: () => true,
     focusRecipientsOnMount: false,
     includeSelf: true,
-    hideAttachments: true,
+    hideAttachments: props.readOnly === true,
     recipientOptions: () => [
       ...recipients().to,
       ...recipients().cc,

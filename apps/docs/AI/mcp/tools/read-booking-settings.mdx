@@ -1,0 +1,17 @@
+---
+title: ReadBookingSettings
+description: >-
+  Read the full personal or team Booking Links configuration: booking-page name
+  and introduction, reusable schedules, default availability, and all link
+  settings with IDs and revision.
+---
+
+# ReadBookingSettings
+
+Read the full personal or team Booking Links configuration: booking-page name and introduction, reusable schedules, default availability, and all link settings with IDs and revision. Omit teamId for personal. Discover team IDs using ListBookingLinks. This read does not create a profile. Use the returned profile with UpdateBookingSettings to change shared availability or page settings.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `teamId` | string | No | Existing team ID from ListBookingLinks, or null for personal settings. |

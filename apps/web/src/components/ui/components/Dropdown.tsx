@@ -5,6 +5,7 @@ import CheckIcon from '@phosphor/check.svg';
 import {
   type ComponentProps,
   createSignal,
+  type JSX,
   onCleanup,
   Show,
   splitProps,
@@ -14,6 +15,10 @@ import {
   addCtrlJKMenuNavigation,
   highlightFirstMenuItemOnOpen,
 } from '../utils/menuKeyboardNavigation';
+import {
+  createSelectionDismissal,
+  type SelectionDismissal,
+} from '../utils/selectionDismissal';
 import { Button, type ButtonProps } from './Button';
 import { Surface, type SurfaceProps } from './Surface';
 
@@ -66,9 +71,14 @@ export type DropdownTriggerProps = ComponentProps<
 export type DropdownItemIndicatorProps = ComponentProps<
   typeof KobalteDropdownMenu.ItemIndicator
 >;
-export type DropdownCheckboxItemProps = ComponentProps<
-  typeof KobalteDropdownMenu.CheckboxItem
->;
+export type DropdownCheckboxItemProps = Omit<
+  ComponentProps<typeof KobalteDropdownMenu.CheckboxItem>,
+  'closeOnSelect' | 'onChange'
+> & {
+  indicator?: JSX.Element;
+  closeOnSelect?: SelectionDismissal;
+  onChange?: (checked: boolean) => void;
+};
 export type DropdownSubTriggerProps = ComponentProps<
   typeof KobalteDropdownMenu.SubTrigger
 >;
@@ -81,7 +91,12 @@ export type DropdownGroupLabelProps = ComponentProps<
 export type DropdownGroupProps = ComponentProps<
   typeof KobalteDropdownMenu.Group
 >;
-export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
+export type DropdownItemProps = Omit<
+  ComponentProps<typeof KobalteDropdownMenu.Item>,
+  'closeOnSelect'
+> & {
+  closeOnSelect?: SelectionDismissal;
+};
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
 // Text size is inherited from `Dropdown.Content` (defaults to `text-sm`) so a
@@ -319,17 +334,35 @@ const CHECKBOX_ITEM_BOX_CLASS = cn(
 );
 
 function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
-  const [local, rest] = splitProps(props, ['class', 'children']);
+  const selection = createSelectionDismissal();
+  const [local, rest] = splitProps(props, [
+    'class',
+    'children',
+    'indicator',
+    'ref',
+    'closeOnSelect',
+  ]);
   return (
     <KobalteDropdownMenu.CheckboxItem
       class={cn(ROW_CLASS, local.class)}
       {...rest}
+      ref={(element) => {
+        selection.track(element);
+        callRef(local.ref, element);
+      }}
+      closeOnSelect={
+        local.closeOnSelect === 'unless-shift'
+          ? selection.shouldClose()
+          : local.closeOnSelect
+      }
     >
-      <div class={CHECKBOX_ITEM_BOX_CLASS}>
-        <KobalteDropdownMenu.ItemIndicator>
-          <CheckIcon class="size-2.5" />
-        </KobalteDropdownMenu.ItemIndicator>
-      </div>
+      {local.indicator ?? (
+        <div class={CHECKBOX_ITEM_BOX_CLASS}>
+          <KobalteDropdownMenu.ItemIndicator>
+            <CheckIcon class="size-2.5" />
+          </KobalteDropdownMenu.ItemIndicator>
+        </div>
+      )}
       {local.children}
     </KobalteDropdownMenu.CheckboxItem>
   );
@@ -364,12 +397,21 @@ function DropdownSub(props: DropdownSubProps) {
 }
 
 function DropdownItem(props: DropdownItemProps) {
-  const [local, rest] = splitProps(props, ['class']);
+  const selection = createSelectionDismissal();
+  const [local, rest] = splitProps(props, ['class', 'ref', 'closeOnSelect']);
   return (
     <KobalteDropdownMenu.Item
       class={cn(ROW_CLASS, local.class)}
-      closeOnSelect={props.closeOnSelect}
       {...rest}
+      ref={(element) => {
+        selection.track(element);
+        callRef(local.ref, element);
+      }}
+      closeOnSelect={
+        local.closeOnSelect === 'unless-shift'
+          ? selection.shouldClose()
+          : local.closeOnSelect
+      }
     />
   );
 }

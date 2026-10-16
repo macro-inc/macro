@@ -11,7 +11,15 @@ JOIN database_tables row_table ON row_table.id = r.table_id
 JOIN database_entities row_database ON row_database.database_id = row_table.database_id
 WHERE r.id = ANY($2)
     AND row_database.trashed_at IS NULL
-    AND EXISTS (SELECT 1 FROM entity_access ea
-        WHERE ea.entity_id = row_database.database_id AND ea.entity_type = 'database'
-        AND ea.source_id IN (SELECT source_id FROM user_source_ids))
+    AND (
+        EXISTS (SELECT 1 FROM entity_access ea
+            WHERE ea.entity_id = row_database.database_id AND ea.entity_type = 'database'
+            AND ea.source_id IN (SELECT source_id FROM user_source_ids))
+        -- Editors of a live form over the database edit its rows.
+        OR EXISTS (SELECT 1 FROM forms f
+            JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
+            WHERE f.database_id = row_database.database_id AND f.trashed_at IS NULL
+            AND ea.access_level IN ('edit', 'owner')
+            AND ea.source_id IN (SELECT source_id FROM user_source_ids))
+    )
 ORDER BY r.created_at DESC, r.id DESC

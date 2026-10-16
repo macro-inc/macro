@@ -184,7 +184,8 @@ fn subscriptions_are_exact_and_group_is_dedicated() {
             "macro.channels",
             "macro.messages",
             "macro.properties",
-            "macro.email"
+            "macro.email",
+            "macro.calls"
         ]
     );
     assert_eq!(
@@ -386,6 +387,37 @@ fn document_conversion_preserves_the_envelope() {
     };
     let original: Event<documents::domain::events::DocumentTopicEvent> =
         serde_json::from_value(envelope("document.created")).unwrap();
+    assert_eq!(event.event_id, original.event_id);
+    assert_eq!(event.schema_version, original.schema_version);
+    assert_eq!(payload, original.event);
+}
+
+#[test]
+fn call_conversion_preserves_the_envelope() {
+    let archived = json!({
+        "event_id": EVENT_ID,
+        "schema_version": 1,
+        "event_type": "call.record_archived",
+        "metadata": {
+            "call_id": ENTITY_ID, "channel_id": null, "created_by": "macro|human@example.com",
+            "started_at": "2026-10-08T14:00:00Z", "ended_at": "2026-10-08T14:30:00Z",
+            "duration_ms": 1_800_000, "participant_count": 1,
+            "participants": ["macro|human@example.com"], "has_recording": false,
+            "archive_reason": "last_participant_left"
+        }
+    });
+    let message = message(
+        "macro.calls",
+        Some(serde_json::to_vec(&archived).unwrap()),
+        Some(ENTITY_ID.as_bytes().to_vec()),
+        10,
+    );
+    let event = incoming_event(DeclaredMacroEvent::decode(&message).unwrap());
+    let EventPayload::Call(payload) = event.payload else {
+        panic!("expected call payload");
+    };
+    let original: Event<call::domain::events::CallTopicEvent> =
+        serde_json::from_value(archived).unwrap();
     assert_eq!(event.event_id, original.event_id);
     assert_eq!(event.schema_version, original.schema_version);
     assert_eq!(payload, original.event);

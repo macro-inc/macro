@@ -18,14 +18,9 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
-import {
-  type Accessor,
-  createMemo,
-  type JSX,
-  type ParentProps,
-  Show,
-} from 'solid-js';
+import { type Accessor, createMemo, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { ChipShell } from './AgentSessionChipShell';
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
@@ -89,15 +84,6 @@ function ChipFace(props: {
         {capitalize(props.status)}
       </span>
     </>
-  );
-}
-
-/** Shared pill chrome for the GitHub fallback and the entity button. */
-function ChipShell(props: ParentProps): JSX.Element {
-  return (
-    <span class="inline-flex h-7 max-w-44 min-w-0 items-center gap-1 rounded-full border border-edge-muted bg-surface px-2 text-xs leading-none text-ink-muted hover:bg-hover hover:text-ink">
-      {props.children}
-    </span>
   );
 }
 

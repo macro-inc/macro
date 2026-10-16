@@ -5,8 +5,8 @@ pub mod coding_agents;
 pub mod routine_sessions;
 
 pub use axum_router::{
-    AgentSessionControlState, AgentSessionRouterState, agent_sandbox_size_router,
-    agent_session_control_router, agent_session_read_router,
+    AgentSessionControlState, AgentSessionRouterState, agent_coding_preferences_router,
+    agent_sandbox_size_router, agent_session_control_router, agent_session_read_router,
 };
 
 #[cfg(feature = "ai_tools")]

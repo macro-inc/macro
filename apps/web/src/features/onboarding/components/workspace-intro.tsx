@@ -1,5 +1,13 @@
 import CheckIcon from '@phosphor/check.svg';
-import { createUniqueId, For, type JSX, onCleanup } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  createUniqueId,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import {
   WORKSPACE_ACCENTS,
   type WorkspaceAccent,
@@ -17,6 +25,21 @@ export function WorkspaceIntro(props: {
   action?: JSX.Element;
 }) {
   const accent = () => props.accent;
+  const [creamMode, setCreamMode] = createSignal(false);
+  onMount(() => {
+    const root = document.documentElement;
+    const syncMode = () => setCreamMode(root.dataset.themeLight === 'true');
+    syncMode();
+    const observer = new MutationObserver(syncMode);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-theme-light'],
+    });
+    onCleanup(() => observer.disconnect());
+  });
+  createEffect(() => {
+    if (creamMode() && accent().name === 'Pearl') props.onSelectAccent('Mint');
+  });
   const noiseId = createUniqueId();
   let burst!: HTMLDivElement;
   let burstAnimation: Animation | undefined;
@@ -107,9 +130,9 @@ export function WorkspaceIntro(props: {
           style={{
             color: 'var(--intro-accent)',
             background:
-              'linear-gradient(145deg, color-mix(in srgb, var(--intro-accent) 7%, #171717), #090909 65%)',
+              'var(--onboarding-intro-background, linear-gradient(145deg, color-mix(in srgb, var(--intro-accent) 7%, #171717), #090909 65%))',
             'box-shadow':
-              'inset .5px .5px 1px #ffffff1c, inset -.5px -.5px 1px #0008, 0 1px 1px #131313, 0 4px 10px #0005',
+              'var(--onboarding-intro-shadow, inset .5px .5px 1px #ffffff1c, inset -.5px -.5px 1px #0008, 0 1px 1px #131313, 0 4px 10px #0005)',
           }}
         >
           <MacroMarkIcon class="h-7 w-10 overflow-visible" />
@@ -120,10 +143,13 @@ export function WorkspaceIntro(props: {
           Your accent{' '}
           <span class="text-ink-extra-muted">· {accent().name}</span>
         </legend>
-        <div class="flex justify-between gap-2">
+        <div class="flex justify-center gap-2">
           <For each={WORKSPACE_ACCENTS}>
             {(item) => (
-              <label class="relative flex size-9 items-center justify-center rounded-full has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink">
+              <label
+                data-accent-option={item.name}
+                class="relative flex size-9 items-center justify-center rounded-full has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink"
+              >
                 <input
                   type="radio"
                   name="workspace-accent"
@@ -137,8 +163,12 @@ export function WorkspaceIntro(props: {
                   style={{
                     background: item.color,
                     'background-clip': 'padding-box',
-                    'border-width': accent().name === item.name ? '4px' : '0px',
-                    'border-color': 'var(--color-ink)',
+                    'border-width':
+                      accent().name === item.name
+                        ? 'var(--workspace-accent-ring-width, 4px)'
+                        : '0px',
+                    'border-color':
+                      'var(--workspace-accent-ring-color, var(--color-ink))',
                     'box-shadow':
                       'inset 0 1px 1px #ffffff66, inset 0 -1px 1px #00000030',
                   }}

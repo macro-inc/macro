@@ -15,17 +15,28 @@ import { NewCallButton } from './NewCallButton';
 
 const mocks = vi.hoisted(() => ({
   joinChannelCall: vi.fn<(_: string) => Promise<void>>(),
+  navigate: vi.fn<(_: string) => void>(),
 }));
 
 vi.mock('@channel/Call/join-channel-call', () => ({
   joinChannelCall: mocks.joinChannelCall,
 }));
 
+vi.mock('@solidjs/router', () => ({ useNavigate: () => mocks.navigate }));
+
 vi.mock('@channel/Call/NewMeetingButton', () => ({
-  NewMeetingButton: (props: { onChannelCall: () => void }) => (
-    <button type="button" onClick={props.onChannelCall}>
-      New channel call
-    </button>
+  NewMeetingButton: (props: {
+    onChannelCall: () => void;
+    onInstantCall: () => void;
+  }) => (
+    <>
+      <button type="button" onClick={props.onChannelCall}>
+        New channel call
+      </button>
+      <button type="button" onClick={props.onInstantCall}>
+        New instant call
+      </button>
+    </>
   ),
 }));
 
@@ -90,10 +101,20 @@ vi.mock('@ui', () => {
 beforeEach(() => {
   mocks.joinChannelCall.mockReset();
   mocks.joinChannelCall.mockResolvedValue();
+  mocks.navigate.mockReset();
 });
 afterEach(cleanup);
 
 describe('NewCallButton', () => {
+  it('opens instant call setup without creating a channel call', () => {
+    render(() => <NewCallButton />);
+    fireEvent.click(screen.getByRole('button', { name: 'New instant call' }));
+
+    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith('/meet/new');
+    expect(mocks.joinChannelCall).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Start Call' })).toBeNull();
+  });
+
   it('starts the selected channel through the mounted-channel call flow', async () => {
     render(() => <NewCallButton />);
     fireEvent.click(screen.getByRole('button', { name: 'New channel call' }));

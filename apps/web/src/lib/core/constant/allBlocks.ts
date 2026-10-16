@@ -192,6 +192,7 @@ export function fileTypeToBlockName(
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (blockOrFiletype === 'crm_company') return 'company';
   if (blockOrFiletype === 'crm_contact') return 'contact';
+  if (blockOrFiletype === 'crm_pipeline') return 'pipeline';
 
   if (blockOrFiletype === 'docx' || blockOrFiletype === 'write') {
     if (isFeatureEnabled(enableDocxEditor)) return 'write';
@@ -246,15 +247,11 @@ export type ItemLike = {
     | 'initiative'
     | 'call'
     | 'crm_company'
-    | 'reminder'
     | 'calendar_event'
     | 'database';
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;
-  /** Present on reminders: the entity the reminder is about. A reminder has no
-   * block of its own, so it borrows this entity's icon. */
-  referencedEntity?: { type: string; fileType?: string; subType?: string };
 };
 
 /**
@@ -282,17 +279,6 @@ export function itemToBlockName(
   }
   if (item.type === 'agent_session') return 'agent';
   if (item.type === 'channel_thread') return 'channel';
-  // A reminder has no block of its own; it points at one. A standalone
-  // reminder falls through to 'unknown'. Same precedence as the referenced
-  // entity would get on its own row, so a task or a .docx resolves to its
-  // specific block rather than the generic 'document'.
-  if (item.type === 'reminder') {
-    const referenced = item.referencedEntity;
-    if (referenced?.subType && isBlockAlias(referenced.subType)) {
-      return referenced.subType;
-    }
-    return fileTypeToBlockName(referenced?.fileType ?? referenced?.type, icon);
-  }
   return fileTypeToBlockName(item.type, icon);
 }
 

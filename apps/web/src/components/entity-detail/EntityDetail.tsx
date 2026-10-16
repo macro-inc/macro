@@ -14,10 +14,7 @@ import {
   MarkdownDetail,
   type MarkdownDetailContext,
 } from '@app/features/drive-view/views/MarkdownDetail';
-import {
-  PdfDetail,
-  type PdfDetailContext,
-} from '@app/features/drive-view/views/PdfDetail';
+import type { PdfDetailContext } from '@app/features/drive-view/views/PdfDetail';
 import {
   UnknownDetail,
   type UnknownDetailContext,
@@ -40,15 +37,23 @@ import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { lazyNamed } from '@core/util/lazyNamed';
 import {
   children,
   createMemo,
   type JSX,
   Match,
+  Suspense,
   Switch,
   untrack,
 } from 'solid-js';
 import type { EntityDetailTarget } from './entity-detail-target';
+
+// PDF.js and its viewer are only needed once a PDF is opened.
+const PdfDetail = lazyNamed(
+  () => import('@app/features/drive-view/views/PdfDetail'),
+  'PdfDetail'
+);
 
 type DocumentDetailContext =
   | MarkdownDetailContext
@@ -222,9 +227,11 @@ export function EntityDetail(props: EntityDetailProps) {
         </VideoDetail>
       </Match>
       <Match when={blockType() === 'pdf'}>
-        <PdfDetail documentId={props.target.id}>
-          {(context) => <>{renderChildren(context)}</>}
-        </PdfDetail>
+        <Suspense>
+          <PdfDetail documentId={props.target.id}>
+            {(context) => <>{renderChildren(context)}</>}
+          </PdfDetail>
+        </Suspense>
       </Match>
       <Match when={blockType() === 'unknown'}>
         <UnknownDetail documentId={props.target.id}>

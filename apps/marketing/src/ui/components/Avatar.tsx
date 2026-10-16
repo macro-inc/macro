@@ -27,7 +27,7 @@ const SQUARE_RADIUS = {
 export const avatarVariants = createVariants(
   cn(
     'group/avatar relative flex shrink-0 select-none items-center justify-center overflow-hidden',
-    'bg-ink-extra-muted has-[img:not([data-failed])]:bg-transparent text-surface'
+    'bg-surface-3 has-[img:not([data-failed])]:bg-transparent text-ink'
   ),
   {
     size: {

@@ -1,0 +1,138 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/export_ci_telemetry.rs
+name: Export CI telemetry
+'on':
+  workflow_run:
+    types:
+    - completed
+    workflows:
+    - Auto Label PRs
+    - Build Agent Daemon on Tag
+    - Build AppImage
+    - Build Desktop on Tag
+    - Build Rust CI Image
+    - Build Web App
+    - Build macOS DMG
+    - CLA
+    - Cancel Stuck Cloud Storage Deploys
+    - Cleanup Preview
+    - Deploy AI Editing Worker
+    - Deploy All Services
+    - Deploy CLA Worker
+    - Deploy FusionAuth Instance
+    - Deploy Lexical Service
+    - Deploy Preview
+    - Deploy Production Release
+    - Deploy Service (Generic)
+    - Deploy Sync Service
+    - Deploy Web App
+    - Deploy Website
+    - Deploy analytics proxy dev
+    - Deploy on Push
+    - Ensure Daytona Snapshot
+    - Export Datadog observability definitions
+    - Migrate Macro Database
+    - Publish Android to Google Play
+    - Publish SDK
+    - Pull Request
+    - Pulumi Preview on PR
+    - Push local stack binaries
+    - Release SDK
+    - Reusable Deploy Service
+    - Reusable Preview Service
+    - SDK Check
+    - Web App Pr Checks
+    - cargo deny check
+    - cargo workspace dependency check
+    - check generated workflows
+    - check node_modules nix
+    - cloud storage code check
+    - conventions code check
+    - deploy pulumi service
+    - iOS Preview
+    - infra code check
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - id: preflight
+      name: Check upstream exporter limits
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+      with:
+        script: |
+          const run = context.payload.workflow_run;
+          const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+            ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
+          });
+          if (data.total_count > 100 || data.jobs.length !== data.total_count) {
+            throw new Error('Grafana exporter supports at most 100 jobs; refusing a partial trace');
+          }
+          // Check the pinned exporter's name-based IDs and timestamp requirements.
+          const { createHash } = require('node:crypto');
+          const prefix = `${context.repo.owner}/${context.repo.repo}${run.id}${run.run_attempt}`;
+          const ids = new Set();
+          function span(suffix) {
+            const id = createHash('sha256').update(prefix + suffix).digest('hex').slice(16, 32);
+            if (ids.has(id)) throw new Error('Duplicate exporter span ID; job/step names must be distinct');
+            ids.add(id);
+          }
+          function timed(entry) {
+            const start = Date.parse(entry.started_at);
+            const end = Date.parse(entry.completed_at);
+            return entry.conclusion && Number.isFinite(start) && Number.isFinite(end) && end >= start;
+          }
+          span('s');
+          for (const job of data.jobs) {
+            if (job.status !== 'completed' || !timed(job)) {
+              throw new Error('Job timing is incomplete; retry after GitHub finalizes this attempt');
+            }
+            span(job.name);
+            for (const step of job.steps ?? []) {
+              if (!timed(step)) throw new Error('Step timing is unavailable; this exporter cannot represent it');
+              span(job.name + step.name);
+            }
+          }
+          // At 512 spans upstream starts an asynchronous batch whose failure can be swallowed.
+          if (ids.size >= 512) throw new Error('Grafana exporter cannot reliably report delivery failures for 512+ spans');
+          core.setOutput('export', data.jobs.length > 0);
+          if (!data.jobs.length) core.notice('No jobs in this attempt; no execution trace to export');
+    - name: Assume CI telemetry role
+      if: steps.preflight.outputs.export == 'true'
+      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+      with:
+        role-to-assume: arn:aws:iam::569036502058:role/macro-observability-ci
+        aws-region: us-east-1
+        role-duration-seconds: '900'
+    - id: ingest
+      name: Read ingestion credential
+      if: steps.preflight.outputs.export == 'true'
+      run: |
+        set -euo pipefail
+        token=$(aws secretsmanager get-secret-value --region us-east-1 \
+          --secret-id observability/dev-ingest --query SecretString --output text)
+        if [[ ${#token} -lt 32 || "$token" == *[[:space:]]* ]]; then
+          echo 'Invalid ingestion credential' >&2
+          exit 1
+        fi
+        echo "::add-mask::$token"
+        headers=$(printf '%s' "$token" | python3 -c 'import sys, urllib.parse; print("Authorization=Bearer%20" + urllib.parse.quote(sys.stdin.read(), safe=""))')
+        echo "::add-mask::$headers"
+        printf 'headers=%s\n' "$headers" >> "$GITHUB_OUTPUT"
+      shell: bash
+    - id: traces
+      name: Export workflow, job and step traces
+      if: steps.preflight.outputs.export == 'true'
+      uses: grafana/grafana-github-actions/gha-otel-export@b1c422726cc4ff4adb0838ebca67586f24babb42
+      with:
+        github-token: ${{ github.token }}
+      env:
+        OTEL_SERVICE_NAME: github-actions
+        OTEL_RESOURCE_ATTRIBUTES: deployment.environment=ci
+        OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+        OTEL_EXPORTER_OTLP_ENDPOINT: https://otlp.macro-internal.com
+        OTEL_EXPORTER_OTLP_HEADERS: ${{ steps.ingest.outputs.headers }}

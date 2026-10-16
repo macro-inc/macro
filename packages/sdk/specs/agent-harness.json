@@ -46,13 +46,261 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime is disconnected"
+            "description": "Macrod runtime or Cursor account is not connected"
           },
           "502": {
             "description": "Provider probe failed"
           },
           "504": {
             "description": "Macrod probe timed out"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-coding-preferences": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read what the caller's new coding sessions are told to do beyond their assignment.",
+        "operationId": "get_agent_coding_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingPreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace the caller's coding preferences.",
+        "operationId": "put_agent_coding_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodingPreferencesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingPreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-conversations/{channel_id}": {
+      "get": {
+        "tags": ["agent-conversations"],
+        "summary": "The agent conversations in a channel the caller may see. Ordinary channels\nand other people's conversations list none.",
+        "operationId": "list_agent_conversations",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Conversation channel",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's agent conversations in the channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentConversationsDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Conversations temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-conversations/{channel_id}/{bot_id}/start-fresh": {
+      "post": {
+        "tags": ["agent-conversations"],
+        "summary": "Start a fresh agent context, retaining the channel transcript.",
+        "operationId": "start_fresh_agent_conversation",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Persona the conversation is with",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartFreshAgentConversationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "New context reserved"
+          },
+          "404": {
+            "description": "Conversation not found"
+          },
+          "409": {
+            "description": "Context is busy, stale or unavailable"
+          },
+          "503": {
+            "description": "Temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-conversations/{channel_id}/{bot_id}/turns/{source}/retry": {
+      "post": {
+        "tags": ["agent-conversations"],
+        "summary": "Explicitly retry a failed message in the conversation's current session.",
+        "operationId": "retry_agent_conversation_turn",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Persona the conversation is with",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryAgentConversationTurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Retry queued"
+          },
+          "404": {
+            "description": "Conversation or turn not found"
+          },
+          "409": {
+            "description": "Attempt cannot be retried"
+          },
+          "503": {
+            "description": "Temporarily unavailable"
           }
         },
         "security": [
@@ -98,7 +346,7 @@
             "description": "Harness is not visible to caller"
           },
           "409": {
-            "description": "Macrod runtime is disconnected"
+            "description": "Macrod runtime or Cursor account is not connected"
           },
           "502": {
             "description": "Provider probe failed"
@@ -436,6 +684,65 @@
         }
       }
     },
+    "/agent-sessions/by-pull-requests": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "List the sessions associated with each of up to 100 pull requests that the caller can view,\nwith the thread each session was started from.",
+        "operationId": "agent_sessions_for_pull_requests",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PullRequestUrls"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullRequestsSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/preview": {
       "post": {
         "tags": ["agent-sessions"],
@@ -496,10 +803,40 @@
         }
       }
     },
+    "/agent-sessions/warm": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Prepare MCP connections without sending a prompt or creating a visible list row.",
+        "operationId": "warm_agent_session_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmAgentSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmAgentSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}": {
       "get": {
         "tags": ["agent-sessions"],
         "summary": "Get an agent session by id.",
+        "description": "A caller holding no grant is answered 401; an id with no session behind it\nat all is answered 404. They used to be the same answer, which left a\nclient that read a session before its create had landed unable to tell a\nrace it should retry from a refusal it should not.",
         "operationId": "get_agent_session",
         "parameters": [
           {
@@ -525,7 +862,7 @@
             }
           },
           "401": {
-            "description": "",
+            "description": "the session exists but is not this caller's",
             "content": {
               "text/plain": {
                 "schema": {
@@ -536,6 +873,16 @@
           },
           "403": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "no session with this id: not created yet, or deleted since",
             "content": {
               "text/plain": {
                 "schema": {
@@ -652,6 +999,16 @@
           },
           "403": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The session answers an agent conversation",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2298,6 +2655,143 @@
           }
         }
       },
+      "AgentConversationDto": {
+        "type": "object",
+        "description": "An agent's conversation in a channel, as the person it is with sees it.",
+        "required": [
+          "channelId",
+          "botId",
+          "name",
+          "available",
+          "settingsChanged",
+          "sessions",
+          "turns"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Whether the caller may currently send a new prompt."
+          },
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Optional persona avatar."
+          },
+          "botId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persona id (without the bot principal prefix)."
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel containing the visible transcript."
+          },
+          "name": {
+            "type": "string",
+            "description": "Persona's historical display name."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentConversationSessionDto"
+            },
+            "description": "The sessions the conversation has run on, oldest first."
+          },
+          "settingsChanged": {
+            "type": "boolean",
+            "description": "Whether new persona settings are available to adopt explicitly."
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentConversationTurnDto"
+            },
+            "description": "Persistent state of each accepted message and its current attempt."
+          }
+        }
+      },
+      "AgentConversationSessionDto": {
+        "type": "object",
+        "description": "One session a conversation has run on; every channel message stays visible.",
+        "required": ["sessionId", "createdAt", "isCurrent"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session began."
+          },
+          "isCurrent": {
+            "type": "boolean",
+            "description": "Whether this is the current agent context."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Session whose controls and live events belong to this context."
+          }
+        }
+      },
+      "AgentConversationTurnDto": {
+        "type": "object",
+        "description": "Execution status without exposing the persona prompt or stored credentials.",
+        "required": [
+          "sourceMessageId",
+          "actionId",
+          "sessionId",
+          "state",
+          "retryable",
+          "createdAt"
+        ],
+        "properties": {
+          "actionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Current runtime attempt identity."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the source message was first accepted."
+          },
+          "replyMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The associated agent reply, if it has been posted."
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether Retry would be accepted now. A failed attempt is not retryable\nuntil its reply says how it ended."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Session carrying this turn."
+          },
+          "sourceMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The user's message in the channel timeline."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ConversationTurnState",
+            "description": "Durable execution state."
+          }
+        }
+      },
+      "AgentConversationsDto": {
+        "type": "object",
+        "description": "The agent conversations in a channel the caller may see.",
+        "required": ["conversations"],
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentConversationDto"
+            },
+            "description": "Empty for ordinary channels and other people's conversations."
+          }
+        }
+      },
       "AgentModelDto": {
         "type": "object",
         "description": "One model picker option.",
@@ -2318,6 +2812,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "supportsImages": {
+            "type": ["boolean", "null"],
+            "description": "Image input support, absent when the runtime does not advertise it."
           }
         }
       },
@@ -2748,6 +3246,10 @@
             "$ref": "#/components/schemas/SessionStatusDto",
             "description": "The session's status."
           },
+          "taskId": {
+            "type": ["string", "null"],
+            "description": "The Macro task the session was linked to."
+          },
           "threadChannelId": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -3022,6 +3524,21 @@
           }
         }
       },
+      "CodingPreferencesBody": {
+        "type": "object",
+        "description": "Request or response body for the caller's coding preferences.",
+        "required": ["createTasks", "openPullRequests"],
+        "properties": {
+          "createTasks": {
+            "type": "boolean",
+            "description": "Whether new coding sessions research prior work and link a Macro task."
+          },
+          "openPullRequests": {
+            "type": "boolean",
+            "description": "Whether new coding sessions deliver their work as a pull request."
+          }
+        }
+      },
       "CompleteRequest": {
         "type": "object",
         "description": "One-time manual code. Deliberately does not implement Debug.",
@@ -3057,6 +3574,10 @@
                     "description": "The id the caller already speculated this action under, when it has\none. Adopted as the accepted id, so a client that renders the action\noptimistically promotes that entry in place instead of retracting it\nand re-speculating under a server id. Re-sending the same id is not a\nsecond action: see [`ControlResponse`].\n\nNamed rather than flattened so it cannot collide with the action's own\nfields, which are tagged under `type`."
                   }
                 ]
+              },
+              "context": {
+                "type": ["object", "null"],
+                "description": "Why the agent is being asked. Only a runtime forwarding a triggered\nprompt may send it; a user's request carrying it is refused."
               }
             }
           }
@@ -3082,6 +3603,18 @@
         "type": "string",
         "description": "What accepting a control operation did with it, on the wire.",
         "enum": ["sent", "queued"]
+      },
+      "ConversationTurnState": {
+        "type": "string",
+        "description": "The state of one source message, retained after completion for deduplication.",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "stopped",
+          "interrupted"
+        ]
       },
       "CreateAgentSessionRequest": {
         "type": "object",
@@ -3632,6 +4165,60 @@
         "description": "Who associated a pull request with a session.",
         "enum": ["agent", "user"]
       },
+      "PullRequestLinkedSession": {
+        "type": "object",
+        "description": "A session linked to a pull request, as a viewer of that session sees it.",
+        "required": ["sessionId", "source"],
+        "properties": {
+          "originMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The message that started the session, such as an @mention, when it was\nstarted from a thread. A mention inside a thread is that reply, not the root."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session id."
+          },
+          "source": {
+            "$ref": "#/components/schemas/PullRequestLinkSource",
+            "description": "Who associated the pull request with the session."
+          },
+          "threadParent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageParent",
+                "description": "The channel, task, or CRM record whose thread the session was started from, if any."
+              }
+            ]
+          }
+        }
+      },
+      "PullRequestSessions": {
+        "type": "object",
+        "description": "The sessions linked to one pull request that the caller can view.",
+        "required": ["url", "githubKey", "sessions"],
+        "properties": {
+          "githubKey": {
+            "type": "string",
+            "description": "The pull request's `owner/repo/pull/number` key."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PullRequestLinkedSession"
+            },
+            "description": "Linked sessions the caller can view, oldest link first."
+          },
+          "url": {
+            "type": "string",
+            "description": "The requested pull request URL, canonicalized."
+          }
+        }
+      },
       "PullRequestSessionsResponse": {
         "type": "object",
         "description": "The sessions associated with a pull request.",
@@ -3655,6 +4242,34 @@
           "url": {
             "type": "string",
             "description": "The pull request's GitHub URL, such as `https://github.com/owner/repo/pull/12`."
+          }
+        }
+      },
+      "PullRequestUrls": {
+        "type": "object",
+        "description": "GitHub pull requests, by URL.",
+        "required": ["urls"],
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Pull request GitHub URLs, at most 100."
+          }
+        }
+      },
+      "PullRequestsSessionsResponse": {
+        "type": "object",
+        "description": "The sessions associated with each requested pull request.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PullRequestSessions"
+            },
+            "description": "One entry per requested pull request, in request order."
           }
         }
       },
@@ -3701,6 +4316,18 @@
           "name": {
             "type": "string",
             "description": "New user-facing name. Leading and trailing whitespace is discarded."
+          }
+        }
+      },
+      "RetryAgentConversationTurnRequest": {
+        "type": "object",
+        "description": "The attempt the user saw and chose to retry; prevents double-click reruns.",
+        "required": ["actionId"],
+        "properties": {
+          "actionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Current failed attempt identity."
           }
         }
       },
@@ -3892,6 +4519,18 @@
           }
         }
       },
+      "StartFreshAgentConversationRequest": {
+        "type": "object",
+        "description": "The session the user is choosing to leave behind.",
+        "required": ["sessionId"],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Current session id shown in the conversation metadata."
+          }
+        }
+      },
       "StartResponse": {
         "type": "object",
         "description": "Public PKCE challenge and attempt handle; contains no verifier or provider tokens.",
@@ -4011,6 +4650,35 @@
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
+              }
+            ]
+          }
+        }
+      },
+      "WarmAgentSessionRequest": {
+        "type": "object",
+        "description": "A client-minted id deduplicates warm calls without creating a conversation.",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Id reserved by this browser for its next in-memory conversation."
+          }
+        }
+      },
+      "WarmAgentSessionResponse": {
+        "type": "object",
+        "description": "A bounded best-effort warm attempt; absence means normal creation should proceed.",
+        "properties": {
+          "session": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentSessionResponse",
+                "description": "Prepared session, hidden until explicitly claimed through create."
               }
             ]
           }

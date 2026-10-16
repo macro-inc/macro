@@ -1,5 +1,5 @@
-import { OptionPill } from '@app/features/block-database/components/select-pill';
 import { For, Match, Switch } from 'solid-js';
+import { OptionPill } from '../../database/components/select-pill';
 import type { AnswerRenderers } from '../context/answer-display';
 import {
   type ReferenceNames,

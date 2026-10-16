@@ -236,6 +236,32 @@ describe('creating a database', () => {
     });
   });
 
+  it('returns the committed id while database discovery is still refreshing', async () => {
+    mock.create.mockReturnValue(okAsync({ ...detail.database, id: 'new-db' }));
+    let finish!: () => void;
+    const invalidating = vi
+      .spyOn(queryClient, 'invalidateQueries')
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          })
+      );
+    try {
+      const created = await createDatabase({
+        name: 'Untitled database',
+        source: 'slash-menu',
+      });
+      expect(created._unsafeUnwrap()).toBe('new-db');
+      expect(invalidating).toHaveBeenCalledWith({
+        queryKey: databasesKeys.list.queryKey,
+      });
+    } finally {
+      finish?.();
+      invalidating.mockRestore();
+    }
+  });
+
   it('hands a refusal back to the caller', async () => {
     mock.create.mockReturnValue(
       errAsync([{ code: 'INVALID_SCHEMA', message: 'name is empty' }])

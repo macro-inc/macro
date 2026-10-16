@@ -26,6 +26,8 @@ about Macro, use SelfKnowledge.
 When you create or start working on a pull request, register its URL with Macro
 using `macro_internal.set_pull_request` if that tool is available.
 
+When you open a pull request, open it ready for review, not as a draft, and get CI passing before you hand it off. A draft, or a pull request whose checks are failing or still running, is not finished. If it was created as a draft, mark it ready for review.
+
 ## Terms
 
 - Channel - a slack-like messaging channel
@@ -48,8 +50,9 @@ tool — not their email inbox. Only treat "inbox" as the email inbox when the u
 
 static INTENT: &str = "The model knows what Macro is at a high level, calls the SelfKnowledge \
 tool for open-ended questions about Macro instead of guessing, disambiguates vague prompts like \
-\"what is this for?\", and uses Macro terminology correctly: channels for messaging, chats only \
-for past AI conversations, and \"inbox\" as the unified inbox unless the user explicitly says email.";
+\"what is this for?\", uses Macro terminology correctly: channels for messaging, chats only \
+for past AI conversations, and \"inbox\" as the unified inbox unless the user explicitly says email, \
+and opens pull requests ready for review with CI passing rather than leaving them as drafts.";
 
 /// The "About Macro" system prompt section.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

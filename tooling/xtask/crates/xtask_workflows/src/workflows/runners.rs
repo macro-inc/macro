@@ -29,6 +29,8 @@ pub enum Runner {
     /// Apple Silicon, for jobs that need a real Apple SDK. A machine label
     /// rather than a dashboard profile, so it needs no setup outside this file.
     MacOsArm,
+    /// Larger Apple Silicon machine for desktop release builds.
+    MacOsArmLarge,
 }
 
 impl fmt::Display for Runner {
@@ -39,6 +41,7 @@ impl fmt::Display for Runner {
             Runner::Mid => "namespace-profile-linux-mid",
             Runner::RustCi => "namespace-profile-linux-rust-ci",
             Runner::MacOsArm => "nscloud-macos-sequoia-arm64-6x14",
+            Runner::MacOsArmLarge => "nscloud-macos-sequoia-arm64-12x28",
         })
     }
 }

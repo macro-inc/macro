@@ -8,7 +8,6 @@ import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -193,13 +192,6 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
           </ViewSidebar.Nav>
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
-      <SidebarTagsSection
-        activeIds={state.value().facets.tags ?? []}
-        onActiveIdsChange={state.setTags}
-        open={state.value().tagsOpen}
-        onOpenChange={state.setTagsOpen}
-        onNavigate={props.onNavigate}
-      />
     </>
   );
 }

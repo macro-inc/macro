@@ -1,0 +1,176 @@
+{
+  "commit": "9d06e08e2b914f11e167d2ad6fcd95ac0f35f13d",
+  "scope": "Reviewed presentation subset and scripted behavior; not a full copy of the authenticated app.",
+  "sources": [
+    {
+      "path": "apps/web/src/features/agents-view/components/AgentsSidebar.tsx",
+      "blob": "205d0f91e21b7617300a852683add59699ade167",
+      "consumer": "WorkspaceSidebar.tsx"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/components/ChatComposer.tsx",
+      "blob": "c3e63b272944c8e1083685ba28fb3cdcca06c932",
+      "consumer": "AgentComposer.tsx / frozen ChannelComposer"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/views/AgentPicker.tsx",
+      "blob": "644caefe607e81eb8e416bbe3e339c985e53decd",
+      "consumer": "AgentComposer.tsx"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/components/ModelSelector.tsx",
+      "blob": "35f02624974173677c6bc5c2656fe138db756816",
+      "consumer": "AgentComposer.tsx / model-picker"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/components/AgentSessionPane.tsx",
+      "blob": "9b181309950e4477a80c5266ebab37cf49f49853",
+      "consumer": "AgentSession.tsx"
+    },
+    {
+      "path": "apps/web/src/features/block-agent/component/AgentMessage.tsx",
+      "blob": "10dc6b5a07231ca0fe116431f583c6794f811230",
+      "consumer": "AgentTranscript.tsx"
+    },
+    {
+      "path": "apps/web/src/features/block-agent/component/Transcript.tsx",
+      "blob": "462c8e16d3e87acef3826b9335698564ece3cc6f",
+      "consumer": "agent-transcript.css"
+    },
+    {
+      "path": "apps/web/src/features/block-agent/views/LiveToolGroup.tsx",
+      "blob": "6894e8d176e84d901c6f2d42f162fe0beea6b183",
+      "consumer": "AgentTranscript.tsx"
+    },
+    {
+      "path": "apps/web/src/lib/core/component/AI/component/tool/email/DraftComposer.tsx",
+      "blob": "3f2d5a310ea71692a10148106d598c984f8bd8a1",
+      "consumer": "NorthwindSession.tsx / HomepageEmailCompose.tsx"
+    },
+    {
+      "path": "apps/web/src/lib/core/component/AI/component/mcpConstants.ts",
+      "blob": "98338de71a33e65fcf6c41652e89ad807a8f92fe",
+      "consumer": "AgentStories.tsx"
+    },
+    {
+      "path": "apps/web/src/features/routines/components/routines-list.tsx",
+      "blob": "2a66fc7db375bac8c8f3a2b17c7eae4fa38afd2b",
+      "consumer": "WorkspaceAgents.tsx"
+    },
+    {
+      "path": "crates/agent_inmem/src/domain/models.rs",
+      "blob": "decc815c424f62bdf0936b49b67100192fa0ad1e",
+      "consumer": "agentDemoData.ts"
+    },
+    {
+      "path": "crates/memory/src/domain/service.rs",
+      "blob": "5be103c192128b793c6d0fb9ef3cf64e7478c032",
+      "consumer": "ProductAgentsPage.tsx memory copy"
+    },
+    {
+      "path": "crates/ai_tools/src/lib.rs",
+      "blob": "30d01f6aad7aea8a7e1fc356b921ede9d2a05ccf",
+      "consumer": "ProductAgentsPage.tsx MCP copy"
+    },
+    {
+      "path": "crates/email/src/inbound/toolset/send_email.rs",
+      "blob": "e0de1039c4f89b4dbc7642c9e21edc5ad248fe0f",
+      "consumer": "NorthwindSession.tsx review behavior"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/views/NewChatPage.tsx",
+      "blob": "3ec7f821a976f3f825e1318ffad98b8126521cbf",
+      "consumer": "AgentComposer.tsx"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/agents-view.css",
+      "blob": "cb8f3425de85c715d50422ff82ae2b97adc97ad0",
+      "consumer": "agent-stories.css / dummy-workspace.css"
+    },
+    {
+      "path": "apps/web/src/lib/core/component/AI/component/input/ModelCatalogPicker.tsx",
+      "blob": "a6cfd3c3f6ac885509b03c3963937325ddad0d60",
+      "consumer": "workspace/frozen/model-picker"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/core/mode.ts",
+      "blob": "213815b18f93dc3dd23b9b0b16769058d1975a55",
+      "consumer": "WorkspaceSidebar.tsx"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/components/AgentSessionRow.tsx",
+      "consumer": "WorkspaceSidebar.tsx / dummy-workspace.css",
+      "blob": "0fb7a79d857ed2197a6372c125d4281dd5ebb1cc"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/views/AgentSessionListItem.tsx",
+      "consumer": "WorkspaceSidebar.tsx",
+      "blob": "b07f73d6959413e1fd51f00b1b6f8c67b8726500"
+    },
+    {
+      "path": "apps/web/src/features/agents-view/components/AgentSessionCodeDetails.tsx",
+      "consumer": "WorkspaceSidebar.tsx",
+      "blob": "38430aaa662dd1d28b401935884159ec2a7ced98"
+    },
+    {
+      "path": "apps/web/src/components/view-shell/view-shell-layout.ts",
+      "consumer": "dummy-workspace.css container breakpoint",
+      "blob": "b54b7b0044cedf14c679eadd698bbd0daed6a040"
+    },
+    {
+      "path": "apps/web/src/components/ui/components/UserMessageBubble.tsx",
+      "consumer": "ui/components/UserMessageBubble.tsx",
+      "blob": "78c0d7760622e492594fea9461505da47e7838ed"
+    },
+    {
+      "path": "apps/web/src/features/settings/components/bring-your-own-agent.tsx",
+      "consumer": "ProductAgentsPage.tsx BYOA",
+      "blob": "6b1d6c918f4e19c790ae017f9d9e0aaec15d8ae0"
+    },
+    {
+      "path": "apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentMention.tsx",
+      "blob": "45b27f4e840bb190143ea6dee23b291d6289bc15",
+      "consumer": "AgentTranscript.tsx / AgentWorkflowStories.tsx inline mentions"
+    },
+    {
+      "path": "apps/web/src/features/channel/Message/Layout.tsx",
+      "blob": "143d73e13178296472524d99697825f3d2a2bed9",
+      "consumer": "AgentWorkflowStories.tsx / frozen MessageRow"
+    },
+    {
+      "path": "crates/agent_harness/src/outbound/channel_prompt_context.rs",
+      "blob": "2bf528fbe6dce8c25e0af79b7217781c471619ae",
+      "consumer": "AgentWorkflowStories.tsx conversation context"
+    },
+    {
+      "path": "apps/web/src/features/drive-view/components/folder-composer.tsx",
+      "blob": "e6f854947763cda3fbab328e2f81726e2a742a92",
+      "consumer": "FolderComposerMockup.tsx"
+    },
+    {
+      "path": "apps/web/src/components/ui/components/EntityComposer.tsx",
+      "blob": "937cecbf4e15232df81d82368bf7e6a47a4a11a6",
+      "consumer": "FolderComposerMockup.tsx"
+    },
+    {
+      "path": "apps/web/src/lib/core/component/AI/component/input/SpeedToggle.tsx",
+      "blob": "91d7ad89eb8b2fd1637a60e4162eae9a1e754dd9",
+      "consumer": "AgentComposer.tsx new-chat speed control"
+    },
+    {
+      "path": "apps/web/src/lib/core/component/AI/constant/speed.ts",
+      "blob": "1ed8624e6ff062310f932b9a5c5728b25a8955f1",
+      "consumer": "AgentComposer.tsx new-chat speed control"
+    },
+    {
+      "path": "apps/web/src/features/channel/Thread/ThreadTerminalRail.tsx",
+      "blob": "5036d3c0fe0231c5b2dbdd9db89b53b2d0e0b55b",
+      "consumer": "dummy-workspace.css terminal reply connector"
+    },
+    {
+      "path": "apps/web/src/lib/core/component/LexicalMarkdown/collaboration/remote-cursor.tsx",
+      "blob": "6b4ed1dce6d2e2fe6bd0fa1b5192b22d7432d62a",
+      "consumer": "agent-workflows.css / AgentDeliverableStory remote caret"
+    }
+  ]
+}

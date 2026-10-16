@@ -1,6 +1,7 @@
 import {
   fetchCrmCompanyPreviews,
   fetchCrmContactPreviews,
+  fetchCrmPipelinePreviews,
 } from '@app/features/crm/preview-adapter';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { itemToSafeName } from '@core/constant/allBlocks';
@@ -449,6 +450,39 @@ async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
   );
 }
 
+/**
+ * A form previews from its own detail, which viewers (respondents) can read
+ * too; one that is gone reads as deleted.
+ */
+async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
+  return Promise.all(
+    ids.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'form', loading: false } as const;
+      const detail = await storageServiceClient.forms.get({ id });
+      if (detail.isErr())
+        return {
+          ...base,
+          access: detail.error.some(
+            (error) =>
+              error.code === 'NOT_FOUND' ||
+              error.code === 'GONE' ||
+              error.refusal?.code === 'notFound'
+          )
+            ? 'does_not_exist'
+            : 'no_access',
+        };
+      const { form } = detail.value;
+      return {
+        ...base,
+        access: 'access',
+        rawName: form.name,
+        name: form.name,
+        owner: form.ownerId,
+      };
+    })
+  );
+}
+
 function filterMapToId(items: Array<ItemEntity>, type: ItemEntity['type']) {
   return items.filter((i) => i.type === type).map(({ id }) => id);
 }
@@ -475,8 +509,10 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchEmailPreviews, filterMapToId(items, 'email')),
     doFetch(fetchCrmCompanyPreviews, filterMapToId(items, 'crm_company')),
     doFetch(fetchCrmContactPreviews, filterMapToId(items, 'crm_contact')),
+    doFetch(fetchCrmPipelinePreviews, filterMapToId(items, 'crm_pipeline')),
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
     doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),
+    doFetch(fetchFormPreviews, filterMapToId(items, 'form')),
   ]);
   const resultMap = new Map<string, PreviewItem>();
   results.flat().forEach((result) => {

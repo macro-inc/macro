@@ -7,7 +7,6 @@ import {
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitPanel } from '@components/app/split-panel';
-import { useLogout } from '@core/auth/logout';
 import { enableEmailSignatures } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
@@ -38,6 +37,7 @@ import {
   searchSettings,
 } from './core/settings-search';
 import { SettingsTabContent } from './SettingsTabContent';
+import { TeamSidebarAction } from './TeamSidebarAction';
 
 export function SettingsPanelComponentWrapper() {
   const params = useParams<{ tab?: string }>();
@@ -84,7 +84,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const { closeSettings, activeTabId, selectTab } = useSettingsState();
   const splitNavigate = useSplitNavigate();
   const { groups, searchGroups, flatTabs } = useSettingsTabs();
-  const logout = useLogout();
   const signatures = useFeatureFlag(enableEmailSignatures);
 
   const activeNavigationTab = activeTabId;
@@ -231,6 +230,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <SplitPanel.Body>
             <ViewShell.Root
               asidePreferenceKey="settings"
+              asidePinned
               resizable
               aside={{ preserveDuringResize: false }}
               main={{ preferredWidth: 960 }}
@@ -252,7 +252,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   onSearchQueryChange={setSearchQuery}
                   isItemActive={isItemActive}
                   onSelect={selectRoutedTab}
-                  onLogout={() => logout()}
+                  footer={<TeamSidebarAction />}
                 />
               </ViewShell.Aside>
               <ViewShell.Main>

@@ -23,6 +23,7 @@ vi.mock('@ui', async () => ({
   cn: (await import('@ui/utils/classname')).cn,
   Button: (props: ComponentProps<'button'>) => <button {...props} />,
   Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
+  Tooltip: (await import('@ui/components/Tooltip')).Tooltip,
 }));
 vi.mock('../context/compose-context', () => ({
   useCompose: () => ({

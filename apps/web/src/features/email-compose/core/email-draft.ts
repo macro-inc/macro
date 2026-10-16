@@ -2,6 +2,7 @@ import type { EmailContact } from '../../email-message/core/email-message';
 
 /** Feature-owned values. Transport adaptation belongs to queries. */
 export interface EmailDraft {
+  sender_email?: string;
   bcc?: EmailContact[] | null;
   body_html?: string | null;
   body_macro?: string | null;

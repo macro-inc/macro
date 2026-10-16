@@ -554,6 +554,15 @@ service_url! {
             dev: "https://static-file-service-dev.macro.com",
             prod: "https://static-file-service.macro.com",
         },
+        /// Browser-facing static file base that file links are stamped with.
+        /// [`StaticFileServiceUrl`] is the address services call; on a local
+        /// stack the two differ, since containers reach the service
+        /// in-network while browsers go through the frontend proxy.
+        pub StaticFilePublicUrl {
+            local: "http://localhost:8100",
+            dev: "https://static-file-service-dev.macro.com",
+            prod: "https://static-file-service.macro.com",
+        },
         /// Agent harness service API URL. Serves the agent-session control
         /// routes, which run in the process that owns the live sessions.
         pub AgentHarnessServiceUrl {

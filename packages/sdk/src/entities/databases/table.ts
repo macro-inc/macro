@@ -7,6 +7,7 @@ import { DatabaseColumn } from './column';
 import type { AddColumnOptions, Database } from './database';
 import { DatabaseRow } from './row';
 import { DatabaseView } from './view';
+import type { DatabaseWebhook } from './webhook';
 
 /**
  * One table (tab) of a {@link Database}.
@@ -20,7 +21,7 @@ export class DatabaseTable {
     /** The database this table belongs to. */
     readonly database: Database,
     /** Identifier of the table. */
-    readonly id: string
+    readonly id: string,
   ) {}
 
   /** A handle to a table by id, within a database. Details load on first access. */
@@ -37,7 +38,7 @@ export class DatabaseTable {
     const found = tables.find((table) => table.table.id === this.id);
     if (!found) {
       throw new MacroNotFoundError(
-        `table ${this.id} is not in database ${this.database.id}`
+        `table ${this.id} is not in database ${this.database.id}`,
       );
     }
     return found;
@@ -95,6 +96,11 @@ export class DatabaseTable {
   async views(): Promise<DatabaseView[]> {
     const { views } = await this.detail();
     return views.map((view) => DatabaseView.byId(this, view.id));
+  }
+
+  /** Create a webhook that inserts rows here. See {@link Database.createWebhook}. */
+  createWebhook(): Promise<{ webhook: DatabaseWebhook; token: string }> {
+    return this.database.createWebhook(this);
   }
 
   /** Delete this table. See {@link Database.deleteTable}. */

@@ -25,3 +25,4 @@ To click through by hand, run
   other address signs up as a first-time user.
 - `/?page=signup` is the desktop sign-up through onboarding's opening slides.
 - `/?page=mobile-signup` is the mobile-web email capture.
+- Add `&verifyLatency=300` to make code checks take a network round trip.

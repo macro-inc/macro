@@ -3,6 +3,8 @@
   --nav-muted: #b8b8bd;
   --nav-surface: rgb(18 18 20 / 78%);
   --nav-edge: rgb(255 255 255 / 13%);
+  --nav-menu-surface: rgb(21 21 23 / 96%);
+  --nav-menu-shadow: 0 20px 60px #000a, inset 0 1px 0 #ffffff12;
   font-family: Inter, 'Inter Variable', -apple-system, BlinkMacSystemFont, sans-serif;
   color: var(--nav-ink);
   font-weight: 400;
@@ -22,7 +24,7 @@
 .site-menu-mark > span { position: absolute; inset: 0; background: currentColor; transition: clip-path 440ms cubic-bezier(.22,1,.36,1); }
 .site-menu-mark > span:nth-child(2) { transition-delay: 35ms; }
 .site-menu-mark > span:nth-child(3) { transition-delay: 70ms; }
-.site-menu-panel { position: absolute; top: calc(100% + 12px); left: 0; display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 24px; width: min(560px, calc(100vw - 64px)); max-height: calc(100dvh - 140px); overflow-y: auto; padding: 24px; box-sizing: border-box; border-radius: 24px; background: rgb(21 21 23 / 96%); border: 1px solid var(--nav-edge); box-shadow: 0 20px 60px #000a, inset 0 1px 0 #ffffff12; backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); animation: site-menu-in 180ms ease-out; }
+.site-menu-panel { position: absolute; top: calc(100% + 12px); left: 0; display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 24px; width: min(560px, calc(100vw - 64px)); max-height: calc(100dvh - 140px); overflow-y: auto; padding: 24px; box-sizing: border-box; border-radius: 24px; background: var(--nav-menu-surface); border: 1px solid var(--nav-edge); box-shadow: var(--nav-menu-shadow); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); animation: site-menu-in 180ms ease-out; }
 .site-menu-group h2 { margin: 0 0 12px; padding: 0 10px; font: inherit; font-size: 11px; color: var(--nav-muted); }
 .site-menu-panel a { display: block; color: var(--nav-ink); padding: 9px 10px; border-radius: 10px; font: inherit; font-size: 14px; line-height: 20px; text-decoration: none; }
 .site-menu-panel a:hover { background: #ffffff0a; }
@@ -89,7 +91,7 @@
     position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column;
     width: 100%; height: 100dvh; max-height: none; gap: 26px;
     padding: calc(84px + env(safe-area-inset-top, 0px)) 20px calc(28px + env(safe-area-inset-bottom, 0px));
-    border: 0; border-radius: 0; background: #000; box-shadow: none;
+    border: 0; border-radius: 0; background: var(--nav-menu-surface); box-shadow: none;
     backdrop-filter: none; -webkit-backdrop-filter: none; overscroll-behavior: contain;
     animation: site-menu-in 240ms cubic-bezier(.16, 1, .3, 1);
   }

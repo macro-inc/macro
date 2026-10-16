@@ -5,6 +5,7 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::domain::models::EmailApiError;
 use macro_user_id::cowlike::ArcCowStr;
 use macro_user_id::user_id::MacroUserId;
+use model::document::MAX_DOCUMENT_NAME_GRAPHEMES;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use models_email::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
@@ -18,7 +19,11 @@ use system_properties::{
     SystemPropertiesService, SystemPropertiesServiceImpl,
 };
 use thiserror::Error;
+use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 #[derive(Error, Debug)]
 pub enum UploadAttachmentError {
@@ -210,8 +215,8 @@ fn determine_file_metadata(
     let file_name = original_file_name
         .split('.')
         .next()
-        .unwrap_or(original_file_name)
-        .to_string();
+        .unwrap_or(original_file_name);
+    let file_name = truncate_document_name(file_name).to_string();
 
     let file_type = match original_file_name
         .rsplit_once('.')
@@ -237,6 +242,13 @@ fn determine_file_metadata(
     };
 
     Ok((file_name, file_type))
+}
+
+/// DSS rejects longer names, so keep only the leading graphemes rather than drop the attachment.
+fn truncate_document_name(name: &str) -> &str {
+    name.grapheme_indices(true)
+        .nth(MAX_DOCUMENT_NAME_GRAPHEMES)
+        .map_or(name, |(end, _)| &name[..end])
 }
 
 /// Creates a document record in the Document Storage Service (DSS) and returns the response,

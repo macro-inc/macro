@@ -3,7 +3,7 @@ language: tsx
 severity: warning
 message: Don't add cursor-pointer to clickable elements.
 note: |-
-  Rule FE-27 in docs/STYLE_GUIDE.md (also apps/web/AGENTS.md, Styling). The
+  Rule FE-27 in docs/development/style-guide.md. The
   app deliberately does not use pointer cursors on clickable elements.
 files:
   - apps/web/**

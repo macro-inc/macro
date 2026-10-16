@@ -15,10 +15,11 @@ export function Contact(props: ComponentProps<typeof View>) {
   );
 }
 
-/** The contact's section tabs, below a host's header. */
+/** The contact's section tabs, for a host's top bar. */
 export function ContactTabs(props: {
   value: ContactSection;
   onChange: (section: ContactSection) => void;
+  compact?: boolean;
 }) {
   return <RecordTabs sections={CONTACT_SECTIONS} {...props} />;
 }

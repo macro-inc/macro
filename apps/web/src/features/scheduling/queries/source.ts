@@ -1,10 +1,16 @@
+import { getDisplayNameParts, type MacroId } from '@core/user';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { schedulingClient } from '@service-email/scheduling';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { SchedulingSource } from '../context/scheduling-context';
-import type { SchedulingProfile, SchedulingScope } from '../core/types';
+import {
+  newDefaultBookingLink,
+  newSchedule,
+  type SchedulingProfile,
+  type SchedulingScope,
+} from '../core/types';
 import { schedulingKeys } from './keys';
 
 export function useSchedulingProfileQuery(scope: Accessor<SchedulingScope>) {
@@ -104,5 +110,63 @@ export function createSchedulingSource(
 export function useManageBookingMutation() {
   return useMutation(() => ({
     mutationFn: (id: string) => throwOnErr(() => schedulingClient.manage(id)),
+  }));
+}
+
+async function createDefaultBookingLinkIfNeeded(
+  profile: SchedulingProfile,
+  userId: string
+): Promise<SchedulingProfile | null> {
+  if (profile.revision !== 0 || profile.eventTypes.length > 0) {
+    return null;
+  }
+
+  const { firstName } = getDisplayNameParts(userId as MacroId);
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const schedule = newSchedule(timeZone);
+  const bookingLink = newDefaultBookingLink(schedule.id, userId, firstName);
+
+  const updatedProfile: SchedulingProfile = {
+    ...profile,
+    schedules: [schedule],
+    defaultScheduleId: schedule.id,
+    eventTypes: [bookingLink],
+  };
+
+  try {
+    const result = await throwOnErr(() =>
+      schedulingClient.save(updatedProfile, undefined)
+    );
+    return result.profile;
+  } catch {
+    return null;
+  }
+}
+
+export function useSchedulingProfileWithAutoSetupQuery(
+  scope: Accessor<SchedulingScope>,
+  userId: Accessor<string>
+) {
+  return useQuery(() => ({
+    queryKey: schedulingKeys.settings(scope().id).queryKey,
+    queryFn: async () => {
+      const result = await throwOnErr(() =>
+        schedulingClient.settings(scope().teamId)
+      );
+      const profile = result.profile;
+
+      if (!scope().teamId && userId()) {
+        const updated = await createDefaultBookingLinkIfNeeded(
+          profile,
+          userId()
+        );
+        if (updated) {
+          return updated;
+        }
+      }
+
+      return profile;
+    },
+    retry: false,
   }));
 }

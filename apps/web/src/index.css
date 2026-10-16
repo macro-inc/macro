@@ -347,11 +347,13 @@ body.tauri-ios {
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
-  --color-snippet:     var(--color-pink);
+  --color-snippet:     var(--color-note);
+  --color-form:        var(--color-pink);
+  --color-communication: color-mix(in srgb, var(--color-ink-muted) 70%, var(--color-blue));
   --color-pdf:         var(--color-red);
   --color-rss:         var(--color-blue);
   --color-default:     var(--color-content-1);
-  --color-email:       var(--color-default);
+  --color-email:       var(--color-communication);
 }
 
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
@@ -544,11 +546,13 @@ body.tauri-ios {
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
-  --color-snippet:     var(--color-pink);
+  --color-snippet:     var(--color-note);
+  --color-form:        var(--color-pink);
+  --color-communication: color-mix(in srgb, var(--color-ink-muted) 70%, var(--color-blue));
   --color-pdf:         var(--color-red);
   --color-rss:         var(--color-blue);
   --color-default:     var(--color-content-1);
-  --color-email:       var(--color-default);
+  --color-email:       var(--color-communication);
 
   /* Font families */
   /* Apple devices get the system font (SF): `-apple-system` and
@@ -572,6 +576,8 @@ body.tauri-ios {
   --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
   --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
+  /* Two laps around the circle, easing in and out, then a long rest before the next. */
+  --animate-update-glow: update-glow-spin 8s infinite, update-glow-fade 8s linear infinite;
   --animate-accordion-down: accordion-down 150ms ease-out;
   --animate-accordion-up: accordion-up 150ms ease-out;
 
@@ -1290,6 +1296,14 @@ html[data-touch-device='true'] :is(
   to   { height: 0; }
 }
 
+/* Match the item panels' 200ms exit; the inset follows responsive width changes. */
+@keyframes gantt-scene-close {
+  from,
+  to {
+    left: var(--gantt-closing-inset);
+  }
+}
+
 @keyframes typing-dot {
   0%   { transform: scale(1)   translateY(0   ); }
   50%  { transform: scale(1.5) translateY(-2px); }
@@ -1302,6 +1316,18 @@ html[data-touch-device='true'] :is(
 }
 
 /* Ported from opencode's `--animate-pulse-scale` (github.com/sst/opencode, MIT © 2025 opencode). */
+/* easeInOutCubic: the laps start slow, speed up, and slow down into the end. */
+@keyframes update-glow-spin {
+  0%        { transform: rotate(0deg); animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1); }
+  35%, 100% { transform: rotate(720deg); }
+}
+
+@keyframes update-glow-fade {
+  0%        { opacity: 0; }
+  3%, 31%   { opacity: 1; }
+  35%, 100% { opacity: 0; }
+}
+
 @keyframes todo-pulse {
   0%, 100% { transform: scale(1);   opacity: 1;   }
   50%      { transform: scale(0.6); opacity: 0.5; }

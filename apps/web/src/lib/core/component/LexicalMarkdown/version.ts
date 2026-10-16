@@ -27,5 +27,13 @@
  * Version 5.0 - Sep 2026. Added CursorSystemNotificationNode (Cursor `<system_notification>` event cards).
  * Version 6.0 - Oct 2026. Added source-only DatabaseQueryNode: a live database answer pointing at a saved query (`queryId`), with its table, title, and table or chart display (bar, line, area, scatter, pie; optional `color` and `stack`).
  * Version 6.1 - Oct 2026. ReplyTargetNode accepts call, initiative, and CRM message parents.
+ * Version 6.2 - Oct 2026. DocumentCardNode preview data can reserve poll height using its option count.
+ * Version 7.0 - Oct 2026. Added TaskListNode: replaces ListNode at runtime, serializes as
+ *   `task-list` with the `list` wire shape plus optional `$.taskListView` node state
+ *   (persisted check-list task filters).
+ * Version 7.1 - Oct 2026. PullRequestMentionNode: optional GitHub `url`; `id` may be empty
+ *   when an agent mentions a PR by URL, and the decorator resolves the synced PR.
+ * Version 8.0 - Oct 2026. Added BookingLinkMentionNode for Macro `/app/book/…` URLs.
+ * Version 9.0 - Oct 2026. Added AgentActivityNode: the steps of an agent's reply between two passages, with a snapshot of its rows and live rendering where the session is readable.
  */
-export const MARKDOWN_VERSION_COUNTER = 6.1;
+export const MARKDOWN_VERSION_COUNTER = 9.0;

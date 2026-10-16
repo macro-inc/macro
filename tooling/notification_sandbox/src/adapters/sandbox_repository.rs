@@ -68,6 +68,16 @@ impl NotificationRepository for SandboxNotificationRepository {
             .await
     }
 
+    async fn notification_is_withdrawn(&self, notification_id: Uuid) -> Result<bool, Report> {
+        self.inner.notification_is_withdrawn(notification_id).await
+    }
+
+    async fn complete_notification_publication(&self, notification_id: Uuid) -> Result<(), Report> {
+        self.inner
+            .complete_notification_publication(notification_id)
+            .await
+    }
+
     async fn update_sent_status<'a>(
         &self,
         notification_id: Uuid,

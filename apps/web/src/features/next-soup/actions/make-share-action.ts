@@ -28,7 +28,7 @@ export const makeShareAction = () => {
     if (!first) return;
 
     if (others.length === 0) {
-      openGlobalShareModal({ entity: first });
+      await openGlobalShareModal({ entity: first });
       return;
     }
 

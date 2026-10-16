@@ -82,7 +82,7 @@ export function CallParticipants(props: {
           />
         }
       >
-        <div class="flex items-center gap-1.5">
+        <div class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
           <Show when={entities().length > 0}>
             <UserGroup entities={entities()} maxUsers={2} />
           </Show>

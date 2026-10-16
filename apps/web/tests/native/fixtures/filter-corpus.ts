@@ -4,7 +4,7 @@ import {
 } from '../../../src/features/property/identifiers';
 import { mailProjectionCapsules } from '../../../src/lib/graphql-cache/worker/browser-test/mail-projection-capsules';
 import type { TagSetResponse } from '../../../src/lib/service-clients/service-properties/generated/schemas/tagSetResponse';
-import { EMAIL, fixtureId as id, USER_ID } from './mail';
+import { EMAIL, fixtureMailAccount, fixtureId as id, USER_ID } from './mail';
 
 export const PEOPLE = [USER_ID, 'macro|other@example.com'];
 export const TAG_DEFINITION = id(7000);
@@ -28,6 +28,7 @@ const priorityIds = [
 export const FILE_TYPES = [
   'doc-markdown',
   'doc-canvas',
+  'doc-spreadsheet',
   'file-code',
   'file-image',
   'file-pdf',
@@ -40,6 +41,7 @@ export const FILE_TYPES = [
 const fileTypes = [
   'md',
   'canvas',
+  'spreadsheet',
   'ts',
   'png',
   'pdf',
@@ -68,6 +70,7 @@ export type FixtureRow = {
   inbox?: boolean;
   calendar?: boolean;
   shared?: boolean;
+  favorite?: boolean;
   draft?: boolean;
   sent?: boolean;
   attachmentKind?: 'pdf' | 'image' | 'document';
@@ -163,10 +166,10 @@ export function filterCorpus(
       },
     });
   }
-  for (let n = 0; n < 20; n++) {
+  for (let n = 0; n < FILE_TYPES.length * PEOPLE.length; n++) {
     const index = 101 + n;
     const category = n % FILE_TYPES.length;
-    const owner = PEOPLE[Math.floor(n / 10)];
+    const owner = PEOPLE[Math.floor(n / FILE_TYPES.length)];
     const tags = tagsFor(n);
     const attachment = n % 3 === 0;
     result.push({
@@ -192,9 +195,9 @@ export function filterCorpus(
         viewedAt: null,
         deletedAt: null,
         subType:
-          category === 7
+          FILE_TYPES[category] === 'doc-snippet'
             ? { __typename: 'GraphqlSnippetSubType' }
-            : category === 8
+            : FILE_TYPES[category] === 'doc-skill'
               ? { __typename: 'GraphqlSkillSubType' }
               : null,
         notifications: [],
@@ -296,6 +299,7 @@ export function filterCorpus(
       senderPhotoUrl: null,
     });
     const attachmentKind = (['pdf', 'image', 'document'] as const)[n % 3];
+    const favorite = [6, 8, 9, 60, 71].includes(n);
     result.push({
       kind: 'email',
       id: id(n),
@@ -307,6 +311,7 @@ export function filterCorpus(
       inbox: n % 2 === 0,
       calendar: n % 5 === 0,
       shared: n === 60 || n >= 71,
+      favorite,
       draft: n % 3 === 0,
       // The canonical capsule for row 4 intentionally has no outbound timestamp.
       sent: n % 4 === 0 && n !== 4,
@@ -340,7 +345,7 @@ export function filterCorpus(
         notifications: [],
         participants: [],
         labels: [],
-        isFavorited: false,
+        isFavorited: favorite,
         attachments: [
           {
             id: id(9000 + n),
@@ -365,11 +370,9 @@ export function filterCorpus(
   return result;
 }
 
-export const matrixAccounts = LINKS.map((id, n) => ({
-  id,
-  emailAddress: n === 0 ? EMAIL : 'other@example.com',
-  photoUrl: null,
-}));
+export const matrixAccounts = LINKS.map((id, n) =>
+  fixtureMailAccount(id, n === 0 ? EMAIL : 'other@example.com', n === 0)
+);
 export const matrixTagSets: TagSetResponse[] = [
   {
     scope: 'user',

@@ -1,6 +1,6 @@
 //! Durable single-thread email reminder workflow.
 //!
-//! Every writer (including generic edit/remove and dispatch) takes the same
+//! Every writer (including dispatch) takes the same
 //! user/thread lock. Intent is stored before email side effects; the minute
 //! sweep retries incomplete intent after a crash. Operation identities outlive
 //! cancellation, so a timed-out request cannot recreate a removed follow-up.
@@ -70,7 +70,7 @@ impl FollowupState {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EmailFollowup {
-    /// Its ordinary reminder, used by the existing alert/management surfaces.
+    /// Identity of the snooze and its delivery records.
     pub reminder_id: Uuid,
     /// Conversation identity.
     pub thread_id: Uuid,
@@ -164,7 +164,7 @@ impl EmailFollowupCommand {
     }
 }
 
-/// Repository contract for the durable workflow, alongside ordinary reminders.
+/// Repository contract for the durable email workflow.
 pub trait EmailFollowupRepo: RemindersRepo {
     /// A database-wide lock; dropping it releases serialization after a crash.
     type Guard: Send;
@@ -180,7 +180,7 @@ pub trait EmailFollowupRepo: RemindersRepo {
         user: &MacroUserIdStr<'_>,
         thread: Uuid,
     ) -> impl Future<Output = Result<Option<FollowupRecord>, ReminderError>> + Send;
-    /// Resolve a reminder's specialization, without treating generic email reminders as follow-ups.
+    /// Resolve an owned snooze's durable workflow.
     fn reminder_followup(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -192,7 +192,7 @@ pub trait EmailFollowupRepo: RemindersRepo {
         user: &MacroUserIdStr<'_>,
         operation: Uuid,
     ) -> impl Future<Output = Result<Option<(Uuid, EmailFollowupCommand)>, ReminderError>> + Send;
-    /// Atomically persist intent, its operation identity and the ordinary reminder.
+    /// Atomically persist intent, its operation identity and delivery schedule.
     /// The caller holds the user/thread guard. `description` is supplied on create.
     fn save_followup(
         &self,

@@ -1,0 +1,32 @@
+# Presence only: never use these bounded edges as full notification history or
+# as the input to mark-read/done actions. Keep the shared Soup document unchanged.
+query HomeUnreadPresence($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				metadata { createdAt updatedAt }
+				unreadNotifications: notifications(
+					filter: { states: [UNSEEN], channelFeedOnly: true }
+					limit: 1
+				) { id state }
+				... on GraphqlSoupDocument {
+					subType { __typename }
+				}
+				... on GraphqlSoupEmailThread {
+					isRead
+					inboxVisible
+					isDraft
+					sortTs
+					labels { id name providerLabelId }
+					unreadReminders: notifications(
+						filter: { states: [UNSEEN], eventTypes: ["reminder"] }
+						limit: 1
+					) { id state }
+				}
+			}
+		}
+	}
+}

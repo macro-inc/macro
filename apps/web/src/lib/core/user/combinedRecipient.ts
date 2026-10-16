@@ -18,7 +18,7 @@ type EntityMap = {
   channel: ChannelWithParticipants;
   contact: ExtractedContactInfo;
   custom: CustomUserInput;
-  agent: Bot;
+  agent: Pick<Bot, 'id' | 'name' | 'handle' | 'description' | 'avatar_url'>;
 };
 
 type Entity<T extends keyof EntityMap> = {

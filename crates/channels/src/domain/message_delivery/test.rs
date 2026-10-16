@@ -53,7 +53,7 @@ impl ChannelReferenceSharePermissions for Log {
         _: MacroUserIdStr<'static>,
         _: Uuid,
         _: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<crate::domain::models::ReferenceShareResult>, Self::Err> {
         *self.shares.lock().unwrap() += 1;
         anyhow::bail!("sharing temporarily unavailable")
     }
@@ -250,6 +250,7 @@ async fn plain_edits_deletions_reactions_and_typing_only_send_the_common_payload
         MessageChange::Typing {
             thread_id: Some(Uuid::from_u128(9)),
             active: false,
+            agent: None,
         },
     ] {
         // The plain edit still records sharing, whose failure is reported.

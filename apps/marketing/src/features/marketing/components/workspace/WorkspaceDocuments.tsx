@@ -20,7 +20,7 @@ import {
   PanelSection,
   PanelToggle,
 } from './frozen/DetailPanel';
-import { PersonIcon } from './frozen/TaskProperties';
+import { MessageRow } from './frozen/MessageRow';
 
 // Retain the subset of Markdown represented by the frozen editor presentation.
 function markdownFrom(element: HTMLElement): string {
@@ -56,6 +56,8 @@ export function WorkspaceDocuments(props: {
   workspace: DummyWorkspace;
   relatedContent?: JSX.Element;
   onShare?: () => void;
+  sharingDescription?: string;
+  hideCollectionNavigation?: boolean;
 }) {
   const w = props.workspace;
   const [panel, setPanel] = createSignal<boolean>();
@@ -171,14 +173,16 @@ export function WorkspaceDocuments(props: {
       {(doc) => (
         <>
           <ViewShell.TopBar>
-            <Button
-              variant="plain"
-              size="icon-sm"
-              label={w.view() === 'home' ? 'Back to Home' : 'Back to files'}
-              onClick={() => w.backToCollection('documents')}
-            >
-              <ArrowLeft />
-            </Button>
+            <Show when={!props.hideCollectionNavigation}>
+              <Button
+                variant="plain"
+                size="icon-sm"
+                label={w.view() === 'home' ? 'Back to Home' : 'Back to files'}
+                onClick={() => w.backToCollection('documents')}
+              >
+                <ArrowLeft />
+              </Button>
+            </Show>
             <Show when={w.view() === 'home'}>
               <button
                 type="button"
@@ -230,7 +234,7 @@ export function WorkspaceDocuments(props: {
                 </PanelSection>
                 <PanelSection title="Details" open>
                   <PanelGrid>
-                    <PanelRow label="Owner">Jacob Beckerman</PanelRow>
+                    <PanelRow label="Owner">Jacob</PanelRow>
                     <PanelRow label="Created">Sep 28, 2026</PanelRow>
                     <PanelRow label="Last updated">Today</PanelRow>
                   </PanelGrid>
@@ -242,7 +246,9 @@ export function WorkspaceDocuments(props: {
                   />
                 </PanelSection>
                 <PanelSection title="Sharing" open>
-                  <p class="text-xs text-ink-muted">Launch team can edit</p>
+                  <p class="text-xs text-ink-muted">
+                    {props.sharingDescription ?? 'Launch team can edit'}
+                  </p>
                 </PanelSection>
                 <PanelSection title="References">
                   <button
@@ -310,14 +316,11 @@ export function WorkspaceDocuments(props: {
                 </div>
                 {props.relatedContent}
                 <div class="mt-8 mb-3 text-xs text-ink-muted">Discussion</div>
-                <For each={doc().comments}>
-                  {(comment) => (
-                    <div class="flex items-start gap-2 mb-4 text-sm">
-                      <PersonIcon person={comment.person} />
-                      <p>{comment.body}</p>
-                    </div>
-                  )}
-                </For>
+                <div role="log" aria-label="Document discussion">
+                  <For each={doc().comments}>
+                    {(comment) => <MessageRow message={comment} />}
+                  </For>
+                </div>
                 <ChannelComposer
                   label="Comment on document"
                   placeholder="Leave a comment…"

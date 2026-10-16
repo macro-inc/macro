@@ -1,5 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { soupKeys } from '@queries/soup/keys';
+import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -48,6 +49,20 @@ export function useCrmContactByEmailQuery(
   );
 }
 
+function contactQueryOptions(deps: CrmRecordDependencies, contactId: string) {
+  return queryOptions({
+    queryKey: crmKeys.contact(contactId).queryKey,
+    queryFn: () => {
+      if (!contactId) {
+        throw new Error('contact id is required to fetch contact');
+      }
+      return throwOnErr(() => deps.storage.getContact({ contactId }));
+    },
+    staleTime: CONTACT_STALE_TIME,
+    enabled: !!contactId,
+  });
+}
+
 /**
  * Fetches a single CRM contact by id via `GET /crm/contacts/{id}`.
  * The endpoint is role-aware: admins/owners see hidden contacts too,
@@ -59,20 +74,7 @@ export function useContactQuery(
   contactId: Accessor<string>
 ) {
   return useQuery(
-    () => {
-      const id = contactId();
-      return {
-        queryKey: crmKeys.contact(id).queryKey,
-        queryFn: () => {
-          if (!id) {
-            throw new Error('contact id is required to fetch contact');
-          }
-          return throwOnErr(() => deps.storage.getContact({ contactId: id }));
-        },
-        staleTime: CONTACT_STALE_TIME,
-        enabled: !!id,
-      };
-    },
+    () => contactQueryOptions(deps, contactId()),
     () => deps.client
   );
 }
@@ -121,8 +123,9 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
           );
         }
       },
-      onSettled: (_data, _err, { contactId, companyId }) =>
-        Promise.all([
+      onSettled: async (_data, _err, { contactId, companyId }) => {
+        await invalidateCachedCrmContacts(contactId);
+        return Promise.all([
           deps.client.invalidateQueries({
             queryKey: crmKeys.contact(contactId).queryKey,
           }),
@@ -130,7 +133,8 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
             queryKey: crmKeys.company(companyId).queryKey,
           }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-        ]),
+        ]);
+      },
     }),
     () => deps.client
   );
@@ -156,13 +160,15 @@ export function useSetContactHiddenMutation(deps: CrmRecordDependencies) {
         hidden: boolean;
       }) =>
         throwOnErr(() => deps.storage.setContactHidden({ contactId, hidden })),
-      onSuccess: (_data, { contactId }) =>
-        Promise.all([
+      onSuccess: async (_data, { contactId }) => {
+        await invalidateCachedCrmContacts(contactId);
+        return Promise.all([
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
           deps.client.invalidateQueries({
             queryKey: crmKeys.contact(contactId).queryKey,
           }),
-        ]),
+        ]);
+      },
     }),
     () => deps.client
   );

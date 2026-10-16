@@ -27,6 +27,5 @@ export function soupItemMatchesHomeTab(
       'noise',
       () => item.tag === 'emailThread' && item.data.isSignal === false
     )
-    .with('reminders', () => item.tag === 'reminder')
     .exhaustive();
 }

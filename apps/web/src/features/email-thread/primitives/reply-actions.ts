@@ -6,7 +6,10 @@ import type { EmailThreadState } from './email-thread-state';
 
 export function openEmailReplyComposerForMessage(args: {
   ctx: EmailThreadState;
-  isMobile: boolean;
+  /** Touch layouts reply in the compose drawer; the inline reply input only
+   * renders for non-touch. Phone width alone is not the gate: tablets are
+   * touch at desktop widths. */
+  isTouch: boolean;
   message: EmailMessage;
   replyType: ReplyType;
   isLastMessage?: boolean;
@@ -21,7 +24,7 @@ export function openEmailReplyComposerForMessage(args: {
   // the registry key includes a seed only the composer knows.
   args.ctx.replyRequest.set(messageId, args.replyType);
 
-  if (args.isMobile) {
+  if (args.isTouch) {
     args.ctx.mobileReplyComposer.openForMessage(messageId);
     return true;
   }

@@ -76,8 +76,14 @@ export type EmailListProps = {
 };
 
 export function EmailList(props: EmailListProps) {
-  const { state, source, list, registerListActivationHandler, openThread } =
-    useEmailView();
+  const {
+    state,
+    source,
+    list,
+    registerListActivationHandler,
+    openThread,
+    filterByTag,
+  } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
   function openEntity(
@@ -381,7 +387,7 @@ export function EmailList(props: EmailListProps) {
   // Switching tab or inbox scope is a new list: drop focus, selection, and
   // and start from the top.
   const listScope = () =>
-    `${state.tab}|${state.inboxIds === undefined ? '*' : state.inboxIds.join(',')}`;
+    `${state.tab}|${state.inboxIds === undefined ? '*' : state.inboxIds.join(',')}|${state.aliasFilter?.emailAddress ?? ''}`;
   let activeScope = listScope();
   createEffect(() => {
     const nextScope = listScope();
@@ -577,6 +583,7 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      onFilterByTag={filterByTag}
                                       scheduleStatus={
                                         <Show
                                           when={source.reminderForThread?.(

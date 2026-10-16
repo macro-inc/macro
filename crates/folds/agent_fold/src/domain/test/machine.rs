@@ -319,3 +319,33 @@ fn a_tool_call_without_a_prompt_opens_a_turn() {
         agent.parts[0]
     );
 }
+
+const TEXT_PROMPT: &str = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p0","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"tighten the fold"}]}}}"#;
+
+/// A prompt shows when it was sent, which is when the log stored it.
+#[test]
+fn a_stored_prompt_carries_the_time_it_was_logged() {
+    let logged_at = "2026-10-15T14:02:00Z".parse().unwrap();
+    let mut machine = FoldMachineImpl::new();
+    for entry in parse_log(TEXT_PROMPT) {
+        let _ = machine.push(AgentSessionLog {
+            logged_at: Some(logged_at),
+            ..entry
+        });
+    }
+
+    assert_eq!(machine.messages()[0].posted_at, Some(logged_at));
+}
+
+/// A prompt still on the wire has no time yet: guessing one would show a
+/// time the log may never agree with.
+#[test]
+fn a_speculated_prompt_has_no_time() {
+    let mut machine = FoldMachineImpl::new();
+    for entry in parse_log(TEXT_PROMPT) {
+        let _ = machine.push_speculative(entry);
+    }
+
+    assert!(machine.messages()[0].pending);
+    assert_eq!(machine.messages()[0].posted_at, None);
+}

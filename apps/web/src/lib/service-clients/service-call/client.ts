@@ -183,6 +183,21 @@ export const callServiceClient = {
     ).map((result) => result);
   },
 
+  /**
+   * `POST /call/record/{callId}/decline`: declines this ringing call without
+   * joining it, so the user's other devices stop ringing. Bound to `callId`
+   * so a stale ring cannot decline a newer call in the same channel. 404 when
+   * the call already ended or was replaced.
+   */
+  async declineCall(callId: string) {
+    return (
+      await fetchWithToken<Record<string, never>>(
+        `${host}/call/record/${callId}/decline`,
+        { method: 'POST' }
+      )
+    ).map(() => undefined);
+  },
+
   async checkActiveCall(channelId: string) {
     return (
       await fetchWithToken<CallActiveResponse>(

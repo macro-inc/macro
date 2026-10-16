@@ -44,6 +44,7 @@ const FIELDS: &[&str] = &[
     "isSignal",
     "cacheProjection",
     "latestInboundMessageTs",
+    "reminderReturnedAt",
     "updatedAt",
     "mailAllPreview",
     "mailDraftPreview",
@@ -79,6 +80,11 @@ fn bool_fact(r: &Record, field: &str, attribute: &str) -> Option<ExactFact> {
         return None;
     };
     boolean_fact(*value, attribute)
+}
+
+// Match the server INBOX view without inventing an inbound message on a sent-only thread.
+fn inbox_timestamp(record: &Record) -> Option<Option<i64>> {
+    Some(timestamp(record, "latestInboundMessageTs")?.max(timestamp(record, "reminderReturnedAt")?))
 }
 fn boolean_fact(value: bool, attribute: &str) -> Option<ExactFact> {
     Some(ExactFact {
@@ -166,10 +172,10 @@ fn project_with_facts(
         attribute: vocabulary::token("mail-all-ts"),
         value: all,
     }];
-    if let Some(inbound) = timestamp(record, "latestInboundMessageTs")? {
+    if let Some(inbox) = inbox_timestamp(record)? {
         times.push(IntegerFact {
             attribute: vocabulary::token("mail-inbox-ts"),
-            value: inbound,
+            value: inbox,
         });
     }
     if let Some(outbound) = cache_facts.latest_outbound_message_ts() {
@@ -210,6 +216,7 @@ struct DraftState {
 /// Apply complete draft contributions without fabricating server capsules.
 /// This is shared by browser and desktop and independent of cached query pages.
 pub async fn draft_optimistic_updates<S: Storage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
@@ -238,7 +245,7 @@ pub async fn draft_optimistic_updates<S: Storage>(
     let record_key = RecordKey::new(key.to_string()).map_err(error)?;
     let parsed = Document::parse(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
-    let records = normalize(op, variables, data).map_err(error)?;
+    let records = normalize(schema, op, variables, data).map_err(error)?;
     let Some(record) = records.get(&key).filter(|record| {
         FIELDS
             .iter()
@@ -317,13 +324,14 @@ pub enum ProjectionError<S: std::error::Error + 'static> {
 /// Canonical preview edges are independent of the source query's view/filter.
 /// A missing v2 field cannot borrow completeness from an older projection.
 pub async fn projection_updates<S: Storage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
     variables: &Map<String, Value>,
     data: &Value,
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
-    projection_updates_for_write(storage, query, operation, variables, data, true).await
+    projection_updates_for_write(schema, storage, query, operation, variables, data, true).await
 }
 
 /// Prepare Mail facts without consulting the old user's records when the write
@@ -331,6 +339,7 @@ pub async fn projection_updates<S: Storage>(
 /// partial incoming rows remain incomplete instead of borrowing old metadata.
 /// The cache engine, not this adapter, performs the actual identity reset.
 pub async fn projection_updates_for_write<S: Storage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
@@ -364,7 +373,7 @@ pub async fn projection_updates_for_write<S: Storage>(
     }
     let parsed = Document::parse(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
-    let updates = normalize(op, variables, data)
+    let updates = normalize(schema, op, variables, data)
         .map_err(error)?
         .into_iter()
         .filter(|(key, record)| {
@@ -414,8 +423,9 @@ pub async fn projection_updates_for_write<S: Storage>(
             }
             // Sort patches cannot express deletion. Suppress a capsule-only
             // projection until a full snapshot replaces cleared INBOX/SENT sorts.
-            if changed.contains("latestInboundMessageTs")
-                && timestamp(&merged, "latestInboundMessageTs")?.is_none()
+            if (changed.contains("latestInboundMessageTs")
+                || changed.contains("reminderReturnedAt"))
+                && inbox_timestamp(&merged)?.is_none()
             {
                 return Some(incomplete());
             }
@@ -436,7 +446,10 @@ pub async fn projection_updates_for_write<S: Storage>(
                 "mail-calendar" | "mail-shared" | "mail-sent-ts" => {
                     changed.contains("cacheProjection")
                 }
-                "mail-inbox-ts" => changed.contains("latestInboundMessageTs"),
+                "mail-inbox-ts" => {
+                    changed.contains("latestInboundMessageTs")
+                        || changed.contains("reminderReturnedAt")
+                }
                 "mail-all-message" => changed.contains("mailAllPreview"),
                 "mail-draft-message" => changed.contains("mailDraftPreview"),
                 "mail-sent-message" => changed.contains("mailSentPreview"),

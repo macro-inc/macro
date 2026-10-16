@@ -559,7 +559,7 @@ function Gutter(props: GutterProps) {
       <Show when={props.showDivider}>
         <div
           class={cn(
-            'absolute border-edge-muted touch:hidden',
+            'absolute border-edge-frame touch:hidden',
             horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
           )}
           style={barStyle('1px')}

@@ -191,9 +191,7 @@ fn folds_session_controls_as_typed_parts() {
     let log = parse_log(concat!(
         r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"m","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
         "\n",
-        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"c","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"/compact"}]}}}"#,
-        "\n",
-        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","result":{"stopReason":"end_turn"}}}"#,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"_macro/context_summary","params":{"sessionId":"s","text":"Earlier, the user chose opus.","replaces":0}}}"#,
         "\n",
         r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
     ));
@@ -217,6 +215,7 @@ fn folds_session_controls_as_typed_parts() {
             outcome: ControlOutcome::Accepted,
         }]
     );
+    assert_eq!(messages[1].author, Author::Agent);
     assert_eq!(
         messages[2].parts.as_slice(),
         &[MessagePart::Control {
@@ -227,6 +226,56 @@ fn folds_session_controls_as_typed_parts() {
     assert_eq!(messages[0].id, TurnId(0));
     assert_eq!(messages[1].id, TurnId(1));
     assert_eq!(messages[2].id, TurnId(2));
+}
+
+/// `/compact` is a message to every harness: the transcript shows what the
+/// agent did, not what someone asked for. A compaction shows when the agent
+/// reports one, as a line of its own beside the turn it landed in, which
+/// carries on and ends as usual.
+#[test]
+fn compaction_shows_when_the_agent_reports_one_not_when_asked() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"c","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"/compact"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"What should I compact?"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"_macro/context_summary","params":{"sessionId":"s","text":"The user asked about compaction.","through":"c","replaces":2}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" Nothing yet."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","result":{"stopReason":"end_turn"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(
+        messages.len(),
+        3,
+        "the message, its reply and the compaction"
+    );
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[MessagePart::Text {
+            text: "/compact".to_owned()
+        }]
+    );
+    assert!(matches!(messages[0].author, Author::User { .. }));
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Text {
+            text: "What should I compact? Nothing yet.".to_owned()
+        }]
+    );
+    assert_eq!(messages[1].author, Author::Agent);
+    assert_eq!(messages[1].stop, Some(StopReason::EndTurn));
+    assert_eq!(
+        messages[2].parts.as_slice(),
+        &[MessagePart::Control {
+            control: Control::Compact,
+            outcome: ControlOutcome::Accepted,
+        }]
+    );
+    assert_eq!(messages[2].author, Author::Agent);
+    assert_eq!(messages[2].stop, None);
 }
 
 /// A stop pressed before the agent's first chunk - a window over ten seconds

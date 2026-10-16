@@ -27,6 +27,11 @@ const host = vi.hoisted(() => ({
   alert: vi.fn(),
   editorMount: vi.fn(),
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: flag.key === 'enable-routine-conditions',
+  }),
+}));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: host.openWithSplit }),
 }));
@@ -487,6 +492,45 @@ describe('routine composer execution selection', () => {
         filters: [
           { events: ['task.created'] },
           { events: ['email.message_received'] },
+        ],
+      },
+    });
+  });
+
+  it('saves an email trigger with an only-run-if condition', async () => {
+    host.create.mockImplementation(async (body) => created(body));
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'New email received' })
+    );
+    const condition = screen.getByRole('textbox', { name: 'Only run if' });
+    expect(condition.getAttribute('placeholder')).toBe(
+      'Is this email an invoice or a receipt?'
+    );
+    fireEvent.input(condition, {
+      target: { value: '  Is this email an invoice?  ' },
+    });
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
+        'button',
+        { name: 'Add trigger' }
+      )
+    );
+    expect(
+      screen.getByTitle('New email received · if Is this email an invoice?')
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
+    await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
+    expect(host.create.mock.calls[0][0]).toMatchObject({
+      trigger: {
+        type: 'events',
+        filters: [
+          {
+            events: ['email.message_received'],
+            condition: 'Is this email an invoice?',
+          },
         ],
       },
     });

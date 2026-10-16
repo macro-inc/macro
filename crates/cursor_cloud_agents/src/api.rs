@@ -132,10 +132,14 @@ impl std::fmt::Debug for ApiKey {
     }
 }
 
+/// The prefixes a Cursor API key carries. Cursor now mints `grok_` keys, and
+/// the `crsr_` keys minted before that still authenticate.
+const CURSOR_KEY_PREFIXES: [&str; 2] = ["crsr_", "grok_"];
+
 /// Static configuration for a [`CursorClient`].
 #[derive(Debug, Clone)]
 pub struct CursorConfig {
-    /// The API key (`crsr_…`).
+    /// The API key (`grok_…`, or `crsr_…` for older keys).
     pub api_key: ApiKey,
     /// Base url, `https://api.cursor.com` outside tests.
     pub base_url: String,
@@ -157,7 +161,7 @@ pub enum CursorClientError {
     /// diagnostics that are safe to print: enough to recognize a placeholder
     /// or a stray quote, never enough to reconstruct a real key.
     #[error(
-        "not a Cursor API key (got {length} chars starting {prefix:?}, expected a \"crsr_\" prefix)"
+        "not a Cursor API key (got {length} chars starting {prefix:?}, expected a \"grok_\" or \"crsr_\" prefix)"
     )]
     MalformedKey {
         /// Length of the offending key.
@@ -297,7 +301,10 @@ impl CursorClient {
     /// picks up in transit, so what is checked here is the key itself.
     pub fn new(config: CursorConfig) -> Result<Self, CursorClientError> {
         let key = config.api_key.expose();
-        if !key.starts_with("crsr_") {
+        if !CURSOR_KEY_PREFIXES
+            .iter()
+            .any(|prefix| key.starts_with(prefix))
+        {
             return Err(CursorClientError::MalformedKey {
                 length: key.len(),
                 prefix: key.chars().take(4).collect(),

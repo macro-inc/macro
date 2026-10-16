@@ -40,7 +40,9 @@ export function devHttps(
               cert: readFileSync(join(directory, 'server.pem')),
               key: readFileSync(join(directory, 'server-key.pem')),
             },
-            allowedHosts: [hostname],
+            // Tailscale Serve proxies a remote devbox over HTTP/2 under its
+            // MagicDNS name; Vite's HMR socket rejects hosts not listed here.
+            allowedHosts: [hostname, '.ts.net'],
           },
         };
       } finally {

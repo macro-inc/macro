@@ -12,20 +12,30 @@ use crate::{constants::header_names, error::ResultExt, secrets::Secrets};
 pub enum AccessLevel {
     #[default]
     View = 0,
-    /// Legacy document sockets permit Comment writes; surfaces do not.
+    /// Document sockets may write comment marks; surfaces may not write.
     Comment = 1,
     Edit = 2,
     Owner = 3,
     Admin = 4,
 }
 
+/// What a session may change in the document it is connected to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WriteAccess {
+    None,
+    /// Comment anchors live in the document body, so commenting writes it;
+    /// every other change must be rejected.
+    CommentMarks,
+    Full,
+}
+
 impl AccessLevel {
-    pub fn can_edit_for(&self, kind: SessionKind) -> bool {
-        let minimum = match kind {
-            SessionKind::Document => Self::Comment,
-            SessionKind::Surface => Self::Edit,
-        };
-        self >= &minimum
+    pub fn write_access_for(&self, kind: SessionKind) -> WriteAccess {
+        match (self, kind) {
+            (Self::View, _) | (Self::Comment, SessionKind::Surface) => WriteAccess::None,
+            (Self::Comment, SessionKind::Document) => WriteAccess::CommentMarks,
+            (Self::Edit | Self::Owner | Self::Admin, _) => WriteAccess::Full,
+        }
     }
 }
 

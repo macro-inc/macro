@@ -1,11 +1,14 @@
 import MacroLogo from '@icon/macro-logo.svg';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { FeaturePage } from '../../features/marketing/components/FeaturePage';
 import {
   DESKTOP_RELEASE_API_URL,
   DESKTOP_RELEASE_URL,
   type DesktopDownloadUrls,
+  type DesktopPlatform,
+  desktopReleaseVersion,
+  detectDesktopPlatform,
   FALLBACK_DOWNLOAD_URLS,
   releaseDownloadUrls,
 } from '../../features/marketing/core/desktopDownloads';
@@ -15,18 +18,20 @@ import './RouteDownload.css';
 
 export function RouteDownload() {
   setPageSeo({
-    title: 'Download Macro for macOS',
-    description:
-      'Download the latest release of Macro for macOS. Available for Apple silicon Macs.',
+    title: 'Download Macro for macOS and Linux',
+    description: 'Download the latest release of Macro for macOS and Linux.',
     path: '/download',
   });
 
   const [downloads, setDownloads] = createSignal<DesktopDownloadUrls>(
     FALLBACK_DOWNLOAD_URLS
   );
-  const [releaseTag, setReleaseTag] = createSignal<string>();
+  const [platform, setPlatform] = createSignal<DesktopPlatform>('macos');
+  const downloadUrl = () => downloads()[platform()];
+  const releaseVersion = () => desktopReleaseVersion(downloadUrl());
 
   onMount(() => {
+    setPlatform(detectDesktopPlatform(navigator.userAgent));
     const controller = new AbortController();
     const loadLatestRelease = async () => {
       try {
@@ -35,12 +40,10 @@ export function RouteDownload() {
           signal: controller.signal,
         });
         if (!response.ok) throw new Error('Unable to load desktop release');
-        const release = await response.json();
-        setDownloads(releaseDownloadUrls(release));
-        if (typeof release.tag_name === 'string')
-          setReleaseTag(release.tag_name);
+        const releases = await response.json();
+        setDownloads(releaseDownloadUrls(releases));
       } catch {
-        // The release page remains a usable fallback if the API is unavailable.
+        // Keep direct installer links usable if GitHub is unavailable or rate-limited.
       }
     };
     void loadLatestRelease();
@@ -55,22 +58,24 @@ export function RouteDownload() {
             <MacroLogo />
           </div>
           <h1>Download Macro</h1>
-          <p>Available for macOS.</p>
+          <p>Available for macOS and Linux</p>
         </header>
 
         <div class="downloads-action">
-          <a class="site-nav-start" href={downloads().macos}>
-            Download for macOS
+          <a class="site-nav-start" href={downloadUrl()}>
+            Download for {platform() === 'linux' ? 'Linux' : 'macOS'}
           </a>
-          <p>Apple silicon · DMG</p>
         </div>
 
         <p class="downloads-release">
           <a href={DESKTOP_RELEASE_URL} target="_blank" rel="noreferrer">
-            {releaseTag() ? `Release ${releaseTag()}` : 'Latest release'}
+            All releases
             <ArrowUpRight aria-hidden="true" />
           </a>
         </p>
+        <Show when={releaseVersion()}>
+          {(version) => <p class="downloads-version">{version()}</p>}
+        </Show>
       </div>
       <SectionMoreFeatures currentPath="/download" footerOnly />
     </FeaturePage>

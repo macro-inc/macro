@@ -1,6 +1,7 @@
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlatformNotificationState } from '../components/PlatformNotificationProvider';
+import { openNotification } from '../notification-navigation';
 import type { PlatformNotificationHandle } from '../notification-platform';
 import type { UnifiedNotification } from '../types';
 
@@ -244,6 +245,37 @@ describe('maybeHandlePlatformNotification', () => {
       })
     );
     expect(handle.onClick).toHaveBeenCalledOnce();
+  });
+
+  it('opens the original notification target only when its platform handle is clicked', async () => {
+    const focus = vi.spyOn(window, 'focus').mockImplementation(() => {});
+    vi.mocked(openNotification).mockClear();
+    try {
+      let click: (() => void) | undefined;
+      const handle = createNotificationHandle();
+      handle.onClick = (callback) => {
+        click = callback;
+      };
+      const notification = createChannelInviteNotification();
+      const layout = {} as SplitManager;
+      await maybeHandlePlatformNotification(
+        notification,
+        createNotificationInterface(async () => handle),
+        layout
+      );
+      expect(openNotification).not.toHaveBeenCalled();
+      expect(handle.close).not.toHaveBeenCalled();
+      expect(click).toBeDefined();
+      click!();
+      expect(focus).toHaveBeenCalledOnce();
+      expect(openNotification).toHaveBeenCalledExactlyOnceWith(
+        notification,
+        layout
+      );
+      expect(handle.close).toHaveBeenCalledOnce();
+    } finally {
+      focus.mockRestore();
+    }
   });
 
   it('names the bot, not "Someone", for an agent notification with no sender', async () => {

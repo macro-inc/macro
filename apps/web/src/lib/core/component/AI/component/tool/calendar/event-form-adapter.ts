@@ -66,9 +66,11 @@ export function createCalendarEventToEditorInitialValues(
       .join(', '),
     location: event.location ?? '',
     description: event.description ?? '',
-    conference: event.addGoogleMeet
-      ? ('google_meet' as const)
-      : ('none' as const),
+    conference: event.addMacroCall
+      ? ('macro' as const)
+      : event.addGoogleMeet
+        ? ('google_meet' as const)
+        : ('none' as const),
     reminders: cloneReminders(event.reminders),
     eventType: isOutOfOffice ? ('out_of_office' as const) : undefined,
     outOfOffice: isOutOfOffice
@@ -158,11 +160,11 @@ export function editorSubmitValuesToCreateCalendarEvent(
     attendees: attendees(values.guestEmails, original.attendees),
     recurrenceLines: values.recurrenceLines ?? original.recurrenceLines ?? [],
     calendarId: values.calendarId,
-    addGoogleMeet: outOfOffice
-      ? false
-      : values.conference === undefined
-        ? original.addGoogleMeet
-        : values.conference === 'google_meet',
+    // `conferenceChoice` is the user's current pick, including the
+    // client-recognized Macro call the provider-level `conference` never
+    // carries; an out-of-office event takes no conferencing at all.
+    addMacroCall: !outOfOffice && values.conferenceChoice === 'macro',
+    addGoogleMeet: !outOfOffice && values.conferenceChoice === 'google_meet',
     reminders: cloneReminders(values.reminders ?? original.reminders),
     eventType: outOfOffice
       ? 'out_of_office'

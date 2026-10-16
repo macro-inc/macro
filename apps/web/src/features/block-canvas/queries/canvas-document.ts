@@ -1,5 +1,5 @@
 import { storageServiceClient } from '@service-storage/client';
-import type { Canvas } from '../model/CanvasModel';
+import type { CanvasFile } from '../core/document-format';
 
 export type CanvasViewLocation = {
   x?: number;
@@ -31,7 +31,7 @@ export async function fetchCanvasViewLocation(
 
 export async function saveCanvasDocument(
   documentId: string,
-  canvas: Canvas
+  canvas: CanvasFile
 ): Promise<{ file: Blob; saved: boolean }> {
   const buffer = new TextEncoder().encode(JSON.stringify(canvas));
   const file = new Blob([buffer], {

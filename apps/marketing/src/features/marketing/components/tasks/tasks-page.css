@@ -1,0 +1,187 @@
+/* Tasks owns the story and geometry; shared feature pages keep their styling. */
+.tasks-page .email-desktop-demo {
+	--desktop-stage-width: min(1120px, 92vw);
+}
+.tasks-page .email-desktop-wallpaper {
+	padding: 32px;
+}
+.tasks-page .email-desktop-content {
+	height: 540px;
+}
+.tasks-page .email-desktop-content .product-demo {
+	height: 100%;
+	border-radius: 0;
+	mask-image: none;
+	-webkit-mask-image: none;
+}
+.tasks-page .email-desktop-content .product-demo-stage {
+	height: 100%;
+}
+.tasks-page .email-desktop-content .product-demo-stage::before {
+	display: none;
+}
+.tasks-page .tasks-founder-letter blockquote {
+	color: #ccc;
+	font-size: 19px;
+	line-height: 1.65;
+	margin: 0;
+}
+.tasks-page .tasks-founder-letter footer {
+	margin: 12px 0 24px;
+}
+.tasks-page .tasks-founder-letter p {
+	max-width: 760px;
+}
+.tasks-page .product-prose a {
+	color: #ddd;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+.tasks-page .homepage-feature-end {
+	width: min(872px, 100%);
+	margin-inline: auto;
+}
+.task-project-view {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	height: 100%;
+	overflow: hidden;
+}
+.task-source-close {
+	position: absolute;
+	right: 8px;
+	top: 54px;
+	z-index: 5;
+	background: var(--color-panel);
+}
+.task-plan-link {
+	margin-top: 16px;
+}
+.task-due-date {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	border-radius: 999px;
+	padding: 3px 8px;
+	background: var(--color-surface-2);
+	border: 1px solid var(--color-edge-muted);
+}
+.task-checklist-doc h2:not(:first-child) {
+	margin-top: 24px;
+}
+.task-checklist-doc .task-checklist-after {
+	margin-top: 12px;
+}
+.task-checklist-doc .sample-task-mention {
+	max-width: 100%;
+}
+.tasks-page .task-checklist-toolbar > button:disabled {
+	opacity: 0.5;
+}
+@media (max-width: 699px) {
+	.tasks-page .email-desktop-demo {
+		--desktop-stage-width: calc(100vw - 24px);
+	}
+	.tasks-page .email-desktop-wallpaper {
+		padding: 16px 10px;
+	}
+	.tasks-page .email-desktop-content {
+		height: 600px;
+	}
+	.tasks-page .tasks-founder-letter blockquote {
+		font-size: 17px;
+	}
+}
+.task-checklist-select { display: block; width: 100%; text-align: left; }
+.task-checklist-select-row { display: flex; align-items: center; gap: 10px; min-height: 38px; font-size: 15px; }
+.task-checklist-select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+.task-checklist-owner { color: var(--color-accent); white-space: nowrap; }
+
+/* Show the whole Tasks workspace, including its navigation and editable list. */
+.tasks-page .email-desktop-demo[data-desktop-canvas=true] {
+  --desktop-stage-width: min(1280px, 94vw);
+}
+.tasks-page .email-desktop-demo[data-desktop-canvas=true] .email-desktop-wallpaper {
+  padding: 32px;
+}
+.tasks-page .tasks-founder-person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+}
+.tasks-founder-person img { border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.tasks-founder-person strong { display: block; color: #ddd; font-weight: 500; font-size: 14px; }
+.tasks-founder-person span { display: block; color: #999; font-size: 13px; }
+@media (max-width: 699px) {
+  .tasks-page .email-desktop-demo[data-desktop-canvas=true] { --desktop-stage-width: calc(100vw - 24px); }
+  .tasks-page .email-desktop-demo[data-desktop-canvas=true] .email-desktop-wallpaper { padding: 16px 10px; }
+}
+
+/* Task details grow to fit their discussion. The fade is outside the content,
+   not extra space the visitor has to scroll through to reach the composer. */
+.tasks-page .feature-page-visual .product-demo:has(.sample-detail-layout) {
+  height: auto;
+  min-height: calc(var(--product-demo-height) + var(--product-demo-fade-tail));
+}
+.tasks-page .feature-page-visual .product-demo:has(.sample-detail-layout) > .dummy-main,
+.tasks-page .feature-page-visual .product-demo:has(.sample-detail-layout) .task-project-view {
+  height: auto;
+  flex: 1 0 auto;
+}
+.tasks-page .feature-page-visual .sample-detail-layout {
+  flex: 1 0 auto;
+}
+.tasks-page .feature-page-visual .sample-detail-content > .dummy-scroll {
+  flex: 1 0 auto;
+  overflow: visible;
+}
+
+
+
+/* One editorial block connects Jacob's quote to his related article. */
+.tasks-page .tasks-founder-letter { margin-bottom: 24px; }
+.tasks-founder-card {
+  display: block;
+  overflow: hidden;
+  border: 1px solid #ffffff20;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #181819, #101011);
+  text-decoration: none;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.tasks-founder-card:hover { border-color: #ffffff50; }
+.tasks-founder-card:focus-visible { outline: 2px solid #bbb; outline-offset: 5px; }
+.tasks-founder-card-body { padding: 32px; }
+.tasks-founder-card .tasks-founder-person { margin: 24px 0 0; }
+.tasks-founder-card-article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 32px;
+  border-top: 1px solid #ffffff15;
+  color: #ddd;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.tasks-founder-card-article > span:last-child { color: #aaa; white-space: nowrap; }
+.tasks-founder-card:hover .tasks-founder-card-article > span:last-child { color: #fff; }
+@media (max-width: 699px) {
+  .tasks-founder-card-body { padding: 24px; }
+  .tasks-page .tasks-founder-card h2 { font-size: 25px; margin-bottom: 18px; }
+  .tasks-founder-card-article { padding: 16px 24px; gap: 12px; font-size: 13px; }
+  .tasks-founder-card .tasks-founder-person { gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .tasks-founder-card { transition: none; } }
+
+@media (max-width: 699px) {
+  .tasks-page .email-page-hero > .email-page-hero-description {
+    font-size: clamp(11px, 2.6vw, 14px);
+    white-space: nowrap;
+  }
+}

@@ -1,4 +1,6 @@
 {
+  "git+https://github.com/signalapp/tungstenite-rs?rev=a1837ccfe96b6895a57352d7f0112e4557516c27#a1837ccfe96b6895a57352d7f0112e4557516c27" =
+    "sha256-yGGTDdIpvW+skch46bHAa201WolofJC5KKwCcPfDTVs=";
   "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
     "sha256-7Noz7RMN+4nhlU5BBLzxZZ53nNFGewrr8BFMO1adkCo=";
   "git+https://github.com/whutchinson98/jsonwebtoken#c8c0d19511a0e7ba9d456e21437a79d321e99f16" =

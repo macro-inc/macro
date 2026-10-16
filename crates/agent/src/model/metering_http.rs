@@ -56,8 +56,33 @@ impl<H> MeteredHttpClient<H> {
 
     async fn prepare(
         &self,
-        request: Request<Bytes>,
+        mut request: Request<Bytes>,
     ) -> http_client::Result<(Request<Bytes>, Option<Attempt>)> {
+        if self.protocol == WireProtocol::Anthropic
+            && serde_json::from_slice::<Value>(request.body())
+                .ok()
+                .is_some_and(|body| body.get("speed").is_some_and(|speed| speed == "fast"))
+        {
+            let beta = "fast-mode-2026-02-01";
+            let existing = request
+                .headers()
+                .get("anthropic-beta")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default();
+            if !existing.split(',').any(|value| value.trim() == beta) {
+                let value = if existing.is_empty() {
+                    beta.to_owned()
+                } else {
+                    format!("{existing},{beta}")
+                };
+                request.headers_mut().insert(
+                    "anthropic-beta",
+                    value
+                        .parse()
+                        .map_err(|_| http_error(MeteringError::Unsupported))?,
+                );
+            }
+        }
         let Some(context) = MeteringContext::current().filter(MeteringContext::enabled) else {
             return Ok((request, None));
         };
@@ -79,7 +104,7 @@ impl<H> MeteredHttpClient<H> {
         })();
         let (mut body, model) = match parsed {
             Ok(parsed) => parsed,
-            Err(error) if !context.activated() => {
+            Err(error) if !context.activated() && !context.records_per_call() => {
                 tracing::error!(error = ?error, "cannot identify provider attempt; observation not persisted");
                 return Ok((request, None));
             }
@@ -160,10 +185,12 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                                 request_id(&parts.headers),
                             );
                             facts.response(&bytes);
-                            attempt
+                            let pricing =
+                                attempt.record_cost(facts.evidence(), facts.delivered_speed());
+                            let finalized = attempt
                                 .finish(facts.outcome, facts.evidence(), facts.request_id)
-                                .await
-                                .map_err(http_error)?;
+                                .await;
+                            pricing.and(finalized).map_err(http_error)?;
                             let body: LazyBody<U> = Box::pin(async move { Ok(U::from(bytes)) });
                             Ok(Response::from_parts(parts, body))
                         }
@@ -256,16 +283,20 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                                 decoder.push(bytes, &mut facts);
                                 if facts.terminal
                                     && let Some(attempt) = attempt.take()
-                                    && let Err(error) = attempt
+                                {
+                                    let pricing = attempt
+                                        .record_cost(facts.evidence(), facts.delivered_speed());
+                                    let finalized = attempt
                                         .finish(
                                             facts.outcome,
                                             facts.evidence(),
                                             facts.request_id.clone(),
                                         )
-                                        .await
-                                {
-                                    let _ = tx.send(Err(http_error(error))).await;
-                                    return;
+                                        .await;
+                                    if let Err(error) = pricing.and(finalized) {
+                                        let _ = tx.send(Err(http_error(error))).await;
+                                        return;
+                                    }
                                 }
                             }
                             Err(_) => {
@@ -340,10 +371,9 @@ async fn finish_failure(attempt: Attempt, error: &http_client::Error) -> http_cl
             evidence = facts.evidence();
         }
     }
-    attempt
-        .finish(outcome, evidence, facts.request_id)
-        .await
-        .map_err(http_error)
+    let pricing = attempt.record_cost(evidence, facts.delivered_speed());
+    let finalized = attempt.finish(outcome, evidence, facts.request_id).await;
+    pricing.and(finalized).map_err(http_error)
 }
 
 /// Raw provider facts: never use Rig's generic Usage defaults, which replace
@@ -353,6 +383,7 @@ struct Facts {
     zero_usage_is_missing: bool,
     request_id: Option<ProviderRequestId>,
     usage: Option<Value>,
+    service_tier: Option<String>,
     terminal: bool,
     invalid: bool,
     outcome: ProviderOutcome,
@@ -369,6 +400,7 @@ impl Facts {
             zero_usage_is_missing,
             request_id,
             usage: None,
+            service_tier: None,
             terminal: false,
             invalid: false,
             outcome: ProviderOutcome::Succeeded,
@@ -389,6 +421,10 @@ impl Facts {
         match serde_json::from_slice::<Value>(bytes) {
             Ok(value) => {
                 self.identify(&value);
+                self.service_tier = value
+                    .get("service_tier")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
                 self.usage = value
                     .get(if self.protocol == WireProtocol::Gemini {
                         "usageMetadata"
@@ -463,6 +499,10 @@ impl Facts {
                     value.get("type").and_then(Value::as_str),
                     Some("response.completed" | "response.incomplete" | "response.failed")
                 ) {
+                    self.service_tier = value
+                        .pointer("/response/service_tier")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned);
                     self.usage = value.pointer("/response/usage").cloned();
                     self.terminal = true;
                     if value["type"] == "response.failed" {
@@ -493,6 +533,17 @@ impl Facts {
                     self.terminal = true;
                 }
             }
+        }
+    }
+
+    fn delivered_speed(&self) -> Option<&str> {
+        if self.protocol == WireProtocol::Anthropic {
+            self.usage
+                .as_ref()
+                .and_then(|usage| usage.get("speed"))
+                .and_then(Value::as_str)
+        } else {
+            self.service_tier.as_deref()
         }
     }
 

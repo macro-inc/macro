@@ -1,4 +1,5 @@
 import AlignMiddle from '@phosphor/align-center-vertical-simple.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import Check from '@phosphor/check.svg';
 import PaintBucket from '@phosphor/paint-bucket.svg';
 import Sigma from '@phosphor/sigma.svg';
@@ -10,6 +11,7 @@ import TextAlignRight from '@phosphor/text-align-right.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import {
+  SPREADSHEET_DATE_FORMATS,
   SPREADSHEET_FUNCTIONS,
   SPREADSHEET_NUMBER_FORMATS,
   SPREADSHEET_ZOOM_LEVELS,
@@ -116,6 +118,52 @@ export function ZoomMenu(props: SpreadsheetToolbarProps) {
   );
 }
 
+function DateFormatsMenu(props: SpreadsheetToolbarProps) {
+  return (
+    <Dropdown.Sub>
+      <Dropdown.SubTrigger
+        disabled={props.readonly}
+        class="h-8 gap-2 touch:h-auto touch:min-h-[44px]"
+      >
+        <span class="size-3.5 shrink-0" />
+        <span class="flex-1">Date formats</span>
+        <CaretRight class="size-3.5 shrink-0" />
+      </Dropdown.SubTrigger>
+      <Dropdown.SubContent class="max-w-[calc(100vw-1rem)] text-sm text-ink touch:text-[max(14px,0.875rem)]">
+        <Dropdown.Group>
+          <For each={SPREADSHEET_DATE_FORMATS}>
+            {(date) => (
+              <Choice
+                disabled={props.readonly}
+                selected={
+                  props.cell?.format === 'date' &&
+                  props.cell.numberFormat === date.numberFormat
+                }
+                onSelect={() =>
+                  props.onStyle({
+                    format: 'date',
+                    numberFormat: date.numberFormat,
+                  })
+                }
+              >
+                {date.example}
+              </Choice>
+            )}
+          </For>
+        </Dropdown.Group>
+        <Dropdown.Group>
+          <Choice
+            disabled={props.readonly}
+            onSelect={() => props.onCommand('custom-date-format')}
+          >
+            Custom date and time…
+          </Choice>
+        </Dropdown.Group>
+      </Dropdown.SubContent>
+    </Dropdown.Sub>
+  );
+}
+
 export function NumberFormatMenu(props: SpreadsheetToolbarProps) {
   return (
     <ToolbarMenu
@@ -126,14 +174,19 @@ export function NumberFormatMenu(props: SpreadsheetToolbarProps) {
     >
       <For each={SPREADSHEET_NUMBER_FORMATS}>
         {(format) => (
-          <Choice
-            disabled={props.readonly}
-            selected={(props.cell?.format ?? 'general') === format.value}
-            description={format.example}
-            onSelect={() => props.onStyle({ format: format.value })}
-          >
-            {format.label}
-          </Choice>
+          <>
+            <Choice
+              disabled={props.readonly}
+              selected={(props.cell?.format ?? 'general') === format.value}
+              description={format.example}
+              onSelect={() => props.onStyle({ format: format.value })}
+            >
+              {format.label}
+            </Choice>
+            <Show when={format.value === 'date'}>
+              <DateFormatsMenu {...props} />
+            </Show>
+          </>
         )}
       </For>
     </ToolbarMenu>

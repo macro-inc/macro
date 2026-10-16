@@ -7,13 +7,13 @@ import IconGithub from '../../../assets/icons/icon-github.svg';
 import markDesyncPlaceholder from '../../../assets/mark-desync-placeholder.jpg';
 import placeholderChannelsUrl from '../../../assets/placeholderchannels.webp';
 import teamVideoUrl from '../../../assets/team-russell-boswell.mp4';
-import { buildCalLinkWithAttribution } from '../../utils/utilAnalytic';
 import { APP_BASE_URL } from '../../utils/utilBaseUrl';
 import { breakpoint, viewportWidth } from '../../utils/utilBreakpoint';
 import {
   CtaIcon,
   ctaHref,
   ctaLabel,
+  demoHref,
   handleCtaClick,
 } from '../../utils/utilCta';
 import {
@@ -610,7 +610,7 @@ function TeamMemberCard(props: { member: { name: string; tags: string[] } }) {
             'font-family': 'display',
             'font-size':
               viewportWidth() < 700 ? '30px' : breakpoint() ? '34px' : '30px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.02em',
             'line-height': 1.05,
             margin: '0',
@@ -699,7 +699,7 @@ function ComparisonCard(props: {
           style={{
             'font-family': 'display',
             'font-size': viewportWidth() < 700 ? '19px' : '18px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'line-height': 1.12,
             margin: '0',
           }}
@@ -811,7 +811,7 @@ function FinalBentoCta() {
                     : compact()
                       ? '47px'
                       : '51px',
-              'font-weight': '315',
+              'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
               'letter-spacing': '-0.015em',
               'line-height': 1.08,
               margin: 0,
@@ -1227,7 +1227,7 @@ export function OpenSourceBento() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '32px' : '38px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.015em',
             'line-height': 1.12,
             margin: 0,
@@ -1581,7 +1581,7 @@ export function SectionFeatureGrid(
               color: 'var(--c1)',
               'font-family': 'display',
               'font-size': mobile() ? '34px' : '44px',
-              'font-weight': '315',
+              'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
               'letter-spacing': '-0.015em',
               'line-height': 1.2,
               margin: 0,
@@ -1928,7 +1928,8 @@ export function SectionFeatureGrid(
               style={{
                 'font-family': 'display',
                 'font-size': mobile() ? '55px' : breakpoint() ? '57px' : '53px',
-                'font-weight': '315',
+                'font-weight':
+                  'calc(315 + var(--cream-slab-weight-increase, 0))',
                 'letter-spacing': '-0.015em',
                 'line-height': 1.08,
                 margin: '0',
@@ -2023,9 +2024,7 @@ export function SectionFeatureGrid(
               </Show>
             </div>
             <a
-              href={buildCalLinkWithAttribution(
-                'https://cal.com/team/macro/macro-demo-call'
-              )}
+              href={demoHref()}
               target="_blank"
               rel="noopener noreferrer"
               class="hover-color"
@@ -2315,7 +2314,8 @@ export function SectionFeatureGrid(
                   : stacked()
                     ? '28px'
                     : '51px',
-                'font-weight': '315',
+                'font-weight':
+                  'calc(315 + var(--cream-slab-weight-increase, 0))',
                 'letter-spacing':
                   narrowDesktop() || stacked() ? 'normal' : '-0.015em',
                 'line-height': narrowDesktop() || stacked() ? 1.12 : 1.08,
@@ -2377,7 +2377,8 @@ export function SectionFeatureGrid(
                     display: 'grid',
                     'font-family': 'display',
                     'font-size': mobile() ? '22px' : '24px',
-                    'font-weight': '315',
+                    'font-weight':
+                      'calc(315 + var(--cream-slab-weight-increase, 0))',
                     'grid-template-columns': 'auto minmax(0, 1fr)',
                     gap: '14px',
                     'line-height': 1.12,

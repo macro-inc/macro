@@ -45,7 +45,7 @@ export function SectionHero() {
             'line-height': 1.1,
             'font-size': isCompact() ? '31px' : breakpoint() ? '40px' : '52px',
             'font-family': 'display',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
           }}
         >
           The new office suite.

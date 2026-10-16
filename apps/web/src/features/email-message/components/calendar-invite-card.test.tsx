@@ -14,7 +14,10 @@ vi.mock('@ui', async () => ({
     <button {...props} />
   ),
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 const resolved: InvitationResolution = {
   kind: 'resolved',
   eventId: 'event',
@@ -157,5 +160,118 @@ describe('native invitation card', () => {
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull();
     expect(screen.getByText(/Responses are paused/)).toBeTruthy();
+  });
+  it('renders formatted descriptions and keeps lists outside paragraphs', () => {
+    const htmlInvitation = {
+      ...invitationFixture,
+      description:
+        '<p>Meeting details with <strong>bold</strong> and <a href="https://example.com">link</a></p><ul><li>First item</li><li>Second item</li></ul>',
+    };
+    render(() => <CalendarInviteCard invitation={htmlInvitation} />);
+    const description = screen.getByText(/Meeting details/);
+    expect(description.querySelector('strong')?.textContent).toBe('bold');
+    expect(
+      screen.getByRole('link', { name: 'link' }).getAttribute('href')
+    ).toBe('https://example.com/');
+    expect(
+      screen.getByText('First item').closest('ul')?.previousElementSibling
+    ).toBe(description);
+    expect(screen.getByText('Second item').tagName).toBe('LI');
+    expect(description.textContent).not.toContain('<strong>');
+  });
+  it('removes active markup and unsafe URLs from descriptions', () => {
+    const { container } = render(() => (
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description:
+            '<p onclick="alert(1)">Safe text<script>alert(1)</script><img src="x" onerror="alert(1)"><a href="javascript:alert(1)">unsafe link</a></p>',
+        }}
+      />
+    ));
+    expect(screen.getByText(/Safe text/).textContent).toBe(
+      'Safe textunsafe link'
+    );
+    expect(
+      container.querySelector('script, img, [onclick], [onerror]')
+    ).toBeNull();
+    expect(screen.queryByRole('link', { name: 'unsafe link' })).toBeNull();
+  });
+  it.each([
+    'https://example.com/',
+    'mailto:bob@example.com',
+    'tel:+15555550100',
+  ])('opens description links through the host: %s', (url) => {
+    const openExternal = vi.fn();
+    render(() => (
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description: `<p><a href="${url}"><strong>Details</strong></a></p>`,
+        }}
+        actions={{ openExternal }}
+      />
+    ));
+    expect(fireEvent.click(screen.getByText('Details'))).toBe(false);
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith(url);
+  });
+  it('opens links in a new tab when the card has no host action', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(() => (
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description: '<p><a href="https://example.com">Meeting notes</a></p>',
+        }}
+      />
+    ));
+    expect(
+      fireEvent.click(screen.getByRole('link', { name: 'Meeting notes' }))
+    ).toBe(false);
+    expect(open).toHaveBeenCalledExactlyOnceWith(
+      'https://example.com/',
+      '_blank',
+      'noopener,noreferrer'
+    );
+  });
+  it('escapes angle brackets in plain text descriptions', () => {
+    const plainTextInvitation = {
+      ...invitationFixture,
+      description: 'Email <bob@example.com> for questions\nOwner: <TBD>',
+    };
+    render(() => <CalendarInviteCard invitation={plainTextInvitation} />);
+    const description = screen.getByText(/Email/);
+    expect(description.textContent).toContain('<bob@example.com>');
+    expect(description.textContent).toContain('Owner: <TBD>');
+    expect(description.querySelector('br')).not.toBeNull();
+    expect(description.querySelector('bob, tbd')).toBeNull();
+  });
+  it('updates the sanitized description when the calendar resolves newer details', () => {
+    const [resolution, setResolution] = createSignal<InvitationResolution>({
+      kind: 'loading',
+    });
+    render(() => (
+      <CalendarInviteCard
+        invitation={{
+          ...invitationFixture,
+          description: '<p>Original details</p>',
+        }}
+        actions={{
+          get resolution() {
+            return resolution();
+          },
+        }}
+      />
+    ));
+    expect(screen.getByText('Original details')).toBeTruthy();
+    setResolution({
+      ...resolved,
+      current: {
+        ...invitationFixture,
+        description: '<p><strong>Updated details</strong></p>',
+      },
+    });
+    expect(screen.queryByText('Original details')).toBeNull();
+    expect(screen.getByText('Updated details').tagName).toBe('STRONG');
   });
 });

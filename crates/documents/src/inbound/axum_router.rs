@@ -7,6 +7,7 @@
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
+//! - `POST /github_prs/tasks` — get the tasks linked to each of a batch of GitHub pull requests
 //! - `GET /{document_id}/short_id` — get document short ID
 //! - `GET`/`PUT /{document_id}/team_share` — get/set the document's team-share state
 //! - `POST /create_markdown` — create and initialize a markdown document
@@ -34,6 +35,7 @@ pub mod get_branch_name;
 pub mod get_cached_snapshot_url;
 pub mod get_document;
 pub mod get_document_by_team_slug;
+pub mod get_github_pull_request_tasks;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
@@ -79,6 +81,7 @@ use self::{
     get_cached_snapshot_url::get_cached_snapshot_url_handler,
     get_document::get_document_handler,
     get_document_by_team_slug::get_document_by_team_slug_handler,
+    get_github_pull_request_tasks::get_github_pull_request_tasks_handler,
     get_github_pull_requests::get_github_pull_requests_handler,
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
@@ -305,6 +308,10 @@ where
         .route(
             "/create_task",
             axum::routing::post(create_task_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/github_prs/tasks",
+            axum::routing::post(get_github_pull_request_tasks_handler::<T, Svc, Auth>),
         )
         .route(
             "/similarity_search",

@@ -50,6 +50,7 @@ async fn successful_response_serializes_available_catalog() {
             models: vec![agent_fold::domain::model::ModelOption {
                 id: "fast".to_owned(),
                 name: "Fast".to_owned(),
+                supports_images: None,
                 description: None,
                 group: None,
             }],

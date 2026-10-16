@@ -26,6 +26,12 @@ pub trait MessageReader: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError>;
+    /// Read a parent's discussions and timeline activity as one ordered page.
+    async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError>;
 
     /// Read live history preceding a prompt, scoped by its parent.
     async fn preceding(
@@ -96,6 +102,20 @@ pub trait MessageCommands: Send + Sync + 'static {
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError>;
+    /// Publish an agent session typing through the bot that speaks for it.
+    ///
+    /// Defaults to plain typing, which drops the session: an adapter that
+    /// cannot carry it still shows the bot typing.
+    async fn agent_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root: Option<Uuid>,
+        active: bool,
+        agent: AgentTyping,
+    ) -> Result<(), MessageError> {
+        let _ = agent;
+        self.typing(access, root, active, None).await
+    }
     /// Update entity discussion state or detach removed document Markdown text.
     async fn patch_thread(
         &self,
@@ -139,6 +159,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
         MessageService::timeline(self, access, query).await
+    }
+    async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        MessageService::timeline_entries(self, access, query).await
     }
 
     async fn preceding(
@@ -214,6 +241,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
     ) -> Result<(), MessageError> {
         MessageService::typing(self, access, root, active, nonce).await
     }
+    async fn agent_typing(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        root: Option<Uuid>,
+        active: bool,
+        agent: AgentTyping,
+    ) -> Result<(), MessageError> {
+        MessageService::agent_typing(self, access, root, active, agent).await
+    }
     async fn patch_thread(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -256,6 +292,12 @@ mockall::mock! {
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError>;
+    /// Read a parent's discussions and timeline activity as one ordered page.
+    async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError>;
 
     /// Read live history preceding a prompt, scoped by its parent.
     async fn preceding(

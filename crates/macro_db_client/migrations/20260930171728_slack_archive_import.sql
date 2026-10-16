@@ -191,13 +191,19 @@ CREATE TABLE slack_import_upload (
     verified_at timestamptz,
     verified_version_id text CHECK (length(verified_version_id) > 0),
     verified_etag text CHECK (length(verified_etag) > 0),
-    UNIQUE NULLS NOT DISTINCT (job_id, slack_channel_id, part_index),
+    UNIQUE (job_id, slack_channel_id, part_index),
     FOREIGN KEY (job_id, slack_channel_id)
         REFERENCES slack_import_conversation (job_id, slack_channel_id) ON DELETE CASCADE,
     CHECK (num_nonnulls(slack_channel_id, part_index, record_count) IN (0, 3)),
     CHECK ((verified_at IS NOT NULL) =
         (verified_version_id IS NOT NULL OR verified_etag IS NOT NULL))
 );
+
+-- PostgreSQL 14 does not support UNIQUE NULLS NOT DISTINCT. The check above
+-- requires channel/index to be both present or both absent, so the ordinary
+-- unique constraint covers conversation parts and this index covers users.
+CREATE UNIQUE INDEX slack_import_upload_one_users_per_job
+    ON slack_import_upload (job_id) WHERE slack_channel_id IS NULL;
 
 -- Lock job before conversation in every registration/seal transaction. This
 -- makes a concurrent seal/finalize and registration serialize on the same row.
@@ -340,4 +346,3 @@ CREATE INDEX slack_import_message_map_message_idx ON slack_import_message_map (m
 ALTER TABLE import_entity DROP CONSTRAINT import_entity_initiator_check;
 ALTER TABLE import_entity ADD CONSTRAINT import_entity_initiator_check
     CHECK (initiator IN ('onboarding', 'chat', 'archive'));
-

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id FROM ai_billing_usage_period WHERE user_id = ANY($1)\n             AND policy = 'public_allowance_v1' AND period_start < $3 AND period_end > $2\n             AND NOT EXISTS (\n                 SELECT 1 FROM ai_billing_plan_change AS change\n                 WHERE change.user_id = ai_billing_usage_period.user_id\n                   AND change.period_start = ai_billing_usage_period.period_start\n                   AND change.changed_at < $3\n                   AND (change.new_plan = 'max' OR change.previous_plan = 'max' AND change.changed_at > change.period_start)\n             )",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6b4e7c66c526999588ba3cd6e28a753686363434b474181c6511702fba18984e"
+}

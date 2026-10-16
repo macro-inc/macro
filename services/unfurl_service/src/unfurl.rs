@@ -2,6 +2,7 @@ use anyhow::Error;
 use futures::StreamExt;
 use scraper::{Html, Selector};
 use std::collections::HashMap;
+use tracing::Level;
 use url::Url;
 
 use crate::http_safety::{
@@ -113,7 +114,7 @@ impl From<FetchError> for UnfurlFetchError {
     }
 }
 
-#[tracing::instrument(err(Debug), skip(client))]
+#[tracing::instrument(err(Debug, level = Level::DEBUG), skip(client))]
 pub async fn extract_meta_tags_prod(
     client: &reqwest::Client,
     raw_url: &str,

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT stored_for_id AS \"user_id!\" FROM foreign_entity\n        WHERE id = $1 AND stored_for_auth_entity = 'user'\n        UNION\n        SELECT tu.user_id AS \"user_id!\"\n        FROM foreign_entity fe\n        JOIN team_user tu ON tu.team_id = CASE\n            WHEN fe.stored_for_auth_entity = 'team' THEN fe.stored_for_id::uuid END\n        WHERE fe.id = $1 AND fe.stored_for_auth_entity = 'team'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "87c9c6d9ebaa0590c40c110c7d453c0faa191a341d516b008c794f3179849cff"
+}

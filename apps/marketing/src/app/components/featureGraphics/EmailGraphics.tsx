@@ -2069,7 +2069,7 @@ function _EmailIntro() {
         style={{
           'font-family': 'display',
           'font-size': compact() ? '28px' : 'clamp(32px, 4vw, 46px)',
-          'font-weight': '315',
+          'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
           'letter-spacing': '-0.015em',
           'line-height': 1.14,
           margin: '0',

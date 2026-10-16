@@ -17,8 +17,16 @@ async function center(locator: Locator): Promise<Point> {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
-/** Chromium delivers trusted touch input, including native scroll/pointercancel. */
-async function androidDrag(page: Page, from: Point, to: Point) {
+/**
+ * Chromium delivers trusted touch input, including native scroll/pointercancel.
+ * `hold` runs with the finger still down at `to`.
+ */
+async function androidDrag(
+  page: Page,
+  from: Point,
+  to: Point,
+  hold?: () => Promise<void>
+) {
   const session = await page.context().newCDPSession(page);
   const touch = (point: Point) => ({ ...point, id: 1, radiusX: 4, radiusY: 4 });
   try {
@@ -40,6 +48,7 @@ async function androidDrag(page: Page, from: Point, to: Point) {
       // does not exercise the browser's scroll recognition.
       await page.waitForTimeout(16);
     }
+    await hold?.();
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchEnd',
       touchPoints: [],
@@ -50,13 +59,19 @@ async function androidDrag(page: Page, from: Point, to: Point) {
 }
 
 /** WebKit exposes touch taps, but no trusted touch drag API. */
-async function webkitPointerHandleDrag(page: Page, handle: Locator, to: Point) {
+async function webkitPointerHandleDrag(
+  page: Page,
+  handle: Locator,
+  to: Point,
+  hold?: () => Promise<void>
+) {
   const from = await center(handle);
   // A browser mouse pointer exercises handle hit-testing and pointer capture;
   // it does not prove iOS native touch scrolling or gesture arbitration.
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 12 });
+  await hold?.();
   await page.mouse.up();
 }
 
@@ -180,6 +195,27 @@ test('touch taps select, edit, apply, and cancel cell drafts', async ({
   await expect(formulaBar(page)).toHaveValue('42');
 });
 
+test('editing a date cell by touch opens its calendar, and a tapped day is written', async ({
+  page,
+}) => {
+  await cell(page, 'C2').tap();
+  await cell(page, 'C2').tap();
+  await page.getByRole('textbox', { name: 'Edit C2' }).fill('10/16/2026');
+  await button(page, 'Apply edit').tap();
+  await expect(cell(page, 'C2')).toHaveText('10/16/2026');
+
+  await cell(page, 'C2').tap();
+  await cell(page, 'C2').tap();
+  const picker = page.locator('[data-cell-date-picker]');
+  await expect(picker).toBeVisible();
+  await expectInsideViewport(page, picker);
+  await picker
+    .getByRole('gridcell', { name: '20', exact: true, disabled: false })
+    .tap();
+  await expect(cell(page, 'C2')).toHaveText('10/20/2026');
+  await expect(picker).toBeHidden();
+});
+
 test('selection handles extend a range (WebKit drag uses a mouse pointer)', async ({
   page,
   browserName,
@@ -195,6 +231,38 @@ test('selection handles extend a range (WebKit drag uses a mouse pointer)', asyn
   await expect(cell(page, 'A2')).toHaveAttribute('aria-selected', 'true');
   await expect(cell(page, 'B4')).toHaveAttribute('aria-selected', 'true');
   await expect(cell(page, 'B5')).toHaveAttribute('aria-selected', 'false');
+});
+
+test('a selection handle held past the bottom edge scrolls and extends the range (WebKit drag uses a mouse pointer)', async ({
+  page,
+  browserName,
+}) => {
+  await cell(page, 'A2').tap();
+  const handle = button(page, 'Move selection end');
+  await expect(handle).toBeVisible();
+  const grid = page.getByRole('grid', { name: 'Spreadsheet' });
+  const box = await grid.boundingBox();
+  if (!box) throw new Error('Grid is missing.');
+  const from = await center(handle);
+  // Over the footer, below the grid, in column A.
+  const to = {
+    x: (await center(cell(page, 'A2'))).x,
+    y: box.y + box.height + 20,
+  };
+  const lastRow = async () =>
+    Number((await addressBar(page).inputValue()).match(/^A2:A(\d+)$/)?.[1]);
+  const scrollsDown = async () => {
+    await expect.poll(lastRow).toBeGreaterThanOrEqual(80);
+  };
+  if (browserName === 'chromium')
+    await androidDrag(page, from, to, scrollsDown);
+  else await webkitPointerHandleDrag(page, handle, to, scrollsDown);
+  const row = await lastRow();
+  await expect(cell(page, `A${row}`)).toBeInViewport();
+  await expect(cell(page, `A${row}`)).toHaveAttribute('aria-selected', 'true');
+  expect(await grid.evaluate((element) => element.scrollTop)).toBeGreaterThan(
+    1000
+  );
 });
 
 test('touch formula suggestions and reference handles retain the editor (WebKit drag uses a mouse pointer)', async ({
@@ -278,6 +346,73 @@ test('touch formatting and sheet navigation preserve workbook state', async ({
   await button(page, 'Close find and replace').tap();
   await expect(dialog).toBeHidden();
   await expect(addressBar(page)).toHaveValue('A2');
+});
+
+test('touch taps pick an @date day on screen without dropping the cell editor', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date(2026, 9, 16, 12));
+  await page.goto('/?mentions');
+  await expect(cell(page, 'B4')).toHaveText('30');
+  await cell(page, 'A6').tap();
+  await cell(page, 'A6').tap();
+  const input = page.getByRole('textbox', { name: 'Edit A6' });
+  await expect(input).toBeFocused();
+  await input.pressSequentially('@date');
+  const picker = page.locator('[data-cell-date-picker]');
+  await expectInsideViewport(page, picker);
+  await picker
+    .getByRole('gridcell', { name: '15', exact: true, disabled: false })
+    .tap();
+  await expect(picker).toBeHidden();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveText('10/15/2026 ');
+  await button(page, 'Apply edit').tap();
+  await expect(cell(page, 'A6')).toHaveText('10/15/2026');
+  expect(
+    await page.evaluate(() => window.spreadsheetFixture.snapshot()[0].cells.A6)
+  ).toEqual({ value: '46310', format: 'date' });
+});
+
+test('tapping another dropdown cell moves the open list there, and other cells close it', async ({
+  page,
+}) => {
+  for (const address of ['C4', 'C2']) {
+    await cell(page, address).tap();
+    await tapMenu(page, 'Format and data', 'Dropdown…');
+    const dialog = page.getByRole('dialog', { name: 'Dropdown' });
+    const choice = (number: number) =>
+      dialog.getByRole('textbox', { name: `Choice ${number}`, exact: true });
+    await choice(1).fill('Low');
+    for (const [index, value] of ['Medium', 'High'].entries()) {
+      await button(page, 'Add choice').tap();
+      await choice(index + 2).fill(value);
+    }
+    await button(page, 'Save').tap();
+    await expect(dialog).toBeHidden();
+  }
+  const list = page.getByRole('menu');
+  const marker = (address: string) =>
+    cell(page, address).locator('[data-dropdown-marker]');
+
+  await marker('C4').tap();
+  await expect(list).toBeVisible();
+  await cell(page, 'C2').tap();
+  await expect(button(page, 'Choose a value for C2')).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
+  await list.getByRole('menuitem', { name: 'High' }).tap();
+  await expect(list).toBeHidden();
+  await expect(cell(page, 'C2')).toHaveText('High');
+
+  await marker('C4').tap();
+  await expect(list).toBeVisible();
+  await cell(page, 'E8').tap();
+  await expect(list).toBeHidden();
+  await cell(page, 'C4').tap();
+  await expect(cell(page, 'C4')).toHaveAttribute('aria-selected', 'true');
+  await expect(list).toBeHidden();
 });
 
 test('viewer touch controls keep editing disabled while allowing selection and downloads', async ({

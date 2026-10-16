@@ -50,6 +50,7 @@ export function BotInviteSelect(props: {
   channelId: string;
   channelBotIds: string[];
   focusRequest: number;
+  onInvited?: () => void;
 }) {
   const botsQuery = useBotsQuery();
   const addBotMutation = useAddBotToChannelMutation();
@@ -90,7 +91,8 @@ export function BotInviteSelect(props: {
       });
       setSelectedBot(undefined);
       toast.success(`${bot.name} invited to channel`);
-      focusInput();
+      if (props.onInvited) props.onInvited();
+      else focusInput();
     } catch {
       toast.failure('Failed to invite bot');
     }

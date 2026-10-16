@@ -6,6 +6,13 @@ distribution: the public site, `/app` routing to the web-app stack, `/.well-know
 OIDC, `resources*` to Ghost, and the `www`/`chat`/signed-in-root redirects in
 `wwwRedirect/handler.js`.
 
+The legacy `chat.macro.com` / `chat-dev.macro.com` redirect hostnames are disabled
+by default. Set `website-infra:enableChatRedirect` to `true` for a stack only after
+its `certArn` covers the corresponding hostname. This enables both the CloudFront
+alias and its Route 53 record; leaving it disabled removes both. CloudFront
+validates every alias against the certificate on distribution updates, so an
+uncovered chat hostname would block unrelated website deploys.
+
 Moved from `macro-inc/solid-site/infra`; project and stack names are unchanged,
 so this program manages the existing resources.
 

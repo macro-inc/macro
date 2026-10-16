@@ -12,6 +12,7 @@ import {
 import { safeConferenceUrl } from '../../calendar/utils/conference-link';
 import { calendarMacroCallUrl } from '../../calendar/utils/macro-call-link';
 import {
+  isMeetingEvent,
   selectUpcomingCalendarEvents,
   type UpcomingCalendarEvent,
 } from '../core/upcoming-calendar-events';
@@ -23,6 +24,7 @@ const TARGET_EVENT_COUNT = 5;
 type SourceOptions = {
   userId: Accessor<string | undefined>;
   sourceById: Accessor<ReadonlyMap<string, CalendarSource>>;
+  sourcesReady?: Accessor<boolean>;
   isSourceVisible: (sourceId: string) => boolean;
   now: Accessor<Date>;
 };
@@ -46,9 +48,7 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
     const previous = windows.slice();
     const enabled = () =>
       Boolean(options.userId()) &&
-      previous.every(
-        ({ query }) => query.isSuccess && !query.isPlaceholderData
-      ) &&
+      previous.every(({ query }) => query.isSuccess) &&
       selectUpcomingCalendarEvents(
         previous.flatMap((window) => window.events()),
         options.now()
@@ -65,7 +65,7 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
       () => ({ enabled: enabled() })
     );
     const calendarEvents = createMemo(() => {
-      if (!query.isSuccess || query.isPlaceholderData) return [];
+      if (!query.isSuccess) return [];
       const sources = options.sourceById();
       return query.data.items.flatMap((item): CalendarEvent[] => {
         const event = mapCalendarOccurrence(item, {
@@ -86,41 +86,42 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
       });
     });
     const events = createMemo(() =>
-      calendarEvents().map(
-        (event): UpcomingCalendarEvent => ({
+      calendarEvents().map((event): UpcomingCalendarEvent => {
+        const url =
+          calendarMacroCallUrl(event) ?? safeConferenceUrl(event.conferenceUrl);
+        return {
           id: event.id,
           title: event.title,
           color: event.calendar.color,
-          url:
-            calendarMacroCallUrl(event) ??
-            safeConferenceUrl(event.conferenceUrl),
+          url,
           start: event.start,
           end: event.end,
           allDay: event.allDay,
           eventId: event.eventId,
           occurrenceKey: event.occurrenceKey,
-        })
-      )
+          isMeeting: isMeetingEvent(event, url),
+        };
+      })
     );
     windows.push({ query, enabled, events, calendarEvents });
   }
 
   const activeWindows = () => windows.filter((window) => window.enabled());
   return {
-    events: createMemo(() =>
-      selectUpcomingCalendarEvents(
+    events: createMemo(() => {
+      if (options.sourcesReady?.() === false) return [];
+      return selectUpcomingCalendarEvents(
         activeWindows().flatMap((window) => window.events()),
         options.now()
-      )
-    ),
+      );
+    }),
     findEvent: (id: string) =>
       activeWindows()
         .flatMap((window) => window.calendarEvents())
         .find((event) => event.id === id),
     loading: () =>
-      activeWindows().some(
-        ({ query }) => query.isPending || query.isPlaceholderData
-      ),
+      options.sourcesReady?.() === false ||
+      activeWindows().some(({ query }) => query.isPending),
     error: () =>
       activeWindows().some(({ query }) => query.isError)
         ? 'Could not load upcoming events.'

@@ -1,20 +1,66 @@
 import GitMerge from '@phosphor/git-merge.svg';
 import { Button, type ButtonSize, cn, confirmDialog } from '@ui';
-import { getOwner, Show } from 'solid-js';
+import { getOwner, type Owner, Show } from 'solid-js';
 import {
   createMergePullRequestAction,
   type MergePullRequestTarget,
 } from '../primitives/create-merge-pull-request-action';
+import {
+  type PullRequestCheck,
+  pullRequestReadyToMerge,
+} from '../primitives/pull-request-ready-to-merge';
 import { prDisplayName } from '../util/prKey';
+
+/** Ask before merging, naming the pull request. */
+export function confirmMergePullRequest(
+  target: MergePullRequestTarget,
+  owner: Owner | null
+) {
+  return confirmDialog(
+    {
+      title: 'Merge pull request?',
+      get body() {
+        return (
+          <div class="space-y-4 pt-2">
+            <div class="flex items-start gap-3 rounded-lg border border-edge-muted bg-input p-3">
+              <GitMerge
+                aria-hidden="true"
+                class="mt-0.5 size-4 shrink-0 text-ink-muted"
+              />
+              <div class="min-w-0 space-y-1">
+                <Show when={target.title}>
+                  <p class="text-sm font-medium text-ink wrap-anywhere">
+                    {target.title}
+                  </p>
+                </Show>
+                <p class="text-xs text-ink-muted wrap-anywhere">
+                  {prDisplayName(target)}
+                </p>
+              </div>
+            </div>
+            <p>
+              This will merge the pull request into its base branch on GitHub.
+            </p>
+          </div>
+        );
+      },
+      confirmLabel: 'Merge pull request',
+    },
+    { owner }
+  );
+}
 
 /**
  * Merge an open pull request as the signed-in user. Renders nothing unless
- * the pull request is open; GitHub's own permissions decide whether the
- * merge goes through once asked.
+ * the pull request is open, not a draft, and its checks have finished
+ * without failing. GitHub's own permissions decide whether the merge goes
+ * through once asked.
  */
 export function MergePullRequestButton(props: {
   target: MergePullRequestTarget;
   status: string | null | undefined;
+  draft?: boolean | null;
+  checks?: readonly PullRequestCheck[] | null;
   size?: ButtonSize;
   class?: string;
   /** Hide the label and show the icon alone, with the label as its name. */
@@ -24,44 +70,17 @@ export function MergePullRequestButton(props: {
   const owner = getOwner();
   const action = createMergePullRequestAction({
     onMerged: props.onMerged,
-    confirm: (target) =>
-      confirmDialog(
-        {
-          title: 'Merge pull request?',
-          get body() {
-            return (
-              <div class="space-y-4 pt-2">
-                <div class="flex items-start gap-3 rounded-lg border border-edge-muted bg-input p-3">
-                  <GitMerge
-                    aria-hidden="true"
-                    class="mt-0.5 size-4 shrink-0 text-ink-muted"
-                  />
-                  <div class="min-w-0 space-y-1">
-                    <Show when={target.title}>
-                      <p class="text-sm font-medium text-ink wrap-anywhere">
-                        {target.title}
-                      </p>
-                    </Show>
-                    <p class="text-xs text-ink-muted wrap-anywhere">
-                      {prDisplayName(target)}
-                    </p>
-                  </div>
-                </div>
-                <p>
-                  This will merge the pull request into its base branch on
-                  GitHub.
-                </p>
-              </div>
-            );
-          },
-          confirmLabel: 'Merge pull request',
-        },
-        { owner }
-      ),
+    confirm: (target) => confirmMergePullRequest(target, owner),
   });
   const label = () => (action.pending() ? 'Merging…' : 'Merge');
   return (
-    <Show when={props.status === 'open'}>
+    <Show
+      when={pullRequestReadyToMerge({
+        status: props.status,
+        draft: props.draft,
+        checks: props.checks,
+      })}
+    >
       <Button
         variant="success"
         size={props.size ?? 'sm'}

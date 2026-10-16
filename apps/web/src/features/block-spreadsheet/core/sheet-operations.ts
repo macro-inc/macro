@@ -2,6 +2,7 @@ import {
   cellPlainText,
   cellTextParts,
 } from '@macro-inc/spreadsheet/cell-mentions';
+import type { RangeMove } from '@macro-inc/spreadsheet/workbook-structure';
 import type { CellCopy, SpreadsheetCalculation } from './calculation';
 import { csvCellValue } from './csv-value';
 import {
@@ -15,11 +16,57 @@ import {
 import {
   SPREADSHEET_MAX_CELL_LENGTH,
   SPREADSHEET_MAX_COLUMNS,
+  SPREADSHEET_MAX_INDENT,
   SPREADSHEET_MAX_ROWS,
   type SpreadsheetCellEdits,
   type SpreadsheetCells,
 } from './spreadsheet-document';
 import { CSV_MAX_BYTES } from './workbook-file-types';
+
+/** Largest selection whose empty cells take an indent too: one full column.
+ * Past it, as with a whole sheet, only the cells the sheet holds move, so an
+ * indent never writes millions of style-only cells. */
+const INDENT_EMPTY_CELLS_LIMIT = SPREADSHEET_MAX_ROWS;
+
+/** Excel's Increase and Decrease Indent: each cell moves one level from its
+ * own, so nested line items keep their depth relative to each other. */
+export function indentEdits(
+  cells: SpreadsheetCells,
+  selection: CellSelection,
+  change: 1 | -1
+): SpreadsheetCellEdits {
+  const { top, bottom, left, right } = selectionBounds(selection);
+  const addresses =
+    (bottom - top + 1) * (right - left + 1) <= INDENT_EMPTY_CELLS_LIMIT
+      ? selectionAddresses(selection)
+      : Object.keys(cells).filter((address) => {
+          const position = positionFromAddress(address);
+          return (
+            !!position &&
+            position.row >= top &&
+            position.row <= bottom &&
+            position.column >= left &&
+            position.column <= right
+          );
+        });
+  const edits: SpreadsheetCellEdits = {};
+  for (const address of addresses) {
+    const cell = cells[address];
+    const current = cell?.indent ?? 0;
+    const indent = Math.max(
+      0,
+      Math.min(SPREADSHEET_MAX_INDENT, current + change)
+    );
+    if (indent === current) continue;
+    edits[address] = {
+      indent,
+      // Centered text has no indent, so indenting it aligns it left.
+      ...(change > 0 &&
+        cell?.horizontalAlign === 'center' && { horizontalAlign: 'left' }),
+    };
+  }
+  return edits;
+}
 
 export function borderEdits(
   selection: CellSelection,
@@ -48,6 +95,31 @@ export function borderEdits(
       ];
     })
   );
+}
+
+/** Whether moving cells would replace values that are not among them. */
+export function moveReplacesValues(cells: SpreadsheetCells, move: RangeMove) {
+  const { source, rows, columns } = move;
+  for (const address in cells) {
+    if (!cells[address].value) continue;
+    const position = positionFromAddress(address);
+    if (
+      !position ||
+      position.row < source.top + rows ||
+      position.row > source.bottom + rows ||
+      position.column < source.left + columns ||
+      position.column > source.right + columns
+    )
+      continue;
+    if (
+      position.row < source.top ||
+      position.row > source.bottom ||
+      position.column < source.left ||
+      position.column > source.right
+    )
+      return true;
+  }
+  return false;
 }
 
 /** Sort entire selected rows together using the active column as the key. */

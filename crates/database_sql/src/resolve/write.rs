@@ -18,7 +18,7 @@ use super::{
 pub fn resolve_insert(table: &Table, insert: Insert) -> Result<InsertQuery, ResolveError> {
     let mut columns = Vec::with_capacity(insert.columns.len());
     for name in &insert.columns {
-        let column = names::column(table, name)?;
+        let column = stored_column(names::column(table, name)?)?;
         if columns
             .iter()
             .any(|seen: &&crate::catalog::Column| seen.id == column.id)
@@ -53,7 +53,7 @@ pub fn resolve_update(catalog: &Catalog, update: Update) -> Result<UpdateQuery, 
     let table = names::table(catalog, &update.table)?;
     let mut assignments: Vec<Assignment> = Vec::with_capacity(update.assignments.len());
     for (name, value) in update.assignments {
-        let column = names::column(table, &name)?;
+        let column = stored_column(names::column(table, &name)?)?;
         if assignments.iter().any(|seen| seen.column == column.id) {
             return Err(ResolveError::DuplicateColumn {
                 column: column.name.clone(),
@@ -86,6 +86,18 @@ pub fn resolve_update(catalog: &Catalog, update: Update) -> Result<UpdateQuery, 
         read,
         assignments,
     })
+}
+
+/// The column, unless a formula computes its cells.
+pub(super) fn stored_column(
+    column: &crate::catalog::Column,
+) -> Result<&crate::catalog::Column, ResolveError> {
+    match column.formula {
+        Some(_) => Err(ResolveError::DerivedColumn {
+            column: column.name.clone(),
+        }),
+        None => Ok(column),
+    }
 }
 
 pub fn resolve_delete(catalog: &Catalog, delete: Delete) -> Result<DeleteQuery, ResolveError> {

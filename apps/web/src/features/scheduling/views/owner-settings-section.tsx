@@ -161,7 +161,6 @@ export function OwnerSettingsSection(props: {
                 }
               >
                 <AvailabilityPanel
-                  owner={scope()}
                   profile={p()}
                   canEdit={scope().canEdit}
                   saving={source.saving()}
@@ -199,7 +198,7 @@ export function OwnerSettingsSection(props: {
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
               <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <OwnerBadge scope={scope()} />
+                <p class="text-sm text-ink-muted">Public booking page</p>
                 <div class="flex items-center gap-3">
                   <Show when={p().revision > 0}>
                     <a
@@ -224,8 +223,8 @@ export function OwnerSettingsSection(props: {
                   </Button>
                 </div>
               </div>
-              <div class="flex flex-col gap-4">
-                <div class="flex flex-col gap-6 rounded-xl border border-edge-muted p-6">
+              <div class="grid items-start gap-8 @2xl:grid-cols-2">
+                <div class="flex flex-col gap-5">
                   <Field label="Display name">
                     <TextInput
                       disabled={!scope().canEdit}
@@ -267,7 +266,7 @@ export function OwnerSettingsSection(props: {
                     Save booking page
                   </Button>
                 </div>
-                <aside class="rounded-xl border border-edge-muted p-6">
+                <aside class="rounded-lg border border-edge-muted p-5">
                   <p class="text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Preview
                   </p>
@@ -300,15 +299,12 @@ export function OwnerSettingsSection(props: {
               role="group"
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
-              <div class="mb-4">
-                <OwnerBadge scope={scope()} />
-              </div>
               <BookingsPanel
                 bookings={source.bookings()}
                 events={p().eventTypes}
                 members={capabilities.members()}
                 currentUserId={capabilities.userId()}
-                canEdit={scope().canEdit}
+                canManageBookings={scope().canManageBookings}
                 busyId={busyBooking()}
                 onApprove={(id) =>
                   void bookingAction(id, () => source.approve(id))
@@ -333,9 +329,6 @@ export function OwnerSettingsSection(props: {
               role="group"
               aria-label={`${scope().name} ${props.kind === 'page' ? 'booking page' : props.kind}`}
             >
-              <div class="mb-4">
-                <OwnerBadge scope={scope()} />
-              </div>
               <Show when={scope().id} keyed>
                 {(_scopeId) => (
                   <InsightsView

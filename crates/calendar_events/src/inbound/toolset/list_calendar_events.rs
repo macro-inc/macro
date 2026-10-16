@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use super::{CalendarToolContext, ToolEventAttendee, description_preview, time_fields};
 use crate::domain::{
-    models::{CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceRange},
-    ports::{CalendarMutationService, CalendarOccurrenceService},
+    models::{CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceListing, OccurrenceRange},
+    ports::{CalendarMutationService, CalendarOccurrenceService, MeetingLinkProvider},
     service::CalendarValidationError,
 };
 
@@ -140,17 +140,18 @@ impl ToolAnnotated for ListCalendarEvents {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for ListCalendarEvents
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for ListCalendarEvents
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = ListCalendarEventsResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List calendar events");
@@ -184,10 +185,11 @@ where
             let full_page = rows.len() > usize::from(OCCURRENCES_MAX);
             cursor = rows
                 .last()
-                .map(|(_, occurrence)| CalendarOccurrenceCursor::from_occurrence(occurrence));
+                .map(|listing| CalendarOccurrenceCursor::from_occurrence(&listing.occurrence));
             occurrences.extend(
                 rows.into_iter()
-                    .filter(|(_, occurrence)| !occurrence.is_cancelled),
+                    .filter(|listing| !listing.occurrence.is_cancelled)
+                    .map(OccurrenceListing::into_occurrence_event),
             );
             if !full_page {
                 exhausted = true;

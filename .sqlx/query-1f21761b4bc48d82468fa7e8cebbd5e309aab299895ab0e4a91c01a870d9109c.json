@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"Document\"\n            SET \"fileType\" = $3,\n                \"updatedAt\" = NOW()\n            WHERE id = $1 AND LOWER(\"fileType\") = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1f21761b4bc48d82468fa7e8cebbd5e309aab299895ab0e4a91c01a870d9109c"
+}

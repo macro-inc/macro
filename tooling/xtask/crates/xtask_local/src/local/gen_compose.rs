@@ -494,6 +494,18 @@ fn apply_tags(value: &mut Value, mode: Mode, instance: &Instance) {
             }
         }
     }
+    // Generated companions do not inherit the base compose's common settings.
+    // Apply after adding aux overrides so every generated service is covered.
+    for service in services.values_mut().filter_map(Value::as_mapping_mut) {
+        service.insert(
+            "logging".into(),
+            serde_yaml::to_value(serde_json::json!({
+                "driver": "json-file",
+                "options": { "max-size": "20m", "max-file": "3" }
+            }))
+            .expect("logging configuration is serializable"),
+        );
+    }
 }
 
 /// Define the per-instance external networks and volumes (named-instance only).

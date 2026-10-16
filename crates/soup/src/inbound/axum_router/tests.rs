@@ -225,6 +225,15 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn send_message_for_user(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _link: Option<uuid::Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::SendAsUnavailable)
+    }
+
     async fn set_thread_archived(
         &self,
         _user: MacroUserIdStr<'static>,
@@ -701,6 +710,15 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn send_message_for_user(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _link: Option<uuid::Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(EmailErr::SendAsUnavailable)
+    }
+
     async fn set_thread_archived(
         &self,
         _user: MacroUserIdStr<'static>,

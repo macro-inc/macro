@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO form_questions (id, form_id, section_id, column_id, position, help_text, required, widget)\n        SELECT question.id, $1, question.section_id, question.column_id, question.position,\n               question.help_text, question.required, question.widget\n        FROM UNNEST($2::uuid[], $3::uuid[], $4::uuid[], $5::text[], $6::text[], $7::bool[], $8::text[])\n            AS question(id, section_id, column_id, position, help_text, required, widget)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "BoolArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b4b8b3d293505e1880959faa3a87791b7212f482cfb38c25a76084ccdf371845"
+}

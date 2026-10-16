@@ -61,7 +61,10 @@ query SoupSharedMailBackfill($input: SoupInput!) {
 query MailAccounts {
 	user {
 		id
-		emailLinks { ...MailAccountFields }
+		emailLinks {
+			...MailAccountFields
+			sendAs { emailAddress displayName }
+		}
 	}
 }
 
@@ -194,6 +197,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		inboxVisible
 		linkId
 		latestInboundMessageTs
+		reminderReturnedAt
 		mailDraftState @cacheOnly { ...EmailDraftStateFields }
         mailAllPreview @cacheOnly { ...MailPreviewFields }
 		mailDraftPreview @cacheOnly { ...MailPreviewFields }
@@ -212,8 +216,8 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		createdAt
 		updatedAt
 		viewedAt
-		participants {
-			id
+		participants: senders {
+			contactId
 			linkId
 			name
 			email
@@ -305,6 +309,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			...SoupPropertyFields
 		}
 	}
+	...GraphqlCrmContactFields
 	... on GraphqlSoupCrmCompany {
 		crmTeamId: teamId
 		crmCompanyName: name
@@ -327,27 +332,6 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		sourceMetadata
 		createdAt
 		updatedAt
-	}
-	... on GraphqlSoupReminder {
-		reminderDescription: description
-		scheduleType
-		remindAt
-		cron
-		timezone
-		nextRunAt
-		enabled
-		completedAt
-		createdAt
-		updatedAt
-		referencedEntity {
-			id
-			entityType
-			fileType
-			subType
-		}
-		properties {
-			...SoupPropertyFields
-		}
 	}
 	... on GraphqlSoupCalendarEvent {
 		calendarEventTitle: title
@@ -435,6 +419,7 @@ fragment SoupNotificationFields on GraphqlNotification {
 }
 
 fragment SoupNotificationStateFields on GraphqlNotification {
+	__typename
 	id
 	eventType
 	entityType
@@ -516,6 +501,20 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		repliedToDocumentCommentThreadText: text
 		repliedToDocumentCommentThreadSenderProfilePictureUrl: senderProfilePictureUrl
 		repliedToDocumentCommentThreadSenderDisplayName: senderDisplayName
+	}
+	... on GraphqlEntityAccessRequestedMetadata {
+		entityAccessRequestedRequestId: requestId
+		entityAccessRequestedRevision: revision
+		entityAccessRequestedEntityName: entityName
+		entityAccessRequestedFileType: fileType
+		entityAccessRequestedAccessLevel: accessLevel
+	}
+	... on GraphqlEntityAccessGrantedMetadata {
+		entityAccessGrantedRequestId: requestId
+		entityAccessGrantedRevision: revision
+		entityAccessGrantedEntityName: entityName
+		entityAccessGrantedFileType: fileType
+		entityAccessGrantedAccessLevel: accessLevel
 	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName

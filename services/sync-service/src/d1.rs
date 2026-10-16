@@ -137,6 +137,19 @@ pub async fn insert_blame_many(env: &worker::Env, events: &[BlameEvent]) -> work
     Ok(())
 }
 
+/// Delete every peer mapping and blame row recorded for a document.
+pub async fn delete_document_rows(db: D1Database, document_id: &str) -> worker::Result<()> {
+    let statements = [
+        "DELETE FROM peer_user_map WHERE document_id = ?;",
+        "DELETE FROM blame WHERE document_id = ?;",
+    ]
+    .into_iter()
+    .map(|sql| db.prepare(sql).bind(&[document_id.into()]))
+    .collect::<worker::Result<Vec<_>>>()?;
+    db.batch(statements).await?;
+    Ok(())
+}
+
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct BlameRow {
     pub peer_id: String,

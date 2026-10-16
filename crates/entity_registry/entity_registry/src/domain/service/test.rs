@@ -33,6 +33,7 @@ struct FakeRepo {
     get: Option<EntityRecord>,
     get_many: Vec<EntityRecord>,
     list: Vec<EntityRecord>,
+    list_all: Vec<EntityRecord>,
     count: EntityTypeCount,
 }
 
@@ -51,6 +52,10 @@ impl EntityRegistryRepository for FakeRepo {
         _entity_type: Option<RegisteredEntityType>,
     ) -> EntityRegistryResult<Vec<EntityRecord>> {
         Ok(self.list.clone())
+    }
+
+    async fn list_all_owned_by(&self, _owner: &Owner) -> EntityRegistryResult<Vec<EntityRecord>> {
+        Ok(self.list_all.clone())
     }
 
     async fn count_by_type(
@@ -102,5 +107,24 @@ async fn get_many_list_and_count_return_repository_values() {
             .await
             .unwrap(),
         count
+    );
+}
+
+#[tokio::test]
+async fn list_all_owned_by_reads_the_trash_inclusive_listing() {
+    let live = sample_record(1);
+    let trashed = EntityRecord {
+        deleted_at: Some(ts()),
+        ..sample_record(2)
+    };
+    let service = EntityRegistryServiceImpl::new(FakeRepo {
+        list: vec![live.clone()],
+        list_all: vec![trashed.clone(), live.clone()],
+        ..FakeRepo::default()
+    });
+
+    assert_eq!(
+        service.list_all_owned_by(&user_owner()).await.unwrap(),
+        vec![trashed, live]
     );
 }

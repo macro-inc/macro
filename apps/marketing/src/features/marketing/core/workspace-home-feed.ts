@@ -19,7 +19,7 @@ export const sampleHomeFeed: { title: string; items: HomeFeedItem[] }[] = [
         view: 'messages',
         id: 'dm-julia',
         person: 'julia',
-        title: 'Julia Westphal',
+        title: 'Julia',
       },
       {
         view: 'agents',

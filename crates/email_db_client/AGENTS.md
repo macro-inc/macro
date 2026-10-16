@@ -1,0 +1,51 @@
+# email_db_client
+
+## What it is
+
+Part of the Email feature: the SQLx query crate for MacroDB's email tables —
+messages, threads, contacts, labels, links, attachments, sync tokens, CRM
+cleanup, and backfill.
+
+## Start here
+
+- `src/lib.rs`: the module list, one per table/feature area, mirroring
+  `macro_db_client`'s layout.
+- `src/parse/`: service↔DB type conversion (`db_to_service.rs`,
+  `service_to_db.rs`) and column-length limits (`column_limits.rs`).
+- `README.md`: local test-database setup.
+
+## Scope
+
+- Owns: the `sqlx::query!` call sites for email tables.
+- Not here: email domain/business logic → `crates/email`; provider API calls
+  → `email_api_client`. The schema lives in `crates/macro_db_client/migrations/`
+  (shared MacroDB), not here.
+
+## Boundaries
+
+- Depends on: `models_email`, `models_pagination`, `email_utils`.
+- Used by: `crates/email`, `crates/search_service`, `services/calendar_service`,
+  `services/authentication_service`, `services/search_processing_service`,
+  `services/email_service`.
+
+## Recipes
+
+- Add a query to an existing table: the module in `src/<area>/` (e.g.
+  `src/messages/get.rs`) → its `mod.rs` → a fixture under `fixtures/*.sql` if
+  the test needs seed data.
+- Add a column or table: see `crates/macro_db_client/AGENTS.md` (this crate
+  only owns queries, not migrations).
+
+## Checks
+
+- `cargo test -p email_db_client` (`SQLX_OFFLINE` unset; requires local
+  MacroDB — `just setup_macrodb`).
+
+## Gotchas
+
+- Quote and alias camelCase columns to Rust field names; check
+  `crates/macro_db_client/migrations/` for real column spelling, don't guess.
+
+## Related
+
+- Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`

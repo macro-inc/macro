@@ -279,6 +279,16 @@ pub fn guard(
                             );
                         }
                     }
+                    ColumnChange::SetFormula { .. } => {
+                        if present.is_none() {
+                            continue;
+                        }
+                        if let Some(writer) = later.iter().rev().find(|record| {
+                            record.columns.iter().any(|touch| touch.column == *column)
+                        }) {
+                            return refused(UndoRefusal::ChangedSince, Some(writer));
+                        }
+                    }
                     ColumnChange::ChangeType { .. } => {
                         if let Some(writer) = later.iter().rev().find(|record| {
                             record

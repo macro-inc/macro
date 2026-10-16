@@ -3,6 +3,7 @@ import { Button, Dialog, InputGroup, Surface, TextField } from '@ui';
 import { Show } from 'solid-js';
 
 export function AutoReloadDialog(props: {
+  sharedWithTeam?: boolean;
   enabled: boolean;
   minimum: string;
   target: string;
@@ -47,6 +48,11 @@ export function AutoReloadDialog(props: {
             Set balance thresholds and a monthly spending limit for automatic
             credit purchases.
           </Dialog.Description>
+          <Show when={props.sharedWithTeam}>
+            <p class="text-sm text-ink-muted">
+              Auto-reload adds credits to your team’s shared balance.
+            </p>
+          </Show>
           <TextField value={props.minimum} onChange={props.onMinimum}>
             <TextField.Label>Minimum balance</TextField.Label>
             <TextField.Description>

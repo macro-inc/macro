@@ -216,3 +216,63 @@ async fn shutdown_signals_active_runs_and_awaits_completion_without_claiming_mor
     assert_eq!(service.state.pending.lock().unwrap().len(), 23);
     assert!(executions.is_empty());
 }
+
+/// Like the real queue, keeps returning a run until dispatch finishes it.
+struct Requeueing {
+    run: PendingEventRun,
+    started: AtomicUsize,
+    finish: tokio::sync::Notify,
+    done: std::sync::atomic::AtomicBool,
+}
+impl EventRunDispatch for Arc<Requeueing> {
+    async fn pending(&self, _: PageSize) -> Result<Vec<PendingEventRun>, Report> {
+        Ok(if self.done.load(Ordering::SeqCst) {
+            Vec::new()
+        } else {
+            vec![self.run.clone()]
+        })
+    }
+    async fn reconcile(&self, _: PageSize) -> Result<u16, Report> {
+        Ok(0)
+    }
+    async fn dispatch(
+        &self,
+        _: PendingEventRun,
+        _: impl Future<Output = ()> + Send,
+    ) -> Result<DispatchResult, Report> {
+        self.started.fetch_add(1, Ordering::SeqCst);
+        self.finish.notified().await;
+        self.done.store(true, Ordering::SeqCst);
+        Ok(DispatchResult::NotStarted)
+    }
+}
+
+#[tokio::test]
+async fn a_run_still_pending_during_dispatch_is_not_dispatched_again() {
+    let queue = Arc::new(Requeueing {
+        run: service(1, false).state.pending.lock().unwrap()[0].clone(),
+        started: AtomicUsize::new(0),
+        finish: tokio::sync::Notify::new(),
+        done: Default::default(),
+    });
+    let shutdown = CancellationToken::new();
+    let executions = TaskTracker::new();
+    let worker = tokio::spawn(run(
+        Arc::clone(&queue),
+        shutdown.clone(),
+        executions.clone(),
+        page_size(),
+        Duration::from_millis(1),
+    ));
+    wait_until(|| queue.started.load(Ordering::SeqCst) == 1).await;
+    // Many polls return the same pending run while it is in flight.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(queue.started.load(Ordering::SeqCst), 1);
+    queue.finish.notify_waiters();
+    wait_until(|| queue.done.load(Ordering::SeqCst)).await;
+    shutdown.cancel();
+    worker.await.unwrap();
+    executions.close();
+    executions.wait().await;
+    assert_eq!(queue.started.load(Ordering::SeqCst), 1);
+}

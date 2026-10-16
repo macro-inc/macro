@@ -1,6 +1,5 @@
 import './ListEntity.css';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import { ReminderRowSchedule } from '@app/features/reminders/views/reminder-row-schedule';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
@@ -38,11 +37,7 @@ import {
   isHitSnippetComplete,
   isHitSnippetEntity,
 } from '../extractors-search/snippet-entity';
-import {
-  isChannelEntity,
-  isEmailEntity,
-  isReminderEntity,
-} from '../types/entity';
+import { isChannelEntity, isEmailEntity } from '../types/entity';
 import { isWithNotification } from '../types/notification';
 import { isSearchEntity } from '../types/search';
 import { createEntityDraggable } from '../utils/draggable';
@@ -103,19 +98,11 @@ export function ListEntity(props: ListEntityProps) {
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
   const leadingAction = children(() => props.leadingAction);
-  const scheduleStatus = children(() => (
-    <>
-      {props.scheduleStatus}
-      <Show when={isReminderEntity(props.entity) && props.entity}>
-        {(entity) => (
-          <ReminderRowSchedule
-            entity={entity()}
-            onToggleDone={props.onToggleReminderDone}
-          />
-        )}
-      </Show>
-    </>
-  ));
+  const titleLeading = children(() => props.titleLeading);
+  const icon = children(() => props.icon);
+  const titleTrailing = children(() => props.titleTrailing);
+  const meta = children(() => props.meta);
+  const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
@@ -173,6 +160,10 @@ export function ListEntity(props: ListEntityProps) {
     entity: props.entity,
     actions: !isTouchDevice() ? rowActions() : undefined,
     leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    titleLeading: titleLeading(),
+    icon: icon(),
+    titleTrailing: titleTrailing(),
+    meta: meta(),
     scheduleStatus: scheduleStatus(),
     authorDisplayName: props.authorDisplayName,
     checked: props.checked,
@@ -219,6 +210,9 @@ export function ListEntity(props: ListEntityProps) {
 
   return (
     <Entity.Root
+      role={props.role}
+      tabIndex={props.tabIndex}
+      onKeyDown={props.onKeyDown}
       entity={props.entity}
       onClick={(e) => {
         if (e.metaKey && props.onChecked) {
@@ -234,18 +228,23 @@ export function ListEntity(props: ListEntityProps) {
         // to track which layout the Switch actually renders.
         isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
         'soup-list-entity rounded-xl @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
+        // Keep avatar-group separators in sync with the row background so they
+        // blend into it instead of creating visible rings.
+        '[--avatar-group-separator:var(--color-panel)]',
         {
           'min-h-10 mx-(--soup-row-gutter)':
             !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9 mx-(--soup-row-gutter)':
             !isMobile() && usesCondensedNarrowLayout(),
-          'bg-list-selected': props.checked,
-          'bg-list-selected-highlighted': props.checked && props.highlighted,
-          'bg-list-highlighted':
+          'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
+            props.checked,
+          'bg-list-selected-highlighted [--avatar-group-separator:var(--color-list-selected-highlighted)]':
+            props.checked && props.highlighted,
+          'bg-list-highlighted [--avatar-group-separator:var(--color-list-highlighted)]':
             props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-list-hover':
+          'hover:bg-list-hover hover:[--avatar-group-separator:var(--color-list-hover)]':
             !props.highlighted && !props.checked && !isTouchDevice(),
-          'focus-within:bg-list-hover':
+          'focus-within:bg-list-hover focus-within:[--avatar-group-separator:var(--color-list-hover)]':
             !!rowActions() && !props.highlighted && !props.checked,
         }
       )}

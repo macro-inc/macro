@@ -1,7 +1,7 @@
 import IconApple from '@icon/macro-apple.svg';
 import IconGoogle from '@icon/macro-google.svg';
-import { Button } from '@ui';
 import { Show } from 'solid-js';
+import { AuthButton } from './form-fields';
 
 export function LoginPicker(props: {
   /** Sign in with Apple is required for App Store review and iOS-only. */
@@ -12,29 +12,25 @@ export function LoginPicker(props: {
 }) {
   return (
     <div class="flex flex-col gap-3">
-      <Button variant="cta" size="xl" autofocus onClick={props.onGoogle}>
-        <IconGoogle class="size-fit" />
+      <AuthButton autofocus onClick={props.onGoogle}>
+        <IconGoogle
+          viewBox="0 0 24 24"
+          class="size-5 shrink-0"
+          fill="currentColor"
+          stroke="none"
+          aria-hidden="true"
+        />
         Continue with Google
-      </Button>
+      </AuthButton>
       <Show when={props.showApple}>
-        <Button
-          variant="outline"
-          size="xl"
-          class="bg-surface"
-          onClick={props.onApple}
-        >
-          <IconApple class="size-fit" />
+        <AuthButton variant="secondary" onClick={props.onApple}>
+          <IconApple class="size-5 shrink-0" aria-hidden="true" />
           Continue with Apple
-        </Button>
+        </AuthButton>
       </Show>
-      <Button
-        variant="outline"
-        size="xl"
-        class="bg-surface"
-        onClick={props.onEmail}
-      >
+      <AuthButton variant="secondary" onClick={props.onEmail}>
         Continue with email
-      </Button>
+      </AuthButton>
     </div>
   );
 }

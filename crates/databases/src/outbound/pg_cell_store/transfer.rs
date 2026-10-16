@@ -6,7 +6,7 @@ use models_databases::{ColumnId, RowId};
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::journal::created_table;
+use crate::domain::journal::{CellImage, cell_value, created_table};
 use crate::domain::models::{DatabaseId, Table, Viewer};
 use crate::domain::transfer::{
     DatabaseTransferRepo, ImportFingerprint, ImportOutcome, ImportTable,
@@ -171,6 +171,12 @@ where
             .await?;
             rows.extend(row_ids);
         }
+        let column_ids: HashMap<_, _> = definitions
+            .iter()
+            .copied()
+            .zip(columns.iter().copied())
+            .collect();
+        let mut after = CellImage::default();
         for (row, row_cells) in rows.iter().zip(cells) {
             for (definition, value) in row_cells {
                 self.properties
@@ -182,6 +188,11 @@ where
                     )
                     .await
                     .map_err(cells_error)?;
+                if let Some(column) = column_ids.get(definition)
+                    && let Some(value) = cell_value(value)
+                {
+                    after.cells.entry(*row).or_default().insert(*column, value);
+                }
             }
         }
         let table: Table = table.try_into().map_err(PgDatabasesRepoError::from)?;
@@ -197,6 +208,7 @@ where
                 table.version,
                 &columns,
                 &rows,
+                after,
             )],
         )
         .await?;

@@ -48,9 +48,12 @@ fn nested_task_completion_hydration_invalidates_task_searches() {
                 panic!("task subtype must stay embedded in its document");
             };
             assert_eq!(subtype["isCompleted"], CacheValue::Bool(false));
-            let selection =
-                RecordSelection::parse(include_str!("task_completion.graphql"), "TaskCompletion")
-                    .unwrap();
+            let selection = RecordSelection::parse(
+                crate::meta::bundled_schema_ref(),
+                include_str!("task_completion.graphql"),
+                "TaskCompletion",
+            )
+            .unwrap();
             if cold {
                 engine = Engine::new(engine.into_storage());
             }

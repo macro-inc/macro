@@ -15,6 +15,15 @@ pub use MockDBClient as DB;
 
 use model::citations::TextReference;
 
+/// Whether extracted text was stored for a document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocumentTextOutcome {
+    Stored,
+    /// The document row no longer exists, e.g. it was deleted while its
+    /// converted PDF was waiting to be extracted.
+    DocumentMissing,
+}
+
 #[cfg_attr(test, allow(dead_code))]
 #[derive(Clone)]
 pub struct DBClient {
@@ -34,7 +43,7 @@ impl DBClient {
         document_id: &str,
         text: &str,
         token_count: i64,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<DocumentTextOutcome> {
         create_document_text::create_document_text(
             self.inner.clone(),
             document_id,

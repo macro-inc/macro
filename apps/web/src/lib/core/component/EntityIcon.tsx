@@ -11,8 +11,6 @@ import type {
   EmailEntity,
   EntityData,
   ForeignEntity,
-  NamedSubType,
-  ReminderEntity,
 } from '@entity';
 import Spreadsheet from '@icon/wide-spreadsheet.svg';
 import SpreadsheetBold from '@icon/wide-spreadsheet-bold.svg';
@@ -23,6 +21,7 @@ import BracketsCurly from '@phosphor/brackets-curly.svg';
 import Building from '@phosphor/building.svg';
 import BuildingOffice from '@phosphor/building-office.svg';
 import Calendar from '@phosphor/calendar.svg';
+import ClipboardText from '@phosphor/clipboard-text.svg';
 import ClockClockwise from '@phosphor/clock-clockwise.svg';
 import Code from '@phosphor/code.svg';
 import Database from '@phosphor/database.svg';
@@ -47,10 +46,13 @@ import GlobeIcon from '@phosphor/globe.svg';
 import HashStraight from '@phosphor/hash-straight.svg';
 import FileImage from '@phosphor/image.svg';
 import ListChecks from '@phosphor/list-checks.svg';
+import PaintBrushBroad from '@phosphor/paint-brush-broad.svg';
+import PenNib from '@phosphor/pen-nib.svg';
 import PhoneCall from '@phosphor/phone-call.svg';
 import Shapes from '@phosphor/shapes.svg';
 import Sparkle from '@phosphor/sparkle.svg';
 import Stack from '@phosphor/stack.svg';
+import Table from '@phosphor/table.svg';
 import Users from '@phosphor/users.svg';
 import UsersThree from '@phosphor/users-three.svg';
 import AddressBookBold from '@phosphor-icons/core/bold/address-book-bold.svg';
@@ -60,6 +62,7 @@ import BracketsCurlyBold from '@phosphor-icons/core/bold/brackets-curly-bold.svg
 import BuildingBold from '@phosphor-icons/core/bold/building-bold.svg';
 import BuildingOfficeBold from '@phosphor-icons/core/bold/building-office-bold.svg';
 import CalendarBold from '@phosphor-icons/core/bold/calendar-bold.svg';
+import ClipboardTextBold from '@phosphor-icons/core/bold/clipboard-text-bold.svg';
 import ClockClockwiseBold from '@phosphor-icons/core/bold/clock-clockwise-bold.svg';
 import CodeBold from '@phosphor-icons/core/bold/code-bold.svg';
 import DatabaseBold from '@phosphor-icons/core/bold/database-bold.svg';
@@ -84,10 +87,13 @@ import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
 import HashStraightBold from '@phosphor-icons/core/bold/hash-straight-bold.svg';
 import FileImageBold from '@phosphor-icons/core/bold/image-bold.svg';
 import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
+import PaintBrushBroadBold from '@phosphor-icons/core/bold/paint-brush-broad-bold.svg';
+import PenNibBold from '@phosphor-icons/core/bold/pen-nib-bold.svg';
 import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
 import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
 import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
 import StackBold from '@phosphor-icons/core/bold/stack-bold.svg';
+import TableBold from '@phosphor-icons/core/bold/table-bold.svg';
 import UsersBold from '@phosphor-icons/core/bold/users-bold.svg';
 import UsersThreeBold from '@phosphor-icons/core/bold/users-three-bold.svg';
 import type { PreviewItem } from '@queries/preview';
@@ -138,15 +144,15 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   document: {
     icon: File,
     boldIcon: FileBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-note',
+    background: 'bg-note/20',
     prettyName: 'Document',
   },
   call: {
     icon: PhoneCall,
     boldIcon: PhoneCallBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Call',
   },
   calendar: {
@@ -177,6 +183,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-orange/20',
     prettyName: 'Presentation',
   },
+  psd: {
+    icon: PaintBrushBroad,
+    boldIcon: PaintBrushBroadBold,
+    foreground: 'text-blue',
+    background: 'bg-blue/20',
+    prettyName: 'Photoshop file',
+  },
   fig: {
     icon: FigmaLogo,
     boldIcon: FigmaLogoBold,
@@ -184,12 +197,26 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-violet/20',
     prettyName: 'Figma file',
   },
+  ai: {
+    icon: PenNib,
+    boldIcon: PenNibBold,
+    foreground: 'text-amber',
+    background: 'bg-amber/20',
+    prettyName: 'Illustrator file',
+  },
   database: {
     icon: Database,
     boldIcon: DatabaseBold,
     foreground: 'text-code',
     background: 'bg-code/20',
     prettyName: 'Database',
+  },
+  form: {
+    icon: ClipboardText,
+    boldIcon: ClipboardTextBold,
+    foreground: 'text-form',
+    background: 'bg-form/20',
+    prettyName: 'Form',
   },
   html: {
     icon: FileHtml,
@@ -201,15 +228,15 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   channel: {
     icon: HashStraight,
     boldIcon: HashStraightBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Channel',
   },
   public: {
     icon: GlobeIcon,
     boldIcon: GlobeIconBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Public Channel',
   },
   organization: {
@@ -222,22 +249,22 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   private: {
     icon: HashStraight,
     boldIcon: HashStraightBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Private Channel',
   },
   direct_message: {
     icon: Users,
     boldIcon: UsersBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Direct Message',
   },
   team: {
     icon: UsersThree,
     boldIcon: UsersThreeBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Team Channel',
   },
   email: {
@@ -355,8 +382,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   emailRead: {
     icon: EmailRead,
     boldIcon: EmailReadBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-ink-extra-muted',
+    background: 'bg-ink-extra-muted/20',
     prettyName: 'Read Email',
   },
   emailInvite: {
@@ -418,8 +445,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   initiative: {
     icon: Stack,
     boldIcon: StackBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-task',
+    background: 'bg-task/20',
     prettyName: 'Project',
   },
   snippet: {
@@ -457,6 +484,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'Company',
   },
+  pipeline: {
+    icon: Table,
+    boldIcon: TableBold,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Pipeline',
+  },
   reminder: {
     icon: BellSimple,
     boldIcon: BellSimpleBold,
@@ -479,6 +513,7 @@ export function isArchiveType(ext: string): boolean {
 
 function validateEntity(entity: string): EntityWithValidIcon {
   if (entity === 'automation') return 'routine';
+  if (entity === 'ics') return 'calendar';
   if (entity in ENTITY_ICON_CONFIGS) {
     return entity as EntityWithValidIcon;
   } else if (isBlockAlias(entity)) {
@@ -517,7 +552,7 @@ export type EntityIconProps = {
    * like 'directMessage; If an unrecognized type or no type at all is passed,
    * a default gray file icon will be used.
    */
-  targetType?: FileType | EntityWithValidIcon;
+  targetType?: FileType | EntityWithValidIcon | (string & {});
   /**
    * The size of the Icon.
    * sm = "w-4 h-4"
@@ -627,8 +662,6 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   hasIcsAttachment?: EmailEntity['hasIcsAttachment'];
   foreignSource?: ForeignEntity['foreignSource'];
   metadata?: ForeignEntity['metadata'];
-  /** Reference metadata carried by reminder entities. */
-  referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
 /** The shared entity-to-icon mapping used by lists, previews, and drag images. */
@@ -637,6 +670,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'document' }, (e) => {
       if (e.subType?.type === 'task') return 'task';
       if (e.fileType === 'spreadsheet') return 'spreadsheet';
+      if (e.fileType === 'ics') return 'calendar';
       if (e.fileType && isArchiveType(e.fileType)) return 'archive';
       const blockName = itemToBlockName(e, true);
       return blockName === 'unknown' ? 'document' : blockName;
@@ -655,11 +689,6 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'initiative' }, () => 'initiative')
     .with({ type: 'project' }, () => 'project')
     .with({ type: 'calendar_event' }, () => 'calendar')
-    .with({ type: 'reminder' }, (e) =>
-      e.referencedEntity
-        ? reminderReferenceIconType(e.referencedEntity)
-        : 'reminder'
-    )
     .with({ type: 'call' }, () => 'call')
     .with({ type: 'routine' }, () => 'routine')
     .with({ type: 'foreign' }, (e) => {
@@ -673,41 +702,8 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_company' }, () => 'crm_company')
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
+    .with({ type: 'form' }, () => 'form')
     .exhaustive();
-}
-
-/** What the block resolvers return when they cannot place something. */
-const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
-
-/**
- * The icon for what a reminder is about, shown beside the reminder's name.
- *
- * Synchronous by design: the referenced entity's `fileType`/`subType` are
- * resolved server-side precisely so this costs no fetch per row.
- *
- * A reference that resolves to nothing gets the reminder icon, not the unknown-file
- * glyph, which on a reminder row reads as breakage rather than as a reminder.
- * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
- * returns the literal `unknown`, and `validateEntity` returns `default`.
- */
-export function reminderReferenceIconType(
-  reference: NonNullable<ReminderEntity['referencedEntity']>
-): EntityWithValidIcon {
-  if (reference.type === 'crm_company') return 'company';
-  if (reference.type === 'crm_contact') return 'contact';
-  const blockName = itemToBlockName(
-    {
-      type: reference.type,
-      fileType: reference.fileType,
-      subType: reference.subType
-        ? { type: reference.subType as NamedSubType }
-        : undefined,
-    },
-    true
-  );
-
-  const iconType = blockName ? validateEntity(blockName) : 'default';
-  return UNRESOLVED_ICONS.has(iconType) ? 'reminder' : iconType;
 }
 
 export function getEntityIconConfig(
@@ -721,6 +717,9 @@ export function getPreviewItemIconType(item: PreviewItem): EntityWithValidIcon {
   if (item.loading || item.access !== 'access') {
     return 'default';
   }
+  // A pipeline previews like an entity but is not one.
+  const { type } = item;
+  if (type === 'crm_pipeline') return 'pipeline';
 
-  return getEntityIconType(item);
+  return getEntityIconType({ ...item, type });
 }

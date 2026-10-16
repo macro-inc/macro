@@ -9,7 +9,7 @@ mod test;
 use models_databases::EntityKind as OpEntityKind;
 use models_databases::property::stored_cast_kind;
 pub use models_databases::property::{DataType, OptionValue};
-use models_databases::{ColumnId, DatabaseId, OptionId, TableId};
+use models_databases::{ColumnId, DatabaseId, Formula, OptionId, TableId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
@@ -69,6 +69,11 @@ pub struct ColumnSchema {
     pub property: PropertyType,
     /// The definition's options, in any order.
     pub options: Vec<OptionSchema>,
+    /// For a derived column, its formula; its definition says what the
+    /// formula yields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[specta(optional)]
+    pub formula: Option<Formula>,
 }
 
 /// A column's type as the properties system stores it.
@@ -174,6 +179,7 @@ pub fn build(schema: &Schema, scope: Option<DatabaseId>) -> Catalog {
                     placement: column.id,
                     name: column.name.clone(),
                     kind: column.kind(),
+                    formula: column.formula.clone(),
                 })
                 .collect(),
             source: TableSource::Database,

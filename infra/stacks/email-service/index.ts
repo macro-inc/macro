@@ -386,6 +386,11 @@ emailAttachmentBucket.attachCloudfrontPolicy({
   emailServiceRoleArn: emailServiceRole.arn,
 });
 
+// Services hosting `ai_tools` stage SendEmail attachments in this bucket
+// (`ATTACHMENT_BUCKET`), which the scheduled sender then reads.
+export const emailAttachmentsBucketArn = emailAttachmentBucket.bucket.arn;
+export const emailAttachmentsBucketName = emailAttachmentBucket.bucket.bucket;
+
 const containerEnvVars = [
   {
     name: 'ENVIRONMENT',

@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
 import type { AddPropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/addPropertyOptionRequest';
@@ -14,29 +14,31 @@ import { propertiesKeys } from './keys';
 // with undefined data under an app-shell Suspense boundary would remount-loop.
 const EMPTY_OPTIONS: PropertyOption[] = [];
 
+function propertyOptionsQueryOptions(
+  propertyDefinitionId: string,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: propertiesKeys.options({ propertyDefinitionId }).queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        propertiesServiceClient.getPropertyOptions({
+          definition_id: propertyDefinitionId,
+        })
+      ),
+    enabled,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    placeholderData: EMPTY_OPTIONS,
+  });
+}
+
 export function usePropertyOptionsQuery(
   propertyDefinitionId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
 ) {
-  return useQuery(() => {
-    const defId = propertyDefinitionId();
-    return {
-      queryKey: propertiesKeys.options({ propertyDefinitionId: defId })
-        .queryKey,
-      queryFn: async () => {
-        const result = await throwOnErr(
-          async () =>
-            await propertiesServiceClient.getPropertyOptions({
-              definition_id: defId,
-            })
-        );
-        return result;
-      },
-      enabled: enabled(),
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      placeholderData: EMPTY_OPTIONS,
-    };
-  });
+  return useQuery(() =>
+    propertyOptionsQueryOptions(propertyDefinitionId(), enabled())
+  );
 }
 
 function invalidatePropertyOptions(propertyDefinitionId: string) {

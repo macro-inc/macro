@@ -3,20 +3,25 @@ import { TZDate } from '@date-fns/tz';
 import type { ActionTrigger } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import {
+  type EventTriggerDraft,
   newScheduleTrigger,
   type RoutineTriggerDraft,
 } from '../core/routine-triggers';
+
+function serializeFilter(trigger: EventTriggerDraft) {
+  const condition = trigger.condition?.trim();
+  return {
+    events: trigger.events,
+    ...(trigger.ids === undefined ? {} : { ids: trigger.ids }),
+    ...(condition ? { condition } : {}),
+  };
+}
 
 export function serializeTrigger(trigger: RoutineTriggerDraft) {
   if (trigger.kind === 'event')
     return {
       type: 'events' as const,
-      filters: [
-        {
-          events: trigger.events,
-          ...(trigger.ids === undefined ? {} : { ids: trigger.ids }),
-        },
-      ],
+      filters: [serializeFilter(trigger)],
     };
   const [hour, minute] = trigger.time.split(':').map(Number);
   if (trigger.frequency === 'once') {
@@ -48,14 +53,7 @@ export function serializeTriggers(
     .filter((trigger) => trigger.kind === 'schedule')
     .map(serializeTrigger);
   const filters = triggers.flatMap((trigger) =>
-    trigger.kind === 'event'
-      ? [
-          {
-            events: trigger.events,
-            ...(trigger.ids === undefined ? {} : { ids: trigger.ids }),
-          },
-        ]
-      : []
+    trigger.kind === 'event' ? [serializeFilter(trigger)] : []
   );
   const values = [
     ...schedules,
@@ -79,6 +77,7 @@ export function parseRoutineTriggers(
         kind: 'event',
         events: filter.events,
         ids: filter.ids ?? undefined,
+        condition: filter.condition ?? undefined,
       }));
     const draft = {
       ...newScheduleTrigger('custom'),

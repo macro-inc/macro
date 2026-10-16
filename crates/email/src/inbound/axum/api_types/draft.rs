@@ -130,6 +130,7 @@ impl CreateDraftRequest {
         let draft = self.draft;
 
         CreateDraftInput {
+            sender_email: None,
             db_id: draft.db_id,
             provider_id: draft.provider_id,
             replying_to_id: draft.replying_to_id,

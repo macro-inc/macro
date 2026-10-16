@@ -10,7 +10,11 @@ fn brief() -> TaskBrief {
     TaskBrief {
         title: "Fix export".to_owned(),
         markdown: "Include archived rows in CSV exports.".to_owned(),
-        project_id: None,
+        status: None,
+        priority: None,
+        due: None,
+        assignee_ids: Vec::new(),
+        project: None,
     }
 }
 
@@ -381,7 +385,10 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
         .returning(move |_| {
             Box::pin(async move {
                 Ok(Some(TaskBrief {
-                    project_id: Some(project_id),
+                    project: Some(trigger_context::ProjectRef {
+                        id: project_id.as_uuid(),
+                        name: "Exports".to_owned(),
+                    }),
                     ..brief()
                 }))
             })
@@ -397,13 +404,36 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
             message.content = input.content;
             Ok(message)
         });
+    let mut people = crate::domain::context::MockPeopleDirectory::new();
+    people.expect_people().once().returning(|ids| {
+        Box::pin(async move {
+            Ok(ids
+                .into_iter()
+                .map(|id| trigger_context::ContextPerson {
+                    name: format!("name of {id}"),
+                    email: None,
+                    id,
+                })
+                .collect())
+        })
+    });
     let broker = RecordedEvents::default();
-    process_task_assignment(&trigger, &broker, &commands, &context, &assignment)
+    process_task_assignment(&trigger, &broker, &commands, &context, &people, &assignment)
         .await
         .unwrap();
     let events = broker.0.lock().unwrap();
     assert_eq!(events.len(), 1);
     let metadata = &events[0]["metadata"];
+    let context = &metadata["context"];
+    assert_eq!(context["kind"], "task_assigned");
+    assert_eq!(context["task"]["id"], "task-1");
+    assert_eq!(context["task"]["title"], "Fix export");
+    assert_eq!(
+        context["task"]["project"],
+        serde_json::json!({ "id": project_id.to_string(), "name": "Exports" })
+    );
+    assert_eq!(context["assigned_by"]["id"], assignment.actor.as_ref());
+    assert_eq!(context["discussion_id"], event_id.to_string());
     assert_eq!(metadata["source"], "assigned_to_task");
     assert_eq!(metadata["bot_id"], bot_id::CODEX_BOT_ID.to_string());
     let prompt = metadata["prompt"].as_str().unwrap();

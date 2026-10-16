@@ -3,7 +3,7 @@
   color: var(--post-ink);
   font-family: 'Roboto Slab Variable', display, serif;
   font-size: clamp(36px, 5.4vw, 56px);
-  font-weight: 315;
+  font-weight: calc(315 + var(--cream-slab-weight-increase, 0));
   letter-spacing: -0.035em;
   line-height: 1.16;
   text-wrap: balance;

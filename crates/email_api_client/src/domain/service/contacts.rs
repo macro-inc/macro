@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use super::super::models::EmailApiError;
 use super::super::ports::{MailboxContactsClient, ProviderRateLimiter, ProviderTokenSource};
-use super::{ApiOperationKind, EmailApiClientServiceImpl};
+use super::{ApiOperationKind, EmailApiClientServiceImpl, log_operation_error};
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
@@ -12,7 +12,7 @@ where
     L: ProviderRateLimiter,
 {
     /// Fetches the linked mailbox owner's contact record.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self))]
     pub async fn get_self_contact(&self, link_id: Uuid) -> Result<Contact, EmailApiError> {
         let access_token = self
             .prepare(link_id, ApiOperationKind::ListContacts)
@@ -21,10 +21,14 @@ where
         self.repository
             .get_self_contact(&access_token, link_id)
             .await
+            .inspect_err(log_operation_error)
     }
 
     /// Lists primary contacts, optionally continuing an incremental synchronization.
-    #[tracing::instrument(skip(self, sync_token), err)]
+    ///
+    /// Failures log at WARN: an expired sync token ([`EmailApiError::OutdatedCursor`])
+    /// or a grant without the contacts scopes is routine, and callers recover or skip.
+    #[tracing::instrument(skip(self, sync_token), err(level = "warn"))]
     pub async fn list_contacts(
         &self,
         link_id: Uuid,
@@ -40,7 +44,9 @@ where
     }
 
     /// Lists automatically collected contacts, optionally continuing a synchronization.
-    #[tracing::instrument(skip(self, sync_token), err)]
+    ///
+    /// Failures log at WARN for the same reasons as [`Self::list_contacts`].
+    #[tracing::instrument(skip(self, sync_token), err(level = "warn"))]
     pub async fn list_other_contacts(
         &self,
         link_id: Uuid,

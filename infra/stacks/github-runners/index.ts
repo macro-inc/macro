@@ -4,7 +4,7 @@ import { SmokeTestRunner } from './runner';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'github-runners',
 };
 

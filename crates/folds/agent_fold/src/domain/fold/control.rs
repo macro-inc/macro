@@ -6,41 +6,26 @@ use agent_runtime_protocol::domain::action::AgentActionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 
-use super::state::{Changed, FoldState, Turn};
+use super::state::{Changed, FoldState};
 
 impl FoldState {
-    /// Open a turn for a compact: the invocation renders as a control part,
-    /// and how it went is the turn's own reply and stop reason, not an
-    /// outcome to track separately.
-    pub(super) fn begin_compact(
-        &mut self,
-        prompt_id: &RequestId,
-        user_id: Option<MacroUserIdStr<'static>>,
-    ) -> Option<Changed> {
-        let closed = self.close_turn(None);
-        debug_assert!(closed.is_none());
+    /// Show that the agent summarized its own context. Nothing answers it,
+    /// and it is no turn: it lands between turns, or beside one running.
+    pub(super) fn record_compaction(&mut self) -> Option<Changed> {
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
         let message = self.messages.len();
         self.messages.push(FoldedMessage {
             id,
-            author: Author::User { user_id },
-            request_id: AgentActionId::from_request_id(prompt_id),
+            author: Author::Agent,
+            request_id: None,
             parts: NonEmpty::one(MessagePart::Control {
                 control: Control::Compact,
                 outcome: ControlOutcome::Accepted,
             }),
             stop: None,
             pending: self.speculative,
-        });
-        self.turn = Some(Turn {
-            id,
-            prompt_pending: self.speculative,
-            stop_requested: false,
-            prompt_id: Some(prompt_id.clone()),
-            agent: None,
-            plan_position: None,
-            expects_reply: false,
+            posted_at: None,
         });
         Some(Changed::new(message))
     }
@@ -72,6 +57,7 @@ impl FoldState {
             parts: NonEmpty::one(MessagePart::Control { control, outcome }),
             stop: None,
             pending: self.speculative,
+            posted_at: None,
         });
         Some(Changed::new(message))
     }

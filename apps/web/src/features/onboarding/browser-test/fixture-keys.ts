@@ -1,5 +1,7 @@
 /** sessionStorage keys shared by the fixture page and its Playwright tests. */
 export const FIXTURE_KEYS = {
+  /** Explicit preview palette retained through simulated external redirects. */
+  theme: 'onboarding-fixture:theme',
   /** Partial world merged over the defaults on the first load. */
   seed: 'onboarding-fixture:seed',
   /** The fake backend's current state, persisted across reloads. */

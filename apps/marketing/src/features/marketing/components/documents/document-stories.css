@@ -131,3 +131,116 @@
   .doc-story-merged, .doc-share-card, .doc-share-person[data-new='true'] { animation: none; }
   .doc-sync-status[data-status='connecting'] > svg { animation: none; }
 }
+
+/* Split layout follows the app: adjacent panes on desktop, one pane on mobile. */
+.doc-source-split { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; height: 100%; }
+.doc-source-original, .doc-source-view { position: relative; display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; min-height: 0; }
+.doc-source-view { border-left: 1px solid var(--color-edge-muted); background: var(--color-panel); overflow: hidden; }
+.doc-source-view > [data-view-shell-top-bar] { padding-right: 42px; }
+.doc-source-close { position: absolute; right: 8px; top: 12px; z-index: 6; }
+.doc-source-split[data-narrow=true][data-source-open=true] > .doc-source-original { visibility: hidden; }
+.doc-source-split[data-narrow=true] > .doc-source-view { position: absolute; inset: 0; z-index: 8; border-left: 0; }
+.doc-source-split .doc-share-scrim { z-index: 9; }
+@container sample-main (max-width: 620px) {
+  .doc-source-original .doc-story-page { padding-top: 28px; }
+  .doc-source-original .doc-story-title { font-size: 22px; }
+  .doc-source-original .doc-story-body { font-size: 14px; }
+}
+.doc-source-link { display: inline; border-radius: 3px; color: inherit; text-align: left; }
+.doc-source-link:hover { background: var(--color-hover); }
+.doc-source-link:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+.doc-project-discussion { margin-top: 32px; }
+.doc-agent-context { min-height: 212px; max-width: 700px; margin: 0 auto 12px; padding-inline: 16px; text-align: left; }
+
+/* In a phone-sized source pane, keep the title, sharing, details, and close visible. */
+@container sample-main (max-width: 420px) {
+  .doc-source-view [aria-label='Mark as unread'],
+  .doc-source-view [aria-label='Mark done'],
+  .doc-source-view [aria-label='Copy email link'],
+  .doc-source-view [aria-label='Link copied'] { display: none; }
+}
+
+/* Docs keeps its complete, scrollable editor above the decorative stage tail. */
+.docs-page .doc-story-page { padding-top: 30px; padding-bottom: 32px; }
+.docs-page .doc-story-body { font-size: 15px; line-height: 1.7; }
+.docs-page .doc-story-title { font-size: 26px; line-height: 34px; }
+.docs-page .doc-story-body > h2 { margin-top: 24px; }
+.docs-page .email-desktop-demo { mask-image: none; -webkit-mask-image: none; }
+.docs-page .email-desktop-wallpaper { padding-bottom: 48px; }
+.docs-page .email-desktop-demo .product-demo { height: 660px; }
+.docs-page .email-desktop-demo .doc-story-page { max-width: 720px; }
+.doc-named-caret::before { content: attr(data-name); position: absolute; bottom: 100%; left: 0; padding: 1px 5px; background: var(--doc-caret, #6b7280); color: white; border-radius: 3px 3px 3px 0; font-size: 10px; line-height: 15px; white-space: nowrap; }
+.doc-organization { position: relative; }
+.doc-organizer { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.doc-organizer [hidden] { display: none !important; }
+.doc-collection { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.doc-collection-search { padding: 18px 20px 12px; max-width: 560px; }
+.doc-collection-rows { padding: 4px 10px 24px; }
+.doc-collection-row { display: flex; align-items: center; gap: 12px; padding: 14px 14px; width: 100%; min-width: 0; text-align: left; border-radius: 8px; font-size: 14px; }
+.doc-collection-row:hover { background: var(--color-hover); }
+.doc-collection-row:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.doc-collection-row > svg { width: 18px; height: 18px; flex: none; }
+.doc-collection-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-collection-row time { min-width: 76px; text-align: right; font-size: 12px; color: var(--color-ink-extra-muted); }
+.doc-row-tags { display: flex; gap: 12px; font-size: 11px; color: var(--color-ink-muted); }
+.doc-row-tags > span, .doc-click-tags button { display: inline-flex; align-items: center; gap: 6px; }
+.doc-filter { display: flex; align-items: center; gap: 8px; margin: 0 24px 12px; font-size: 12px; }
+.doc-filter > span:first-child { color: var(--color-ink-muted); }
+.doc-filter b { font-weight: 500; }
+.doc-filter button { padding: 4px; border-radius: 4px; }
+.doc-click-tags { display: flex; gap: 8px; padding-left: 6px; }
+.doc-click-tags button { padding: 3px 6px; border-radius: 5px; color: var(--color-ink-muted); font-size: 12px; }
+.doc-click-tags button:hover { background: var(--color-hover); }
+.doc-organize-pointer { position: absolute; inset: 0 auto auto 0; z-index: 10; pointer-events: none; transition: transform 700ms ease; }
+@media (max-width: 699px) {
+  .docs-page .doc-story-page { padding-top: 24px; }
+  .docs-page .doc-story-title { font-size: 23px; line-height: 30px; }
+  .docs-page .doc-story-body { font-size: 14px; }
+  .docs-page .email-desktop-demo .product-demo { height: 650px; }
+  .doc-collection-row { gap: 8px; padding-inline: 8px; }
+  .doc-collection-row time { min-width: 60px; font-size: 11px; }
+  .doc-row-tags { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .doc-organize-pointer { transition: none; } }
+.docs-page .email-desktop-content { height: 660px; }
+@media (max-width: 699px) { .docs-page .email-desktop-content { height: 650px; } }
+
+/* The agent transcript sits directly on the page, before the shared editor. */
+.doc-agent-conversation { max-width: 700px; margin: 0 auto 12px; }
+.doc-agent-conversation .homepage-conversation { margin-bottom: 0; }
+.doc-agent-conversation .homepage-message { max-width: 100%; }
+.doc-agent-tools { max-width: 700px; min-height: 228px; margin: 0 auto 8px; padding-inline: 16px; text-align: left; }
+.product-page .docs-jump-links { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 699px) {
+  .doc-agent-tools { min-height: 248px; padding-inline: 0; }
+  .product-page .docs-jump-links { gap: 12px; }
+  .docs-jump-links .email-feature-graphic { width: 100%; height: 78px; }
+  .docs-jump-links a { min-width: 0; font-size: 12px; }
+}
+
+/* Keep the prompt still and reserve the final paragraph's line wrapping. */
+.doc-agent-conversation .homepage-enter { animation: none; opacity: 1; transform: none; }
+.doc-agent-conversation .homepage-message-body { white-space: normal; }
+.doc-story-body > .doc-stable-edit { display: grid; }
+.doc-stable-edit > span { grid-area: 1 / 1; min-width: 0; }
+.doc-edit-measure { visibility: hidden; pointer-events: none; user-select: none; }
+.doc-stable-edit .doc-caret { height: 1em; line-height: 1; }
+
+/* Equal source panes within the standard feature window. */
+.doc-multi-split { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; }
+.doc-multi-original, .doc-multi-pane { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; }
+.doc-multi-split[data-narrow=true][data-open=true] > .doc-multi-original { visibility: hidden; }
+.doc-multi-split[data-narrow=true] > .doc-multi-pane { position: absolute; inset: 0; visibility: hidden; }
+.doc-multi-split[data-narrow=true] > .doc-multi-pane[data-active=true] { visibility: visible; z-index: 8; }
+.docs-wide-demo .doc-story-title { font-size: 24px; }
+.docs-wide-demo .doc-story-scroll { padding-inline: 24px; }
+.doc-edit-measure::before { content: attr(data-content); }
+.doc-agent-tools { transition: min-height 380ms ease; }
+.doc-agent-tools[data-open=false] { min-height: 32px; }
+@media (prefers-reduced-motion: reduce) { .doc-agent-tools { transition: none; } }
+
+.docs-page .email-page-hero-description { white-space:nowrap; }
+.docs-page .email-page-hero-break { display:block; }
+@media(max-width:699px) {
+  .docs-page .email-page-hero > .email-page-hero-description { font-size:clamp(10px, 2.9vw, 14px); }
+}

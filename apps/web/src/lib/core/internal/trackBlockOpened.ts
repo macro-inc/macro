@@ -27,10 +27,12 @@ function isSoupEntityTag(
       'routine',
       'agent_session',
       'database',
+      'form',
       'calendar_event',
       'foreign',
       'crm_company',
       'crm_contact',
+      'crm_pipeline',
       'initiative',
       () => false
     )

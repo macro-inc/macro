@@ -1365,6 +1365,10 @@
             "type": "string",
             "description": "The user who sent the invitation"
           },
+          "isDirectMessage": {
+            "type": "boolean",
+            "description": "Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording."
+          },
           "messageContent": {
             "type": ["string", "null"],
             "description": "Message content to show in the invite email, when the invite was triggered by a message."
@@ -1740,6 +1744,64 @@
           }
         }
       },
+      "EntityAccessGrantedMetadata": {
+        "type": "object",
+        "description": "A person granted you access to a shared entity.",
+        "required": ["requestId", "revision", "entityName", "accessLevel"],
+        "properties": {
+          "accessLevel": {
+            "$ref": "#/components/schemas/RequestedAccessLevel",
+            "description": "Requested or granted permission."
+          },
+          "entityName": {
+            "type": "string",
+            "description": "Shared item's name."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "Document file type for routing."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable request identity."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Revision that generated this notification."
+          }
+        }
+      },
+      "EntityAccessRequestedMetadata": {
+        "type": "object",
+        "description": "A person requested access to a shared entity.",
+        "required": ["requestId", "revision", "entityName", "accessLevel"],
+        "properties": {
+          "accessLevel": {
+            "$ref": "#/components/schemas/RequestedAccessLevel",
+            "description": "Requested or granted permission."
+          },
+          "entityName": {
+            "type": "string",
+            "description": "Shared item's name."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "Document file type for routing."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable request identity."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Revision that generated this notification."
+          }
+        }
+      },
       "EntityType": {
         "type": "string",
         "description": "The type of an entity in Macro",
@@ -1758,13 +1820,15 @@
           "static_file",
           "crm_company",
           "crm_contact",
+          "crm_pipeline",
           "reminder",
           "skill",
           "agent_session",
           "scheduled_action",
           "initiative",
           "database",
-          "database_row"
+          "database_row",
+          "form"
         ]
       },
       "ErrorResponse": {
@@ -2418,6 +2482,36 @@
           },
           {
             "type": "object",
+            "description": "Someone requested more access to a shared entity.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/EntityAccessRequestedMetadata",
+                "description": "Someone requested more access to a shared entity."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["entity_access_requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An owner granted requested access.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/EntityAccessGrantedMetadata",
+                "description": "An owner granted requested access."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["entity_access_granted"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Someone commented, replied, or mentioned the recipient on a project.",
             "required": ["content", "tag"],
             "properties": {
@@ -3003,6 +3097,11 @@
             "description": "the thread id"
           }
         }
+      },
+      "RequestedAccessLevel": {
+        "type": "string",
+        "description": "Permission level used by an access request, excluding ownership.",
+        "enum": ["view", "comment", "edit"]
       },
       "TaskAssignedMetadata": {
         "type": "object",

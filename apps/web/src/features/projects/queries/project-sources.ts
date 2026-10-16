@@ -1,5 +1,6 @@
 import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import type { CacheHost } from '@graphql-cache/host/types';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
@@ -7,31 +8,34 @@ import {
   refetchGraphqlInitiativeProperties,
 } from '@queries/properties/graphql/entity';
 import { propertiesKeys } from '@queries/properties/keys';
-import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
 import type { initiativeClient } from '@service-storage/initiative';
-import { type QueryClient, useMutation, useQuery } from '@tanstack/solid-query';
-import type { Client } from '@urql/core';
+import { type QueryClient, useMutation } from '@tanstack/solid-query';
+import { type Client, CombinedError } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
 import { createProjectMutation } from './create-project';
-import { projectKeys } from './keys';
-import { projectDetailQueryOptions } from './project-identity';
+import { createProjectDetailQuery } from './project-identity';
 import { projectDefinitionProperties } from './project-properties';
+import { refreshProjectQueries } from './project-revalidation';
 import { createProjectSoupSource } from './project-soup';
 import { TASK_PROJECT_PROPERTY, taskProjectValue } from './task-project';
 
 type ProjectCommands = ReturnType<ProjectsContext['createCommands']>;
 
 const accessLost = (error: unknown) =>
-  ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
-    thrownResultErrorHasCode(error, code)
+  ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some(
+    (code) =>
+      thrownResultErrorHasCode(error, code) ||
+      (error instanceof CombinedError &&
+        error.graphQLErrors.some((error) => error.extensions.code === code))
   );
 
 /** GraphQL Soup lists projects. */
 export type ProjectSoupTransport = {
   client(): Client;
+  cacheHost?(): CacheHost | undefined;
 };
 
 /** Transport and cache mechanics stay outside the feature's reactive consumers. */
@@ -42,12 +46,7 @@ export function createProjectSources(
   userId: Accessor<string | undefined>,
   createReadGate: () => Accessor<boolean> = () => () => true
 ): ProjectsContext {
-  const refresh = async () => {
-    await Promise.all([
-      cache.invalidateQueries({ queryKey: projectKeys._def }),
-      refreshActiveGraphqlSoupQueries(),
-    ]);
-  };
+  const refresh = () => refreshProjectQueries(soup.client());
   const context: ProjectsContext = {
     userId,
     createPropertyDefinitionsSource() {
@@ -74,15 +73,11 @@ export function createProjectSources(
     },
     createProjectSource(id) {
       const readEnabled = createReadGate();
-      const query = useQuery(
-        () => {
-          const projectId = id();
-          return {
-            ...projectDetailQueryOptions(client, userId(), projectId),
-            enabled: readEnabled() && Boolean(userId() && projectId),
-          };
-        },
-        () => cache
+      const query = createProjectDetailQuery(
+        soup.client,
+        userId,
+        id,
+        readEnabled
       );
       return {
         project: () =>
@@ -122,7 +117,12 @@ export function createProjectSources(
               ],
           ...rest
         );
-      const create = createProjectMutation(client, cache, userId);
+      const create = createProjectMutation(
+        client,
+        cache,
+        userId,
+        soup.cacheHost
+      );
       const update = useMutation(
         () => ({
           mutationFn: ({

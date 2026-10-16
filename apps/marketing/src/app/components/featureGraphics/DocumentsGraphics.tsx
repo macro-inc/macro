@@ -4844,7 +4844,7 @@ function _FaqSection() {
           style={{
             'font-family': 'display',
             'font-size': mobile() ? '34px' : '42px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.018em',
             'line-height': 1.1,
             margin: 0,

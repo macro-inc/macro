@@ -17,19 +17,21 @@ async function fetchProjectData(projectId: string): Promise<Project> {
   return result.value.projectMetadata;
 }
 
+// Cached callbacks outlive the caller; only the resolved id enters them.
+function projectDataQueryOptions(id: string | undefined | null) {
+  return {
+    queryKey: id
+      ? entityKeys.projectData(id).queryKey
+      : entityKeys.projectData._def,
+    queryFn: () => fetchProjectData(id!),
+    staleTime: STALE_TIME,
+    gcTime: GC_TIME,
+    enabled: !!id,
+  };
+}
+
 export function useProjectDataQuery(
   projectId: Accessor<string | undefined | null>
 ) {
-  return useQuery(() => {
-    const id = projectId();
-    return {
-      queryKey: id
-        ? entityKeys.projectData(id).queryKey
-        : entityKeys.projectData._def,
-      queryFn: () => fetchProjectData(id!),
-      staleTime: STALE_TIME,
-      gcTime: GC_TIME,
-      enabled: !!id,
-    };
-  });
+  return useQuery(() => projectDataQueryOptions(projectId()));
 }

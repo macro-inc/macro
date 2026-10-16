@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn accepts_fragment_only_object_document() {
     let selection = RecordSelection::parse(
+        crate::meta::bundled_schema_ref(),
         r#"
         fragment SoupItemFields on GraphqlSoupDocument {
           documentId: id
@@ -20,6 +21,7 @@ fn accepts_fragment_only_object_document() {
 #[test]
 fn accepts_normalized_union_selection() {
     let selection = RecordSelection::parse(
+        crate::meta::bundled_schema_ref(),
         r#"
         fragment SoupEntities on GraphqlSoupEntity {
           __typename
@@ -45,14 +47,19 @@ fn accepts_normalized_union_selection() {
 
 #[test]
 fn rejects_embedded_root_and_unbound_variables() {
-    let embedded =
-        RecordSelection::parse("fragment Page on SoupPage { nextCursor }", "Page").unwrap_err();
+    let embedded = RecordSelection::parse(
+        crate::meta::bundled_schema_ref(),
+        "fragment Page on SoupPage { nextCursor }",
+        "Page",
+    )
+    .unwrap_err();
     assert!(matches!(
         embedded,
         RecordSelectionError::NotNormalized(ref name) if name == "SoupPage"
     ));
 
     let variable = RecordSelection::parse(
+        crate::meta::bundled_schema_ref(),
         r#"fragment UserSoup on GraphqlUser {
           soup(input: $input) { nextCursor }
         }"#,
@@ -68,17 +75,26 @@ fn rejects_embedded_root_and_unbound_variables() {
 #[test]
 fn rejects_unknown_fragment_and_type() {
     assert!(matches!(
-        RecordSelection::parse("fragment Item on GraphqlSoupDocument { id }", "Missing"),
+        RecordSelection::parse(
+            crate::meta::bundled_schema_ref(),
+            "fragment Item on GraphqlSoupDocument { id }",
+            "Missing"
+        ),
         Err(RecordSelectionError::Document(
             DocumentError::UnknownFragment(_)
         ))
     ));
     assert!(matches!(
-        RecordSelection::parse("fragment Item on MissingType { id }", "Item"),
+        RecordSelection::parse(
+            crate::meta::bundled_schema_ref(),
+            "fragment Item on MissingType { id }",
+            "Item"
+        ),
         Err(RecordSelectionError::UnknownType(_))
     ));
     assert!(matches!(
         RecordSelection::parse(
+            crate::meta::bundled_schema_ref(),
             "fragment Item on GraphqlSoupDocument { id } fragment Unused on MissingType { id }",
             "Item",
         ),

@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 /// A wall-clock window in an availability schedule.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TimeWindow {
     /// Inclusive HH:MM start.
@@ -14,7 +15,8 @@ pub struct TimeWindow {
     pub end: String,
 }
 /// Availability for one weekday.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct WeeklyDay {
     /// Sunday is zero.
     pub day: u8,
@@ -22,7 +24,8 @@ pub struct WeeklyDay {
     pub windows: Vec<TimeWindow>,
 }
 /// Replacement availability for one date.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DateOverride {
     /// Local date in the schedule zone.
     pub date: NaiveDate,
@@ -30,7 +33,8 @@ pub struct DateOverride {
     pub windows: Vec<TimeWindow>,
 }
 /// Reusable hours, with DST interpreted in an IANA zone.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Schedule {
     /// Stable schedule identity.
@@ -38,6 +42,7 @@ pub struct Schedule {
     /// Display name.
     pub name: String,
     /// IANA time zone.
+    #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
     pub time_zone: chrono_tz::Tz,
     /// Weekly windows.
     pub weekly: Vec<WeeklyDay>,
@@ -45,6 +50,7 @@ pub struct Schedule {
     pub overrides: Vec<DateOverride>,
 }
 /// Team host assignment policy.
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SchedulingMode {
@@ -56,7 +62,8 @@ pub enum SchedulingMode {
     RoundRobin,
 }
 /// A question on the booking form.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Question {
     /// Stable identity.
     pub id: Uuid,
@@ -66,7 +73,8 @@ pub struct Question {
     pub required: bool,
 }
 /// A reusable booking link.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct EventType {
     /// Stable identity.
@@ -81,7 +89,12 @@ pub struct EventType {
     pub duration_minutes: u16,
     /// Meeting location.
     pub location: String,
-    /// Generate a Google Meet conference.
+    /// Generate a Macro call and attach its join link when someone books.
+    /// Mutually exclusive with Google Meet. Omitted on links saved before
+    /// Macro calls were a booking option, which keep their previous conference.
+    #[serde(default)]
+    pub macro_call: bool,
+    /// Generate a Google Meet conference. Mutually exclusive with a Macro call.
     pub google_meet: bool,
     /// Whether new bookings are accepted.
     pub enabled: bool,
@@ -109,7 +122,8 @@ pub struct EventType {
     pub questions: Vec<Question>,
 }
 /// Editable configuration for a person or team.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
     /// Public, opaque profile identity.
@@ -139,6 +153,7 @@ pub struct OwnedProfile {
     pub profile: Profile,
 }
 /// Booking lifecycle state.
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BookingStatus {
@@ -154,6 +169,7 @@ pub enum BookingStatus {
     Failed,
 }
 /// Attendance recorded by an assigned host or profile administrator after a meeting.
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BookingAttendance {
@@ -168,6 +184,7 @@ pub enum BookingAttendance {
     HostNoShow,
 }
 /// Public booking details, also visible to authorized profile members.
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Booking {
@@ -186,6 +203,7 @@ pub struct Booking {
     /// Absolute meeting end.
     pub ends_at: DateTime<Utc>,
     /// Booker's display time zone.
+    #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
     pub time_zone: chrono_tz::Tz,
     /// Assigned hosts.
     pub hosts: Vec<String>,
@@ -268,7 +286,8 @@ pub struct BusyRange {
     pub end: DateTime<Utc>,
 }
 /// Available slot and the hosts who can satisfy it.
-#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Slot {
     /// Absolute start.
@@ -284,7 +303,7 @@ pub struct Slot {
 pub struct TeamMember {
     /// Macro user identity.
     pub user_id: String,
-    /// Whether this member administers scheduling.
+    /// Whether this member is a team owner or admin, who may manage any host's bookings.
     pub admin: bool,
 }
 /// Use-case failures mapped by transport adapters.
@@ -342,6 +361,8 @@ pub struct PublicEvent {
     pub duration_minutes: u16,
     /// Location shared by the host.
     pub location: String,
+    /// Whether a Macro call will be created for the booking.
+    pub macro_call: bool,
     /// Whether a Google Meet will be created.
     pub google_meet: bool,
     /// Information requested from the booker.

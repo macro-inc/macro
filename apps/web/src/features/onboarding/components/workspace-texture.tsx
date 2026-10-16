@@ -18,7 +18,10 @@ export function WorkspaceTexture(props: { accent: string; filterId: string }) {
         data-workspace-texture
         aria-hidden="true"
         class="pointer-events-none absolute inset-0 size-full"
-        style={{ opacity: 0.2, 'mask-image': textureMask }}
+        style={{
+          opacity: 'var(--workspace-grain-opacity, 0.2)',
+          'mask-image': textureMask,
+        }}
       >
         <filter id={props.filterId}>
           <feTurbulence

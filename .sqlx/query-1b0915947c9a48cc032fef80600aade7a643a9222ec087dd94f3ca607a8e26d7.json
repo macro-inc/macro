@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH incoming AS (\n            SELECT * FROM unnest($2::uuid[], $3::text[], $4::email_recipient_type[])\n            AS t(contact_id, name, recipient_type)\n        ), removed AS (\n            DELETE FROM email_message_recipients\n            WHERE message_id = $1::uuid\n              AND (contact_id, recipient_type) NOT IN (\n                  SELECT contact_id, recipient_type FROM incoming\n              )\n        )\n        INSERT INTO email_message_recipients (message_id, contact_id, name, recipient_type)\n        SELECT $1, contact_id, name, recipient_type FROM incoming\n        ON CONFLICT (message_id, contact_id, recipient_type) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "email_recipient_type[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "email_recipient_type",
+                  "kind": {
+                    "Enum": [
+                      "TO",
+                      "CC",
+                      "BCC"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1b0915947c9a48cc032fef80600aade7a643a9222ec087dd94f3ca607a8e26d7"
+}

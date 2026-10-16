@@ -20,6 +20,7 @@ fn allowed_original_urls_are_accepted() {
         "https://localhost/app/login",
         "https://dev.macro.com/app/login",
         "https://macro.com/app/login",
+        "https://www.macro.com/app/login",
     ] {
         let original_url = Url::parse(original_url).expect("test URL should parse");
         assert!(
@@ -34,8 +35,10 @@ fn untrusted_original_urls_are_rejected() {
     for original_url in [
         "https://example.com/app/login",
         "https://macro.com.example.com/app/login",
+        "https://www.macro.com.example.com/app/login",
         "https://staging.macro.com/app/login",
         "http://macro.com/app/login",
+        "http://www.macro.com/app/login",
         "http://dev.macro.com/app/login",
         "tauri://example.com/app/login",
         "http://127.0.0.1:3000/app/login",

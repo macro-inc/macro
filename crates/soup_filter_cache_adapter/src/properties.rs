@@ -113,7 +113,12 @@ fn extend_document(
 /// Upgrade legacy core/Mail mutations and maintain property-only writes atomically.
 /// An absent property snapshot cannot establish completeness; it may only retain
 /// same-identity property proof already present in the current profile.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit schema, storage, and authoritative write context"
+)]
 pub async fn augment_authoritative<S: cache_core::predicate::PredicateIndexStorage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
@@ -123,6 +128,7 @@ pub async fn augment_authoritative<S: cache_core::predicate::PredicateIndexStora
     mutations: Vec<ProjectionMutation>,
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
     let changes = prepare(
+        schema,
         storage,
         query,
         operation,

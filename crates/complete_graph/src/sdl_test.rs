@@ -1,4 +1,29 @@
 #[test]
+fn email_senders_are_embedded_and_legacy_participants_remain_available() {
+    let sdl = crate::build_schema().sdl();
+    let participant = sdl
+        .split_once("type GraphqlSoupEmailSender {")
+        .expect("email sender type")
+        .1
+        .split_once('}')
+        .expect("end of email sender type")
+        .0;
+    assert!(
+        participant
+            .lines()
+            .any(|line| line.trim() == "contactId: ID!")
+    );
+    assert!(sdl.contains("senders: [GraphqlSoupEmailSender!]!"));
+    assert!(sdl.contains("participants: [GraphqlSoupEmailParticipant!]!"));
+    assert!(
+        !participant
+            .lines()
+            .any(|line| line.trim().starts_with("id:")),
+        "message-specific names must not be normalized by contact ID"
+    );
+}
+
+#[test]
 fn soup_response_schema_exposes_frontend_fields() {
     let sdl = crate::build_schema().sdl();
 
@@ -16,6 +41,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "emailLabels: [GraphqlSoupEmailLabel!]!",
         "emailLinks: [GraphqlEmailLink!]!",
         "favorites(filter: FavoritesFilterInput): [GraphqlFavorite!]!",
+        "folders: [GraphqlSoupProject!]!",
         "input FavoritesFilterInput {",
         "entityTypes: [GraphqlEntityType!]! = []",
         "entityIds: [ID!]! = []",
@@ -26,10 +52,14 @@ fn soup_response_schema_exposes_frontend_fields() {
         "linkId: ID!",
         "latestInboundMessageTs: String",
         "senderPhotoUrl: String",
-        "participants: [GraphqlSoupEmailParticipant!]!",
+        "participants: [GraphqlSoupEmailParticipant!]! @deprecated(reason: \"Use senders to preserve message-specific display names.\")",
+        "senders: [GraphqlSoupEmailSender!]!",
         "attachments: [GraphqlSoupEmailAttachment!]!",
         "labels: [GraphqlSoupEmailLabel!]!",
         "type GraphqlEmailLink {",
+        "sendAs: [GraphqlEmailSendAsAddress!]",
+        "type GraphqlEmailSendAsAddress {",
+        "displayName: String",
         "macroId: String!",
         "emailAddress: String!",
         "photoUrl: String",
@@ -106,6 +136,13 @@ fn soup_response_schema_exposes_frontend_fields() {
         "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
         "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
         "saveEmailDraft(input: SaveEmailDraftInput!): SaveEmailDraftPayload!",
+        "sendEmailMessage(input: SendEmailMessageInput!): SendEmailMessagePayload!",
+        "input SendEmailMessageInput {",
+        "draft: SaveEmailDraftInput!",
+        "includeSignature: Boolean",
+        "type SendEmailMessagePayload {",
+        "messageId: ID!",
+        "senderEmail: String",
         "deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!",
         "input MarkEmailThreadSeenInput {",
         "input UpdateEmailThreadLabelInput {",
@@ -140,10 +177,28 @@ fn soup_response_schema_exposes_frontend_fields() {
     ] {
         assert_sdl_line(&sdl, expected);
     }
-    assert!(
-        sdl.contains("union GraphqlNotifEvent = GraphqlChannelMentionMetadata |"),
-        "notification metadata must be represented by the typed event union"
-    );
+    let schema = apollo_compiler::Schema::parse_and_validate(&sdl, "schema.graphql")
+        .expect("generated SDL is valid");
+    let apollo_compiler::schema::ExtendedType::Union(metadata) = schema
+        .types
+        .get("GraphqlNotifEvent")
+        .expect("notification metadata union exists")
+    else {
+        panic!("notification metadata must be represented by the typed event union");
+    };
+    for expected in [
+        "GraphqlChannelMentionMetadata",
+        "GraphqlEntityAccessRequestedMetadata",
+        "GraphqlEntityAccessGrantedMetadata",
+    ] {
+        assert!(
+            metadata
+                .members
+                .iter()
+                .any(|member| member.name.as_str() == expected),
+            "notification metadata union missing {expected}"
+        );
+    }
     assert_eq!(
         sdl.lines()
             .filter(|line| line.trim() == "metadata: GraphqlNotifEvent!")
@@ -288,7 +343,6 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupCall",
         "GraphqlSoupCrmCompany",
         "GraphqlSoupForeignEntity",
-        "GraphqlSoupReminder",
         "GraphqlSoupAgentSession",
         "GraphqlSoupDatabaseRow",
     ] {
@@ -514,6 +568,73 @@ fn database_rows_are_an_opt_in_soup_entity_named_by_table() {
 }
 
 #[test]
+fn crm_records_carry_their_pipeline_entries() {
+    let sdl = crate::build_schema().sdl();
+    let block = |declaration: &str| {
+        sdl.split_once(declaration)
+            .unwrap_or_else(|| panic!("schema has no `{declaration}`"))
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0
+            .to_owned()
+    };
+    for record in [
+        "type GraphqlSoupCrmCompany implements GraphqlSoupEntity {",
+        "type GraphqlSoupCrmContact implements GraphqlSoupEntity {",
+    ] {
+        assert_sdl_line(
+            &block(record),
+            "pipelineEntries: [GraphqlCrmPipelineEntry!]!",
+        );
+    }
+    let entry = block("type GraphqlCrmPipelineEntry {");
+    for field in [
+        "id: ID!",
+        "pipeline: GraphqlCrmPipeline!",
+        "cells: [GraphqlCrmPipelineCell!]!",
+    ] {
+        assert_sdl_line(&entry, field);
+    }
+    // A cell is a fact about its row, so it stays embedded in the entry.
+    let cell = block("type GraphqlCrmPipelineCell {");
+    assert!(!cell.lines().any(|line| line.trim() == "id: ID!"));
+    assert_sdl_line(&cell, "column: GraphqlCrmPipelineColumn!");
+    assert_sdl_line(&cell, "value: GraphqlPropertyValue");
+    let column = block("type GraphqlCrmPipelineColumn {");
+    assert_sdl_line(&column, "id: ID!");
+    assert_sdl_line(&column, "writable: Boolean!");
+    assert_sdl_line(&column, "options: [GraphqlPropertyOption!]!");
+    let pipeline = block("type GraphqlCrmPipeline {");
+    assert_sdl_line(&pipeline, "id: ID!");
+    assert_sdl_line(&pipeline, "canEdit: Boolean!");
+}
+
+#[test]
+fn crm_associations_scope_soup_and_compose_in_document_trees() {
+    let sdl = crate::build_schema().sdl();
+    let block = |declaration: &str| {
+        sdl.split_once(declaration)
+            .unwrap_or_else(|| panic!("schema has no `{declaration}`"))
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0
+            .to_owned()
+    };
+    assert_sdl_line(
+        &block("input GraphqlEntityFilterAst {"),
+        "crmAssociation: GraphqlCrmAssociation",
+    );
+    let document = block("input GraphqlDocumentLiteral @oneOf {");
+    assert_sdl_line(&document, "crmAssociated: GraphqlCrmAssociation");
+    assert_sdl_line(&document, "nameContains: String");
+    let association = block("input GraphqlCrmAssociation @oneOf {");
+    assert_sdl_line(&association, "company: ID");
+    assert_sdl_line(&association, "contact: ID");
+}
+
+#[test]
 fn scheduled_actions_hang_off_the_authenticated_user() {
     use apollo_compiler::schema::ExtendedType;
 
@@ -538,6 +659,8 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
         "CHANNEL_MENTIONED",
         "CHANNEL_MESSAGE_PATCHED",
         "CHANNEL_MESSAGE_ATTACHMENT_CREATED",
+        "CALL_STARTED",
+        "CALL_ENDED",
     ] {
         assert_sdl_line(&sdl, value);
     }
@@ -709,6 +832,65 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
         entity_ids.contains("empty list matches nothing"),
         "{entity_ids}"
     );
+}
+
+#[test]
+fn calendar_reads_hang_off_the_authenticated_user() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "calendars: [GraphqlCalendar!]!",
+        "calendarOccurrences(input: CalendarRangeInput!): GraphqlCalendarOccurrencePage!",
+        "union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime",
+        "watermark: [GraphqlCalendarLinkWatermark!]!",
+        "calendarChanges(input: CalendarChangesInput!): GraphqlCalendarChanges!",
+        "since: [CalendarLinkWatermarkInput!]!",
+        "newWatermark: [GraphqlCalendarLinkWatermark!]!",
+        "occurrences: [GraphqlCalendarOccurrence!]!",
+        "createCalendarEvent(input: CreateCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "updateCalendarEvent(input: UpdateCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "deleteCalendarEvent(input: DeleteCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "respondToCalendarEvent(input: RespondToCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "input CalendarEventTimeInput @oneOf {",
+        "deletedEventId: ID",
+        "needsCalendarPermission: Boolean!",
+        "calendarDisabled: Boolean!",
+        "hasCalendarData: Boolean!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let ExtendedType::Object(occurrence) = schema
+        .types
+        .get("GraphqlCalendarOccurrence")
+        .expect("occurrence type")
+    else {
+        panic!("GraphqlCalendarOccurrence must be an object");
+    };
+    for scalar in ["id", "eventId", "linkId"] {
+        assert_eq!(occurrence.fields[scalar].ty.to_string(), "ID!");
+    }
+    assert_eq!(
+        occurrence.fields["event"].ty.to_string(),
+        "GraphqlCalendarEvent!"
+    );
+    for entity in ["GraphqlCalendarEvent", "GraphqlCalendar"] {
+        let ExtendedType::Object(object) = schema.types.get(entity).expect("entity type") else {
+            panic!("{entity} must be an object");
+        };
+        assert_eq!(object.fields["id"].ty.to_string(), "ID!");
+        assert_eq!(object.fields["linkId"].ty.to_string(), "ID!");
+    }
+
+    let ExtendedType::Object(root) = schema.types.get("SoupQueryRoot").expect("query root") else {
+        panic!("SoupQueryRoot must be an object");
+    };
+    assert!(!root.fields.contains_key("calendars"));
+    assert!(!root.fields.contains_key("calendarOccurrences"));
+    assert!(!root.fields.contains_key("calendarChanges"));
 }
 
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client

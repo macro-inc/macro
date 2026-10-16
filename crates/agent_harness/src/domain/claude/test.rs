@@ -150,6 +150,7 @@ async fn seed(
 ) -> AgentSessionId {
     let id = AgentSessionId::new();
     repo.create(CreateAgentSessionParams {
+        purpose: agent_session::domain::model::SessionPurpose::Standalone,
         repo_branch: None,
         id,
         bot_id: bot,

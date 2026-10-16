@@ -35,7 +35,7 @@ fn domain(input: &str) -> IResult<&str, &str> {
 
 /// Parser for local part (before @)
 fn atom(input: &str) -> IResult<&str, &str> {
-    take_while1(|c: char| c.is_ascii_alphanumeric() || "!#$%&'*+/=?^_`{|}~-".contains(c))
+    take_while1(|c: char| c.is_ascii_alphanumeric() || "!#%&'*+/=?^_`{|}~-".contains(c))
         .parse(input)
 }
 

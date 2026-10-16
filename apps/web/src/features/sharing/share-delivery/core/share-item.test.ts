@@ -20,8 +20,8 @@ const item = (overrides: Partial<ShareItem> = {}): ShareItem => ({
 const commentsOn = { markdownComments: true };
 
 describe('shareAccess', () => {
-  it.each(['agent_session', 'initiative'] as const)(
-    'leaves out a %s the sender does not own',
+  it.each(['agent_session', 'initiative', 'crm_pipeline'] as const)(
+    'leaves out a %s the sender cannot grant',
     (kind) => {
       expect(shareAccess(item({ kind, canGrant: false }))).toEqual({
         t: 'cannot-send',
@@ -48,9 +48,17 @@ describe('shareAccess', () => {
 });
 
 describe('owedGrant', () => {
-  it('grants native projects before the message and the rest after', () => {
+  it('grants native projects and pipelines before the message and the rest after', () => {
     expect(owedGrant(item({ kind: 'initiative' }), 'edit')).toEqual({
       when: 'before-send',
+      level: 'edit',
+    });
+    expect(owedGrant(item({ kind: 'crm_pipeline' }), 'comment')).toEqual({
+      when: 'before-send',
+      level: 'comment',
+    });
+    expect(owedGrant(item({ kind: 'form' }), 'edit')).toEqual({
+      when: 'after-send',
       level: 'edit',
     });
     expect(owedGrant(item(), 'comment')).toEqual({
@@ -136,6 +144,19 @@ describe('levelChoice', () => {
     expect(levelChoice([item()], { markdownComments: false })?.options).toEqual(
       ['view', 'comment', 'edit']
     );
+  });
+
+  it('never offers comment on a form, alone or in a batch', () => {
+    expect(levelChoice([item({ kind: 'form' })], commentsOn)).toEqual({
+      options: ['view', 'edit'],
+      initial: 'view',
+    });
+    expect(
+      levelChoice(
+        [item({ markdown: true }), item({ kind: 'form', id: 'form-1' })],
+        commentsOn
+      )?.options
+    ).toEqual(['view', 'edit']);
   });
 
   it('ignores a seeded comment level the control does not offer', () => {

@@ -1,14 +1,34 @@
 import type { IUser } from '@core/user';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createEditor, type LexicalEditor } from 'lexical';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createMenuOperations } from '../../../shared/inlineMenu';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { MentionsMenu } from './MentionsMenu';
+import { createItemHandler } from './utils/mentionHandlers';
+import * as mobileSort from './utils/mobileSort';
 
 const mocks = vi.hoisted(() => ({
   crmEnabled: false,
+  mobile: false,
   requestedBuckets: [] as string[],
+  contacts: [] as import('@core/context/quickAccess').EntityItem[],
+  hasMoreContacts: false,
+  loadMoreContacts: vi.fn(async () => {}),
+}));
+
+vi.mock('@app/features/crm/record-adapter', () => ({
+  useCrmContactMentionSource: () => {
+    mocks.requestedBuckets.push('crm_contact');
+    return {
+      entities: () => mocks.contacts,
+      totalCount: () => mocks.contacts.length,
+      hasMore: () => mocks.hasMoreContacts,
+      isLoadingMore: () => false,
+      loadMore: mocks.loadMoreContacts,
+    };
+  },
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
@@ -51,7 +71,7 @@ vi.mock('@core/context/user', () => ({
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: () => 'md',
 }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mocks.mobile }));
 vi.mock('@core/util/dateSearch/useDateSearch', () => ({
   useDateSearch: () => () => [],
 }));
@@ -81,7 +101,11 @@ const originalScrollIntoView = Element.prototype.scrollIntoView;
 
 afterEach(() => {
   mocks.crmEnabled = false;
+  mocks.mobile = false;
   mocks.requestedBuckets = [];
+  mocks.contacts = [];
+  mocks.hasMoreContacts = false;
+  mocks.loadMoreContacts.mockClear();
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -130,7 +154,111 @@ it('keeps matching category and row nodes mounted across typing and updated peop
   expect(menu.isOpen()).toBe(false);
 });
 
-it('offers CRM companies but not CRM contacts', () => {
+it.each([false, true])(
+  'leaves closed mention sources idle and refreshes them on reopen (mobile: %s)',
+  async (mobile) => {
+    mocks.mobile = mobile;
+    vi.useFakeTimers();
+    Element.prototype.scrollIntoView = vi.fn();
+    const sort = vi.spyOn(mobileSort, 'sortMobileMentions');
+    const seamus: IUser = {
+      id: 'macro|seamus@macro.com',
+      name: 'Seamus Edson',
+      email: 'seamus@macro.com',
+    };
+    const [users, setUsers] = createSignal([seamus]);
+    const readUsers = vi.fn(users);
+    const readEntities = vi.fn(() => []);
+    const menu = createMenuOperations();
+    const onPick = vi.fn();
+    render(() => (
+      <MentionsMenu
+        menu={menu}
+        users={readUsers}
+        entities={readEntities}
+        sources={['users', 'documents', 'channels']}
+        anchor={document.createElement('div')}
+        onPick={onPick}
+      />
+    ));
+
+    expect(readUsers).not.toHaveBeenCalled();
+    expect(readEntities).not.toHaveBeenCalled();
+    expect(sort).not.toHaveBeenCalled();
+    menu.setSearchTerm('sea');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(readUsers).not.toHaveBeenCalled();
+    expect(readEntities).not.toHaveBeenCalled();
+    expect(sort).not.toHaveBeenCalled();
+
+    menu.openMenu();
+    expect(screen.getByTitle('Seamus Edson seamus@macro.com')).toBeTruthy();
+    expect(readUsers).toHaveBeenCalled();
+    expect(readEntities).toHaveBeenCalled();
+    if (mobile) expect(sort).toHaveBeenCalled();
+
+    menu.closeMenu();
+    readUsers.mockClear();
+    readEntities.mockClear();
+    sort.mockClear();
+    const updated = { ...seamus, name: 'Seamus Updated' };
+    setUsers([updated]);
+    menu.setSearchTerm('updated');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(readUsers).not.toHaveBeenCalled();
+    expect(readEntities).not.toHaveBeenCalled();
+    expect(sort).not.toHaveBeenCalled();
+
+    menu.openMenu();
+    expect(screen.getByTitle('Seamus Updated seamus@macro.com')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onPick).toHaveBeenCalledWith(
+      expect.objectContaining({ data: updated })
+    );
+    expect(menu.isOpen()).toBe(false);
+  }
+);
+
+it('only paginates an open mobile menu and resumes on reopen', async () => {
+  mocks.mobile = true;
+  mocks.crmEnabled = true;
+  mocks.hasMoreContacts = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  });
+  const menu = createMenuOperations();
+  const editor = createEditor();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={editor}
+      users={() => []}
+      sources={['users']}
+      includeContacts
+    />
+  ));
+  expect(mocks.loadMoreContacts).not.toHaveBeenCalled();
+
+  menu.openMenu();
+  await Promise.resolve();
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(1);
+
+  menu.closeMenu();
+  await Promise.resolve();
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(1);
+
+  menu.openMenu();
+  await Promise.resolve();
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(2);
+});
+
+it('offers CRM companies and contacts', () => {
   mocks.crmEnabled = true;
   vi.mocked(useEmailSearchMention).mockReturnValue({
     emails: () => [],
@@ -150,5 +278,48 @@ it('offers CRM companies but not CRM contacts', () => {
     />
   ));
   expect(mocks.requestedBuckets).toContain('crm_company');
-  expect(mocks.requestedBuckets).not.toContain('crm_contact');
+  expect(mocks.requestedBuckets).toContain('crm_contact');
+});
+
+it('opens cell pickers without replaying the menu entrance animation', () => {
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const { container } = render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => []}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+      animate={false}
+    />
+  ));
+  expect(screen.getByText('No results')).toBeTruthy();
+  expect(container.querySelector('.menu-open-animation')).toBeNull();
+});
+
+it('records mentions against the editing source outside a legacy block', () => {
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const editor = {
+    dispatchCommand: vi.fn(),
+    getRootElement: () => null,
+  } as unknown as LexicalEditor;
+  render(() => (
+    <MentionsMenu
+      menu={createMenuOperations()}
+      users={() => []}
+      editor={editor}
+      sourceDocumentId="doc-1"
+    />
+  ));
+  expect(createItemHandler).toHaveBeenCalledWith(
+    expect.objectContaining({ blockId: 'doc-1' })
+  );
 });

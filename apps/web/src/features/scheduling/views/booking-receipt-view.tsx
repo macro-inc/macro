@@ -1,4 +1,4 @@
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { RescheduleForm } from '../components/reschedule-form';
 import type { BookingReceipt } from '../core/types';
@@ -9,6 +9,8 @@ export function BookingReceiptView(props: {
   cancel: () => Promise<void>;
   loadSlots: (date: string) => Promise<{ startsAt: string; endsAt: string }[]>;
   reschedule: (start: string) => Promise<void>;
+  /** Shown inside another Macro page, which already frames the receipt. */
+  embedded?: boolean;
 }) {
   const [confirm, setConfirm] = createSignal(false);
   const [rescheduling, setRescheduling] = createSignal(false);
@@ -31,7 +33,12 @@ export function BookingReceiptView(props: {
     }
   };
   return (
-    <main class="min-h-screen bg-panel px-4 py-20 text-ink">
+    <main
+      class={cn(
+        'min-h-screen bg-panel px-4 text-ink',
+        props.embedded ? 'py-4' : 'py-20'
+      )}
+    >
       <div class="mx-auto max-w-lg rounded-2xl border border-edge-muted bg-surface-1 p-8">
         <Show
           when={props.receipt}

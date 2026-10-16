@@ -1,5 +1,6 @@
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import type { EntityData } from '@entity';
+import { createKeyedProjection } from '@queries/soup/create-keyed-projection';
 import {
   makeGraphqlGroupedSoupContinuationInput,
   makeGraphqlGroupedSoupInput,
@@ -129,6 +130,18 @@ export function createGraphqlGroupedSoupQueries(
       if (isInstructionsMdDoc(item, instructionsIdQuery)) return [];
       return [mapApiSoupItemToEntity(item)];
     });
+
+  const initialItems = createKeyedProjection(
+    () => Object.entries(args.initialPage()?.items ?? {}),
+    ([id]) => id,
+    ([id, item]) => ({
+      id,
+      entity: mapItems({ [id]: item }, [id], args.itemFilter())[0],
+    })
+  );
+  const initialEntities = createMemo(
+    () => new Map(initialItems().map(({ id, entity }) => [id, entity]))
+  );
 
   const configs = createMemo<GraphqlGroupConfig[]>(() => {
     const field = args.groupByField();
@@ -304,11 +317,10 @@ export function createGraphqlGroupedSoupQueries(
         );
         if (!group) return;
         return {
-          entities: mapItems(
-            initialPage.items,
-            group.itemIds,
-            config.itemFilter
-          ),
+          entities: group.itemIds.flatMap((id) => {
+            const entity = initialEntities().get(id);
+            return entity ? [entity] : [];
+          }),
         };
       });
 

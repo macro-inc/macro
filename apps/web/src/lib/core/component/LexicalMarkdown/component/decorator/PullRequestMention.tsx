@@ -1,6 +1,12 @@
+import {
+  parseGithubPrUrl,
+  prDisplayName,
+  toGithubKey,
+} from '@app/features/block-pr/util/prKey';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HoverCard } from '@core/component/HoverCard';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { openExternalUrl } from '@core/util/url';
 import {
   useNativeSplitNavigationHandler,
   useSplitNavigationHandler,
@@ -8,6 +14,7 @@ import {
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
+  isGithubPullRequestUrl,
   type PullRequestMentionDecoratorProps,
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
@@ -16,7 +23,11 @@ import OpenIcon from '@phosphor/arrows-out.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
-import { usePrMentionQuery } from '@queries/storage/pr-mention';
+import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
+import {
+  usePrMentionQuery,
+  usePullRequestByGithubKeyQuery,
+} from '@queries/storage/pr-mention';
 import type {
   ForeignEntity,
   GithubPullRequestCheckRun,
@@ -29,6 +40,7 @@ import {
   KEY_ENTER_COMMAND,
 } from 'lexical';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   type JSX,
@@ -92,6 +104,14 @@ function pullRequestLabel(
   return title ?? displayName ?? refLabel;
 }
 
+function pullRequestUrl(entity: ForeignEntity | undefined): string | undefined {
+  if (!entity || entity.foreignEntitySource !== GITHUB_PULL_REQUEST_SOURCE) {
+    return undefined;
+  }
+  const url = optionalString(metadataRecord(entity.metadata).url);
+  return url && isGithubPullRequestUrl(url) ? url : undefined;
+}
+
 function pullRequestStatus(entity: ForeignEntity | undefined): string {
   if (!entity || entity.foreignEntitySource !== GITHUB_PULL_REQUEST_SOURCE) {
     return 'open';
@@ -104,12 +124,27 @@ interface PullRequestParts {
   number?: string;
 }
 
+/** The `owner/repo#N title` label `pullRequestLabel` writes to the node. */
+const RESOLVED_LABEL_PATTERN =
+  /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+#([1-9][0-9]*) (.+)$/;
+
+/**
+ * Split a stored label into the face a resolved PR shows, so a mention whose
+ * label already names the PR renders the same text before and after its
+ * lookup settles.
+ */
+function labelParts(label: string | undefined): PullRequestParts {
+  const match = label?.match(RESOLVED_LABEL_PATTERN);
+  if (match) return { name: match[2], number: `#${match[1]}` };
+  return { name: fallbackLabel(label) };
+}
+
 function pullRequestParts(
   entity: ForeignEntity | undefined,
   label: string | undefined
 ): PullRequestParts {
   if (!entity || entity.foreignEntitySource !== GITHUB_PULL_REQUEST_SOURCE) {
-    return { name: fallbackLabel(label) };
+    return labelParts(label);
   }
 
   const metadata = metadataRecord(entity.metadata);
@@ -347,8 +382,8 @@ export function PullRequestPreviewCard(props: {
   fallbackLabel?: string;
 }) {
   return (
-    <div class="select-none overflow-hidden w-80 text-ink">
-      <Surface depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">
+    <div class="select-none w-80 text-ink">
+      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
         <Suspense
           fallback={
             <div class="p-3 flex items-center justify-center text-sm text-ink-muted">
@@ -366,30 +401,110 @@ export function PullRequestPreviewCard(props: {
   );
 }
 
+function githubKeyFromUrl(url: string | undefined): string | undefined {
+  const ref = url ? parseGithubPrUrl(url) : null;
+  return ref ? toGithubKey(ref) : undefined;
+}
+
+/** The label to show before a mention's entity resolves. */
+function mentionFallbackLabel(
+  props: Pick<PullRequestMentionDecoratorProps, 'label' | 'url'>
+): string | undefined {
+  if (props.label) return props.label;
+  const ref = props.url ? parseGithubPrUrl(props.url) : null;
+  return ref ? prDisplayName(ref) : undefined;
+}
+
+/**
+ * Resolve a GitHub-URL-only mention (one an agent wrote without the Macro id)
+ * to its synced pull request. Settles to `undefined` while loading and when
+ * Macro has not synced the PR, without suspending.
+ */
+function useGithubUrlMentionEntity(
+  props: Pick<PullRequestMentionDecoratorProps, 'id' | 'url'>,
+  enabled: Accessor<boolean>
+): Accessor<ForeignEntity | undefined> {
+  const query = usePullRequestByGithubKeyQuery(
+    () => (props.id ? undefined : githubKeyFromUrl(props.url)),
+    enabled
+  );
+  return () => (query.isSuccess ? (query.data ?? undefined) : undefined);
+}
+
+/** Hover preview for a GitHub URL mention Macro has not synced. */
+function UnsyncedPullRequestPreviewCard(props: {
+  label: string;
+  url?: string;
+}) {
+  return (
+    <div class="select-none w-80 text-ink">
+      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+        <div class="flex items-center justify-between gap-2 p-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="relative size-4 shrink-0 inline-flex">
+              <PullRequestStatusIcon status="unknown" />
+            </span>
+            <span class="text-sm font-semibold truncate">{props.label}</span>
+          </div>
+          <Show when={props.url}>
+            {(url) => (
+              <a
+                href={url()}
+                target="_blank"
+                rel="noreferrer"
+                class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <OpenIcon class="size-4" />
+              </a>
+            )}
+          </Show>
+        </div>
+      </Surface>
+    </div>
+  );
+}
+
 function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
+  const fetchEnabled = () => !lexicalWrapper?.skipPreviewFetch;
 
-  const query = usePrMentionQuery(
-    () => props.id,
-    () => !lexicalWrapper?.skipPreviewFetch
-  );
+  const query = usePrMentionQuery(() => props.id, fetchEnabled);
+  const urlEntity = useGithubUrlMentionEntity(props, fetchEnabled);
+  const entity = () => {
+    if (!props.id) return urlEntity();
+    return query.isSuccess ? query.data : undefined;
+  };
 
   const label = createMemo(
-    () => pullRequestLabel(query.data) ?? fallbackLabel(props.label)
+    () =>
+      pullRequestLabel(entity()) ?? fallbackLabel(mentionFallbackLabel(props))
   );
-  const parts = createMemo(() => pullRequestParts(query.data, props.label));
-  const status = createMemo(() => pullRequestStatus(query.data));
+  const parts = createMemo(() =>
+    pullRequestParts(entity(), mentionFallbackLabel(props))
+  );
+  // An unresolved mention has no known state yet.
+  const status = createMemo(() => {
+    const resolved = entity();
+    return resolved ? pullRequestStatus(resolved) : 'unknown';
+  });
 
+  // Keep the node's label and GitHub URL current, so the Markdown this editor
+  // sends (an agent prompt, a message) names the PR and links it.
   createEffect(() => {
-    const nextLabel = pullRequestLabel(query.data);
-    if (!editor || !nextLabel || nextLabel === props.label) return;
+    const resolved = entity();
+    const nextLabel = pullRequestLabel(resolved);
+    const nextUrl = props.url ? undefined : pullRequestUrl(resolved);
+    const labelChanged = !!nextLabel && nextLabel !== props.label;
+    if (!editor || (!labelChanged && !nextUrl)) return;
 
     editor.update(
       () => {
         const node = $getNodeByKey(props.key);
         if ($isPullRequestMentionNode(node)) {
-          node.setLabel(nextLabel);
+          if (labelChanged) node.setLabel(nextLabel);
+          if (nextUrl) node.setUrl(nextUrl);
         }
       },
       {
@@ -399,21 +514,30 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
     );
   });
 
+  // A sent message must not change height when the PR resolves after it
+  // mounts: the face stays on one line, and one whose markup lacks the title
+  // (an agent's URL-only mention) takes the full width the title will fill.
+  const reservesTitleWidth = () =>
+    !labelParts(mentionFallbackLabel(props)).number;
+
   return (
     <span
       data-pr-mention="true"
       data-pr-id={props.id}
       data-pr-label={label()}
-      class="pointer-events-auto"
+      class={cn(
+        'pointer-events-auto inline-flex max-w-[min(32em,100%)] items-baseline',
+        reservesTitleWidth() && 'w-[32em]'
+      )}
     >
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
+      <span class="relative top-[0.125em] size-[1em] shrink-0 inline-flex mx-1">
         <PullRequestStatusIcon status={status()} />
       </span>
-      <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
-        {parts().name}
+      <span class="flex min-w-0 items-baseline underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+        <span class="min-w-0 truncate">{parts().name}</span>
         <Show when={parts().number}>
           {(number) => (
-            <span class="text-ink-extra-muted text-[0.8em]">{` ${number()}`}</span>
+            <span class="shrink-0 whitespace-pre text-ink-extra-muted text-[0.8em]">{` ${number()}`}</span>
           )}
         </Show>
       </span>
@@ -427,15 +551,44 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
   const selection = () => lexicalWrapper?.selection;
   const { openWithSplit } = useSplitLayout()!;
 
+  const githubLinkQuery = useGithubLinkStatusQuery({
+    enabled: () => !lexicalWrapper?.skipPreviewFetch,
+  });
+  const isGithubLinked = () => githubLinkQuery.data?.status === 'linked';
+
   const isSelectedAsNode = () => {
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   };
 
+  const urlEntity = useGithubUrlMentionEntity(
+    props,
+    () => !lexicalWrapper?.skipPreviewFetch
+  );
+  const entityId = () => props.id || urlEntity()?.id;
+
+  // When GitHub is not linked, render as a plain link instead of the fancy mention UI
+  const shouldRenderAsPlainLink = () => {
+    if (lexicalWrapper?.skipPreviewFetch) return false;
+    return !!(githubLinkQuery.isFetched && !isGithubLinked() && props.url);
+  };
+
   const open = (e: MouseEvent | KeyboardEvent | null) => {
+    // Match the rendered plain-link destination: Enter must not open the
+    // internal PR split when GitHub is unlinked, even if props.id is set.
+    if (shouldRenderAsPlainLink()) {
+      openExternalUrl(props.url!);
+      return;
+    }
+    const id = entityId();
+    if (!id) {
+      // A PR Macro has not synced has no split to open; fall back to GitHub.
+      if (props.url) openExternalUrl(props.url);
+      return;
+    }
     openWithSplit(
-      { type: 'pr', id: props.id },
+      { type: 'pr', id },
       { preferNewSplit: openInNewSplitForMention(e?.shiftKey, e != null) }
     );
   };
@@ -462,31 +615,54 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
   });
 
   return (
-    <HoverCard
-      trigger={
-        <span class="relative">
-          <span
-            class={cn(
-              'size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active',
-              isSelectedAsNode() && 'bg-active text-ink'
-            )}
-            {...navHandlers}
-          >
-            <Suspense
-              fallback={
-                <span class="text-ink-placeholder">Fetching PR...</span>
-              }
+    <Show
+      when={!shouldRenderAsPlainLink()}
+      fallback={
+        <a
+          href={props.url}
+          target="_blank"
+          rel="noreferrer"
+          class="text-link hover:text-link-hover visited:text-link-visited underline"
+        >
+          {fallbackLabel(mentionFallbackLabel(props))}
+        </a>
+      }
+    >
+      <HoverCard
+        trigger={
+          <span class="relative">
+            <span
+              class={cn(
+                'size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active',
+                isSelectedAsNode() && 'bg-active text-ink'
+              )}
+              {...navHandlers}
             >
               <PullRequestMentionContent {...props} />
-            </Suspense>
+            </span>
+            <MentionTooltip show={isSelectedAsNode()} text="Open" />
           </span>
-          <MentionTooltip show={isSelectedAsNode()} text="Open" />
-        </span>
-      }
-      content={
-        <PullRequestPreviewCard id={props.id} fallbackLabel={props.label} />
-      }
-    />
+        }
+        content={
+          <Show
+            when={entityId()}
+            fallback={
+              <UnsyncedPullRequestPreviewCard
+                label={fallbackLabel(mentionFallbackLabel(props))}
+                url={props.url}
+              />
+            }
+          >
+            {(id) => (
+              <PullRequestPreviewCard
+                id={id()}
+                fallbackLabel={mentionFallbackLabel(props)}
+              />
+            )}
+          </Show>
+        }
+      />
+    </Show>
   );
 }
 

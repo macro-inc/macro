@@ -33,8 +33,8 @@ impl GithubRepo for PgGithubRepo {
     async fn get_github_link_by_user_id<'a>(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'a>>,
-    ) -> Result<GithubLink, Self::Err> {
-        let link = sqlx::query!(
+    ) -> Result<Option<GithubLink>, Self::Err> {
+        sqlx::query!(
         r#"
         SELECT id, macro_id, fusionauth_user_id as "fusionauth_user_id: Uuid", github_username, github_user_id, created_at, updated_at
         FROM github_links
@@ -54,20 +54,15 @@ impl GithubRepo for PgGithubRepo {
                 updated_at: r.updated_at,
             }))
         .fetch_optional(&self.pool)
-        .await?;
-
-        match link {
-            Some(l) => Ok(l),
-            None => Err(sqlx::Error::RowNotFound),
-        }
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn get_github_link_by_github_user_id(
         &self,
         github_user_id: &str,
-    ) -> Result<GithubLink, Self::Err> {
-        let link = sqlx::query!(
+    ) -> Result<Option<GithubLink>, Self::Err> {
+        sqlx::query!(
         r#"
         SELECT id, macro_id, fusionauth_user_id as "fusionauth_user_id: Uuid", github_username, github_user_id, created_at, updated_at
         FROM github_links
@@ -89,12 +84,7 @@ impl GithubRepo for PgGithubRepo {
                 updated_at: r.updated_at,
             }))
         .fetch_optional(&self.pool)
-        .await?;
-
-        match link {
-            Some(l) => Ok(l),
-            None => Err(sqlx::Error::RowNotFound),
-        }
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]

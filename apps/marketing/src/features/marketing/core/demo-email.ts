@@ -25,7 +25,7 @@ export const demoEmails: readonly DemoEmail[] = [
     id: 'dana',
     tags: ['customers', 'follow-up'],
     favorite: true,
-    sender: 'Dana Whitfield',
+    sender: 'Dana',
     subject: 'Next steps for our team',
     snippet: 'Thursday at 9 works. Could you share the rollout plan?',
     time: '9:41 AM',
@@ -35,7 +35,7 @@ export const demoEmails: readonly DemoEmail[] = [
   {
     id: 'julia',
     tags: ['launch'],
-    sender: 'Julia Westphal',
+    sender: 'Julia',
     subject: 'Launch announcement',
     snippet: 'The first draft is ready for your review.',
     time: '9:32 AM',
@@ -45,7 +45,7 @@ export const demoEmails: readonly DemoEmail[] = [
   {
     id: 'teo',
     tags: ['product'],
-    sender: 'Teo Nys',
+    sender: 'Teo',
     subject: 'Ready for Thursday',
     snippet: 'The invite flow is ready. Let’s run through the checklist.',
     time: '9:18 AM',

@@ -256,6 +256,19 @@ function AttachmentItem(props: {
           />
         )}
       </Match>
+      <Match when={props.attachment.type === 'document' && props.attachment}>
+        {(attachment) => (
+          <EmailAttachmentPill
+            attachment={{
+              fileName: attachment().fileName,
+              mimeType: attachment().mimeType,
+            }}
+            removable={!ctx.disabled()}
+            onRemove={handleRemove}
+            onClick={props.onOpen}
+          />
+        )}
+      </Match>
     </Switch>
   );
 }

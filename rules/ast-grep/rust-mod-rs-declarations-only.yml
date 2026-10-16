@@ -3,7 +3,7 @@ language: rust
 severity: error
 message: mod.rs should only declare submodules and re-exports; move logic into its own module file.
 note: |-
-  Rule CS-25 in docs/STYLE_GUIDE.md, mined from PR #4175.
+  Rule CS-25 in docs/development/style-guide.md, mined from PR #4175.
   Prefer the file-and-directory module style: put logic and submodule
   declarations in `foo.rs` with submodules under `foo/` (Rust supports both
   coexisting) — that is how all legacy violations were resolved. If you keep

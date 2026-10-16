@@ -1,4 +1,5 @@
 import { ThrownResultError, throwOnErr } from '@core/util/result';
+import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
@@ -58,6 +59,42 @@ function pullRequestByGithubKeyQueryOptions(githubKey: string) {
     staleTime: PR_MENTION_STALE_TIME,
     retry: 1,
   };
+}
+
+/** The cached pull request for a GitHub key, if a lookup already resolved it. */
+export function getCachedPullRequestByGithubKey(
+  githubKey: string
+): ForeignEntity | undefined {
+  return (
+    queryClient.getQueryData<ForeignEntity | null>(
+      pullRequestMentionKeys.byGithubKey(githubKey).queryKey
+    ) ?? undefined
+  );
+}
+
+/**
+ * Resolve a pull request by GitHub key outside a component. The result shares
+ * the `byGithubKey` cache and seeds the mention query, so a chip created from
+ * it renders without a second request. Resolves `null` when the pull request
+ * has not been synced or the lookup fails.
+ */
+export async function fetchPullRequestByGithubKey(
+  githubKey: string
+): Promise<ForeignEntity | null> {
+  try {
+    const entity = await queryClient.fetchQuery(
+      pullRequestByGithubKeyQueryOptions(githubKey)
+    );
+    if (entity) {
+      queryClient.setQueryData(
+        pullRequestMentionKeys.foreignEntity(entity.id).queryKey,
+        entity
+      );
+    }
+    return entity;
+  } catch {
+    return null;
+  }
 }
 
 export function usePullRequestByGithubKeyQuery(

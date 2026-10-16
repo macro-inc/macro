@@ -19,6 +19,11 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
   mapGraphqlGroupedSoupPage: vi.fn(),
 }));
+vi.mock('./grouped-projection', () => ({
+  createGraphqlGroupedSoupProjection:
+    (source: () => { data: unknown } | undefined) => () =>
+      source()?.data,
+}));
 vi.mock('./active-queries', () => ({
   registerGraphqlSoupRevalidations: () => () => {},
 }));
@@ -59,9 +64,17 @@ function fixture(emailView: 'inbox' | 'drafts' | 'all' = 'drafts') {
     localOptimistic: optimistic,
   });
   mocks.query.mockImplementation(
-    (options: () => { onResult: typeof onResult }) => {
+    (
+      options: () => {
+        onResult: typeof onResult;
+        select: (data: unknown) => unknown;
+      }
+    ) => {
       onResult = options().onResult;
-      return { data: { viewerId: 'viewer', data: network }, error: undefined };
+      return {
+        data: options().select({ user: { id: 'viewer' }, data: network }),
+        error: undefined,
+      };
     }
   );
   const root = createRoot((dispose) => ({

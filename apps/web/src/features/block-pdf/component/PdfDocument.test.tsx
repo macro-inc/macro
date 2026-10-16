@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@solidjs/router', () => ({ useBeforeLeave: () => {} }));
+vi.mock('@macro/tauri', () => ({ useTauri: () => undefined }));
 vi.mock('../context/pdf-document-context', () => ({
   PdfDocumentProvider: (props: { children: JSX.Element }) => props.children,
   usePdfDocument: () => ({

@@ -23,6 +23,9 @@ mod document_family;
 pub use document_family::DocumentFamily;
 use models_permissions::share_permission::access_level::AccessLevel;
 
+/// The longest document name DSS accepts, counted in extended grapheme clusters.
+pub const MAX_DOCUMENT_NAME_GRAPHEMES: usize = 200;
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct DocumentPermissionsToken {
     /// The users id if present

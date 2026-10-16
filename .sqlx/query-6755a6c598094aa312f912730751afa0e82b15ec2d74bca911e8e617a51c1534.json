@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_links\n        SET deleting_at = COALESCE(deleting_at, NOW()),\n            is_sync_active = false,\n            updated_at = NOW()\n        WHERE id = $1 AND (deleting_at IS NULL OR is_sync_active)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6755a6c598094aa312f912730751afa0e82b15ec2d74bca911e8e617a51c1534"
+}

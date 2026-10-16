@@ -16,6 +16,7 @@ export const ColumnChangeKind = {
   create: 'create',
   rename: 'rename',
   change_type: 'change_type',
+  set_formula: 'set_formula',
   delete: 'delete',
   add_options: 'add_options',
   update_option: 'update_option',

@@ -17,6 +17,7 @@ use crate::domain::{
     models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange},
     ports::{
         CalendarMutationService, CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope,
+        MeetingLinkProvider,
     },
 };
 
@@ -221,17 +222,18 @@ impl ToolAnnotated for UpdateCalendarEvent {
 }
 
 #[async_trait]
-impl<M, O> AsyncTool<CalendarToolContext<M, O>> for UpdateCalendarEvent
+impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for UpdateCalendarEvent
 where
     M: CalendarMutationService,
     O: CalendarOccurrenceService,
+    L: MeetingLinkProvider,
 {
     type Output = ToolCalendarEvent;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(
         &self,
-        service_context: ServiceContext<CalendarToolContext<M, O>>,
+        service_context: ServiceContext<CalendarToolContext<M, O, L>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(

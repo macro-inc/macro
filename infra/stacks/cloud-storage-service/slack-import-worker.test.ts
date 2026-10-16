@@ -41,6 +41,8 @@ beforeAll(async () => {
   // Isolate the shared barrel's ESM cycle, keeping the real Doppler/image helpers.
   mock.module('../../packages/shared', () => ({
     stack: 'dev',
+    grafanaTelemetryEnabled: true,
+    grafanaIngestSecretArn: secretArn,
     config: new pulumi.Config('cloud-storage-service'),
     CLOUD_TRAIL_SNS_TOPIC_ARN: 'arn:aws:sns:us-east-1:123456789012:alerts',
   }));
@@ -126,7 +128,7 @@ describe('Slack import Fargate worker', () => {
     });
     const task = service.taskDefinitionArgs;
     expect(task.cpu).toBe('1024');
-    expect(task.memory).toBe('2048');
+    expect(task.memory).toBe('3072');
     expect(task.containers.worker.stopTimeout).toBe(120);
     expect(task.containers.worker.memory).toBe(1536);
     let memory = 0;
@@ -141,7 +143,7 @@ describe('Slack import Fargate worker', () => {
       );
       expect(container.portMappings ?? []).toEqual([]);
     }
-    expect(memory).toBe(2048);
+    expect(memory).toBe(2560);
     expect(service.deploymentCircuitBreaker).toEqual({
       enable: true,
       rollback: true,
@@ -179,17 +181,9 @@ describe('Slack import Fargate worker', () => {
     );
     const task = resource('awsx:ecs:FargateService').inputs.taskDefinitionArgs;
     expect(task.taskRole.roleArn).not.toBe(task.executionRole.roleArn);
-    expect(task.containers.worker.secrets).toEqual(
-      [
-        'DATABASE_URL',
-        'INTERNAL_API_KEY',
-        'SLACK_IMPORT_ENABLED',
-        'SLACK_IMPORT_CONCURRENCY',
-      ].map((key) => ({
-        name: key,
-        valueFrom: `${secretArn}:${key}::`,
-      }))
-    );
+    expect(task.containers.worker.secrets).toEqual([
+      { name: 'APP_SECRETS_JSON', valueFrom: secretArn },
+    ]);
     expect(
       resources.some(
         (item) => item.name === 'slack-import-worker-execution-role'
@@ -204,7 +198,7 @@ describe('Slack import Fargate worker', () => {
     ).toBe(true);
   });
 
-  test('wires queue names, staging and the processing API rather than search queries', () => {
+  test('keeps runtime telemetry identity alongside Doppler application settings', () => {
     const worker = resource('awsx:ecs:FargateService').inputs.taskDefinitionArgs
       .containers.worker;
     const env = Object.fromEntries(
@@ -215,14 +209,9 @@ describe('Slack import Fargate worker', () => {
     );
     expect(env).toMatchObject({
       ENVIRONMENT: 'dev',
-      UPLOAD_STAGING_BUCKET: 'bulk-upload-staging-dev',
-      OVERRIDE_SLACK_IMPORT_QUEUE: 'slack-import-queue-dev',
-      OVERRIDE_SLACK_IMPORT_DLQ: 'slack-import-dlq-dev',
-      OVERRIDE_CONNECTION_GATEWAY_URL:
-        'https://dev-gateway.macro.com/connection-gateway',
-      OVERRIDE_SEARCH_PROCESSING_SERVICE_URL:
-        'https://dev-gateway.macro.com/search-processing',
-      SLACK_IMPORT_JOIN_EMAIL_ENABLED: 'false',
+      DD_SERVICE: 'slack-import-worker',
+      DD_ENV: 'dev',
+      GRAFANA_OTLP_ENDPOINT: 'http://127.0.0.1:14317',
     });
     expect(env.SEARCH_SERVICE_URL).toBeUndefined();
     expect(env.OVERRIDE_SEARCH_SERVICE_URL).toBeUndefined();

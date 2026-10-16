@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET LOCAL lock_timeout = '1s'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e87a3f76d9caee326b4f36802430f3ea370cd374183c6a0e229aeada18bba533"
+}

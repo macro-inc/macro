@@ -23,6 +23,8 @@ export type PropsSource<P extends object> = P | Accessor<P>;
 
 /** Options controlling an imperative dialog's lifecycle. */
 export type OpenDialogOptions = {
+  /** Reuse an already open dialog with this key. */
+  key?: string;
   /**
    * The Solid owner whose context and lifetime the dialog should inherit.
    * Capture this owner while the calling component is being created; event
@@ -78,6 +80,8 @@ export type ImperativeDialogController<P extends ManagedDialogProps> = {
 
 type DialogEntry = {
   id: string;
+  key?: string;
+  handle: DialogHandle;
   component: ManagedDialogComponent;
   props: PropsSource<Record<string, unknown>>;
   owner?: Owner;
@@ -125,6 +129,12 @@ export function openDialog<P extends ManagedDialogProps>(
   props: PropsSource<ManagedDialogInput<P>>,
   options: OpenDialogOptions = {}
 ): DialogHandle {
+  const existing = options.key
+    ? dialogEntries().find(
+        (entry) => entry.key === options.key && !entry.finalized
+      )
+    : undefined;
+  if (existing) return existing.handle;
   const id = `imperative-dialog-${++nextDialogId}`;
   const [isOpen, setOpen] = createSignal(true);
   const focusLock = useFocusLock(id);
@@ -135,8 +145,16 @@ export function openDialog<P extends ManagedDialogProps>(
     resolveClosed = resolve;
   });
 
+  const handle: DialogHandle = {
+    id,
+    isOpen,
+    close: () => finalizeDialog(id, 'programmatic'),
+    closed,
+  };
   const entry: DialogEntry = {
     id,
+    key: options.key,
+    handle,
     component: component as ManagedDialogComponent,
     props: props as PropsSource<Record<string, unknown>>,
     owner: options.owner ?? undefined,
@@ -155,12 +173,7 @@ export function openDialog<P extends ManagedDialogProps>(
     });
   }
 
-  return {
-    id,
-    isOpen,
-    close: () => finalizeDialog(id, 'programmatic'),
-    closed,
-  };
+  return handle;
 }
 
 /**

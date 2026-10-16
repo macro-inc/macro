@@ -2,11 +2,11 @@ import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
+import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
 import { LeftoverRow } from './leftover-row';
 import type { ConnectionsModel } from './model';
 import { isConnectionsEmpty } from './model';
-import { IntegrationRow, SettingsCard, SettingsSection } from './primitives';
-import { availableStarters, providerIcon } from './provider-meta';
+import { EMPTY_STARTERS, providerIcon } from './provider-meta';
 import { useConnectionsView } from './view-state';
 
 export function ConnectedView(props: { model: ConnectionsModel }) {
@@ -86,7 +86,7 @@ function EmptyConnected() {
     <>
       <SettingsSection title="Start with a connection">
         <SettingsCard>
-          <For each={availableStarters()}>
+          <For each={EMPTY_STARTERS}>
             {(item) => (
               <button
                 type="button"

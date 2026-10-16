@@ -6,11 +6,14 @@ export {
 } from '@core/context/user';
 export {
   invalidateAiBillingSummary,
+  invalidateSubscriptionStatus,
   useAiBillingPlansQuery,
   useAiBillingSummaryQuery,
   useChangePlanMutation,
   useCreateAiCreditCheckoutMutation,
   useIncludedAiCentsByTier,
+  useSubscriptionStatusQuery,
+  useUpdateAiAutoReloadMutation,
   useUpdateAiOverageMutation,
 } from './ai-billing';
 export {

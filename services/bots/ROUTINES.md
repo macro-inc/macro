@@ -13,6 +13,8 @@ Ideas to configure through **Agents → Routines → Create Routine**:
 | Keep the team in sync | Referenced project channels | Friday, 16:00 | Draft progress report and next priorities |
 | Catch work that slipped | Open tasks and project conversations | Monday/Wednesday/Friday, 15:00 | Prioritized follow-up list |
 | Walk into meetings prepared | Calendar and linked Macro context | Weekdays, 08:30 | Objectives, recent decisions, open questions |
+| Prep before the call settles | The call and who has joined so far | **Call started** trigger | Talking points, open questions, linked context |
+| Follow up after calls | The call's transcript and participants | **Call ended** trigger | Recap, decisions, owners for action items |
 | Spot revenue signals | Stripe bot channel messages | Weekdays, 09:30 | Payment events and cancellation follow-ups |
 | Follow up on incidents | Anthropic status bot posts | Daily, 10:00 | Active incidents, latest updates, observed impact |
 | Review what shipped | An agent's GitHub connection | Weekdays, 16:30 | Merges, releases, failed checks, waiting reviews |

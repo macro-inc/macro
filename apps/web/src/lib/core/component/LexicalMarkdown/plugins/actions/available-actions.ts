@@ -10,7 +10,10 @@ export function availableActions(
   }
 ): Action[] {
   return actions.filter((action) => {
-    if (action.id === 'database-query' && !options.databasesEnabled)
+    if (
+      (action.id === 'database-query' || action.id === 'database') &&
+      !options.databasesEnabled
+    )
       return false;
     if (options.ignoreActionIds?.includes(action.id)) return false;
     const { dependencies } = action;

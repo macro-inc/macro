@@ -1,10 +1,11 @@
 import type { Accessor } from 'solid-js';
 import type { EmailRecipient } from '../core/email-recipient';
+import type { SenderInbox } from '../core/email-sender';
 import type { ReplyType } from '../core/reply-type';
 
 export interface EmailFormContextInputs {
   viewerEmail: Accessor<string | undefined>;
-  inboxes: Accessor<{ id: string; email_address: string }[]>;
+  inboxes: Accessor<SenderInbox[]>;
 }
 
 /** Only the reply capabilities consumed by the composer; the caller owns navigation. */

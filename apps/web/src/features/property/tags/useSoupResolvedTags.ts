@@ -21,11 +21,8 @@ function optionLabel(option: PropertyOptionResponse): string {
  * any edit mutations. Virtual rows use this read-only model until a picker is
  * actually opened.
  *
- * `inFlightOptionIdsForDefinition` overlays an uncommitted selection. Applying
- * an entity's first tag from a set creates a property record whose id only
- * exists once the server answers, so that write cannot be reflected in the
- * cache beforehand — without the overlay the chip would appear a round trip
- * late.
+ * `inFlightOptionIdsForDefinition` overlays pending selections, including edits
+ * waiting for the per-entity mutation scope before writing to the cache.
  */
 export function useSoupResolvedTags(
   properties: Accessor<SoupProperty[] | undefined>,

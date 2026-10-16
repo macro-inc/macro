@@ -7,6 +7,7 @@ mod test;
 use std::future::Future;
 use std::time::Duration;
 
+use call::domain::events::CallMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
@@ -30,15 +31,17 @@ macro_event_broker::declare_topics!(
     ChannelMacroEvent,
     MessageMacroEvent,
     PropertyMacroEvent,
-    EmailMacroEvent
+    EmailMacroEvent,
+    CallMacroEvent
 );
 
 struct ScheduledActionEventIngestionGroup;
 
 impl GroupName for ScheduledActionEventIngestionGroup {
     const GROUP_NAME: &'static str = "scheduled-action-event-ingestion";
-    // `macro.messages` joined this group's subscription with no committed
-    // offset; starting at its head avoids replaying the topic's retention.
+    // Topics such as `macro.messages` and `macro.calls` joined this group's
+    // subscription with no committed offset; starting at their head avoids
+    // replaying each topic's retention.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
@@ -103,6 +106,14 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
                 payload: EventPayload::Email(envelope.event.clone()),
+            }
+        }
+        DeclaredMacroEvent::CallMacroEvent(event) => {
+            let envelope = event.event();
+            IncomingEvent {
+                event_id: envelope.event_id,
+                schema_version: envelope.schema_version,
+                payload: EventPayload::Call(envelope.event.clone()),
             }
         }
     }
@@ -239,7 +250,7 @@ where
     }
 }
 
-/// Consume exactly document and channel topics under a dedicated durable group.
+/// Consume exactly the declared topics under a dedicated durable group.
 ///
 /// Only durable admission or a permanent rejection permits committing. Admission
 /// errors get five attempts with bounded exponential backoff. Exhausted retries,

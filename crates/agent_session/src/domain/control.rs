@@ -3,6 +3,7 @@
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
+use trigger_context::TriggerContext;
 
 use super::error::{AgentSessionError, Result};
 use super::ports::ControlEvent;
@@ -19,13 +20,21 @@ impl ControlEvent {
     /// Only an authenticated user with edit access may answer an interaction.
     /// Runtime principals may forward ordinary controls, but cannot use their
     /// acting-user identity to approve their own permission or elicitation.
+    ///
+    /// Trigger context is only accepted from a runtime forwarding a prompt it
+    /// was triggered with. A user could otherwise tell an owner's agent that
+    /// the owner asked for something.
     pub fn authorized(
         action: AgentAction,
         action_id: Option<AgentActionId>,
+        context: Option<TriggerContext>,
         principal: ControlPrincipal,
         access: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<Self> {
         let actor = match principal {
+            ControlPrincipal::User if context.is_some() => {
+                return Err(AgentSessionError::Forbidden);
+            }
             ControlPrincipal::User => Some(
                 access
                     .get_authenticated_user()
@@ -46,6 +55,7 @@ impl ControlEvent {
             action,
             action_id,
             actor,
+            context,
         })
     }
 }

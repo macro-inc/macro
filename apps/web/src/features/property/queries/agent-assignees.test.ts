@@ -14,11 +14,15 @@ const fixture = vi.hoisted(() => ({
   bots: [] as Bot[],
   pending: false,
   agentRollout: false,
+  claudeRollout: false,
+  codexRollout: false,
   cursorRollout: false,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
+  claudeCloud: { key: 'claude-cloud' },
   enableChatV3Agents: { key: 'enable-chat-v3-agents' },
+  enableCodexAgents: { key: 'enable-codex-agents' },
   enableCursorAgents: { key: 'enable-cursor-agents' },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -26,7 +30,11 @@ vi.mock('@app/lib/analytics/posthog', () => ({
     enabled:
       flag.key === 'enable-chat-v3-agents'
         ? fixture.agentRollout
-        : fixture.cursorRollout,
+        : flag.key === 'claude-cloud'
+          ? fixture.claudeRollout
+          : flag.key === 'enable-codex-agents'
+            ? fixture.codexRollout
+            : fixture.cursorRollout,
   }),
 }));
 
@@ -80,6 +88,8 @@ beforeEach(() => {
   fixture.bots = [];
   fixture.pending = false;
   fixture.agentRollout = false;
+  fixture.claudeRollout = false;
+  fixture.codexRollout = false;
   fixture.cursorRollout = false;
 });
 
@@ -96,12 +106,7 @@ describe('task agent assignees', () => {
     fixture.bots = [owned.bot, team.bot, inactive.bot, deleted.bot];
     createRoot((dispose) => {
       const users = useAgentAssignees(() => true);
-      expect(users().map(({ id }) => id)).toEqual([
-        CLAUDE_BOT_PRINCIPAL_ID,
-        CODEX_BOT_PRINCIPAL_ID,
-        'bot|owned',
-        'bot|team',
-      ]);
+      expect(users().map(({ id }) => id)).toEqual(['bot|owned', 'bot|team']);
       expect(users().find(({ id }) => id === 'bot|owned')).toEqual({
         id: 'bot|owned',
         name: 'Research agent',
@@ -114,10 +119,10 @@ describe('task agent assignees', () => {
 
   it('does not suspend people selection while agents are pending, or expose agents to other properties', () => {
     fixture.pending = true;
+    fixture.claudeRollout = true;
     createRoot((dispose) => {
       expect(useAgentAssignees(() => true)().map(({ id }) => id)).toEqual([
         CLAUDE_BOT_PRINCIPAL_ID,
-        CODEX_BOT_PRINCIPAL_ID,
       ]);
       expect(useAgentAssignees(() => false)()).toEqual([]);
       dispose();
@@ -126,6 +131,8 @@ describe('task agent assignees', () => {
 
   it('reuses system session-agent rollout and excludes classic Macro', () => {
     fixture.agentRollout = true;
+    fixture.claudeRollout = true;
+    fixture.codexRollout = true;
     fixture.cursorRollout = true;
     createRoot((dispose) => {
       const ids = useAgentAssignees(() => true)().map(({ id }) => id);
@@ -134,9 +141,9 @@ describe('task agent assignees', () => {
         CLAUDE_BOT_PRINCIPAL_ID,
         CODEX_BOT_PRINCIPAL_ID,
         CURSOR_BOT_PRINCIPAL_ID,
-        MACRO_CODER_PRINCIPAL_ID,
       ]);
       expect(ids).not.toContain(MACRO_AGENT_PRINCIPAL_ID);
+      expect(ids).not.toContain(MACRO_CODER_PRINCIPAL_ID);
       dispose();
     });
   });

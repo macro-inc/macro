@@ -26,6 +26,10 @@
     },
     "macro": {
       "url": "https://mcp-server.macro.com/mcp"
+    },
+    "posthog": {
+      "type": "http",
+      "url": "https://mcp.posthog.com/mcp"
     }
   }
 }

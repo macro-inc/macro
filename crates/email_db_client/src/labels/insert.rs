@@ -259,7 +259,6 @@ pub async fn insert_label(
 }
 
 /// inserts the labels of an email into the database in a batch
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn insert_message_labels(
     tx: &mut sqlx::PgConnection,
     link_id: Uuid,
@@ -309,38 +308,27 @@ pub async fn insert_message_labels(
         );
     }
 
-    // insert into junction table
-    let message_ids_repeated: Vec<Uuid> =
-        std::iter::repeat_n(message_id, label_mappings.len()).collect();
     let label_db_ids: Vec<Uuid> = label_mappings.iter().map(|m| m.id).collect();
 
-    // deleting records that don't match the ones to insert first in case we are doing an
-    // upsert and some of the old ones got removed
-    if delete_old {
-        sqlx::query!(
-            r#"
-        DELETE FROM email_message_labels
-        WHERE message_id = $1
-        AND label_id NOT IN (
-            SELECT UNNEST($2::uuid[])
-        )
-        "#,
-            message_id,
-            &label_db_ids
-        )
-        .execute(&mut *tx)
-        .await?;
-    }
-
-    sqlx::query(
+    // with delete_old, records that don't match the ones to insert are removed in case we are
+    // doing an upsert and some of the old ones got removed. An unchanged set deletes and inserts
+    // nothing.
+    sqlx::query!(
         r#"
+        WITH removed AS (
+            DELETE FROM email_message_labels
+            WHERE $3::bool
+              AND message_id = $1::uuid
+              AND label_id NOT IN (SELECT UNNEST($2::uuid[]))
+        )
         INSERT INTO email_message_labels (message_id, label_id)
-        SELECT * FROM unnest($1::uuid[], $2::uuid[])
+        SELECT $1, label_id FROM UNNEST($2::uuid[]) AS t(label_id)
         ON CONFLICT (message_id, label_id) DO NOTHING
         "#,
+        message_id,
+        &label_db_ids,
+        delete_old
     )
-    .bind(&message_ids_repeated)
-    .bind(&label_db_ids)
     .execute(&mut *tx)
     .await?;
 

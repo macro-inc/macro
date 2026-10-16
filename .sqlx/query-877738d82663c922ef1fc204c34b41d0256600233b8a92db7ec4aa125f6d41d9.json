@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_pipeline_entities SET trashed_at = CASE WHEN $2 THEN now() ELSE NULL END, updated_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "877738d82663c922ef1fc204c34b41d0256600233b8a92db7ec4aa125f6d41d9"
+}

@@ -11,6 +11,10 @@ const config: KnipConfig = {
     'src/lib/workers/**/*.{js,ts,tsx}',
     // Feature browser harnesses load from their own HTML and Playwright specs.
     'src/features/*/browser-test/*.{ts,tsx}',
+    'src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/*.tsx',
+    'src/features/billing-lab/entry.tsx',
+    // Native test runners are invoked by scripts, not the application graph.
+    'tests/native/{runner,links-runner,notifications-runner}.ts',
   ],
   project: ['src/**/*.{js,ts,tsx}'],
 
@@ -60,6 +64,8 @@ const config: KnipConfig = {
     'libheif-js',
     '@tailwindcss/vite',
     'bebop',
+    // TypeScript 7's compiler, run by path from `type-check`.
+    'typescript-native',
   ],
 
   ignoreWorkspaces: ['../../packages/loro-mirror', '../../packages/sdk'],

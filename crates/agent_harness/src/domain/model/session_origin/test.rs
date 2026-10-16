@@ -8,12 +8,14 @@ fn actor() -> MacroUserIdStr<'static> {
 #[test]
 fn existing_mention_commands_keep_their_wire_shape_and_reply_behavior() {
     let mention = MentionOrigin {
+        reply_placement: Default::default(),
         parent: MessageParent::Channel(Uuid::from_u128(1)),
         thread_id: Uuid::from_u128(2),
         message_id: Uuid::from_u128(3),
         sender: actor(),
         content: "Please review this".to_owned(),
         attachments: vec![PromptAttachment::new("https://example.com/file", "image")],
+        context: None,
     };
     let wire = serde_json::to_value(&mention).unwrap();
     let origin: SessionOrigin = serde_json::from_value(wire.clone()).unwrap();
@@ -36,6 +38,7 @@ fn assignments_remain_distinct_after_command_serialization() {
         discussion_id: Uuid::from_u128(4),
         actor: actor(),
         prompt: "Private task brief".to_owned(),
+        context: None,
     });
     let wire = serde_json::to_value(&origin).unwrap();
     assert!(wire.get("content").is_none());

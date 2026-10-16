@@ -1,0 +1,126 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE forms SET\n                description = COALESCE($2, description),\n                confirmation_message = COALESCE($3, confirmation_message),\n                audience = COALESCE($4, audience),\n                status = COALESCE($5, status),\n                closes_at = CASE WHEN $6 THEN $7 ELSE closes_at END,\n                tally_visible = COALESCE($8, tally_visible),\n                updated_at = $9\n            WHERE id = $1\n            RETURNING id, name, description, owner_id, database_id, table_id,\n                      submitted_column_id, respondent_column_id, audience, tally_visible,\n                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,\n                   name_follows_database\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "database_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "table_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "submitted_column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "respondent_column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "audience",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "tally_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "closes_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "confirmation_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "trashed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "name_follows_database",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Timestamptz",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6e51119c880191da372512fa09bd842c73e046b36528eee807dcfdd1468bf2b8"
+}

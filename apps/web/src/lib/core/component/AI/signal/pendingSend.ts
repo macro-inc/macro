@@ -1,10 +1,12 @@
 import type { Attachment, Model } from '@core/component/AI/types';
 import { createSignal } from 'solid-js';
+import type { ModelSpeed } from '../constant/speed';
 
 export type PendingSend = {
   content: string;
   attachments: Attachment[];
   model: Model;
+  speed?: ModelSpeed;
 };
 
 const [pendingSend, setPendingSend] = createSignal<PendingSend | null>(null);

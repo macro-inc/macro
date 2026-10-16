@@ -1,0 +1,6 @@
+.feature-comparisons { position: relative; display: grid; gap: 20px; scroll-margin-top: 112px; }
+.feature-comparison-anchor { position: absolute; top: 0; scroll-margin-top: 112px; }
+.feature-comparisons .comparison-table-scroll { max-width: 100%; }
+.feature-comparison-key { display: flex; flex-wrap: wrap; gap: 10px 24px; color: #a3a3a3; font-size: 12px; line-height: 1.5; }
+.feature-comparison-key > span { display: inline-flex; gap: 8px; align-items: center; }
+.feature-comparison-key svg { flex: none; }

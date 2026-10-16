@@ -31,9 +31,7 @@ function EmailReminderStatusContent(props: {
   const label = () =>
     pending()
       ? `Reminder set for ${new Date(reminder()!.remindAt).toLocaleString()}`
-      : reminder()?.state === 'returned'
-        ? 'Reminder returned — remind me again'
-        : 'Remind me';
+      : 'Remind me';
   const action = makeCreateReminderAction({ onEmailSaved: props.onSaved });
   return (
     <Button
@@ -48,7 +46,7 @@ function EmailReminderStatusContent(props: {
       <BellIcon
         class="size-4"
         classList={{
-          'text-accent': pending() || reminder()?.state === 'returned',
+          'text-accent': pending(),
         }}
       />
     </Button>

@@ -9,6 +9,7 @@ import {
 import { Show } from 'solid-js';
 import { channelsSearch } from './channels-route';
 import { ChannelsView } from './channels-view';
+import { ChannelsViewSkeleton } from './channels-view-skeleton';
 
 function ChannelsLegacyRouteView() {
   const params = useParams<{ channelId?: string }>();
@@ -41,4 +42,4 @@ export const ChannelsRouteView = withAuth(() => {
       <ChannelsView />
     </AppView>
   );
-});
+}, ChannelsViewSkeleton);

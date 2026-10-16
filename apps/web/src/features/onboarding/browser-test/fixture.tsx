@@ -34,6 +34,19 @@ const land = (landing: FixtureLanding) => {
 };
 
 const params = Object.fromEntries(new URLSearchParams(location.search));
+if (params.theme === 'cream' || params.theme === 'dark') {
+  sessionStorage.setItem(FIXTURE_KEYS.theme, params.theme);
+}
+const previewTheme = sessionStorage.getItem(FIXTURE_KEYS.theme);
+// Preview the same local palette that the app's theme selection supplies.
+const lightScheme = window.matchMedia('(prefers-color-scheme: light)');
+const applyPreviewTheme = () => {
+  document.documentElement.dataset.themeLight = String(
+    previewTheme === 'cream' || (previewTheme !== 'dark' && lightScheme.matches)
+  );
+};
+applyPreviewTheme();
+lightScheme.addEventListener('change', applyPreviewTheme);
 const fake = createFakeOnboarding(loadWorld(), {
   onChange: saveWorld,
   // The inbox OAuth leaves the page and returns to bare /onboarding.

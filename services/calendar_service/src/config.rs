@@ -56,6 +56,10 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_sync_enabled: bool,
 
+    /// Enable read-only calendar projections shared with current teammates.
+    #[macro_config_default(false)]
+    pub calendar_team_sharing_enabled: bool,
+
     /// Auth service secret key, used for internal access
     pub authentication_service_secret_key: LocalOrRemoteSecret<AuthenticationServiceSecretKey>,
 

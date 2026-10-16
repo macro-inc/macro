@@ -9,7 +9,7 @@ import {
 import type { CombinedError } from '@urql/core';
 import { err, ok, type Result, ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
-import type { DatabaseEntityFailure } from '../core/write-failure';
+import type { DatabaseEntityFailure } from '../../database/core/write-failure';
 
 /** The slice of the GraphQL client a database trash sends through. */
 export type TrashDatabaseClient = {

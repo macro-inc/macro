@@ -1,5 +1,6 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useSplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   navigateToSidebarView,
@@ -10,9 +11,8 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
-import { useLocation } from '@solidjs/router';
 import { Button, cn } from '@ui';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
 import { SidebarUnreadDot } from './unread-dot';
@@ -22,26 +22,9 @@ export type ListNavProps = {
   item: SidebarNextNavItem;
   unread?: boolean;
   activeCall?: boolean;
+  /** A short status pill under the glyph, e.g. `Now` or `12m`. */
+  badge?: string;
   onContextMenuOpenChange?: (open: boolean) => void;
-};
-
-type PendingNav = {
-  itemId: SidebarNextNavItem['id'];
-  /** The active split's content when the item was pressed. */
-  activeContentKey: string | undefined;
-};
-
-/**
- * The nav item pressed most recently, highlighted before the split layout
- * catches up. Shared across every rail button so only one item is ever
- * pending. It stops applying the moment the active content changes — to the
- * pressed view, or to anything else — so a stale press never sticks.
- */
-const [pendingNav, setPendingNav] = createSignal<PendingNav>();
-
-const activeContentKey = () => {
-  const content = globalSplitManager()?.activeSplit()?.content();
-  return content ? `${content.type}:${content.id}` : undefined;
 };
 
 /**
@@ -60,21 +43,16 @@ export const ListNav = (props: ListNavProps) => {
   const { hideSidebarItem } = useSidebarPrefs();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
-  const location = useLocation();
+  const router = useSplitRouter();
 
   const content = () => sidebarContent(props.item.id, props.item.params);
+  const preload = () => layout.preloadContent(content());
 
-  // Read the manager signal live: it is undefined until the split layout
-  // mounts, which happens after the sidebar.
-  const matchesActiveContent = () => {
+  // Split content mirrors the router's current entry, including the owning
+  // workspace for nested details. Never infer selection from the multi-pane URL.
+  const isActive = () => {
     const activeContent = globalSplitManager()?.activeSplit()?.content();
-    // With no active split to match on, fall back to the URL path.
-    if (!activeContent) {
-      return location.pathname
-        .split('/')
-        .filter(Boolean)
-        .includes(props.item.id);
-    }
+    if (!activeContent) return false;
     const expected = content();
     if (
       props.item.id === 'agents' &&
@@ -87,77 +65,29 @@ export const ListNav = (props: ListNavProps) => {
     );
   };
 
-  // Optimistic: the pressed item takes the highlight on mousedown, before the
-  // view swaps in. The pending press only counts while the active content is
-  // still what it was at press time; once anything moves, the real state wins.
-  const isActive = () => {
-    const pending = pendingNav();
-    if (pending && pending.activeContentKey === activeContentKey()) {
-      return pending.itemId === props.item.id;
-    }
-    return matchesActiveContent();
-  };
-
-  // Opening a view is a synchronous store replace plus the new view's first
-  // render, all inside the event handler. Painted in the same frame, the
-  // highlight would only appear once that render finished. Let the browser
-  // paint the pending highlight first, then navigate on the next tick.
-  let scheduledFrame: number | undefined;
-  let scheduledTick: ReturnType<typeof setTimeout> | undefined;
-  const afterNextPaint = (run: () => void) => {
-    if (scheduledFrame !== undefined) cancelAnimationFrame(scheduledFrame);
-    if (scheduledTick !== undefined) clearTimeout(scheduledTick);
-    scheduledFrame = requestAnimationFrame(() => {
-      scheduledFrame = undefined;
-      scheduledTick = setTimeout(() => {
-        scheduledTick = undefined;
-        run();
-      }, 0);
-    });
-  };
-  onCleanup(() => {
-    if (scheduledFrame !== undefined) cancelAnimationFrame(scheduledFrame);
-    if (scheduledTick !== undefined) clearTimeout(scheduledTick);
-  });
-
   const navigate = (event: MouseEvent) => {
     // The row acts on mousedown to beat the focus change, so suppress the
     // default selection/focus behaviour.
     event.preventDefault();
     analytics.track('sidebar_click', { view: props.item.id });
 
-    const activeSplit = globalSplitManager()?.activeSplit();
-    const activeContent = activeSplit?.content();
-    const expected = content();
-    const isSameContent =
-      activeContent?.type === expected.type && activeContent.id === expected.id;
-
-    if (!isSameContent || event.shiftKey) {
-      setPendingNav({
-        itemId: props.item.id,
-        activeContentKey: activeContentKey(),
-      });
-      const { shiftKey } = event;
-      afterNextPaint(() => {
-        navigateToSidebarView({
-          viewId: props.item.id,
-          params: props.item.params,
-          shiftKey,
-          openWithSplit: layout.openWithSplit,
-          referredFrom: 'sidebar',
-        });
-        // Navigation is synchronous, so the real state now holds. Drop the
-        // press: left in place, it would claim the highlight again whenever
-        // the active content returned to what it was at press time (e.g.
-        // Settings → Agents → Settings would light up Agents).
-        setPendingNav((pending) =>
-          pending?.itemId === props.item.id ? undefined : pending
-        );
-        globalSplitManager()?.returnFocus();
-      });
-      return;
+    const split = globalSplitManager()?.activeSplit();
+    const selected = isActive();
+    if (!event.shiftKey) {
+      const pane = router.panes().find((pane) => pane.toString() === split?.id);
+      // A later ordinary press also supersedes a pending Shift-open from this
+      // pane. Cancelling preserves the current entry and split-owned state.
+      if (pane) void router.cancelNavigation(pane);
     }
-
+    if (!selected || event.shiftKey) {
+      navigateToSidebarView({
+        viewId: props.item.id,
+        params: props.item.params,
+        shiftKey: event.shiftKey,
+        openWithSplit: layout.openWithSplit,
+        referredFrom: 'sidebar',
+      });
+    }
     globalSplitManager()?.returnFocus();
   };
 
@@ -204,7 +134,11 @@ export const ListNav = (props: ListNavProps) => {
         )}
         label={props.item.label}
         aria-description={
-          [props.unread && 'Unread items', props.activeCall && 'Active call']
+          [
+            props.unread && 'Unread items',
+            props.activeCall && 'Active call',
+            props.badge && `Next meeting: ${props.badge}`,
+          ]
             .filter(Boolean)
             .join('. ') || undefined
         }
@@ -219,6 +153,9 @@ export const ListNav = (props: ListNavProps) => {
         data-sidebar-next-item={props.item.id}
         data-unread={props.unread ? '' : undefined}
         data-active-call={props.activeCall ? '' : undefined}
+        data-badge={props.badge}
+        onMouseEnter={preload}
+        onFocus={preload}
         onMouseDown={onMouseDown}
         onClick={onClick}
       >
@@ -241,6 +178,17 @@ export const ListNav = (props: ListNavProps) => {
           >
             <PhoneCallIcon class="size-full" />
           </span>
+        </Show>
+        <Show when={props.badge}>
+          {(badge) => (
+            <span
+              aria-hidden="true"
+              data-sidebar-badge
+              class="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-accent px-1 text-[9px] font-semibold leading-3 text-surface ring-2 ring-panel"
+            >
+              {badge()}
+            </span>
+          )}
         </Show>
       </Button>
     </SidebarOpenInSplitMenu>

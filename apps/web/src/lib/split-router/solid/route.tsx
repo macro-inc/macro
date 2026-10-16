@@ -2,12 +2,15 @@ import { type Component, type JSX, untrack } from 'solid-js';
 import type { SplitRouteDefinition } from '../routes/types';
 
 export type RouteProps = {
-  /** Its children and component come from this element, not the definition. */
+  /** Its children, component, and loading come from this element, not the definition. */
   definition: SplitRouteDefinition & {
     children?: undefined;
     component?: undefined;
+    loading?: undefined;
   };
   component?: Component<object>;
+  /** Shown while `component` suspends, such as while its lazy chunk loads. */
+  loading?: Component<object>;
   children?: JSX.Element;
 };
 
@@ -39,11 +42,11 @@ function resolveChildren(children: unknown): unknown[] {
 }
 
 function definitionOf(props: RouteProps): SplitRouteDefinition {
-  const { definition, component } = props;
+  const { definition, component, loading } = props;
 
-  if (definition.children || definition.component) {
+  if (definition.children || definition.component || definition.loading) {
     throw new Error(
-      `Split route "${definition.id}" is declared with <SplitRouter.Route>, so its definition must not set children or component`
+      `Split route "${definition.id}" is declared with <SplitRouter.Route>, so its definition must not set children, component, or loading`
     );
   }
 
@@ -52,6 +55,7 @@ function definitionOf(props: RouteProps): SplitRouteDefinition {
   return {
     ...definition,
     ...(component ? { component } : {}),
+    ...(loading ? { loading } : {}),
     ...(children.length ? { children } : {}),
   };
 }

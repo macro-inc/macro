@@ -6,6 +6,7 @@ import {
   databaseCreatedEvent,
   deletedEvent,
   editedEvent,
+  formRespondedEvent,
   messagedEvent,
   openedEvent,
   participantAddedEvent,
@@ -25,6 +26,7 @@ describe('decodeActivityEvent', () => {
     [messagedEvent, { kind: 'messaged' as const }],
     [sentEvent, { kind: 'email-sent' as const }],
     [callStartedEvent, { kind: 'call-started' as const }],
+    [formRespondedEvent, { kind: 'responded' as const }],
     [
       propertyChangedEvent,
       {
@@ -97,4 +99,8 @@ describe('decodeActivityEvent', () => {
       tag: 'GraphqlActivityTimeTravelled',
     });
   });
+});
+
+it('decodes a form as its own entity type', () => {
+  expect(decodeActivityEvent(formRespondedEvent).entityType).toBe('form');
 });

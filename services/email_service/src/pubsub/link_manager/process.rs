@@ -7,6 +7,7 @@ use email::domain::events::{
     EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata, LinkReauthRequiredMetadata,
 };
 use email_api_client::domain::models::{AccessToken, EmailApiError, TokenFreshness};
+use email_db_client::links::delete::PurgeBatchSizes;
 use model_entity::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;
 use models_email::api::refresh::RefreshEmailEvent;
@@ -283,10 +284,10 @@ async fn handle_delete(
     deletion_reason: &DeletionReason,
 ) -> anyhow::Result<()> {
     tracing::info!("Deleting link");
-    // set sync status to false so any future inbox updates get ignored
-    email_db_client::links::update::update_link_sync_status(&ctx.db, link.id, false)
+    // mark the link as being deleted, which stops sync so any future inbox updates get ignored
+    email_db_client::links::delete::mark_link_deleting(&ctx.db, link.id)
         .await
-        .context("Failed to update link sync status")?;
+        .context("Failed to mark link as deleting")?;
 
     // cancel any running backfill jobs
     email_db_client::backfill::job::update::cancel_active_jobs_by_link_id(&ctx.db, link.id)
@@ -336,10 +337,10 @@ async fn handle_delete(
         .ok();
 
     // Tear down CRM rows this link contributed to the user's team before
-    // the big cascading link delete fires. Best-effort: a failure here
+    // the link is purged. Best-effort: a failure here
     // would only leave orphan `crm_contacts`/`crm_companies` rows behind
-    // (the `crm_contact_sources` FK to `email_links` cascades on the
-    // upcoming `delete_link_by_id`, so the link-scoped source rows go
+    // (the `crm_contact_sources` FK to `email_links` cascades when the
+    // upcoming `purge_link` deletes the link row, so the link-scoped source rows go
     // away regardless), so we log and continue rather than bailing.
     let macro_id_str = link.macro_id.to_string();
     match ctx.crm_service.get_team_id_for_user(&macro_id_str).await {
@@ -360,10 +361,11 @@ async fn handle_delete(
         }
     }
 
-    // finally, delete all the user's link as well as all of their email data in a big cascading delete
-    email_db_client::links::delete::delete_link_by_id(&ctx.db, link.id)
+    // finally, delete the link and all of its email data in bounded batches; a redelivered
+    // message resumes the purge where an interrupted one stopped
+    email_db_client::links::delete::purge_link(&ctx.db, link.id, PurgeBatchSizes::default())
         .await
-        .context("Failed to delete link in background task")?;
+        .context("Failed to purge link in background task")?;
 
     // The teardown is async relative to the delete request, so signal completion
     // now that the rows are gone — a client showing this inbox can drop its data.

@@ -49,10 +49,10 @@ function applyStatus(payload: NetworkStatusPayload): void {
   for (const listener of listeners) listener(status);
 }
 
-/** Current native reachability state. Remains `unknown` off iOS. */
+/** Current native reachability state. Remains `unknown` off native mobile. */
 export { nativeNetworkStatus };
 
-/** Signal aborted whenever iOS reports that no network path is available. */
+/** Signal aborted whenever the native platform reports that no network path is available. */
 export function getNativeNetworkAbortSignal(): AbortSignal {
   return networkAbortController.signal;
 }
@@ -66,9 +66,9 @@ export function subscribeNativeNetworkStatus(
   return () => listeners.delete(listener);
 }
 
-/** Starts the singleton iOS `NWPathMonitor` channel. */
+/** Starts the singleton native reachability channel. */
 export function initializeNativeNetworkStatus(): Promise<void> {
-  if (!isPlatform('ios')) return Promise.resolve();
+  if (!isPlatform(['ios', 'android'])) return Promise.resolve();
   if (!initialization) initialization = startNativeMonitor();
   return initialization;
 }
@@ -85,7 +85,7 @@ async function startNativeMonitor(): Promise<void> {
       statusChannel = undefined;
       if (attempt === WATCH_START_ATTEMPTS) {
         // Fail open: status stays 'unknown' and offline aborts never engage
-        // this session, matching the browser-connectivity behavior off iOS.
+        // this session, matching the browser-connectivity behavior off native mobile.
         initialization = undefined;
         console.error('[network-status] failed to start native monitor', error);
         return;

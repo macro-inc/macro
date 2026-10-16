@@ -76,7 +76,7 @@ describe('standalone website demos', () => {
   it('edits cells, commits keyboard navigation, and restores edits with undo and redo', () => {
     const view = render(() => <HomepageSpreadsheet />);
     const cell = view.getByRole('gridcell', {
-      name: 'A2: Dana Whitfield',
+      name: 'A2: Dana',
     });
     fireEvent.click(cell);
     fireEvent.dblClick(cell);
@@ -89,18 +89,16 @@ describe('standalone website demos', () => {
     expect(view.getByRole('gridcell', { name: 'A2: Dana Test' })).toBeTruthy();
     expect(
       view
-        .getByRole('gridcell', { name: 'A3: Maya Chen' })
+        .getByRole('gridcell', { name: 'A3: Maya' })
         .getAttribute('aria-selected')
     ).toBe('true');
     fireEvent.click(view.getByRole('button', { name: 'Undo' }));
-    expect(
-      view.getByRole('gridcell', { name: 'A2: Dana Whitfield' })
-    ).toBeTruthy();
+    expect(view.getByRole('gridcell', { name: 'A2: Dana' })).toBeTruthy();
     fireEvent.click(view.getByRole('button', { name: 'Redo' }));
     expect(view.getByRole('gridcell', { name: 'A2: Dana Test' })).toBeTruthy();
     fireEvent.click(view.getByRole('button', { name: 'Bold' }));
     expect(
-      view.getByRole('gridcell', { name: 'A3: Maya Chen' }).style.fontWeight
+      view.getByRole('gridcell', { name: 'A3: Maya' }).style.fontWeight
     ).toBe('700');
     expect(fetch).not.toHaveBeenCalled();
   });

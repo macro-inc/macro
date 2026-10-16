@@ -67,6 +67,7 @@ createWebsocketEventEffect<
     switch (update.status) {
       case 'partially_completed':
         projectId = update.projectId;
+        toast.alert('Some files in the folder could not be uploaded');
         break;
       case 'completed':
         projectId = update.projectId;

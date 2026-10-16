@@ -7,7 +7,7 @@
 .homepage-github-stars { display: inline-flex; gap: 9px; align-items: center; min-height: 28px; margin-top: -12px; font-size: 17px; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
 .homepage-github-star { color: #f69232; }
 .homepage-github-link:hover .homepage-github-stars { color: var(--color-ink); }
-.homepage-open-source h2 { margin: calc(44 * var(--graphic-unit)) 0 0; font-family: 'Roboto Slab Variable', display, serif; font-size: clamp(36px, min(4.5vw, 6.5svh), 60px); font-weight: 315; line-height: 1.12; letter-spacing: -.025em; }
+.homepage-open-source h2 { margin: calc(44 * var(--graphic-unit)) 0 0; font-family: 'Roboto Slab Variable', display, serif; font-size: clamp(36px, min(4.5vw, 6.5svh), 60px); font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); line-height: 1.12; letter-spacing: -.025em; }
 .homepage-open-source-subtext { margin: clamp(20px, 3svh, 30px) 0 0; font-size: clamp(14px, 1.4vw, 17.5px); line-height: 1.8; color: var(--color-ink-muted); }
 .homepage-open-source-badges { display: flex; align-items: center; justify-content: center; gap: clamp(24px, 4vw, 56px); margin: calc(52 * var(--graphic-unit)) auto 0; color: var(--color-ink-extra-muted); }
 .homepage-open-source-badges > div { display: flex; flex-direction: column; align-items: center; gap: 14px; }

@@ -1,9 +1,9 @@
 use crate::api::context::ApiContext;
+use crate::util::gmail::send::cleanup_draft_attachments;
 use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use email_service::util::gmail::send::cleanup_draft_attachments;
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;
@@ -96,7 +96,7 @@ pub async fn handler(
             .await;
 
     match result {
-        Ok(_deleted_thread) => {
+        Ok(_) => {
             tx.commit().await?;
 
             // cleanup attachments in the background

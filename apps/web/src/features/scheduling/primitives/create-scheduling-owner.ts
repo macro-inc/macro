@@ -53,7 +53,7 @@ export function createSchedulingOwner(
   };
   const save = async (next: SchedulingProfile) => {
     if (!scope().canEdit)
-      throw new Error('Only owners and admins can edit team scheduling.');
+      throw new Error('Only team members can edit team scheduling.');
     setError('');
     await source.save(next);
   };

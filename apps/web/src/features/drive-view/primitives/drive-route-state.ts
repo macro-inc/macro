@@ -98,7 +98,6 @@ export function createDriveViewState(
       expandedFolderIds: [],
       favoritesOpen: true,
       rootOpen: true,
-      tagsOpen: true,
     },
   });
   const value = (): DriveState => ({ ...saved(), ...route.selection() });

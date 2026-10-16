@@ -47,7 +47,7 @@ export function queuedDraftSaveArgs({
     bodyText: draft.body_text ?? undefined,
     bodyMacro: draft.body_macro ?? undefined,
     senderLinkId,
-    senderEmail,
+    senderEmail: draft.sender_email ?? senderEmail,
     // Responses carry the body unencoded; mutation input retains base64.
     optimisticBodyHtml: draft.body_html
       ? decodeBase64Utf8(draft.body_html)

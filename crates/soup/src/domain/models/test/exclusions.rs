@@ -171,6 +171,27 @@ fn crm_scoped_email_exclusions_preserve_authorization_prechecks() {
 }
 
 #[test]
+fn crm_scoped_email_reaches_viewers_without_a_mailbox() {
+    let mut req = request(Some(EntityFilterAst::default()), false);
+    req.link_ids.clear();
+    assert!(req.build_email_request(None).is_none());
+
+    let mut filter = EntityFilterAst::default();
+    filter.email_filter.crm_scope = Some(item_filters::ast::CrmScope::Domains(vec![
+        "example.com".to_string(),
+    ]));
+    for follow_up in [false, true] {
+        let mut req = request(Some(filter.clone()), follow_up);
+        req.link_ids.clear();
+        let email = req
+            .build_email_request(None)
+            .expect("team-contributed CRM email does not need the viewer's mailbox");
+        assert!(email.link_ids.is_empty());
+        assert!(email.crm_scope.is_some());
+    }
+}
+
+#[test]
 fn exclusion_only_skips_the_targeted_entity_type() {
     for excluded_leg in LEGS {
         let req = request(

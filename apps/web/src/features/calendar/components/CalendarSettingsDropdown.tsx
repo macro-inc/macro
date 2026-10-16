@@ -172,7 +172,7 @@ function DesktopCalendarSettings(props: {
     <Dropdown placement={props.sidebar ? 'top-end' : 'bottom-end'}>
       <Dropdown.Trigger
         variant="ghost"
-        size={props.sidebar ? 'md' : 'icon-md'}
+        size={props.sidebar ? 'md' : 'icon-lg'}
         class={
           props.sidebar
             ? 'w-full border-transparent bg-transparent'

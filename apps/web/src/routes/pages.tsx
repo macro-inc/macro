@@ -9,12 +9,15 @@ import {
 } from '@app/features/scheduling/public-booking';
 import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { Button } from '@ui';
-import { onCleanup, onMount } from 'solid-js';
+import { lazy, onCleanup, onMount } from 'solid-js';
 import {
   bookingReceiptRoute,
   EMAIL_SIGNUP_CALLBACK_PATH,
+  formRespondRoute,
   INBOX_LINK_CALLBACK_PATH,
   publicBookingRoute,
   taskSlugRoute,
@@ -31,7 +34,17 @@ export function LoginPage() {
   return <Login />;
 }
 
+/**
+ * Phone browsers (including Meta's in-app browser) leave their email on the
+ * website's `/mobile-signup` and get a link to finish signing up on desktop.
+ */
 export function SignupPage() {
+  if (isMobile() && !isNativeMobilePlatform()) {
+    window.location.replace(
+      `${getWebOrigin()}/mobile-signup${window.location.search}`
+    );
+    return null;
+  }
   return <Login signupMode />;
 }
 
@@ -78,6 +91,17 @@ export function TaskSlugPage() {
 export function PublicBookingRoutePage() {
   const params = useRouteParams(publicBookingRoute);
   return <PublicBookingPage profile={params.profile} slug={params.slug} />;
+}
+
+/** Forms code loads only when someone opens a respond link. */
+const FormRespondPage = lazy(async () => ({
+  default: (await import('@app/features/block-form/form-respond-page'))
+    .FormRespondPage,
+}));
+
+export function FormRespondRoutePage() {
+  const params = useRouteParams(formRespondRoute);
+  return <FormRespondPage formId={params.formId} />;
 }
 
 export function BookingReceiptRoutePage() {

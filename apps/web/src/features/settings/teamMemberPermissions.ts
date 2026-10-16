@@ -4,6 +4,14 @@ export function isTeamAdminOrOwner(role: TeamRole | undefined): boolean {
   return role === TeamRole.admin || role === TeamRole.owner;
 }
 
+/** Admins and owners can always invite; members only when the team allows it. */
+export function canInviteToTeam(
+  role: TeamRole | undefined,
+  allowNonAdminInvites: boolean
+): boolean {
+  return isTeamAdminOrOwner(role) || allowNonAdminInvites;
+}
+
 export function canRemoveTeamMember(
   actingUserId: string | undefined,
   actingRole: TeamRole | undefined,

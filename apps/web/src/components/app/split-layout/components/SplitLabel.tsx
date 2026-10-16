@@ -9,7 +9,6 @@ import {
 import {
   EntityIcon,
   type EntityIconSelector,
-  isArchiveType,
 } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -246,12 +245,8 @@ export function BlockItemSplitLabel(props: {
   const isOwner = useIsDocumentOwner();
 
   const targetType = () => {
-    // archive files have a special icon
     if (blockName === 'unknown') {
-      const fileType = blockMetadataSignal()?.fileType;
-      if (fileType && isArchiveType(fileType)) {
-        return 'archive';
-      }
+      return blockMetadataSignal()?.fileType ?? blockName;
     }
     return blockName;
   };

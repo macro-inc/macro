@@ -25,6 +25,15 @@ vi.mock('@service-storage/client', async () => {
   const { databasesClient } = await import('@service-storage/databases');
   return { storageServiceClient: { databases: databasesClient } };
 });
+// The forms chip and warnings are off here: no forms list loads.
+vi.mock('@queries/storage/forms', () => ({
+  useFormsForDatabaseQuery: () => ({
+    isSuccess: false,
+    isError: false,
+    fetchStatus: 'idle',
+    data: undefined,
+  }),
+}));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return {

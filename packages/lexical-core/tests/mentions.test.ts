@@ -119,6 +119,12 @@ describe('parsePullRequestMentions', () => {
     expect(parsePullRequestMentions(input)).toBe('foreign-1');
   });
 
+  it('falls back to the GitHub reference for a URL-only mention', () => {
+    const input =
+      '<m-pr-mention>{"url":"https://github.com/macro-inc/macro/pull/7945","label":""}</m-pr-mention>';
+    expect(parsePullRequestMentions(input)).toBe('macro-inc/macro#7945');
+  });
+
   it('returns empty string for invalid JSON', () => {
     const input = '<m-pr-mention>???</m-pr-mention>';
     expect(parsePullRequestMentions(input)).toBe('');

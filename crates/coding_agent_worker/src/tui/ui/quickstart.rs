@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph};
 
 use super::layout::{centered, render_input};
+use super::modals::agent_groups;
 use super::theme::{ACCENT, DIM, ERR, OK, THEME, WARN, focus_marker, focus_style, modal};
 use crate::config::IdentityScope;
 use crate::tui::agent_catalog::AgentKind;
@@ -16,10 +17,10 @@ pub(crate) fn render_quickstart(
     config_path: &std::path::Path,
 ) {
     super::theme::render_background(frame);
-    let discovered_height = (setup.agents.len() as u16 + 2).clamp(3, 9);
+    let discovered_height = (discovered_lines(setup, 0).len() as u16 + 2).clamp(3, 12);
     let area = centered(
         84,
-        frame.area().height.saturating_sub(2).min(33),
+        frame.area().height.saturating_sub(2).min(36),
         frame.area(),
     );
     frame.render_widget(Clear, area);
@@ -224,27 +225,23 @@ fn render_discovered_agents(frame: &mut Frame, setup: &Quickstart, area: Rect) {
         return;
     }
 
-    for (index, agent) in setup.agents.iter().enumerate() {
+    frame.render_widget(Paragraph::new(discovered_lines(setup, inner.width)), inner);
+}
+
+fn discovered_lines(setup: &Quickstart, width: u16) -> Vec<Line<'_>> {
+    agent_groups(&setup.agents, width, |index, agent| {
         let focused = setup.focus == QuickstartFocus::Agent(index);
         let chosen = setup
             .selected_agent
             .as_ref()
             .is_some_and(|selected| selected.kind == agent.kind);
-        let row = Rect {
-            y: inner.y + index as u16,
-            height: 1,
-            ..inner
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(focus_marker(focused), Style::new().fg(ACCENT)),
-                Span::styled(if chosen { "● " } else { "○ " }, Style::new().fg(ACCENT)),
-                Span::styled(format!("{:<22}", agent.name), focus_style(focused)),
-                Span::styled(agent.note.unwrap_or(""), Style::new().fg(DIM)),
-            ])),
-            row,
-        );
-    }
+        Line::from(vec![
+            Span::styled(focus_marker(focused), Style::new().fg(ACCENT)),
+            Span::styled(if chosen { "● " } else { "○ " }, Style::new().fg(ACCENT)),
+            Span::styled(format!("{:<22}", agent.short_name()), focus_style(focused)),
+            Span::styled(agent.note.unwrap_or(""), Style::new().fg(DIM)),
+        ])
+    })
 }
 
 fn render_quickstart_custom(frame: &mut Frame, setup: &Quickstart, area: Rect) {

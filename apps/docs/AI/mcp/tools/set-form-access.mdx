@@ -1,0 +1,16 @@
+---
+title: SetFormAccess
+description: >-
+  Open, close or share a saved form immediately.
+---
+
+# SetFormAccess
+
+Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `formId` | FormId | Yes | Identifier of a form (the shareable entity respondents open). |
+| `draft` | AccessDraft | Yes | Complete access settings. Empty grant deltas are a no-op. |

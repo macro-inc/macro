@@ -9,7 +9,7 @@ mod test;
 /// The stub `STRIPE_SECRET_KEY` set by `run_local --no-doppler` (see
 /// `tooling/xtask/crates/xtask_local/src/local/local_env.rs`). With this key a
 /// real Stripe call would fail, so local signups skip it and store a
-/// deterministic placeholder id instead.
+/// deterministic placeholder only in the required legacy account field.
 const LOCAL_STRIPE_SECRET_STUB: &str = "local-stripe-secret";
 
 fn is_local_stripe_stub() -> bool {
@@ -30,7 +30,7 @@ fn local_stripe_customer_id(email: &str) -> String {
 /// multiple easy-to-follow functions
 ///
 /// Returns the (user_id, Option<organization_id>)
-#[tracing::instrument(skip(db, stripe_client))]
+#[tracing::instrument(skip(db, stripe_client), err)]
 pub async fn create_user(
     fusionauth_user_id: &str,
     username: &str,
@@ -42,17 +42,27 @@ pub async fn create_user(
     let stripe_customer_id = if is_local_stripe_stub() {
         // Local mode uses a stub key; don't call Stripe (it would 401 and
         // abort the transactional user.create webhook, blocking all signups).
-        local_stripe_customer_id(email)
+        tracing::info!("skipping Stripe customer creation for the local Stripe stub");
+        None
     } else {
         // NOTE: stripe adds in ~400ms of latency to this request. We may want to update our
         // requirement that each customer exists in stripe and create stripe customers as needed.
+        let start_time = std::time::Instant::now();
         let stripe_customer = create_stripe_user(email, stripe_client).await?;
-        tracing::trace!(stripe_customer_id=?stripe_customer.id.to_string(), "created stripe customer");
-        stripe_customer.id.to_string()
+        tracing::info!(
+            stripe_customer_id = %stripe_customer.id,
+            elapsed_ms = start_time.elapsed().as_millis() as u64,
+            "created Stripe customer"
+        );
+        Some(stripe_customer.id.to_string())
     };
+    // The legacy account key is required, but a profile without a real Stripe
+    // customer must leave billing absent so free team creation skips Stripe.
+    let macro_user_customer_id = stripe_customer_id
+        .clone()
+        .unwrap_or_else(|| local_stripe_customer_id(email));
 
     let organization_id = match_user_to_organization(db, email).await?;
-    tracing::trace!(organization_id=?organization_id, "matched user to organization");
 
     let roles = match organization_id {
         Some(organization_id) => {
@@ -61,7 +71,7 @@ pub async fn create_user(
         None => ["self_serve".to_string()].into_iter().collect(),
     };
 
-    tracing::trace!(roles=?roles, "got roles for user");
+    tracing::info!(organization_id=?organization_id, roles=?roles, "resolved organization and roles for new user");
 
     // Create user in macrodb
     let user_id = macro_db_client::user::create_user::create_user(
@@ -70,17 +80,19 @@ pub async fn create_user(
         username,
         email,
         is_verified,
-        &stripe_customer_id,
+        &macro_user_customer_id,
+        stripe_customer_id.as_deref(),
         organization_id,
         roles,
     )
     .await?;
 
+    tracing::info!(user_id, "created macro user and user profile in macrodb");
+
     if organization_id.is_some() {
         macro_db_client::organization::delete_organization_invitation(db.clone(), email).await?;
+        tracing::info!(organization_id=?organization_id, "deleted pending organization invitation");
     }
-
-    tracing::trace!("created user in macrodb");
 
     Ok((user_id, organization_id))
 }
@@ -89,7 +101,7 @@ pub async fn create_user(
 /// Note: This does not check if a user with the same email already exists.
 /// We can safely assume that this is not the case when we create a new user as the webhook is only
 /// run for new users.
-#[tracing::instrument(skip(stripe_client))]
+#[tracing::instrument(skip(stripe_client), err)]
 pub async fn create_stripe_user(
     email: &str,
     stripe_client: &stripe::Client,

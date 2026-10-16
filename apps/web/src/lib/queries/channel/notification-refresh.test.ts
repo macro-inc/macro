@@ -30,7 +30,9 @@ function setup() {
   const request = vi
     .fn<() => Promise<{ error?: CombinedError }>>()
     .mockResolvedValue({});
-  const query = vi.fn(() => ({ toPromise: request }));
+  const query = vi.fn((..._args: Parameters<Client['query']>) => ({
+    toPromise: request,
+  }));
   const client = { query } as unknown as Client;
   const queue = channelNotificationRefresh(client);
   cleanups.push(() => disposeChannelNotificationRefresh(client));
@@ -160,6 +162,41 @@ describe('shared channel notification refresh', () => {
     expect(f.query).toHaveBeenCalledTimes(3);
   });
 
+  it('refreshes heterogeneous witnesses for non-channel changes without waking channel readers', async () => {
+    const f = setup();
+    f.register('channel');
+    const home = f.register('home', {
+      channelId: undefined,
+      scope: 'all-entities',
+      filtered: true,
+      notificationIds: ['notification'],
+    });
+    const notification: GraphqlNotificationPatch = {
+      ...patch('document', true),
+      notification: {
+        id: 'notification',
+        entityType: 'DOCUMENT',
+        entityId: 'document',
+      },
+    } as GraphqlNotificationPatch;
+    f.queue.onPatch(notification, true);
+    await tick();
+    expect(f.query).toHaveBeenCalledExactlyOnceWith(
+      document,
+      { id: 'home' },
+      { requestPolicy: 'network-only' }
+    );
+    // Replacing the single witness may reveal an older unread notification.
+    home.reader.notificationIds = [];
+    f.queue.onPatch(notification, true);
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(2);
+    home.reader.enabled = false;
+    f.queue.onPatch(notification, true);
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(2);
+  });
+
   it('refreshes a full edge when an updated notification is not in its membership', async () => {
     const f = setup();
     f.register();
@@ -184,6 +221,24 @@ describe('shared channel notification refresh', () => {
     f.queue.onPatch(deletion('b', 'GraphqlSoupChannel'), true);
     await tick();
     expect(f.query).toHaveBeenCalledTimes(4);
+  });
+
+  it('refreshes Home when another reader owns deleted thread-scoping evidence', async () => {
+    const f = setup();
+    f.register('thread', { notificationIds: ['seen-reply'] });
+    f.register('other-channel');
+    f.register('home', {
+      scope: 'all-entities',
+      channelId: undefined,
+      filtered: true,
+    });
+    f.queue.onPatch(deletion('seen-reply'), true);
+    await tick();
+    expect(f.query).toHaveBeenCalledTimes(2);
+    expect(f.query.mock.calls.map((call) => call[1])).toEqual([
+      { id: 'thread' },
+      { id: 'home' },
+    ]);
   });
 
   it('reconnects enabled readers without starting disabled or global feeds', async () => {

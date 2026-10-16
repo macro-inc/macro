@@ -109,6 +109,9 @@ const prompt: FoldedMessage = {
   parts: [{ kind: 'text', text: 'Say hi' }],
   stop: null,
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
 };
 
 const response: FoldedMessage = {
@@ -119,6 +122,9 @@ const response: FoldedMessage = {
   parts: [{ kind: 'text', text: 'Hi!' }],
   stop: { kind: 'end_turn' },
   pending: false,
+  segments: [],
+  phase: null,
+  postedAt: null,
 };
 
 const openResponse: FoldedMessage = {

@@ -7,14 +7,29 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, type JSX, onMount } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
 
+const renderTelemetry = vi.hoisted(() => ({
+  context: vi.fn(),
+  observe: vi.fn(),
+}));
+vi.mock('../context/AgentSessionContext', () => ({
+  useOptionalAgentSession: renderTelemetry.context,
+}));
+
 // The layer under test is how a message lays its parts out — which calls fold
 // into a group and at what index — so every part renderer and ui primitive
 // is a marker. The per-part components have their own tests.
+const openedOrigins = vi.hoisted(() => [] as unknown[]);
+vi.mock('../open-prompt-origin', () => ({
+  useOpenPromptOrigin: () => (destination: unknown) => {
+    openedOrigins.push(destination);
+  },
+}));
+
 vi.mock('@core/util/message-send-motion', () => ({
   messageSendMotion: () => {},
 }));
@@ -33,7 +48,18 @@ vi.mock('@ui', () => ({
   ),
 }));
 vi.mock('./parts/TextPart', () => ({
-  TextPart: (props: { text: string }) => <p data-testid="text">{props.text}</p>,
+  TextPart: (props: {
+    text: string;
+    observeRender?: (element: HTMLElement) => void;
+  }) => {
+    let element!: HTMLParagraphElement;
+    onMount(() => props.observeRender?.(element));
+    return (
+      <p ref={element} data-testid="text">
+        {props.text}
+      </p>
+    );
+  },
 }));
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
@@ -79,8 +105,10 @@ vi.mock('../ui', () => ({
   WorkingLine: (props: { label?: string }) => (
     <div data-testid="working">{props.label}</div>
   ),
-  ActionLine: (props: { label: string }) => (
-    <div data-testid="action-line">{props.label}</div>
+  ActionLine: (props: { label: string; detail?: string }) => (
+    <div data-testid="action-line" data-detail={props.detail}>
+      {props.label}
+    </div>
   ),
   FailureNoticeCard: (props: {
     notice: { title: string; body: string; link?: { url: string } | null };
@@ -110,6 +138,8 @@ vi.mock('../views/LiveToolGroup', () => ({
 
 afterEach(() => {
   viewerId.current = 'macro|me@macro.com';
+  renderTelemetry.context.mockReset();
+  renderTelemetry.observe.mockReset();
   cleanup();
 });
 
@@ -139,6 +169,9 @@ const message = (
   agentSessionId: 'session',
   requestId: null,
   pending: false,
+  postedAt: null,
+  segments: [],
+  phase: null,
   turn: 0,
   author: { kind: 'agent' },
   parts,
@@ -146,6 +179,29 @@ const message = (
 });
 
 describe('Message tool grouping', () => {
+  it('observes only agent answer DOM on the existing session and matching turn', () => {
+    renderTelemetry.context.mockReturnValue({
+      observeRenderedText: renderTelemetry.observe,
+    });
+    const answer = message([text('Hello')]);
+    answer.turn = 3;
+    render(() => <Message message={answer} inFlight />);
+    expect(renderTelemetry.observe).toHaveBeenCalledExactlyOnceWith(
+      'session',
+      3,
+      expect.any(HTMLElement)
+    );
+    cleanup();
+    renderTelemetry.observe.mockClear();
+    render(() => (
+      <Message
+        message={{ ...answer, author: { kind: 'user', userId: null } }}
+        inFlight={false}
+      />
+    ));
+    expect(renderTelemetry.observe).not.toHaveBeenCalled();
+  });
+
   it('folds consecutive tool calls into one group, keeping their indices', () => {
     const view = render(() => (
       <Message
@@ -706,7 +762,7 @@ describe('Message failed turns', () => {
         inFlight={false}
       />
     ));
-    expect(view.getByTestId('action-line').textContent).toContain(
+    expect(view.getByTestId('action-line').dataset.detail).toBe(
       'Internal error: something broke'
     );
     expect(view.queryByTestId('failure-notice')).toBeNull();
@@ -737,5 +793,71 @@ describe('Message failed turns', () => {
       'https://www.cursor.com/dashboard?tab=settings'
     );
     expect(view.queryByTestId('action-line')).toBeNull();
+  });
+});
+
+describe('Message prompt footer', () => {
+  const context = (xml: string) =>
+    `<m-agent-context>${JSON.stringify({ version: 1, text: xml }).replace(/</g, '\\u003c')}</m-agent-context>\nWork on the assigned task.`;
+
+  it('says under the prompt what started it, and goes there on click', () => {
+    openedOrigins.length = 0;
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([
+            text(
+              context(
+                '<trigger kind="task_assigned" discussion="d1"><assigned by="Julia" by_id="macro|julia@example.com"/><task id="task-1" title="Fix calendar popover scroll" status="Todo"/></trigger>'
+              )
+            ),
+          ]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+        }}
+        inFlight={false}
+      />
+    ));
+
+    const line = view.getByRole('button', {
+      name: 'via task Fix calendar popover scroll from Julia',
+    });
+    line.click();
+    expect(openedOrigins).toEqual([{ kind: 'task', taskId: 'task-1' }]);
+  });
+
+  it('shows only when a prompt typed in the session was posted', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([
+            text(
+              context('<session owner="Me" owner_id="macro|me@macro.com"/>')
+            ),
+          ]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+          postedAt: '2026-10-15T14:02:00+00:00',
+        }}
+        inFlight={false}
+      />
+    ));
+    const footer = view.getByTestId('prompt-footer');
+    expect(footer.querySelector('button')).toBeNull();
+    expect(footer.querySelector('time')?.dateTime).toBe(
+      '2026-10-15T14:02:00+00:00'
+    );
+  });
+
+  it('adds nothing under a prompt the log has not confirmed', () => {
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text('Do the thing.')]),
+          author: { kind: 'user', userId: 'macro|me@macro.com' },
+          pending: true,
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('prompt-footer')).toBeNull();
   });
 });

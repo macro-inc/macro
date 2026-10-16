@@ -3,10 +3,10 @@ import { databaseDetailQueryOptions } from '@queries/storage/databases';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
-import type { DatabaseViewColumn } from '../core/database-view';
-import type { NewView, ViewCreation } from '../core/view-creation';
-import { boardLayout } from '../core/views';
-import type { DatabaseOpFailure } from '../core/write-failure';
+import type { DatabaseViewColumn } from '../../database/core/database-view';
+import type { NewView, ViewCreation } from '../../database/core/view-creation';
+import { boardLayout } from '../../database/core/views';
+import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import { createBoardWithStatusColumn, createDatabaseView } from './views';
 
 /** Mint the whole intent once. A retry checks for a committed view before writing again. */

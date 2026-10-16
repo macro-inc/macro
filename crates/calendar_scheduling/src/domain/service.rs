@@ -11,9 +11,9 @@ use uuid::Uuid;
 pub struct Service<R, C, D> {
     pub(super) repository: R,
     pub(super) calendars: C,
-    directory: D,
+    pub(super) directory: D,
 }
-impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
+impl<R: Repository, C, D: Directory> Service<R, C, D> {
     /// Construct the scheduling use-case service.
     pub fn new(repository: R, calendars: C, directory: D) -> Self {
         Self {
@@ -21,6 +21,47 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             calendars,
             directory,
         }
+    }
+    /// Validate a saved booking destination for an authorized authoring integration.
+    pub async fn validate_attachment(
+        &self,
+        user: &str,
+        profile: Uuid,
+        event: Uuid,
+    ) -> Result<(), Error>
+    where
+        C: AttachmentReadiness,
+    {
+        let owner = self
+            .repository
+            .profile(profile)
+            .await?
+            .ok_or(Error::NotFound)?;
+        self.authorize(user, &owner, false).await?;
+        let event = owner
+            .profile
+            .event_types
+            .iter()
+            .find(|e| e.id == event && e.enabled)
+            .ok_or(Error::NotFound)?;
+        if event.requires_confirmation
+            || event.hosts.is_empty()
+            || !owner
+                .profile
+                .schedules
+                .iter()
+                .any(|s| s.id == event.schedule_id)
+        {
+            return Err(Error::Invalid(
+                "Choose an enabled booking link with a schedule, hosts and automatic confirmation."
+                    .into(),
+            ));
+        }
+        self.validate_booking_hosts(&owner, &event.hosts).await?;
+        for host in &event.hosts {
+            self.calendars.ready(host).await?;
+        }
+        Ok(())
     }
     /// Deterministic opaque identity for a personal or team scheduling profile.
     pub fn profile_id(user: &str, team: Option<Uuid>) -> Uuid {
@@ -30,14 +71,21 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         );
         Uuid::new_v5(&Uuid::NAMESPACE_URL, scope.as_bytes())
     }
-    async fn authorize(&self, user: &str, owner: &OwnedProfile, write: bool) -> Result<(), Error> {
+    /// Any team member may read and edit their team's profile; `admin` limits
+    /// the action to the team's administrators.
+    pub(super) async fn authorize(
+        &self,
+        user: &str,
+        owner: &OwnedProfile,
+        admin: bool,
+    ) -> Result<(), Error> {
         if let Some(team) = owner.team_id {
             if self
                 .directory
                 .members(team)
                 .await?
                 .iter()
-                .any(|m| m.user_id == user && (!write || m.admin))
+                .any(|m| m.user_id == user && (!admin || m.admin))
             {
                 return Ok(());
             }
@@ -45,6 +93,26 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             return Ok(());
         }
         Err(Error::Forbidden)
+    }
+    async fn validate_booking_hosts(
+        &self,
+        owner: &OwnedProfile,
+        hosts: &[String],
+    ) -> Result<(), Error> {
+        let members = if let Some(team) = owner.team_id {
+            self.directory
+                .members(team)
+                .await?
+                .into_iter()
+                .map(|m| m.user_id)
+                .collect::<Vec<_>>()
+        } else {
+            vec![owner.user_id.clone().ok_or(Error::Forbidden)?]
+        };
+        if hosts.iter().any(|h| !members.contains(h)) {
+            return Err(Error::Forbidden);
+        }
+        Ok(())
     }
     /// Read configuration, returning an unsaved default for a new profile.
     pub async fn settings(&self, user: &str, team: Option<Uuid>) -> Result<Profile, Error> {
@@ -69,7 +137,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         self.authorize(user, &owner, false).await?;
         Ok(owner.profile)
     }
-    /// Save a validated, revision-protected profile. Only team admins may edit team links.
+    /// Save a validated, revision-protected profile. Any team member may edit team links.
     pub async fn save(
         &self,
         user: &str,
@@ -85,7 +153,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             team_id: team,
             profile,
         };
-        self.authorize(user, &owner, true).await?;
+        self.authorize(user, &owner, false).await?;
         let previous = self.repository.profile(owner.profile.id).await?;
         self.validate_hosts(&owner, previous.as_ref()).await?;
         self.repository.save_profile(owner).await
@@ -124,26 +192,8 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         }
         Ok(())
     }
-    async fn validate_booking_hosts(
-        &self,
-        owner: &OwnedProfile,
-        hosts: &[String],
-    ) -> Result<(), Error> {
-        let members = if let Some(team) = owner.team_id {
-            self.directory
-                .members(team)
-                .await?
-                .into_iter()
-                .map(|m| m.user_id)
-                .collect::<Vec<_>>()
-        } else {
-            vec![owner.user_id.clone().ok_or(Error::Forbidden)?]
-        };
-        if hosts.iter().any(|h| !members.contains(h)) {
-            return Err(Error::Forbidden);
-        }
-        Ok(())
-    }
+}
+impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
     /// Publish only enabled event types and public presentation fields.
     pub async fn public_profile(&self, id: Uuid) -> Result<PublicProfile, Error> {
         let owner = self.repository.profile(id).await?.ok_or(Error::NotFound)?;
@@ -163,6 +213,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                     description: e.description,
                     duration_minutes: e.duration_minutes,
                     location: e.location,
+                    macro_call: e.macro_call,
                     google_meet: e.google_meet,
                     questions: e.questions,
                     requires_confirmation: e.requires_confirmation,
@@ -562,11 +613,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .profile(record.profile_id)
             .await?
             .ok_or(Error::NotFound)?;
-        if record.booking.hosts.iter().any(|host| host == user) {
-            self.authorize(user, &owner, false).await?;
-        } else {
-            self.authorize(user, &owner, true).await?;
-        }
+        self.authorize_booking(user, &owner, &record).await?;
         if record.booking.status != BookingStatus::Confirmed || record.booking.ends_at > Utc::now()
         {
             return Err(Error::Invalid(
@@ -594,7 +641,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         {
             return Err(Error::Conflict);
         }
-        if self
+        let busy = self
             .calendars
             .busy(
                 &record.booking.hosts,
@@ -602,9 +649,13 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 record.busy_end,
                 None,
             )
-            .await?
+            .await?;
+        if busy.iter().any(|interval| interval.end < interval.start) {
+            return Err(Error::CalendarUnavailable);
+        }
+        if busy
             .iter()
-            .any(|b| b.start < record.busy_end && b.end > record.busy_start)
+            .any(|b| b.start < b.end && b.start < record.busy_end && b.end > record.busy_start)
         {
             return Err(Error::Conflict);
         }
@@ -635,8 +686,18 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
             .profile(record.profile_id)
             .await?
             .ok_or(Error::NotFound)?;
-        self.authorize(user, &owner, true).await?;
+        self.authorize_booking(user, &owner, &record).await?;
         Ok(record)
+    }
+    /// Hosts may manage the meetings they host; anyone else needs admin rights.
+    async fn authorize_booking(
+        &self,
+        user: &str,
+        owner: &OwnedProfile,
+        record: &BookingRecord,
+    ) -> Result<(), Error> {
+        let hosts = record.booking.hosts.iter().any(|host| host == user);
+        self.authorize(user, owner, !hosts).await
     }
     /// Read a booking using its unguessable booker capability.
     pub async fn receipt(&self, id: Uuid, token: Uuid) -> Result<BookingRecord, Error> {
@@ -756,7 +817,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 .profile(record.profile_id)
                 .await?
                 .ok_or(Error::NotFound)?;
-            self.authorize(user.ok_or(Error::Forbidden)?, &owner, true)
+            self.authorize_booking(user.ok_or(Error::Forbidden)?, &owner, &record)
                 .await?;
         }
         if record.booking.status == BookingStatus::Cancelled {

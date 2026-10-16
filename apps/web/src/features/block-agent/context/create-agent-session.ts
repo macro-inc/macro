@@ -112,6 +112,8 @@ export function createAgentSession(
   options: {
     /** The viewer, so a speculated prompt is attributed as the log will. */
     userId: Accessor<string | undefined>;
+    /** This view now owns a reference; a pending navigation may release its own. */
+    onAcquire?: () => void;
   }
 ): AgentSessionHandle {
   // Whether this block went on screen before it had a session to load.
@@ -205,6 +207,7 @@ export function createAgentSession(
       unsubscribe();
       session.release();
     });
+    options.onAcquire?.();
     return session;
   });
 
@@ -238,7 +241,7 @@ export function createAgentSession(
       setMetadata(snapshot.metadata);
       replace(snapshot.messages);
     });
-    session.rendered(kind);
+    session.rendered(kind, snapshot.messages);
   };
 
   /** The fetched session, shown, with a rename that landed meanwhile kept. */

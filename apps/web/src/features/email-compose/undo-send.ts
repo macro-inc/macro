@@ -1,13 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
-import {
-  restoreEmailDraft,
-  unscheduleEmailMessage,
-} from '@queries/email/integration';
+import { saveEmailComposeDraft } from '@queries/email/graphql/compose';
+import { unscheduleEmailMessage } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateSoupEntity } from '@queries/soup/cache';
-import type { ApiDraftInput } from '@service-email/generated/schemas';
+import type { EmailDraft } from './core/email-draft';
 import { prepareEmailBodyFromHtml } from './primitives/prepare-email-body';
 import { endUndoSend, tryBeginUndoSend } from './primitives/undo-send-claim';
 
@@ -109,16 +107,21 @@ export async function runUndoSend(options: {
  * autosave overwrites the stale body.
  */
 export async function restoreDraftBodyAfterUndo(
-  draft: Omit<ApiDraftInput, 'body_html'>,
+  draft: Omit<EmailDraft, 'body_html'>,
   bodyHtml: string,
   linkId: string | undefined
 ): Promise<void> {
   const prepared = prepareEmailBodyFromHtml(bodyHtml);
-  const saveResult = await restoreEmailDraft(
-    { draft: { ...draft, body_html: prepared.bodyHtml } },
-    linkId
-  );
-  if (saveResult.isErr()) {
-    Telemetry.error(new Error('Failed to restore draft body after undo-send'));
+  try {
+    await saveEmailComposeDraft({
+      draft: { ...draft, body_html: prepared.bodyHtml },
+      inboxId: linkId,
+    });
+  } catch (error) {
+    Telemetry.error(
+      error instanceof Error
+        ? error
+        : new Error('Failed to restore draft body after undo-send')
+    );
   }
 }

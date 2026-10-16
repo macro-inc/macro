@@ -63,6 +63,8 @@ const STATUS_EVERY: u32 = 4;
 /// Consecutive ready status checks, with no transcript ending, that end a
 /// turn anyway (slash commands and interrupted turns write no final message).
 const SETTLED_CHECKS: u32 = 3;
+/// How long a new tab's shell may take to reach its prompt.
+const SHELL_READY_TIMEOUT: Duration = Duration::from_secs(10);
 const QUIET_START: Duration = Duration::from_secs(20);
 const MISSING_AGENT_CHECKS: u32 = 5;
 /// Which coding-agent TUI each session runs.
@@ -754,8 +756,6 @@ impl Adapter {
                 .open_window(&session.cwd, &label, !self.options.no_focus)
                 .await?
         };
-        // The tab's shell must reach its prompt before an agent can start.
-        tokio::time::sleep(Duration::from_millis(800)).await;
 
         let model = lock(&session.model).clone();
         let mut args = Vec::new();
@@ -808,9 +808,20 @@ impl Adapter {
         args.extend(self.options.agent_args.iter().cloned());
         let name = agent_name(&session.id);
         let started = std::time::SystemTime::now();
-        herdr
-            .start_agent(&name, kind.herdr_kind(), &window.pane_id, &args)
-            .await?;
+        // The tab's shell must reach its prompt before an agent can start,
+        // and a worktree's direnv can hold it for seconds.
+        let deadline = tokio::time::Instant::now() + SHELL_READY_TIMEOUT;
+        loop {
+            match herdr
+                .start_agent(&name, kind.herdr_kind(), &window.pane_id, &args)
+                .await
+            {
+                Err(error) if error.pane_busy() && tokio::time::Instant::now() < deadline => {
+                    tokio::time::sleep(POLL).await;
+                }
+                result => break result?,
+            }
+        }
         tracing::info!(
             session = %session.id,
             pane = %window.pane_id,

@@ -12,7 +12,7 @@ use messages::domain::{
         Message, MessageAttribution, MessageParent, MessageThread, NewThreadAnchor, PostMessage,
         PostMessageNotificationPolicy, ThreadPatch, ThreadState,
     },
-    ports::{MessageError, MessagePage, MessagePatch, MessageTimelineQuery},
+    ports::{MessageError, MessagePage, MessagePatch, MessageTimelinePage, MessageTimelineQuery},
     service::{MessageView, MessageWrite},
 };
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -24,7 +24,9 @@ use crate::domain::permission_token::decode_permission_token;
 use super::{
     DocumentToolContext,
     comment_on_document::CommentOnDocument,
+    delete_document_comment::DeleteDocumentComment,
     edit_document::test::{FakeDocumentService, FakeEditingWorker, FakeEntityAccessService},
+    edit_document_comment::EditDocumentComment,
     resolve_document_comment::ResolveDocumentComment,
 };
 
@@ -41,6 +43,47 @@ pub(in crate::inbound::toolset) struct FakeMessages {
     fail_posts: bool,
     posts: Arc<Mutex<Vec<(EntityAccessReceipt<MessageWrite>, PostMessage)>>>,
     thread_patches: Arc<Mutex<Vec<(EntityAccessReceipt<MessageWrite>, Uuid, ThreadPatch)>>>,
+    /// Author of the stored comment `get` returns; reads panic when unset.
+    comment_author: Option<ChannelSender<'static>>,
+    /// Whether the stored comment is a reply rather than a thread's first comment.
+    comment_is_reply: bool,
+    /// Refuse every comment edit or delete as the message service refuses a non-author.
+    forbid_changes: bool,
+    comment_patches: Arc<Mutex<Vec<(EntityAccessReceipt<MessageWrite>, Uuid, MessagePatch)>>>,
+    comment_deletes: Arc<Mutex<Vec<(EntityAccessReceipt<MessageWrite>, Uuid)>>>,
+}
+
+impl FakeMessages {
+    fn with_comment_by(author: ChannelSender<'static>) -> Self {
+        Self {
+            comment_author: Some(author),
+            ..Self::default()
+        }
+    }
+
+    fn stored_comment(&self, id: Uuid) -> Message {
+        let at = Utc.with_ymd_and_hms(2026, 9, 23, 12, 0, 0).unwrap();
+        Message {
+            id,
+            parent: MessageParent::parse("document", &DOCUMENT.to_string()).unwrap(),
+            thread_id: self.comment_is_reply.then_some(THREAD),
+            sender_id: self
+                .comment_author
+                .clone()
+                .expect("test configured a stored comment"),
+            imported_author: None,
+            bot_profile: None,
+            mentions: vec![],
+            triggered_by: None,
+            content: "stored comment".to_owned(),
+            created_at: at,
+            updated_at: at,
+            edited_at: None,
+            deleted_at: None,
+            attachments: vec![],
+            reactions: vec![],
+        }
+    }
 }
 
 impl Default for FakeMessages {
@@ -50,6 +93,11 @@ impl Default for FakeMessages {
             fail_posts: false,
             posts: Arc::default(),
             thread_patches: Arc::default(),
+            comment_author: None,
+            comment_is_reply: false,
+            forbid_changes: false,
+            comment_patches: Arc::default(),
+            comment_deletes: Arc::default(),
         }
     }
 }
@@ -59,9 +107,9 @@ impl MessageReader for FakeMessages {
     async fn get(
         &self,
         _access: EntityAccessReceipt<MessageView>,
-        _id: Uuid,
+        id: Uuid,
     ) -> Result<Message, MessageError> {
-        panic!("unexpected get call")
+        Ok(self.stored_comment(id))
     }
     async fn get_thread(
         &self,
@@ -75,6 +123,13 @@ impl MessageReader for FakeMessages {
         _access: EntityAccessReceipt<MessageView>,
         _query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
+        panic!("unexpected timeline call")
+    }
+    async fn timeline_entries(
+        &self,
+        _access: EntityAccessReceipt<MessageView>,
+        _query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
         panic!("unexpected timeline call")
     }
     async fn preceding(
@@ -146,19 +201,30 @@ impl MessageCommands for FakeMessages {
     }
     async fn patch(
         &self,
-        _access: EntityAccessReceipt<MessageWrite>,
-        _id: Uuid,
-        _input: MessagePatch,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        input: MessagePatch,
     ) -> Result<Message, MessageError> {
-        panic!("unexpected patch call")
+        if self.forbid_changes {
+            return Err(MessageError::Forbidden);
+        }
+        self.comment_patches
+            .lock()
+            .unwrap()
+            .push((access, id, input));
+        Ok(self.stored_comment(id))
     }
     async fn delete(
         &self,
-        _access: EntityAccessReceipt<MessageWrite>,
-        _id: Uuid,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
         _nonce: Option<String>,
     ) -> Result<Message, MessageError> {
-        panic!("unexpected delete call")
+        if self.forbid_changes {
+            return Err(MessageError::Forbidden);
+        }
+        self.comment_deletes.lock().unwrap().push((access, id));
+        Ok(self.stored_comment(id))
     }
     async fn react(
         &self,
@@ -810,4 +876,143 @@ fn comment_optional_fields_can_be_omitted() {
     assert!(tool.thread_id.is_none());
     assert!(tool.quote.is_none());
     assert!(tool.occurrence.is_none());
+}
+
+fn user_sender() -> ChannelSender<'static> {
+    ChannelSender::try_from(USER.to_owned()).unwrap()
+}
+
+fn bot_sender() -> ChannelSender<'static> {
+    ChannelSender::try_from(bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string()).unwrap()
+}
+
+fn assert_user_on_document(access: &EntityAccessReceipt<MessageWrite>) {
+    assert_eq!(access.entity().entity_id, DOCUMENT.to_string());
+    assert!(matches!(access.auth(), EntityAccessAuth::Authenticated(_)));
+}
+
+#[tokio::test]
+async fn edit_comment_rewrites_the_users_own_comment_as_the_user() {
+    let messages = FakeMessages::with_comment_by(user_sender());
+    let patches = messages.comment_patches.clone();
+
+    EditDocumentComment {
+        document_id: DOCUMENT,
+        comment_id: THREAD,
+        content: "clearer wording".to_owned(),
+    }
+    .call(context(AccessLevel::Comment, messages), request())
+    .await
+    .expect("the author can edit their comment");
+
+    let patches = patches.lock().unwrap();
+    let [(access, id, patch)] = patches.as_slice() else {
+        panic!("expected one edit, got {}", patches.len());
+    };
+    assert_user_on_document(access);
+    assert_eq!(*id, THREAD);
+    assert_eq!(patch.content.as_deref(), Some("clearer wording"));
+}
+
+#[tokio::test]
+async fn edit_comment_rewrites_the_assistants_comment_as_the_bot() {
+    let messages = FakeMessages::with_comment_by(bot_sender());
+    let patches = messages.comment_patches.clone();
+
+    EditDocumentComment {
+        document_id: DOCUMENT,
+        comment_id: THREAD,
+        content: "corrected".to_owned(),
+    }
+    .call(context(AccessLevel::Comment, messages), request())
+    .await
+    .expect("the assistant can edit its own comment");
+
+    assert_bot_on_document(&patches.lock().unwrap()[0].0);
+}
+
+#[tokio::test]
+async fn edit_comment_explains_that_only_the_author_can_edit() {
+    let messages = FakeMessages {
+        forbid_changes: true,
+        ..FakeMessages::with_comment_by(user_sender())
+    };
+
+    let error = EditDocumentComment {
+        document_id: DOCUMENT,
+        comment_id: THREAD,
+        content: "rewrite".to_owned(),
+    }
+    .call(context(AccessLevel::Comment, messages), request())
+    .await
+    .expect_err("the message service refused the edit");
+
+    assert!(
+        error.description.contains("author"),
+        "{}",
+        error.description
+    );
+}
+
+#[tokio::test]
+async fn edit_comment_rejects_empty_text() {
+    let error = EditDocumentComment {
+        document_id: DOCUMENT,
+        comment_id: THREAD,
+        content: " ".to_owned(),
+    }
+    .call(
+        context(AccessLevel::Comment, FakeMessages::default()),
+        request(),
+    )
+    .await
+    .expect_err("empty edits are refused");
+
+    assert!(error.description.contains("DeleteDocumentComment"));
+}
+
+#[tokio::test]
+async fn delete_comment_reports_whether_the_thread_went_with_it() {
+    let root = FakeMessages::with_comment_by(user_sender());
+    let root_deletes = root.comment_deletes.clone();
+    let response = DeleteDocumentComment {
+        document_id: DOCUMENT,
+        comment_id: THREAD,
+    }
+    .call(context(AccessLevel::Comment, root), request())
+    .await
+    .expect("the author can delete their comment");
+    assert!(response.deleted_thread);
+    assert_user_on_document(&root_deletes.lock().unwrap()[0].0);
+
+    let reply = FakeMessages {
+        comment_is_reply: true,
+        ..FakeMessages::with_comment_by(user_sender())
+    };
+    let response = DeleteDocumentComment {
+        document_id: DOCUMENT,
+        comment_id: Uuid::from_u128(8),
+    }
+    .call(context(AccessLevel::Comment, reply), request())
+    .await
+    .expect("the author can delete their reply");
+    assert!(!response.deleted_thread);
+}
+
+#[tokio::test]
+async fn delete_comment_explains_who_can_delete() {
+    let messages = FakeMessages {
+        forbid_changes: true,
+        ..FakeMessages::with_comment_by(user_sender())
+    };
+
+    let error = DeleteDocumentComment {
+        document_id: DOCUMENT,
+        comment_id: THREAD,
+    }
+    .call(context(AccessLevel::Comment, messages), request())
+    .await
+    .expect_err("the message service refused the delete");
+
+    assert!(error.description.contains("owner"), "{}", error.description);
 }

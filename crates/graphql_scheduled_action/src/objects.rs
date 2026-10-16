@@ -70,6 +70,8 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
     events: Vec<GraphqlScheduledActionEventName>,
     /// Entity ids that can satisfy this filter. Null matches every id; an empty list matches nothing.
     entity_ids: Option<Vec<ID>>,
+    /// Yes/no question the triggering content must answer with yes before the routine runs.
+    condition: Option<String>,
 }
 
 /// The agent task a routine runs.
@@ -121,6 +123,10 @@ pub(crate) enum GraphqlScheduledActionEventName {
     ChannelMessagePatched,
     /// A channel message attachment was created.
     ChannelMessageAttachmentCreated,
+    /// A call the routine's owner started began.
+    CallStarted,
+    /// A call the routine's owner joined ended.
+    CallEnded,
 }
 
 impl From<EventName> for GraphqlScheduledActionEventName {
@@ -139,6 +145,8 @@ impl From<EventName> for GraphqlScheduledActionEventName {
             EventName::ChannelMentioned => Self::ChannelMentioned,
             EventName::ChannelMessagePatched => Self::ChannelMessagePatched,
             EventName::ChannelMessageAttachmentCreated => Self::ChannelMessageAttachmentCreated,
+            EventName::CallStarted => Self::CallStarted,
+            EventName::CallEnded => Self::CallEnded,
         }
     }
 }
@@ -241,6 +249,9 @@ fn event_filters(
                 entity_ids: filter
                     .ids()
                     .map(|ids| ids.iter().map(|id| ID(id.to_string())).collect()),
+                condition: filter
+                    .condition()
+                    .map(|condition| condition.as_str().to_owned()),
             })
             .collect(),
     }

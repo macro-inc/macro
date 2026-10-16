@@ -24,7 +24,8 @@ pub const CACHE_FORMAT_VERSION: u32 = 3;
 /// fetched. Bump this epoch for incompatible changes to normalized identity,
 /// field storage shape, or other schema-derived cache semantics.
 // File-type facts now preserve raw server text instead of enum-normalizing it.
-pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 3;
+// Calendar range tables index cached occurrences, so older caches lack rows.
+pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 4;
 
 #[derive(Debug, Error)]
 pub enum CodecError {
@@ -169,20 +170,21 @@ mod tests {
     fn namespace_uses_schema_compatibility_epoch_not_schema_hash() {
         assert_eq!(
             cache_namespace("client-token-1"),
-            "graphql-cache:client-token-1:s3:v3"
+            "graphql-cache:client-token-1:s4:v3"
         );
     }
 
     #[test]
     fn database_name_separates_storage_versions() {
-        // The versions of the last unversioned builds keep their file.
+        // The versions of the last unversioned builds kept their file; every
+        // later epoch embeds its versions, even at that storage schema.
         assert_eq!(
             cache_database_name("client-token-1", 11),
-            "graphql-cache:client-token-1"
+            "graphql-cache:client-token-1:s4.v3.t11"
         );
         assert_eq!(
             cache_database_name("client-token-1", 12),
-            "graphql-cache:client-token-1:s3.v3.t12"
+            "graphql-cache:client-token-1:s4.v3.t12"
         );
         assert_eq!(
             legacy_cache_database_name("client-token-1"),

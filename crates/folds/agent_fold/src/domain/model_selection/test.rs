@@ -33,12 +33,14 @@ fn projects_ungrouped_models_and_ignores_other_config() {
             ModelOption {
                 id: "opus".to_owned(),
                 name: "Opus".to_owned(),
+                supports_images: None,
                 description: Some("Largest model".to_owned()),
                 group: None,
             },
             ModelOption {
                 id: "sonnet".to_owned(),
                 name: "Sonnet".to_owned(),
+                supports_images: None,
                 description: None,
                 group: None,
             },

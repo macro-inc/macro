@@ -109,6 +109,7 @@ function thread(
     isRead: false,
     projectId: 'project-1',
     latestInboundMessageTs: '2026-08-06T12:00:00Z',
+    reminderReturnedAt: null,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-06T12:02:00Z',
     viewerPermission: {

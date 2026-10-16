@@ -2,7 +2,7 @@ import { useCall } from '@channel/Call/use-call';
 import { isNativeIosCallKitEnabled } from '@channel/Call/use-callkit';
 import type { TabItem } from '@core/component/Tabs';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
-import { useChannelType } from '@core/context/channels';
+import { useChannel, useChannelType } from '@core/context/channels';
 import { useActiveCallQuery } from '@queries/call/call';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { Accessor } from 'solid-js';
@@ -40,6 +40,7 @@ function CallTabLabel() {
 export function useChannelTabItems(channelId: string): Accessor<TabItem[]> {
   const { activeTab } = useChannelTab();
   const channelType = useChannelType(channelId);
+  const channel = useChannel(channelId);
   const call = useCall(() => channelId);
   const activeCallQuery = useActiveCallQuery(() => channelId);
   // Show the Call tab whenever we're actually in the call, mid-join, or
@@ -47,6 +48,7 @@ export function useChannelTabItems(channelId: string): Accessor<TabItem[]> {
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS &&
+    !channel()?.agent_dm &&
     canUseInlineCallTab() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
@@ -56,7 +58,7 @@ export function useChannelTabItems(channelId: string): Accessor<TabItem[]> {
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelType.direct_message)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
-    if (!ENABLE_CALLS)
+    if (!ENABLE_CALLS || channel()?.agent_dm)
       filtered = filtered.filter((tab) => tab.value !== 'calls');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');

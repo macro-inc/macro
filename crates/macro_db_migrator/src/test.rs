@@ -2,9 +2,18 @@ use super::MACRO_DB_MIGRATIONS;
 use sqlx::{PgPool, migrate::Migrator};
 use std::borrow::Cow;
 
+/// CI clones every test database from a `template1` that already holds the macrodb
+/// schema (`just setup_test_template`). These tests build their own schema, so they
+/// start from an empty `public` schema.
+const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
+
 const SCHEMA_DROP_VERSION: i64 = 20261002150422;
 
 async fn before_drop(pool: &PgPool) {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(pool)
+        .await
+        .unwrap();
     let migrator = Migrator {
         migrations: Cow::Owned(
             MACRO_DB_MIGRATIONS

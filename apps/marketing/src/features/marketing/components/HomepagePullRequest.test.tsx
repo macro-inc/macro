@@ -61,7 +61,7 @@ describe('website pull-request demo', () => {
 
   it('opens the trace, expands tools and outputs, switches to the PR, and restores focus', async () => {
     render(() => <HomepagePullRequest />);
-    const opener = screen.getByRole('button', { name: 'View session' });
+    const opener = screen.getByRole('button', { name: 'Open session' });
     opener.focus();
     fireEvent.click(opener);
     const dialog = await screen.findByRole('dialog');

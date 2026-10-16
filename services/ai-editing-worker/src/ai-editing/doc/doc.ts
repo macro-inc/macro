@@ -32,6 +32,7 @@ import {
   type TableNode,
 } from '@lexical/table';
 import { $createAgentSessionMentionNode } from '@macro-inc/lexical-core/nodes/AgentSessionMentionNode';
+import { $createBookingLinkMentionNode } from '@macro-inc/lexical-core/nodes/BookingLinkMentionNode';
 import { $createContactMentionNode } from '@macro-inc/lexical-core/nodes/ContactMentionNode';
 import {
   $createDateMentionNode,
@@ -1049,6 +1050,14 @@ export function buildNode(spec: NodeSpec): LexicalNode {
         )
         .with({ kind: 'pr' }, (m) =>
           $createPullRequestMentionNode({ id: m.id, label: m.label })
+        )
+        .with({ kind: 'booking_link' }, (m) =>
+          $createBookingLinkMentionNode({
+            profileId: m.profileId,
+            url: m.url,
+            slug: m.slug,
+            label: m.label,
+          })
         )
         .with({ kind: 'tag' }, (m) =>
           $createTagMentionNode({

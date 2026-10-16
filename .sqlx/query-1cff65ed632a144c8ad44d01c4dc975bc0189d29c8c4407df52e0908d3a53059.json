@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH updated AS (\n            UPDATE email_messages\n            SET\n                replying_to_id = update_data.new_replying_to_id,\n                updated_at = NOW()\n            FROM\n                UNNEST($1::uuid[], $2::uuid[])\n                    AS update_data(message_id, new_replying_to_id)\n            WHERE\n                email_messages.id = update_data.message_id\n                AND email_messages.link_id = $3\n                AND email_messages.replying_to_id IS DISTINCT FROM update_data.new_replying_to_id\n        )\n        SELECT COUNT(*) AS \"matched!\"\n        FROM email_messages\n        WHERE id = ANY($1) AND link_id = $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "matched!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1cff65ed632a144c8ad44d01c4dc975bc0189d29c8c4407df52e0908d3a53059"
+}

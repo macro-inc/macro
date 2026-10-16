@@ -82,6 +82,18 @@ describe('spreadsheet toolbar', () => {
     expect(view.onCommand).toHaveBeenCalledWith('undo');
   });
 
+  it('indents the selection and returns focus to the sheet', () => {
+    const onRestoreFocus = vi.fn();
+    const view = toolbar({ onRestoreFocus });
+    fireEvent.click(view.getByRole('button', { name: 'Increase indent' }));
+    fireEvent.click(view.getByRole('button', { name: 'Decrease indent' }));
+    expect(view.onCommand.mock.calls).toEqual([
+      ['indent-increase'],
+      ['indent-decrease'],
+    ]);
+    expect(onRestoreFocus).toHaveBeenCalledTimes(2);
+  });
+
   it('cancels a font size draft and restores keyboard focus without applying it', () => {
     const editor = document.createElement('textarea');
     document.body.append(editor);
@@ -124,6 +136,7 @@ describe('spreadsheet toolbar', () => {
     ['Format and data', 'Sort selected range A → Z', 'sort-asc'],
     ['Format and data', 'Fill down', 'fill-down'],
     ['Format and data', 'Clear formatting', 'clear-formatting'],
+    ['Format and data', 'Goal Seek…', 'goal-seek'],
   ])(
     'keeps %s / %s reachable with the keyboard',
     async (trigger, item, command) => {
@@ -176,6 +189,23 @@ describe('spreadsheet toolbar', () => {
     expect(view.onCommand).toHaveBeenCalledWith('toggle-gridlines');
   });
 
+  it('keeps view-only display settings available but not the saved gridlines', async () => {
+    const view = toolbar({ readonly: true });
+    fireEvent.keyDown(view.getByRole('button', { name: 'View options' }), {
+      key: 'ArrowDown',
+    });
+    const gridlines = await screen.findByRole('menuitemcheckbox', {
+      name: 'Gridlines',
+    });
+    expect(gridlines.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.keyDown(gridlines, { key: 'Enter' });
+    fireEvent.keyDown(
+      screen.getByRole('menuitemcheckbox', { name: 'Formula bar' }),
+      { key: 'Enter' }
+    );
+    expect(view.onCommand.mock.calls).toEqual([['toggle-formula-bar']]);
+  });
+
   it('closes a top menu with Escape and restores editor focus without executing a command', async () => {
     const editor = document.createElement('textarea');
     document.body.append(editor);
@@ -209,6 +239,40 @@ describe('spreadsheet toolbar', () => {
       { key: 'Enter' }
     );
     expect(view.onStyle).toHaveBeenCalledWith({ format: 'currency' });
+    fireEvent.keyDown(view.getByRole('button', { name: 'Number format' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.keyDown(
+      await screen.findByRole('menuitem', {
+        name: 'Accounting $ (1,234.00)',
+      }),
+      { key: 'Enter' }
+    );
+    expect(view.onStyle).toHaveBeenCalledWith({ format: 'accounting' });
+  });
+
+  it.each([
+    ['Sep 2026', { style: { format: 'date', numberFormat: 'mmm yyyy' } }],
+    [
+      'Thursday, September 17, 2026',
+      { style: { format: 'date', numberFormat: 'dddd, mmmm d, yyyy' } },
+    ],
+    ['Custom date and time…', { command: 'custom-date-format' }],
+  ])('offers %s under Number format → Date formats', async (item, expected) => {
+    const view = toolbar();
+    fireEvent.keyDown(view.getByRole('button', { name: 'Number format' }), {
+      key: 'ArrowDown',
+    });
+    fireEvent.keyDown(
+      await screen.findByRole('menuitem', { name: 'Date formats' }),
+      { key: 'ArrowRight' }
+    );
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: item }), {
+      key: 'Enter',
+    });
+    if ('style' in expected)
+      expect(view.onStyle).toHaveBeenCalledWith(expected.style);
+    else expect(view.onCommand).toHaveBeenCalledWith(expected.command);
   });
 
   it.each([
@@ -257,6 +321,8 @@ describe('spreadsheet toolbar', () => {
       'Italic',
       'Fill color',
       'Number format',
+      'Increase indent',
+      'Decrease indent',
       'Functions',
       'Undo',
       'Paste special',

@@ -13,6 +13,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
   agentsEnabled: false,
+  claudeEnabled: false,
+  codexEnabled: false,
   cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
@@ -115,10 +117,13 @@ vi.mock('@core/util/upload', () => ({
 }));
 
 vi.mock('@core/codex/flag', () => ({
-  useCodexAgentsAccess: () => () => false,
+  useCodexAgentsAccess: () => () => editorMocks.codexEnabled,
 }));
 vi.mock('@core/cursor/flag', () => ({
   useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
+}));
+vi.mock('@core/claude/flag', () => ({
+  useClaudeAgentsAccess: () => () => editorMocks.claudeEnabled,
 }));
 vi.mock('../../use-chat-v3-agents-flag', () => ({
   useChatV3AgentsFlag: () => () => editorMocks.agentsEnabled,
@@ -364,7 +369,11 @@ vi.mock('@queries/messages/typing', () => ({
 
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
-import { cursorMentionUser } from '../../macroAi';
+import {
+  claudeMentionUser,
+  codexMentionUser,
+  cursorMentionUser,
+} from '../../macroAi';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
@@ -396,6 +405,8 @@ function render(ui: () => JSX.Element) {
 describe('Input slots', () => {
   beforeEach(() => {
     editorMocks.agentsEnabled = false;
+    editorMocks.claudeEnabled = false;
+    editorMocks.codexEnabled = false;
     editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
@@ -481,8 +492,10 @@ describe('Input slots', () => {
     expect(screen.queryByRole('group', { name: 'Dictation' })).toBeNull();
   });
 
-  it('offers Cursor within its rollout before account setup', () => {
+  it('offers Cursor, Claude, and Codex within their rollouts before account setup', () => {
     editorMocks.cursorEnabled = true;
+    editorMocks.claudeEnabled = true;
+    editorMocks.codexEnabled = true;
     render(() => <ChannelInput input={baseInput} />);
     expect(editorMocks.mentionUsers?.().map((user) => user.name)).toEqual(
       expect.arrayContaining(['Cursor', 'Claude', 'Codex'])
@@ -538,17 +551,19 @@ describe('Input slots', () => {
     ]);
   });
 
-  it('hides Cursor outside its rollout, including supplied bot entries', () => {
+  it('hides Cursor, Claude, and Codex outside their rollouts, including supplied bot entries', () => {
+    const builtIns = () => [
+      cursorMentionUser(),
+      claudeMentionUser(),
+      codexMentionUser(),
+    ];
     render(() => (
-      <ChannelInput
-        input={baseInput}
-        participants={() => [cursorMentionUser()]}
-        bots={() => [cursorMentionUser()]}
-      />
+      <ChannelInput input={baseInput} participants={builtIns} bots={builtIns} />
     ));
     const names = editorMocks.mentionUsers?.().map((user) => user.name);
     expect(names).not.toContain('Cursor');
-    expect(names).toEqual(expect.arrayContaining(['Claude', 'Codex']));
+    expect(names).not.toContain('Claude');
+    expect(names).not.toContain('Codex');
   });
 
   it('does not start typing when the editor hydrates an empty composer', async () => {
@@ -651,10 +666,21 @@ describe('Input slots', () => {
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
-    await user.click(screen.getByRole('button', { name: 'Attach files' }));
-    expect(screen.queryByRole('menu')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Format' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Delete reply' }));
+    // The menu is modal, so it opens last.
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+    ).toEqual(
+      expect.arrayContaining([
+        'Mention@',
+        'Attach files',
+        'New task',
+        'New document',
+      ])
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Attach files' }));
 
     expect(onSend).toHaveBeenCalledOnce();
     expect(clickSpy).toHaveBeenCalledOnce();
@@ -678,7 +704,7 @@ describe('Input slots', () => {
     ));
 
     expect(screen.getByTestId('custom-actions')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Attach files' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
   });
 

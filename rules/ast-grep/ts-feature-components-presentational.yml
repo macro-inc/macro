@@ -5,7 +5,7 @@ language: typescript
 severity: warning
 message: Feature components take resolved values and return JSX. Data, reactivity wiring, and navigation belong to primitives/ and views/.
 note: |-
-  Rule FE-33 in docs/STYLE_GUIDE.md. `components/` never imports
+  Rule FE-33 in docs/development/style-guide.md. `components/` never imports
   `queries/`, `primitives/`, `views/`, `@queries/*`, urql, or the split
   navigation helpers. It renders what views hand it: domain values from
   `core/`, resolved display (typed in `context/`), and event handlers. The
@@ -13,6 +13,15 @@ note: |-
   untyped wire JSON for property-changed rows. In block-agent, `ui/` is
   the presentation layer and `component/` is the composition layer.
 files:
+  - apps/web/src/features/access-requests/components/**
+  - apps/web/src/features/agent-activity/components/**
+  - apps/web/src/features/agent-dms/components/**
+  - apps/web/src/features/agent-conversations/components/**
+  - apps/web/src/features/agent-interactions/components/**
+  - apps/web/src/features/billing-lab/components/**
+  - apps/web/src/features/paywall/components/ai-usage-limit-dialog*
+  - apps/web/src/features/calendar-team/components/**
+  - apps/web/src/features/tasks-view/components/task-board*
   - apps/web/src/features/sharing/share-delivery/components/**
   - apps/web/src/features/routines/components/**
   - apps/web/src/features/scheduling/components/**
@@ -24,6 +33,8 @@ files:
   - apps/web/src/features/projects/components/**
   - apps/web/src/features/channel/Call/chat/components/**
   - apps/web/src/features/block-agent/ui/**
+  - apps/web/src/features/block-ai/components/**
+  - apps/web/src/features/block-psd/components/**
   - apps/web/src/features/meetings/components/**
   - apps/web/src/features/block-spreadsheet/components/**
   - apps/web/src/features/property/tags/components/**
@@ -37,6 +48,7 @@ files:
   - apps/web/src/features/block-write/components/**
   - apps/web/src/features/onboarding/components/**
   - apps/web/src/features/auth/components/**
+  - apps/web/src/features/block-form/components/**
 rule:
   any:
     - kind: string

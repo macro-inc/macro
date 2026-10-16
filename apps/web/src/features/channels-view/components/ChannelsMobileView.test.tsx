@@ -1,8 +1,5 @@
 import type { ChannelEntity } from '@entity/types/entity';
-import type {
-  Notification,
-  WithNotification,
-} from '@entity/types/notification';
+import type { Notification } from '@entity/types/notification';
 import {
   cleanup,
   fireEvent,
@@ -30,6 +27,7 @@ const mocks = vi.hoisted(() => ({
     mutedEntities: () => [],
   },
   handle: {},
+  failure: vi.fn(),
 }));
 vi.mock('@app/components/list', () => ({ createListController: () => ({}) }));
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -56,7 +54,9 @@ vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: mocks.handle }),
 }));
-vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.failure },
+}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 vi.mock('@entity/utils/notification', () => ({ isMutedItem: () => false }));
 vi.mock('@queries/channel/notification-selection', () => ({
@@ -105,31 +105,6 @@ const channel: ChannelEntity = {
     { id: 'reply-notification', state: 'unseen', createdAt: '2026-01-01' },
   ],
 };
-const hydrated: WithNotification<ChannelEntity> = {
-  ...channel,
-  unreadNotifications: undefined,
-  notifications: () => [
-    {
-      id: 'reply-notification',
-      entity_id: channel.id,
-      entity_type: 'channel',
-      notification_event_type: 'channel_message_reply',
-      notification_metadata: {
-        tag: 'channel_message_reply',
-        content: {
-          messageId: 'reply',
-          messageContent: 'Unread reply',
-          threadId: 'root',
-          channelType: 'private',
-        },
-      },
-      sent: true,
-      state: 'unseen',
-      created_at: '2026-01-01',
-      updated_at: '2026-01-01',
-    },
-  ],
-};
 const source: ChannelsDataSource = {
   items: () => [channel],
   isLoading: () => false,
@@ -149,14 +124,8 @@ afterEach(cleanup);
 
 describe('mobile channel activation', () => {
   it.each<ChannelsQueryScope>(['recents', 'channels', 'direct_messages'])(
-    'hydrates and opens at latest with top-level read marking from %s',
+    'opens immediately at latest with top-level read marking from %s',
     async (tab) => {
-      let resolve!: (channel: WithNotification<ChannelEntity>) => void;
-      mocks.hydrate.mockReturnValueOnce(
-        new Promise((done) => {
-          resolve = done;
-        })
-      );
       render(() => (
         <ChannelsMobileView
           source={source}
@@ -168,15 +137,12 @@ describe('mobile channel activation', () => {
       ));
 
       fireEvent.click(screen.getByRole('button', { name: 'One' }));
-      expect(mocks.hydrate).toHaveBeenCalledExactlyOnceWith(
-        channel,
-        mocks.source.withLocalOverrides
-      );
-      expect(mocks.openSplit).not.toHaveBeenCalled();
-      resolve(hydrated);
+      expect(mocks.hydrate).not.toHaveBeenCalled();
+      expect(mocks.openSplit).toHaveBeenCalledOnce();
+      expect(mocks.failure).not.toHaveBeenCalled();
 
       await waitFor(() =>
-        expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(hydrated, {
+        expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(channel, {
           splitHandle: mocks.handle,
           referredFrom: 'channels',
           notificationSource: mocks.source,
@@ -186,4 +152,30 @@ describe('mobile channel activation', () => {
       );
     }
   );
+
+  it('still reports a navigation failure while the list is mounted', async () => {
+    const error = new Error('Navigation failed');
+    mocks.openSplit.mockRejectedValueOnce(error);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(() => (
+        <ChannelsMobileView
+          source={source}
+          searchQuery=""
+          onClearSearch={() => {}}
+          tab="channels"
+          onTabChange={() => {}}
+        />
+      ));
+      fireEvent.click(screen.getByRole('button', { name: 'One' }));
+      await waitFor(() =>
+        expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(
+          'Unable to open conversation. Please try again.'
+        )
+      );
+      expect(log).toHaveBeenCalledWith('Failed to open conversation', error);
+    } finally {
+      log.mockRestore();
+    }
+  });
 });

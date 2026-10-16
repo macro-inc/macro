@@ -1,7 +1,9 @@
+pub mod attachments;
 mod draft;
 mod followup;
 mod previews;
 mod send;
+mod senders;
 pub(crate) mod signature;
 mod thread;
 mod thread_labels;
@@ -63,6 +65,7 @@ pub struct EmailServiceImpl<T, U, E, CS, Eam, B = NoopMacroEventBroker> {
     pub(crate) entity_access_management_service: Eam,
     pub(crate) macro_event_broker: B,
     pub(crate) sent_undo_delay_secs: u32,
+    pub(crate) sender_provider: std::sync::Arc<dyn crate::domain::senders::EmailSenderProvider>,
 }
 
 impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam>
@@ -89,11 +92,23 @@ where
             entity_access_management_service,
             macro_event_broker: NoopMacroEventBroker,
             sent_undo_delay_secs,
+            sender_provider: std::sync::Arc::new(
+                crate::domain::senders::UnavailableEmailSenderProvider,
+            ),
         }
     }
 }
 
 impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
+    /// Configure the provider used to discover and authorize alternate senders.
+    pub fn with_sender_provider(
+        mut self,
+        provider: impl crate::domain::senders::EmailSenderProvider,
+    ) -> Self {
+        self.sender_provider = std::sync::Arc::new(provider);
+        self
+    }
+
     /// Replace the event broker used to publish `macro.email` events.
     /// [`new`](Self::new) starts with a [`NoopMacroEventBroker`].
     pub fn with_macro_event_broker<B2: MacroEventBroker>(
@@ -108,6 +123,7 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
             entity_access_management_service: self.entity_access_management_service,
             macro_event_broker,
             sent_undo_delay_secs: self.sent_undo_delay_secs,
+            sender_provider: self.sender_provider,
         }
     }
 
@@ -295,6 +311,16 @@ where
         draft_id: uuid::Uuid,
     ) -> Result<crate::domain::models::DeletedUserDraft, EmailErr> {
         self.delete_draft_for_user_impl(macro_id, draft_id).await
+    }
+
+    async fn send_message_for_user(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        link_id: Option<Uuid>,
+        input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        self.send_message_for_user_impl(macro_id, link_id, input)
+            .await
     }
 
     async fn send_message(

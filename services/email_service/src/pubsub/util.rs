@@ -117,12 +117,16 @@ pub async fn cg_refresh_calendar(
     db: &sqlx::PgPool,
     owner_macro_id: &str,
     link_id: uuid::Uuid,
+    team_ooo_changed: bool,
 ) {
     if !cfg!(feature = "connection_gateway") {
         return;
     }
     let payload = serde_json::to_value(
-        calendar_events::domain::models::RefreshCalendarEvent::Synced { link_id },
+        calendar_events::domain::models::RefreshCalendarEvent::Synced {
+            link_id,
+            team_ooo_changed,
+        },
     )
     .unwrap_or_default();
     let mut recipients = vec![owner_macro_id.to_string()];

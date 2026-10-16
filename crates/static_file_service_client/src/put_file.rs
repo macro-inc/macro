@@ -88,6 +88,43 @@ impl StaticFileServiceClient {
         .await
     }
 
+    /// Reserve a file owned by `owner_id` without uploading it. The caller
+    /// PUTs the bytes to the returned `upload_url`, declaring `content_type`,
+    /// before the URL expires.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn reserve_for_user(
+        &self,
+        owner_id: &str,
+        file_name: &str,
+        content_type: &str,
+    ) -> Result<PutFileResponse> {
+        let full_url = format!("{}/internal/file", self.url);
+        let res = self
+            .client
+            .put(&full_url)
+            .header(crate::INTERNAL_MACRO_USER_ID_HEADER, owner_id)
+            .json(&PutFileRequest {
+                file_name: file_name.to_string(),
+                content_type: Some(content_type.to_string()),
+                extension_data: None,
+            })
+            .send()
+            .await?;
+
+        let status_code = res.status();
+        if status_code != reqwest::StatusCode::OK {
+            let body: String = res.text().await?;
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                "unexpected response from static file service"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        Ok(res.json().await?)
+    }
+
     /// Reserve a file and PUT its bytes to the upload URL that comes back.
     async fn upload(
         &self,

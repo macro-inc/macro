@@ -68,6 +68,13 @@ export function useScheduledEmailSource(
     const threadIds = new Set<string>();
     const entities = [];
     for (const message of scheduled.data) {
+      if (
+        state.aliasFilter &&
+        (message.link_id !== state.aliasFilter.inboxId ||
+          message.from?.email.toLowerCase() !==
+            state.aliasFilter.emailAddress.toLowerCase())
+      )
+        continue;
       if (threadIds.has(message.thread_db_id)) continue;
       threadIds.add(message.thread_db_id);
       entities.push(

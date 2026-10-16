@@ -5,6 +5,7 @@ import {
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Show } from 'solid-js';
 import { PrAgentSessionsSection } from './PrAgentSessionsSection';
+import { PrLinkedWorkSection } from './PrLinkedWorkSection';
 
 export function PrSidePanelSections(props: {
   enrichment?: GithubPullRequestWithDetails;
@@ -46,6 +47,8 @@ export function PrSidePanelSections(props: {
       <SidePanel.Section id="pr-checks" title="Checks" order={20}>
         <GithubPullRequestChecksContent enrichment={props.enrichment} />
       </SidePanel.Section>
+
+      <PrLinkedWorkSection pullRequest={props.enrichment} />
 
       <PrAgentSessionsSection
         url={props.enrichment?.url}

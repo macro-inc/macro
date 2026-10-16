@@ -43,8 +43,8 @@ use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
-    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, AppServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
@@ -78,6 +78,7 @@ maybe_env_var! {
         EnableEmailScheduledQueue,
         EnableGmailOpsQueue,
         EnableNotificationQueue,
+        McpCredentialsKeySecretName,
     }
 }
 
@@ -120,6 +121,9 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 /// `INTERNAL_API_KEY` (presented to the lexical service and to the
 /// connection gateway for realtime channel side effects), `KAFKA_BROKERS`.
 ///
+/// `MCP_CREDENTIALS_KEY_SECRET_NAME` enables import tools on hosts with access
+/// to the shared connector encryption key; hosts without it remain unwired.
+///
 /// Service URLs are resolved through the `macro_service_urls` crate, and queue
 /// names through the `macro_queues` crate (both using optional `OVERRIDE_*` env
 /// vars before environment defaults).
@@ -130,20 +134,30 @@ pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
 /// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
 /// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
 ///
+/// `ATTACHMENT_BUCKET` (the email service's draft attachment bucket) is
+/// optional; without it `SendEmail` refuses attachments but still sends.
+///
 /// `enforcement` is validated by the host at startup and shared with all other
-/// AI entry points. It configures both quota admission and prospective counting.
-/// `pricing` is the host's mandatory AI pricing configuration, shared with every
-/// other billing component it composes.
+/// AI entry points. It configures quota admission here and must be the policy
+/// `recorder` was composed with. `pricing` is the host's mandatory AI pricing
+/// configuration, shared with every other billing component it composes.
+///
+/// `recorder` is the host's configured usage recorder, shared by every tool in
+/// the context that calls a model. The host composes it so that one process
+/// records, counts, and requests settlement for usage one way: through
+/// [`ai_billing::composition::pg_settling_recorder`] where its usage is
+/// chargeable, or [`ai_usage::pg_recorder_with_enforcement`] where it is not.
 ///
 /// `event_task_tracker` tracks event publishes started by the context. Callers
 /// must retain the original tracker, pass a clone here, and close and drain the
 /// original after the host stops broker-backed work.
-#[tracing::instrument(skip(pool, event_task_tracker), err)]
+#[tracing::instrument(skip(pool, event_task_tracker, recorder), err)]
 pub async fn build_tool_service_context_from_env(
     pool: sqlx::PgPool,
     event_task_tracker: TaskTracker,
     enforcement: ai_usage::AiUsageEnforcement,
     pricing: ai_billing::AiPricing,
+    recorder: Arc<dyn ai_usage::UsageRecorder>,
 ) -> anyhow::Result<ToolServiceContext> {
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
@@ -255,18 +269,21 @@ pub async fn build_tool_service_context_from_env(
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
         PgGithubPullRequestRepo::new(pool.clone()),
     );
-    let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(ReadOnlyPool(pool.clone())),
-        frecency_service,
-        ReadonlyEmailPreviewAdapter(email_service),
-        channels_service,
-        call::domain::service::CallRecordQueryServiceImpl::new(
-            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
-        ),
-        crm::domain::service::NoOpCrmService,
-        github_pull_request_service,
-        reminders::domain::service::NoOpRemindersService,
-    ));
+    let favorites_service = crate::tool_context::build_favorites_service(pool.clone());
+    let soup_service = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(ReadOnlyPool(pool.clone())),
+            frecency_service,
+            ReadonlyEmailPreviewAdapter(email_service),
+            channels_service,
+            call::domain::service::CallRecordQueryServiceImpl::new(
+                call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+            ),
+            crm::domain::service::NoOpCrmService,
+            github_pull_request_service,
+        )
+        .with_favorites(favorites_service.clone()),
+    );
 
     let s3_client = macro_aws_config::s3_client().await;
     let document_files = documents::outbound::s3_document_files::S3DocumentFiles::new(
@@ -352,7 +369,10 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
         lexical_client.clone(),
         sync_client.as_ref().clone(),
-        ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
+        ReqwestEditingWorkerClient::new(
+            ai_editing_worker_url.clone(),
+            Arc::new(reqwest::Client::new()),
+        ),
         env.document_permission_jwt.to_string(),
         crate::tool_context::build_message_service_with_side_effects(
             pool.clone(),
@@ -361,7 +381,9 @@ pub async fn build_tool_service_context_from_env(
         ),
     )
     .with_presentation_files(Arc::new(document_files.clone()))
-    .with_design_files(Arc::new(document_files));
+    .with_design_files(Arc::new(document_files.clone()))
+    .with_photoshop_files(Arc::new(document_files.clone()))
+    .with_illustrator_files(Arc::new(document_files));
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),
@@ -388,6 +410,14 @@ pub async fn build_tool_service_context_from_env(
             pool.clone(),
         ))),
         Arc::new(lexical_client),
+    )
+    .with_attachment_sender(
+        crate::email_attachments::build_email_attachment_sender(
+            user_email_service.clone(),
+            EmailPgRepo::new(pool.clone()),
+            document_tool_context.service.clone(),
+        )
+        .await,
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(
@@ -408,6 +438,8 @@ pub async fn build_tool_service_context_from_env(
         pool.clone(),
         calendar_service_url,
         env.internal_api_key.to_string(),
+        call_tool_context.service.clone(),
+        AppServiceUrl::new()?,
     );
 
     let notification_reader_service = NotificationReaderService {
@@ -478,10 +510,89 @@ pub async fn build_tool_service_context_from_env(
         soup_service.clone(),
         pool.clone(),
     );
+    let crm_tool_context = crate::tool_context::build_crm_tool_context(pool.clone());
+    let pipeline_tool_context = crate::tool_context::build_pipeline_tool_context(
+        pool.clone(),
+        &databases_tool_context,
+        &crm_tool_context,
+    );
 
-    let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
+    let forms_tool_context = crate::tool_context::build_forms_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        &databases_tool_context,
+        &calendar_tool_context,
+        Some(side_effect_clients.connection_gateway.as_ref().clone()),
+        crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        crate::tool_context::FormsToolConfig {
+            app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
+            editing_worker_url: ai_editing_worker_url,
+        },
+    );
+
+    let admission =
+        ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
+    let pipedream_client = crate::mcp_app_catalog::pipedream_client_from_env()?;
+    let import_tool_context = if let Some(secret_name) = maybe_env
+        .mcp_credentials_key_secret_name
+        .as_ref()
+        .and_then(|key| key.value())
+    {
+        let mcp_credentials_key = secretsmanager_client
+            .get_maybe_secret_value(environment, secret_name)
+            .await
+            .context("failed to load MCP credentials encryption key")?;
+        let mcp_encryption_key =
+            mcp_client::domain::models::AesKey::try_from(mcp_credentials_key.as_ref())
+                .context("invalid MCP credentials encryption key")?;
+        let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
+            Arc::new(mcp_client::outbound::pg_server_repo::PgServerRepo::new(
+                pool.clone(),
+                mcp_encryption_key,
+            )),
+            Arc::new(
+                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
+            ),
+            Arc::new(pipedream_client.clone()),
+        ));
+        let import_service = Arc::new(
+            import::domain::service::ImportServiceImpl::new(
+                import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()),
+                mcp_selector.clone(),
+                Arc::new(crate::ToolEntityCreator {
+                    document_creator: document_tool_context.creator.clone(),
+                    entity_access_service: entity_access_service.clone(),
+                    channel_service: channel_tool_context.service.clone(),
+                    task_properties: document_tool_context
+                        .service
+                        .task_properties_service
+                        .clone(),
+                    document_properties:
+                        import::outbound::document_properties::DocumentPropertiesApplicator::new(
+                            properties_service.clone(),
+                        ),
+                    team_repository: crate::tool_context::build_team_repository(pool.clone()),
+                }),
+                recorder.clone(),
+            )
+            .with_slack_source(Arc::new(
+                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector),
+            ))
+            .with_admission(admission.clone())
+            .with_notifier(import::outbound::gateway_notifier::gateway_import_notify(
+                side_effect_clients.connection_gateway.clone(),
+            )),
+        );
+        ToolImportToolContext::wired(import_service)
+    } else {
+        ToolImportToolContext::unwired()
+    };
 
     Ok(ToolServiceContext {
+        connector_tool_context: crate::tool_context::build_connector_tool_context(
+            pool.clone(),
+            pipedream_client.clone(),
+        ),
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
         soup_service,
@@ -501,40 +612,55 @@ pub async fn build_tool_service_context_from_env(
         email_tool_context,
         call_tool_context,
         calendar_tool_context,
-        notification_tool_context,
-        reminders_tool_context: crate::tool_context::build_reminders_tool_context(
+        team_calendar_tool_context: crate::tool_context::build_team_calendar_tool_context(
             pool.clone(),
-            user_email_service.clone(),
-            entity_access_service.clone(),
+            macro_env_var::maybe_read_env("CALENDAR_TEAM_SHARING_ENABLED")
+                .and_then(|value| value.parse::<bool>().ok())
+                .unwrap_or(false),
         ),
+        booking_management_tool_context: crate::tool_context::build_booking_management_tool_context(
+            CalendarServiceUrl::new()?,
+            env.internal_api_key.to_string(),
+            environment,
+        ),
+        booking_link_tool_context: crate::tool_context::build_booking_link_tool_context(
+            pool.clone(),
+            environment,
+        ),
+        notification_tool_context,
+        item_notification_preference_tool_context:
+            crate::tool_context::build_item_notification_preference_tool_context(pool.clone()),
         databases_tool_context,
+        forms_tool_context,
         databases_sql_tool_context,
-        import_tool_context: ToolImportToolContext::unwired(),
+        import_tool_context,
         chat_tool_context,
         channel_tool_context,
+        channel_media_upload_tool_context: crate::build_channel_media_upload_tool_context()?,
         bot_tool_context: crate::tool_context::build_bot_tool_context(
             pool.clone(),
             crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             document_storage_service_url,
-            crate::mcp_app_catalog::pipedream_client_from_env()?,
+            pipedream_client,
         ),
         coding_agent_tool_context: crate::build_coding_agent_tool_context(
             macro_service_urls::AgentHarnessServiceUrl::new()?,
             env.internal_api_key.to_string(),
         )?,
         project_tool_context,
+        favorites_tool_context: crate::tool_context::build_favorites_tool_context(
+            favorites_service,
+            entity_access_service.clone(),
+        ),
         initiative_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
-        crm_tool_context: crate::tool_context::build_crm_tool_context(pool.clone()),
+        crm_tool_context,
+        pipeline_tool_context,
         skill_tool_context,
         schedule_tool_context: crate::build_routine_tool_context()?,
         anthropic_tool_context,
-        admission: ai_billing::composition::pg_admission_service(
-            pool.clone(),
-            enforcement,
-            pricing,
-        ),
+        admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })

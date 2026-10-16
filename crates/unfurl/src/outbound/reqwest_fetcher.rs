@@ -6,6 +6,7 @@ use std::sync::Arc;
 use futures::StreamExt;
 use scraper::{Html, Selector};
 use thiserror::Error;
+use tracing::Level;
 use url::Url;
 
 use super::http_safety::{
@@ -82,7 +83,7 @@ enum UnfurlFetchError {
     Parse(anyhow::Error),
 }
 
-#[tracing::instrument(err(Debug), skip(client))]
+#[tracing::instrument(err(Debug, level = Level::DEBUG), skip(client))]
 async fn extract_meta_tags(
     client: &reqwest::Client,
     raw_url: &str,

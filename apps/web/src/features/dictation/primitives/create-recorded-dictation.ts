@@ -71,7 +71,7 @@ export function createRecordedDictation(options: {
     const current = new AbortController();
     upload = current;
     setPhase('finishing');
-    setMessage('Transcribing with OpenAI…');
+    setMessage('');
     trace?.event('dictation.upload_started', {
       attempt: ++attempt,
       audioBytes: blob.size,
@@ -120,11 +120,7 @@ export function createRecordedDictation(options: {
       return;
     }
     setPhase('review');
-    setMessage(
-      limitReached
-        ? 'Recording limit reached. Select the checkmark to transcribe with OpenAI.'
-        : 'Recording stopped. Select the checkmark to transcribe with OpenAI.'
-    );
+    setMessage(limitReached ? 'Recording limit reached.' : '');
   };
 
   const start = async () => {
@@ -230,7 +226,7 @@ export function createRecordedDictation(options: {
     disabled: () => phase() !== 'idle',
     label: () =>
       options.supported
-        ? 'Start dictation with OpenAI Whisper'
+        ? 'Start dictation'
         : 'Dictation is unavailable in this browser',
   };
 }

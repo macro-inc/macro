@@ -99,6 +99,30 @@ describe('parseNaturalDate', () => {
     expect(fri?.getDate()).toBe(21);
   });
 
+  it('should parse day of week abbreviations', () => {
+    // Base date is Saturday June 15, 2024
+    // Test common abbreviations
+    expect(parseNaturalDate('mon', baseDate)?.getDate()).toBe(17);
+    expect(parseNaturalDate('tue', baseDate)?.getDate()).toBe(18);
+    expect(parseNaturalDate('tues', baseDate)?.getDate()).toBe(18);
+    expect(parseNaturalDate('wed', baseDate)?.getDate()).toBe(19);
+    expect(parseNaturalDate('weds', baseDate)?.getDate()).toBe(19);
+    expect(parseNaturalDate('thu', baseDate)?.getDate()).toBe(20);
+    expect(parseNaturalDate('thur', baseDate)?.getDate()).toBe(20);
+    expect(parseNaturalDate('thurs', baseDate)?.getDate()).toBe(20);
+    expect(parseNaturalDate('fri', baseDate)?.getDate()).toBe(21);
+    expect(parseNaturalDate('sat', baseDate)?.getDate()).toBe(22);
+    expect(parseNaturalDate('sun', baseDate)?.getDate()).toBe(16);
+  });
+
+  it('should be case insensitive for day abbreviations', () => {
+    // Base date is Saturday June 15, 2024
+    expect(parseNaturalDate('MON', baseDate)?.getDate()).toBe(17);
+    expect(parseNaturalDate('Mon', baseDate)?.getDate()).toBe(17);
+    expect(parseNaturalDate('THU', baseDate)?.getDate()).toBe(20);
+    expect(parseNaturalDate('FRI', baseDate)?.getDate()).toBe(21);
+  });
+
   it('should handle case insensitivity', () => {
     const date1 = parseNaturalDate('FEB 17', baseDate);
     const date2 = parseNaturalDate('feb 17', baseDate);
@@ -256,6 +280,112 @@ describe('useDateSearch', () => {
     });
   });
 
+  it('should find tomorrow with shorthand "tmrw"', () => {
+    createRoot((dispose) => {
+      const [query] = createSignal('tmrw');
+      const options = useDateSearch({ query });
+
+      const result = options();
+      const tomorrowOption = result.find((opt) =>
+        opt.displayText.toLowerCase().includes('tomorrow')
+      );
+      expect(tomorrowOption).toBeTruthy();
+
+      dispose();
+    });
+  });
+
+  it('should resolve "tmrw 8" and "tmrw 8p" with times', () => {
+    createRoot((dispose) => {
+      const baseDate = new Date('2024-06-15T10:00:00');
+
+      const morning = useDateSearch({
+        query: () => 'tmrw 8',
+        baseDate,
+      })();
+      const morningOption = morning.find((opt) =>
+        opt.displayText.toLowerCase().includes('tomorrow')
+      );
+      expect(morningOption).toBeTruthy();
+      expect(morningOption?.date.getDate()).toBe(16);
+      expect(morningOption?.date.getHours()).toBe(8);
+
+      const evening = useDateSearch({
+        query: () => 'tmrw 8p',
+        baseDate,
+      })();
+      const eveningOption = evening.find((opt) =>
+        opt.displayText.toLowerCase().includes('tomorrow')
+      );
+      expect(eveningOption).toBeTruthy();
+      expect(eveningOption?.displayText).toContain('at 8 PM');
+      expect(eveningOption?.date.getHours()).toBe(20);
+
+      dispose();
+    });
+  });
+
+  it('should find tomorrow with various aliases', () => {
+    createRoot((dispose) => {
+      const aliases = ['tmrw', 'tmr', 'tom'];
+      aliases.forEach((alias) => {
+        const [query] = createSignal(alias);
+        const options = useDateSearch({ query });
+
+        const result = options();
+        const tomorrowOption = result.find((opt) =>
+          opt.displayText.toLowerCase().includes('tomorrow')
+        );
+        expect(tomorrowOption).toBeTruthy();
+      });
+
+      dispose();
+    });
+  });
+
+  it('should find weekday presets by abbreviation', () => {
+    createRoot((dispose) => {
+      const [query] = createSignal('mon');
+      const options = useDateSearch({ query });
+
+      const result = options();
+      const mondayOption = result.find((opt) =>
+        opt.displayText.toLowerCase().includes('monday')
+      );
+      expect(mondayOption).toBeTruthy();
+
+      dispose();
+    });
+  });
+
+  it('should find weekday presets by various abbreviations', () => {
+    createRoot((dispose) => {
+      const testCases = [
+        { abbr: 'thu', day: 'thursday' },
+        { abbr: 'thur', day: 'thursday' },
+        { abbr: 'thurs', day: 'thursday' },
+        { abbr: 'fri', day: 'friday' },
+        { abbr: 'wed', day: 'wednesday' },
+        { abbr: 'weds', day: 'wednesday' },
+        { abbr: 'tue', day: 'tuesday' },
+        { abbr: 'tues', day: 'tuesday' },
+      ];
+
+      testCases.forEach(({ abbr, day }) => {
+        const [query] = createSignal(abbr);
+        const options = useDateSearch({ query });
+
+        const result = options();
+        const dayOption = result.find((opt) =>
+          opt.displayText.toLowerCase().includes(day)
+        );
+        expect(dayOption).toBeTruthy();
+      });
+
+      dispose();
+    });
+  });
+
   it('should handle relative date queries', () => {
     createRoot((dispose) => {
       const [query] = createSignal('week');
@@ -403,6 +533,59 @@ describe('parseTime', () => {
     expect(result2?.time.hours).toBe(15);
     expect(result2?.time.minutes).toBe(0);
     expect(result2?.rest).toBe('');
+  });
+
+  it('should parse short meridiem forms like 8p and 8a', () => {
+    expect(parseTime('8p')).toEqual({
+      time: { hours: 20, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('8a')).toEqual({
+      time: { hours: 8, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('12p')).toEqual({
+      time: { hours: 12, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('12a')).toEqual({
+      time: { hours: 0, minutes: 0 },
+      rest: '',
+    });
+    expect(parseTime('3:30p')).toEqual({
+      time: { hours: 15, minutes: 30 },
+      rest: '',
+    });
+  });
+
+  it('should parse compact times like 830p', () => {
+    expect(parseTime('830p')).toEqual({
+      time: { hours: 20, minutes: 30 },
+      rest: '',
+    });
+    expect(parseTime('1230am')).toEqual({
+      time: { hours: 0, minutes: 30 },
+      rest: '',
+    });
+  });
+
+  it('should parse bare hours after a date word like tmrw 8', () => {
+    expect(parseTime('tmrw 8')).toEqual({
+      time: { hours: 8, minutes: 0 },
+      rest: 'tmrw',
+    });
+    expect(parseTime('tmrw 8p')).toEqual({
+      time: { hours: 20, minutes: 0 },
+      rest: 'tmrw',
+    });
+    expect(parseTime('friday 9')).toEqual({
+      time: { hours: 9, minutes: 0 },
+      rest: 'friday',
+    });
+    expect(parseTime('8 tmrw')).toEqual({
+      time: { hours: 8, minutes: 0 },
+      rest: 'tmrw',
+    });
   });
 
   it('should parse times with spaces before meridiem', () => {

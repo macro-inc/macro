@@ -1,5 +1,11 @@
 //! Thin HTTP routes; membership, availability, and write policy live in the service.
-use crate::domain::{models::*, ports::*, service::Service};
+use crate::domain::{
+    insights::{BookingInsights, InsightQuery},
+    management::BookingChange,
+    models::*,
+    ports::*,
+    service::Service,
+};
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, FromRef, Path, Query, State},
@@ -54,6 +60,9 @@ pub fn router<
             get(settings::<R, C, D, A>).put(save::<R, C, D, A>),
         )
         .route("/bookings", get(bookings::<R, C, D, A>))
+        .route("/insights", post(insights::<R, C, D, A>))
+        .route("/bookings/{id}/change", post(change::<R, C, D, A>))
+        .route("/bookings/{id}/slots", get(host_slots::<R, C, D, A>))
         .route("/bookings/{id}/manage", get(manage::<R, C, D, A>))
         .route("/bookings/{id}/approve", post(approve::<R, C, D, A>))
         .route("/bookings/{id}/attendance", post(attendance::<R, C, D, A>))
@@ -365,6 +374,53 @@ async fn manage<R: Repository, C: Calendars, D: Directory, A: MacroAuthorization
         booking: r.booking,
         token: r.token,
         schedule_time_zone: r.schedule.time_zone,
+    }))
+}
+
+async fn insights<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+    State(s): State<RouterState<R, C, D, A>>,
+    user: MacroAuthorizationExtractor<A, UserOrInternal>,
+    Query(scope): Query<Scope>,
+    Json(query): Json<InsightQuery>,
+) -> Result<Json<BookingInsights>, ApiError> {
+    Ok(Json(
+        s.service
+            .booking_insights(
+                user.authorization.user.macro_user_id.as_ref(),
+                scope.team_id,
+                query,
+            )
+            .await?,
+    ))
+}
+async fn change<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+    State(s): State<RouterState<R, C, D, A>>,
+    user: MacroAuthorizationExtractor<A, UserOrInternal>,
+    Path(id): Path<Uuid>,
+    Json(change): Json<BookingChange>,
+) -> Result<Json<BookingResponse>, ApiError> {
+    Ok(Json(BookingResponse {
+        booking: s
+            .service
+            .change_booking(user.authorization.user.macro_user_id.as_ref(), id, change)
+            .await?,
+    }))
+}
+async fn host_slots<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+    State(s): State<RouterState<R, C, D, A>>,
+    user: MacroAuthorizationExtractor<A, UserOrInternal>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<ReplacementQuery>,
+) -> Result<Json<SlotsResponse>, ApiError> {
+    Ok(Json(SlotsResponse {
+        slots: s
+            .service
+            .host_replacement_slots(
+                user.authorization.user.macro_user_id.as_ref(),
+                id,
+                query.date,
+            )
+            .await?,
     }))
 }
 

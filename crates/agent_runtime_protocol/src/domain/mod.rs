@@ -8,6 +8,8 @@ pub mod channel;
 /// Role-oriented connections over a logical Agent Runtime Protocol stream.
 #[cfg(feature = "transport")]
 pub mod connection;
+/// The log frame an agent leaves when it summarizes its own context.
+pub mod context;
 /// The physical transport port.
 pub mod ports;
 /// Versioned protocol message types.

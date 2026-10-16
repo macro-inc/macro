@@ -1,5 +1,6 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createNativeUpdatePreparation } from '../../../lib/tauri/native-update-preparation';
 import { createPdfPersistence, type PdfPersistence } from './pdf-persistence';
 
 function createDeferred() {
@@ -25,6 +26,46 @@ afterEach(() => {
 });
 
 describe('createPdfPersistence', () => {
+  it('prevents restart when a strict PDF save fails', async () => {
+    const { persistence, dispose } = setup();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const flush = vi.fn();
+    const preparation = createNativeUpdatePreparation({
+      isBlocked: () => false,
+      flush,
+    });
+    preparation.register(() =>
+      persistence.runSave(
+        async () => {
+          throw new Error('PDF save failed');
+        },
+        () => true,
+        { throwOnError: true }
+      )
+    );
+    await expect(preparation.prepare()).rejects.toThrow('PDF save failed');
+    expect(flush).not.toHaveBeenCalled();
+    expect(persistence.isSaving()).toBe(false);
+    dispose();
+  });
+
+  it('waits for an ongoing save before preparation can continue', async () => {
+    const { persistence, dispose } = setup();
+    const deferred = createDeferred();
+    const saving = persistence.runSave(
+      () => deferred.promise,
+      () => true
+    );
+    const finished = vi.fn();
+    const waiting = persistence.waitForSaves().then(finished);
+    await Promise.resolve();
+    expect(finished).not.toHaveBeenCalled();
+    deferred.resolve();
+    await Promise.all([saving, waiting]);
+    expect(finished).toHaveBeenCalledOnce();
+    dispose();
+  });
+
   it('skips saves that are not required', async () => {
     const { persistence, dispose } = setup();
     let saves = 0;

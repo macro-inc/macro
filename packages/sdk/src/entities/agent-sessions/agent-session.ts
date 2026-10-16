@@ -3,6 +3,7 @@ import type {
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  CodingPreferencesBody,
   ControlResponse,
   PromptAttachment,
   PullRequestLinkSource,
@@ -285,6 +286,25 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
         body: { size },
       })
     ).size;
+  }
+
+  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  static async codingPreferences(
+    client: MacroClient
+  ): Promise<CodingPreferencesBody> {
+    return unwrap(await client.agentHarness.getAgentCodingPreferences());
+  }
+
+  /** Replace the caller's coding preferences. */
+  static async setCodingPreferences(
+    client: MacroClient,
+    preferences: CodingPreferencesBody
+  ): Promise<CodingPreferencesBody> {
+    return unwrap(
+      await client.agentHarness.putAgentCodingPreferences({
+        body: preferences,
+      })
+    );
   }
 
   /**

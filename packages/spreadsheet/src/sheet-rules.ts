@@ -1,4 +1,4 @@
-import { parseCellAddress } from './spreadsheet-document';
+import { formatCellAddress, parseCellAddress } from './spreadsheet-document';
 
 /**
  * Sheet rules imported from Excel and kept in sheet metadata: notes,
@@ -36,8 +36,47 @@ export function validSqref(value: unknown): value is string {
   );
 }
 
+export type CellBounds = {
+  top: number;
+  left: number;
+  bottom: number;
+  right: number;
+};
+
+/** The parts of `area` outside `hole`. */
+export function subtractBounds(area: CellBounds, hole: CellBounds) {
+  if (
+    hole.top > area.bottom ||
+    hole.bottom < area.top ||
+    hole.left > area.right ||
+    hole.right < area.left
+  )
+    return [area];
+  const pieces: CellBounds[] = [];
+  const top = Math.max(area.top, hole.top);
+  const bottom = Math.min(area.bottom, hole.bottom);
+  if (area.top < hole.top) pieces.push({ ...area, bottom: hole.top - 1 });
+  if (area.bottom > hole.bottom) pieces.push({ ...area, top: hole.bottom + 1 });
+  if (area.left < hole.left)
+    pieces.push({ top, bottom, left: area.left, right: hole.left - 1 });
+  if (area.right > hole.right)
+    pieces.push({ top, bottom, left: hole.right + 1, right: area.right });
+  return pieces;
+}
+
+/** A sqref of zero-based bounds. */
+export function boundsSqref(bounds: CellBounds[]) {
+  return bounds
+    .map((area) => {
+      const first = formatCellAddress(area.top, area.left);
+      const last = formatCellAddress(area.bottom, area.right);
+      return first === last ? first : `${first}:${last}`;
+    })
+    .join(' ');
+}
+
 /** The ranges of a sqref, as zero-based bounds. */
-export function sqrefBounds(sqref: string) {
+export function sqrefBounds(sqref: string): CellBounds[] {
   return sqref.split(' ').flatMap((range) => {
     const [first, last = first] = range.split(':').map(parseCellAddress);
     return first && last
@@ -87,6 +126,9 @@ export const DATA_VALIDATION_TYPES = [
   'custom',
 ] as const;
 
+/** A dropdown choice's color, as #RRGGBB. */
+export type DropdownColor = { item: string; color: string };
+
 /** An Excel data validation rule. Formulas are stored without `=`. */
 export type DataValidation = {
   range: string;
@@ -104,6 +146,11 @@ export type DataValidation = {
   showPrompt?: boolean;
   promptTitle?: string;
   prompt?: string;
+  /**
+   * Macro's colors for a list's choices, matched to cell text ignoring case.
+   * Excel has no equivalent; export writes them as conditional formatting.
+   */
+  colors?: DropdownColor[];
 };
 
 export const CONDITIONAL_FORMAT_TYPES = [
@@ -311,6 +358,7 @@ export function validDataValidation(value: unknown) {
       'showPrompt',
       'promptTitle',
       'prompt',
+      'colors',
     ]) &&
     validSqref(value.range) &&
     (DATA_VALIDATION_TYPES as readonly unknown[]).includes(value.type) &&
@@ -328,7 +376,21 @@ export function validDataValidation(value: unknown) {
     optional(value.error, text) &&
     flag(value.showPrompt) &&
     optional(value.promptTitle, (title) => text(title, 64)) &&
-    optional(value.prompt, text)
+    optional(value.prompt, text) &&
+    optional(
+      value.colors,
+      (colors) =>
+        Array.isArray(colors) &&
+        colors.length <= 1_000 &&
+        colors.every(
+          (entry) =>
+            record(entry) &&
+            onlyKeys(entry, ['item', 'color']) &&
+            text(entry.item) &&
+            entry.item !== '' &&
+            color(entry.color)
+        )
+    )
   );
 }
 

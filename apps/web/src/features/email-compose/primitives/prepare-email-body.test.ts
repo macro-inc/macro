@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 
+import { staticFileReferenceEndpoint } from '@core/constant/servers';
 import { $generateNodesFromDOM } from '@lexical/html';
 import { DocumentMentionNode } from '@macro-inc/lexical-core';
 import { $getRoot, $nodesOfType, createEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import { decodeBase64Utf8 } from '../core/decode-base64';
-import { prepareEmailBodyFromHtml } from './prepare-email-body';
+import { createEmailEditor } from '../tests/editor';
+import {
+  prepareEmailBody,
+  prepareEmailBodyFromHtml,
+  registerToggleAppendedThread,
+  TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
+} from './prepare-email-body';
 
 const replyingTo = message('original', {
   from: { name: 'Ada Lovelace', email: 'ada@example.com' },
@@ -19,6 +26,27 @@ const replyingTo = message('original', {
   internal_date_ts: '2026-08-01T12:00:00Z',
   attachments: [],
 });
+
+const inlineImageMessage = {
+  ...replyingTo,
+  body_html_sanitized:
+    '<p>Chart</p><img src="cid:chart" alt="chart"><img src="cid:missing">',
+  attachments: [
+    {
+      db_id: 'chart-attachment',
+      content_id: '<chart>',
+      sfs_id: 'chart-file',
+      mime_type: 'image/png',
+    },
+  ],
+};
+
+function quotedImageSources(html: string) {
+  const body = new DOMParser().parseFromString(html, 'text/html').body;
+  return Array.from(body.querySelectorAll('.macro_quote img')).map((img) =>
+    img.getAttribute('src')
+  );
+}
 
 describe('prepareEmailBodyFromHtml', () => {
   it.each(['reply', 'forward'] as const)(
@@ -76,6 +104,38 @@ describe('prepareEmailBodyFromHtml', () => {
       expect(decoded).toContain('href="https://example.com/accept"');
     }
   );
+  it.each(['reply', 'forward'] as const)(
+    'links inline cid images to their static-file copies in an outgoing %s',
+    (replyType) => {
+      const prepared = prepareEmailBodyFromHtml('<p>My reply</p>', {
+        replyType,
+        replyingTo: inlineImageMessage,
+      });
+      const images = quotedImageSources(decodeBase64Utf8(prepared.bodyHtml));
+      expect(images).toEqual([
+        staticFileReferenceEndpoint('chart-file'),
+        'cid:missing',
+      ]);
+    }
+  );
+  it('links inline cid images in a forward quoted in the editor', () => {
+    const editor = createEmailEditor('FYI');
+    registerToggleAppendedThread(editor);
+    editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+      replyingTo: inlineImageMessage,
+      replyType: 'forward',
+      visible: true,
+    });
+    const prepared = prepareEmailBody(editor, {
+      replyType: 'forward',
+      replyingTo: inlineImageMessage,
+    });
+    const images = quotedImageSources(decodeBase64Utf8(prepared!.bodyHtml));
+    expect(images).toEqual([
+      staticFileReferenceEndpoint('chart-file'),
+      'cid:missing',
+    ]);
+  });
   it('does not add a quote block without appendReply (undo-send restore)', () => {
     const prepared = prepareEmailBodyFromHtml('<p>hi there</p>');
     const decoded = decodeBase64Utf8(prepared.bodyHtml);

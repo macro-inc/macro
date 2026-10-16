@@ -32,6 +32,7 @@ function sameResult(left: CalculatedCell, right: CalculatedCell) {
     left.number === right.number &&
     left.error === right.error &&
     left.warning === right.warning &&
+    left.date === right.date &&
     left.type === right.type &&
     left.value === right.value &&
     left.spill?.rows === right.spill?.rows &&
@@ -135,6 +136,11 @@ self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
         type: 'change-axis',
         sheets: engine.changeAxis(operation.sheets, operation.change),
       }))
+      .with({ type: 'move-range' }, (operation) => ({
+        id: operation.id,
+        type: 'move-range',
+        sheets: engine.moveRange(operation.sheets, operation.move),
+      }))
       .with({ type: 'calculate' }, (operation) => ({
         id: operation.id,
         type: 'calculate',
@@ -163,6 +169,16 @@ self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
           operation.cursor,
           operation.context
         ),
+      }))
+      .with({ type: 'goal-seek' }, (operation) => ({
+        id: operation.id,
+        type: 'goal-seek',
+        result: operation.sheets
+          ? engine.goalSeek(operation.sheets, operation.request)
+          : (session?.goalSeek(operation.request) ?? {
+              status: 'invalid' as const,
+              message: 'Calculate the sheet before using Goal Seek.',
+            }),
       }))
       .exhaustive();
   } catch (error) {

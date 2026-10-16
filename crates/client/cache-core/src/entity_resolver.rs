@@ -6,7 +6,7 @@
 //! currently generated in Rust; a nonexistent or non-scalar runtime path is
 //! therefore handled safely as a cache miss by denormalization.
 
-use crate::meta::{self, FieldKind, TypeKind};
+use crate::meta::{FieldKind, TypeKind};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -75,22 +75,25 @@ pub struct EntityResolverLookup {
 
 impl EntityResolverLookup {
     /// Validates descriptors against generated output schema metadata.
-    pub fn compile(resolvers: &[EntityResolver]) -> Result<Self, EntityResolverError> {
+    pub fn compile(
+        schema: &crate::meta::Schema,
+        resolvers: &[EntityResolver],
+    ) -> Result<Self, EntityResolverError> {
         let mut by_parent = BTreeMap::<String, BTreeMap<String, EntityResolver>>::new();
         for resolver in resolvers {
-            let parent = meta::type_meta(&resolver.parent_type)
+            let parent = schema
+                .type_meta(&resolver.parent_type)
                 .ok_or_else(|| EntityResolverError::UnknownParent(resolver.parent_type.clone()))?;
             if parent.kind != TypeKind::Object {
                 return Err(EntityResolverError::ParentNotObject(
                     resolver.parent_type.clone(),
                 ));
             }
-            let field =
-                meta::field_meta(&resolver.parent_type, &resolver.field_name).ok_or_else(|| {
-                    EntityResolverError::UnknownField {
-                        parent: resolver.parent_type.clone(),
-                        field: resolver.field_name.clone(),
-                    }
+            let field = schema
+                .field_meta(&resolver.parent_type, &resolver.field_name)
+                .ok_or_else(|| EntityResolverError::UnknownField {
+                    parent: resolver.parent_type.clone(),
+                    field: resolver.field_name.clone(),
                 })?;
             if field.ty.kind != FieldKind::Composite || field.ty.list {
                 return Err(EntityResolverError::NotSingularComposite {
@@ -99,20 +102,22 @@ impl EntityResolverLookup {
                 });
             }
 
-            let target = meta::type_meta(&resolver.target_type)
+            let target = schema
+                .type_meta(&resolver.target_type)
                 .ok_or_else(|| EntityResolverError::UnknownTarget(resolver.target_type.clone()))?;
             if target.kind != TypeKind::Object {
                 return Err(EntityResolverError::TargetNotObject(
                     resolver.target_type.clone(),
                 ));
             }
-            if target.key_fields != Some(&["id"][..]) {
+            if target.key_fields.as_deref() != Some(&["id".to_owned()][..]) {
                 return Err(EntityResolverError::TargetNotKeyable(
                     resolver.target_type.clone(),
                 ));
             }
 
-            let declared = meta::type_meta(field.ty.name)
+            let declared = schema
+                .type_meta(field.ty.name)
                 .expect("generated composite field type has generated metadata");
             let compatible = match declared.kind {
                 TypeKind::Object => declared.name == target.name,

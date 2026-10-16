@@ -64,7 +64,7 @@ impl InvitationIdentity {
     }
 }
 
-/// Facts from an independently authorized owned calendar copy.
+/// Facts from an independently authorized owned or delegated calendar copy.
 pub struct InvitationCandidate {
     /// Connected inbox of this copy.
     pub link_id: Uuid,
@@ -83,12 +83,12 @@ pub struct InvitationCandidate {
 }
 /// Calendar-owned access and identity lookup boundary.
 pub trait CalendarInvitationRepository: Send + Sync {
-    /// Whether an independently owned connected account is available or still syncing.
+    /// Whether an owned or delegated connected account is available or still syncing.
     fn invitation_availability(
         &self,
         viewer: &str,
     ) -> impl Future<Output = Result<InvitationAvailability, Report>> + Send;
-    /// Batch query only the viewer's owned calendar copies.
+    /// Batch query only the viewer's owned or inbox-delegated calendar copies.
     fn invitation_candidates(
         &self,
         viewer: &str,
@@ -97,7 +97,7 @@ pub trait CalendarInvitationRepository: Send + Sync {
 }
 /// Calendar connection/sync facts for explaining lookup misses.
 pub struct InvitationAvailability {
-    /// At least one active owned calendar account.
+    /// At least one active owned or delegated calendar account.
     pub connected: bool,
     /// At least one active account still syncing.
     pub syncing: bool,
@@ -107,7 +107,7 @@ pub struct InvitationAvailability {
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum InvitationResolution {
-    /// Viewer has no active owned Google-backed calendar.
+    /// Viewer has no active owned or delegated Google-backed calendar.
     Disconnected,
     /// An active calendar is still ingesting this event.
     StillSyncing,
@@ -117,7 +117,7 @@ pub enum InvitationResolution {
     Unavailable,
     /// No independently authorized matching copy has synced.
     NoMatch,
-    /// More than one owned account could respond; never guess.
+    /// More than one authorized account could respond; never guess.
     Ambiguous,
     /// Current authorized event and explicit capabilities.
     Resolved {

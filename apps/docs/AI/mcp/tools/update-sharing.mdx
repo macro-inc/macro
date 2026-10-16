@@ -1,0 +1,22 @@
+---
+title: UpdateSharing
+description: >-
+  Change who can access a document (including a task), an AI chat, or a project
+  (folder), as the Share menu in the app does: link sharing, team access, and
+  per-channel access.
+---
+
+# UpdateSharing
+
+Change who can access a document (including a task), an AI chat, or a project (folder), as the Share menu in the app does: link sharing, team access, and per-channel access. Each omitted field stays unchanged; off disables that share. Requires edit access to a document, or owning an AI chat or project; only the owner can change team access. Use ShareWithChannel to post an item into a channel, and UpdateInitiativeSharing for Tasks projects (initiatives).
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"document"` \| `"chat"` \| `"project"` | Yes | The kind of item whose sharing changes. |
+| `entityId` | string | Yes | The id of the item whose sharing changes. |
+| `linkScope` | `"off"` \| `"public"` \| `"team"` | No | Who the item's share link admits: public (anyone with the link), team (the owner's team members with the link), or off to disable link sharing. |
+| `linkAccess` | `"off"` \| `"view"` \| `"comment"` \| `"edit"` | No | Permission granted by an enabled share link. Off resets it to the default level. |
+| `teamAccess` | `"off"` \| `"view"` \| `"comment"` \| `"edit"` | No | Access for everyone on the owner's team; off removes it. |
+| `channels` | SharingChannel[] | No | Individual channel grants to set or remove; other channel grants stay unchanged. |

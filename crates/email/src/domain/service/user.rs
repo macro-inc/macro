@@ -18,6 +18,22 @@ where
     Eam: Send + Sync + 'static,
     B: Send + Sync + 'static,
 {
+    async fn get_user_email_senders(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        link_id: uuid::Uuid,
+    ) -> Result<Vec<crate::domain::senders::SendAsAddress>, EmailErr> {
+        let inboxes = self.email_repo.user_accessible_inboxes(macro_id).await?;
+        let link = inboxes
+            .iter()
+            .find(|link| link.id == link_id)
+            .ok_or(EmailErr::InboxNotFound)?;
+        self.sender_provider
+            .send_as(link, false)
+            .await
+            .map(super::senders::verified_senders)
+    }
+
     async fn get_user_email_labels(
         &self,
         macro_id: MacroUserIdStr<'static>,

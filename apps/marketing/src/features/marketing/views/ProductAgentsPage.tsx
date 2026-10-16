@@ -1,235 +1,190 @@
-import ChatGPTIcon from '@icon/openai.svg';
-import ClaudeIcon from '@icon/wide-claude.svg';
-import CursorIcon from '@icon/wide-cursor-ide.svg';
-import { For } from 'solid-js';
+import ArrowUpRight from '@phosphor/arrow-up-right.svg';
+import CaretDown from '@phosphor/caret-down.svg';
 import { setPageSeo } from '../../../app/utils/utilSeo';
-import HermesIcon from '../assets/hermes.svg';
-import OpenClawIcon from '../assets/openclaw.svg';
+import { AgentMcpSetup } from '../components/agents/AgentStories';
 import {
-  AgentMcpDemo,
-  AgentMemoryDemo,
-  AgentModelsDemo,
-  AgentSearchDemo,
-} from '../components/agents/AgentStories';
+  AgentDeliverableStory,
+  AgentMeetingStory,
+  AgentTeamworkStory,
+} from '../components/agents/AgentWorkflowStories';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import {
   ContextGraphic,
-  DiffGraphic,
+  EditingGraphic,
   LinkedWorkGraphic,
   ThreadGraphic,
 } from '../components/product/ProductGraphics';
-import {
-  ProductHero,
-  ProductPage,
-  ProductProse,
-} from '../components/product/ProductPage';
+import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 import './agents-page.css';
 
-/** Clients the app's MCP settings and Bring your own agent card name. */
-const existingAgents = [
-  { name: 'Claude', icon: ClaudeIcon },
-  { name: 'ChatGPT', icon: ChatGPTIcon },
-  { name: 'Cursor', icon: CursorIcon },
-  { name: 'Hermes', icon: HermesIcon },
-  { name: 'OpenClaw', icon: OpenClawIcon },
-];
-
 const agentsFaq = [
   {
-    q: 'What does Macro’s memory actually remember?',
-    a: 'Who works on what, what you’ve promised customers, and who knows the most about a topic. We rebuild it every night from your team’s email, channels, docs, tasks, calls, and CRM. When an agent needs the latest details, it searches for them. It only uses what the person asking is allowed to see.',
+    q: 'Can I choose a different model?',
+    a: 'Yes. Choose from the models in Macro’s agent picker when starting or continuing a conversation. A connected agent uses the models supported by its own runtime.',
   },
   {
-    q: 'What can agents do in Macro?',
-    a: 'Most of what you can. They search and read email, chat, docs, tasks, and calls. They write and edit docs, create and assign tasks, update customers in the CRM, post in channels, and draft email. The results land in the same workspace your team already uses.',
+    q: 'Whose permissions does an agent use?',
+    a: 'Hosted agents use the conversation owner’s access. Someone else prompting a shared conversation may need the owner’s approval. Connected agents also follow their own permission settings.',
   },
   {
-    q: 'Which models can I use?',
-    a: 'The latest from Anthropic, OpenAI, and Google. The model is a dropdown in the composer, and you can switch in the middle of a conversation if you want a second opinion. Memory and tools work the same with every model, so you’re never locked into one lab.',
+    q: 'Can I review an email before it goes out?',
+    a: 'Yes. Review and edit the draft in the conversation, then send it. In a channel or document discussion, the agent asks for confirmation in the thread. External clients have their own review controls.',
   },
   {
-    q: 'Can an agent see things I can’t?',
-    a: 'No. An agent runs with the permissions of the person using it. If a doc, channel, or email isn’t shared with you, your agent can’t read it either.',
-  },
-  {
-    q: 'Will an agent send email without asking me?',
-    a: 'No. The agent drafts the email in the conversation, and it only goes out after you’ve checked the recipients and the wording. Other changes, like doc edits and new tasks, happen right away, the same way a teammate’s would.',
-  },
-  {
-    q: 'Can I edit what an agent makes?',
-    a: 'Yes. A doc or task an agent creates is an ordinary Macro doc or task. Edit it, reassign it, or ask another agent to pick it up.',
-  },
-  {
-    q: 'Does a doc have to be open for an agent to edit it?',
-    a: 'No. Agents edit through the same sync service your teammates use, so the doc can be closed. If you have it open, you’ll see the edits arrive live and can keep typing alongside them.',
-  },
-  {
-    q: 'Can I use Macro from Claude Code, ChatGPT, or Cursor?',
-    a: (
-      <>
-        Yes. Our MCP server gives them the same tools our agents use, with your
-        permissions. In Claude Code, run{' '}
-        <code>
-          claude mcp add --transport http macro https://mcp-server.macro.com/mcp
-        </code>
-        . In Claude.ai, add it under Settings → Connectors. ChatGPT needs
-        Developer mode turned on. Cursor and other IDEs take the JSON config
-        from the MCP server page in Macro’s settings.
-      </>
-    ),
+    q: 'Can an agent work while I’m away?',
+    a: 'Hosted agents can continue after you close the app. Local agents need your machine to stay online. Routines let you schedule recurring work.',
   },
 ];
 
 export function RouteAgents() {
+  // The router coalesces a click on the current hash. Still scroll back to it
+  // when the visitor has moved elsewhere on this long page.
+  const revisitSection = (
+    event: MouseEvent & { currentTarget: HTMLAnchorElement }
+  ) => {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0
+    )
+      return;
+    const hash = event.currentTarget.hash;
+    if (hash !== window.location.hash) return;
+    event.preventDefault();
+    document.getElementById(hash.slice(1))?.scrollIntoView({
+      block: 'start',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+    });
+  };
   setPageSeo({
-    title: 'Macro Agents — AI With Your Whole Workspace as Context',
+    title: 'Macro Agents | Agents That Know What Your Team Is Doing',
     description:
-      'Agents with memory of your team’s email, chat, docs, tasks, and calls. One search across everything, any model, and an MCP server for the agents you already use.',
+      'Give agents native access to the context and tools behind your work. Use workspace permissions, choose a model, mention agents in chat, or bring your own agent.',
     path: '/agents',
   });
   return (
     <ProductPage>
-      <ProductHero
-        product="Agents"
-        title={['Agents that know what', 'your team is doing.']}
-        description={[
-          'Macro remembers your email, chat, docs, tasks, and calls.',
-          'Use any model, from any device, and pick up where you left off.',
-        ]}
-        cta="agents_hero_get_started"
-      />
+      <div class="agents-hero">
+        <ProductHero
+          product="Agents"
+          title={['Agents that know', 'what your team is doing.']}
+          description={[
+            'Give agents your company’s context',
+            'to get things done alongside your team.',
+          ]}
+          cta="agents_hero_get_started"
+        />
+      </div>
       <WorkspaceDesktopDemo
-        view="agents"
-        initialAgent="launch-status"
-        label="Explore Macro Agents"
-        caption="A sample workspace. Ask about the launch or open a linked task."
+        heroFrame
+        view="messages"
+        agentShowcase
+        desktopWidth={1000}
+        label="Delegate work from a team conversation"
       />
       <nav class="feature-page-jump-links" aria-label="On this page">
-        <a href="#agent-memory">
-          <ThreadGraphic />
-          <span>Team memory</span>
-        </a>
-        <a href="#agent-search">
+        <a onClick={revisitSection} href="#agent-sources">
           <ContextGraphic />
-          <span>One search</span>
+          <span>Your personal agent</span>
         </a>
-        <a href="#agent-models">
-          <DiffGraphic />
-          <span>Any model</span>
+        <a onClick={revisitSection} href="#agent-actions">
+          <EditingGraphic />
+          <span>Tools to act</span>
         </a>
-        <a href="#existing-agents">
+        <a onClick={revisitSection} href="#agent-collaboration">
+          <ThreadGraphic />
+          <span>Agents on your team</span>
+        </a>
+        <a onClick={revisitSection} href="#existing-agents">
           <LinkedWorkGraphic />
-          <span>Bring your agents</span>
+          <span>Bring your own agent</span>
         </a>
       </nav>
       <FeaturePageSection
-        id="agent-memory"
-        title="Memory for the whole team."
-        description={
-          'ChatGPT remembers your chats. Macro remembers your company.\nAsk who owns something, what you promised a customer, or who to ask.'
-        }
+        id="agent-sources"
+        title="An agent that knows where to look."
+        description="Your agent can follow connections across your company’s work and act on what it finds. A question about tomorrow’s calls can draw on your calendar, earlier conversations, and the latest customer messages."
       >
         <div class="feature-page-visual">
-          <AgentMemoryDemo />
+          <AgentMeetingStory />
         </div>
-        <ProductProse>
-          <p>
-            ChatGPT and Claude build memory from your conversations with them.
-            Macro builds it from everything your team does: email, channels,
-            docs, tasks, calls, and the CRM, refreshed every night. It learns
-            who works on what, so it can assign a task to the right person,
-            route a customer issue, or tell you who knows the most about
-            something. It only uses what you’re allowed to see.
-          </p>
-        </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="agent-search"
-        title="One search across everything."
-        description={
-          'Agents search email, chat, docs, tasks, and calls with one tool.\nNo stitching together five integrations that each return half the answer.'
-        }
+        id="agent-actions"
+        title="Work alongside your agent"
+        description="Your team can open the same document, add context, and ask an agent to update it. Changes happen in the shared file."
       >
         <div class="feature-page-visual">
-          <AgentSearchDemo />
+          <AgentDeliverableStory />
         </div>
-        <ProductProse>
-          <p>
-            Plug Claude into Slack, Notion, Linear, and Gmail and it has to
-            search each one, dedupe the results, and guess what happened in what
-            order. We built Macro’s tools the way we built the app: one search
-            across everything, one way to read any item, and links back to the
-            source. Your agent spends its time on your question instead of on
-            plumbing.
-          </p>
-        </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
-        id="agent-models"
-        title="Any model. Same memory."
-        description={
-          'Switch between the latest models from Anthropic, OpenAI, and Google.\nYour memory and tools come with you.'
-        }
+        id="agent-collaboration"
+        title="Bring your agents into team chat."
+        description="Ask Macro for a mockup, give feedback, then tag Cursor to build it."
       >
         <div class="feature-page-visual">
-          <AgentModelsDemo />
+          <AgentTeamworkStory />
         </div>
-        <ProductProse>
-          <p>
-            Models leapfrog each other every few months, and you shouldn’t have
-            to move your company’s memory every time they do. In Macro, the
-            model is a dropdown, and everything the agent knows about your team
-            works the same whichever one you pick. Agents run in the cloud, too,
-            so you can start something on your laptop, close it, and check the
-            result on your phone.
-          </p>
-        </ProductProse>
       </FeaturePageSection>
       <FeaturePageSection
         id="existing-agents"
-        title="Bring Claude, ChatGPT, or Cursor."
-        description={
-          'Connect any MCP client and it gets the same tools our agents use.\nOne command for Claude Code, or a connector for Claude.ai and ChatGPT.'
-        }
+        title="Bring your own agent."
+        description="Give the agent you already use access to the context and tools in Macro."
       >
-        <ul
-          class="agents-page-providers"
-          aria-label="Agents that connect to Macro"
-        >
-          <For each={existingAgents}>
-            {(agent) => (
-              <li data-agent={agent.name}>
-                <span class="agents-page-provider-icon">
-                  <agent.icon aria-hidden="true" />
-                </span>
-                <span>{agent.name}</span>
-              </li>
-            )}
-          </For>
-        </ul>
-        <div class="feature-page-visual agents-page-mcp">
-          <AgentMcpDemo />
+        <div class="agents-connections">
+          <div class="agents-connection-paths">
+            <div class="agents-connection-path">
+              <h3>Your agent, inside Macro</h3>
+              <p>
+                Bring Claude Code, OpenCode, OpenClaw, or Hermes into your
+                workspace. Connect through macrod and keep your agent running on
+                your machine.
+              </p>
+              <a
+                class="agents-setup-link"
+                href="https://docs.macro.com/AI/bring-your-own"
+              >
+                Connect your agent <ArrowUpRight aria-hidden="true" />
+              </a>
+            </div>
+            <div class="agents-connection-path">
+              <h3>Macro, inside your agent</h3>
+              <p>
+                Use Macro from Claude, ChatGPT, Cursor, or another MCP client.
+                Search your workspace and work with its documents and tasks from
+                there.
+              </p>
+              <a
+                class="agents-setup-link"
+                href="https://docs.macro.com/AI/mcp/overview"
+              >
+                Connect with MCP <ArrowUpRight aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+          <details class="agents-mcp-disclosure">
+            <summary>
+              MCP connection commands <CaretDown aria-hidden="true" />
+            </summary>
+            <div
+              class="agents-mcp-content workspace-demo portal-scope"
+              data-theme="dark"
+            >
+              <AgentMcpSetup />
+            </div>
+          </details>
         </div>
-        <ProductProse>
-          <p>
-            Our MCP server gets the same care as the app. Point Claude Code,
-            Cursor, Claude.ai, or ChatGPT at it and your agent can search the
-            workspace, read and edit docs, and update tasks and customers, all
-            with your permissions.
-          </p>
-        </ProductProse>
       </FeaturePageSection>
       <FeaturePageFaq
         id="agents-faq-title"
-        title="Questions about Macro agents"
-        introduction={
-          <p>
-            Agents in Macro use the same permissions you do. Here are the
-            details.
-          </p>
-        }
+        title="Models, permissions, and control."
         items={agentsFaq}
       />
       <HomepageClosing />

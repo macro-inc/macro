@@ -2,7 +2,8 @@
  * The comment tool's state: whether it is on, the thread open beside its
  * pin, a comment being placed, the sidebar filter, and where the open
  * page's threads pin now (layers move, so their bounds are read again
- * after every edit).
+ * after every edit). A followed comment link turns the tool on at its
+ * thread.
  */
 
 import type { FigEngine } from '@core/fig-engine/client';
@@ -56,7 +57,6 @@ export function createFigComments(options: {
     setOpenThreadSignal(id);
     if (id) {
       store.markSeen(id);
-      store.load?.(id);
       setDraft(undefined);
     }
   };
@@ -71,7 +71,7 @@ export function createFigComments(options: {
   };
 
   const pageThreads = createMemo(() =>
-    store.threads().filter((t) => t.anchor?.pageId === pageId())
+    store.threads().filter((t) => t.anchor.pageId === pageId())
   );
 
   // Layer bounds come from the engine (an external system), after edits.
@@ -80,7 +80,7 @@ export function createFigComments(options: {
     on([pageThreads, viewer.page, viewer.editVersion], ([threads, page]) => {
       const ids = [
         ...new Set(
-          threads.flatMap((t) => (t.anchor?.nodeId ? [t.anchor.nodeId] : []))
+          threads.flatMap((t) => (t.anchor.nodeId ? [t.anchor.nodeId] : []))
         ),
       ];
       const r = ++request;
@@ -103,7 +103,6 @@ export function createFigComments(options: {
   const pins = createMemo((): CommentPin[] => {
     const me = store.me()?.id;
     return pageThreads().flatMap((thread) => {
-      if (!thread.anchor) return [];
       const at = anchorPoint(thread.anchor, bounds());
       if (!at) return [];
       return [
@@ -150,47 +149,66 @@ export function createFigComments(options: {
     setDraft({ anchor: anchorAt(page, at, node), at });
   };
 
-  /** Posts the placed comment; resolves to the new thread's id. */
-  const post = async (
-    text: string,
-    mentions: Parameters<FigCommentStore['create']>[2]
-  ) => {
-    const d = draft();
-    if (!d) return undefined;
-    const id = await store.create(d.anchor, text, mentions);
+  /** The placed comment was posted: its thread opens beside the pin. */
+  const posted = (threadId: string) => {
     setDraft(undefined);
-    setOpenThread(id);
-    return id;
+    setOpenThread(threadId);
+  };
+
+  /** Where an anchor on the open page pins now (its layer may have moved). */
+  const pinPoint = async (anchor: FigCommentAnchor) => {
+    if (!anchor.nodeId) return anchorPoint(anchor, new Map());
+    try {
+      const [g] = await engine.geometry(viewer.page(), [anchor.nodeId]);
+      return g ? anchorPoint(anchor, new Map([[g.id, g.bounds]])) : undefined;
+    } catch {
+      return undefined;
+    }
   };
 
   /** Shows a thread: its page, its pin in view, and the thread open. */
   const reveal = async (thread: FigCommentThread) => {
     const anchor = thread.anchor;
-    if (anchor && anchor.pageId !== pageId()) {
+    if (anchor.pageId !== pageId()) {
       const index = viewer.pages.findIndex((p) => p.id === anchor.pageId);
       if (index >= 0) await viewer.openPage(index);
     }
     setOpenThread(thread.id);
-    const pin = pins().find((p) => p.thread.id === thread.id);
-    if (pin) {
-      const v = viewer.viewport();
-      const z = viewer.camera().zoom;
-      const view = { w: v.w / z, h: v.h / z };
-      const c = viewer.camera();
-      const inView =
-        pin.at.x >= c.x &&
-        pin.at.y >= c.y &&
-        pin.at.x <= c.x + view.w &&
-        pin.at.y <= c.y + view.h;
-      if (!inView)
-        viewer.zoomToRect({
-          x: pin.at.x - view.w / 2,
-          y: pin.at.y - view.h / 2,
-          w: view.w,
-          h: view.h,
-        });
-    }
+    if (anchor.pageId !== pageId()) return;
+    const at = await pinPoint(anchor);
+    if (!at) return;
+    const v = viewer.viewport();
+    const c = viewer.camera();
+    const view = { w: v.w / c.zoom, h: v.h / c.zoom };
+    const inView =
+      at.x >= c.x &&
+      at.y >= c.y &&
+      at.x <= c.x + view.w &&
+      at.y <= c.y + view.h;
+    if (!inView)
+      viewer.zoomToRect({
+        x: at.x - view.w / 2,
+        y: at.y - view.h / 2,
+        w: view.w,
+        h: view.h,
+      });
   };
+
+  // Following a comment link (navigation, an external event) shows its
+  // comment: the thread at its pin, or the list with the discussion.
+  createEffect(
+    on(
+      () => store.linked?.(),
+      (link) => {
+        if (!link) return;
+        setActive(true);
+        viewer.setTool('move');
+        const thread = store.threads().find((t) => t.id === link.threadId);
+        if (thread) void reveal(thread);
+        else viewer.setDesignOpen(true);
+      }
+    )
+  );
 
   return {
     store,
@@ -206,7 +224,7 @@ export function createFigComments(options: {
     listed,
     unreadCount,
     placeAt,
-    post,
+    posted,
     reveal,
     isUnread: (t: FigCommentThread) =>
       isUnread(t, store.me()?.id, store.seenAt(t.id)),

@@ -28,7 +28,11 @@ fn recipe() -> OptimisticLinkPatch {
 fn record_recipes_roundtrip_and_do_not_become_network_queries() {
     let patch = recipe();
     assert_eq!(
-        deduplicate_patches(&[patch.clone(), patch.clone()]).unwrap(),
+        deduplicate_patches(
+            crate::meta::bundled_schema_ref(),
+            &[patch.clone(), patch.clone()]
+        )
+        .unwrap(),
         vec![patch.clone()]
     );
     assert_eq!(
@@ -85,7 +89,7 @@ fn invalid_roots_and_fragments_are_rejected_before_enqueue() {
     patch.record_root.as_mut().unwrap().fragment_name = "Missing".into();
     cases.push(patch);
     for patch in cases {
-        assert!(deduplicate_patches(&[patch]).is_err());
+        assert!(deduplicate_patches(crate::meta::bundled_schema_ref(), &[patch]).is_err());
     }
 }
 
@@ -94,12 +98,12 @@ fn resolution_rejects_missing_fields_and_cached_type_mismatches() {
     let patch = recipe();
     let root = patch.record_root.as_ref().unwrap();
     assert!(matches!(
-        root.resolve(&HashMap::new(), &patch),
+        root.resolve(crate::meta::bundled_schema_ref(), &HashMap::new(), &patch),
         Err(LinkPatchError::MissingParent(_))
     ));
     let mut effective = HashMap::from([(root.entity_key.clone(), Record::default())]);
     assert!(matches!(
-        root.resolve(&effective, &patch),
+        root.resolve(crate::meta::bundled_schema_ref(), &effective, &patch),
         Err(LinkPatchError::MissingField { .. })
     ));
     effective.get_mut(&root.entity_key).unwrap().fields.insert(
@@ -107,7 +111,7 @@ fn resolution_rejects_missing_fields_and_cached_type_mismatches() {
         crate::value::CacheValue::String("GraphqlSoupChat".into()),
     );
     assert!(matches!(
-        root.resolve(&effective, &patch),
+        root.resolve(crate::meta::bundled_schema_ref(), &effective, &patch),
         Err(LinkPatchError::InvalidEntrypoint(_))
     ));
 }

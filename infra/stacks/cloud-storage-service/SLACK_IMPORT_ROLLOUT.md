@@ -100,7 +100,7 @@ instead, so maintenance and DLQ reconciliation continue.
 
 ## Local execution (explicit opt-in)
 
-Start a local stack using [the local guide](../../../docs/RUNNING_LOCALLY.md),
+Start a local stack using [the local guide](../../../docs/development/running-locally.md),
 never `run_dev` or a shared-dev environment. The inventory deliberately excludes
 this worker from default builds/startup. Local provisioning creates both queues
 and reapplies visibility/redrive/retention settings after all queues exist.

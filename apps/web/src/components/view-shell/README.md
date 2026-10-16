@@ -18,8 +18,9 @@ The control inset is derived from that center and the control's size. Never
 align trailing controls by their outer edges or offset an individual icon.
 
 - `ViewSidebar.Primary` gives create actions and toolbars the same 8px top inset.
-- `ViewSidebar.CloseButton` shows split close only in docked navigation, never
-  inside a narrow navigation overlay. Keep split-close controls out of overlays.
+- `ViewSidebar.CloseButton` closes the owning split in both docked navigation and
+  narrow navigation overlays. Its visibility follows the split controller, not
+  the sidebar breakpoint; the last remaining list split still has no close action.
 - `ViewSidebar.Toolbar` aligns its final `Control` with the right rail.
 - `ViewSidebar.Content` owns outer gutters, 16px top/bottom padding, and section gaps.
 - `Item` and `Action` own row spacing; use `Icon` for leading glyphs and

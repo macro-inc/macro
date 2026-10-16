@@ -3,7 +3,20 @@
   <head><link rel="preload" href="/fonts/roboto-slab-variable.woff2" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/fonts/inter-variable.woff2" as="font" type="font/woff2" crossorigin /><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Macro — One unified interface for all your work.</title>
     <link rel="icon" href="/macro-favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#000000" />
-    <style>html,body{margin:0;background:#000;color:#fff}</style>
+    <style>html,body{margin:0;background:#000;color:#fff}html[data-palette=cream],html[data-palette=cream] body{background:#f5f1e8;color:#1d1c1a}</style>
+    <script>
+      // First-paint palette, so the prerendered homepage never flashes dark in
+      // light mode. Mirrors src/features/setup/sitePalette.ts.
+      (function () {
+        var theme = new URLSearchParams(location.search).get('theme');
+        var cream = theme === 'cream' || (theme !== 'dark' && matchMedia('(prefers-color-scheme: light)').matches);
+        var root = document.documentElement;
+        root.dataset.themeLight = String(cream);
+        if (!cream) return;
+        root.dataset.palette = 'cream';
+        document.querySelector('meta[name="theme-color"]').content = '#f5f1e8';
+      })();
+    </script>
     <script>
       if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
         !function(f,b,e,v,n,t,s)

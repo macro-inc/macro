@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access_request(id, entity_type, entity_id, requester_id, requested_level, status, revision, created_at, updated_at, resolved_at, granted_level, retry_after)\n            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)\n            ON CONFLICT(id) DO UPDATE SET requested_level = EXCLUDED.requested_level, status = EXCLUDED.status, revision = EXCLUDED.revision, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, resolved_at = EXCLUDED.resolved_at, granted_level = EXCLUDED.granted_level, retry_after = EXCLUDED.retry_after",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        },
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ddfa427e2dca64780677fc1fc258d097c233fb5b247c198ba3c2514a4161ffa"
+}

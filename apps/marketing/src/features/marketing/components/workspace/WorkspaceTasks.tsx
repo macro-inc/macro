@@ -200,13 +200,14 @@ export function WorkspaceTasks(props: {
               </h2>
               <div class="flex flex-wrap gap-2">
                 <For
-                  each={w.data.documents.filter(
-                    (doc) =>
-                      doc.id === 'plan' ||
-                      doc.id === 'launch-metrics' ||
-                      (task().id === 'deploy'
-                        ? doc.id === 'release-checks'
-                        : doc.id === 'rollout')
+                  each={w.data.documents.filter((doc) =>
+                    task().relatedDocumentIds
+                      ? task().relatedDocumentIds?.includes(doc.id)
+                      : doc.id === 'plan' ||
+                        doc.id === 'launch-metrics' ||
+                        (task().id === 'deploy'
+                          ? doc.id === 'release-checks'
+                          : doc.id === 'rollout')
                   )}
                 >
                   {(doc) => (

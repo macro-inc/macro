@@ -1,6 +1,6 @@
+import { PermissionCard } from '@app/features/agent-interactions/components/PermissionCard';
 import type { PendingPermission } from '@service-agent-fold/generated/types';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
-import { PermissionCard } from '../ui/PermissionCard';
 import { toolCallDetail, toolLabel } from './parts/shared';
 
 /** Live approval above the composer, with context from the requested tool. */

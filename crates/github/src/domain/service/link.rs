@@ -9,9 +9,12 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubMergeMethod,
-        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestRef,
-        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+        EnrichedGithubPullRequest, GithubAccessToken, GithubDraftOutcome, GithubError, GithubLink,
+        GithubLinkStatus, GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
+        GithubPullRequestMergeabilityEntry, GithubPullRequestMergeabilityRequest,
+        GithubPullRequestNumber, GithubPullRequestRef, MergeGithubPullRequestRequest,
+        MergeGithubPullRequestResponse, SetGithubPullRequestDraftRequest,
+        SetGithubPullRequestDraftResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -61,32 +64,32 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
         }
     }
 
-    fn link_lookup_error(error: R::Err) -> GithubError {
-        let error: anyhow::Error = error.into();
-
-        if error.to_string().contains("no rows returned") {
-            return GithubError::NoLinkFound;
-        }
-
-        GithubError::Internal(error)
-    }
-
-    async fn get_user_link_for_validation(
+    async fn find_user_link(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
-    ) -> Result<GithubLink, GithubError> {
+    ) -> Result<Option<GithubLink>, GithubError> {
         self.repo
             .get_github_link_by_user_id(macro_user_id)
             .await
-            .map_err(Self::link_lookup_error)
+            .map_err(|e| GithubError::Internal(e.into()))
     }
 
     async fn validated_access_token(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> Result<GithubAccessToken, GithubError> {
-        let link = self.get_user_link_for_validation(macro_user_id).await?;
+        let link = self
+            .find_user_link(macro_user_id)
+            .await?
+            .ok_or(GithubError::NoLinkFound)?;
 
+        self.validated_link_access_token(&link).await
+    }
+
+    async fn validated_link_access_token(
+        &self,
+        link: &GithubLink,
+    ) -> Result<GithubAccessToken, GithubError> {
         let access_token = self
             .auth
             .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
@@ -144,10 +147,10 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
         }
     }
 
-    /// The pull request as GitHub reports it after a merge, written back to
-    /// its foreign entities so the app shows it merged before the webhook
-    /// arrives. Best-effort: the merge already happened.
-    async fn refresh_merged_pull_request(
+    /// The pull request as GitHub reports it after a merge or draft change,
+    /// written back to its foreign entities so the app shows the change
+    /// before the webhook arrives. Best-effort: the change already happened.
+    async fn refresh_changed_pull_request(
         &self,
         access_token: &GithubAccessToken,
         reference: GithubPullRequestRef,
@@ -167,7 +170,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
                     owner=%reference.owner,
                     repo=%reference.repo,
                     number=reference.number,
-                    "failed to refresh GitHub pull request after merge"
+                    "failed to refresh GitHub pull request after a change"
                 );
             })
             .ok()?;
@@ -195,34 +198,28 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
     for GithubLinkServiceImpl<R, U, F, E>
 {
     #[tracing::instrument(skip(self), err)]
-    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
-        &self,
-        redirect_uri: &str,
-        state: T,
-    ) -> Result<String, GithubError> {
+    fn construct_oauth_url(&self, redirect_uri: &str, state: &str) -> Result<String, GithubError> {
         self.oauth
             .construct_oauth_url(&self.config.client_id, redirect_uri, state)
             .map_err(|e| GithubError::Internal(e.into()))
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn get_user_link(
+    async fn get_user_link_status(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
-    ) -> Result<GithubLink, GithubError> {
-        self.repo
-            .get_github_link_by_user_id(macro_user_id)
-            .await
-            .map_err(Self::link_lookup_error)
-    }
+    ) -> Result<GithubLinkStatus, GithubError> {
+        let Some(link) = self.find_user_link(macro_user_id).await? else {
+            return Ok(GithubLinkStatus::NotLinked);
+        };
 
-    #[tracing::instrument(skip(self), err)]
-    async fn check_user_link_token(
-        &self,
-        macro_user_id: &MacroUserId<Lowercase<'static>>,
-    ) -> Result<(), GithubError> {
-        self.validated_access_token(macro_user_id).await?;
-        Ok(())
+        match self.validated_link_access_token(&link).await {
+            Ok(_) => Ok(GithubLinkStatus::Linked(link)),
+            Err(GithubError::ReauthenticationRequired) => {
+                Ok(GithubLinkStatus::ReauthenticationRequired)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     #[tracing::instrument(skip(self, pull_requests), err)]
@@ -306,7 +303,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         };
 
         let pull_request = self
-            .refresh_merged_pull_request(&access_token, request.to_reference())
+            .refresh_changed_pull_request(&access_token, request.to_reference())
             .await;
 
         Ok(MergeGithubPullRequestResponse {
@@ -317,22 +314,71 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn set_pull_request_draft(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        request: SetGithubPullRequestDraftRequest,
+    ) -> Result<SetGithubPullRequestDraftResponse, GithubError> {
+        let access_token = self.validated_access_token(macro_user_id).await?;
+
+        let outcome = self
+            .oauth
+            .set_pull_request_draft(
+                access_token.as_str(),
+                &request.owner,
+                &request.repo,
+                request.number,
+                request.draft,
+            )
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))?;
+
+        let draft = match outcome {
+            GithubDraftOutcome::Changed { draft } => draft,
+            GithubDraftOutcome::Rejected { rejection, message } => {
+                return Err(GithubError::PullRequestUpdateRejected { rejection, message });
+            }
+        };
+
+        let pull_request = self
+            .refresh_changed_pull_request(&access_token, request.to_reference())
+            .await;
+
+        Ok(SetGithubPullRequestDraftResponse {
+            draft,
+            pull_request,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_pull_request_mergeability(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        pull_requests: Vec<GithubPullRequestNumber>,
+    ) -> Result<Vec<GithubPullRequestMergeabilityEntry>, GithubError> {
+        if pull_requests.len() > GithubPullRequestMergeabilityRequest::MAX {
+            return Err(GithubError::TooManyPullRequests);
+        }
+        if pull_requests.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let access_token = self.validated_access_token(macro_user_id).await?;
+
+        self.oauth
+            .get_pull_request_mergeability(access_token.as_str(), &pull_requests)
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn delete_user_link(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> Result<(), GithubError> {
-        // Get link
-        let link = match self.repo.get_github_link_by_user_id(macro_user_id).await {
-            Ok(link) => link,
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    tracing::trace!("no github link found for user");
-                    return Ok(());
-                }
-
-                return Err(GithubError::Internal(e));
-            }
+        let Some(link) = self.find_user_link(macro_user_id).await? else {
+            tracing::trace!("no github link found for user");
+            return Ok(());
         };
 
         // Count how many Macro users share this GitHub account. The FusionAuth
@@ -402,17 +448,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         let gh_id = user_info.id.to_string();
 
         // 1. Does THIS user already have a link, and to which account?
-        let this_user_link = match self.repo.get_github_link_by_user_id(user_id).await {
-            Ok(l) => Some(l),
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    None
-                } else {
-                    return Err(GithubError::Internal(e));
-                }
-            }
-        };
+        let this_user_link = self.find_user_link(user_id).await?;
 
         if let Some(existing) = &this_user_link
             && existing.github_user_id == gh_id
@@ -432,17 +468,11 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         // behavior).
 
         // 2. Does anyone already OWN this github account? (owner row = earliest row)
-        let account_owner = match self.repo.get_github_link_by_github_user_id(&gh_id).await {
-            Ok(l) => Some(l),
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    None
-                } else {
-                    return Err(GithubError::Internal(e));
-                }
-            }
-        };
+        let account_owner = self
+            .repo
+            .get_github_link_by_github_user_id(&gh_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
 
         let row_fusionauth_user_id = match &account_owner {
             Some(owner) => {

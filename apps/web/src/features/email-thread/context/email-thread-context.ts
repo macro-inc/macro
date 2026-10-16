@@ -55,7 +55,6 @@ export interface EmailThreadContext {
   viewerEmail: Accessor<string | undefined>;
   viewerLoading: Accessor<boolean>;
   isTouch: Accessor<boolean>;
-  isMobile: Accessor<boolean>;
   createCommands(
     thread: Accessor<EmailThread | undefined>
   ): EmailThreadCommands;

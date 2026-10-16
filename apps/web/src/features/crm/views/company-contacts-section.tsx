@@ -1,85 +1,129 @@
-import type { CrmCompanyEntity } from '@entity';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  type CrmCompanyEntity,
+  type CrmContactEntity,
+  ListEntity,
+  ListEntityMetadataQueryProvider,
+  ListLayoutProvider,
+} from '@entity';
+import { Avatar } from '@ui';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import { RecordSection } from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmContact as CompanyContact } from '../core/contact';
+import type { CrmContact } from '../core/contact';
+
+function ContactRow(props: {
+  contact: CrmContact;
+  onOpen: (event: MouseEvent) => void;
+  ownerId: string;
+}) {
+  const photo = useCrmContext().createContactPhoto?.(props.contact.email);
+  const name = () => props.contact.name || props.contact.email;
+  const entity = (): CrmContactEntity => ({
+    ...props.contact,
+    type: 'crm_contact',
+    name: name(),
+    ownerId: props.ownerId,
+    sortTs: props.contact.lastInteraction,
+  });
+  return (
+    <ListEntity
+      entity={entity()}
+      timestamp={props.contact.lastInteraction}
+      role="button"
+      tabIndex={0}
+      onClick={props.onOpen}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.currentTarget.click();
+      }}
+      icon={
+        <Avatar size="sm" aria-hidden="true">
+          <Show when={photo?.()}>
+            {(url) => <Avatar.Image src={url()} alt="" />}
+          </Show>
+          <Avatar.Fallback>{name().slice(0, 1).toUpperCase()}</Avatar.Fallback>
+        </Avatar>
+      }
+      titleTrailing={
+        <Show when={props.contact.name}>
+          <span class="min-w-0 truncate font-normal text-ink-extra-muted">
+            {props.contact.email}
+          </span>
+        </Show>
+      }
+    />
+  );
+}
 
 export function CompanyContactsSection(props: {
   company?: CrmCompanyEntity;
-  contacts?: CompanyContact[];
-  onOpenContact?: (contact: CompanyContact) => void;
+  contacts?: CrmContact[];
+  onOpenContact?: (contact: CrmContact) => void;
+  actions?: JSX.Element;
 }) {
-  const contacts = () => props.contacts ?? [];
   const { openWithSplit } = useCrmContext().createNavigation();
-
   const [search, setSearch] = createSignal('');
+  const [listRef, setListRef] = createSignal<HTMLElement>();
   const filtered = createMemo(() => {
     const query = search().trim().toLowerCase();
-    if (!query) return contacts();
-    return contacts().filter(
+    return (props.contacts ?? []).filter(
       (contact) =>
+        !query ||
         contact.name?.toLowerCase().includes(query) ||
         contact.email.toLowerCase().includes(query)
     );
   });
 
   return (
-    <Show
-      when={props.company}
-      fallback={<div class="text-sm text-ink-muted">Loading…</div>}
+    <RecordSection
+      title="Team"
+      search={search()}
+      onSearchChange={setSearch}
+      searchPlaceholder="Search contacts…"
+      actions={props.actions}
     >
       <Show
-        when={contacts().length > 0}
-        fallback={<div class="text-sm text-ink-muted">No contacts yet.</div>}
+        when={props.company}
+        fallback={
+          <div class="p-6 text-center text-sm text-ink-muted">Loading…</div>
+        }
       >
-        <div class="flex flex-col gap-2">
-          <input
-            type="text"
-            value={search()}
-            onInput={(event) => setSearch(event.currentTarget.value)}
-            placeholder="Search contacts…"
-            class="w-full rounded-md border border-edge bg-surface px-2 py-1 text-sm text-ink placeholder:text-ink-placeholder focus:outline-none"
-          />
-          <Show
-            when={filtered().length > 0}
-            fallback={
-              <div class="text-sm text-ink-muted">No matching contacts.</div>
-            }
-          >
-            <div class="flex flex-col gap-1">
-              <For each={filtered()}>
-                {(contact) => (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      if (props.onOpenContact && !event.shiftKey) {
-                        props.onOpenContact(contact);
-                        return;
-                      }
-                      openWithSplit(
-                        {
-                          type: 'contact',
-                          id: contact.id,
-                        },
-                        { activate: true, preferNewSplit: event.shiftKey }
-                      );
-                    }}
-                    class="flex min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-ink-muted/[0.06]"
-                  >
-                    <span class="truncate text-sm">
-                      {contact.name ?? contact.email}
-                    </span>
-                    <Show when={contact.name}>
-                      <span class="truncate text-xs text-ink-muted">
-                        {contact.email}
-                      </span>
-                    </Show>
-                  </button>
-                )}
-              </For>
+        <Show
+          when={filtered().length}
+          fallback={
+            <div class="p-6 text-center text-sm text-ink-muted">
+              {search().trim() ? 'No matching contacts.' : 'No contacts yet.'}
             </div>
-          </Show>
-        </div>
+          }
+        >
+          <ListEntityMetadataQueryProvider>
+            <ListLayoutProvider ref={listRef}>
+              <div ref={setListRef} class="flex flex-col">
+                <For each={filtered()}>
+                  {(contact) => (
+                    <ContactRow
+                      contact={contact}
+                      ownerId={props.company?.ownerId ?? ''}
+                      onOpen={(event) => {
+                        if (props.onOpenContact && !event.shiftKey) {
+                          props.onOpenContact(contact);
+                          return;
+                        }
+                        openWithSplit(
+                          { type: 'contact', id: contact.id },
+                          { activate: true, preferNewSplit: event.shiftKey }
+                        );
+                      }}
+                    />
+                  )}
+                </For>
+              </div>
+            </ListLayoutProvider>
+          </ListEntityMetadataQueryProvider>
+        </Show>
       </Show>
-    </Show>
+    </RecordSection>
   );
 }

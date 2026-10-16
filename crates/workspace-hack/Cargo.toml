@@ -27,8 +27,7 @@ aws-runtime = { version = "1", default-features = false, features = ["event-stre
 aws-sdk-sts = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = { version = "1", features = ["http0-compat", "sign-eventstream", "sigv4a"] }
 aws-smithy-http = { version = "0.63", default-features = false, features = ["event-stream"] }
-aws-smithy-http-client = { version = "1", default-features = false, features = ["legacy-rustls-ring", "rustls-aws-lc"] }
-aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio", "tls-rustls"] }
+aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio"] }
 aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x", "http-auth", "test-util"] }
 aws-smithy-types = { version = "1", default-features = false, features = ["byte-stream-poll-next", "http-body-0-4-x", "http-body-1-x", "rt-tokio", "test-util"] }
 aws_lambda_events = { version = "0.16", default-features = false, features = ["eventbridge", "s3", "sns", "sqs"] }
@@ -58,7 +57,7 @@ either = { version = "1", features = ["serde", "use_std"] }
 elliptic-curve = { version = "0.13", default-features = false, features = ["ecdh", "hazmat", "pem", "std"] }
 event-listener = { version = "5" }
 fastrand = { version = "2" }
-flate2 = { version = "1", features = ["zlib-rs"] }
+flate2 = { version = "1", features = ["zlib", "zlib-rs"] }
 foldhash = { version = "0.2" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
@@ -70,30 +69,32 @@ futures-task = { version = "0.3" }
 futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std", "wasm_js"] }
-getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng", "wasm_js"] }
 hashbrown-582f2526e08bb6a0 = { package = "hashbrown", version = "0.14", features = ["raw"] }
 hashbrown-9067fe90e8c1f593 = { package = "hashbrown", version = "0.17" }
 hashbrown-986da7b5efc2b80e = { package = "hashbrown", version = "0.16" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hybrid-array = { version = "0.4", default-features = false, features = ["alloc", "ctutils", "extra-sizes", "subtle", "zeroize"] }
-hyper-582f2526e08bb6a0 = { package = "hyper", version = "0.14", default-features = false, features = ["client", "http1", "http2", "runtime", "server", "stream"] }
-hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["full"] }
-hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["acceptor", "http1", "http2", "logging", "tls12", "webpki-tokio"] }
+hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
 inout = { version = "0.2", default-features = false, features = ["block-padding"] }
 insta = { version = "1", features = ["glob", "json"] }
-itertools = { version = "0.13" }
+itertools-594e8ee84c453af0 = { package = "itertools", version = "0.13" }
+itertools-5ef9efb8ec2df382 = { package = "itertools", version = "0.12" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
+libz-sys = { version = "1", features = ["static"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 mime_guess = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-bigint = { version = "0.4" }
+num-complex = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
+num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
+num-rational = { version = "0.4", features = ["num-bigint-std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
@@ -104,6 +105,7 @@ phf = { version = "0.13", features = ["macros"] }
 phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
 phf_shared-93f6ce9d446188ac = { package = "phf_shared", version = "0.10" }
 phf_shared-a6292c17cd707f01 = { package = "phf_shared", version = "0.11" }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 prost = { version = "0.12", features = ["prost-derive"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
@@ -117,8 +119,7 @@ rig-core = { version = "0.41", features = ["test-utils"] }
 rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rustc-hash = { version = "2" }
-rustls-2b5c6dc72f624058 = { package = "rustls", version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
-rustls-647d43efb71741da = { package = "rustls", version = "0.21" }
+rustls = { version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 schemars = { version = "1", features = ["chrono04", "uuid1"] }
 scopeguard = { version = "1" }
@@ -152,9 +153,11 @@ tracing-log = { version = "0.2", default-features = false, features = ["log-trac
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 triomphe = { version = "0.1" }
 tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
+twox-hash = { version = "2" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh32"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 
@@ -171,8 +174,7 @@ aws-runtime = { version = "1", default-features = false, features = ["event-stre
 aws-sdk-sts = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = { version = "1", features = ["http0-compat", "sign-eventstream", "sigv4a"] }
 aws-smithy-http = { version = "0.63", default-features = false, features = ["event-stream"] }
-aws-smithy-http-client = { version = "1", default-features = false, features = ["legacy-rustls-ring", "rustls-aws-lc"] }
-aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio", "tls-rustls"] }
+aws-smithy-runtime = { version = "1", default-features = false, features = ["client", "default-https-client", "rt-tokio"] }
 aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x", "http-auth", "test-util"] }
 aws-smithy-types = { version = "1", default-features = false, features = ["byte-stream-poll-next", "http-body-0-4-x", "http-body-1-x", "rt-tokio", "test-util"] }
 aws_lambda_events = { version = "0.16", default-features = false, features = ["eventbridge", "s3", "sns", "sqs"] }
@@ -204,7 +206,7 @@ either = { version = "1", features = ["serde", "use_std"] }
 elliptic-curve = { version = "0.13", default-features = false, features = ["ecdh", "hazmat", "pem", "std"] }
 event-listener = { version = "5" }
 fastrand = { version = "2" }
-flate2 = { version = "1", features = ["zlib-rs"] }
+flate2 = { version = "1", features = ["zlib", "zlib-rs"] }
 foldhash = { version = "0.2" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
@@ -216,30 +218,32 @@ futures-task = { version = "0.3" }
 futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std", "wasm_js"] }
-getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng", "wasm_js"] }
 hashbrown-582f2526e08bb6a0 = { package = "hashbrown", version = "0.14", features = ["raw"] }
 hashbrown-9067fe90e8c1f593 = { package = "hashbrown", version = "0.17" }
 hashbrown-986da7b5efc2b80e = { package = "hashbrown", version = "0.16" }
 hmac = { version = "0.12", default-features = false, features = ["reset"] }
 hybrid-array = { version = "0.4", default-features = false, features = ["alloc", "ctutils", "extra-sizes", "subtle", "zeroize"] }
-hyper-582f2526e08bb6a0 = { package = "hyper", version = "0.14", default-features = false, features = ["client", "http1", "http2", "runtime", "server", "stream"] }
-hyper-dff4ba8e3ae991db = { package = "hyper", version = "1", features = ["full"] }
-hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", default-features = false, features = ["acceptor", "http1", "http2", "logging", "tls12", "webpki-tokio"] }
+hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
 inout = { version = "0.2", default-features = false, features = ["block-padding"] }
 insta = { version = "1", features = ["glob", "json"] }
-itertools = { version = "0.13" }
+itertools-594e8ee84c453af0 = { package = "itertools", version = "0.13" }
+itertools-5ef9efb8ec2df382 = { package = "itertools", version = "0.12" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
+libz-sys = { version = "1", features = ["static"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
 memchr = { version = "2" }
 mime_guess = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-bigint = { version = "0.4" }
+num-complex = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
+num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
+num-rational = { version = "0.4", features = ["num-bigint-std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
@@ -266,8 +270,7 @@ rig-core = { version = "0.41", features = ["test-utils"] }
 rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rustc-hash = { version = "2" }
-rustls-2b5c6dc72f624058 = { package = "rustls", version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
-rustls-647d43efb71741da = { package = "rustls", version = "0.21" }
+rustls = { version = "0.23", default-features = false, features = ["logging", "prefer-post-quantum", "ring", "std", "tls12"] }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 schemars = { version = "1", features = ["chrono04", "uuid1"] }
 scopeguard = { version = "1" }
@@ -305,9 +308,11 @@ tracing-log = { version = "0.2", default-features = false, features = ["log-trac
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 triomphe = { version = "0.1" }
 tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
+twox-hash = { version = "2" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh32"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 
@@ -316,7 +321,7 @@ bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 futures-lite = { version = "2" }
-hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
@@ -338,7 +343,7 @@ bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 futures-lite = { version = "2" }
-hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
@@ -361,7 +366,7 @@ crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
 futures-lite = { version = "2" }
-hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }
@@ -384,7 +389,7 @@ crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
 futures-lite = { version = "2" }
-hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 mio = { version = "1", features = ["net", "os-ext"] }

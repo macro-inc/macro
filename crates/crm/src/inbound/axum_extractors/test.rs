@@ -227,6 +227,28 @@ impl EntityAccessService for FakeEntityAccessService {
 struct FakeCrmService;
 
 impl CrmService for FakeCrmService {
+    async fn list_contacts_for_soup(
+        &self,
+        _user_id: &str,
+        _access: Option<
+            &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
+        >,
+        _query: crate::domain::contact_listing::CrmContactListQuery,
+    ) -> Result<Vec<crate::domain::contact_listing::CrmContactForSoup>, CrmError> {
+        Ok(vec![])
+    }
+
+    async fn resolve_association(
+        &self,
+        _user_id: &str,
+        _access: Option<
+            &crate::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
+        >,
+        _record: crate::domain::association::CrmAssociation,
+    ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
+        panic!("unexpected resolve_association call")
+    }
+
     async fn populate_contact(
         &self,
         _team_id: &Uuid,

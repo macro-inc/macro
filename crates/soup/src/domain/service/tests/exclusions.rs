@@ -37,7 +37,6 @@ async fn document_only_soup_never_calls_excluded_entity_services() {
         calls.clone(),
         NoOpCrmService,
         foreign_entities.clone(),
-        NoOpRemindersService,
     )
     .get_user_soup(
         SoupRequest {

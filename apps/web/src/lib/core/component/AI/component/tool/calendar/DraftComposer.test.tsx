@@ -3,7 +3,7 @@ import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { For, type JSX } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
   refetchLinks: vi.fn(),
   startAddInbox: vi.fn(),
   execute: vi.fn(),
+  quickCalls: () => ({ loading: false, enabled: true }),
+}));
+vi.mock('@app/features/meetings/use-quick-calls-flag', () => ({
+  useQuickCallsFlag: () => () => mocks.quickCalls(),
 }));
 vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({
@@ -62,6 +66,18 @@ vi.mock('@app/features/calendar/components/composer/EventForm', () => ({
           {(option) => <option value={option.id}>{option.label}</option>}
         </For>
       </select>
+      <output aria-label="Macro calls enabled">
+        {String(props.macroCallsEnabled)}
+      </output>
+      <output aria-label="Conference">
+        {props.controller.state().conference}
+      </output>
+      <button
+        type="button"
+        onClick={() => props.controller.setField('conference', 'macro')}
+      >
+        Pick Macro call
+      </button>
       <button
         disabled={
           !props.controller.canSave() || props.disabled || props.pending
@@ -101,7 +117,10 @@ const calendar = (id: string): VisibleCalendar => ({
   defaultReminders: [],
 });
 
-function showDraft(calendarId?: string) {
+function showDraft(
+  calendarId?: string,
+  overrides: Partial<CreateCalendarEvent> = {}
+) {
   const draft = {
     title: 'Customer demo',
     calendarId,
@@ -110,6 +129,7 @@ function showDraft(calendarId?: string) {
       startsAt: '2030-01-01T12:00:00Z',
       endsAt: '2030-01-01T13:00:00Z',
     },
+    ...overrides,
   } as CreateCalendarEvent;
   return render(() => (
     <CalendarDraftComposer
@@ -130,6 +150,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.execute.mockResolvedValue(true);
   mocks.startAddInbox.mockResolvedValue(undefined);
+  mocks.quickCalls = () => ({ loading: false, enabled: true });
   mocks.calendarError = false;
   mocks.linksError = false;
   mocks.links = [link('personal'), link('work')];
@@ -243,4 +264,44 @@ describe('AI calendar draft account selection', () => {
       });
     }
   );
+});
+
+describe('AI calendar draft Macro calls', () => {
+  it('offers Macro calls under the quick-calls flag', () => {
+    const [flag, setFlag] = createSignal({ loading: false, enabled: false });
+    mocks.quickCalls = flag;
+    showDraft();
+    expect(screen.getByLabelText('Macro calls enabled').textContent).toBe(
+      'false'
+    );
+    setFlag({ loading: false, enabled: true });
+    expect(screen.getByLabelText('Macro calls enabled').textContent).toBe(
+      'true'
+    );
+  });
+
+  it('opens on the conferencing the agent drafted', () => {
+    showDraft(undefined, { addMacroCall: true });
+    expect(screen.getByLabelText('Conference').textContent).toBe('macro');
+  });
+
+  it('executes the tool with addMacroCall when the user picks a Macro call', async () => {
+    showDraft(undefined, {
+      attendees: [{ email: 'guest@example.com' }],
+      addGoogleMeet: false,
+    });
+    expect(screen.getByLabelText('Conference').textContent).toBe('none');
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Pick Macro call' })
+    );
+    expect(screen.getByLabelText('Conference').textContent).toBe('macro');
+    await fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        addMacroCall: true,
+        addGoogleMeet: false,
+        attendees: [{ email: 'guest@example.com' }],
+      })
+    );
+  });
 });

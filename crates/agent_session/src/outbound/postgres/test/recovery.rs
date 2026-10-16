@@ -110,6 +110,7 @@ async fn recovery_preserves_history_closes_stale_turn_and_fences_old_writer(pool
                 content: Message::ToServer(ToServerMessage::Event {
                     event: SystemEvent::AcpReady,
                 }),
+                logged_at: None,
             },
             &resumed,
         )

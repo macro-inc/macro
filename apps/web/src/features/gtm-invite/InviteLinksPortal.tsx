@@ -63,7 +63,7 @@ export function InviteLinksPortal() {
             <h1 class="text-xl font-semibold tracking-tight">Invite links</h1>
             <p class="text-sm text-ink-muted">
               Personal signup links for prospects. Each one is good for 48 hours
-              and gives the recipient their first month of Premium free.
+              and gives the recipient their first month of Pro free.
             </p>
           </div>
         </header>

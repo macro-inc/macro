@@ -126,16 +126,16 @@ async fn denied_and_mismatched_receipts_skip_but_unavailable_access_defers_intak
 }
 
 #[tokio::test]
-async fn mentions_and_mail_only_admit_their_recipient_even_when_others_have_access() {
+async fn mentions_mail_and_calls_only_admit_their_recipient_even_when_others_have_access() {
     use crate::domain::event_trigger::{EventPayload, MessageFact};
-    for is_email in [false, true] {
+    for name in [
+        "channel.mentioned",
+        "email.message_received",
+        "call.started",
+        "call.ended",
+    ] {
         let owner = user();
         let mut subscribed = configuration();
-        let name = if is_email {
-            "email.message_received"
-        } else {
-            "channel.mentioned"
-        };
         subscribed.filters = serde_json::from_value(json!([{"events":[name]}])).unwrap();
         let mut other = subscribed.clone();
         other.action_id = generate_uuid_v7();
@@ -152,23 +152,36 @@ async fn mentions_and_mail_only_admit_their_recipient_even_when_others_have_acce
         let service =
             EventAdmissionService::new(repo.clone(), access.clone(), 10.try_into().unwrap());
         let id = generate_uuid_v7();
-        let payload = if is_email {
-            EventPayload::Email(serde_json::from_value(json!({
+        let payload = match name {
+            "email.message_received" => EventPayload::Email(serde_json::from_value(json!({
                 "event_type":"email.message_received", "metadata": {
                     "link_id": id, "owner": owner, "message_id": id, "thread_id": id,
                     "provider_message_id": "message", "provider_thread_id": "thread",
                     "is_new_thread": true, "to_emails": [], "attachment_count": 0, "is_spam_or_trash": false
                 }
-            })).unwrap())
-        } else {
-            EventPayload::Message(MessageFact::Mentioned(
+            })).unwrap()),
+            "call.started" => EventPayload::Call(serde_json::from_value(json!({
+                "event_type":"call.started", "metadata": {
+                    "call_id": id, "channel_id": null, "created_by": owner,
+                    "created_at": Utc::now(), "recording_enabled": false
+                }
+            })).unwrap()),
+            "call.ended" => EventPayload::Call(serde_json::from_value(json!({
+                "event_type":"call.record_archived", "metadata": {
+                    "call_id": id, "channel_id": null, "created_by": "macro|host@macro.com",
+                    "started_at": Utc::now(), "ended_at": Utc::now(), "duration_ms": 1_000,
+                    "participant_count": 2, "participants": ["macro|host@macro.com", owner],
+                    "has_recording": false, "archive_reason": "last_participant_left"
+                }
+            })).unwrap()),
+            _ => EventPayload::Message(MessageFact::Mentioned(
                 serde_json::from_value(json!({
                     "parent": {"type":"channel", "id": id}, "message_id": id, "root_id": id,
                     "sender": "macro|sender@macro.com", "content":"", "created_at": Utc::now(),
                     "mentioned": {"entity_type":"user", "entity_id": owner}
                 }))
                 .unwrap(),
-            ))
+            )),
         };
         let event = IncomingEvent {
             event_id: generate_uuid_v7(),

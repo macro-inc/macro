@@ -21,11 +21,39 @@ function compareRecency(left: CommandMenuItem, right: CommandMenuItem) {
   );
 }
 
+function isPeopleItem(item: CommandMenuItem) {
+  return (
+    item.bucket === 'dm' ||
+    item.bucket === 'person' ||
+    item.bucket === 'crm_contact'
+  );
+}
+
+/** Keep the existing order within each group and the positions of other results. */
+function prioritizeInternalPeople(items: CommandMenuItem[]): CommandMenuItem[] {
+  const people = items
+    .filter(isPeopleItem)
+    .sort(
+      (left, right) =>
+        Number(left.bucket === 'crm_contact') -
+        Number(right.bucket === 'crm_contact')
+    );
+  let nextPerson = 0;
+  return items.map((item) =>
+    isPeopleItem(item) ? people[nextPerson++] : item
+  );
+}
+
 /** Rank cached and local candidates together using the command menu's rules. */
 export function rankCommandSearchItems(
   items: CommandMenuItem[],
   query: string,
-  options: { preserveAdditionalEntityMatches: boolean }
+  options: {
+    preserveAdditionalEntityMatches: boolean;
+    /** Rows a server search already matched, kept even when the menu's
+     * fuzzy matcher would not match them. */
+    preservedIds?: ReadonlySet<string>;
+  }
 ): CommandMenuItem[] {
   const ranked = search(items, query)
     .sort(
@@ -34,17 +62,18 @@ export function rankCommandSearchItems(
         compareRecency(left.item, right.item)
     )
     .map(({ item }) => item);
-  if (!options.preserveAdditionalEntityMatches) return ranked;
+  const preserved = (item: CommandMenuItem) =>
+    options.preservedIds?.has(item.id) ||
+    (options.preserveAdditionalEntityMatches &&
+      (item.kind === 'entity' || item.kind === 'initiative'));
+  if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
+    return prioritizeInternalPeople(ranked);
 
   // Cache search accepts broader subsequences than the menu's fuzzy matcher.
   // Keep these additional matches reachable after the regular ranked results.
   const matchedIds = new Set(ranked.map((item) => item.id));
   const additional = items
-    .filter(
-      (item) =>
-        (item.kind === 'entity' || item.kind === 'initiative') &&
-        !matchedIds.has(item.id)
-    )
+    .filter((item) => preserved(item) && !matchedIds.has(item.id))
     .sort(compareRecency);
-  return [...ranked, ...additional];
+  return prioritizeInternalPeople([...ranked, ...additional]);
 }

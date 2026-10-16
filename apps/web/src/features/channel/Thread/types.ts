@@ -2,13 +2,14 @@ import type { MessageEditor } from '@channel/Channel/create-message-editor';
 import type { NewMessageCheckable } from '@channel/Channel/util';
 import type { InputHandle, InputSnapshot } from '@channel/Input';
 import type { MessageListItem, MessageParent } from '@service-storage/messages';
-import type { Accessor, Setter } from 'solid-js';
+import type { Accessor, JSX, Setter } from 'solid-js';
 import type {
   ChannelMessageListMeta,
   MessageActions,
   MessageData,
 } from '../Message';
 import type { FocusRequest } from './focus-request';
+import type { MessageElementMount } from './message-element-lifecycle';
 
 export type ThreadActions = {
   onDismissNewMessages?: () => void;
@@ -53,6 +54,12 @@ export type ThreadTargetNavigation = {
 };
 
 export type ThreadProps = {
+  /** Optional host-specific timeline decorations and live content. */
+  beforeMessage?: JSX.Element;
+  afterMessage?: JSX.Element;
+  renderMessageContent?: (content: JSX.Element) => JSX.Element;
+  /** See `hideTriggeredBy` on the channel message. */
+  hideTriggeredBy?: boolean;
   data: Accessor<MessageListItem>;
   parent: Accessor<MessageParent>;
   /** The enclosing view owns a floating input only in unified mode. */
@@ -66,6 +73,10 @@ export type ThreadProps = {
   isFindBarOpen: Accessor<boolean>;
   /** The unified input's reply binding */
   unifiedReplyTarget?: { threadId: string; replyId?: string };
+  /** Exact unread notification targets, including replies not yet loaded. */
+  unreadMessageIds?: readonly string[];
+  onMessageMount?: MessageElementMount;
+  onDisclosureMount?: MessageElementMount;
   isNewMessage?: (reply: NewMessageCheckable) => boolean;
   selectedMessageId?: Accessor<string | undefined>;
   onSelectMessage?: (messageId: string) => void;

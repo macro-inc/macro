@@ -3,6 +3,7 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 export const authKeys = createQueryKeys('auth', {
   aiBillingPlans: null,
   aiBillingSummary: null,
+  subscriptionStatus: null,
   codexStatus: null,
   codexEnvironments: null,
   codexLogin: (attemptId: string) => ({ queryKey: [attemptId] }),

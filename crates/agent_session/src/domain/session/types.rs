@@ -1,6 +1,6 @@
 //! The machine's vocabulary: phases, inputs, and effects.
 
-use agent_client_protocol::schema::v1::{PermissionOptionId, RequestId, SessionId};
+use agent_client_protocol::schema::v1::{McpServer, PermissionOptionId, RequestId, SessionId};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -83,6 +83,11 @@ pub(super) enum SessionOpening {
     New,
     Resume(SessionId),
     Load(SessionId),
+    /// A `session/resume` of the session already live on this connection,
+    /// sent only to hand the agent a new MCP server list. Unlike a resume
+    /// that opens the connection, a refusal leaves the session live on the
+    /// servers it already had.
+    Refresh(SessionId),
 }
 
 /// What the agent said it can do about a session it has seen before, distilled
@@ -220,6 +225,10 @@ pub enum Input<Token> {
         /// Handshake from this transport.
         context: std::sync::Arc<InitializationContext>,
     },
+    /// The MCP servers the agent should have from now on. A live session is
+    /// re-resumed with them between turns; one still opening takes them on
+    /// the request it has yet to send, or re-resumes once live.
+    ReplaceMcpServers(Vec<McpServer>),
     /// The connection is over. Idempotent: a dead machine ignores it.
     Closed(CloseReason),
 }

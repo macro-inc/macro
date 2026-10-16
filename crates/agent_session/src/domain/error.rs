@@ -10,6 +10,12 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Speculative sessions cannot belong to a conversation or a message.
+    #[error("a warm session cannot have conversation or message provenance")]
+    InvalidSessionPurpose,
+    /// No session has been created under this identity yet.
+    #[error("agent session {0} was not found")]
+    NotFound(AgentSessionId),
     /// New Macro-funded work was refused before execution.
     #[cfg(feature = "admission")]
     #[error(transparent)]
@@ -66,8 +72,17 @@ pub enum AgentSessionError {
     InvalidName(&'static str),
     #[error("agent session {0} is archived")]
     Archived(AgentSessionId),
+    /// The session answers an agent conversation's channel, which archiving
+    /// it would leave unanswered. Starting fresh in the conversation retires
+    /// it instead.
+    #[error(
+        "agent session {0} answers an agent conversation; start fresh there instead of archiving it"
+    )]
+    AnswersConversation(AgentSessionId),
     #[error("a preview request may name at most {0} sessions")]
     TooManyPreviewIds(usize),
+    #[error("a pull request lookup may name at most {0} pull requests")]
+    TooManyPullRequests(usize),
     #[error("the caller may not control this agent session")]
     Forbidden,
     #[error("no queued action with this id; it may already have been dispatched")]

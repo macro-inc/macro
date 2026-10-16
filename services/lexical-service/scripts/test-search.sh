@@ -8,8 +8,8 @@ if [ $# -eq 0 ]; then
 fi
 
 DOC_ID=$1
-BASE_URL="http://localhost:8931"
-AUTH_KEY="local"
+BASE_URL="http://localhost:8096"
+AUTH_KEY="${INTERNAL_API_SECRET_KEY:-local}"
 
 curl -v \
   -H "x-internal-auth-key: $AUTH_KEY" \

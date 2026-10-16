@@ -47,6 +47,7 @@ export type ChannelRailItemProps = {
 
 export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
+  supportsOpenInNewSplit: false,
   senderBucket: undefined,
 };
 
@@ -137,6 +138,7 @@ export function IncomingCallActions(props: {
   class?: string;
   layout?: 'compact' | 'wide';
 }) {
+  const userId = useUserId();
   const isWide = () => props.layout === 'wide';
 
   return (
@@ -161,7 +163,7 @@ export function IncomingCallActions(props: {
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              dismissIncomingCallEverywhere(callId());
+              dismissIncomingCallEverywhere(callId(), userId());
             }}
           >
             <XIcon class="size-3" />

@@ -103,7 +103,9 @@ where
             return;
         }
         self.publish_retirements(retired);
-        self.refresh.calendar_changed(owner_id, email_link_id).await;
+        self.refresh
+            .calendar_changed(owner_id, email_link_id, true)
+            .await;
     }
 
     /// Announce what a write did to the canonical row. A write that changed
@@ -201,7 +203,7 @@ where
         self.publish_write_outcome(&outcome);
         if outcome.change != CalendarEventChange::Unchanged {
             self.refresh
-                .calendar_changed(&outcome.owner_id, email_link_id)
+                .calendar_changed(&outcome.owner_id, email_link_id, outcome.team_ooo_changed)
                 .await;
         }
         if let Some(viewer) = viewer {
@@ -543,7 +545,7 @@ where
         // The purge removed whole calendars, and no sync echo will ever
         // arrive for a disconnected link, so viewers have to be nudged here.
         self.refresh
-            .calendar_changed(requester_id, email_link_id)
+            .calendar_changed(requester_id, email_link_id, true)
             .await;
         Ok(())
     }
@@ -632,7 +634,7 @@ where
 }
 
 fn validate_time(time: &EventTime) -> Result<(), CalendarMutationError> {
-    if !time.is_valid() {
+    if !time.has_positive_duration() {
         return Err(CalendarMutationError::InvalidInput(
             "event end must be after its start".to_string(),
         ));

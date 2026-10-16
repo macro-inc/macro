@@ -7,7 +7,6 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Accordion } from '@kobalte/core/accordion';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import { Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -106,7 +105,6 @@ const FILTER_ICONS = new Map<string, () => JSX.Element>([
       />
     ),
   ],
-  ['reminders', () => <BellSimpleIcon class="size-3.5 text-ink-muted" />],
   [
     'calendar',
     () => (

@@ -12,9 +12,7 @@ use axum::extract::ws::{Message, WebSocket};
 use cowlike::CowLike;
 use futures::{StreamExt, stream::SplitStream};
 use macro_user_id::user_id::MacroUserIdStr;
-use std::error::Error;
 use tokio::sync::mpsc::Sender;
-use tungstenite::error::{Error as TungsteniteError, ProtocolError};
 
 pub async fn handle_websocket_stream(
     connection_context: ConnectionContext<'_>,
@@ -25,35 +23,18 @@ pub async fn handle_websocket_stream(
         match msg {
             Ok(msg) => {
                 if let Err(e) = handle_message(connection_context, msg, &sender).await {
-                    tracing::error!(error=?e, "error handling message");
+                    tracing::warn!(error=?e, "error handling message");
                 }
             }
+            // A read error means the client went away without a close frame
+            // (connection reset, broken pipe, no closing handshake).
             Err(err) => {
-                match err
-                    .source()
-                    .and_then(|e| e.downcast_ref::<TungsteniteError>())
-                {
-                    // benign disconnect – ignore
-                    Some(TungsteniteError::Protocol(
-                        ProtocolError::ResetWithoutClosingHandshake,
-                    )) => {}
-                    Some(e) => {
-                        tracing::error!(
-                            error = ?e,
-                            connection_id = %connection_context.connection_id,
-                            user_id       = %connection_context.user_context.user_id,
-                            "web-socket closed with tungstenite error",
-                        );
-                    }
-                    None => {
-                        tracing::error!(
-                            error = ?err,
-                            connection_id = %connection_context.connection_id,
-                            user_id       = %connection_context.user_context.user_id,
-                            "web-socket closed with non-tungstenite error",
-                        );
-                    }
-                }
+                tracing::info!(
+                    error = ?err,
+                    connection_id = %connection_context.connection_id,
+                    user_id       = %connection_context.user_context.user_id,
+                    "web-socket closed with error",
+                );
                 break;
             }
         };
@@ -71,6 +52,7 @@ pub async fn handle_message(
 ) -> Result<()> {
     let text_message = match message {
         Message::Text(text) => Some(text),
+        Message::Ping(_) | Message::Pong(_) => return Ok(()),
         Message::Close(_) => {
             tracing::debug!("websocket connection closed naturally");
             return Ok(());

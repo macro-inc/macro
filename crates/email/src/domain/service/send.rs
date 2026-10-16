@@ -1,5 +1,3 @@
-use chrono::Duration;
-
 use crate::domain::{
     events::{EmailMacroEvent, MessageSendQueuedMetadata},
     models::{CreateDraftInput, CreatedDraft, EmailErr, Link},
@@ -20,21 +18,42 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
+    #[tracing::instrument(skip_all, err)]
+    pub(crate) async fn send_message_for_user_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        link_id: Option<uuid::Uuid>,
+        mut input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        let inboxes = self
+            .email_repo
+            .inboxes_for_macro_id(macro_id.clone())
+            .await
+            .map_err(anyhow::Error::from)?;
+        let link = super::draft::resolve_target_link(&inboxes, link_id, &macro_id)?;
+        let link_ids: Vec<_> = inboxes.iter().map(|link| link.id).collect();
+        self.resolve_client_handles(&mut input, &link_ids).await?;
+        input.actor = Some(macro_id);
+        self.send_message_impl(link, &inboxes, input).await
+    }
+
     #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
     pub(crate) async fn send_message_impl(
         &self,
         link: &Link,
         accessible_inboxes: &[Link],
-        mut input: CreateDraftInput,
+        input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
         let delay_secs = self.sent_undo_delay_secs;
-        let send_time = chrono::Utc::now() + Duration::seconds(delay_secs as i64);
-        input.send_time = Some(send_time);
         let actor = input.actor.clone();
 
         let created = self
             .prepare_and_insert_db_message(link, accessible_inboxes, input, false)
             .await?;
+
+        let send_time = created
+            .send_time
+            .ok_or_else(|| anyhow::anyhow!("prepared delivery has no scheduled send time"))?;
 
         // FE displays "Undo" button for delay_secs. Give extra time for round trip of cancel request
         let sqs_delay = delay_secs as i32 + 2;

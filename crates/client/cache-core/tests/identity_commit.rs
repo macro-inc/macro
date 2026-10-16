@@ -21,6 +21,7 @@ async fn enqueue(engine: &mut Engine<InMemoryStorage>, uuid: &str) -> MutationId
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid,
                 query: MUTATION,
                 operation_name: None,
@@ -134,6 +135,7 @@ async fn enqueue_aliased(engine: &mut Engine<InMemoryStorage>) -> MutationId {
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: UUID,
                 query: ALIASED_MUTATION,
                 operation_name: None,
@@ -188,6 +190,7 @@ async fn enqueue_aliased(engine: &mut Engine<InMemoryStorage>) -> MutationId {
                     query: PROPERTIES.into(),
                     operation_name: None,
                     variables_json: r#"{"id":"local"}"#.into(),
+                    only_on_link_failure: false,
                 }],
                 created_at_ms: 0,
             },
@@ -484,6 +487,7 @@ fn cross_inbox_draft_settlement_preserves_source_thread_and_rebases_queued_edits
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        client_metadata: None,
                         uuid: UUID,
                         query: SAVE,
                         operation_name: None,
@@ -542,6 +546,7 @@ fn cross_inbox_draft_settlement_preserves_source_thread_and_rebases_queued_edits
 
         let mut engine = Engine::new(engine.into_storage());
         let selection = cache_core::record_selection::RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
             "fragment Draft on GraphqlSoupEmailMessage { id subject }",
             "Draft",
         )
@@ -623,6 +628,7 @@ fn rollback_after_restart_returns_persisted_revalidations_with_resolved_ids() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        client_metadata: None,
                         uuid: UUID,
                         query: MUTATION,
                         operation_name: None,
@@ -633,6 +639,7 @@ fn rollback_after_restart_returns_persisted_revalidations_with_resolved_ids() {
                             query: PROPERTIES.into(),
                             operation_name: Some("Properties".into()),
                             variables_json: r#"{"id":"local"}"#.into(),
+                            only_on_link_failure: false,
                         }],
                         identity_bindings: &[IdentityBinding {
                             local_key: EntityKey("GraphqlProperty:local".into()),
@@ -678,6 +685,7 @@ fn rollback_after_restart_returns_persisted_revalidations_with_resolved_ids() {
                 query: PROPERTIES.into(),
                 operation_name: Some("Properties".into()),
                 variables_json: r#"{"id":"server"}"#.into(),
+                only_on_link_failure: false,
             }]
         );
         assert_eq!(result.mutation_uuid.as_deref(), Some(UUID));

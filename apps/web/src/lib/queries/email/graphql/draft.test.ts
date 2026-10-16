@@ -88,6 +88,7 @@ describe('optimistic draft saves', () => {
     expect(variables).toEqual({
       input: {
         draftId: args.draftId,
+        senderEmail: args.senderEmail,
         threadDbId: 'thread',
         subject: 'Updated subject',
       },

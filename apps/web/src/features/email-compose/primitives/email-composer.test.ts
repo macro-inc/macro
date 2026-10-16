@@ -147,7 +147,11 @@ describe('standalone compose controller', () => {
       { id: 'work', email_address: 'work@example.com', settings: {} },
     ];
     const root = mountEmailComposer(context, undefined, {
-      draft: message('existing-draft', { is_draft: true, link_id: 'work' }),
+      draft: message('existing-draft', {
+        is_draft: true,
+        link_id: 'work',
+        from: { email: 'work@example.com' },
+      }),
       initialInboxId: 'inbox',
     });
     try {

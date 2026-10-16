@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use agent_egress::domain::model::McpServerSlug;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -18,6 +19,8 @@ pub type RecordedProvisioning = (AgentSessionId, String, AgentMcpServers);
 #[derive(Clone, Default)]
 pub struct EgressProvisionerMock {
     provisioned: Arc<Mutex<Vec<RecordedProvisioning>>>,
+    /// The apps every environment advertises, as the owner's connections.
+    connected: Arc<Mutex<Vec<McpServerSlug>>>,
 }
 
 impl EgressProvisionerMock {
@@ -36,6 +39,27 @@ impl EgressProvisionerMock {
             .expect("egress mock lock should not be poisoned")
             .clone()
     }
+
+    /// Advertise `app` in every environment from now on, as an owner who has
+    /// just connected it would see.
+    pub fn connect(&self, app: &str) {
+        self.connected
+            .lock()
+            .expect("egress mock lock should not be poisoned")
+            .push(McpServerSlug::parse(app).expect("a valid app slug"));
+    }
+
+    fn egress(&self, session_token: String) -> SandboxEgress {
+        SandboxEgress {
+            session_token,
+            mcp_servers: self
+                .connected
+                .lock()
+                .expect("egress mock lock should not be poisoned")
+                .clone(),
+            ..test_egress()
+        }
+    }
 }
 
 impl SandboxEgressProvisioner for EgressProvisionerMock {
@@ -51,7 +75,7 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
             .push((session, owner.to_string(), selection.clone()));
 
         Ok(ProvisionedEgress {
-            sandbox: test_egress(),
+            sandbox: self.egress(test_egress().session_token),
             session_token_hash: "test-token-hash".to_owned(),
         })
     }
@@ -62,10 +86,7 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
         session_token: String,
         _selection: &AgentMcpServers,
     ) -> Result<SandboxEgress> {
-        Ok(SandboxEgress {
-            session_token,
-            ..test_egress()
-        })
+        Ok(self.egress(session_token))
     }
 }
 

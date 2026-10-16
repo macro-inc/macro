@@ -10,7 +10,7 @@ import {
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'call-recording',
 };
 

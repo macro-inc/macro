@@ -4,8 +4,8 @@ mod test;
 use analytics_client::{MetaActionSource, MetaUserData};
 use std::{collections::HashSet, future::Future};
 
+use crate::service::signup_policy::SignupPolicy;
 use anyhow::Context;
-use authentication_service::service::signup_policy::SignupPolicy;
 use axum::{
     extract::{self, State},
     http::StatusCode,
@@ -14,16 +14,16 @@ use axum::{
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use rand::Rng;
 
+use crate::service::user::create_user::create_user;
+use crate::service::user::support_channel_welcome::{
+    AuthorizedSupportChannelMessages, post_support_channel_welcome,
+};
 use crate::{
     api::{
         context::{ApiContext, AuthorizationService},
         signup_policy::signup_forbidden_response,
     },
     rate_limit_config::RATE_LIMIT_CONFIG,
-};
-use authentication_service::service::user::create_user::create_user;
-use authentication_service::service::user::support_channel_welcome::{
-    AuthorizedSupportChannelMessages, post_support_channel_welcome,
 };
 use channels::domain::{
     models::{ChannelType, CreateChannelRequest},
@@ -38,6 +38,7 @@ use macro_user_id::{
 use model::authentication::webhooks::{FusionAuthUserWebhook, User as FusionAuthWebhookUser};
 use model_entity::EntityType;
 use teams::domain::team_repo::TeamService;
+use tracing::Instrument;
 
 /// Macro support team members added to every new user's support channel.
 const MACRO_SUPPORT_EMAILS: [&str; 5] = [
@@ -85,18 +86,30 @@ fn identity_provider_name(user: &FusionAuthWebhookUser) -> (Option<String>, Opti
 }
 
 /// FusionAuth create user webhook
-#[tracing::instrument(skip(ctx, req, _internal_authorization), fields(email=%req.event.user.email, fusionauth_user_id=%req.event.user.id, username=?req.event.user.username, event_type=%req.event.event_type, ip_address=%req.event.info.ip_address))]
+#[tracing::instrument(
+    skip(ctx, req, _internal_authorization),
+    fields(
+        event_id = %req.event.id,
+        event_type = %req.event.event_type,
+        email = %req.event.user.email,
+        fusionauth_user_id = %req.event.user.id,
+        username = ?req.event.user.username,
+        verified = req.event.user.verified,
+        ip_address = %req.event.info.ip_address,
+    )
+)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<FusionAuthUserWebhook>,
 ) -> Result<Response, Response> {
-    tracing::info!("create_user_webhook");
+    tracing::info!("received FusionAuth user webhook");
+    let start_time = std::time::Instant::now();
 
     match req.event.event_type.as_str() {
         "user.create.complete" => {
             create_user_webhook_complete(&ctx, req).await.map_err(|e| {
-                tracing::error!(error=?e, "unable to user.create.complete");
+                tracing::error!(error=?e, "unable to handle user.create.complete");
                 (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
             })?;
         }
@@ -109,15 +122,20 @@ pub async fn handler(
         }
         "user.email.verified" => {
             verify_user_email_webhook(&ctx, req).await.map_err(|e| {
-                tracing::error!(error=?e, "unable to user.email.verified");
+                tracing::error!(error=?e, "unable to handle user.email.verified");
                 (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
             })?;
         }
         _ => {
-            tracing::error!("unexpected event type");
+            tracing::error!("unexpected FusionAuth event type; webhook is not implemented for it");
             return Ok(StatusCode::NOT_IMPLEMENTED.into_response());
         }
     }
+
+    tracing::info!(
+        elapsed_ms = start_time.elapsed().as_millis() as u64,
+        "handled FusionAuth user webhook"
+    );
 
     Ok(StatusCode::OK.into_response())
 }
@@ -129,9 +147,10 @@ enum UserCreateWebhookError {
 
 fn user_create_webhook_error_response(error: UserCreateWebhookError) -> Response {
     match error {
+        // Already logged where the policy was evaluated.
         UserCreateWebhookError::Forbidden => signup_forbidden_response(),
         UserCreateWebhookError::Onboarding(e) => {
-            tracing::error!(error=?e, "unable to user.create");
+            tracing::error!(error=?e, "unable to handle user.create; FusionAuth user creation will be aborted");
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
         }
     }
@@ -148,14 +167,22 @@ where
 {
     signup_policy
         .authorize_public_email(&req.event.user.email)
-        .map_err(|_| UserCreateWebhookError::Forbidden)?;
+        .map_err(|denial| {
+            // The denial variant is redacted and never names configured addresses.
+            tracing::warn!(denial=?denial, "rejected user.create: signup policy denied public email");
+            UserCreateWebhookError::Forbidden
+        })?;
 
     onboard_user(req)
         .await
         .map_err(UserCreateWebhookError::Onboarding)
 }
 
-#[tracing::instrument(skip(ctx, req), err)]
+#[tracing::instrument(
+    skip(ctx, req),
+    fields(email = %req.event.user.email, fusionauth_user_id = %req.event.user.id),
+    err
+)]
 async fn verify_user_email_webhook(
     ctx: &ApiContext,
     req: FusionAuthUserWebhook,
@@ -171,9 +198,16 @@ async fn verify_user_email_webhook(
     )
     .await?;
 
+    tracing::info!("marked user email as verified");
+
     Ok(())
 }
 
+#[tracing::instrument(
+    skip(ctx, req),
+    fields(email = %req.event.user.email, fusionauth_user_id = %req.event.user.id),
+    err
+)]
 async fn create_user_webhook_complete(
     ctx: &ApiContext,
     req: FusionAuthUserWebhook,
@@ -181,18 +215,39 @@ async fn create_user_webhook_complete(
     let fusionauth_user_id = req.event.user.id;
 
     match ctx.auth_client.register_user(&fusionauth_user_id).await {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            tracing::info!("registered user with the FusionAuth application");
+            Ok(())
+        }
         Err(e) => match e {
-            FusionAuthClientError::UserAlreadyRegistered => Ok(()),
+            FusionAuthClientError::UserAlreadyRegistered => {
+                tracing::info!("user is already registered with the FusionAuth application");
+                Ok(())
+            }
             _ => {
-                tracing::error!(error=?e, "unable to register user in fusionauth");
+                tracing::error!(error=?e, "unable to register user with the FusionAuth application");
                 Err(e.into())
             }
         },
     }
 }
 
-#[tracing::instrument(skip(ctx, req), err)]
+/// Onboards a new FusionAuth user.
+///
+/// `user_id` and `organization_id` are recorded on the span once the profile
+/// exists so that every later log line, including those from the spawned
+/// follow-up tasks, carries them.
+#[tracing::instrument(
+    skip(ctx, req),
+    fields(
+        email = %req.event.user.email,
+        fusionauth_user_id = %req.event.user.id,
+        ip_address = %req.event.info.ip_address,
+        user_id = tracing::field::Empty,
+        organization_id = tracing::field::Empty,
+    ),
+    err
+)]
 async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> anyhow::Result<()> {
     let ip_address = req.event.info.ip_address;
     let email = req.event.user.email.to_lowercase();
@@ -218,6 +273,11 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     if let Some(count) = rate_limit
         && count >= RATE_LIMIT_CONFIG.create_user_hourly.0
     {
+        tracing::warn!(
+            count,
+            limit = RATE_LIMIT_CONFIG.create_user_hourly.0,
+            "create user hourly rate limit exceeded for ip address"
+        );
         anyhow::bail!("rate limit exceeded")
     }
 
@@ -229,7 +289,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         )
         .await?
     {
-        tracing::info!(user_id=?user_id, organization_id=?organization_id, "user profile already exists for FusionAuth user");
+        tracing::info!(user_id=?user_id, organization_id=?organization_id, "user profile already exists for FusionAuth user; skipping onboarding");
         return Ok(());
     }
 
@@ -240,11 +300,16 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     {
         // The macro_user already exists for that email
         // We do not allow a user to login through their secondary linked account for SSO so we shouldn't allow for passwordless either
-        tracing::info!(user_id=?user_id, "user already exists");
+        tracing::warn!(existing_user_id=?user_id, "email already belongs to an existing user; rejecting signup through secondary account link");
 
         anyhow::bail!("cannot login through secondary account link");
     }
 
+    tracing::info!(
+        has_first_name = first_name.is_some(),
+        has_last_name = last_name.is_some(),
+        "creating user"
+    );
     let start_time = std::time::Instant::now();
     let (user_id, organization_id) = create_user(
         &fusionauth_user_id,
@@ -256,7 +321,15 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     )
     .await?;
 
-    tracing::trace!(user_id=?user_id, organization_id=?organization_id, "created user");
+    let span = tracing::Span::current();
+    span.record("user_id", user_id.as_str());
+    if let Some(organization_id) = organization_id {
+        span.record("organization_id", organization_id);
+    }
+    tracing::info!(
+        elapsed_ms = start_time.elapsed().as_millis() as u64,
+        "created user; dispatching signup follow-ups"
+    );
 
     // Mark the account as freshly created so the auth callback completing this
     // flow can attribute the login as a signup (analytics). Best-effort.
@@ -297,6 +370,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     last_name,
                 )
                 .await
+                .inspect(|_| tracing::info!("set user name from identity provider"))
                 .inspect_err(
                     |e| tracing::error!(error=?e, "unable to set user name from identity provider"),
                 );
@@ -312,6 +386,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     }),
                 )
                 .await
+                .inspect(|_| tracing::info!("tracked PostHog sign_up event"))
                 .inspect_err(|e| tracing::warn!(error=?e, "failed to track PostHog sign_up event"));
 
             let user_data = MetaUserData {
@@ -340,10 +415,12 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     }),
                 )
                 .await
+                .inspect(|_| tracing::info!("tracked Meta CompleteRegistration event"))
                 .inspect_err(|e| {
                     tracing::warn!(error=?e, "failed to track Meta CompleteRegistration");
                 });
         }
+        .in_current_span()
     });
 
     // Tell Loops the account now exists. This upserts the contact into our
@@ -368,10 +445,12 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     Some(&format!("user-registered-{user_id}")),
                 )
                 .await
+                .inspect(|_| tracing::info!("sent Loops user_registered event"))
                 .inspect_err(
                     |e| tracing::error!(error=?e, "failed to send Loops user_registered event"),
                 );
         }
+        .in_current_span()
     });
 
     // add user to all active experiments
@@ -379,10 +458,16 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         let db = ctx.db.clone();
         let user_id = user_id.clone();
         async move {
-            if let Err(e) = initialize_user_experiments(&db, &user_id).await {
-                tracing::error!(error=?e, "failed to initialize user experiments");
+            match initialize_user_experiments(&db, &user_id).await {
+                Ok(experiment_count) => {
+                    tracing::info!(experiment_count, "initialized user experiments");
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, "failed to initialize user experiments");
+                }
             }
         }
+        .in_current_span()
     });
 
     // Automatically add the new user to a team whose auto-join domain
@@ -401,14 +486,17 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
             };
             match teams_service.try_join_team_by_domain(&user_id).await {
                 Ok(Some(member)) => {
-                    tracing::info!(team_id=%member.team_id, %user_id, "auto-joined user to team by email domain");
+                    tracing::info!(team_id=%member.team_id, "auto-joined user to team by email domain");
                 }
-                Ok(None) => {}
+                Ok(None) => {
+                    tracing::info!("no team auto-join domain matched the user's email domain");
+                }
                 Err(e) => {
-                    tracing::error!(error=?e, %user_id, "failed to auto-join user to team by email domain");
+                    tracing::error!(error=?e, "failed to auto-join user to team by email domain");
                 }
             }
         }
+        .in_current_span()
     });
 
     // Seed the starter documents (the "Macro how to guide" and the starter
@@ -425,10 +513,10 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         let entity_access_service = ctx.entity_access_service.clone();
         let favorites_service = ctx.favorites_service.clone();
         let user_id = user_id.clone();
-        let email = email.clone();
         let support_channel_name = support_channel_name.clone();
         async move {
-            initialize_starter_docs_with_retries(&document_storage_service_client, &user_id).await;
+            initialize_starter_docs_with_retries(&document_storage_service_client, &user_id)
+                .await;
 
             let owner_id = match MacroUserIdStr::try_from(user_id) {
                 Ok(owner_id) => owner_id,
@@ -465,30 +553,33 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
             {
                 Ok(channel) => channel,
                 Err(e) => {
-                    tracing::error!(error=?e, %email, "failed to create Macro support channel");
+                    tracing::error!(error=?e, "failed to create Macro support channel");
                     return;
                 }
             };
+            tracing::info!(channel_id=%channel.id, "created Macro support channel");
 
             let channel_entity = EntityType::Channel.with_entity_str(&channel.id);
             if let Err(e) = favorites_service
                 .add_favorite_with_established_access(&owner_id, &channel_entity)
                 .await
             {
-                tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
+                tracing::error!(error=?e, channel_id=%channel.id, "failed to favorite Macro support channel");
             }
 
             let welcome_gateway =
                 AuthorizedSupportChannelMessages::new(channel_messages, entity_access_service);
             let _ = post_support_channel_welcome(&welcome_gateway, &channel.id, owner_id)
                 .await
+                .inspect(|_| {
+                    tracing::info!(channel_id=%channel.id, "posted Macro support welcome message");
+                })
                 .inspect_err(|e| {
-                tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to post Macro support welcome message");
-            });
+                    tracing::error!(error=?e, channel_id=%channel.id, "failed to post Macro support welcome message");
+                });
         }
+        .in_current_span()
     });
-
-    tracing::trace!(email, fusionauth_user_id, elapsed=?start_time.elapsed(), "created user");
 
     // Allow to fail silently
     let _ = ctx
@@ -509,24 +600,28 @@ async fn initialize_starter_docs_with_retries(
     const RETRY_DELAY_SECS: u64 = 2;
     for attempt in 1..=MAX_ATTEMPTS {
         match client.initialize_starter_docs(user_id).await {
-            Ok(_) => return,
+            Ok(_) => {
+                tracing::info!(attempt, "initialized starter docs");
+                return;
+            }
             Err(e) if attempt < MAX_ATTEMPTS => {
                 tracing::warn!(error=?e, attempt, "failed to initialize starter docs, retrying");
                 tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
             }
             Err(e) => {
-                tracing::error!(error=?e, "failed to initialize starter docs after {MAX_ATTEMPTS} attempts");
+                tracing::error!(error=?e, attempt, "failed to initialize starter docs after {MAX_ATTEMPTS} attempts");
             }
         }
     }
 }
 
-/// Initializes the experiments for a provided user
-#[allow(dead_code)]
+/// Initializes the experiments for a provided user.
+///
+/// Returns the number of active experiments the user was enrolled in.
 async fn initialize_user_experiments(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<usize> {
     let active_experiments = macro_db_client::experiment::get_active_experiments(db)
         .await
         .context("failed to get active experiments")?;
@@ -548,5 +643,5 @@ async fn initialize_user_experiments(
         .await
         .context("failed to bulk create experiment logs")?;
 
-    Ok(())
+    Ok(active_experiments.len())
 }

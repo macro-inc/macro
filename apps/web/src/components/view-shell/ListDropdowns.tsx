@@ -2,8 +2,11 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from '@app/features/next-soup/soup-view/filters-bar/filter-menu';
+import GanttIcon from '@phosphor/chart-bar-horizontal.svg';
 import CheckIcon from '@phosphor/check.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
+import BoardIcon from '@phosphor/kanban.svg';
+import ListIcon from '@phosphor/list-bullets.svg';
 import SortIcon from '@phosphor/sort-ascending.svg';
 import GroupIcon from '@phosphor/stack.svg';
 import { cn, Dropdown } from '@ui';
@@ -88,6 +91,46 @@ function SingleSelectDropdown<TId extends string>(
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
+  );
+}
+
+export type ViewLayout = 'list' | 'board' | 'gantt';
+
+export type ViewLayoutDropdownProps = Omit<
+  SingleSelectDropdownProps<ViewLayout>,
+  'icon' | 'label' | 'options'
+> & {
+  label?: string;
+  layouts?: readonly ViewLayout[];
+};
+
+const VIEW_LAYOUT_OPTIONS: ListControlOption<ViewLayout>[] = [
+  { id: 'list', label: 'List', icon: () => <ListIcon /> },
+  { id: 'board', label: 'Board', icon: () => <BoardIcon /> },
+  { id: 'gantt', label: 'Gantt', icon: () => <GanttIcon /> },
+];
+
+export function ViewLayoutDropdown(props: ViewLayoutDropdownProps) {
+  return (
+    <SingleSelectDropdown
+      {...props}
+      label={props.label ?? 'Layout'}
+      options={VIEW_LAYOUT_OPTIONS.filter(
+        (option) => !props.layouts || props.layouts.includes(option.id)
+      )}
+      icon={
+        <Show
+          when={props.value === 'gantt'}
+          fallback={
+            <Show when={props.value === 'board'} fallback={<ListIcon />}>
+              <BoardIcon />
+            </Show>
+          }
+        >
+          <GanttIcon />
+        </Show>
+      }
+    />
   );
 }
 
@@ -257,12 +300,15 @@ export function ListFilterDropdown<
                           !props.isSelected(group.id, id)
                       )
                     }
-                    closeOnSelect={group.selectionMode === 'single'}
+                    closeOnSelect={
+                      group.selectionMode === 'single' ? true : 'unless-shift'
+                    }
                     contentClass={group.contentClass}
                   />
                 }
               >
                 <SearchableFilterSubmenu
+                  onSelectionComplete={() => setOpen(false)}
                   label={group.label}
                   active={isGroupActive(group)}
                   options={() => group.options}

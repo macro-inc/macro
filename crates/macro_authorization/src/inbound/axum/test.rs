@@ -734,6 +734,71 @@ async fn user_rejects_missing_and_invalid_user_credentials() {
     );
 }
 
+/// Records the level of every event emitted while installed.
+#[derive(Clone, Default)]
+struct EventLevels(Arc<Mutex<Vec<tracing::Level>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for EventLevels {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _context: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        self.0
+            .lock()
+            .expect("levels lock poisoned")
+            .push(*event.metadata().level());
+    }
+}
+
+#[tokio::test]
+async fn authorization_failures_log_at_the_level_of_their_cause() {
+    use tracing::Level;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    async fn check(request: Request<Body>, expected: Level) {
+        let (router, _service) = test_router();
+        let levels = EventLevels::default();
+        let _guard =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(levels.clone()));
+
+        send(&router, request).await;
+
+        assert_eq!(*levels.0.lock().expect("levels lock poisoned"), [expected]);
+    }
+
+    check(
+        empty_body(request("/user").header("authorization", "Bearer expired")),
+        Level::INFO,
+    )
+    .await;
+    check(
+        empty_body(request("/user").header("authorization", "Bearer invalid")),
+        Level::WARN,
+    )
+    .await;
+    check(
+        empty_body(request("/internal").header(INTERNAL_API_KEY_HEADER, "invalid")),
+        Level::WARN,
+    )
+    .await;
+    check(
+        empty_body(bot_request("/bot", "bot-forbidden")),
+        Level::WARN,
+    )
+    .await;
+    check(
+        empty_body(bot_request("/bot", "bot-unavailable")),
+        Level::ERROR,
+    )
+    .await;
+    check(
+        empty_body(user_api_key_request("/required", "mak_unavailable")),
+        Level::ERROR,
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn required_extracts_valid_bearer_and_preserves_organization() {
     let (router, service) = test_router();

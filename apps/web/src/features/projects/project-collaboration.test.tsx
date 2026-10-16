@@ -94,7 +94,10 @@ function setup(targetId?: string) {
     data: {
       pages: [
         {
-          items: [message(newId, 'New comment'), message(oldId, 'Old comment')],
+          entries: [
+            { type: 'message', message: message(newId, 'New comment') },
+            { type: 'message', message: message(oldId, 'Old comment') },
+          ],
         },
       ],
     },

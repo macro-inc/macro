@@ -283,7 +283,7 @@ function PowerInSimplicity() {
             // its own column is the third of those, so it drops from 36/380 to
             // .tasks-h3's 30/350.
             'font-size': mobile() ? '23px' : '30px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.01em',
             'line-height': 1.35,
             // Wide gap under the heading: it reads as a title over a statement
@@ -415,7 +415,7 @@ function _FeatureSplit(props: {
             style={{
               'font-family': 'display',
               'font-size': mobile() ? '32px' : '42px',
-              'font-weight': '315',
+              'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
               'letter-spacing': '-0.018em',
               'line-height': 1.1,
               margin: '0',
@@ -1334,7 +1334,7 @@ function DocsFeatureCopy(props: { block: DocsFeatureBlock }) {
             'font-family': 'display',
             'font-size': mobile() ? '32px' : '42px',
             // Main's h2 tier: a section title, same slot as .tasks-h2.
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.018em',
             'line-height': mobile() ? 1.1 : `${DOCS_HEADLINE_LH}px`,
             // The nudge is a cross-column correction -- it registers this
@@ -1562,7 +1562,7 @@ function DocsIntegrationHero() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '32px' : '42px',
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.018em',
             // The bands set their leading in px because their two-column
             // header registers the headline's x-height against the subtitle's
@@ -1842,7 +1842,7 @@ function ComparisonSection() {
             // Main's h3 tier -- the smaller section title. /tasks sets its own
             // "How does Macro Tasks stack up?" in .tasks-h3 at 350, which is
             // this heading in the same slot on the sibling page.
-            'font-weight': '315',
+            'font-weight': 'calc(315 + var(--cream-slab-weight-increase, 0))',
             'letter-spacing': '-0.015em',
             'line-height': 1.1,
             margin: 0,

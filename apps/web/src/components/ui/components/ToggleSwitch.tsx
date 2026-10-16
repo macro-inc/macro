@@ -91,7 +91,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
 
   return (
     <KobalteSwitch
-      class={cn('inline-flex items-center gap-2', local.class)}
+      class={cn('relative inline-flex items-center gap-2', local.class)}
       defaultChecked={local.defaultChecked}
       onChange={handleChange}
       disabled={local.disabled}

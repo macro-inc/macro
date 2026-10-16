@@ -101,6 +101,9 @@ export function DriveHeader() {
                         <DriveFilterMenu />
                       </Suspense>
                     </Show>
+                    <div class="shrink-0 @max-[720px]/view-shell:hidden">
+                      <DriveCreateMenu presentation="toolbar" />
+                    </div>
                   </div>
                 </div>
               </>

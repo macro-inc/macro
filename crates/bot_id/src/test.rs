@@ -127,3 +127,9 @@ fn equality_and_hash_ignore_uuid_case() {
         [lower.clone(), upper.clone()].into_iter().collect();
     assert_eq!(set.len(), 1);
 }
+
+#[test]
+fn macro_agent_session_bot_is_mentioned_as_macro() {
+    assert_eq!(mention_handle(MACRO_NEW_BOT_ID, MACRO_NEW_HANDLE), "macro");
+    assert_eq!(mention_handle(CURSOR_BOT_ID, CURSOR_HANDLE), "cursor");
+}

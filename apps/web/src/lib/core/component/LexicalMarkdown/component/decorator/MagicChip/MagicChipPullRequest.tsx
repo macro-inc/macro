@@ -1,4 +1,5 @@
 import { MergePullRequestButton } from '@app/features/block-pr/component/MergePullRequestButton';
+import type { PullRequestCheck } from '@app/features/block-pr/primitives/pull-request-ready-to-merge';
 import {
   parseGithubPrUrl,
   prDisplayName,
@@ -27,6 +28,21 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
     return value && typeof value === 'object' && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : {};
+  };
+  const checks = (): PullRequestCheck[] | undefined => {
+    const value = metadata().checks;
+    if (!Array.isArray(value)) return undefined;
+    return value.map((item) => {
+      if (!item || typeof item !== 'object') {
+        return { status: null, conclusion: null };
+      }
+      const record = item as Record<string, unknown>;
+      return {
+        status: typeof record.status === 'string' ? record.status : null,
+        conclusion:
+          typeof record.conclusion === 'string' ? record.conclusion : null,
+      };
+    });
   };
   const text = (key: 'name' | 'status') => {
     const value = metadata()[key];
@@ -138,6 +154,8 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
               <MergePullRequestButton
                 target={{ ...prRef(), title: text('name') }}
                 status={text('status')}
+                draft={metadata().draft === true}
+                checks={checks()}
                 class="h-8"
               />
             )}

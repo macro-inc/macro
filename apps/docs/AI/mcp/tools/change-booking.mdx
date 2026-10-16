@@ -1,0 +1,18 @@
+---
+title: ChangeBooking
+description: >-
+  Manage an existing Booking Links meeting found with ListBookings: cancel it,
+  approve a legacy pending booking, record or clear attendance, or reschedule to
+  a start returned by GetBookingRescheduleSlots.
+---
+
+# ChangeBooking
+
+Manage an existing Booking Links meeting found with ListBookings: cancel it, approve a legacy pending booking, record or clear attendance, or reschedule to a start returned by GetBookingRescheduleSlots. Cancellation, approval and rescheduling can notify attendees; explain the action and act only on user authorization. Attendance is available only after a confirmed meeting ends. Existing host/admin permissions and availability rules apply. Returns the actual saved booking; a failed or processing status requires reconciliation, not blind retries. This does not edit the reusable booking link.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `bookingId` | string | Yes | Existing booking ID discovered through ListBookings. |
+| `change` | BookingChange | Yes | A host's requested change to a booked meeting. |

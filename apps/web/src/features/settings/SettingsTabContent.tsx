@@ -14,6 +14,7 @@ import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
 import { ConnectedAccounts } from './ConnectedAccounts';
+import { DesktopApp } from './DesktopApp';
 import { EmailSettings } from './email-settings';
 import { McpConnections } from './McpConnections';
 import { MobileApp } from './MobileApp';
@@ -79,6 +80,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Connections')}>
         <McpConnections />
+      </Show>
+      <Show when={isCurrentTab('Desktop App')}>
+        <DesktopApp />
       </Show>
       <Show when={isCurrentTab('Mobile App')}>
         <MobileApp />

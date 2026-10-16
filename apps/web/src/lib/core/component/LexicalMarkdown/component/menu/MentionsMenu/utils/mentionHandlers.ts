@@ -66,6 +66,33 @@ async function handleAgentSessionMention(
 }
 
 /**
+ * Insert a CRM company or contact chip and record it as a reference of the
+ * CRM record, so the record's References list includes this document. A CRM
+ * reference does not share a file, invite a user, or notify the contact.
+ */
+async function handleCrmMention(
+  item: EntityItem,
+  dependencies: HandlerDependencies
+): Promise<void> {
+  const { editor, blockId } = dependencies;
+  const entity = item.data;
+  if (entity.type !== 'crm_contact' && entity.type !== 'crm_company') return;
+  const mentionUuid =
+    blockId && tracksMentions(dependencies)
+      ? await trackMention(blockId, entity.type, entity.id)
+      : undefined;
+  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: entity.id,
+    documentName:
+      entity.type === 'crm_contact'
+        ? entity.name || entity.email
+        : entityDisplayName(item),
+    blockName: entity.type === 'crm_contact' ? 'contact' : 'company',
+    ...(mentionUuid ? { mentionUuid } : {}),
+  });
+}
+
+/**
  * Handle entity mention (documents, channels, emails, etc.).
  */
 async function handleEntityMention(
@@ -79,6 +106,10 @@ async function handleEntityMention(
     return await handleAgentSessionMention(entity, dependencies);
   }
 
+  if (entity.type === 'crm_contact' || entity.type === 'crm_company') {
+    return await handleCrmMention(item, dependencies);
+  }
+
   const blockNameForMention = getBlockNameFromEntity(item);
   const itemName = entityDisplayName(item);
 
@@ -88,6 +119,7 @@ async function handleEntityMention(
       .with('channel', 'dm', () => 'channel' as const)
       .with('initiative', () => 'initiative' as const)
       .with('database', () => 'database' as const)
+      .with('form', () => 'form' as const)
       .otherwise(() => 'document' as const);
     mentionId = await trackMention(blockId, trackType, entity.id);
   }

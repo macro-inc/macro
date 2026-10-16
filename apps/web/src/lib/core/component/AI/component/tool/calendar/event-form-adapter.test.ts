@@ -45,6 +45,17 @@ describe('createCalendarEventToEditorInitialValues', () => {
     expect(values.conference).toBe('none');
   });
 
+  it('maps the requested conferencing onto the editor choice', () => {
+    expect(
+      createCalendarEventToEditorInitialValues(event({ addMacroCall: true }))
+        .conference
+    ).toBe('macro');
+    expect(
+      createCalendarEventToEditorInitialValues(event({ addGoogleMeet: true }))
+        .conference
+    ).toBe('google_meet');
+  });
+
   it('maps the tool decline modes onto the editor names', () => {
     const values = createCalendarEventToEditorInitialValues(
       event({
@@ -130,5 +141,43 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
     );
     expect(merged.eventType).toBeUndefined();
     expect(merged.outOfOffice).toBeUndefined();
+  });
+
+  it('turns the conferencing choice into exactly one tool flag', () => {
+    const macro = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({ conferenceChoice: 'macro' }),
+      event({ addGoogleMeet: true })
+    );
+    expect(macro.addMacroCall).toBe(true);
+    expect(macro.addGoogleMeet).toBe(false);
+
+    const meet = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({
+        conferenceChoice: 'google_meet',
+        conference: 'google_meet',
+      }),
+      event({ addMacroCall: true })
+    );
+    expect(meet.addMacroCall).toBe(false);
+    expect(meet.addGoogleMeet).toBe(true);
+
+    const none = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({ conferenceChoice: 'none' }),
+      event({ addMacroCall: true })
+    );
+    expect(none.addMacroCall).toBe(false);
+    expect(none.addGoogleMeet).toBe(false);
+  });
+
+  it('drops the Macro call from an out-of-office event', () => {
+    const merged = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({
+        conferenceChoice: 'macro',
+        outOfOffice: { autoDeclineMode: 'decline_none' },
+      }),
+      event({ addMacroCall: true })
+    );
+    expect(merged.addMacroCall).toBe(false);
+    expect(merged.addGoogleMeet).toBe(false);
   });
 });

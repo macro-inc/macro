@@ -17,7 +17,7 @@ static SYSTEM_PROMPT: &str = r#"You decide whether the latest message in a chann
 
 Answer true only when the latest message is addressed to the agent, for example:
 - it asks the agent a question or gives it an instruction
-- it answers a question the agent just asked
+- it answers a question the agent just asked, including a short agreement ("yes", "yeah", "please", "go ahead") to an offer to share something with the channel
 - it reacts to the agent's last message in a way that invites a reply (a correction, a complaint about the agent's answer, a follow-up)
 
 Answer false when:
@@ -116,5 +116,16 @@ impl InferredTriggerClassifier for FastModelTriggerClassifier {
             "inferred trigger classification"
         );
         Ok(output.expects_response)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn agreeing_to_a_share_offer_expects_a_response() {
+        let prompt = super::SYSTEM_PROMPT;
+        assert!(prompt.contains("\"yes\""));
+        assert!(prompt.contains("share something with the channel"));
+        assert!(prompt.contains("\"thanks\""));
     }
 }

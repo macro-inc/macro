@@ -40,7 +40,7 @@ fn row(n: u16) -> Value {
         "__typename": "GraphqlSoupEmailThread", "id": id(n), "name": format!("Mail {n}"),
         "ownerId": VIEWER, "linkId": id(1000), "isRead": n.is_multiple_of(4),
         "inboxVisible": n.is_multiple_of(2), "isSignal": n.is_multiple_of(3), "isFavorited": false,
-        "cacheProjection": capsule, "latestInboundMessageTs": TIMESTAMP, "updatedAt": TIMESTAMP, "properties": [],
+        "cacheProjection": capsule, "latestInboundMessageTs": TIMESTAMP, "reminderReturnedAt": null, "updatedAt": TIMESTAMP, "properties": [],
         "mailAllPreview": preview(n, 1000),
         "mailDraftPreview": n.is_multiple_of(3).then(|| preview(n, 2000)),
         "mailSentPreview": n.is_multiple_of(4).then(|| preview(n, 3000)),
@@ -62,7 +62,7 @@ fn filters() -> Value {
         "calendarEventFilter": {"literal": {"id": nil}},
         "channelFilter": {"literal": {"channelId": nil}},
         "channelThreadFilter": {"literal": {"channelId": nil}},
-        "reminderFilter": {"literal": {"id": nil}},
+        "crmContactFilter": {"literal": {"id": nil}},
         "agentSessionFilter": {"literal": {"id": nil}},
         "callFilter": {"literal": {"callId": nil}},
         "crmCompanyFilter": {"literal": {"id": nil}},
@@ -131,6 +131,53 @@ fn write_data(
         identity: identity.map(str::to_owned),
     }))
     .unwrap()
+}
+
+#[test]
+fn native_live_query_returns_field_deltas_from_the_shared_engine() {
+    let handle = spawn_handle();
+    let project_key = format!("GraphqlSoupProject:{}", id(100));
+    let project_data = |favorite| {
+        json!({"user": {"id": VIEWER, "soup": {
+            "items": [{"__typename": "GraphqlSoupProject", "id": id(100), "cacheProjection": null,
+                "ownerId": VIEWER, "parentId": null, "createdAt": TIMESTAMP, "updatedAt": TIMESTAMP,
+                "notifications": [], "properties": [], "isFavorited": favorite}],
+        }}})
+    };
+    write_data(
+        &handle,
+        include_str!("project.graphql"),
+        project_data(false),
+        Some(VIEWER),
+    );
+    let mut filters = filters();
+    filters["emailFilter"] = json!({"tree": {"literal": {"threadId": id(0)}}});
+    filters["projectFilter"] = json!({"literal": {"projectIdSelf": id(100)}});
+    let live_request = |since: Option<&str>| {
+        serde_json::from_value(json!({
+        "filters": filters, "sortMethod": "UPDATED_AT", "sortDirection": "DESC", "limit": 20,
+        "baseline": [{"key":project_key, "sortTimestamp":TIMESTAMP}],
+        "liveQuery": { "id":"native-live", "document":"fragment Item on GraphqlSoupProject { id favorite: isFavorited }", "fragmentName":"Item", "since":since },
+    })).unwrap()
+    };
+    let first = evaluate(&handle, live_request(None));
+    assert_eq!(first["kind"], "live-query");
+    assert_eq!(first["upserts"].as_array().unwrap().len(), 1);
+    write_data(
+        &handle,
+        include_str!("project.graphql"),
+        project_data(true),
+        Some(VIEWER),
+    );
+    let next = evaluate(&handle, live_request(first["revision"].as_str()));
+    assert_eq!(next["reset"], false);
+    assert!(next.get("keys").is_none());
+    assert!(next["upserts"].as_array().unwrap().is_empty());
+    assert_eq!(next["patches"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        next["patches"][0]["fields"],
+        json!([{ "path":["favorite"], "value":true }])
+    );
 }
 
 #[test]
@@ -267,6 +314,8 @@ fn enqueue_archive(handle: &EngineHandle, n: u16) -> (String, String) {
         "native-runner".into(),
         10,
         1000,
+        None,
+        vec![],
     ))
     .unwrap();
     let InitialMutationClaimWire::Claimed { mutation } = result.initial_claim else {
@@ -412,7 +461,7 @@ fn native_mail_confinement_never_admits_nonempty_deferred_partitions() {
     let handle = spawn_handle();
     hydrate(&handle);
     for (partition, id_field) in [
-        ("reminderFilter", "id"),
+        ("crmContactFilter", "id"),
         ("agentSessionFilter", "id"),
         ("channelThreadFilter", "channelId"),
     ] {

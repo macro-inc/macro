@@ -30,6 +30,7 @@ import { onMount, Show } from 'solid-js';
 import { TasksDetailView } from './components/TasksDetailView';
 import { projectDetailSearch } from './project-detail-search';
 import { TasksView } from './tasks-view';
+import { TasksViewSkeleton } from './tasks-view-skeleton';
 
 function TasksLegacyRouteView() {
   const params = useParams<{ taskId?: string; projectId?: string }>();
@@ -54,7 +55,7 @@ export const TasksRouteView = withAuth(() => {
       <TasksView />
     </AppView>
   );
-});
+}, TasksViewSkeleton);
 
 function DisabledProjectRoute() {
   const navigate = useNavigate();

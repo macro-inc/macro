@@ -1,3 +1,4 @@
+import { MarkdownHostContext } from '@core/component/LexicalMarkdown/context/MarkdownHostContext';
 import type { Accessor, ParentComponent } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
@@ -24,7 +25,9 @@ export const MarkdownDocumentProvider: ParentComponent<{
   context: MarkdownDocumentContextValue;
 }> = (props) => (
   <MarkdownDocumentContext.Provider value={props.context}>
-    {props.children}
+    <MarkdownHostContext.Provider value="md">
+      {props.children}
+    </MarkdownHostContext.Provider>
   </MarkdownDocumentContext.Provider>
 );
 

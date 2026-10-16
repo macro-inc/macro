@@ -65,7 +65,8 @@ export function DriveList() {
 
   const timestamp = (entity: EntityData) => {
     const { location, sort } = state.value();
-    if (entity.type === 'database') return entity.createdAt;
+    if (entity.type === 'database' || entity.type === 'form')
+      return entity.createdAt;
 
     if (location.kind === 'tab' && location.tab === 'recent')
       return entity.touchedAt;

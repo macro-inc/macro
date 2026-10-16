@@ -9,7 +9,8 @@
     "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run -c vitest.config.ts",
     "check:seo": "bun scripts/verify-seo.ts",
-    "check:seo:live": "bun scripts/verify-seo-live.ts"
+    "check:seo:live": "bun scripts/verify-seo-live.ts",
+    "check:agent-ui": "bun scripts/check-agent-ui.ts"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",
