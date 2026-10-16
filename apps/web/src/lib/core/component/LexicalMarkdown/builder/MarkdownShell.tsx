@@ -48,6 +48,8 @@ import type { EditorBuilder, EditorComponentProps } from './types';
 
 export type MarkdownShellProps = EditorComponentProps & {
   config: EditorBuilder;
+  /** Accessible name independent of a changing visual placeholder. */
+  ariaLabel?: string;
 };
 
 export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
@@ -234,6 +236,7 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
           disabled={!!props.disabled}
           showPlaceholder={showPlaceholder()}
           placeholder={props.placeholder}
+          ariaLabel={props.ariaLabel}
         />
 
         <DecoratorRenderer editor={editor} />

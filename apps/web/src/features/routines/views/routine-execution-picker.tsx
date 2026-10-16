@@ -123,6 +123,7 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
       class="min-w-0 max-w-full"
     >
       <AgentPicker
+        showModelLabel
         triggerClass={badgeTriggerClasses({
           variant: 'outline',
           size: 'sm',

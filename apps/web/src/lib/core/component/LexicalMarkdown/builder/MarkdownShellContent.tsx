@@ -6,6 +6,7 @@ export function MarkdownShellContent(props: {
   disabled: boolean;
   showPlaceholder: boolean;
   placeholder: string | undefined;
+  ariaLabel?: string;
 }) {
   return (
     <>
@@ -16,7 +17,7 @@ export function MarkdownShellContent(props: {
         role="textbox"
         aria-multiline="true"
         aria-readonly={props.disabled}
-        aria-label={props.placeholder || 'Message'}
+        aria-label={props.ariaLabel || props.placeholder || 'Message'}
       />
       <Show when={props.showPlaceholder}>
         <div

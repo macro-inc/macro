@@ -45,6 +45,7 @@ describe('MarkdownShell content', () => {
         disabled={false}
         showPlaceholder={showPlaceholder()}
         placeholder={placeholder()}
+        ariaLabel="Message the agent"
       />
     ));
 
@@ -53,6 +54,9 @@ describe('MarkdownShell content', () => {
     setPlaceholder('Reply to thread');
     expect(screen.queryByText('Write a message')).toBeNull();
     expect(screen.getByText('Reply to thread')).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Message the agent' })).toBe(
+      editable
+    );
     setShowPlaceholder(false);
     expect(screen.queryByText('Reply to thread')).toBeNull();
     setShowPlaceholder(true);

@@ -137,14 +137,32 @@ The mobile conversation list omits the desktop **New conversation**, **Agents**,
 and **Connections** controls. Use the Home composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the
-agent/model control to open a searchable bottom sheet. Tap an agent to use its
+agent/model control once to open a bottom sheet with its search field focused,
+without first focusing or expanding the message input. Tap an agent to use its
 default model, or its model arrow to choose a model; **Create agent** opens the
-roster. Desktop navigation remains unchanged.
+roster. Agents are clustered into **Built-in**, **Your agents**, and **Needs
+connection**, with runtime/model details below their names. Code opens directly
+on these groups without an empty Models section or an unrelated runtime warning.
+**Create agent** uses the shared rounded pill button with a subtle fill at the
+bottom right at the end of the scrolling list. The picker uses one
+continuous surface, with labels and spacing separating groups instead of nested
+shaded cards. Provider sections use compact spacing, with labels close to their
+rows. Model lists start with
+**Suggested**, followed by **More models** and your agents. **More models**
+opens the complete provider catalog, including copies of Suggested choices;
+use Back to return. Search accepts
+model names, IDs, and providers. When browsing an agent, **Use default** in the
+header selects its configured model.
 
-The mobile Home composer is a filled, rounded input with no placeholder or
-rotating tips. Its collapsed height matches the New button, with the model
-selector and Send always visible. Tap the input to reveal attachment, microphone
-(when enabled), and repository controls; they collapse again when tapping outside.
+The mobile Home composer is an opaque, rounded input using the same surface as
+the New button, including its glass treatment in dark mode. Send is a bare up
+arrow without a background, including when disabled. The short placeholder reads
+“Message Macro AI”.
+Its collapsed height matches New, with Send visible and the model/provider control hidden until the input is focused. Tap the input to expand across the row, hiding New and giving the draft
+a full-width text area above the controls.
+Chat/Code stays in the inset bar above the input on phones. Repository controls
+appear alongside it in Code mode.
+Tapping outside collapses the composer and restores New.
 The editor and model picker stay mounted so collapsing preserves the draft.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
@@ -303,7 +321,12 @@ the shimmer.
   or disconnected.
 
   **New conversation** opens the composer. **Conversations** is a mixed list
-  of chats and coding sessions, newest first, with one search across both.
+  of chats and coding sessions, with one search across both. **Group conversations**
+  switches between Status (the default), Type, and None, preserving newest-first
+  order within each group. **Filter conversations** combines Type, Status, and
+  Pull request filters; choices within a category are ORed and categories are
+  ANDed. Grouping and filters are remembered per user. Clear filters from the menu
+  or an empty filtered list.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
   pull request is linked). Home and the Agents sidebar share these agent rows.
   Rows have no agent or runtime-status subtext. A session that is starting or
@@ -322,20 +345,36 @@ the shimmer.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
   actions. Archived sessions are grouped at the bottom under **Archived**.
-- The starting page has a compact composer that starts at one line and grows
-  with longer prompts or Shift+Enter. Lists, quotes, headings, and other
-  non-paragraph blocks expand immediately, even with short text. This also applies
-  to session composers. The editor takes the full width and controls move below;
-  returning to a short paragraph restores the compact row. Height changes animate
+- The starting page has **Chat / Code** in the composer’s inset bar, below the input on
+  desktop and above it on phones. The choice limits the offered agents and is
+  remembered per user. Switching modes preserves the draft and attachments and
+  clears model and effort overrides from the previous mode. It does not filter
+  the conversation sidebar. Session composers start at one line and grow with
+  longer prompts or Shift+Enter. Lists, quotes, headings, and other non-paragraph
+  blocks expand immediately, even with short text. The editor takes the full width
+  and controls move below; returning to a short paragraph restores the compact
+  row. Focusing a session input on a phone also expands it. Height changes animate
   over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
-  Direct model selections show only the model name and provider icon in the input.
-  Saved and coding agents show their identity beside the current model. There is
-  no Chat/Code switch or separate model button.
-- The agent dropdown includes every saved agent regardless of runtime, plus Cursor.
-  Macro's models use the same searchable catalog as running sessions: a short
-  **Recommended** list and a **More models** submenu grouped by model family,
-  followed by **Agents** and **Coding agents** sections. Models have readable
+  Direct model selections show the model icon, with the model name in the title.
+  Saved and coding agents show their own icon and name on desktop, without a
+  second model icon; phones use an icon-only picker. Routine configuration
+  keeps the saved model name visible in its picker, including unavailable models.
+- The agent dropdown includes saved agents of the selected mode regardless of
+  runtime, plus Cursor in Code mode.
+  Macro's models use the same searchable catalog as running sessions:
+  **Suggested** lists **Opus 5.5**, **Sonnet 5.5**, **GPT-5.6** (Sol in
+  runtime catalogs), and **GPT-6 Astra**, when available, in that order. The
+  **More models** submenu contains the complete catalog grouped by provider,
+  including the Suggested choices and effort/speed variants. Your agents
+  follow Suggested and More models in the root menu. Choosing a model
+  does not reorder the sections. Search matches names, IDs, and provider names. The compact borderless search
+  field receives focus when the selector opens or reopens. Its opaque header
+  meets the top of the scroll area so rows cannot show through above it.
+  **Built-in**, **Your agents**, and **Needs connection** groups follow when
+  they have entries. Each agent row shows its runtime and model, or its setup
+  action/availability reason. **Create agent** uses the shared rounded pill
+  button at the bottom right with a subtle background. Models have readable
   names (for example, **Sonnet 5.5**) and provider or model icons aligned with the
   agent icons. The in-memory catalog offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
@@ -343,20 +382,20 @@ the shimmer.
   are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 4.5**; older Claude versions
   (Sonnet 5, Opus 5, Fable 5.1) are not offered.
   Selecting a model here selects
-  the default runtime and applies that model to the next send, retracting the repository drawer.
+  the default runtime and applies that model to the next send, hiding the repository controls while keeping the mode bar visible.
   A model chosen from that catalog is remembered in local storage as the
   default for Macro's in-memory agent until another model entry is picked.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.
   Unavailable paired agents stay visible with a reason.
   If Macro is unavailable, its catalog stays searchable but
   model choices are disabled in every list. Model discovery uses the
-  selected runtime, including Claude Cloud. Every coding agent opens the repository
-  drawer; chat agents hide it. Repository/branch overrides are currently applied
+  selected runtime, including Claude Cloud. Every coding agent shows repository
+  controls; chat agents hide those controls but keep the mode bar. Repository/branch overrides are currently applied
   only to Cursor sessions by the create-session API.
-  Coding agents carry a `</>` badge. The most recently used supported,
+  The most recently used supported,
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
-  the searchable Settings catalog, provider icons, and scrollable **More models**.
+  the searchable Settings catalog, provider icons, and scrollable provider sections.
   The submenu focuses the `Search models` field so you can type immediately.
   Clicking an agent directly, or pressing Enter/Space on its focused row, uses
   its default and clears any previous model override. Right Arrow still opens
@@ -375,20 +414,19 @@ the shimmer.
   type a prompt on Home, visit an agent session, then return using the Home sidebar
   button or Back. The Home prompt should remain after returning and after a reload.
   Sending or clearing the input removes only that surface's saved text draft.
-  **Create agent** stays pinned at the bottom of the dropdown
-  while the agent and model lists scroll. It opens the roster on the selected kind's
+  **Create agent** follows the agent and model lists as a right-aligned action,
+  sharing their scroll area without a separate footer. It opens the roster on the selected kind's
   tab, where either kind can be created.
-- On Home and New conversation, selecting a coding agent expands the input even
+- On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
-  vertical center. The heading and first input line stay anchored while the composer
-  expands downward. The plus attachment button stays at the far left: before the
+  vertical center. The heading stays anchored while the composer expands downward,
+  with the repository bar below the input on desktop and above it on mobile.
+  The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
-  on the left and the agent/model and Send on the right. A full-width repository bar
-  slides and fades in below the rounded input over 200ms, with rounded bottom corners
-  and a subtle border along its sides and bottom, with a darker surface in dark mode.
-  Selecting a chat agent retracts the bar and
-  restores the compact input when the draft fits on one line, without remounting
-  the editor or losing the draft. Reduced-motion
+  on the left and the agent/model and Send on the right. A full-width inset bar holds Chat/Code in both modes, with rounded outer corners
+  and a subtle border, with a darker surface in dark mode.
+  Selecting Chat hides the repository controls and keeps the mode switch in
+  the inset bar, without remounting the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
   (**Choose repository** until one is picked) opens a searchable list:
   **Choose automatically**, then the repositories the signed-in user reaches
@@ -429,12 +467,21 @@ the shimmer.
   update the saved agent; configure persistent defaults in the agent editor.
   Within an existing session, the model picker remains available on the right.
   Its trigger, model options, and session metadata use the same readable model names
-  as the new-conversation picker. The menu includes provider icons, search, a short
-  **Recommended** list, and a scrollable **More models** submenu shared with Settings.
-  At phone width there is no room beside the menu, so **More models** replaces the
-  list in place and a **Recommended** row at the top goes back.
-- Chat agents' empty input cycles tips about connectors, skills, mentions, and
-  agents; coding agents show **Describe what you want to build**. Type `@` for
+  as the new-conversation picker. Large catalogs share the Settings picker:
+  provider icons, search, **Suggested** first, and **More models** for the
+  complete provider catalog. Desktop opens a submenu; phone widths show
+  the catalog in place with a Back action. Search includes every model.
+- The separate segmented effort slider has been removed from the model menu.
+  Model-specific effort choices remain available in model submenus.
+  Free and Pro users start new conversations at the lowest advertised level,
+  unless they explicitly choose another. Existing sessions keep their current setting.
+- On desktop, chat agents' empty input types tips about connectors, skills,
+  mentions, and agents one character at a time, pauses to read each hint, then
+  quickly erases it before typing the next. Entering a draft pauses the animation;
+  clearing it resumes. The text-only typewriter also runs when reduced motion
+  is enabled.
+  Coding agents show **Describe what you want to build**; phones keep the short
+  **Message Macro AI** placeholder. Type `@` for
   mentions and `/` for skills.
   Check `/` with the Android software keyboard too: the skills menu should open
   and filter while typing, without sending the draft.

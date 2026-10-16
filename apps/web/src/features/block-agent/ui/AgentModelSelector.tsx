@@ -40,7 +40,14 @@ import SearchIcon from '@phosphor/magnifying-glass.svg';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { Button, cn, Dropdown } from '@ui';
-import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  type Component,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { groupOptions, withoutRedundantGroups } from './model-groups';
 
 /** Compact ghost pill — same size as the short-list trigger and chat's selector. */
@@ -78,6 +85,7 @@ export interface AgentModelSelectorProps {
   options: ModelOption[];
   disabled?: boolean;
   effortLabel?: string;
+  menuHeader?: JSX.Element;
   modelRow?: Component<ModelRowProps>;
   /** Receives the id of the model to switch to. */
   onSelect: (model: string) => void;
@@ -162,6 +170,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
               />
             </div>
           </Show>
+          {props.menuHeader}
           <MobileDrawer.ScrollBody>
             <Show when={groups().length === 0}>
               <div class="px-4 py-6 text-center text-sm text-ink-muted">
@@ -223,6 +232,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         <CaretDown class="shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)] overflow-hidden">
+        {props.menuHeader}
         {/* The gradients anchor here, outside the scrolling box, and read
             the menu background through `--color-surface`. */}
         <div class="relative [--color-surface:var(--color-menu)]">
@@ -262,6 +272,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
       <Show when={!isTouchDevice() || props.modelRow} fallback={sheet}>
         <Show when={useCatalog() || props.modelRow} fallback={shortList}>
           <ModelCatalogPicker
+            menuHeader={props.menuHeader}
             value={shown()}
             options={catalogOptions()}
             onSelect={pick}
