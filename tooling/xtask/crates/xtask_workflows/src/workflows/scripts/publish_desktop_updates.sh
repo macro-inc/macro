@@ -33,7 +33,20 @@ if gh release view desktop-stable --repo "$RELEASE_REPOSITORY" --json assets > "
     nix develop --command bun apps/web/scripts/desktop-release.mjs newer \
       release-artifacts/latest.json "$work_dir/latest.json" || result=$?
     if [ "$result" -eq 2 ]; then
-      echo "A matching or newer desktop release is already promoted."
+      candidate_version=$(jq -er '.version' release-artifacts/latest.json)
+      current_version=$(jq -er '.version' "$work_dir/latest.json")
+      if [ "$candidate_version" = "$current_version" ]; then
+        if ! cmp -s release-artifacts/latest.json "$work_dir/latest.json"; then
+          echo "Desktop update feed already has version $candidate_version with different content" >&2
+          exit 1
+        fi
+        # A previous attempt may have uploaded the feed but failed before
+        # marking the versioned release as the latest download.
+        gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --latest
+        echo "Desktop release already promoted."
+      else
+        echo "A newer desktop release is already promoted."
+      fi
       exit 0
     fi
     [ "$result" -eq 0 ] || exit "$result"
@@ -45,7 +58,9 @@ else
     echo "Could not read the existing desktop update channel" >&2
     exit 1
   fi
-  gh release create desktop-stable --repo "$RELEASE_REPOSITORY" --target "$RELEASE_TAG" \
+  # --target accepts a branch or full commit SHA, not the versioned release tag.
+  release_commit=$(git rev-parse --verify 'HEAD^{commit}')
+  gh release create desktop-stable --repo "$RELEASE_REPOSITORY" --target "$release_commit" \
     --prerelease --latest=false --title "Desktop stable update feed" \
     --notes "Update metadata only. Download installers from a versioned desktop release."
 fi
