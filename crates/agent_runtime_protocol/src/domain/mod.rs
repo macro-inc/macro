@@ -10,6 +10,8 @@ pub mod channel;
 pub mod connection;
 /// The log frame an agent leaves when it summarizes its own context.
 pub mod context;
+/// Headers a runtime presents when it dials the gateway.
+pub mod dial;
 /// The physical transport port.
 pub mod ports;
 /// Versioned protocol message types.

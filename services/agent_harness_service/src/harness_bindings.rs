@@ -3,7 +3,8 @@
 //! Composition-root adapters: [`PgHarnessBindings`] answers "which registered
 //! harness serves this bot right now" for session binding, and
 //! [`PgHarnessPresence`] writes the attach/detach bookkeeping the harness
-//! settings page reads connection state from.
+//! settings page reads connection state from, and the operator's bypass
+//! consent each dial reports.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -13,6 +14,9 @@ use agent_harness::domain::ports::{HarnessBindings, HarnessPresence};
 use bot_id::BotId;
 use harness_id::HarnessId;
 use sqlx::PgPool;
+
+#[cfg(test)]
+mod test;
 
 /// [`HarnessBindings`] over the `agent_configs` table.
 #[derive(Clone)]
@@ -58,11 +62,20 @@ impl PgHarnessPresence {
 }
 
 impl HarnessPresence for PgHarnessPresence {
-    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    fn connected(
+        self: Arc<Self>,
+        harness: HarnessId,
+        operator_allows_bypass: Option<bool>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Box::pin(async move {
             let result = sqlx::query!(
-                r#"UPDATE harnesses SET last_connected_at = now() WHERE id = $1"#,
+                r#"
+                UPDATE harnesses
+                SET last_connected_at = now(), operator_allows_bypass = $2
+                WHERE id = $1
+                "#,
                 harness.as_uuid(),
+                operator_allows_bypass,
             )
             .execute(&self.pool)
             .await;
