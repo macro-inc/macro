@@ -51,6 +51,10 @@ describe('crm tab search params', () => {
   it.each([
     'active',
     'people',
+    'tasks',
+    'email',
+    'notes',
+    'calls',
     'hidden',
     pipelineTab(pipelineId),
     'list:favorites',

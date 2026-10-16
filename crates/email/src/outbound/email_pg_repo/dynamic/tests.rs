@@ -438,7 +438,8 @@ fn test_build_message_email_filter_or() {
     let result = build_message_email_filter(&expr, &resolved);
     let debug = result.to_debug_sql();
 
-    assert!(debug.contains("OR"));
+    assert!(debug.contains("ANY("));
+    assert!(!debug.contains(" OR "));
     assert!(result.has_bind_uuid(&id1));
     assert!(result.has_bind_uuid(&id2));
     assert!(result.has_no_raw_containing("sender1@example.com"));
@@ -1319,7 +1320,7 @@ fn test_matching_threads_ctes_domain_all_roles_share_one_contact_scan() {
 }
 
 #[test]
-fn test_matching_threads_ctes_distinct_domains_get_separate_contact_ctes() {
+fn test_matching_threads_ctes_distinct_domains_share_a_contact_cte() {
     let expr = Expr::or(
         Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".into()))),
         Expr::Literal(EmailLiteral::Sender(Email::Domain("globex.com".into()))),
@@ -1329,7 +1330,8 @@ fn test_matching_threads_ctes_distinct_domains_get_separate_contact_ctes() {
     let debug = body.to_debug_sql();
 
     assert!(debug.contains("matching_contacts_0 AS MATERIALIZED"));
-    assert!(debug.contains("matching_contacts_1 AS MATERIALIZED"));
+    assert!(!debug.contains("matching_contacts_1 AS MATERIALIZED"));
+    assert!(debug.contains("= ANY("));
     assert!(body.has_bind_string("acme.com"));
     assert!(body.has_bind_string("globex.com"));
 }

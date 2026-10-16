@@ -1,7 +1,7 @@
 import { SidePanel } from '@components/app/side-panel';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
-import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CompanyContact } from '../core/contact';
 import {
@@ -39,6 +39,12 @@ export function Company(props: {
   onOpenPipeline?: (pipelineId: string) => void;
 }) {
   const context = useCrmContext();
+  onCleanup(
+    context.registerTaskComposerRecord(() => ({
+      type: 'company',
+      id: props.companyId,
+    }))
+  );
   const openCreateContactModal = context.openCreateContact;
   const listsEnabled = context.listsEnabled();
   const pipelinesEnabled = context.pipelinesEnabled();

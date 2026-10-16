@@ -65,7 +65,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { AppProviders } from './AppProviders';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -233,9 +232,9 @@ function useNewOnboardingRedirect() {
 }
 
 /**
- * The app's providers and chrome — rail, hotkeys, command menu, launcher,
- * global modals, and the mobile dock — around a page. The split layout and
- * signed-in form pages render in it; auth, booking, and meeting pages don't.
+ * The app's chrome — rail, hotkeys, command menu, launcher, global modals,
+ * and the mobile dock — around a page. Route shells supply the providers and
+ * content; auth, booking, and meeting pages render without this chrome.
  */
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -256,95 +255,90 @@ export function AppChrome(props: ParentProps) {
   );
 
   return (
-    <AppProviders>
-      <SidebarVisibilityContext.Provider value={sidebarVisible}>
-        <Show when={isAuthenticated() === true}>
-          <ShowFeatureFlag flag={enableDatabases}>
-            <Suspense>
-              <StarterDatabase />
-            </Suspense>
-          </ShowFeatureFlag>
-        </Show>
-        <Suspense>
-          <Show when={isAuthenticated()}>
-            <GithubReauthenticationPrompt />
-            <GmailReauthenticationPrompt />
-            <CalendarPermissionPrompt />
-            <GlobalShortcuts />
-            <Show when={!isTouchDevice()}>
-              <GoToHotkeys />
-              <Suspense>
-                <FavoritesCommands />
-                <CommandMenu />
-              </Suspense>
-            </Show>
-            <Suspense>
-              <PropertyEditorModal />
-            </Suspense>
-            <GlobalBulkEditEntityModal />
-            <NativeShareSheet />
-            <MacroMcpSetupModal />
-            <CreateChannelModal />
-            <Show when={companyDialogUsed()}>
-              <Suspense>
-                <CreateCompanyModal />
-              </Suspense>
-            </Show>
-            <Show when={contactDialogUsed()}>
-              <Suspense>
-                <CreateContactModal />
-              </Suspense>
-            </Show>
-            <Show when={isAddInboxDialogOpen()}>
-              <AddInboxDialog />
-            </Show>
-          </Show>
-          <Show when={isAuthenticated() === false}>
-            <Show when={hasLoginCookie()} fallback={<Banner />}>
-              <SessionExpiredRedirect />
-            </Show>
-          </Show>
-        </Suspense>
-        <div class="min-h-0 flex-1 flex">
-          <ItemDndProvider>
-            <Show when={isSidebarVisible()}>
-              <SidebarRail />
-            </Show>
-            <PageContent>
-              {/* Route loading must not detach the chrome or mobile navigation;
-                  the route draws its own loading state. */}
-              <Suspense>{props.children}</Suspense>
-            </PageContent>
-          </ItemDndProvider>
-        </div>
-        <Show when={isTouchDevice() && isAuthenticated()}>
-          <FloatRegionHost />
+    <SidebarVisibilityContext.Provider value={sidebarVisible}>
+      <Show when={isAuthenticated() === true}>
+        <ShowFeatureFlag flag={enableDatabases}>
           <Suspense>
-            <UserCardDrawer />
+            <StarterDatabase />
           </Suspense>
-          <Show when={isMobile()}>
+        </ShowFeatureFlag>
+      </Show>
+      <Suspense>
+        <Show when={isAuthenticated()}>
+          <GithubReauthenticationPrompt />
+          <GmailReauthenticationPrompt />
+          <CalendarPermissionPrompt />
+          <GlobalShortcuts />
+          <Show when={!isTouchDevice()}>
+            <GoToHotkeys />
             <Suspense>
-              <MobileSettings />
+              <FavoritesCommands />
+              <CommandMenu />
             </Suspense>
           </Show>
-          <MobileViewsRow />
-          <FloatRegion
-            region="dock"
-            active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
-          >
-            <MobileDockRow />
-          </FloatRegion>
-        </Show>
-        <InitialInteractiveOnboardingModal />
-        <Suspense>
-          <Show when={isAuthenticated()}>
-            <Launcher
-              open={createMenuOpen()}
-              onOpenChange={setCreateMenuOpen}
-            />
+          <Suspense>
+            <PropertyEditorModal />
+          </Suspense>
+          <GlobalBulkEditEntityModal />
+          <NativeShareSheet />
+          <MacroMcpSetupModal />
+          <CreateChannelModal />
+          <Show when={companyDialogUsed()}>
+            <Suspense>
+              <CreateCompanyModal />
+            </Suspense>
           </Show>
+          <Show when={contactDialogUsed()}>
+            <Suspense>
+              <CreateContactModal />
+            </Suspense>
+          </Show>
+          <Show when={isAddInboxDialogOpen()}>
+            <AddInboxDialog />
+          </Show>
+        </Show>
+        <Show when={isAuthenticated() === false}>
+          <Show when={hasLoginCookie()} fallback={<Banner />}>
+            <SessionExpiredRedirect />
+          </Show>
+        </Show>
+      </Suspense>
+      <div class="min-h-0 flex-1 flex">
+        <ItemDndProvider>
+          <Show when={isSidebarVisible()}>
+            <SidebarRail />
+          </Show>
+          <PageContent>
+            {/* Route loading must not detach the chrome or mobile navigation;
+                  the route draws its own loading state. */}
+            <Suspense>{props.children}</Suspense>
+          </PageContent>
+        </ItemDndProvider>
+      </div>
+      <Show when={isTouchDevice() && isAuthenticated()}>
+        <FloatRegionHost />
+        <Suspense>
+          <UserCardDrawer />
         </Suspense>
-      </SidebarVisibilityContext.Provider>
-    </AppProviders>
+        <Show when={isMobile()}>
+          <Suspense>
+            <MobileSettings />
+          </Suspense>
+        </Show>
+        <MobileViewsRow />
+        <FloatRegion
+          region="dock"
+          active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
+        >
+          <MobileDockRow />
+        </FloatRegion>
+      </Show>
+      <InitialInteractiveOnboardingModal />
+      <Suspense>
+        <Show when={isAuthenticated()}>
+          <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
+        </Show>
+      </Suspense>
+    </SidebarVisibilityContext.Provider>
   );
 }

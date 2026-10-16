@@ -3,6 +3,10 @@ import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import {
+  CreateContextProvider,
+  useCreateContext,
+} from './context/create-context';
 
 const host = vi.hoisted(() => ({
   popoverSplit: vi.fn(),
@@ -98,6 +102,8 @@ import {
   type LauncherInnerProps,
   runCreateAction,
   setCreateMenuOpen,
+  useCreateAction,
+  useCreateCommands,
   useCreateMenuBlocks,
 } from './Launcher';
 
@@ -167,9 +173,11 @@ it('reactively adds and removes Project while retaining Task and Folder', () => 
     );
   };
   const view = render(() => (
-    <MemoryRouter>
-      <Route path="/" component={Menu} />
-    </MemoryRouter>
+    <CreateContextProvider focusedPaneId={() => undefined}>
+      <MemoryRouter>
+        <Route path="/" component={Menu} />
+      </MemoryRouter>
+    </CreateContextProvider>
   ));
   expect(view.container.textContent).not.toContain('Project');
   expect(view.container.textContent).toContain('Task');
@@ -301,4 +309,77 @@ it('opens the Folder composer without creating a folder immediately', () => {
   });
   expect(host.createFolder).not.toHaveBeenCalled();
   expect(host.openWithSplit).not.toHaveBeenCalled();
+});
+
+it('binds create-menu and shortcut actions to the provider and snapshots before focus changes', () => {
+  const [focusedPane, setFocusedPane] = createSignal('first');
+  const first = { key: 'first', visiblePropertyIds: ['company'] };
+  const Menu = () => {
+    const context = useCreateContext();
+    context.register('first', () => ({ task: first }));
+    context.register('second', () => ({ task: { key: 'second' } }));
+    const task = useCreateCommands().find((item) => item.blockName === 'task');
+    return <button onClick={() => task?.keyDownHandler()}>New task</button>;
+  };
+  const view = render(() => (
+    <CreateContextProvider focusedPaneId={focusedPane}>
+      <MemoryRouter>
+        <Route path="/" component={Menu} />
+      </MemoryRouter>
+    </CreateContextProvider>
+  ));
+  host.popoverSplit.mockImplementationOnce(() => setFocusedPane('second'));
+  fireEvent.click(view.getByText('New task'));
+  first.visiblePropertyIds.push('changed');
+  expect(host.popoverSplit).toHaveBeenNthCalledWith(1, {
+    type: 'component',
+    id: 'task-compose',
+    params: {
+      composerContext: { key: 'first', visiblePropertyIds: ['company'] },
+    },
+  });
+  fireEvent.click(view.getByText('New task'));
+  expect(host.popoverSplit).toHaveBeenNthCalledWith(2, {
+    type: 'component',
+    id: 'task-compose',
+    params: { composerContext: { key: 'second' } },
+  });
+});
+
+it('lets explicit creation defaults override or suppress the focused preset', () => {
+  const Action = () => {
+    useCreateContext().register('pane', () => ({ task: { key: 'focused' } }));
+    const create = useCreateAction();
+    return (
+      <>
+        <button
+          onClick={() =>
+            create('task', { context: { task: { key: 'explicit' } } })
+          }
+        >
+          Explicit
+        </button>
+        <button onClick={() => create('task', { context: { task: null } })}>
+          Standard
+        </button>
+      </>
+    );
+  };
+  const view = render(() => (
+    <CreateContextProvider focusedPaneId={() => 'pane'}>
+      <Action />
+    </CreateContextProvider>
+  ));
+  fireEvent.click(view.getByText('Explicit'));
+  expect(host.popoverSplit).toHaveBeenLastCalledWith({
+    type: 'component',
+    id: 'task-compose',
+    params: { composerContext: { key: 'explicit' } },
+  });
+  fireEvent.click(view.getByText('Standard'));
+  expect(host.popoverSplit).toHaveBeenLastCalledWith({
+    type: 'component',
+    id: 'task-compose',
+    params: { composerContext: undefined },
+  });
 });

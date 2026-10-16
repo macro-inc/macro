@@ -15,8 +15,12 @@ const fixture = vi.hoisted(() => ({
   listsEnabled: true,
   touch: true,
   openWithSplit: vi.fn(),
+  activityFlag: () => ({ enabled: true, loading: false }),
 }));
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => fixture.activityFlag(),
+}));
 vi.mock('@app/components/view-shell', () => ({
   ViewShell: {
     Root: (props: ParentProps) => props.children,
@@ -141,6 +145,9 @@ vi.mock('../components/pipeline-sidebar', () => ({
 vi.mock('../components/pipeline-dialog', () => ({
   PipelineDialog: () => null,
 }));
+vi.mock('./activity', () => ({
+  CrmActivityView: (props: { tab: string }) => <div>{props.tab} feed</div>,
+}));
 vi.mock('./record-detail', () => ({
   CrmRecordDetail: (props: {
     viewName: string;
@@ -221,7 +228,12 @@ afterEach(() => {
   fixture.openWithSplit.mockReset();
 });
 
-function setup(initialTab = 'active') {
+function setup(
+  initialTab = 'active',
+  initialActivityFlag = { enabled: true, loading: false }
+) {
+  const [activityFlag, setActivityFlag] = createSignal(initialActivityFlag);
+  fixture.activityFlag = activityFlag;
   const [activeTab, setActiveTab] = createSignal<string | undefined>(
     initialTab
   );
@@ -243,7 +255,7 @@ function setup(initialTab = 'active') {
   render(() => (
     <CrmWorkspaceView>{() => <div>Record list</div>}</CrmWorkspaceView>
   ));
-  return { activeTab, setActiveTab, setPipelineRequest };
+  return { activeTab, setActiveTab, setPipelineRequest, setActivityFlag };
 }
 
 it('keeps sidebar destinations in the mobile header when switching records, pipelines and lists', () => {
@@ -281,8 +293,58 @@ it('omits pipelines and lists when those features are disabled', () => {
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
   expect(
     tabs.getAllByRole('button').map((button) => button.textContent)
-  ).toEqual(['Companies', 'People']);
+  ).toEqual(['Companies', 'People', 'Tasks', 'Email', 'Notes', 'Calls']);
 });
+
+it('opens each CRM activity feed instead of the company list', () => {
+  const { activeTab } = setup();
+  const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
+  for (const label of ['Tasks', 'Email', 'Notes', 'Calls']) {
+    fireEvent.click(tabs.getByRole('button', { name: label }));
+    expect(activeTab()).toBe(label.toLowerCase());
+    expect(screen.getByText(`${label.toLowerCase()} feed`)).toBeTruthy();
+    expect(screen.queryByText('Record list')).toBeNull();
+  }
+  fireEvent.click(tabs.getByRole('button', { name: 'Companies' }));
+  expect(screen.getByText('Record list')).toBeTruthy();
+});
+
+it('waits for the rollout before resolving a cold activity link', () => {
+  const { activeTab, setActivityFlag } = setup('tasks', {
+    enabled: false,
+    loading: true,
+  });
+  expect(activeTab()).toBe('tasks');
+  expect(screen.getByText('Loading CRM activity…')).toBeTruthy();
+  expect(screen.queryByText('tasks feed')).toBeNull();
+  expect(screen.queryByText('Record list')).toBeNull();
+  setActivityFlag({ enabled: true, loading: false });
+  expect(activeTab()).toBe('tasks');
+  expect(screen.getByText('tasks feed')).toBeTruthy();
+});
+
+it('hides activity navigation and leaves its feed when the rollout turns off', () => {
+  const { activeTab, setActivityFlag } = setup('email');
+  expect(screen.getByText('email feed')).toBeTruthy();
+  setActivityFlag({ enabled: false, loading: false });
+  expect(activeTab()).toBe('active');
+  expect(screen.queryByText('email feed')).toBeNull();
+  expect(screen.getByText('Record list')).toBeTruthy();
+  const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
+  for (const name of ['Tasks', 'Email', 'Notes', 'Calls']) {
+    expect(tabs.queryByRole('button', { name })).toBeNull();
+  }
+});
+
+it.each(['tasks', 'email', 'notes', 'calls'])(
+  'returns an unavailable %s deep link to Companies without mounting activity',
+  (tab) => {
+    const { activeTab } = setup(tab, { enabled: false, loading: false });
+    expect(activeTab()).toBe('active');
+    expect(screen.queryByText(`${tab} feed`)).toBeNull();
+    expect(screen.getByText('Record list')).toBeTruthy();
+  }
+);
 
 it('shows the company of a pipeline row in place of the pipeline on desktop', () => {
   fixture.touch = false;

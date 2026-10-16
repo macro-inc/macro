@@ -71,9 +71,11 @@ import {
 } from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
+import type { TaskComposerContext } from '../../task-composer/core/context';
 import {
   createTaskComposerProperties,
   createTaskWithProperties,
+  DEFAULT_TASK_COMPOSER_PROPERTY_IDS,
   defaultTaskPropertyValues,
   taskComposerProjectValue,
 } from '../util/taskComposerProperties';
@@ -81,10 +83,11 @@ import {
   clearTaskComposerDraft,
   loadTaskComposerDraft,
   saveTaskComposerDraft,
-  updateDraftTimestamp,
+  taskComposerContextStorage,
 } from '../util/taskComposerStorage';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { InlinePropertyValue } from './InlinePropertyValue';
+import { TaskComposerPropertyPicker } from './TaskComposerPropertyPicker';
 import { SimilarTasksSection } from './TaskDuplicateList';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
@@ -349,6 +352,7 @@ export interface ComposeTaskProps {
   initialAssigneeIds?: string[];
   /** Start in this project, e.g. when composing from the project's page. */
   initialProjectId?: string;
+  composerContext?: TaskComposerContext;
   /** Prefill the visible Due Date control when creating from a timeline. */
   initialDueDate?: Date;
   /**
@@ -373,6 +377,9 @@ export function ComposeTask(props: ComposeTaskProps) {
   const splitPanel = useSplitPanelOrThrow();
   const { popoverSplit, openWithSplit } = useSplitLayout();
   const currentUserId = useUserId();
+  const draftStorage = props.composerContext
+    ? taskComposerContextStorage(props.composerContext.key)
+    : undefined;
 
   const getDefaultPropertyValues = (): Record<string, PropertyApiValues> => {
     const ids = (() => {
@@ -382,7 +389,10 @@ export function ComposeTask(props: ComposeTaskProps) {
       const id = currentUserId();
       return id ? [id] : [];
     })();
-    return defaultTaskPropertyValues(ids);
+    return {
+      ...defaultTaskPropertyValues(ids),
+      ...props.composerContext?.initialPropertyValues,
+    };
   };
 
   // Contextual project and date values apply without discarding a restored draft.
@@ -411,13 +421,16 @@ export function ComposeTask(props: ComposeTaskProps) {
       !props.initialContent &&
       !props.initialAssigneeIds?.length
     ) {
-      const draft = loadTaskComposerDraft();
+      const draft = loadTaskComposerDraft(draftStorage);
       if (draft) {
         return {
           title: draft.title,
           content: draft.content,
           editorState: draft.editorState,
           propertyValues: withInitialProperties(draft.propertyValues),
+          visiblePropertyIds:
+            draft.visiblePropertyIds ??
+            props.composerContext?.visiblePropertyIds,
           isDraftLoaded: true,
         };
       }
@@ -427,6 +440,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       content: props.initialContent ?? '',
       editorState: undefined,
       propertyValues: withInitialProperties(getDefaultPropertyValues()),
+      visiblePropertyIds: props.composerContext?.visiblePropertyIds,
       isDraftLoaded: false,
     };
   };
@@ -493,20 +507,57 @@ export function ComposeTask(props: ComposeTaskProps) {
     propertyValues,
     setPropertyValues,
     properties,
+    visiblePropertyIds,
+    setVisiblePropertyIds,
+    addableDefinitions,
+    addProperty,
     saveHandler,
     composerTags,
     clearComposerTags,
     createDefinitions,
   } = createTaskComposerProperties({
     initialValues: initialState.propertyValues,
+    initialVisiblePropertyIds: initialState.visiblePropertyIds,
+    allDefinitions: true,
   });
+  let baselinePropertyValues = JSON.stringify(initialState.propertyValues);
+  let baselineVisiblePropertyIds = JSON.stringify(visiblePropertyIds());
+  const hasDraftChanges = () =>
+    !!title() ||
+    !!content() ||
+    isDraftLoaded() ||
+    JSON.stringify(propertyValues) !== baselinePropertyValues ||
+    JSON.stringify(visiblePropertyIds()) !== baselineVisiblePropertyIds;
 
   // History upsert mutation
   const upsertToHistoryMutation = useUpsertToHistoryMutation();
 
   // draft saving logic
   let hasInitializedFromDraft = isDraftLoaded();
-  const debouncedSave = debounce(saveTaskComposerDraft, 300);
+  let skipNextDraftSave = false;
+  const debouncedSave = debounce(
+    (draft: Parameters<typeof saveTaskComposerDraft>[0]) =>
+      saveTaskComposerDraft(draft, draftStorage),
+    300
+  );
+  const draftSnapshot = () => ({
+    title: title(),
+    content: content(),
+    editorState: bodyEditor()?.getEditorState().toJSON(),
+    propertyValues: structuredClone(unwrap(propertyValues)),
+    visiblePropertyIds: [...visiblePropertyIds()],
+  });
+  onCleanup(() => {
+    debouncedSave.clear();
+    // Escape and backdrop dismissal bypass the close button. Flush before disposal.
+    if (!isCreating() && hasDraftChanges()) {
+      saveTaskComposerDraft(draftSnapshot(), draftStorage);
+    }
+  });
+  const clearDraft = () => {
+    debouncedSave.clear();
+    clearTaskComposerDraft(draftStorage);
+  };
 
   createEffect(() => {
     const currentTitle = title();
@@ -515,8 +566,13 @@ export function ComposeTask(props: ComposeTaskProps) {
     // change (e.g. setting a due date). unwrap()'d access doesn't subscribe,
     // so without this the draft only saved when title/content changed.
     JSON.stringify(propertyValues);
+    visiblePropertyIds();
     const currentProperties = structuredClone(unwrap(propertyValues));
 
+    if (skipNextDraftSave) {
+      skipNextDraftSave = false;
+      return;
+    }
     if (hasInitializedFromDraft) {
       hasInitializedFromDraft = false;
       return;
@@ -527,6 +583,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       content: currentContent,
       editorState: bodyEditor()?.getEditorState().toJSON(),
       propertyValues: currentProperties,
+      visiblePropertyIds: [...visiblePropertyIds()],
     });
   });
 
@@ -592,12 +649,16 @@ export function ComposeTask(props: ComposeTaskProps) {
     });
   };
 
-  // A retry keeps how this composer creates tasks, not its one-shot callbacks.
+  // A retry keeps its host context and creation policy, not one-shot editor callbacks.
   const reopenForRetry = () =>
     popoverSplit({
       type: 'component',
       id: 'task-compose',
-      params: { createTask: props.createTask },
+      params: {
+        createTask: props.createTask,
+        composerContext: props.composerContext,
+        initialProjectId: props.initialProjectId,
+      },
     });
 
   const handleCreateTask = async () => {
@@ -616,7 +677,8 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
     const resetTitleAndBody = () => {
-      clearTaskComposerDraft();
+      clearDraft();
+      skipNextDraftSave = true;
       setTitle('');
       setContent('');
       setIsDraftLoaded(false);
@@ -628,12 +690,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (!createMore()) {
       // Snapshot the draft locally, then clear localStorage so a new dialog
       // opened while this creation is in flight starts blank.
-      const draftSnapshot = {
-        title: taskTitle,
-        content: taskContent,
-        propertyValues: structuredClone(unwrap(propertyValues)),
-      };
-      clearTaskComposerDraft();
+      const snapshot = draftSnapshot();
+      clearDraft();
       const createdTask = await (props.createTask ?? createTaskWithProperties)(
         taskTitle,
         taskContent,
@@ -655,7 +713,8 @@ export function ComposeTask(props: ComposeTaskProps) {
       if (!createdTask) {
         props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
-        saveTaskComposerDraft(draftSnapshot);
+        debouncedSave.clear();
+        saveTaskComposerDraft(snapshot, draftStorage);
         reopenForRetry();
         return;
       }
@@ -690,7 +749,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
 
     // Success: clear draft and notify
-    clearTaskComposerDraft();
+    clearDraft();
     const { documentId, initialSnapshot } = createdTask;
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
@@ -710,12 +769,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     setIsCreating(true);
 
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
-    const draftSnapshot = {
-      title: taskTitle,
-      content: taskContent,
-      propertyValues: structuredClone(unwrap(propertyValues)),
-    };
-    clearTaskComposerDraft();
+    const snapshot = draftSnapshot();
+    clearDraft();
 
     let split: ReturnType<typeof openWithSplit>['split'];
 
@@ -742,7 +797,8 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     if (!createdTask) {
       split?.goBack();
-      saveTaskComposerDraft(draftSnapshot);
+      debouncedSave.clear();
+      saveTaskComposerDraft(snapshot, draftStorage);
       reopenForRetry();
       return;
     }
@@ -772,12 +828,6 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   const handleClose = () => {
-    const currentTitle = title();
-    const currentContent = content();
-
-    if (currentTitle || currentContent) {
-      updateDraftTimestamp();
-    }
     splitPanel.handle.close();
     props.onClose?.();
   };
@@ -794,14 +844,21 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   const handleClearDraft = () => {
-    clearTaskComposerDraft();
+    clearDraft();
+    skipNextDraftSave = true;
     setTitle('');
     setContent('');
     setPropertyValues(
       reconcile(withInitialProperties(getDefaultPropertyValues()))
     );
+    setVisiblePropertyIds(
+      props.composerContext?.visiblePropertyIds ??
+        DEFAULT_TASK_COMPOSER_PROPERTY_IDS
+    );
     setTagLayoutMode('bottom');
     setIsDraftLoaded(false);
+    baselinePropertyValues = JSON.stringify(unwrap(propertyValues));
+    baselineVisiblePropertyIds = JSON.stringify(visiblePropertyIds());
     const ed = bodyEditor();
     ed && initializeEditorEmpty(ed);
   };
@@ -902,7 +959,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             </Button>
           </Show>
         </div>
-        <Show when={content().trim() || title()}>
+        <Show when={hasDraftChanges()}>
           <Button
             onMouseDown={handleClearDraft}
             tabIndex={-1}
@@ -1051,6 +1108,10 @@ export function ComposeTask(props: ComposeTaskProps) {
               <Show when={tagLayoutMode() === 'bottom'}>
                 <InlineTagsPill docTags={composerTags} showPlaceholder />
               </Show>
+              <TaskComposerPropertyPicker
+                definitions={addableDefinitions()}
+                onAdd={addProperty}
+              />
             </EntityComposer.Properties>
             <Modals />
           </PropertiesProvider>

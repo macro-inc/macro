@@ -7,6 +7,7 @@ mod test;
 mod database_row;
 mod document_ids;
 mod initiative;
+mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
@@ -1121,14 +1122,7 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
     let Some(expr) = ast else {
         return String::new();
     };
-    let formatting = expr.collapse_frames(|frame| match frame {
-        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
-        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
-        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
-        filter_ast::ExprFrame::Literal(literal) => {
-            property_literal_predicate(&literal, entity_id_sql)
-        }
-    });
+    let formatting = property_filter::predicate(expr, entity_id_sql);
     if formatting.is_empty() {
         String::new()
     } else {

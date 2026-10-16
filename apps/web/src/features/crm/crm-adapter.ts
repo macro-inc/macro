@@ -1,9 +1,13 @@
+import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableCrmActivity,
   enableCrmLists,
   enableCrmPipelines,
 } from '@core/constant/featureFlags';
@@ -48,6 +52,7 @@ import {
   createClosedStageIds,
   createCrmPermissions,
 } from './primitives/team-config';
+import { useCrmActivityQuery } from './queries/activity';
 import {
   useCompanyQuery,
   useCreateCompanyMutation,
@@ -80,6 +85,7 @@ import {
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
 import { createAppDealStages } from './stage-adapter';
+import { crmTaskComposerContext } from './task-composer';
 
 // Loaded on demand: the Tasks list imports soup, which imports CRM entry points.
 const CrmRecordTasks = lazy(async () => ({
@@ -165,8 +171,18 @@ export function createAppCrmContext(): CrmContext {
     feedback: toast,
   };
   const userId = useUserId();
+  const layout = useSplitLayout();
+  const panel = useSplitPanel();
+  const createContext = useCreateContext();
+  const activityFlag = useFeatureFlag(enableCrmActivity);
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    registerTaskComposerRecord(source) {
+      if (!panel) return () => {};
+      return createContext.register(panel.handle.id, () => ({
+        task: activityFlag().enabled ? crmTaskComposerContext(source()) : null,
+      }));
+    },
     createPipelines: (teamId) => createPipelinesSource(deps, teamId),
     PipelineEditor: PipelineDatabaseEditor,
     PipelineEntries: createCrmPipelineEntries({
@@ -199,6 +215,20 @@ export function createAppCrmContext(): CrmContext {
       withRowNotifications(
         useContactEmailsQuery(useSoupAstItemsQuery, ...args)
       ),
+    createActivity: (tab) =>
+      withRowNotifications(
+        useCrmActivityQuery(deps, useSoupAstItemsQuery, tab, userId)
+      ),
+    openTaskComposer: () =>
+      layout.popoverSplit({
+        type: 'component',
+        id: 'task-compose',
+        params: {
+          composerContext: panel
+            ? createContext.snapshot('task', panel.handle.id)
+            : undefined,
+        },
+      }),
     createRecordFiles: (scope) =>
       withRowNotifications(useRecordFilesQuery(useSoupAstItemsQuery, scope)),
     createRecordCalls: (scope) =>

@@ -519,6 +519,27 @@ filter sheets. Desktop uses the centered composer dialog.
    enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
 
+The property row adapts when the launching pane supplies a task-composer preset.
+The app shell's creation-context provider snapshots the focused pane's preset
+before the composer opens. It reads the layout's existing focus accessor, not a
+global context registry; no detail fetch or navigation-state capture is needed.
+Without a preset, the standard property row and draft are used. The shared
+composer is not feature-flagged. Create-menu actions, shortcuts, and pane buttons
+capture the provider during setup and read the preset when invoked.
+
+Customers supplies its preset when PostHog `enable-crm-activity` is enabled:
+**Companies** and **Contacts** replace Status in the initial row; Status still
+starts as Not Started on the saved task. Record-level task creation prefills the
+company or contact, including the contact's company when already loaded. With the
+CRM flag off or loading, CRM supplies no preset; record-level creation still
+associates the task with its record. **Add property** searches other supported
+task properties and adds a pill without changing existing values. Tag selection
+continues through its separate Tags picker. CRM drafts are isolated from the
+ordinary task draft and from other CRM records; reopening restores added
+properties as well as their values. **Clear Draft** restores that view's preset.
+Later flag, focus or record changes leave the open draft and associations intact,
+even between launch and mount. The next opening uses the current context.
+
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.
 

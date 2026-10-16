@@ -8,11 +8,13 @@ import {
   ErrorBoundary,
   For,
   type JSX,
+  onCleanup,
   onMount,
   Show,
   Suspense,
 } from 'solid-js';
 import { RecordTabs } from '../components/record-tabs';
+import { useCrmContext } from '../context/crm-context';
 import {
   COMPANY_SECTIONS,
   CONTACT_SECTIONS,
@@ -61,6 +63,8 @@ export function CrmRecordDetail(props: {
 }) {
   const [trail, setTrail] = createSignal<CrmRecordRef[]>([props.record]);
   const current = () => trail()[trail().length - 1];
+  // Keep the selected identity available even if the detail body shows an error.
+  onCleanup(useCrmContext().registerTaskComposerRecord(current));
   const [companySection, setCompanySection] =
     createSignal<CompanySection>('overview');
   const [contactSection, setContactSection] =

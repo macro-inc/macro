@@ -83,6 +83,10 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import {
+  type PaneCreateContext,
+  useCreateContext,
+} from './context/create-context';
 import type { CreateMenuSection } from './core/create-menu-details';
 import {
   launcherItemKey,
@@ -221,7 +225,7 @@ const createBlock = async (spec: {
   span?.event('doc.navigated');
 };
 
-const createComponent = async (spec: {
+const createComponent = (spec: {
   componentId: string;
   shouldInsert?: boolean;
   asPopover?: boolean;
@@ -261,6 +265,8 @@ export function runCreateAction(
     destination?: string;
     /** Creatables that open a composer instead ignore it. */
     openCreated?: OpenCreatedItem;
+    /** Plain defaults supplied by the caller, never resolved from global state. */
+    context?: PaneCreateContext;
   } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
@@ -367,6 +373,7 @@ export function runCreateAction(
       createComponent({
         componentId: 'task-compose',
         asPopover: true,
+        params: { composerContext: options.context?.task ?? undefined },
       });
       return;
     case 'initiative':
@@ -552,9 +559,22 @@ export function runCreateAction(
   }
 }
 
+/** Capture the provider during setup; snapshot only when the action runs. */
+export function useCreateAction(): typeof runCreateAction {
+  const context = useCreateContext();
+  return (name, options = {}) =>
+    runCreateAction(name, {
+      ...options,
+      context:
+        options.context ??
+        (name === 'task' ? { task: context.snapshot('task') } : undefined),
+    });
+}
 export type { CreatableBlock, CreatableName } from './types';
 
-export const CREATABLE_BLOCKS: CreatableBlock[] = [
+const createBlocks = (
+  createAction: typeof runCreateAction
+): CreatableBlock[] => [
   {
     label: 'Email',
     icon: getIconConfig('email').icon,
@@ -565,7 +585,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.emailNewSplit,
     hotkey: 'e',
     keyDownHandler: () => {
-      runCreateAction('email', { shouldInsert: pressedKeys().has('shift') });
+      createAction('email', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -588,7 +608,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     registrationType: 'add',
     enabled: () => !isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
-      runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
+      createAction('chat', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -602,7 +622,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkeyToken: TOKENS.create.routine,
     hotkey: 'u',
     keyDownHandler: () => {
-      runCreateAction('routine');
+      createAction('routine');
       return true;
     },
   },
@@ -619,7 +639,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     registrationType: 'add',
     enabled: () => isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
-      runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
+      createAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -635,7 +655,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.databaseNewSplit,
     hotkey: 'l',
     keyDownHandler: () => {
-      runCreateAction('database', { shouldInsert: pressedKeys().has('shift') });
+      createAction('database', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -651,7 +671,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.formNewSplit,
     hotkey: 'q',
     keyDownHandler: () => {
-      runCreateAction('form', { shouldInsert: pressedKeys().has('shift') });
+      createAction('form', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -665,7 +685,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkeyToken: TOKENS.create.skill,
     hotkey: 'k',
     keyDownHandler: () => {
-      runCreateAction('skill');
+      createAction('skill');
       return true;
     },
   },
@@ -679,7 +699,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.noteNewSplit,
     hotkey: 'd',
     keyDownHandler: () => {
-      runCreateAction('md', { shouldInsert: pressedKeys().has('shift') });
+      createAction('md', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -693,7 +713,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.taskNewSplit,
     hotkey: 't' as const,
     keyDownHandler: () => {
-      runCreateAction('task');
+      createAction('task');
       return true;
     },
   },
@@ -707,7 +727,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkeyToken: TOKENS.create.initiative,
     hotkey: 'p',
     keyDownHandler: () => {
-      runCreateAction('initiative');
+      createAction('initiative');
       return true;
     },
   },
@@ -722,7 +742,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.snippetNewSplit,
     hotkey: 's' as const,
     keyDownHandler: () => {
-      runCreateAction('snippet', { shouldInsert: pressedKeys().has('shift') });
+      createAction('snippet', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -737,7 +757,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.messageNewSplit,
     hotkey: 'm',
     keyDownHandler: () => {
-      runCreateAction('channel', { shouldInsert: pressedKeys().has('shift') });
+      createAction('channel', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -766,7 +786,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.canvasNewSplit,
     hotkey: 'n',
     keyDownHandler: () => {
-      runCreateAction('canvas', {
+      createAction('canvas', {
         shouldInsert: pressedKeys().has('shift'),
       });
       return true;
@@ -784,7 +804,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.photoshopNewSplit,
     hotkey: 'h',
     keyDownHandler: () => {
-      runCreateAction('psd', { shouldInsert: pressedKeys().has('shift') });
+      createAction('psd', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -800,7 +820,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.designNewSplit,
     hotkey: 'i',
     keyDownHandler: () => {
-      runCreateAction('fig', { shouldInsert: pressedKeys().has('shift') });
+      createAction('fig', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -824,7 +844,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.illustrationNewSplit,
     hotkey: 'v',
     keyDownHandler: () => {
-      runCreateAction('ai', { shouldInsert: pressedKeys().has('shift') });
+      createAction('ai', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -840,7 +860,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.spreadsheetNewSplit,
     hotkey: 'b',
     keyDownHandler: () => {
-      runCreateAction('spreadsheet', {
+      createAction('spreadsheet', {
         shouldInsert: pressedKeys().has('shift'),
       });
       return true;
@@ -856,7 +876,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.projectNewSplit,
     hotkey: 'f',
     keyDownHandler: () => {
-      runCreateAction('project', { shouldInsert: pressedKeys().has('shift') });
+      createAction('project', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -870,18 +890,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.codeNewSplit,
     hotkey: 'o',
     keyDownHandler: () => {
-      runCreateAction('code', { shouldInsert: pressedKeys().has('shift') });
+      createAction('code', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
 ];
+
+export const CREATABLE_BLOCKS = createBlocks(runCreateAction);
 
 /** Router-backed commands are bound once in each host's component owner. */
 export function useCreateCommands(): CreatableBlock[] {
   const navigate = useNavigate();
   const quickCalls = useQuickCallsFlag();
   return [
-    ...CREATABLE_BLOCKS,
+    ...createBlocks(useCreateAction()),
     createCallCommand({
       navigate,
       close: () => setCreateMenuOpen(false, false),

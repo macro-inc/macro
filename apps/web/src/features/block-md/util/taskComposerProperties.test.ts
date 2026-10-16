@@ -95,3 +95,114 @@ it('skips the check without a project', async () => {
   await create();
   expect(mock.properties).not.toHaveBeenCalled();
 });
+
+import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import {
+  taskComposerVisiblePropertyIds,
+  taskComposerWritableDefinitions,
+  withoutTaskComposerTags,
+} from './taskComposerProperties';
+
+function definition(
+  id: string,
+  overrides: Partial<PropertyDefinition> = {}
+): PropertyDefinition {
+  return {
+    id,
+    display_name: id,
+    data_type: 'STRING',
+    is_metadata: false,
+    is_system: false,
+    is_multi_select: false,
+    specific_entity_type: null,
+    owner: { scope: 'system' },
+    created_at: '',
+    updated_at: '',
+    ...overrides,
+  };
+}
+
+it('keeps entity-reference targets while excluding metadata, tags, and database columns', () => {
+  const definitions = [
+    definition('assignees', {
+      data_type: 'ENTITY',
+      specific_entity_type: 'USER',
+    }),
+    definition('companies', {
+      data_type: 'ENTITY',
+      specific_entity_type: 'COMPANY',
+    }),
+    definition('contacts', {
+      data_type: 'ENTITY',
+      specific_entity_type: 'CONTACT',
+    }),
+    definition('project', {
+      data_type: 'ENTITY',
+      specific_entity_type: 'INITIATIVE',
+    }),
+    definition('metadata', { is_metadata: true }),
+    definition('tag', { data_type: 'TAG' }),
+    definition('tag-set'),
+    definition('column', { owner: { scope: 'database', database_id: 'db' } }),
+  ];
+  expect(
+    taskComposerWritableDefinitions(definitions, new Set(['tag-set'])).map(
+      (d) => d.id
+    )
+  ).toEqual(['assignees', 'companies', 'contacts', 'project']);
+});
+
+it('keeps context order, ignores unavailable ids and deduplicates selected properties', () => {
+  const definitions = [definition('a'), definition('b')];
+  expect(
+    taskComposerVisiblePropertyIds(
+      ['b', 'missing', 'b', 'a'],
+      definitions,
+      true
+    )
+  ).toEqual(['b', 'a']);
+  expect(taskComposerVisiblePropertyIds([], definitions, true)).toEqual([]);
+});
+
+it('keeps Project behind its feature flag', () => {
+  const definitions = [definition(SYSTEM_PROPERTY_IDS.PROJECT)];
+  expect(
+    taskComposerVisiblePropertyIds(
+      [SYSTEM_PROPERTY_IDS.PROJECT],
+      definitions,
+      false
+    )
+  ).toEqual([]);
+});
+
+it('clears tag sets without clearing arbitrary single-select values', () => {
+  const values = {
+    tag: { valueType: 'SELECT_STRING' as const, values: ['red'] },
+    custom: { valueType: 'SELECT_STRING' as const, values: ['active'] },
+  };
+  expect(withoutTaskComposerTags(values, new Set(['tag']))).toEqual({
+    custom: values.custom,
+  });
+  expect(values.tag.values).toEqual(['red']);
+});
+
+it('converts an arbitrary added single-select property with its definition', async () => {
+  mock.create.mockResolvedValue({ documentId: 'task' });
+  await createTaskWithProperties(
+    'Task',
+    '',
+    [['custom', { valueType: 'SELECT_STRING', values: ['chosen'] }]],
+    new Map([['custom', definition('custom', { data_type: 'SELECT_STRING' })]]),
+    vi.fn()
+  );
+  expect(mock.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      propertyValues: [
+        {
+          propertyId: 'custom',
+          value: { type: 'select_option', option_id: 'chosen' },
+        },
+      ],
+    })
+  );
+});

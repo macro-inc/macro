@@ -2,8 +2,8 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   CREATABLE_BLOCKS,
   type CreatableName,
-  runCreateAction,
   useCreatableEnabled,
+  useCreateAction,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
@@ -127,6 +127,7 @@ function CreateOptionIcon(props: { id: CreateOption['id'] }) {
 }
 
 export const SoupViewCreateButton = () => {
+  const runCreateAction = useCreateAction();
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
   const isCreatableEnabled = useCreatableEnabled();

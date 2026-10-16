@@ -1,5 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
-import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import {
   type ContactSection,
@@ -34,6 +34,13 @@ export function Contact(props: {
   const pipelinesEnabled = context.pipelinesEnabled();
   const contactQuery = useContactQuery(() => props.contactId);
   const contact = () => contactQuery.data;
+  onCleanup(
+    context.registerTaskComposerRecord(() => ({
+      type: 'contact',
+      id: props.contactId,
+      companyId: contact()?.companyId,
+    }))
+  );
   const isTeamAdmin = useIsTeamAdmin();
   const section = () => props.section ?? 'overview';
   const scope = createMemo(

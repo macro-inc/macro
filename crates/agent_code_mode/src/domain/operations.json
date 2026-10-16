@@ -136,6 +136,7 @@
   "auth.getSubscriptionStatus": "Get Subscription Status",
   "auth.changePlan": "Change Plan",
   "auth.createPortalSession": "Create Portal Session",
+  "auth.getTrialEligibility": "Get Trial Eligibility",
   "auth.patchUserTutorial": "Patch User Tutorial",
   "calendar.getAvailabilityCalendars": "Get Availability Calendars",
   "calendar.setAvailabilityCalendar": "Set Availability Calendar",

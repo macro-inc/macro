@@ -2,8 +2,8 @@ import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import {
   type CreatableName,
-  runCreateAction,
   useCreatableEnabled,
+  useCreateAction,
 } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
@@ -80,6 +80,7 @@ export function EmptyState(props: {
   hasHiddenItems?: boolean;
   onClearFilters?: () => void;
 }) {
+  const runCreateAction = useCreateAction();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
   const soup = useSoupView();

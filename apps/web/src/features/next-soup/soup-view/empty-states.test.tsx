@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { shouldShowLoadError } from './empty-states';
 
 vi.mock('@app/features/command/Launcher', () => ({
-  runCreateAction: vi.fn(),
+  useCreateAction: () => vi.fn(),
 }));
 vi.mock('@channel/CreateChannelModal', () => ({
   openNewChannelModal: vi.fn(),

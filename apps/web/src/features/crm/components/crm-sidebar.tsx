@@ -1,4 +1,7 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { getIconConfig } from '@core/component/EntityIcon';
+import { enableCrmActivity } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import ExportIcon from '@phosphor/download-simple.svg';
@@ -12,11 +15,18 @@ import { Button, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { CRM_RECORDS } from '../core/navigation';
+import { CRM_ACTIVITY_TABS, CRM_RECORDS } from '../core/navigation';
 import { COMPANIES_TOUR } from '../tour';
 import { CrmCreateMenu } from './crm-create-menu';
 
-const RECORD_ICONS = { active: BuildingsIcon, people: UsersIcon };
+const RECORD_ICONS = {
+  active: BuildingsIcon,
+  people: UsersIcon,
+  tasks: getIconConfig('task').icon,
+  email: getIconConfig('email').icon,
+  notes: getIconConfig('md').icon,
+  calls: getIconConfig('call').icon,
+};
 
 export function CrmSidebar(props: {
   /** The highlighted record type, list, or pipeline. */
@@ -38,6 +48,7 @@ export function CrmSidebar(props: {
   onSettings: () => void;
   onCollapse: () => void;
 }) {
+  const activityFlag = useFeatureFlag(enableCrmActivity);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
@@ -83,7 +94,12 @@ export function CrmSidebar(props: {
               aria-label="CRM records"
               ref={tourTarget(COMPANIES_TOUR.records)}
             >
-              <For each={CRM_RECORDS}>
+              <For
+                each={[
+                  ...CRM_RECORDS,
+                  ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
+                ]}
+              >
                 {(record) => (
                   <ViewSidebar.Item
                     active={props.active === record.id}

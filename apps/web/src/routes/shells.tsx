@@ -1,7 +1,12 @@
+import { CreateContextProvider } from '@app/features/command/context/create-context';
 import { SplitRouter } from '@app/lib/split-router';
+import { AppProviders } from '@components/app/AppProviders';
 import { dismissBootShell } from '@components/app/boot-shell';
 import { AppChrome, PageContent } from '@components/app/Layout';
-import { SplitLayout } from '@components/app/split-layout/SplitLayout';
+import {
+  SplitLayout,
+  SplitLayoutProvider,
+} from '@components/app/split-layout/SplitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { ImperativeDialogHost } from '@ui';
 import { type JSX, onCleanup, onMount, type ParentProps, Show } from 'solid-js';
@@ -59,9 +64,13 @@ export function withFormRespondShell(Page: () => JSX.Element) {
           </FocusedPage>
         }
       >
-        <AppPage>
-          <Page />
-        </AppPage>
+        <AppProviders>
+          <CreateContextProvider focusedPaneId={() => undefined}>
+            <AppPage>
+              <Page />
+            </AppPage>
+          </CreateContextProvider>
+        </AppProviders>
       </Show>
     );
   };
@@ -136,8 +145,12 @@ function warmRouteViews(views: readonly PreloadableView[]): void {
 export function AppShell(): JSX.Element {
   warmRouteViews(LIKELY_NEXT_VIEWS);
   return (
-    <AppPage>
-      <SplitLayout />
-    </AppPage>
+    <AppProviders>
+      <SplitLayoutProvider>
+        <AppPage>
+          <SplitLayout />
+        </AppPage>
+      </SplitLayoutProvider>
+    </AppProviders>
   );
 }

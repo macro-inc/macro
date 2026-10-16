@@ -18,9 +18,10 @@ alwaysApply: false
 - Each top-level route picks its shell in `app-router-view.tsx`
   (`routes/shells.tsx`): `authRoute` pages and booking links render without app
   chrome, and `appRoute` renders `AppShell` — the app's providers
-  (`AppProviders`), chrome (`AppChrome` in `Layout.tsx`), and the split layout.
-  Put state only the app's views use in `AppProviders`, not `Root`; `Root` keeps
-  what every page or a call needs.
+  (`AppProviders`), layout/context owner (`SplitLayoutProvider`), chrome
+  (`AppChrome` in `Layout.tsx`), and split content. Compose these in the route
+  shell; keep `AppChrome` independent of page selection. Put state only the app's
+  views use in `AppProviders`, not `Root`; `Root` keeps what every page or call needs.
 - `index.html` paints a boot shell before any JS runs: the saved theme's
   background, the rail column, and the desktop app's content card — no app
   content. The first shell to mount dismisses it (`dismissBootShell`). Keep its
