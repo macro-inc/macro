@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,\n                created_at, updated_at, last_connected_at, last_disconnected_at\n            FROM harnesses\n            WHERE deleted_at IS NULL\n              AND (\n                owner_user_id = $1\n                OR team_id IN (SELECT team_id FROM team_user WHERE user_id = $1)\n              )\n            ORDER BY created_at DESC\n            ",
+  "query": "\n            SELECT\n                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,\n                operator_allows_bypass, created_at, updated_at, last_connected_at, last_disconnected_at\n            FROM harnesses\n            WHERE deleted_at IS NULL\n              AND (\n                owner_user_id = $1\n                OR team_id IN (SELECT team_id FROM team_user WHERE user_id = $1)\n              )\n            ORDER BY created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -40,21 +40,26 @@
       },
       {
         "ordinal": 7,
+        "name": "operator_allows_bypass",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "last_connected_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "last_disconnected_at",
         "type_info": "Timestamptz"
       }
@@ -72,11 +77,12 @@
       true,
       false,
       false,
+      true,
       false,
       false,
       true,
       true
     ]
   },
-  "hash": "d30ffc9d1a8aabb56674f4a0292176684576a144a1dd05b4e6fed48f4e49e3a9"
+  "hash": "5039b7d6c707c3d1aacb779d0280f747ef8dc3f35cd50ac52a7b8c83b9c9e3da"
 }

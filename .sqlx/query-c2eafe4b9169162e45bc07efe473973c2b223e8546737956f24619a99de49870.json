@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE harnesses\n                SET last_connected_at = now(), operator_allows_bypass = $2\n                WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c2eafe4b9169162e45bc07efe473973c2b223e8546737956f24619a99de49870"
+}
