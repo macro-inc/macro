@@ -205,6 +205,29 @@ describe('forwarding with selected access', () => {
     }
   );
 
+  it('defaults pdf sharing to comment', async () => {
+    mocks.sendToChannel.mockResolvedValue({
+      channelId: 'channel-1',
+      navigateToChannel: vi.fn(),
+    });
+    const { submit } = mountForward(
+      toShareItem({
+        id: 'doc-1',
+        kind: 'document',
+        name: 'Report',
+        block: 'pdf',
+        canGrant: true,
+      })
+    );
+
+    await submit();
+
+    expect(mocks.editDocument).toHaveBeenCalledWith({
+      documentId: 'doc-1',
+      sharePermission: replace('channel-1', 'comment'),
+    });
+  });
+
   it.each(['channel', 'user', 'group'] as const)(
     'finishes sending to a %s before applying the selected access level',
     async (target) => {

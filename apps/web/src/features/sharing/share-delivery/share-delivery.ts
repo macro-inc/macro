@@ -15,6 +15,7 @@ import type { ShareEvent } from './core/delivery-plan';
 import {
   type ChannelAccessLevel,
   parseChannelAccessLevel,
+  type ShareFormat,
   type ShareItem,
   type ShareItemRef,
   type ShareKind,
@@ -64,11 +65,18 @@ export function toShareItem(input: ShareItemInput): ShareItem {
     kind: input.kind,
     id: input.id,
     name: input.name,
-    markdown:
-      input.block !== undefined && resolveBlockAlias(input.block) === 'md',
+    format: input.block === undefined ? 'other' : formatOf(input.block),
     canGrant: input.canGrant,
     channelGrants: new Map(grants),
   };
+}
+
+function formatOf(block: BlockName | BlockAlias): ShareFormat {
+  return match(resolveBlockAlias(block))
+    .returnType<ShareFormat>()
+    .with('md', () => 'markdown')
+    .with('pdf', () => 'pdf')
+    .otherwise(() => 'other');
 }
 
 export function useShareForm(

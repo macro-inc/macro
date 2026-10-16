@@ -84,24 +84,22 @@ beforeEach(() => {
 
 describe('toShareItem', () => {
   it.each([
-    { block: 'md', markdown: true },
-    { block: 'task', markdown: true },
-    { block: 'agent', markdown: false },
-    { block: undefined, markdown: false },
-  ] as const)(
-    'reads block $block as markdown: $markdown',
-    ({ block, markdown }) => {
-      const item = toShareItem({
-        id: 'doc-1',
-        kind: 'document',
-        name: 'Plan',
-        block,
-        canGrant: true,
-      });
+    { block: 'md', format: 'markdown' },
+    { block: 'task', format: 'markdown' },
+    { block: 'pdf', format: 'pdf' },
+    { block: 'agent', format: 'other' },
+    { block: undefined, format: 'other' },
+  ] as const)('reads block $block as $format', ({ block, format }) => {
+    const item = toShareItem({
+      id: 'doc-1',
+      kind: 'document',
+      name: 'Plan',
+      block,
+      canGrant: true,
+    });
 
-      expect(item.markdown).toBe(markdown);
-    }
-  );
+    expect(item.format).toBe(format);
+  });
 
   it('keeps only channel levels from existing grants', () => {
     const item = toShareItem({
@@ -120,7 +118,7 @@ describe('toShareItem', () => {
       kind: 'document',
       id: 'doc-1',
       name: 'Plan',
-      markdown: false,
+      format: 'other',
       canGrant: false,
       channelGrants: new Map([
         ['channel-1', 'edit'],

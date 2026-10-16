@@ -55,7 +55,7 @@ function item(kind: ShareKind, name: string, canGrant = true): ShareItem {
     kind,
     id: name.toLowerCase(),
     name,
-    markdown: false,
+    format: 'other',
     canGrant,
     channelGrants: new Map(),
   };
@@ -265,7 +265,7 @@ describe('BulkShareView', () => {
   it('explains capped access and a split batch before sending', () => {
     const markdown = (name: string): ShareItem => ({
       ...item('document', name),
-      markdown: true,
+      format: 'markdown',
     });
     setup(
       [

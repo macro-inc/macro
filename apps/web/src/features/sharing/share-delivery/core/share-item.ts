@@ -27,9 +27,11 @@ export function itemKey(item: ShareItemRef): ItemKey {
   return `${item.kind}:${item.id}` as ItemKey;
 }
 
+export type ShareFormat = 'markdown' | 'pdf' | 'other';
+
 export type ShareItem = ShareItemRef & {
   readonly name: string;
-  readonly markdown: boolean;
+  readonly format: ShareFormat;
   readonly canGrant: boolean;
   readonly channelGrants: ReadonlyMap<string, ChannelAccessLevel>;
 };
@@ -157,14 +159,25 @@ export function levelChoice(
 
   const initial = settable
     .filter((entry) => entry.maxLevel !== 'view')
-    .map((entry): ChannelAccessLevel => (entry.item.markdown ? 'edit' : 'view'))
+    .map((entry) => DEFAULT_LEVEL[entry.item.format])
     .reduce(lowerOf, top);
-  return { options, initial };
+  return {
+    options,
+    initial: hideComment && initial === 'comment' ? 'view' : initial,
+  };
 }
+
+const DEFAULT_LEVEL = {
+  markdown: 'edit',
+  pdf: 'comment',
+  other: 'view',
+} as const satisfies Record<ShareFormat, ChannelAccessLevel>;
 
 function takesComment(item: ShareItem, markdownComments: boolean): boolean {
   const policy: KindPolicy = KIND_POLICY[item.kind];
-  return policy.comment !== false && (markdownComments || !item.markdown);
+  return (
+    policy.comment !== false && (markdownComments || item.format !== 'markdown')
+  );
 }
 
 export function parseChannelAccessLevel(

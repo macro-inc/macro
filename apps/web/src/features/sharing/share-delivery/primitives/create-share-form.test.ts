@@ -16,7 +16,7 @@ function item(kind: ShareKind, id: string, canGrant = true): ShareItem {
     kind,
     id,
     name: id,
-    markdown: false,
+    format: 'other',
     canGrant,
     channelGrants: new Map(),
   };

@@ -11,7 +11,7 @@ const item = (overrides: Partial<ShareItem> = {}): ShareItem => ({
   kind: 'document',
   id: 'doc-1',
   name: 'Doc',
-  markdown: false,
+  format: 'other',
   canGrant: true,
   channelGrants: new Map(),
   ...overrides,
@@ -97,15 +97,34 @@ describe('levelChoice', () => {
   });
 
   it('defaults markdown to edit, as the single dialog does', () => {
-    expect(levelChoice([item({ markdown: true })], commentsOn)).toEqual({
+    expect(levelChoice([item({ format: 'markdown' })], commentsOn)).toEqual({
       options: ['view', 'comment', 'edit'],
       initial: 'edit',
     });
   });
 
+  it('defaults a pdf to comment, as the single dialog does', () => {
+    expect(levelChoice([item({ format: 'pdf' })], commentsOn)).toEqual({
+      options: ['view', 'comment', 'edit'],
+      initial: 'comment',
+    });
+  });
+
+  it('drops a comment default to view when the batch hides comment', () => {
+    const batch = [
+      item({ format: 'pdf' }),
+      item({ id: 'doc-2', format: 'markdown' }),
+    ];
+    expect(levelChoice(batch, commentsOn)?.initial).toBe('comment');
+    expect(levelChoice(batch, { markdownComments: false })).toEqual({
+      options: ['view', 'edit'],
+      initial: 'view',
+    });
+  });
+
   it('defaults a mixed batch to the lowest item default', () => {
     const choice = levelChoice(
-      [item({ markdown: true }), item({ kind: 'chat', id: 'chat-1' })],
+      [item({ format: 'markdown' }), item({ kind: 'chat', id: 'chat-1' })],
       commentsOn
     );
     expect(choice?.initial).toBe('view');
@@ -113,7 +132,7 @@ describe('levelChoice', () => {
 
   it('does not let email pull a markdown batch down to view', () => {
     const choice = levelChoice(
-      [item({ markdown: true }), item({ kind: 'email', id: 'thread-1' })],
+      [item({ format: 'markdown' }), item({ kind: 'email', id: 'thread-1' })],
       commentsOn
     );
     expect(choice?.initial).toBe('edit');
@@ -123,13 +142,15 @@ describe('levelChoice', () => {
     const grants = new Map([['channel-1', 'comment' as const]]);
     const prefill = { prefillChannelId: 'channel-1', markdownComments: true };
     expect(
-      levelChoice([item({ markdown: true, channelGrants: grants })], prefill)
-        ?.initial
+      levelChoice(
+        [item({ format: 'markdown', channelGrants: grants })],
+        prefill
+      )?.initial
     ).toBe('comment');
     expect(
       levelChoice(
         [
-          item({ markdown: true, channelGrants: grants }),
+          item({ format: 'markdown', channelGrants: grants }),
           item({ id: 'doc-2' }),
         ],
         prefill
@@ -139,7 +160,7 @@ describe('levelChoice', () => {
 
   it('offers comment on markdown only while markdown comments are on', () => {
     expect(
-      levelChoice([item({ markdown: true })], { markdownComments: false })
+      levelChoice([item({ format: 'markdown' })], { markdownComments: false })
     ).toEqual({ options: ['view', 'edit'], initial: 'edit' });
     expect(levelChoice([item()], { markdownComments: false })?.options).toEqual(
       ['view', 'comment', 'edit']
@@ -153,7 +174,7 @@ describe('levelChoice', () => {
     });
     expect(
       levelChoice(
-        [item({ markdown: true }), item({ kind: 'form', id: 'form-1' })],
+        [item({ format: 'markdown' }), item({ kind: 'form', id: 'form-1' })],
         commentsOn
       )?.options
     ).toEqual(['view', 'edit']);
@@ -162,7 +183,7 @@ describe('levelChoice', () => {
   it('ignores a seeded comment level the control does not offer', () => {
     const grants = new Map([['channel-1', 'comment' as const]]);
     expect(
-      levelChoice([item({ markdown: true, channelGrants: grants })], {
+      levelChoice([item({ format: 'markdown', channelGrants: grants })], {
         prefillChannelId: 'channel-1',
         markdownComments: false,
       })

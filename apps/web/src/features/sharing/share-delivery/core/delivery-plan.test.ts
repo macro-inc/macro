@@ -28,7 +28,7 @@ const item = (id: string, overrides: Partial<ShareItem> = {}): ShareItem => ({
   kind: 'document',
   id,
   name: id,
-  markdown: false,
+  format: 'other',
   canGrant: true,
   channelGrants: new Map(),
   ...overrides,
