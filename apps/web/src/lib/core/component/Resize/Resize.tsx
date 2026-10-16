@@ -450,8 +450,11 @@ function Gutter(props: GutterProps) {
     }
   });
 
-  let [ptrDown, setPtrDown] = createSignal(false);
+  const [ptrDown, setPtrDown] = createSignal(false);
+  let pointerId: number | undefined;
   let lastPointerPosition: number | undefined;
+  let pendingPosition: number | undefined;
+  let frame: number | undefined;
 
   function getAxisZoom() {
     const root = props.root();
@@ -472,20 +475,31 @@ function Gutter(props: GutterProps) {
   }
 
   function onPointerDown(ev: PointerEvent) {
-    if (ev.button !== 0) return;
+    if (ev.button !== 0 || ptrDown()) return;
     props.onChangeStart();
     (ev.currentTarget as HTMLElement).setPointerCapture?.(ev.pointerId);
     window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp, { once: true });
-    window.addEventListener('pointercancel', onPointerUp, { once: true });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
     lastPointerPosition = eventPosition(ev);
+    pointerId = ev.pointerId;
     setPtrDown(true);
     ev.preventDefault();
   }
 
   function onPointerMove(ev: PointerEvent) {
-    if (!ptrDown) return;
-    const position = eventPosition(ev);
+    if (!ptrDown() || ev.pointerId !== pointerId) return;
+    pendingPosition = eventPosition(ev);
+    // Read geometry and solve once per frame, not once per pointer sample.
+    if (frame === undefined) frame = requestAnimationFrame(flushResize);
+  }
+
+  function flushResize() {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = undefined;
+    const position = pendingPosition;
+    pendingPosition = undefined;
+    if (position === undefined) return;
     const prevPosition = lastPointerPosition ?? position;
     lastPointerPosition = position;
 
@@ -493,14 +507,32 @@ function Gutter(props: GutterProps) {
     props.nudge(props.index, delta);
   }
 
-  function onPointerUp() {
+  function removeDragListeners() {
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('pointercancel', onPointerUp);
+  }
+
+  function onPointerUp(ev: PointerEvent) {
+    if (ev.pointerId !== pointerId) return;
+    // Persist the last position even when release precedes the queued frame.
+    if (ev.type === 'pointerup') pendingPosition = eventPosition(ev);
+    flushResize();
+    removeDragListeners();
     lastPointerPosition = undefined;
+    pointerId = undefined;
     setPtrDown(false);
     props.onChangeEnd();
   }
+
+  onCleanup(() => {
+    removeDragListeners();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    if (ptrDown()) {
+      pointerId = undefined;
+      props.onChangeEnd();
+    }
+  });
 
   function onKeyDown(ev: KeyboardEvent) {
     if (ctx?.direction() === 'horizontal') {
@@ -553,6 +585,7 @@ function Gutter(props: GutterProps) {
         ...styles(),
       }}
       onPointerDown={props.resizable ? onPointerDown : undefined}
+      onLostPointerCapture={onPointerUp}
       onKeyDown={props.resizable ? onKeyDown : undefined}
     >
       {/* Spaced panels can omit the divider while retaining resize feedback. */}

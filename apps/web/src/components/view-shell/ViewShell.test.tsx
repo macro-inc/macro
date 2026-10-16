@@ -145,7 +145,7 @@ function setup(preserveDuringResize: boolean, persistWidth = false) {
       new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 256 })
     );
     fireEvent(window, new MouseEvent('pointermove', { clientX: 296 }));
-    fireEvent(window, new MouseEvent('pointerup'));
+    fireEvent(window, new MouseEvent('pointerup', { clientX: 296 }));
   };
   return {
     ...view,

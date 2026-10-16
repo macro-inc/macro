@@ -14,6 +14,10 @@
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
+Split dragging and composer reflow have a backend-free browser regression:
+`bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
+It exercises the real resize solver, scroll container, and Lexical layout primitive.
+
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
 ```sh

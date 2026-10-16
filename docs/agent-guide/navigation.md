@@ -460,6 +460,12 @@ Widening the sidebar while its split is constrained also reduces the main
 content's soft width preference, so the next split resize keeps that choice
 instead of snapping the sidebar back to its constrained width.
 
+Split handles apply pointer movement once per animation frame and commit the
+final position on release. Check a rapid drag followed by immediate release,
+dragging at non-default zoom, and closing a split during a drag; later pointer
+movement must not keep resizing the removed split. Arrow keys still resize
+immediately, with Shift selecting the larger step.
+
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
