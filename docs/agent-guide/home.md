@@ -185,7 +185,7 @@ an older reminder stays in its older section after the event's metadata syncs;
 opening its details should show the expected occurrence. A newer reminder or your
 own later activity can move the row forward, but a calendar sync alone should not.
 
-On mobile, the dock and search scope use the bell icon and **Notifications**
+On mobile, the dock uses the bell icon and **Notifications**
 label; Home is desktop-only. Notifications has no merged own-activity feed or
 chat starting pane. Opening a row navigates to its entity. On iOS, rows fade
 underneath the filters and status bar using the shared top edge gradient.
@@ -213,7 +213,8 @@ longer notifies the thread. Settings → notifications lists them under `AI`.
 ## Home — `/app/component/home`
 
 Greeting, example prompt buttons (`Draft a document`, `Draft an email`,
-`Search & research`), and the ubiquitous `Ask AI` composer. Finishing onboarding
+`Search & research`), and the desktop `Ask AI` composer. Mobile Home keeps its
+New action without a floating AI input. Finishing onboarding
 without a deep link lands here. The retired Getting Started page's old
 `/app/getting-started` and `/app/component/getting-started` links also open Home.
 

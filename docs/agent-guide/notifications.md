@@ -59,9 +59,9 @@ input without a surface background, rounded frame, or shadow. Attachment and
 formatting actions stay available.
 On mobile, open documents and tasks put their new-comment composer in the
 accessory dock above navigation, using the channel input's compact pill and
-expanded surface. Ask AI and New are hidden in these open views only when the
-comment composer is available; their list screens keep those controls. Users
-without comment permission have no comment composer, so Ask AI remains visible.
+expanded surface. New is hidden when the comment composer is available; list
+screens keep New. Users without comment permission have no comment composer.
+The floating Ask AI input appears only on the AI/Agents view.
 
 On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the

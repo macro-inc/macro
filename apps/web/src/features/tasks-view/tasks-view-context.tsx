@@ -6,7 +6,6 @@ import {
   listOwnedSlotName,
 } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
-import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -195,15 +194,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const [persistedState, setState] = props.scopeKey
     ? withSplitPanelOwner(ownedSlot('view-state'), createState)
     : createState();
-  const searchText = useMobileSearchText(
-    () => persistedState.search,
-    () => !props.scopeKey && panel.handle.isActive()
-  );
   // Rollout fallbacks must not overwrite saved tab or layout selections.
   const state = mergeProps(persistedState, {
-    get search() {
-      return searchText();
-    },
     get layout() {
       if (
         isTouchDevice() ||

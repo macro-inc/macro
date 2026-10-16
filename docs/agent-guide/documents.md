@@ -2479,8 +2479,9 @@ trash button. Deleting a comment's first message deletes the whole discussion â€
 the confirmation reads `Delete comment`, the replies under it go too, and an
 anchored comment's highlight clears from the document. Deleting a reply removes
 only that reply. On mobile, the new-comment composer is docked above the navigation bar,
-replacing Ask AI and New when commenting is available in documents and tasks.
-When the comment composer is unavailable, the default Ask AI row appears instead.
+replacing New when commenting is available in documents and tasks.
+When the comment composer is unavailable, New remains available; these views
+have no floating Ask AI input.
 Tap `Leave a comment...`
 to expand the channel-style input; use Send comment to submit (Enter inserts a
 newline on mobile). Submitting clears and unfocuses the mobile input, returning

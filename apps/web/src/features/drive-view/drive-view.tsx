@@ -1,5 +1,4 @@
 import { listOwnedSlotName } from '@app/components/list';
-import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import {
   type FacetSelection,
@@ -70,10 +69,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
       formsFlag().enabled
     )
   );
-  const searchText = useMobileSearchText(
-    () => view.value().search,
-    panel.handle.isActive
-  );
+  const searchText = () => view.value().search;
   const selection = () => ({ ...viewState(), search: searchText() });
   const sidebar = createDriveSidebarSource();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>

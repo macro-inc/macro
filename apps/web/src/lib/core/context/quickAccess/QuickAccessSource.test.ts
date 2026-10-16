@@ -26,9 +26,11 @@ import {
 } from '@tanstack/solid-query';
 import {
   createComponent,
+  createMemo,
   createRenderEffect,
   createRoot,
   createSignal,
+  untrack,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useQuickAccess } from './context';
@@ -60,6 +62,7 @@ const mocks = vi.hoisted(() => ({
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
   crmEnabled: (): boolean => true,
+  graphqlEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
     Record<
@@ -72,10 +75,16 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
   enableDatabases: {},
   enableForms: {},
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.crmEnabled() }),
+  useFeatureFlag: (flag: { key?: string }) => () => ({
+    enabled:
+      flag.key === 'enable-graphql-soup'
+        ? mocks.graphqlEnabled()
+        : mocks.crmEnabled(),
+  }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
@@ -183,12 +192,15 @@ vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupCacheHost: () => ({
-    search: mocks.search,
-    onCacheChanged: mocks.onCacheChanged,
-    readRecordsByKeys: mocks.readRecordsByKeys,
-    disabled: !mocks.cacheEnabled,
-  }),
+  getGraphqlSoupCacheHost: () =>
+    untrack(mocks.graphqlEnabled)
+      ? {
+          search: mocks.search,
+          onCacheChanged: mocks.onCacheChanged,
+          readRecordsByKeys: mocks.readRecordsByKeys,
+          disabled: !mocks.cacheEnabled,
+        }
+      : undefined,
 }));
 
 let dispose: (() => void) | undefined;
@@ -232,6 +244,7 @@ beforeEach(() => {
   mocks.initiatives = [];
   mocks.databases = [];
   mocks.crmEnabled = () => true;
+  mocks.graphqlEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
@@ -392,6 +405,75 @@ function renderRetainedList(
 }
 
 describe('Quick Access source integration', () => {
+  it('starts cached email search when the GraphQL flag arrives after mounting', async () => {
+    const [enabled, setEnabled] = createSignal(false);
+    mocks.graphqlEnabled = enabled;
+    mocks.search.mockResolvedValue({
+      documents: [
+        {
+          profile: 'quick-access-v1',
+          recordKey: 'GraphqlSoupEmailThread:thread-1',
+          bucket: 'email',
+          searchText: 'weekly update | teo | teo@example.com',
+          timestampMs: 1,
+          sourceHash: 'email-hash',
+        },
+      ],
+      nextCursor: null,
+    });
+    mocks.readRecordsByKeys.mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
+      records: [
+        {
+          recordKey: 'GraphqlSoupEmailThread:thread-1',
+          record: {
+            __typename: 'GraphqlSoupEmailThread',
+            id: 'thread-1',
+            name: 'Weekly update',
+            ownerId: 'owner',
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+            viewedAt: null,
+            senderName: 'Teo',
+            senderEmail: 'teo@example.com',
+            linkId: 'inbox',
+            isRead: true,
+            isDraft: false,
+            isImportant: false,
+            inboxVisible: true,
+          },
+        },
+      ],
+    });
+    const { source, list } = setup((source) => ({
+      source,
+      // The shared mobile/desktop entity source owns lists in a memo.
+      list: createMemo(() =>
+        source.useList({
+          buckets: ['email'],
+          searchTerm: () => 'teo',
+        })
+      ),
+    }));
+    expect(source.usesSearchProjection()).toBe(false);
+    expect(list().items()).toEqual([]);
+    expect(mocks.search).not.toHaveBeenCalled();
+
+    setEnabled(true);
+    await vi.waitFor(() => {
+      expect(source.usesSearchProjection()).toBe(true);
+      expect(
+        list()
+          .items()
+          .map((item) => item.id)
+      ).toEqual(['thread-1']);
+    });
+
+    setEnabled(false);
+    expect(source.usesSearchProjection()).toBe(false);
+    expect(list().items()).toEqual([]);
+  });
+
   it('keeps cached document order and fuzzy matches stable across typing and backspacing', async () => {
     const names = [
       'Seamus snip',

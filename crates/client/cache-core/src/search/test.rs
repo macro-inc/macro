@@ -144,3 +144,63 @@ fn crm_contact_projection_indexes_name_email_and_removes_hidden_records() {
         .insert("hidden".into(), CacheValue::Bool(true));
     assert!(project_search_documents(&key, &record).is_empty());
 }
+
+#[test]
+fn email_projection_matches_subject_and_all_senders_but_never_bodies() {
+    let key = EntityKey::entity("GraphqlSoupEmailThread", &["thread"]);
+    let mut record = string_record(&[
+        ("__typename", "GraphqlSoupEmailThread"),
+        ("name", "Weekly update"),
+        ("senderName", "Alex"),
+        ("senderEmail", "alex@example.com"),
+        ("snippet", "quartz"),
+        ("bodyText", "zebra"),
+    ]);
+    record.fields.insert(
+        "senders".into(),
+        CacheValue::List(vec![
+            CacheValue::Object(
+                string_record(&[("name", "Teo Earlier"), ("email", "teo@sender.test")]).fields,
+            ),
+            CacheValue::Object(
+                string_record(&[("name", "Alex"), ("email", "alex@example.com")]).fields,
+            ),
+        ]),
+    );
+    let documents = project_search_documents(&key, &record);
+    assert_eq!(documents.len(), 1);
+    assert!(documents[0].search_text.contains("teo earlier"));
+    assert!(documents[0].search_text.contains("teo@sender.test"));
+    assert!(!documents[0].search_text.contains("quartz"));
+    assert!(!documents[0].search_text.contains("zebra"));
+    for query in ["t", "te", "teo", "teo@sender.test", "weekly"] {
+        let page = rank_documents(
+            &SearchRequest {
+                profile: SearchProfile::QuickAccessV1,
+                buckets: vec!["email".into()],
+                query: query.into(),
+                cursor: None,
+                limit: 50,
+                now_ms: 0,
+            },
+            &documents,
+        );
+        assert_eq!(page.documents.len(), 1, "{query}");
+    }
+    record.fields.insert("name".into(), CacheValue::Null);
+    assert!(
+        project_search_documents(&key, &record)[0]
+            .search_text
+            .contains("teo")
+    );
+    record
+        .fields
+        .insert("hidden".into(), CacheValue::Bool(true));
+    assert!(project_search_documents(&key, &record).is_empty());
+    record.fields.remove("hidden");
+    record.fields.insert(
+        "deletedAt".into(),
+        CacheValue::String("2026-01-01T00:00:00Z".into()),
+    );
+    assert!(project_search_documents(&key, &record).is_empty());
+}

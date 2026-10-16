@@ -131,3 +131,34 @@ fn bucket_moves_and_hidden_rows_invalidate_the_old_bucket_too() {
         BTreeSet::from(["note".into()])
     );
 }
+
+#[test]
+fn email_subject_sender_and_visibility_refresh_but_bodies_do_not() {
+    let typename = "GraphqlSoupEmailThread";
+    let before = record(typename);
+    for field in ["name", "senderName", "senderEmail", "deletedAt", "linkId"] {
+        let mut after = before.clone();
+        after
+            .fields
+            .insert(field.into(), CacheValue::String("changed".into()));
+        assert_eq!(
+            changes(typename, Some(&before), Some(&after)),
+            BTreeSet::from(["email".to_owned()])
+        );
+    }
+    for field in ["hidden", "isRead", "isDraft", "isImportant", "inboxVisible"] {
+        let mut after = before.clone();
+        after.fields.insert(field.into(), CacheValue::Bool(true));
+        assert_eq!(
+            changes(typename, Some(&before), Some(&after)),
+            BTreeSet::from(["email".to_owned()])
+        );
+    }
+    for field in ["snippet", "bodyText", "bodyHtmlSanitized"] {
+        let mut after = before.clone();
+        after
+            .fields
+            .insert(field.into(), CacheValue::String("teo".into()));
+        assert!(changes(typename, Some(&before), Some(&after)).is_empty());
+    }
+}

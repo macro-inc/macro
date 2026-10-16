@@ -203,8 +203,8 @@ and breadcrumb nesting remain in the path. Home, Email, Tasks, Channels, and
 Customers store the selected tab under `sN.home.tab`, `sN.mail.tab`,
 `sN.tasks.tab`, `sN.channels.tab`, and `sN.crm.tab`. Customers uses `people`,
 `pipeline:<uuid>`, `list:<uuid>`, or `hidden`. Companies is the default and
-omits the key. Channels also stores the phone list selection as
-`sN.channels.mobileTab`. Omitted tab keys mean each view's default.
+omits the key. Omitted tab keys mean each view's default. Mobile Channels always opens its
+Recent conversation feed and ignores legacy mobile-tab selections.
 Changing tabs updates the URL, and browser Back and Forward restore the
 selection independently in each pane. Inline detail links preserve these keys.
 Desktop panes expose Close when available and omit split-history back/forward
@@ -546,12 +546,12 @@ The inline `/app/debug/create-menu-demo` keeps all three layouts for comparison
 without creating data. Mobile continues to use its create sheet.
 
 On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
-Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
-dock and search scope pills only when the calendar UI flag is enabled.
+Calendar, Email, Channels, Agents, Files, Tasks, Calls, and CRM (when enabled). Calendar appears in the
+dock only when the calendar UI flag is enabled. Search has its own entity categories.
 Resizing the screen moves views between the dock
 and More views, which always includes Settings and lists the overflow views in
 reverse order. More and the separate bottom-right Search button always retain
-their space. Search opens the search input and scope pills.
+their space. Search opens the persistent Search… input and entity category pills (see [Search](search.md)).
 Once every view fits, the navigation island stops growing; Search stays aligned
 to the right edge.
 Scheduling is a drawer-only destination in **More views** when the
@@ -595,12 +595,16 @@ sheet on mobile, with broad, screen-scaled corners and an even 8px outer inset;
 home-indicator clearance is inside the glass. The mobile full menu is a scrollable
 list of available create actions ordered by recent usage, with a Close create menu
 button and no search field. Desktop retains search and keyboard controls. Other views
-show **+ New** for that full menu. The AI composer narrows beside this
-button; on Agents it fills the row with no duplicate create action. The row
+show **+ New** for that full menu. Only Agents has the floating AI composer,
+which fills the row with no duplicate create action. Other views keep their
+right-aligned New button without an AI input. The row
 hides during search, when a page supplies its own reply or compose controls, or
 when an editable field outside Ask AI is focused on a touch device. The AI draft
 is preserved when the row returns.
 The New button also hides while the software keyboard is open.
+After closing mobile search with the keyboard open or leaving a focused editor,
+verify that the current view’s New action returns once the keyboard closes.
+Removing the focused editor must not leave the action hidden on subsequent views.
 
 Mobile drawers and floating dialogs share this inset glass sheet treatment,
 including filters, task/event creation, file/message actions, sharing, and model
@@ -791,7 +795,7 @@ A failed local refresh keeps displayed rows and their continuation available for
 another pagination attempt. Missing items may still be uncached, but should appear
 after hydration without retyping, including channels outside the first cached
 page. Cmd+K's
-local search excludes unsupported email hits before limiting entity results;
+local search explicitly excludes email hits before limiting entity results;
 email mentions keep their separate search-service path. Text search loads only
 its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;

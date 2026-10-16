@@ -3,7 +3,7 @@ import {
   isListViewID,
   type ListView,
 } from '@app/constants/list-views';
-import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
   createSoupState,
   type GroupMeta,
@@ -493,7 +493,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const filterByTag = (optionId: string) => tagFilter.onChange([optionId]);
 
   const [searchPaused, setSearchPaused] = createSignal(false);
-  const sourceSearchPaused = createMemo(() => searchPaused() || !enabled());
+  const sourceSearchPaused = createMemo(
+    () =>
+      searchPaused() || !enabled() || (isTouchDevice() && SearchState.isOpen())
+  );
   const [assigneeFilter, setAssigneeFilter] = makeFlaggedPersisted(
     useEntryState<string[]>('soup.assigneeFilter', { default: [] }),
     {
@@ -791,25 +794,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     default: props.initialSearchText ?? '',
   });
 
-  // The split's effective search text — derived, never synchronized: while
-  // the dock search session is open and this split is foregrounded, it IS the
-  // session's query (the dock input lives in the stable app chrome — see
-  // Layout — so navigation never remounts it, and the query never enters
-  // per-split state: nothing to clear on close, nothing to reapply on pill
-  // navigation). Otherwise it is the split's own persisted text, which only
-  // the desktop search bar writes.
-  const effectiveSearchText = useMobileSearchText(
-    searchText,
-    panel.handle.isActive
-  );
-
   const search = createSearchState({
     soup,
     filters: () => applyViewFilters(queryFilters.state),
     assignees: assigneeFilter,
     disableLocalSearch: () => config().disableLocalSearch ?? false,
     searchPaused: sourceSearchPaused,
-    searchText: effectiveSearchText,
+    searchText,
     setSearchText,
   });
 

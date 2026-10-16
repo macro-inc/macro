@@ -224,11 +224,10 @@ or stop.
 
 ## Ask AI entry points
 
-**Ask AI** in search (including Tab), the command menu, and mobile search opens
+**Ask AI** in desktop search (including Tab) and the command menu opens
 an agent session. A nonempty search query is sent as the first prompt once the
 session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split into the Agents workspace, while command-menu and mobile
-actions open a new split.
+its current split into the Agents workspace, while command-menu actions open a new split.
 
 **Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
 code files, images, canvases, spreadsheets, email, channels, calls, and projects
@@ -547,14 +546,12 @@ icons instead of flashing back to loading placeholders. Check an answer with
 multiple mentions while more text arrives and when generation finishes, in both
 chat and agent sessions. A newly encountered mention may load once.
 
-On mobile, every screen has a single-line AI composer directly above the bottom
-dock. A labeled glass button beside it opens the current view's create action:
-**+ Email**, **+ Task**, **+ Document**, **+ Message**, or **+ Event**. Home’s
-**+ New** unfolds Email, Message, Document, Event, Task, and More above the button;
-More opens the full create menu in a glass bottom sheet. Other views show
-**+ New** for that full menu. The AI input narrows to fit the button, ending
-to the left of the navigation pill's right edge below. Agents has no separate
-create button; its AI input fills the row.
+On mobile, only the AI/Agents view has a floating AI composer above the bottom
+dock. Its input fills the row with no separate create button. Other views keep
+their right-aligned creation action: **+ Email**, **+ Task**, **+ Document**,
+**+ Message**, or **+ Event**. Home’s **+ New** unfolds Email, Message, Document,
+Event, Task, and More above the button; More opens the full create menu in a glass
+bottom sheet. Other views show **+ New** for that full menu.
 The composer's compact height is 46px, matching the mobile chrome buttons,
 with a paperclip attachment control and centered text and actions. It expands for
 longer prompts while focused, including text that wraps without an explicit
@@ -564,9 +561,9 @@ draft or widening the pane restores the compact layout when the text fits
 beside its controls. Leaving the AI composer collapses a long draft to
 a single-line preview in the accessory row; tapping it expands the same editor
 with the full draft intact. Screens with an available composer or reply controls show those
-instead; opening mobile search shows scope pills in their place. When neither
-is available, the AI composer returns with its draft intact, including in
-documents without a comment composer. Type a
+instead; opening mobile search shows category pills in their place. On Agents,
+the AI composer returns with its draft intact when higher-priority controls close.
+Other views have no floating AI fallback. Type a
 prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
 Enter on the virtual keyboard adds a line to the draft rather than sending it.
@@ -584,12 +581,10 @@ The area behind the composer is transparent, without a bottom gradient overlay.
 The composer has one editable field. Its placeholder appears only while empty;
 placeholder updates and disabled-state changes preserve the editor and draft.
 
-The **Ask AI** button beside the mobile search field sends the typed query.
-It opens an agent session and delivers the query as the first prompt, regardless
-of `enable-chat-v3-agents`. Mobile uses the agent session surface at
-`/app/agent/<id>`; desktop uses the Agents workspace.
+Mobile search uses the dock solely for entity and explicit full-text search;
+it has no Ask AI button.
 
-Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
+On desktop, list surfaces (Home, Agents, Files, Tasks, Customers, Email) have a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively,
 when `enable-chat-v3-agents` is on (default in dev;

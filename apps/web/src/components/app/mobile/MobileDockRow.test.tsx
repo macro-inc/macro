@@ -1,3 +1,4 @@
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import {
   cleanup,
@@ -24,17 +25,12 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: unknown) => () =>
     flag === enableCalendarScheduling ? schedulingFlag : reviewsFlag,
 }));
-vi.mock('@app/features/command/mobile/MobileSearchInput', () => ({
-  MobileAskAiButton: () => null,
-  MobileSearchInput: () => null,
-}));
-vi.mock('@app/features/command/mobile/mobileSearchState', () => ({
-  SearchState: { isOpen: () => false },
-}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ settingsOpen: () => false, toggleSettings }),
 }));
-vi.mock('@core/directive/focusInput', () => ({ triggerFocusInput: vi.fn() }));
+vi.mock('@core/directive/focusInput', () => ({
+  triggerFocusInput: (target: () => HTMLElement | null) => target()?.focus(),
+}));
 vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
   virtualKeyboardVisible: () => false,
@@ -81,9 +77,17 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  SearchState.close();
   drawerStyles.remove();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+});
+
+it('mounts and focuses search during the tap before navigating once', () => {
+  render(() => <MobileDockRow />);
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+  expect(document.activeElement).toBe(screen.getByPlaceholderText('Search…'));
+  expect(navigate).toHaveBeenCalledExactlyOnceWith('search');
 });
 
 describe('dock overflow drawer', () => {

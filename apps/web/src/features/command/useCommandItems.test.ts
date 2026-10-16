@@ -7,6 +7,7 @@ import type {
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useEntitySearch } from './queries/entity-search';
 import type { CategoryFilter } from './types';
 import { useCommandItems } from './useCommandItems';
 
@@ -196,5 +197,41 @@ describe('command menu database categories', () => {
       expect(result.items()).toContain(database);
       expect(mocks.requestedBuckets).toContain('database');
     }
+  });
+});
+
+it('keeps desktop All email-free while mobile composes emails without desktop command state', () => {
+  const { result, setEntityMode, setItems } = setup();
+  result.items();
+  expect(mocks.requestedBuckets).not.toContain('email');
+  setEntityMode(true);
+  const email: QuickAccessItem = {
+    id: 'thread',
+    kind: 'entity',
+    bucket: 'email',
+    searchText: 'Weekly update Teo',
+    sortTimestamp: 1,
+    timestamps: {},
+    data: {
+      type: 'email',
+      id: 'thread',
+      name: 'Weekly update',
+      ownerId: 'owner',
+      isRead: true,
+      isDraft: false,
+      isImportant: false,
+      done: false,
+    },
+  };
+  setItems([email]);
+  createRoot((cleanup) => {
+    const mobile = useEntitySearch(
+      () => 'teo',
+      () => 'email',
+      { enabled: () => true }
+    );
+    expect(mocks.requestedBuckets).toEqual(['email']);
+    expect(mobile.rankItems(mobile.items(), 'teo')).toEqual([email]);
+    cleanup();
   });
 });

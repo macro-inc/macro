@@ -24,6 +24,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/store.rs`: the `Storage` trait every backend (e.g. `cache-turso`) implements.
 - `src/predicate.rs` + `src/record_selection.rs`: the predicate/projection IR
   used to select which cached records satisfy a query.
+- `src/search.rs`: disposable Quick Access projection (version 3); email matches subjects and all embedded senders, never snippets or bodies.
 - `src/queue.rs`: the optimistic mutation queue.
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).

@@ -1,7 +1,4 @@
-import {
-  MobileAskAiButton,
-  MobileSearchInput,
-} from '@app/features/command/mobile/MobileSearchInput';
+import { MobileSearchInput } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -200,13 +197,13 @@ function MobileNavigationDockRow() {
           icon={SearchIcon}
           ariaLabel="Search"
           onClick={() => {
-            // Focus synchronously inside the tap so iOS lets the keyboard
-            // open; the input mounts once opening the session flips the row
-            // to the search layout.
+            // Mount the real input first, then focus it in this same user
+            // gesture. Deferring the focus transfer can lose iOS keyboard
+            // activation when reopening search.
+            SearchState.open();
             triggerFocusInput(() =>
               document.getElementById('mobile-search-input')
             );
-            SearchState.open();
             navigate('search');
           }}
         />
@@ -222,9 +219,8 @@ type MobileDockRowProps = {
 /**
  * The bottom-most chrome row. By default it is the navigation dock (see
  * MobileNavigationDockRow); pressing its Search button opens a search session,
- * which swaps in the search row — the search bar ("Search or ask AI...")
- * with the "Ask AI" island — and shows the views pill row in the accessory
- * slot above as the scope switcher (see MobileViewsRow). Pressing the
+ * which swaps in the search bar and category pills in the accessory slot
+ * above (see MobileViewsRow). Pressing the
  * input's X ends the session and restores the navigation dock.
  */
 export function MobileDockRow(props: MobileDockRowProps) {
@@ -238,7 +234,6 @@ export function MobileDockRow(props: MobileDockRowProps) {
       <MobileBottomEdgeFade />
       <Show when={SearchState.isOpen()} fallback={<MobileNavigationDockRow />}>
         <MobileSearchInput />
-        <MobileAskAiButton />
       </Show>
     </div>
   );

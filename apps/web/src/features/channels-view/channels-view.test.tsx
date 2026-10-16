@@ -14,7 +14,6 @@ import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChannelsDataSource } from './queries';
-import type { ChannelsQueryScope } from './types';
 
 type FullChannel = ChannelEntity & { notifications: Notification[] };
 const mocks = vi.hoisted(() => ({
@@ -25,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   active: (): boolean => true,
   searchOpen: (): boolean => false,
   searchText: (): string => '',
-  mobileTab: (): ChannelsQueryScope => 'channels',
+  sourceEnabled: (_scope: string): boolean => false,
   selectedQuery: vi.fn(),
   markRead: vi.fn(),
   resolveTarget: vi.fn(() => ({ kind: 'message', messageId: 'unread' })),
@@ -146,9 +145,6 @@ vi.mock('./channels-view-context', () => ({
     state: {
       asideWidth: 256,
       tab: 'browse',
-      get mobileTab() {
-        return mocks.mobileTab();
-      },
       sortBy: { channels: 'updated_at', direct_messages: 'updated_at' },
     },
     tab: () => 'browse',
@@ -158,7 +154,6 @@ vi.mock('./channels-view-context', () => ({
         ? { type: 'channel', id: mocks.selectedId() }
         : undefined,
     setAsideWidth: vi.fn(),
-    setMobileTab: vi.fn(),
   }),
 }));
 vi.mock('./queries', () => ({
@@ -175,12 +170,15 @@ vi.mock('./queries', () => ({
     fallback: ChannelEntity[] = []
   ) => [...loaded, ...fallback].find((channel) => channel.id === id),
   useChannelByIdQuery: mocks.selectedQuery,
-  useChannelsSources: () => ({
-    channels: { items: () => mocks.rows() },
-    direct_messages: { items: () => mocks.rows() },
-    recents: { items: () => [] },
-    search: { items: () => [] },
-  }),
+  useChannelsSources: (enabled: (scope: string) => boolean) => {
+    mocks.sourceEnabled = enabled;
+    return {
+      channels: { items: () => mocks.rows() },
+      direct_messages: { items: () => mocks.rows() },
+      recents: { items: () => mocks.rows() },
+      search: { items: () => [] },
+    };
+  },
 }));
 
 import { ChannelDetailRouteView, ChannelsView } from './channels-view';
@@ -231,7 +229,6 @@ beforeEach(() => {
   mocks.active = () => true;
   mocks.searchOpen = () => false;
   mocks.searchText = () => '';
-  mocks.mobileTab = () => 'channels';
   [mocks.selectedId, setSelectedId] = createSignal<string | undefined>('one');
   [mocks.rows, setRows] = createSignal([row('one', 'new'), row('two')]);
   const [query, update] = createStore<QueryState>({
@@ -266,9 +263,8 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('mobile dock search wiring', () => {
-  it('filters DMs from the active dock session and restores rows on close or navigation', async () => {
+  it('shows only recent conversations independently of the dock search session', () => {
     mocks.mobileLayout = () => true;
-    mocks.mobileTab = () => 'direct_messages';
     const [open, setOpen] = createSignal(true);
     const [text, setText] = createSignal('');
     const [active, setActive] = createSignal(true);
@@ -285,15 +281,17 @@ describe('mobile dock search wiring', () => {
     ]);
     render(() => <ChannelsView />);
     expect(screen.getByText('hutch')).toBeTruthy();
+    expect(mocks.sourceEnabled('recents')).toBe(true);
+    for (const scope of ['channels', 'direct_messages', 'threads', 'search']) {
+      expect(mocks.sourceEnabled(scope)).toBe(false);
+    }
     setText('Julia');
-    await waitFor(() =>
-      expect(screen.getByText('Julia Westphal')).toBeTruthy()
-    );
-    await waitFor(() => expect(screen.queryByText('hutch')).toBeNull());
+    expect(screen.getByText('Julia Westphal')).toBeTruthy();
+    expect(screen.getByText('hutch')).toBeTruthy();
     setActive(false);
     expect(screen.getByText('hutch')).toBeTruthy();
     setActive(true);
-    await waitFor(() => expect(screen.queryByText('hutch')).toBeNull());
+    expect(screen.getByText('hutch')).toBeTruthy();
     setOpen(false);
     expect(screen.getByText('hutch')).toBeTruthy();
     expect(screen.getByTestId('mobile-channels').dataset.query).toBe('');

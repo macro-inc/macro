@@ -29,7 +29,6 @@ import {
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelListSort,
-  ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsSortGroup,
   ChannelsTab,
@@ -59,7 +58,6 @@ export type ChannelsViewContext = {
   threadsChannelId: Accessor<string | undefined>;
   setThreadsChannelId: (channelId: string | undefined) => void;
   setTab: (tab: ChannelsTab) => void;
-  setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
   /** Per-user collapse state of a team channel label. */
@@ -73,8 +71,6 @@ function createInitialState(
 ): ChannelsViewState {
   return {
     tab: initial.tab ?? 'browse',
-    mobileTab:
-      initial.mobileTab ?? (initial.tab === 'recents' ? 'recents' : 'channels'),
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
       channels: initial.expandedGroups?.channels ?? true,
@@ -125,10 +121,9 @@ export const [ChannelsViewProvider, useChannelsView] =
 
       createEffect(
         on(
-          () => [search.tab, search.mobileTab] as const,
-          ([tab, mobileTab]) => {
+          () => search.tab,
+          (tab) => {
             if (state.tab !== tab) setState('tab', tab);
-            if (state.mobileTab !== mobileTab) setState('mobileTab', mobileTab);
           }
         )
       );
@@ -156,7 +151,6 @@ export const [ChannelsViewProvider, useChannelsView] =
         return channelsSearchCodec.serialize({
           ...channelsSearch.defaults,
           tab: state.tab,
-          mobileTab: state.mobileTab,
           messageId: target?.kind === 'message' ? target.messageId : '',
           threadId: target?.kind === 'message' ? (target.threadId ?? '') : '',
         });
@@ -222,11 +216,6 @@ export const [ChannelsViewProvider, useChannelsView] =
           if (state.tab === tab) return;
           setState('tab', tab);
           setSearch({ tab });
-        },
-        setMobileTab: (mobileTab) => {
-          if (state.mobileTab === mobileTab) return;
-          setState('mobileTab', mobileTab);
-          setSearch({ mobileTab });
         },
         setSelectedChannel,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),

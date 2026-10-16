@@ -218,7 +218,7 @@ function AskAiDisplay(props: { item: AskAiItem }) {
   );
 }
 
-function ItemDisplay(props: { item: CommandMenuItem }) {
+export function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
       <Match when={props.item.kind === 'initiative' && props.item}>
