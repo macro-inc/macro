@@ -69,6 +69,7 @@ export async function createMarkdownFile(
   refetchSoupEntity(documentId, 'document', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
 
   analytics.track('create_entity', {
@@ -173,6 +174,7 @@ async function createTaskResponse(args?: CreateTaskArgs) {
     refetchSoupEntity(documentId, 'document', {
       ownTouch: true,
       refreshGraphql: true,
+      created: true,
     });
 
   analytics.track('create_entity', {
@@ -235,6 +237,7 @@ export async function createSnippet(
   refetchSoupEntity(documentId, 'document', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
 
   analytics.track('create_entity', {
@@ -286,6 +289,7 @@ export async function createSkill(
   refetchSoupEntity(documentId, 'document', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
 
   analytics.track('create_entity', {
@@ -384,6 +388,7 @@ export async function createCodeFileFromText({
   refetchSoupEntity(document.metadata.documentId, 'document', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
 
   analytics.track('create_entity', {
@@ -437,6 +442,7 @@ export async function createCanvasFileFromJsonString(args: {
   refetchSoupEntity(canvas.metadata.documentId, 'document', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
 
   analytics.track('create_entity', {
@@ -477,6 +483,7 @@ export async function createChat(
   refetchSoupEntity(chat.id, 'chat', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
 
   analytics.track('create_entity', {

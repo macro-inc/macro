@@ -62,6 +62,7 @@ export function createProjectMutation(
               void refetchSoupEntity(project.id, 'initiative', {
                 ownTouch: true,
                 refreshGraphql: true,
+                created: true,
               });
           }
           return toProjectDetail(project);

@@ -50,6 +50,7 @@ export async function createAiDocument(args: {
   refetchSoupEntity(documentId, 'document', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
   analytics.track('create_entity', {
     entityType: 'ai',

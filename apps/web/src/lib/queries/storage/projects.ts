@@ -133,6 +133,7 @@ export async function createProject(params: {
     void refetchSoupEntity(projectId, 'project', {
       ownTouch: true,
       refreshGraphql: true,
+      created: true,
     });
     await Promise.all([invalidateProjects(), refetchHistory()]);
     return projectId;

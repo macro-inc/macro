@@ -57,6 +57,7 @@ export async function createPsdDocument(args: {
   refetchSoupEntity(documentId, 'document', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
   analytics.track('create_entity', {
     entityType: 'psd',

@@ -31,6 +31,7 @@ export async function createSpreadsheetDocument(args?: {
   refetchSoupEntity(documentId, 'document', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
   analytics.track('create_entity', {
     entityType: 'spreadsheet',

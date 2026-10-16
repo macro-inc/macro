@@ -126,6 +126,7 @@ it('resolves as soon as the server answers and refreshes lists in the background
   expect(mock.refetch).toHaveBeenCalledWith('project', 'initiative', {
     ownTouch: true,
     refreshGraphql: true,
+    created: true,
   });
   cache.clear();
 });
