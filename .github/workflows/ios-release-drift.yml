@@ -70,13 +70,14 @@ jobs:
 
         # native_tree_fetch <sha>: make a commit that is not in this checkout (a new
         # PR head, GitHub's test merge commit, the pre-push head) available to
-        # native_tree_hash. Checkouts here don't persist credentials, so authenticate
-        # the way actions/checkout does. Fails if the commit is unreachable (a
-        # force-pushed-away head).
+        # native_tree_hash. Some callers persist actions/checkout credentials; clear
+        # inherited headers before adding ours so Git sends Authorization exactly once.
+        # Fails if the commit is unreachable (a force-pushed-away head).
         native_tree_fetch() {
           local auth
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+          git -c "http.https://github.com/.extraheader=" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             fetch -q --depth=1 origin "$1"
         }
         # ----------------------------------------------------------------------------

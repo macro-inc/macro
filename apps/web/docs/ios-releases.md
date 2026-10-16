@@ -10,6 +10,10 @@ be pushed to update before they receive that bundle.
 Four generated workflows (plus a gate job in the web app PR checks) and a
 checked-in `min-native-build.json` enforce this end to end.
 
+Keep the iOS app named `macro` and retain its unbadged icon assets in
+`tauri/src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset`; the Alpha
+icon and app-name branding are Android-only.
+
 ## The flow for a PR with breaking native changes
 
 1. **`iOS Native Check`**, a job of the web app PR checks
@@ -221,7 +225,16 @@ ios-release --config prd -- just ios-release` covers them), and
   - optional `APPLE_DISTRIBUTION_CERTIFICATE_BASE64` /
     `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD` — a base64-encoded Apple
     Distribution `.p12`; without it the release workflow relies on Xcode
-    cloud signing through the API key.
+    cloud signing through the API key. With it, the runner imports the
+    identity and `prepare-signing` downloads (or creates) an App Store
+    provisioning profile for every target, including both extensions,
+    using that exact certificate. Export uses manual signing so Xcode does
+    not request a cloud certificate. The key needs access to Certificates,
+    Identifiers & Profiles. Profiles are reused until expired or invalid;
+    replacing the certificate creates matching profiles on the next run.
+    Temporary project/export settings are restored after the build, including
+    failures. For local manual signing, import the `.p12` into Keychain first
+    and set `APPLE_DISTRIBUTION_CERTIFICATE_PATH` and its password.
 - **GitHub secrets**:
   - `IOS_RELEASE_DOPPLER_TOKEN` — a Doppler service token with read access to
     `ios-release/prd`, used by the iOS workflows

@@ -24,11 +24,14 @@ ios_resolve_toolchain() {
   ios_rustc="$(command -v "${RUSTC:-${CARGO_BUILD_RUSTC:-rustc}}")"
   ios_rust_target="${1:?Rust target is required}"
   ios_rust_libdir="$("$ios_rustc" --print target-libdir --target "$ios_rust_target")"
-  if ! compgen -G "$ios_rust_libdir/libstd-*.rlib" > /dev/null; then
-    echo "The active Rust toolchain is missing $ios_rust_target: $ios_rust_libdir" >&2
-    echo "Re-enter nix develop to load the updated rust-toolchain.toml, or install the target with rustup if building outside Nix." >&2
-    exit 1
-  fi
+  # Nix's noninteractive Bash omits compgen; use ordinary globbing instead.
+  local ios_stdlib
+  for ios_stdlib in "$ios_rust_libdir"/libstd-*.rlib; do
+    [[ -f "$ios_stdlib" ]] && return 0
+  done
+  echo "The active Rust toolchain is missing $ios_rust_target: $ios_rust_libdir" >&2
+  echo "Re-enter nix develop to load the updated rust-toolchain.toml, or install the target with rustup if building outside Nix." >&2
+  exit 1
 }
 
 ios_activate_toolchain() {
