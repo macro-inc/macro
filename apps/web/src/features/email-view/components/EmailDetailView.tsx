@@ -55,6 +55,7 @@ import { Portal } from 'solid-js/web';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
 import { createBufferedThread } from '../primitives/buffered-thread';
+import { useEmailReaderPane } from '../reader-pane';
 import type { EmailThreadTarget } from '../types';
 import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
 
@@ -144,15 +145,16 @@ function ActiveThreadBindings(props: {
   resolveEntity: Accessor<EntityData | undefined>;
   listNavigation: EmailThreadListNavigation;
   keyboard: Accessor<EmailThreadKeyboardHandlers | undefined>;
+  hotkeyScope: string;
   onDeleted: () => void;
   onClose: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
-  const hotkeyScope = () => panel.splitHotkeyScope;
+  const hotkeyScope = () => props.hotkeyScope;
   useSplitDisplayName(props.title);
   useBlockEntityCommands({
     id: props.id,
-    scopeId: panel.splitHotkeyScope,
+    scopeId: props.hotkeyScope,
     resolveEntity: props.resolveEntity,
     onDeleted: props.onDeleted,
     onEmailReminderSaved: async () => {
@@ -161,7 +163,7 @@ function ActiveThreadBindings(props: {
     favoriteHotkeys: ['s', 'opt+f'],
   });
   useListNavigationHotkeys({
-    scopeId: panel.splitHotkeyScope,
+    scopeId: props.hotkeyScope,
     enabled: panel.isPanelActive,
     navigation: props.listNavigation,
     arrowKeys: true,
@@ -205,6 +207,9 @@ export function EmailDetailView(props: {
 }) {
   const active = () => props.presentation?.active() ?? true;
   const [keyboard, setKeyboard] = createSignal<EmailThreadKeyboardHandlers>();
+  // In the reading pane the thread keeps its keys in the reader's scope, and
+  // Escape hands the keyboard back to the list instead of closing it.
+  const pane = useEmailReaderPane();
   const { closeThread, source: listSource, warmThreads } = useEmailView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -292,6 +297,11 @@ export function EmailDetailView(props: {
     )
   );
   createEffect(() => {
+    if (!active() || !pane || pane.focusRequest() !== props.thread.id) return;
+    pane.clearFocusRequest();
+    focusContainer();
+  });
+  createEffect(() => {
     if (threadData() === undefined && !threadQuery.isError) return;
     // After this flush, so the messages are in the DOM when it is revealed.
     queueMicrotask(() => props.presentation?.onSettled());
@@ -326,8 +336,9 @@ export function EmailDetailView(props: {
           resolveEntity={commandEntity}
           listNavigation={listNavigation}
           keyboard={keyboard}
+          hotkeyScope={pane?.hotkeyScope ?? panel.splitHotkeyScope}
           onDeleted={closeThread}
-          onClose={closeThread}
+          onClose={pane?.focusList ?? closeThread}
         />
       </Show>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -345,7 +356,7 @@ export function EmailDetailView(props: {
                 onClick={openShare}
                 id={props.thread.id}
                 blockType="email"
-                hotkeyScope={panel.splitHotkeyScope}
+                hotkeyScope={pane?.hotkeyScope ?? panel.splitHotkeyScope}
               />
             </Show>
             <SidePanel.Toggle />

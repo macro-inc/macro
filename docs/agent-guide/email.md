@@ -254,6 +254,20 @@ The first scenario covers Signal → Noise → All after disconnecting both nati
 HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
 that driver.
 
+**Reading pane.** On desktop the header's columns button (or `Shift+V`) shows
+threads beside the list instead of in its place; the choice is remembered per
+browser. The list keeps its own keys: j/k and arrows move the cursor and the
+pane follows it (replacing history rather than adding entries), Mark done
+follows the next row, and the open row keeps an accent marker while the pointer
+highlights others. Enter or a click opens the row and moves the keyboard into
+the reader, whose keys live in a child hotkey scope so they never replace the
+list's; Escape in the reader, once there is nothing to unwind, hands the
+keyboard back to the list without closing the thread. Narrow rows stack sender,
+subject and snippet. Without room for both (narrow split, collapsed window) the
+pane folds away and a thread replaces the list as usual. The divider can be
+dragged; the list width is remembered. Verify that list `e` still works after
+switching threads in the pane (the reader's `e` must not replace it).
+
 In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`; the view breadcrumb (for example Signal) has a hover
 background and returns to the filtered list. Pressing `Escape` in the open thread

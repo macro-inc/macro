@@ -195,6 +195,8 @@ export function ListEntity(props: ListEntityProps) {
   const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
   const isSingleLineVariant = () =>
     listLayout?.narrowLayout() === 'single-line';
+  const stacksNarrowEmail = () =>
+    isTouchDevice() || listLayout?.narrowLayout() === 'inbox';
 
   const mobileStacks = createMemo(() => {
     if (!isTouchDevice()) return [];
@@ -246,8 +248,11 @@ export function ListEntity(props: ListEntityProps) {
             !props.highlighted && !props.checked && !isTouchDevice(),
           'focus-within:bg-list-hover focus-within:[--avatar-group-separator:var(--color-list-hover)]':
             !!rowActions() && !props.highlighted && !props.checked,
+          'before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-accent':
+            props.current,
         }
       )}
+      aria-current={props.current ? 'true' : undefined}
       onMouseMove={props.onMouseMove}
     >
       <Switch>
@@ -279,10 +284,10 @@ export function ListEntity(props: ListEntityProps) {
         </Match>
         <Match
           when={
-            isTouchDevice() &&
-            ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
-              isEmailEntity(props.entity) ||
-              props.showUnrollNotifications)
+            (isTouchDevice() &&
+              ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
+                props.showUnrollNotifications)) ||
+            (stacksNarrowEmail() && isEmailEntity(props.entity))
           }
         >
           <MaybeEntityRow

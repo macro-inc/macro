@@ -59,6 +59,8 @@ function setup(initialTab: EmailTab = 'noise') {
       threadOpen: () => false,
       hasSelection: () => false,
       compose,
+      readingPane: () => false,
+      setReadingPane: () => {},
     });
     // Flags loading later re-register the sidebar's letters.
     registerHome();

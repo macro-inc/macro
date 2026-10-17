@@ -20,7 +20,7 @@ import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { debouncedDependent } from '@core/util/debounce';
+import { debounce, debouncedDependent } from '@core/util/debounce';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -62,6 +62,7 @@ import {
 } from '../persistence';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
+import type { EmailListPane } from '../reader-pane';
 import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
@@ -76,6 +77,8 @@ type EmailActionRow = {
 export type EmailListProps = {
   /** The focusable list root, for callers that hand keyboard focus back. */
   ref?: (element: HTMLDivElement) => void;
+  /** Present while threads open in a reading pane beside the list. */
+  pane?: EmailListPane;
 };
 
 export function EmailList(props: EmailListProps) {
@@ -85,6 +88,7 @@ export function EmailList(props: EmailListProps) {
     list,
     registerListActivationHandler,
     openThread,
+    selectedThread,
     filterByTag,
     warmThreads,
   } = useEmailView();
@@ -134,8 +138,12 @@ export function EmailList(props: EmailListProps) {
         { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
         { event: metadata?.event }
       )
-    )
+    ) {
+      // Opening a row in the pane hands it the keyboard, so r, e and the
+      // message arrows act on the thread just opened.
+      props.pane?.focusReader(sourceRow.entity.id);
       return;
+    }
 
     openEntity(sourceRow.entity, {
       event: metadata?.event,
@@ -157,8 +165,9 @@ export function EmailList(props: EmailListProps) {
   const topSpacerSize = createElementSize(topSpacer);
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
-  // Coming back from a thread remounts the list with focus on the page; the
-  // list takes it so its keys and screen-reader cursor work.
+  // Coming back from a thread, or toggling the reading pane, remounts the
+  // list with focus on the page; the list takes it so its keys and
+  // screen-reader cursor work.
   createSplitAutofocus({
     element: () => grid() ?? null,
     enabled: () => panel.isPanelActive() && !isTouchDevice(),
@@ -222,6 +231,13 @@ export function EmailList(props: EmailListProps) {
     return row?.kind === 'entity' ? row.entity : undefined;
   };
 
+  // With a reading pane, the open thread follows the keyboard cursor. Held
+  // keys settle first; following replaces history rather than adding to it.
+  const followInPane = debounce((entity: EntityData | undefined) => {
+    if (!props.pane || entity?.type !== 'email') return;
+    openThread({ id: entity.id, fallbackName: entity.name }, { replace: true });
+  }, 60);
+
   const [collapseEntity, setCollapseEntity] =
     createSignal<(entityId: string) => Promise<void>>();
 
@@ -239,6 +255,8 @@ export function EmailList(props: EmailListProps) {
     onFocus: (target) => {
       if (target) {
         virtualizer()?.scrollToIndex(target.index, { align: 'nearest' });
+        // Mark done moved past the open thread: the pane follows.
+        followInPane(target.entity);
       }
 
       grid()?.focus();
@@ -266,6 +284,8 @@ export function EmailList(props: EmailListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        const row = event.result?.item;
+        if (row?.kind === 'entity') followInPane(row.entity);
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (source.isLoadingMore() || source.error() || !source.hasMore())
           return;
@@ -487,7 +507,7 @@ export function EmailList(props: EmailListProps) {
           onRefresh={pullRefresh}
         />
 
-        <ListLayoutProvider ref={grid}>
+        <ListLayoutProvider ref={grid} narrowLayout="inbox">
           <SwipableRowProvider
             container={viewport}
             setCollapseEntity={setCollapseEntity}
@@ -675,6 +695,11 @@ export function EmailList(props: EmailListProps) {
                                       highlighted={
                                         !isTouchDevice() &&
                                         list.focus.key() === entityRow().id
+                                      }
+                                      current={
+                                        props.pane !== undefined &&
+                                        selectedThread()?.id ===
+                                          entityRow().entity.id
                                       }
                                       onMouseMove={() =>
                                         list.focus.set(entityRow().id, {

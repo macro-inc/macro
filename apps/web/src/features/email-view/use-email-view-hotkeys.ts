@@ -33,6 +33,8 @@ export type UseEmailViewHotkeysOptions = {
   threadOpen: () => boolean;
   hasSelection: () => boolean;
   compose: () => void;
+  readingPane: () => boolean;
+  setReadingPane: (enabled: boolean) => void;
 };
 
 /** Keys that work in Email's list and its open thread alike. */
@@ -90,6 +92,19 @@ export function useEmailViewHotkeys(options: UseEmailViewHotkeysOptions) {
       return true;
     },
     displayPriority: 10,
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkey: 'shift+v',
+    hotkeyToken: TOKENS.email.toggleReadingPane,
+    scopeId: options.scopeId,
+    description: () =>
+      options.readingPane() ? 'Hide reading pane' : 'Show reading pane',
+    condition: options.enabled,
+    keyDownHandler: () => {
+      options.setReadingPane(!options.readingPane());
+      return true;
+    },
   }).withGroup(group);
 
   registerHotkey({
