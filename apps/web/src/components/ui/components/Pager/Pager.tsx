@@ -13,9 +13,10 @@ import {
 } from 'solid-js';
 import './pager.css';
 
-const DEFAULT_ANIMATION_DURATION = 140;
+const DEFAULT_ANIMATION_DURATION = 350;
 const RAPID_NAVIGATION_CLICK_THRESHOLD = DEFAULT_ANIMATION_DURATION + 10;
 const TRANSITION_FALLBACK_BUFFER = 50;
+const RUBBER_BAND_FACTOR = 0.35;
 
 type PagerPhase = 'idle' | 'dragging' | 'settling';
 export type PagerDirection = 'previous' | 'next';
@@ -161,7 +162,7 @@ export function createPager<PageId>(
     });
   };
 
-  const setTransitionEnabled = (enabled: boolean) => {
+  const setTransitionEnabled = (enabled: boolean, durationMs?: number) => {
     if (!rail) return;
 
     if (!enabled) {
@@ -170,7 +171,8 @@ export function createPager<PageId>(
       return;
     }
 
-    rail.style.transition = `transform ${animationDuration()}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+    const duration = durationMs ?? animationDuration();
+    rail.style.transition = `transform ${duration}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`;
     rail.style.willChange = 'transform';
   };
 
@@ -393,7 +395,7 @@ export function createPager<PageId>(
       const direction: PagerDirection = offset < 0 ? 'next' : 'previous';
       const constrainedOffset = transitionFor(direction, 'gesture')
         ? offset
-        : offset * 0.12;
+        : offset * RUBBER_BAND_FACTOR;
       scheduleRailOffset(constrainedOffset);
     },
     commitDrag(direction) {
