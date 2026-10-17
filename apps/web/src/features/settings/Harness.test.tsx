@@ -21,6 +21,7 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/solid-query';
+import { confirmDialog } from '@ui';
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
@@ -97,6 +98,7 @@ const harnessMocks = vi.hoisted(() => ({
     isError: false,
   },
   deleteHarness: vi.fn(),
+  setBypass: vi.fn(),
   approve: vi.fn(),
   pairing: {
     data: {
@@ -137,6 +139,10 @@ vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => harnessMocks.query,
   useDeleteHarnessMutation: () => ({
     mutateAsync: harnessMocks.deleteHarness,
+    isPending: false,
+  }),
+  useSetHarnessPermissionBypassMutation: () => ({
+    mutateAsync: harnessMocks.setBypass,
     isPending: false,
   }),
   useHarnessPairingQuery: (code: () => string | undefined) => ({
@@ -190,6 +196,8 @@ const REGISTERED_HARNESS = {
   updated_at: '2026-08-27T12:00:00Z',
   connected: true,
   last_connected_at: '2026-08-27T12:34:00Z',
+  allow_permission_bypass: false,
+  operator_allows_bypass: true,
 };
 
 beforeAll(() => {
@@ -219,6 +227,7 @@ beforeEach(() => {
   harnessMocks.query.isError = false;
   harnessMocks.pairing.isError = false;
   harnessMocks.deleteHarness.mockResolvedValue(undefined);
+  harnessMocks.setBypass.mockResolvedValue(REGISTERED_HARNESS);
   harnessMocks.approve.mockResolvedValue(REGISTERED_HARNESS);
   harnessMocks.searchParams.pair = undefined;
 });
@@ -509,5 +518,80 @@ describe('Harness', () => {
       { pair: undefined },
       { replace: true }
     );
+  });
+
+  it('allows bypass after pairing once the operator turned on Full Access', async () => {
+    harnessMocks.query.data = [REGISTERED_HARNESS];
+
+    render(() => <Harness />);
+    const toggle = screen.getByRole('switch', {
+      name: 'Allow bypassing permission requests',
+    });
+    expect(toggle.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(confirmDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Allow bypassing permission requests?',
+        })
+      );
+      expect(harnessMocks.setBypass).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        allowed: true,
+      });
+    });
+  });
+
+  it.each([
+    [
+      false,
+      "Turn on Full Access in macrod's Config tab on this machine first.",
+    ],
+    [null, 'Update macrod on this machine to change this.'],
+  ])(
+    'cannot allow bypass while the operator reports %s',
+    (operatorAllowsBypass, hint) => {
+      harnessMocks.query.data = [
+        { ...REGISTERED_HARNESS, operator_allows_bypass: operatorAllowsBypass },
+      ];
+
+      render(() => <Harness />);
+
+      expect(
+        screen
+          .getByRole('switch', { name: 'Allow bypassing permission requests' })
+          .hasAttribute('disabled')
+      ).toBe(true);
+      expect(screen.getByText(hint)).toBeTruthy();
+    }
+  );
+
+  it('turns off bypass without confirming, even after the operator withdrew it', async () => {
+    harnessMocks.query.data = [
+      {
+        ...REGISTERED_HARNESS,
+        allow_permission_bypass: true,
+        operator_allows_bypass: false,
+      },
+    ];
+
+    render(() => <Harness />);
+    expect(
+      screen.getByText('Paused: Full Access is off in macrod on this machine.')
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole('switch', {
+        name: 'Allow bypassing permission requests',
+      })
+    );
+
+    await waitFor(() => {
+      expect(harnessMocks.setBypass).toHaveBeenCalledWith({
+        harnessId: REGISTERED_HARNESS.id,
+        allowed: false,
+      });
+    });
+    expect(confirmDialog).not.toHaveBeenCalled();
   });
 });

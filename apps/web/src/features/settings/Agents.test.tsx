@@ -189,7 +189,8 @@ const harnessMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@queries/harnesses/harnesses', () => ({
+vi.mock('@queries/harnesses/harnesses', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/harnesses/harnesses')>()),
   useHarnessesQuery: vi.fn(() => harnessMocks.query),
 }));
 
@@ -337,6 +338,7 @@ beforeEach(() => {
 
 const MACROD_HARNESS = {
   allow_permission_bypass: false,
+  operator_allows_bypass: true,
   id: '3f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e6f',
   kind: 'macrod',
   name: 'Dev box',
@@ -2055,6 +2057,31 @@ it('offers bypass only after harness consent and resets the choice on harness ch
     true
   );
   expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();
+});
+
+it('withholds bypass once the operator turns Full Access off in macrod', () => {
+  harnessMocks.query.data = [
+    {
+      ...MACROD_HARNESS,
+      allow_permission_bypass: true,
+      operator_allows_bypass: false,
+    },
+  ];
+  modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+    { id: 'claude-code', name: 'Claude Code' },
+  ]);
+  render(() => <Agents {...agentsPageProps} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+  const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+  fireEvent.click(
+    within(dialog).getByRole('radio', { name: 'In your harness' })
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Show' }));
+
+  expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();
+  expect(
+    within(dialog).getByText(/This runtime requires permission prompts/)
+  ).toBeTruthy();
 });
 
 it.each(['in-memory', 'cursor', 'claude-cloud'])(

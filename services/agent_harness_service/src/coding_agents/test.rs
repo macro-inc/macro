@@ -6,6 +6,7 @@ use super::*;
 fn harness(id: HarnessId, connected: bool) -> Harness {
     Harness {
         allow_permission_bypass: false,
+        operator_allows_bypass: None,
         id,
         kind: "macrod".into(),
         name: "Private runtime behind a shared persona".into(),

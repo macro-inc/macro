@@ -20,6 +20,22 @@ export type DeleteHarnessParams = {
   harnessId: string;
 };
 
+export type SetHarnessPermissionBypassParams = {
+  harnessId: string;
+  allowed: boolean;
+};
+
+/**
+ * Whether agents may bypass permission prompts on a harness: the web owner
+ * allows it and the machine operator has not turned Full Access off in
+ * macrod. Mirrors the server's rule.
+ */
+export function harnessAllowsBypass(harness: Harness): boolean {
+  return (
+    harness.allow_permission_bypass && harness.operator_allows_bypass !== false
+  );
+}
+
 // Cached callbacks outlive the hooks; keep hook scope out of these closures.
 const harnessesQueryOptions = queryOptions({
   queryKey: harnessKeys.list.queryKey,
@@ -82,6 +98,30 @@ export function useApproveHarnessPairingMutation() {
     },
     onError: (error) =>
       console.error('failed to approve harness pairing', error),
+  }));
+}
+
+export function useSetHarnessPermissionBypassMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (vars: SetHarnessPermissionBypassParams) =>
+      await throwOnErr(() =>
+        storageServiceClient.patchHarness({
+          harness_id: vars.harnessId,
+          allow_permission_bypass: vars.allowed,
+        })
+      ),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<Harness[]>(
+        harnessKeys.list.queryKey,
+        (current = []) =>
+          current.map((harness) =>
+            harness.id === updated.id ? updated : harness
+          )
+      );
+    },
+    onError: (error) =>
+      console.error('failed to set harness permission bypass', error),
   }));
 }
 

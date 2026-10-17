@@ -12,18 +12,24 @@
 //! arrives for them. A session nobody is prompting costs nothing, and one
 //! prompted after a reconnect restores itself on the way to being prompted.
 //!
+//! Each dial also reports the machine operator's local consent to permission
+//! bypass ([`OPERATOR_ALLOWS_BYPASS_HEADER`]), recorded on every connect so a
+//! changed setting takes effect without re-pairing.
+//!
 //! The token is the whole gate: a valid, unrevoked credential on a live
 //! (undeleted) harness is exactly what the authorizer verifies, so a revoked
 //! harness fails authentication rather than a later fact check.
 
 use std::sync::Arc;
 
+use agent_runtime_protocol::domain::dial::OPERATOR_ALLOWS_BYPASS_HEADER;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_runtime_protocol::outbound::websocket::connect_socket;
 use axum::Router;
 use axum::extract::ws::WebSocketUpgrade;
 use axum::extract::{FromRef, State};
-use axum::response::Response;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse as _, Response};
 use axum::routing::get;
 use macro_authorization::{
     HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
@@ -87,12 +93,26 @@ where
 async fn dial_handler<Auth>(
     State(state): State<RuntimeGatewayState<Auth>>,
     caller: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+    headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response
 where
     Auth: MacroAuthorizationService,
 {
     let harness = caller.authorization.harness_id;
+    let operator_allows_bypass = match headers.get(OPERATOR_ALLOWS_BYPASS_HEADER) {
+        None => None,
+        Some(value) => match value.to_str().map(str::parse::<bool>) {
+            Ok(Ok(allowed)) => Some(allowed),
+            _ => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    format!("{OPERATOR_ALLOWS_BYPASS_HEADER} must be true or false"),
+                )
+                    .into_response();
+            }
+        },
+    };
 
     let runtimes = Arc::clone(&state.runtimes);
     ws.on_upgrade(move |socket| async move {
@@ -100,7 +120,7 @@ where
         // Last dial wins. A runtime that redials has lost its old socket
         // whether or not this side has noticed, so displacing is the only
         // answer that lets it recover.
-        runtimes.attach(harness, transport);
-        tracing::info!(%harness, "a runtime dialed in");
+        runtimes.attach(harness, operator_allows_bypass, transport);
+        tracing::info!(%harness, ?operator_allows_bypass, "a runtime dialed in");
     })
 }

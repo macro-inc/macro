@@ -11,7 +11,7 @@ use uuid::Uuid;
 use super::models::{
     ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreatePairingRequest, CreatedPairing,
     Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-    PairingStatus, RequestedHarnessScope,
+    PairingStatus, PatchHarnessRequest, RequestedHarnessScope,
 };
 
 /// A pairing row to persist.
@@ -135,6 +135,13 @@ pub trait HarnessRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
 
+    /// Set the web owner's permission-bypass consent on an active harness.
+    fn set_allow_permission_bypass(
+        &self,
+        harness_id: HarnessId,
+        allowed: bool,
+    ) -> impl Future<Output = Result<Option<Harness>, Self::Err>> + Send;
+
     /// Soft-delete a harness and revoke its tokens.
     fn delete_harness(
         &self,
@@ -203,6 +210,14 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         caller: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<Harness>, HarnessError>> + Send;
+
+    /// Change a harness the caller may manage.
+    fn patch_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        req: PatchHarnessRequest,
+    ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
 
     /// Revoke a harness the caller may manage.
     fn delete_harness(

@@ -717,6 +717,7 @@ pub struct ChannelWebhookResponse {
 pub struct HarnessFacts {
     /// Who may use the harness.
     pub owner: HarnessOwner,
-    /// Whether the harness operator permits unattended tool approvals.
+    /// Whether agents may bypass permission prompts here: the web owner
+    /// allows it and the machine operator has not withdrawn local consent.
     pub allow_permission_bypass: bool,
 }

@@ -6,6 +6,7 @@
  */
 import type { HarnessId } from './harnessId';
 import type { HarnessLastConnectedAt } from './harnessLastConnectedAt';
+import type { HarnessOperatorAllowsBypass } from './harnessOperatorAllowsBypass';
 import type { HarnessOwner } from './harnessOwner';
 
 /**
@@ -14,7 +15,8 @@ import type { HarnessOwner } from './harnessOwner';
 Clients deserialize this, so both derives are used.
  */
 export interface Harness {
-  /** Whether agents may bypass ACP permission requests on this harness. */
+  /** Whether the web owner lets agents bypass ACP permission requests on
+this harness. Takes effect only while the operator allows it too. */
   allow_permission_bypass?: boolean;
   /** Whether the daemon currently holds a runtime connection. */
   connected: boolean;
@@ -30,6 +32,9 @@ export interface Harness {
   last_connected_at?: HarnessLastConnectedAt;
   /** Display name. */
   name: string;
+  /** The machine operator's local consent to permission bypass, as the
+daemon last reported it on connect. `None` until a daemon reports it. */
+  operator_allows_bypass?: HarnessOperatorAllowsBypass;
   /** Owner. */
   owner: HarnessOwner;
   /** Update timestamp. */

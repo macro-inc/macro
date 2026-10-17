@@ -56,7 +56,7 @@ async fn a_harness_with_no_runtime_has_nothing_to_bind_to() {
 #[tokio::test]
 async fn a_session_binds_onto_its_harness_connection() {
     let registry = RuntimeRegistry::new();
-    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    registry.attach(HarnessId::TEST_A, None, ContainerMock::default());
     let bound = connections(
         Arc::new(FakeBindings::bound(BotId::TEST_A, HarnessId::TEST_A)),
         &registry,
@@ -81,7 +81,7 @@ async fn a_session_binds_onto_its_harness_connection() {
 #[tokio::test]
 async fn a_bot_bound_to_a_disconnected_harness_has_nothing_to_bind_to() {
     let registry = RuntimeRegistry::new();
-    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    registry.attach(HarnessId::TEST_A, None, ContainerMock::default());
     let bound = connections(
         Arc::new(FakeBindings::bound(BotId::TEST_A, HarnessId::TEST_B)),
         &registry,
@@ -98,7 +98,7 @@ async fn a_bot_bound_to_a_disconnected_harness_has_nothing_to_bind_to() {
 #[tokio::test]
 async fn many_bots_sessions_share_one_harness_connection() {
     let registry = RuntimeRegistry::new();
-    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    registry.attach(HarnessId::TEST_A, None, ContainerMock::default());
     let bindings = Arc::new(FakeBindings::bound(BotId::TEST_A, HarnessId::TEST_A));
     bindings
         .bindings
@@ -124,7 +124,7 @@ async fn many_bots_sessions_share_one_harness_connection() {
 #[tokio::test]
 async fn a_redial_displaces_the_previous_connection() {
     let registry = RuntimeRegistry::new();
-    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    registry.attach(HarnessId::TEST_A, None, ContainerMock::default());
     let bound = connections(
         Arc::new(FakeBindings::bound(BotId::TEST_A, HarnessId::TEST_A)),
         &registry,
@@ -134,7 +134,7 @@ async fn a_redial_displaces_the_previous_connection() {
         .await
         .expect("the first dial is bindable");
 
-    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    registry.attach(HarnessId::TEST_A, None, ContainerMock::default());
 
     // Displacing leaves the harness connected, and the session that was riding
     // on the old connection binds again onto the new one - which is how a
@@ -152,7 +152,7 @@ async fn a_redial_displaces_the_previous_connection() {
 async fn a_closed_connection_is_unlisted_so_nothing_binds_onto_it() {
     let registry = RuntimeRegistry::new();
     let runtime = ContainerMock::default();
-    registry.attach(HarnessId::TEST_A, runtime.clone());
+    registry.attach(HarnessId::TEST_A, None, runtime.clone());
     let connection = registry
         .connections
         .get(&HarnessId::TEST_A)
@@ -182,7 +182,7 @@ async fn a_closed_connection_is_unlisted_so_nothing_binds_onto_it() {
 async fn a_redials_connection_outlives_the_one_it_displaced() {
     let registry = RuntimeRegistry::new();
     let first = ContainerMock::default();
-    registry.attach(HarnessId::TEST_A, first.clone());
+    registry.attach(HarnessId::TEST_A, None, first.clone());
     let displaced = registry
         .connections
         .get(&HarnessId::TEST_A)
@@ -193,7 +193,7 @@ async fn a_redials_connection_outlives_the_one_it_displaced() {
         &registry,
     );
 
-    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    registry.attach(HarnessId::TEST_A, None, ContainerMock::default());
     first.disconnects();
     Arc::clone(&registry)
         .drop_when_closed(HarnessId::TEST_A, displaced)
@@ -221,6 +221,7 @@ async fn attach_and_close_report_presence() {
         fn connected(
             self: Arc<Self>,
             harness: HarnessId,
+            _operator_allows_bypass: Option<bool>,
         ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
             Box::pin(async move {
                 self.events.lock().unwrap().push((harness, "connected"));
@@ -241,7 +242,7 @@ async fn attach_and_close_report_presence() {
     let registry: Arc<RuntimeRegistry<ContainerSender>> =
         RuntimeRegistry::with_presence(Arc::clone(&presence) as Arc<dyn HarnessPresence>);
     let runtime = ContainerMock::default();
-    registry.attach(HarnessId::TEST_A, runtime.clone());
+    registry.attach(HarnessId::TEST_A, None, runtime.clone());
     let connection = registry
         .connections
         .get(&HarnessId::TEST_A)

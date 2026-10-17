@@ -5,6 +5,7 @@
 mod chat_reply;
 mod coding_preferences;
 mod owned_purge;
+mod permission_refresh;
 mod presentation;
 mod quota;
 mod user_cleanup;
@@ -3166,7 +3167,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // session: no handshake, no ACP session, nothing sent - a session nobody
     // is prompting costs the runtime nothing.
     let runtime = ContainerMock::default();
-    runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), None, runtime.clone());
     assert!(runtime.agent().received_requests().is_empty());
     assert!(
         repo.get(session.id)
@@ -3245,7 +3246,7 @@ async fn a_macrod_session_selects_its_saved_model_before_the_first_prompt() {
         assert_eq!(session.model, "gpt-5.6-luna");
         assert_eq!(session.harness, harness_id::MACROD_HARNESS_SLUG);
         let runtime = ContainerMock::default();
-        runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
+        runtimes.attach(harness_for_bot(session.bot_id), None, runtime.clone());
 
         let drive = async {
             let agent = runtime.agent();
@@ -3325,7 +3326,7 @@ async fn a_bound_session_stays_on_its_connection_until_it_drops() {
         .expect("open");
 
     let first = ContainerMock::default();
-    runtimes.attach(harness_for_bot(session.bot_id), first.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), None, first.clone());
     let (result, ()) = tokio::join!(
         prompt(&service, session.id, "fix the failing test"),
         complete_bound_handshake(&first)
@@ -3355,7 +3356,7 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
         .expect("open");
 
     let first = ContainerMock::default();
-    runtimes.attach(harness_for_bot(session.bot_id), first.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), None, first.clone());
     let (result, ()) = tokio::join!(
         prompt(&service, session.id, "fix the failing test"),
         complete_bound_handshake(&first)
@@ -3368,7 +3369,7 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
     first.disconnects();
     await_disconnect(&repo, session.id).await;
     let second = ContainerMock::default();
-    runtimes.attach(harness_for_bot(session.bot_id), second.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), None, second.clone());
     assert!(second.agent().received_requests().is_empty());
 
     let (result, ()) = tokio::join!(
@@ -3464,7 +3465,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
     // this deployment's to run, so the dial must not be what the session is
     // restored onto.
     let dialed_in = ContainerMock::default();
-    runtimes.attach(harness_for_bot(session.bot_id), dialed_in.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), None, dialed_in.clone());
 
     let prompted = service.control_event(
         id,

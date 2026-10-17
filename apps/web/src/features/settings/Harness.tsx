@@ -14,10 +14,11 @@ import {
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
+  useSetHarnessPermissionBypassMutation,
 } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
-import { Button, confirmDialog, Dialog, Panel } from '@ui';
+import { Button, confirmDialog, Dialog, Panel, ToggleSwitch } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { ClaudeConnection } from '../claude-connection/claude-connection';
 import { CodexHarness } from './codex/views/CodexHarness';
@@ -336,6 +337,7 @@ export function Harness(props: { onBack?: () => void } = {}) {
                         <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
                           {lastConnectedText(harness)}
                         </p>
+                        <HarnessBypassSetting harness={harness} />
                       </div>
                       <div class="shrink-0">
                         <ConnectAction
@@ -377,6 +379,68 @@ export function Harness(props: { onBack?: () => void } = {}) {
         )}
       </Show>
     </>
+  );
+}
+
+/**
+ * The web owner's half of permission-bypass consent. Enabling needs the
+ * machine operator's Full Access in macrod; disabling is always allowed.
+ */
+function HarnessBypassSetting(props: { harness: RegisteredHarness }) {
+  const setBypass = useSetHarnessPermissionBypassMutation();
+  const allowed = () => props.harness.allow_permission_bypass;
+  const operatorAllows = () => props.harness.operator_allows_bypass;
+
+  const change = async (next: boolean) => {
+    if (next) {
+      const confirmed = await confirmDialog({
+        title: 'Allow bypassing permission requests?',
+        body: 'Agents can run commands and edit files on this machine without approval. Only enable this if you trust everyone who can create agents on this runtime.',
+        confirmLabel: 'Allow',
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+    }
+    try {
+      await setBypass.mutateAsync({
+        harnessId: props.harness.id,
+        allowed: next,
+      });
+    } catch (error) {
+      toast.failure(
+        failureMessage(error, 'Failed to change permission requests')
+      );
+    }
+  };
+
+  const hint = () => {
+    if (operatorAllows() === false) {
+      return allowed()
+        ? 'Paused: Full Access is off in macrod on this machine.'
+        : "Turn on Full Access in macrod's Config tab on this machine first.";
+    }
+    if (operatorAllows() === null && !allowed()) {
+      return 'Update macrod on this machine to change this.';
+    }
+    return allowed()
+      ? 'Agents set to Always bypass approve tool calls without asking.'
+      : 'Every agent on this runtime must ask for permission.';
+  };
+
+  return (
+    <div class="mt-3 flex flex-col gap-1">
+      <ToggleSwitch
+        size="md"
+        label="Allow bypassing permission requests"
+        labelClass="text-xs text-ink"
+        checked={allowed()}
+        disabled={
+          setBypass.isPending || (!allowed() && operatorAllows() !== true)
+        }
+        onChange={(next) => void change(next)}
+      />
+      <p class="text-xs text-ink-extra-muted">{hint()}</p>
+    </div>
   );
 }
 

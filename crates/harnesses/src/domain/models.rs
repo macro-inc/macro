@@ -32,9 +32,14 @@ pub enum HarnessOwner {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Harness {
-    /// Whether agents may bypass ACP permission requests on this harness.
+    /// Whether the web owner lets agents bypass ACP permission requests on
+    /// this harness. Takes effect only while the operator allows it too.
     #[serde(default)]
     pub allow_permission_bypass: bool,
+    /// The machine operator's local consent to permission bypass, as the
+    /// daemon last reported it on connect. `None` until a daemon reports it.
+    #[serde(default)]
+    pub operator_allows_bypass: Option<bool>,
     /// Harness id.
     pub id: HarnessId,
     /// Runtime kind. Currently always `macrod`.
@@ -161,6 +166,16 @@ pub struct ApprovePairingRequest {
     pub name: Option<String>,
     /// Owning team. Omit for a private, user-owned harness.
     pub team_id: Option<Uuid>,
+}
+
+/// Request to change a registered harness.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PatchHarnessRequest {
+    /// Whether agents may bypass ACP permission requests on this harness.
+    /// Enabling requires the machine operator's reported consent.
+    #[serde(default)]
+    pub allow_permission_bypass: Option<bool>,
 }
 
 /// Request to claim an approved pairing's credential.

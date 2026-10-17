@@ -107,8 +107,9 @@ pub trait HarnessBindings: Send + Sync + 'static {
 
 /// Loads facts for the domain to resolve a bot's permission policy.
 ///
-/// Resolved at attach time like [`HarnessBindings`], so changing the agent's
-/// setting takes effect on its existing sessions the next time they attach.
+/// Resolved at attach time and again before every turn, so changing the
+/// agent's setting or its harness's bypass consent takes effect on its live
+/// sessions from their next prompt.
 pub trait PermissionPolicySource: Send + Sync + 'static {
     /// The persona choice and harness limit for `bot` right now.
     fn permission_policy(
@@ -120,8 +121,8 @@ pub trait PermissionPolicySource: Send + Sync + 'static {
 /// Loads a persona's choice of whether it is a coding agent.
 ///
 /// Read when a turn is announced or its reply resolved, like
-/// [`PermissionPolicySource`] is read on attach, so changing the agent's
-/// setting takes effect on its next turn. The domain applies the choice
+/// [`PermissionPolicySource`] is read before each turn, so changing the
+/// agent's setting takes effect on its next turn. The domain applies the choice
 /// with [`crate::domain::model::is_coding_agent`].
 pub trait CodingAgentSource: Send + Sync + 'static {
     /// The persona's setting for `bot`; `None` only for a fixed system bot,
@@ -139,8 +140,13 @@ pub trait CodingAgentSource: Send + Sync + 'static {
 /// Methods take `Arc<Self>` and return owned futures so the registry can fire
 /// them from its own background tasks.
 pub trait HarnessPresence: Send + Sync + 'static {
-    /// A runtime attached for this harness.
-    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    /// A runtime attached for this harness, reporting its operator's local
+    /// consent to permission bypass (`None` from runtimes that predate it).
+    fn connected(
+        self: Arc<Self>,
+        harness: HarnessId,
+        operator_allows_bypass: Option<bool>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
     /// This harness's runtime connection closed.
     fn disconnected(

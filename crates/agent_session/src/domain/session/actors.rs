@@ -71,6 +71,8 @@ pub(crate) enum SessionMessage {
     Action(SessionCommand),
     /// Hand the agent these MCP servers from now on.
     ReplaceMcpServers(Vec<McpServer>),
+    /// Answer the agent's permission requests this way from now on.
+    SetPermissionPolicy(PermissionPolicy),
 }
 
 /// An actor-owned operation or an input to the runtime protocol machine.
@@ -264,6 +266,7 @@ where
                     return ActorInput::PresentTool { presentation, completed };
                 },
                 Some(SessionMessage::ReplaceMcpServers(servers)) => Input::ReplaceMcpServers(servers),
+                Some(SessionMessage::SetPermissionPolicy(policy)) => Input::SetPermissionPolicy(policy),
                 Some(SessionMessage::Action(SessionCommand { user_id, action, action_id, completed, span, enqueued_at })) => {
                     span.record(
                         "agent.command.queue_wait_ms",

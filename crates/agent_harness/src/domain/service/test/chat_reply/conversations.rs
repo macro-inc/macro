@@ -384,7 +384,7 @@ async fn an_external_persona_conversation_binds_the_connected_runtime_without_sp
     command.runtime.kind = AgentKind::External;
     command.runtime.harness = "external".to_owned();
     let runtime = ContainerMock::default();
-    runtimes.attach(harness_for_bot(command.bot_id), runtime.clone());
+    runtimes.attach(harness_for_bot(command.bot_id), None, runtime.clone());
     let open = service.execute(id, HarnessCommand::ConversationMessage(command.clone()));
     let (result, ()) = tokio::join!(open, complete_bound_handshake(&runtime));
     result.expect("a DM delivers its first prompt to the connected persona");

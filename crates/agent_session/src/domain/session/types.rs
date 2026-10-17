@@ -229,6 +229,9 @@ pub enum Input<Token> {
     /// re-resumed with them between turns; one still opening takes them on
     /// the request it has yet to send, or re-resumes once live.
     ReplaceMcpServers(Vec<McpServer>),
+    /// How permission requests the agent sends from now on are answered.
+    /// Requests already held open for a user stay open.
+    SetPermissionPolicy(PermissionPolicy),
     /// The connection is over. Idempotent: a dead machine ignores it.
     Closed(CloseReason),
 }

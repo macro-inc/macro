@@ -9,7 +9,7 @@ web_url = "https://macro.com/app"
 scope = "private"
 # Allow agents to bypass tool permissions, subject to web confirmation.
 # When enabled, agents can run commands and edit files without approval.
-# Changes apply at the next pairing.
+# Changes apply when macrod reconnects; no re-pairing needed.
 allow_permission_bypass = false
 
 [harness]

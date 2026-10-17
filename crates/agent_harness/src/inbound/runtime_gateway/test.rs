@@ -6,6 +6,8 @@
 //! reached the registry.
 
 use super::*;
+use crate::domain::ports::HarnessPresence;
+use agent_runtime_protocol::domain::dial::OPERATOR_ALLOWS_BYPASS_HEADER;
 use axum::http::StatusCode;
 use harness_id::HarnessId;
 use macro_authorization::{
@@ -72,6 +74,11 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
 /// the `ws://` base to dial.
 async fn serve() -> (Arc<RuntimeRegistry<GatewaySender>>, String) {
     let runtimes = RuntimeRegistry::new();
+    let base = serve_registry(Arc::clone(&runtimes)).await;
+    (runtimes, base)
+}
+
+async fn serve_registry(runtimes: Arc<RuntimeRegistry<GatewaySender>>) -> String {
     let authorization = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator,
         InternalAuthConfig {
@@ -92,7 +99,7 @@ async fn serve() -> (Arc<RuntimeRegistry<GatewaySender>>, String) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await });
-    (runtimes, format!("ws://{address}"))
+    format!("ws://{address}")
 }
 
 fn dial_request(base: &str, token: Option<&str>) -> tungstenite::handshake::client::Request {
@@ -146,5 +153,70 @@ async fn a_missing_token_is_rejected() {
 
     // No credentials at all: the extractor rejects before anything runs.
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(!runtimes.is_connected(HarnessId::TEST_A));
+}
+
+/// Forwards each attach's operator report.
+struct ReportedPresence(tokio::sync::mpsc::UnboundedSender<(HarnessId, Option<bool>)>);
+
+impl HarnessPresence for ReportedPresence {
+    fn connected(
+        self: Arc<Self>,
+        harness: HarnessId,
+        operator_allows_bypass: Option<bool>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            self.0.send((harness, operator_allows_bypass)).unwrap();
+        })
+    }
+
+    fn disconnected(
+        self: Arc<Self>,
+        _harness: HarnessId,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+        Box::pin(async {})
+    }
+}
+
+#[tokio::test]
+async fn a_dial_reports_the_operators_bypass_consent() {
+    for (header, reported) in [
+        (Some("true"), Some(true)),
+        (Some("false"), Some(false)),
+        (None, None),
+    ] {
+        let (reports, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let base = serve_registry(RuntimeRegistry::with_presence(Arc::new(ReportedPresence(
+            reports,
+        ))))
+        .await;
+        let mut request = dial_request(&base, Some(HARNESS_TOKEN));
+        if let Some(header) = header {
+            request
+                .headers_mut()
+                .insert(OPERATOR_ALLOWS_BYPASS_HEADER, header.parse().unwrap());
+        }
+
+        let (_socket, _) = tokio_tungstenite::connect_async(request)
+            .await
+            .expect("the dial is valid");
+
+        assert_eq!(
+            received.recv().await,
+            Some((HarnessId::TEST_A, reported)),
+            "header {header:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_malformed_bypass_report_is_rejected() {
+    let (runtimes, base) = serve().await;
+    let mut request = dial_request(&base, Some(HARNESS_TOKEN));
+    request
+        .headers_mut()
+        .insert(OPERATOR_ALLOWS_BYPASS_HEADER, "yes".parse().unwrap());
+
+    assert_eq!(rejected(request).await, StatusCode::BAD_REQUEST);
     assert!(!runtimes.is_connected(HarnessId::TEST_A));
 }

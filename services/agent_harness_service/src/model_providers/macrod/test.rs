@@ -81,7 +81,7 @@ async fn probe_through_bus(remote: bool) {
     let owner = if remote { &other } else { &origin };
     let harness = harness_id();
     let (carrier, mut runtime) = Channel::duplex();
-    owner.registry.attach(harness, carrier);
+    owner.registry.attach(harness, None, carrier);
 
     let (result, ()) = tokio::time::timeout(Duration::from_secs(3), async {
         tokio::join!(origin.models.probe(harness), async {
@@ -125,7 +125,7 @@ async fn remote_probe_errors_reach_the_waiting_replica() {
     let owner = peer().await;
     let harness = harness_id();
     let (carrier, mut runtime) = Channel::duplex();
-    owner.registry.attach(harness, carrier);
+    owner.registry.attach(harness, None, carrier);
     let (result, ()) = tokio::time::timeout(Duration::from_secs(3), async {
         tokio::join!(origin.models.probe(harness), async {
             runtime.rx.recv().await.unwrap();

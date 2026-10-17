@@ -14078,6 +14078,84 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PATCH /harnesses/{harness_id}`.",
+        "operationId": "patch_harness",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchHarnessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/health": {
@@ -30680,7 +30758,7 @@
         "properties": {
           "allow_permission_bypass": {
             "type": "boolean",
-            "description": "Whether agents may bypass ACP permission requests on this harness."
+            "description": "Whether the web owner lets agents bypass ACP permission requests on\nthis harness. Takes effect only while the operator allows it too."
           },
           "connected": {
             "type": "boolean",
@@ -30711,6 +30789,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "operator_allows_bypass": {
+            "type": ["boolean", "null"],
+            "description": "The machine operator's local consent to permission bypass, as the\ndaemon last reported it on connect. `None` until a daemon reports it."
           },
           "owner": {
             "$ref": "#/components/schemas/HarnessOwner",
@@ -33828,6 +33910,16 @@
           "convert_to_team_channel": {
             "type": ["boolean", "null"],
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
+          }
+        }
+      },
+      "PatchHarnessRequest": {
+        "type": "object",
+        "description": "Request to change a registered harness.",
+        "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Whether agents may bypass ACP permission requests on this harness.\nEnabling requires the machine operator's reported consent."
           }
         }
       },

@@ -41,7 +41,10 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import {
+  harnessAllowsBypass,
+  useHarnessesQuery,
+} from '@queries/harnesses/harnesses';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
@@ -196,7 +199,7 @@ export function Agents(props: {
             ? `${harness.name} · Team`
             : (harness?.name ?? 'macrod'),
         kind: 'macrod',
-        allowPermissionBypass: harness?.allow_permission_bypass ?? false,
+        allowPermissionBypass: harness ? harnessAllowsBypass(harness) : false,
         target,
         connected: harness?.connected,
       };
@@ -1268,7 +1271,8 @@ function AgentEditorPage(props: {
                           when={allowPermissionBypass()}
                           fallback={
                             <p class="text-xs text-ink-muted">
-                              This runtime requires permission prompts.
+                              This runtime requires permission prompts. Allow
+                              bypass in its Runtimes settings.
                             </p>
                           }
                         >

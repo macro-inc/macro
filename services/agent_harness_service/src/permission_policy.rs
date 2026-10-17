@@ -6,9 +6,9 @@ use bot_id::BotId;
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 
-/// Reads the persona choice and the harness operator's bypass opt-in.
-/// Fixed system bots retain
-/// their built-in policy.
+/// Reads the persona choice and the harness's bypass consent: the web owner's
+/// and the machine operator's latest report, both required. Fixed system bots
+/// retain their built-in policy.
 #[derive(Clone)]
 pub struct PgPermissionPolicySource {
     repo: PgBotsRepo,

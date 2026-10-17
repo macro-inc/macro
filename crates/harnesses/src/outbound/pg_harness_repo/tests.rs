@@ -555,3 +555,43 @@ async fn pairing_permission_ceiling_roundtrips(pool: PgPool) {
         assert_eq!(stored.details.requested_allow_permission_bypass, allowed);
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn permission_bypass_can_be_changed_after_registration(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let harness_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by, operator_allows_bypass)
+        VALUES ($1, 'mine', $2, $2, true)
+        "#,
+        harness_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let harness_id = HarnessId::new_from_uuid(harness_id);
+
+    let enabled = repo
+        .set_allow_permission_bypass(harness_id, true)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(enabled.allow_permission_bypass);
+    assert_eq!(enabled.operator_allows_bypass, Some(true));
+    let disabled = repo
+        .set_allow_permission_bypass(harness_id, false)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!disabled.allow_permission_bypass);
+
+    repo.delete_harness(harness_id).await.unwrap();
+    assert!(
+        repo.set_allow_permission_bypass(harness_id, true)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

@@ -17,6 +17,7 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
             token: "mhns_test".to_owned(),
             scope: HarnessScope::User,
         },
+        false,
         Harness {
             command: "cat".to_owned(),
             args: Vec::new(),

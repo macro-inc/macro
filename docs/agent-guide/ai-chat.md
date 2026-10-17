@@ -1588,9 +1588,14 @@ must stay hidden; subsequent live messages must still appear.
   `Allow bypassing permission requests`, off by default. Enabling it warns that
   agents may run commands and edit files on the machine without approval.
   Macrod Quickstart and Config also offer `Full Access`, off by
-  default. The choice applies at the next pairing: off disables bypass in the
-  pairing page; on preselects bypass with a warning, and the approving user
-  can turn it off. Older daemons leave this choice to the pairing page.
+  default. At pairing, off disables bypass in the pairing page; on preselects
+  bypass with a warning, and the approving user can turn it off. After
+  pairing, toggling `Full Access` restarts macrod, which reports it on every
+  reconnect, and each paired runtime under Runtimes has its own
+  `Allow bypassing permission requests` switch. Enabling it confirms first and
+  is disabled until macrod reports `Full Access` on; turning either side off
+  stops bypass from each live session's next prompt. Older daemons that never report it
+  keep the bypass granted at pairing but cannot have it newly enabled.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
   and `Always bypass` only for local macrod harnesses. Macrod defaults to prompts;
   bypass requires both harness consent and the agent's explicit choice. Built-in

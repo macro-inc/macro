@@ -616,7 +616,7 @@ impl App {
                     Setting::PermissionBypass => {
                         self.form
                             .set_permission_bypass(!self.config.identity.allow_permission_bypass);
-                        self.save_config(ApplyConfig::NextPairing).await;
+                        self.save_config(ApplyConfig::Now).await;
                     }
                     Setting::HerdrFocus => {
                         self.form.toggle_herdr_focus(&self.config);

@@ -74,7 +74,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
     }
     if app.config.identity.allow_permission_bypass {
         frame.render_widget(
-            Paragraph::new("Warning: agents can run commands and edit files without approval.\nApplies at next pairing.")
+            Paragraph::new("Warning: agents can run commands and edit files without approval.\nThe harness owner must also allow it in Macro's runtime settings.")
                 .style(Style::new().fg(WARN)),
             Rect { y: inner.y + row_of(settings.len()) + 2, height: 2, ..inner },
         );

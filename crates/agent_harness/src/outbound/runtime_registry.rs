@@ -93,8 +93,14 @@ where
     ///
     /// Last dial wins: a runtime that redials has necessarily lost its old
     /// socket, and the sessions it was carrying rebind as they are next used.
-    pub fn attach<Carrier>(self: &Arc<Self>, harness: HarnessId, carrier: Carrier)
-    where
+    /// `operator_allows_bypass` is what the dial reported, passed on to
+    /// presence.
+    pub fn attach<Carrier>(
+        self: &Arc<Self>,
+        harness: HarnessId,
+        operator_allows_bypass: Option<bool>,
+        carrier: Carrier,
+    ) where
         Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
     {
         let connection = RuntimeConnection::connect(carrier);
@@ -107,7 +113,7 @@ where
             tracing::info!(%harness, "a redialed runtime replaced this harness's connection");
         }
         if let Some(presence) = &self.presence {
-            tokio::spawn(Arc::clone(presence).connected(harness));
+            tokio::spawn(Arc::clone(presence).connected(harness, operator_allows_bypass));
         }
         self.watch_for_close(harness, connection);
     }

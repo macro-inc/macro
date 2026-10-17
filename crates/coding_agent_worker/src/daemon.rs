@@ -72,6 +72,7 @@ impl Daemon {
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
+            config.identity.allow_permission_bypass,
             config.harness.clone(),
             &config.workspace.path,
             tap,

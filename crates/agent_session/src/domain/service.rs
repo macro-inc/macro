@@ -75,7 +75,7 @@ use super::ports::{
     SessionOwnership, SessionToolCatalog, SessionTurnObserver, SessionViewAccess,
 };
 use super::session::actors::{ActorInput, SessionActor, SessionCommand, SessionMessage, Stepped};
-use super::session::{CloseReason, Input};
+use super::session::{CloseReason, Input, PermissionPolicy};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -317,6 +317,15 @@ pub trait AgentSessionService: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         servers: Vec<McpServer>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Answer the agent's permission requests under `policy` from now on, on
+    /// the session's live connection on this instance. A session attached
+    /// nowhere here needs nothing: its next attach takes a fresh policy.
+    fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// The session an incoming channel context routes to, if any.
@@ -1136,6 +1145,24 @@ where
         };
         commands
             .send(SessionMessage::ReplaceMcpServers(servers))
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))
+    }
+
+    async fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
+    ) -> Result<()> {
+        let Some(commands) = self
+            .active
+            .get(&id)
+            .and_then(|active| active.commands.clone())
+        else {
+            return Ok(());
+        };
+        commands
+            .send(SessionMessage::SetPermissionPolicy(policy))
             .await
             .map_err(|_| AgentSessionError::Disconnected(id))
     }

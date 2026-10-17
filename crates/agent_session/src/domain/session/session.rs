@@ -210,6 +210,10 @@ impl<Token> SessionMachine<Token> {
                 effects
             }
             Input::ReplaceMcpServers(servers) => self.on_mcp_servers_replaced(servers),
+            Input::SetPermissionPolicy(policy) => {
+                self.permission_policy = policy;
+                vec![]
+            }
             Input::Closed(reason) => self.on_closed(reason),
         }
     }
