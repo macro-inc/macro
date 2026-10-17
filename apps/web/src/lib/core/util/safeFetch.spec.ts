@@ -64,6 +64,25 @@ describe('safeFetch', () => {
     }
   });
 
+  test.each([
+    ['WebKit', new TypeError('Load failed')],
+    [
+      'the native HTTP plugin',
+      'error sending request for url (https://localhost/data)',
+    ],
+  ])(
+    'classify a no-response rejection from %s as a network error',
+    async (_engine, error) => {
+      mockFetch.mockImplementationOnce(() => Promise.reject(error));
+
+      const result = await safeFetch<{ data: string }>(
+        'https://localhost/data'
+      );
+
+      expect(result.isErr() && result.error[0].code).toBe('NETWORK_ERROR');
+    }
+  );
+
   test('retry on network errors when configured', async () => {
     mockFetch
       .mockImplementationOnce(() => {

@@ -1,4 +1,5 @@
 import type { FetchError } from '@core/service';
+import { isNetworkFailure } from '@core/util/networkFailure';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import { err, ok, type Result } from 'neverthrow';
@@ -37,7 +38,7 @@ function httpStatusToError(
 function fetchExceptionToError(
   error: unknown
 ): Result<never, ResultError<FetchError>[]> {
-  if (error instanceof TypeError && error.message === 'Failed to fetch') {
+  if (isNetworkFailure(error)) {
     return err<never, ResultError<FetchError>[]>([
       { code: 'NETWORK_ERROR', message: 'Network error occurred' },
     ]);

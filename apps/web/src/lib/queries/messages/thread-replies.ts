@@ -26,10 +26,11 @@ type ThreadRepliesQueryKey = ReturnType<
 /** Every thread read shares this so a thread never enters the cache without derived senders. */
 export async function fetchMessageThread(
   parent: MessageParent,
-  rootId: string
+  rootId: string,
+  signal?: AbortSignal
 ): Promise<MessageThread> {
   return normalizeMessageThreadSenders(
-    await entityMessagesClient.thread(parent, rootId)
+    await entityMessagesClient.thread(parent, rootId, signal)
   );
 }
 
@@ -39,7 +40,8 @@ export function threadRepliesQueryOptions(
 ) {
   return {
     queryKey: messageKeys.threadReplies(parent, messageId).queryKey,
-    queryFn: () => fetchMessageThread(parent, messageId),
+    queryFn: ({ signal }: { signal?: AbortSignal }) =>
+      fetchMessageThread(parent, messageId, signal),
     staleTime: Infinity,
   };
 }

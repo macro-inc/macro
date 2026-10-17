@@ -76,7 +76,8 @@ it('treats only a missing root as an empty conversation and can refresh after th
   expect(mocks.thread).toHaveBeenCalledOnce();
   expect(mocks.thread).toHaveBeenCalledWith(
     { type: 'call', id: 'call-id' },
-    'call-id'
+    'call-id',
+    expect.any(AbortSignal)
   );
   mocks.thread.mockResolvedValue(thread);
   await source.refresh();

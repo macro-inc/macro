@@ -62,6 +62,7 @@ describe('fetchWithToken refresh latch', () => {
     global.fetch = originalFetch;
     mockFetch.mockReset();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   const refreshCalls = () =>
@@ -294,6 +295,37 @@ describe('fetchWithToken refresh latch', () => {
     // R1's stale failure must not have latched: a fresh 401 still refreshes.
     expect((await fetchToken()).isOk()).toBe(true);
     expect(refreshCalls()).toBe(3);
+  });
+
+  test('a stalled refresh expires without stranding later requests or logging out', async () => {
+    const deadline = new AbortController();
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(deadline.signal);
+    mockFetch.mockImplementationOnce(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(init.signal?.reason)
+          );
+        })
+    );
+
+    const first = fetchToken();
+    const shared = fetchToken();
+    await tick();
+    expect(refreshCalls()).toBe(1);
+
+    deadline.abort(new DOMException('signal timed out', 'TimeoutError'));
+    for (const result of [await first, await shared]) {
+      expect(result.isErr()).toBe(true);
+      expect(
+        result.isErr() && result.error.some((e) => e.code === 'UNAUTHORIZED')
+      ).toBe(false);
+    }
+
+    // The expired attempt released the shared refresh and did not latch.
+    mockFetch.mockImplementation(() => Promise.resolve(jsonResponse(200)));
+    expect((await fetchToken()).isOk()).toBe(true);
+    expect(refreshCalls()).toBe(2);
   });
 
   test('confirmSessionExpired bypasses the latch and confirms a definitive rejection', async () => {

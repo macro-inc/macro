@@ -18,6 +18,7 @@ import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
   type FetchWithTokenErrorCode,
+  type FetchWithTokenInit,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
@@ -225,17 +226,23 @@ export function dssFetch(
   url: string,
   init?: SafeFetchInit
 ): Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dssFetch<T extends Record<string, any>>(
+export function dssFetch<
+  T extends Record<string, any>,
+  CustomErrorCode extends string = never,
+>(
   url: string,
-  init?: SafeFetchInit
-): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>;
-export function dssFetch<T extends Record<string, any> = never>(
+  init?: FetchWithTokenInit<CustomErrorCode>
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode | CustomErrorCode>[]>>;
+export function dssFetch<
+  T extends Record<string, any> = never,
+  CustomErrorCode extends string = never,
+>(
   url: string,
-  init?: SafeFetchInit
+  init?: FetchWithTokenInit<CustomErrorCode>
 ):
-  | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
+  | Promise<Result<T, ResultError<FetchWithTokenErrorCode | CustomErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
-  return fetchWithToken<T>(`${dssHost}${url}`, init);
+  return fetchWithToken<T, CustomErrorCode>(`${dssHost}${url}`, init);
 }
 
 export async function getDocumentPermissionToken(

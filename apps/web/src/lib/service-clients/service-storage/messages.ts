@@ -1,4 +1,6 @@
+import { createReadRequestSignal } from '@core/util/readRequestSignal';
 import { throwOnErr } from '@core/util/result';
+import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
 import { dssFetch } from './client';
 import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
@@ -75,42 +77,69 @@ function path(parent: MessageParent) {
   return `/messages/${parent.type}/${encodeURIComponent(parent.id)}`;
 }
 
+// A rejected selection or cursor is distinct from transport and server
+// failures: the caller can recover by reading without the cursor.
+const messageErrorResponse: ErrorResponseHandler<'BAD_REQUEST'> = async (
+  response
+) =>
+  response.status === 400
+    ? { code: 'BAD_REQUEST', message: 'Bad request' }
+    : statusError(response.status);
+
 async function request<T extends object>(
   url: string,
   method = 'GET',
-  body?: unknown
+  body?: unknown,
+  signal?: AbortSignal
 ): Promise<T> {
   return throwOnErr(() =>
-    dssFetch<T>(url, {
+    dssFetch<T, 'BAD_REQUEST'>(url, {
       method,
       body: body === undefined ? undefined : JSON.stringify(body),
+      // Reads are bounded; writes keep their delivery semantics.
+      ...(method === 'GET' ? { signal: createReadRequestSignal(signal) } : {}),
+      errorResponseHandler: messageErrorResponse,
     })
   );
 }
 
+const read = <T extends object>(url: string, signal?: AbortSignal) =>
+  request<T>(url, 'GET', undefined, signal);
+
 export const entityMessagesClient = {
-  list(parent: MessageParent, selection: MessageTimelineQuery = {}) {
-    return request<MessageListPage>(
-      `${path(parent)}?${new URLSearchParams({ selection: JSON.stringify(selection) })}`
+  list(
+    parent: MessageParent,
+    selection: MessageTimelineQuery = {},
+    signal?: AbortSignal
+  ) {
+    return read<MessageListPage>(
+      `${path(parent)}?${new URLSearchParams({ selection: JSON.stringify(selection) })}`,
+      signal
     );
   },
   async timeline(
     parent: MessageParent,
-    selection: MessageTimelineQuery = {}
+    selection: MessageTimelineQuery = {},
+    signal?: AbortSignal
   ): Promise<MessageTimelinePage> {
-    const page = await request<ReceivedTimelinePage>(
-      `${path(parent)}/timeline?${new URLSearchParams({ selection: JSON.stringify(selection) })}`
+    const page = await read<ReceivedTimelinePage>(
+      `${path(parent)}/timeline?${new URLSearchParams({ selection: JSON.stringify(selection) })}`,
+      signal
     );
     // Skip kinds this client can't render instead of failing the timeline;
     // the page's cursors still continue past them.
     return { ...page, entries: page.entries.filter(isKnownEntry) };
   },
-  get(parent: MessageParent, id: string) {
-    return request<Message>(`${path(parent)}/items/${encodeURIComponent(id)}`);
+  get(parent: MessageParent, id: string, signal?: AbortSignal) {
+    return read<Message>(
+      `${path(parent)}/items/${encodeURIComponent(id)}`,
+      signal
+    );
   },
-  thread(parent: MessageParent, id: string) {
-    return request<MessageThread>(
-      `${path(parent)}/threads/${encodeURIComponent(id)}`
+  thread(parent: MessageParent, id: string, signal?: AbortSignal) {
+    return read<MessageThread>(
+      `${path(parent)}/threads/${encodeURIComponent(id)}`,
+      signal
     );
   },
   post(parent: MessageParent, input: PostMessage) {
@@ -168,6 +197,6 @@ export const entityMessagesClient = {
   },
   legacyLink(parent: MessageParent, id: string, thread = false) {
     if (!/^\d+$/.test(id)) throw new Error('Invalid historical comment link');
-    return request<Message>(`${path(parent)}/legacy/${id}?thread=${thread}`);
+    return read<Message>(`${path(parent)}/legacy/${id}?thread=${thread}`);
   },
 };

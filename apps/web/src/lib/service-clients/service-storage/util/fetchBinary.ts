@@ -1,3 +1,4 @@
+import { isNetworkFailure } from '@core/util/networkFailure';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
 import { err, ok, type Result } from 'neverthrow';
@@ -48,7 +49,7 @@ export async function fetchBinary<T extends ArrayBuffer | Blob>(
       : response.blob());
     return ok(data as T);
   } catch (error) {
-    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+    if (isNetworkFailure(error)) {
       return err([
         { code: 'NETWORK_ERROR', message: 'Network error occurred' },
       ]);
