@@ -4,6 +4,7 @@ import { ganttGroupPlacement } from '@app/components/gantt/gantt-group-placement
 import { useListInteractions } from '@app/components/list';
 import { ListViewport } from '@app/components/list/ListViewport';
 import {
+  ListFilterCountBadge,
   ListFilterDropdown,
   type ListFilterGroup,
   ListGroupDropdown,
@@ -508,11 +509,7 @@ export function ProjectsCollection(props: {
                   }}
                   onClear={clearFilters}
                 />
-                <Show when={activeCount()}>
-                  <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-                    {activeCount()}
-                  </span>
-                </Show>
+                <ListFilterCountBadge count={activeCount()} />
               </div>
               <Dropdown>
                 <Dropdown.Trigger
