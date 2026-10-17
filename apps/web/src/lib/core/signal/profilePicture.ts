@@ -102,6 +102,14 @@ async function batchFetchProfilePictures(ids: string[]) {
   setUserProfilePictures((prev) => ({ ...prev, ...updates }));
 }
 
+/**
+ * Refetches a user's profile picture after the server changed it. The current
+ * picture stays on screen until the new one arrives.
+ */
+export function refetchProfilePicture(id: string) {
+  queueItemsForFetch([id]);
+}
+
 export function useProfilePictureUrl(id?: string): ProfilePictureUrlFetcher {
   if (!id) {
     const dummy_accessor = () => {

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO macro_user_info (macro_user_id, profile_picture)\n        VALUES ($1, $2)\n        ON CONFLICT (macro_user_id)\n        DO UPDATE SET\n            profile_picture = EXCLUDED.profile_picture,\n            profile_picture_hash = NULL\n        WHERE macro_user_info.profile_picture IS DISTINCT FROM EXCLUDED.profile_picture\n            AND (\n                macro_user_info.profile_picture IS NULL\n                OR (macro_user_info.profile_picture <> '' AND macro_user_info.profile_picture = $3)\n            )\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0f8549d54f3b35c4f6165cd4a91c19554850f052eaad9db6e5b3bb0a3bdb341e"
+}
