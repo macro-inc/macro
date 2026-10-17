@@ -55,6 +55,7 @@ export const TOKENS = {
       markRead: 'entity.action.markRead',
       markUnread: 'entity.action.markUnread',
       delete: 'entity.action.delete',
+      trash: 'entity.action.trash',
       rename: 'entity.action.rename',
       moveToFolder: 'entity.action.moveToFolder',
       copy: 'entity.action.copy',
