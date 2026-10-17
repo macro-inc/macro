@@ -7949,6 +7949,16 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	reminderReturnedAt: String
 	"""
+	Timestamp of the latest outbound message, in RFC 3339 format: the SENT
+	view's sort key.
+	"""
+	latestOutboundMessageTs: String
+	"""
+	Timestamp of the latest message that is not spam, in RFC 3339 format:
+	the sort key of every mail view except INBOX and SENT.
+	"""
+	latestNonSpamMessageTs: String
+	"""
 	Complete body-free metadata for local draft edits and discards.
 	"""
 	mailDraftState: GraphqlMailDraftState

@@ -336,6 +336,9 @@ export const GoToHotkeys = () => {
         description: `Go to ${link.label}`,
         keyDownHandler: openSidebarView,
         icon: link.icon,
+        // Views can claim a letter while focused (Email's g then i). Re-running
+        // this effect when flags load must not eclipse those.
+        registrationType: 'add',
       });
     });
 

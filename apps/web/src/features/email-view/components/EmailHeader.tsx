@@ -7,6 +7,7 @@ import {
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
@@ -48,11 +49,24 @@ export function EmailViewBreadcrumbItem() {
   );
 }
 
-export function EmailTopBar() {
+export function EmailTopBar(props: {
+  /** Beside a reading pane the reader shows the trail; the list shows its tab. */
+  tabOnly?: boolean;
+}) {
+  const { state } = useEmailView();
+  const tabTitle = () =>
+    EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
   return (
     <ViewShell.TopBar>
       <div class="flex min-w-0 flex-1 items-baseline gap-2">
-        <ViewBreadcrumbs.Outlet aria-label="Email location" />
+        <Show
+          when={props.tabOnly}
+          fallback={<ViewBreadcrumbs.Outlet aria-label="Email location" />}
+        >
+          <h2 class="truncate px-1 text-sm font-medium text-ink">
+            {tabTitle()}
+          </h2>
+        </Show>
         <EmailInboxFilter class="@max-[720px]/view-shell:hidden" />
       </div>
     </ViewShell.TopBar>
@@ -69,18 +83,31 @@ export function EmailHeader(props: EmailHeaderProps) {
   const selectedTabLabel = () =>
     EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
 
+  const focusSearch = () => {
+    searchInput?.focus();
+    searchInput?.select();
+    return true;
+  };
+  const canSearch = () =>
+    state.tab !== 'scheduled' && state.tab !== 'reminders';
+
+  // Mail clients search with `/`; elsewhere it opens the app's search view.
+  registerHotkey({
+    hotkey: '/',
+    scopeId: panel.splitHotkeyScope,
+    description: 'Search email',
+    condition: () => panel.isPanelActive() && canSearch(),
+    keyDownHandler: focusSearch,
+  });
+
   // The view's control hotkeys are registered once, here, for the split scope.
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     search: {
       description: 'Search email',
-      condition: () => state.tab !== 'scheduled' && state.tab !== 'reminders',
-      run: () => {
-        searchInput?.focus();
-        searchInput?.select();
-        return true;
-      },
+      condition: canSearch,
+      run: focusSearch,
     },
     filter: {
       description: 'Filter email',

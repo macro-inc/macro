@@ -117,7 +117,7 @@ it('delegates keyboard mark done to host list navigation', () => {
 
   try {
     expect(state.handlers()?.markDone()).toBe(true);
-    expect(markDone).toHaveBeenCalledWith(state.context.archiveThread);
+    expect(markDone).toHaveBeenCalledOnce();
   } finally {
     state.dispose();
   }

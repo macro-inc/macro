@@ -87,6 +87,8 @@ export type EmailThreadState = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  /** Marks the thread done and opens the next one in the host's list. */
+  archiveThreadAndAdvance: (opts?: ArchiveThreadOptions) => boolean;
   /** True when the thread is archived, i.e. currently marked done. */
   isThreadDone: Accessor<boolean>;
   /** True when the done state can actually be reversed — see
@@ -241,13 +243,23 @@ export function createEmailThreadState(
     );
   };
 
+  const commands = threadContext.createCommands(threadSnapshot);
+  const archiveThreadAndAdvance = (opts?: ArchiveThreadOptions) => {
+    if (!host.listNavigation) return commands.archiveThread(opts);
+    host.listNavigation.markDone((navigation) =>
+      commands.archiveThread({ ...opts, ...navigation })
+    );
+    return true;
+  };
+
   return {
     registerMessagesList: setMessagesListRef,
     registerMessagesContainer: setMessagesContainerRef,
     thread: selected,
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
-    ...threadContext.createCommands(threadSnapshot),
+    ...commands,
+    archiveThreadAndAdvance,
     messagesContainerRef,
     messagesListRef,
     query: {

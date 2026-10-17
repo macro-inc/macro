@@ -5,7 +5,6 @@ import { CalendarViewSkeleton } from '@app/features/calendar-view/calendar-view-
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { ChannelsViewSkeleton } from '@app/features/channels-view/channels-view-skeleton';
 import { DriveViewSkeleton } from '@app/features/drive-view/drive-view-skeleton';
-import { EmailViewSkeleton } from '@app/features/email-view/email-view-skeleton';
 import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
 import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import {
@@ -36,6 +35,7 @@ import { transformShortIdInUrlPathname } from '@core/util/url';
 import { lazy } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
+import { EmailRoutes } from './email-routes';
 import {
   ActivityRouteView,
   AgentsRouteView,
@@ -49,11 +49,9 @@ import {
   DriveCallRouteView,
   DriveDetailView,
   DriveRouteView,
-  EmailDetailRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
   HomeEntityDetailRouteView,
-  MailRouteView,
   MeetingRouter,
   NotFound,
   PrDetailRouteView,
@@ -108,8 +106,6 @@ import {
   driveTabDocumentRoute,
   driveTabRoute,
   emailSignupCallbackRoute,
-  emailSplitRoute,
-  emailThreadRoute,
   foldersRoute,
   formRespondRoute,
   homeCalendarRoute,
@@ -336,16 +332,7 @@ export function AppRouterView() {
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
         />
-        <Route
-          definition={emailSplitRoute}
-          component={MailRouteView}
-          loading={EmailViewSkeleton}
-        >
-          <Route
-            definition={emailThreadRoute}
-            component={EmailDetailRouteView}
-          />
-        </Route>
+        <EmailRoutes />
         <Route
           definition={tasksSplitRoute}
           component={TasksRouteView}

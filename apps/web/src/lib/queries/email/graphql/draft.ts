@@ -348,11 +348,14 @@ export async function executeGraphqlSaveEmailDraft(
             ),
           ]
         : [],
+      // The returned draft and thread records update every list the cache
+      // maintains; the rest are read again. Refetch the thread page only
+      // when a missing snapshot or an inbox move prevents the message-list
+      // patch; otherwise a save can reset the open thread.
       revalidations: [
-        ...getActiveGraphqlSoupRevalidations(),
-        // Ordinary autosaves already return the draft and thread records.
-        // Refetch only when a missing snapshot or inbox move prevents the
-        // message-list patch; otherwise a save can reset the open thread.
+        ...getActiveGraphqlSoupRevalidations(undefined, {
+          unmaintainedOnly: true,
+        }),
         ...(canPatchThread
           ? []
           : [
@@ -481,7 +484,9 @@ export async function executeGraphqlDeleteEmailDraft(
         ),
       ],
       revalidations: [
-        ...getActiveGraphqlSoupRevalidations(),
+        ...getActiveGraphqlSoupRevalidations(undefined, {
+          unmaintainedOnly: true,
+        }),
         {
           document: EmailThreadPageDocument,
           variables: threadPageVariables,

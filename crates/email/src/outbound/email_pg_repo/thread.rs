@@ -48,6 +48,8 @@ pub(super) async fn thread_metadata_by_ids(
             id AS "thread_id!",
             link_id,
             latest_inbound_message_ts,
+            latest_outbound_message_ts,
+            latest_non_spam_message_ts,
             reminder_returned_at
         FROM email_threads
         WHERE id = ANY($1)

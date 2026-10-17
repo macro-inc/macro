@@ -1,0 +1,15 @@
+# Local cache entrypoint only: subscription roots are not persisted as query
+# membership. Writes a notification state the server has confirmed without
+# replaying any of the notification's other fields.
+subscription NotificationStateCacheWrite {
+	notificationUpdates {
+		__typename
+		... on GraphqlUpdatedNotification {
+			notification {
+				__typename
+				id
+				state
+			}
+		}
+	}
+}

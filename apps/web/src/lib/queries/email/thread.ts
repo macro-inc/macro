@@ -20,7 +20,10 @@ import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
 } from '@service-storage/graphql-email-read-state';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -42,6 +45,7 @@ import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
   mapGraphqlThreadError,
+  warmGraphqlEmailThread,
 } from './graphql/thread';
 import {
   archiveEmailThread,
@@ -116,6 +120,18 @@ export async function fetchAndCacheThread(
 
   if (result.isErr()) return err(result.error as any);
   return ok({ thread: result.value });
+}
+
+/**
+ * Loads a thread into the cache for its next open, if it is not there yet.
+ * Resolves to whether it is cached; prefetching never rejects.
+ */
+export async function warmThread(threadId: string): Promise<boolean> {
+  if (isFeatureEnabled(enableGraphqlSoup))
+    return await warmGraphqlEmailThread(threadId);
+  const options = threadQueryOptions(threadId);
+  await queryClient.prefetchInfiniteQuery(options);
+  return queryClient.getQueryState(options.queryKey)?.status === 'success';
 }
 
 /**
@@ -345,12 +361,16 @@ export function useMarkThreadAsSeenMutation(
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsSeenParams) => {
       if (isFeatureEnabled(enableGraphqlSoup)) {
+        // The optimistic and committed `isRead` reach every list the cache
+        // maintains; the rest are read again when the write commits.
         const disposition = await markGraphqlEmailThreadSeen(
           getGraphqlSoupClient(),
           params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          getActiveGraphqlSoupRevalidations(undefined, {
+            unmaintainedOnly: true,
+          })
         );
-        if (disposition === 'committed')
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }
@@ -428,12 +448,16 @@ export function useMarkThreadAsUnreadMutation(
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsUnreadParams) => {
       if (isFeatureEnabled(enableGraphqlSoup)) {
+        // The optimistic and committed `isRead` reach every list the cache
+        // maintains; the rest are read again when the write commits.
         const disposition = await markGraphqlEmailThreadUnread(
           getGraphqlSoupClient(),
           params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          getActiveGraphqlSoupRevalidations(undefined, {
+            unmaintainedOnly: true,
+          })
         );
-        if (disposition === 'committed')
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }

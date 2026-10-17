@@ -14,31 +14,86 @@ type ActiveGraphqlSoupQuery = {
   target?: () => GraphqlSoupRefreshTarget;
   /** The REST-shaped filter body, for refreshes scoped to matching lists. */
   body?: () => unknown;
+  /** The normalized cache keeps this list's rows and membership current. */
+  cacheMaintained?: () => boolean;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
+type ReaderRefresh = {
+  generation: number;
+  inFlight: Promise<void>;
+  followUp?: Promise<void>;
+};
+const readerRefreshes = new Map<ActiveGraphqlSoupQuery, ReaderRefresh>();
+let refreshGeneration = 0;
+
+async function runReaderRefresh(
+  query: ActiveGraphqlSoupQuery,
+  generation: number
+): Promise<void> {
+  try {
+    await query.refresh();
+  } finally {
+    if (readerRefreshes.get(query)?.generation === generation)
+      readerRefreshes.delete(query);
+  }
+}
+
+/** One refresh per reader at a time. A request made while one is in flight
+ * shares a single follow-up that starts after it, so each caller still gets a
+ * fetch issued after its write instead of a burst of chain refetches. */
+async function refreshReader(query: ActiveGraphqlSoupQuery): Promise<void> {
+  const current = readerRefreshes.get(query);
+  if (current) {
+    current.followUp ??= refreshAfter(current.inFlight, query);
+    return current.followUp;
+  }
+  const generation = ++refreshGeneration;
+  const inFlight = runReaderRefresh(query, generation);
+  readerRefreshes.set(query, { generation, inFlight });
+  return inFlight;
+}
+
+async function refreshAfter(
+  inFlight: Promise<void>,
+  query: ActiveGraphqlSoupQuery
+): Promise<void> {
+  try {
+    await inFlight;
+  } catch {
+    // The follow-up runs whether or not the refresh it waited on succeeded.
+  }
+  return refreshReader(query);
+}
 const revalidationSources = new Set<{
   queries: () => readonly QueryRevalidation[];
   client?: () => Pick<Client, 'query'>;
+  cacheMaintained?: () => boolean;
 }>();
 
 /** Each reader supplies its enabled, loaded pages for durable mutation replay. */
 export function registerGraphqlSoupRevalidations(
   queries: () => readonly QueryRevalidation[],
-  client?: () => Pick<Client, 'query'>
+  client?: () => Pick<Client, 'query'>,
+  /** The normalized cache keeps these pages current (see FE-56). */
+  cacheMaintained?: () => boolean
 ): () => void {
-  const source = { queries, client };
+  const source = { queries, client, cacheMaintained };
   revalidationSources.add(source);
   return () => revalidationSources.delete(source);
 }
 
-/** Snapshot query descriptors without fetching or waiting on the cache. */
+/** Snapshot query descriptors without fetching or waiting on the cache.
+ * `unmaintainedOnly` keeps the pages the cache cannot keep current: the only
+ * ones a write that updates the cache still has to read again. */
 export function getActiveGraphqlSoupRevalidations(
-  client?: Pick<Client, 'query'>
+  client?: Pick<Client, 'query'>,
+  options: { unmaintainedOnly?: boolean } = {}
 ): QueryRevalidation[] {
   const queries = new Map<number, QueryRevalidation>();
   for (const source of revalidationSources) {
     if (client && source.client && source.client() !== client) continue;
+    if (options.unmaintainedOnly && source.cacheMaintained?.()) continue;
     for (const query of source.queries()) {
       queries.set(createRequest(query.document, query.variables).key, query);
     }
@@ -64,10 +119,13 @@ export async function refreshActiveGraphqlSoupQueries(
     target?: GraphqlSoupRefreshTarget;
     /** Only refresh list readers whose filter body matches. */
     where?: (body: unknown) => boolean;
+    /** Skip lists the cache keeps current: the write already updated them. */
+    unmaintainedOnly?: boolean;
   } = {}
 ): Promise<void> {
   const applicable = (query: ActiveGraphqlSoupQuery) => {
     if (!query.isEnabled()) return false;
+    if (options.unmaintainedOnly && query.cacheMaintained?.()) return false;
     if (options.where && !options.where(query.body?.())) return false;
     if (!query.target) return true;
     const target = query.target();
@@ -81,7 +139,7 @@ export async function refreshActiveGraphqlSoupQueries(
     [...activeQueries].map(async (query) => {
       if (!applicable(query)) return;
       try {
-        await query.refresh();
+        await refreshReader(query);
         refreshed.add(query);
       } catch (error) {
         console.error('[graphql-soup] failed to refresh active query', error);

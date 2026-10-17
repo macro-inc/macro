@@ -2,7 +2,11 @@ import type {
   EmailThreadCommands,
   EmailThreadListNavigation,
 } from '@app/features/email-thread/context/email-thread-context';
-import { adjacentEmail } from '@app/features/email-thread/core/adjacent-email';
+import {
+  adjacentEmail,
+  type EmailPosition,
+  emailPosition,
+} from '@app/features/email-thread/core/adjacent-email';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import {
@@ -13,7 +17,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 
 /** Keep thread controls tied to the list and filters the user opened it from. */
 export function useEmailListNavigation(
@@ -40,13 +44,17 @@ export function useEmailListNavigation(
     if (from !== 'mail' && from !== 'home') return [];
     return soup?.rows().map((row) => row.original) ?? [];
   };
+  // Keep the open thread's place after it leaves the list (a reply in
+  // Signal marks it done), so next and previous still work.
+  const position = createMemo<EmailPosition | undefined>(
+    (previous) =>
+      emailPosition(entities(), threadId()) ??
+      (previous?.id === threadId() ? previous : undefined)
+  );
   const target = (direction: -1 | 1) =>
-    adjacentEmail(entities(), threadId(), direction);
+    adjacentEmail(entities(), threadId(), direction, position());
   const canLoadNext = () =>
-    !!source()?.hasMore() &&
-    entities().some(
-      (entity) => entity.type === 'email' && entity.id === threadId()
-    );
+    !!source()?.hasMore() && position()?.id === threadId();
   const open = async (
     entity: EntityData,
     referredFrom = panel?.handle.referredFrom()

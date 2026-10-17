@@ -38,7 +38,9 @@ export function registerEmailHotkeys(
     hotkey: 'e',
     scopeId,
     description: 'Mark done',
-    keyDownHandler: handlers.markDone,
+    // Mark done opens the next thread, so a held key would archive thread
+    // after thread; auto-repeat is ignored.
+    keyDownHandler: (event) => (event?.repeat ? true : handlers.markDone()),
     hotkeyToken: TOKENS.entity.action.markDone,
     displayPriority: 10,
     condition: () => !handlers.isThreadDone(),
@@ -47,7 +49,7 @@ export function registerEmailHotkeys(
     hotkey: 'shift+e',
     scopeId,
     description: 'Mark as not done',
-    keyDownHandler: handlers.markNotDone,
+    keyDownHandler: (event) => (event?.repeat ? true : handlers.markNotDone()),
     hotkeyToken: TOKENS.entity.action.markNotDone,
     displayPriority: 10,
     condition: () => handlers.isThreadDone() && handlers.canMarkNotDone(),

@@ -1,4 +1,4 @@
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { ListDataSource } from './list-data-source';
 
 export type ListDetailNavigationTarget = {
@@ -56,15 +56,56 @@ export function useListDetailNavigation<
       .map(options.getEntity)
       .find((entity) => entity?.id === options.currentId());
 
+  // Where the open entity last sat. Archiving it (a reply marks a thread done)
+  // or a change from another device drops it from the list while it stays
+  // open; its former neighbours still say what next and previous are.
+  const anchor = createMemo<
+    { id: string; next: string[]; previous: string[] } | undefined
+  >((previous) => {
+    const id = options.currentId();
+    const ids = options.source.items().flatMap((item) => {
+      const entity = options.getEntity(item);
+      return entity ? [entity.id] : [];
+    });
+    const index = ids.indexOf(id);
+    if (index === -1) return previous?.id === id ? previous : undefined;
+    return {
+      id,
+      next: ids.slice(index + 1),
+      previous: ids.slice(0, index).reverse(),
+    };
+  });
+
+  const startIndex = (items: readonly TItem[], direction: -1 | 1) => {
+    const indexById = new Map<string, number>();
+    items.forEach((item, index) => {
+      const entity = options.getEntity(item);
+      if (entity) indexById.set(entity.id, index);
+    });
+    const id = options.currentId();
+    const current = indexById.get(id);
+    if (current !== undefined) return current + direction;
+
+    const position = anchor();
+    if (position?.id !== id) return;
+    // The nearest surviving later neighbour took the entity's place.
+    for (const neighbour of position.next) {
+      const index = indexById.get(neighbour);
+      if (index !== undefined) return direction === 1 ? index : index - 1;
+    }
+    for (const neighbour of position.previous) {
+      const index = indexById.get(neighbour);
+      if (index !== undefined) return direction === 1 ? index + 1 : index;
+    }
+  };
+
   const target = (direction: -1 | 1): NavigationStep<TEntity> | undefined => {
     const items = options.source.items();
-    const currentIndex = items.findIndex(
-      (item) => options.getEntity(item)?.id === options.currentId()
-    );
-    if (currentIndex === -1) return;
+    const start = startIndex(items, direction);
+    if (start === undefined) return;
 
     for (
-      let index = currentIndex + direction;
+      let index = start;
       index >= 0 && index < items.length;
       index += direction
     ) {

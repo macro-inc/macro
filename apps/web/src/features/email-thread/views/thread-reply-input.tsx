@@ -5,6 +5,7 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { Layer } from '@ui';
 import {
   type Accessor,
+  type ComponentProps,
   createMemo,
   createSignal,
   type Setter,
@@ -24,6 +25,7 @@ interface ThreadReplyInputProps {
   mobileDrawer?: {
     onClose: () => void;
   };
+  popout?: ComponentProps<typeof ReplyInputView>['popout'];
 }
 
 /** A reply target owns one editor/form lifetime; changing targets must reset the draft latch. */
@@ -148,11 +150,16 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
               formSeed={seed}
               onEngaged={() => setEngaged(true)}
               sideEffectOnSend={afterSend}
-              onMarkDone={ctx.archiveThread}
+              onMarkDone={(options) =>
+                options?.navigate
+                  ? ctx.archiveThreadAndAdvance(options)
+                  : ctx.archiveThread(options)
+              }
               setShowReply={props.setShowReply}
               markdownDomRef={props.markdownDomRef}
               unframed={props.unframed}
               mobileDrawer={props.mobileDrawer}
+              popout={props.popout}
               isEditingExisting={
                 props.replyingTo() == null && props.draft != null
               }

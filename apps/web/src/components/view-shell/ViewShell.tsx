@@ -617,8 +617,18 @@ export function ViewNavigationControls() {
   );
 }
 
-function Main(props: JSX.HTMLAttributes<HTMLElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
+type ViewShellMainProps = JSX.HTMLAttributes<HTMLElement> & {
+  /** Called with the solved width after a drag beside an inline detail. */
+  onWidthChangeEnd?: (width: number) => void;
+};
+
+function Main(props: ViewShellMainProps) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'ref',
+    'onWidthChangeEnd',
+  ]);
   const ws = useViewShellInternal();
   const layout = ws.main.layout;
   const target = () => {
@@ -636,6 +646,7 @@ function Main(props: JSX.HTMLAttributes<HTMLElement>) {
       minSize={layout().min}
       maxSize={ws.detail.placement() === 'inline' ? layout().max : undefined}
       target={target()}
+      onSizeChangeEnd={local.onWidthChangeEnd}
     >
       <main
         {...rest}

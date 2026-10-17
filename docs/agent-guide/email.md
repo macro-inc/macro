@@ -15,9 +15,16 @@ Unlike Calls, it lists only personal tags; team-shared tags are hidden,
 and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
-`Archived` / `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
+`Archived` / `All`, plus `Reminders` when reminders are enabled. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
-connected account. Search is `Ctrl+F` within the surface.
+connected account. Search is `Ctrl+F` or `/` within the surface.
+
+Mail-client keys work in the list and the open thread while Email is focused:
+`c` new email, `s` star, `z` undo the last action, and `g` then a letter for a
+tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e` Archived,
+`h` Reminders, `a` All). These letters replace the app-wide `g` targets only
+inside Email (`g t` is still Tasks elsewhere). `Escape` in a list with nothing
+selected returns to Signal. `?` lists every shortcut for the focused view.
 
 Sender names use each message's `From` display name, falling back to the
 address-book name when it is absent. Multiple people or bots sending through
@@ -52,9 +59,20 @@ replace the timestamp within its existing space. Archived rows offer
 **Unarchive email**; the archive control is disabled in tabs that do not support
 Mark Done. The icons also appear when a button receives keyboard focus. Clicking
 an icon neither opens the thread nor applies the action to other selected rows.
-Touch devices retain the swipe actions.
+On touch devices, swiping a row left marks it done and swiping right opens
+**Remind me** for it; the row springs back until a time is picked. Right swipes
+that start within 40px of the left edge are left to swipe-back navigation.
 Search results use the same reserved column, with actions aligned to the first
 line; snippets, highlighted matches, and expanded hits remain unobstructed.
+
+The list holds still while mail changes under it. Scrolled down, new mail or a
+thread marked done elsewhere above the viewport leaves the rows on screen where
+they are; at the top, new mail appears at the top. Cache writes (the mail
+backfill, read marks, thread loads) and mutation refreshes keep the list as deep
+as it was loaded, and Load More keeps working while they land. Verify by
+scrolling past the first 100 threads, then marking a thread done and letting new
+mail arrive (locally: insert a thread and publish `email.message_received` on
+`macro.email`).
 
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
@@ -116,17 +134,19 @@ the server resolves that inbox's UNREAD label and returns the canonical thread
 (`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
 even when the client labels cache is missing or stale—no label fetch precedes the
 optimistic update. Queued read/unread writes retain revalidation descriptors for
-active flat and grouped lists, including loaded continuation pages. Once replay
-commits (even after a reload), those queries refresh from the server; they should
-not refetch over the optimistic state merely because a write was queued. Trash
+the active lists the cache does not maintain (grouped lists, filters it cannot
+evaluate, a Mail page whose local evaluation is incomplete), including loaded
+continuation pages. Once replay commits (even after a reload), only those queries
+refresh from the server; they should not refetch over the optimistic state merely
+because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
 The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
 ordered queue entry. The server resolves the thread's owning/delegated inbox;
-no client INBOX-label lookup is needed. Confirmed writes revalidate mounted lists,
-including continuation pages; queued writes retain those descriptors for replay
-without refetching over optimism. Callers preserve the queued disposition and
+no client INBOX-label lookup is needed. Confirmed writes revalidate the mounted
+lists the cache does not maintain, including continuation pages; queued writes
+retain those descriptors for replay without refetching over optimism. Callers preserve the queued disposition and
 skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
@@ -141,9 +161,14 @@ remain restored. Only accepted
 threads get their notifications restored. Notification or list-refresh failures
 warn without rolling back accepted unarchives. Verify mixed committed/queued/
 rejected selections, partial-success counts, and that a queued sibling prevents
-shared-list refetch even when notification restoration fails. GraphQL reversals
-rely on normalized writes and their durable revalidation, not an extra REST Soup
-refetch after rows settle. Verify the open-thread header too: with GraphQL enabled,
+shared-list refetch even when notification restoration fails. With the normalized
+cache, a list the cache maintains is not read again after Done, Not Done, Undo,
+read/unread, an entity notification update, a reminder or a draft save: the
+optimistic write and the returned records update it, and it re-evaluates from the
+cache (FE-56). Every Mail tab is maintained once its local evaluation succeeds;
+grouped lists and filters the cache cannot evaluate are still read again. In the
+network panel one `e` in the Email view sends its two mutations and no `Soup`,
+`SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
 Mark Not Done remains available for an archived thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification
@@ -247,6 +272,23 @@ The first scenario covers Signal → Noise → All after disconnecting both nati
 HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
 that driver.
 
+**Reading pane.** On desktop the header's columns button (or `Shift+V`) shows
+threads beside the list instead of in its place; the choice is remembered per
+browser. The list keeps its own keys: j/k and arrows move the cursor and the
+pane follows it (replacing history rather than adding entries), Mark done
+follows the next row, and the open row keeps an accent marker while the pointer
+highlights others. Enter or a click opens the row and moves the keyboard into
+the reader, whose keys live in a child hotkey scope so they never replace the
+list's; Escape in the reader, once there is nothing to unwind, hands the
+keyboard back to the list without closing the thread. Narrow email rows, here
+and on phones, stack senders and date, subject, and one preview line beside a
+slim unread-dot gutter (no per-type icon); unread rows are bold, hovering swaps
+the date for the row actions, and hovering the gutter shows the select checkbox.
+Without room for both (narrow split, collapsed window) the
+pane folds away and a thread replaces the list as usual. The divider can be
+dragged; the list width is remembered. Verify that list `e` still works after
+switching threads in the pane (the reader's `e` must not replace it).
+
 In the new Email view, ordinary row activation opens the thread inside
 `/app/component/mail`; the view breadcrumb (for example Signal) has a hover
 background and returns to the filtered list. Pressing `Escape` in the open thread
@@ -257,8 +299,10 @@ email title menu: open the menu button beside the subject for **Ask AI**, **Crea
 Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and **Previous item** / **Next item** sit at the right of that header. The arrows
 follow the current filtered list and disable at its ends. Mark done advances in
-that list. Mark as unread (in the header or title menu) returns to the originating
-list with its tab, inbox, and filters preserved. Mark as not done and Mark as read
+that list. In a list, the Mark done, Mark as not done and Delete keys act once per
+press: a held key auto-repeats, and those repeats are ignored. Mark as unread (in
+the header or title menu) returns to the originating list with its tab, inbox, and
+filters preserved. Mark as not done and Mark as read
 stay on the current thread.
 Opening a saved draft from **Drafts** keeps the subject breadcrumb, title menu,
 and applicable header controls visible above the composer. Verify these remain
@@ -284,6 +328,16 @@ or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown
 explicit inbox IDs must never silently route to primary while links are loading.
 Background refreshes and older-message loading still update the same thread.
 Verify with API traffic delayed and with previously opened bodies offline.
+The Email view loads the threads the user is about to open: the focused row and
+the one below it once the cursor rests for 150 ms, and the open thread's
+neighbours once it has loaded. With network latency added, j/k and Enter on a
+rested row should show the next body without waiting for `EmailThreadPage`.
+Stepping between threads keeps the current one on screen until the next has
+rendered its messages (at most one second), so the reader is never empty
+between threads. The incoming thread loads hidden and inert: it marks itself
+read, takes keys and focus only once shown. Verify with a mutation observer that
+the visible reader never has zero messages during j/k, that held j advances one
+row per press, and that `z` after `e` returns to the archived thread.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -291,6 +345,8 @@ keeps rounded cards matching the chat composer: soft shadows in light mode,
 the same subtle 3D rim in dark mode, and a faint hover tint. Desktop selection
 does not add an accent-colored ring; keyboard focus has a neutral outline.
 Replies appear inline on desktop and in a composer drawer on touch devices.
+On touch, a saved reply shows as a **Draft** row with its opening words under the
+message it answers (which stays expanded); tapping it reopens the draft.
 Desktop draft bodies and app-controlled message text use 15px, matching channels.
 HTML messages with preserved sender typography retain their explicit sizes.
 Desktop reply actions sit together at the bottom right: discard, attach, schedule,
@@ -301,6 +357,15 @@ delete, attach, format, schedule, and send. Touch compose uses its header toolba
 or the latest message when none is selected. `F` opens a forward and focuses To.
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
+On desktop, a reply's Pop out button (Shift+Cmd+P) saves the draft and reopens
+it in a reply window floating in the app's bottom-right corner. The window stays
+open while the user reads other threads or leaves Email; its message shows
+"Reply open in a window" with a Show button, and `r`/`R`/`f` on that message
+bring the window forward instead of opening a second editor. The title bar
+minimizes the window, fills the screen, or closes it (Shift+Cmd+P too), which
+saves the reply and gives it back to its thread inline. Text must survive each
+hand-off; sending or discarding from the window closes it and leaves no draft in
+an open thread. One reply is in the window at a time.
 An edited reply remains a draft when navigating away and returning. Standalone
 compose also flushes pending edits when leaving through app navigation. Switch
 views immediately after typing, before the 500 ms autosave debounce: the old

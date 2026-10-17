@@ -18,7 +18,9 @@ import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { debounce, debouncedDependent } from '@core/util/debounce';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -26,6 +28,7 @@ import {
   ListLayoutProvider,
   type WithNotification,
 } from '@entity';
+import BellIcon from '@phosphor/bell-simple.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -37,6 +40,7 @@ import {
   createMemo,
   createSignal,
   Match,
+  on,
   type Setter,
   Show,
   Suspense,
@@ -58,7 +62,9 @@ import {
   type EmailListStateSnapshot,
 } from '../persistence';
 import { createEmailRowActionState } from '../primitives/row-action-state';
+import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
+import type { EmailListPane } from '../reader-pane';
 import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
@@ -73,6 +79,8 @@ type EmailActionRow = {
 export type EmailListProps = {
   /** The focusable list root, for callers that hand keyboard focus back. */
   ref?: (element: HTMLDivElement) => void;
+  /** Present while threads open in a reading pane beside the list. */
+  pane?: EmailListPane;
 };
 
 export function EmailList(props: EmailListProps) {
@@ -82,7 +90,9 @@ export function EmailList(props: EmailListProps) {
     list,
     registerListActivationHandler,
     openThread,
+    selectedThread,
     filterByTag,
+    warmThreads,
   } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
@@ -130,8 +140,12 @@ export function EmailList(props: EmailListProps) {
         { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
         { event: metadata?.event }
       )
-    )
+    ) {
+      // Opening a row in the pane hands it the keyboard, so r, e and the
+      // message arrows act on the thread just opened.
+      props.pane?.focusReader(sourceRow.entity.id);
       return;
+    }
 
     openEntity(sourceRow.entity, {
       event: metadata?.event,
@@ -153,6 +167,13 @@ export function EmailList(props: EmailListProps) {
   const topSpacerSize = createElementSize(topSpacer);
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
+  // Coming back from a thread, or toggling the reading pane, remounts the
+  // list with focus on the page; the list takes it so its keys and
+  // screen-reader cursor work.
+  createSplitAutofocus({
+    element: () => grid() ?? null,
+    enabled: () => panel.isPanelActive() && !isTouchDevice(),
+  });
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [isPullRefreshing, setIsPullRefreshing] = createSignal(false);
   const forceEmptyState = useDebugSetting(
@@ -188,6 +209,7 @@ export function EmailList(props: EmailListProps) {
   );
 
   const rows = source.items;
+  const scrollAnchor = createScrollAnchor({ scroller: viewport, rows });
 
   const swipeRowsByEntityId = createMemo(() => {
     const entities = new Map<string, EmailActionRow>();
@@ -212,6 +234,13 @@ export function EmailList(props: EmailListProps) {
     return row?.kind === 'entity' ? row.entity : undefined;
   };
 
+  // With a reading pane, the open thread follows the keyboard cursor. Held
+  // keys settle first; following replaces history rather than adding to it.
+  const followInPane = debounce((entity: EntityData | undefined) => {
+    if (!props.pane || entity?.type !== 'email') return;
+    openThread({ id: entity.id, fallbackName: entity.name }, { replace: true });
+  }, 60);
+
   const [collapseEntity, setCollapseEntity] =
     createSignal<(entityId: string) => Promise<void>>();
 
@@ -229,11 +258,27 @@ export function EmailList(props: EmailListProps) {
     onFocus: (target) => {
       if (target) {
         virtualizer()?.scrollToIndex(target.index, { align: 'nearest' });
+        // Mark done moved past the open thread: the pane follows.
+        followInPane(target.entity);
       }
 
       grid()?.focus();
     },
   });
+
+  // The row under the cursor (keyboard or a resting pointer) and the one below
+  // it are the likeliest next opens.
+  const settledFocusIndex = debouncedDependent(() => list.focus.index(), 150);
+  createEffect(
+    on(settledFocusIndex, (index) => {
+      if (index < 0 || isTouchDevice()) return;
+      const ids = rows()
+        .slice(index)
+        .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []))
+        .slice(0, 2);
+      warmThreads(ids);
+    })
+  );
 
   const listInteractions = useListInteractions({
     controller: list,
@@ -242,6 +287,8 @@ export function EmailList(props: EmailListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        const row = event.result?.item;
+        if (row?.kind === 'entity') followInPane(row.entity);
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (source.isLoadingMore() || source.error() || !source.hasMore())
           return;
@@ -275,6 +322,7 @@ export function EmailList(props: EmailListProps) {
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
     condition: panel.isPanelActive,
+    favoriteHotkeys: ['s', 'opt+f'],
   });
 
   useEmailListHotkeys({
@@ -294,10 +342,14 @@ export function EmailList(props: EmailListProps) {
     });
   }
 
-  const markDoneActionFor = (row: EmailActionRow) =>
+  const rowActionFor = (row: EmailActionRow, id: string) =>
     actionGroupsFor(row)
       .flatMap((group) => group.items)
-      .find((action) => action.id === 'mark-done');
+      .find((action) => action.id === id);
+  const markDoneActionFor = (row: EmailActionRow) =>
+    rowActionFor(row, 'mark-done');
+  const remindActionFor = (row: EmailActionRow) =>
+    rowActionFor(row, 'create-reminder');
 
   function focusActionRow(row: EmailActionRow) {
     list.focus.set(row.rowId, { reason: 'pointer', force: true });
@@ -358,6 +410,10 @@ export function EmailList(props: EmailListProps) {
 
     handle.scrollTo(scrollOffset);
     restoredScroll = true;
+    // j/k in the open thread moves list focus; returning shows that row even
+    // when it is outside the saved viewport.
+    const focused = list.focus.index();
+    if (focused >= 0) handle.scrollToIndex(focused, { align: 'nearest' });
   }
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
@@ -406,10 +462,16 @@ export function EmailList(props: EmailListProps) {
 
     if (list.focus.result()) return;
 
-    const restored = list.focus.restore(list.focus.requestedKey(), {
-      retainUnavailable: false,
-    });
-    if (restored) return;
+    // A row that left the list (archived from its open thread or on another
+    // device) hands focus to the row that took its place. Without surviving
+    // neighbours (rows still loading) the key waits to reappear.
+    const requested = list.focus.requestedKey();
+    const restored = list.focus.restore(requested, { fallback: 'successor' });
+    if (restored) {
+      virtualizer()?.scrollToIndex(restored.index, { align: 'nearest' });
+      return;
+    }
+    if (requested !== undefined) return;
     if (isTouchDevice()) return;
 
     list.focus.first({
@@ -452,7 +514,7 @@ export function EmailList(props: EmailListProps) {
           onRefresh={pullRefresh}
         />
 
-        <ListLayoutProvider ref={grid}>
+        <ListLayoutProvider ref={grid} narrowLayout="inbox">
           <SwipableRowProvider
             container={viewport}
             setCollapseEntity={setCollapseEntity}
@@ -470,6 +532,22 @@ export function EmailList(props: EmailListProps) {
               focusActionRow(row);
               void action.onClick();
             }}
+            canSwipeRight={(entityId) => {
+              const row = swipeRowsByEntityId().get(entityId);
+              return row ? remindActionFor(row) !== undefined : false;
+            }}
+            onSwipeRight={(entityId) => {
+              const row = swipeRowsByEntityId().get(entityId);
+              if (!row) return;
+
+              const action = remindActionFor(row);
+              if (!action) return;
+
+              focusActionRow(row);
+              void action.onClick();
+            }}
+            // Done removes the row; Remind me keeps it until a time is picked.
+            triggerBehavior={{ left: 'fly-out', right: 'spring-back' }}
           >
             <Switch>
               <Match
@@ -546,7 +624,10 @@ export function EmailList(props: EmailListProps) {
                           ? [list.focus.index()]
                           : undefined
                       }
-                      onScroll={checkNearEnd}
+                      onScroll={() => {
+                        scrollAnchor.capture();
+                        checkNearEnd();
+                      }}
                     >
                       {(row) => (
                         <Switch>
@@ -641,6 +722,11 @@ export function EmailList(props: EmailListProps) {
                                         !isTouchDevice() &&
                                         list.focus.key() === entityRow().id
                                       }
+                                      current={
+                                        props.pane !== undefined &&
+                                        selectedThread()?.id ===
+                                          entityRow().entity.id
+                                      }
                                       onMouseMove={() =>
                                         list.focus.set(entityRow().id, {
                                           reason: 'hover',
@@ -663,6 +749,10 @@ export function EmailList(props: EmailListProps) {
                                         swipeLeftColor: 'bg-success',
                                         swipeLeftRevealedComponent: (
                                           <CheckIcon class="size-8 text-surface" />
+                                        ),
+                                        swipeRightColor: 'bg-accent',
+                                        swipeRightRevealedComponent: (
+                                          <BellIcon class="size-8 text-surface" />
                                         ),
                                       }}
                                       onClick={(event) => {

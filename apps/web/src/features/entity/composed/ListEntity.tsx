@@ -48,6 +48,7 @@ import {
 } from '../utils/notification';
 import { useIsShared } from '../utils/shared';
 import { NarrowCondensedLayout } from './list-entity/narrow-condensed-layout';
+import { NarrowEmailLayout } from './list-entity/narrow-email-layout';
 import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
 import { NarrowLayout } from './list-entity/narrow-layout';
 import { NarrowSingleLineLayout } from './list-entity/narrow-single-line-layout';
@@ -246,8 +247,11 @@ export function ListEntity(props: ListEntityProps) {
             !props.highlighted && !props.checked && !isTouchDevice(),
           'focus-within:bg-list-hover focus-within:[--avatar-group-separator:var(--color-list-hover)]':
             !!rowActions() && !props.highlighted && !props.checked,
+          'before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-accent':
+            props.current,
         }
       )}
+      aria-current={props.current ? 'true' : undefined}
       onMouseMove={props.onMouseMove}
     >
       <Switch>
@@ -269,6 +273,24 @@ export function ListEntity(props: ListEntityProps) {
             <NarrowSingleLineLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
+        {/* Email lists stack their rows compactly; mixed lists keep the
+            per-type icon that tells their rows apart. */}
+        <Match
+          when={
+            listLayout?.narrowLayout() === 'inbox' &&
+            isEmailEntity(props.entity) &&
+            props.entity
+          }
+        >
+          {(entity) => (
+            <MaybeEntityRow
+              entityId={props.entity.id}
+              config={props.entityRowConfig}
+            >
+              <NarrowEmailLayout {...layoutProps()} entity={entity()} />
+            </MaybeEntityRow>
+          )}
+        </Match>
         <Match when={isTouchDevice() && mobileStacks().length > 0}>
           <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
@@ -281,8 +303,8 @@ export function ListEntity(props: ListEntityProps) {
           when={
             isTouchDevice() &&
             ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
-              isEmailEntity(props.entity) ||
-              props.showUnrollNotifications)
+              props.showUnrollNotifications ||
+              isEmailEntity(props.entity))
           }
         >
           <MaybeEntityRow

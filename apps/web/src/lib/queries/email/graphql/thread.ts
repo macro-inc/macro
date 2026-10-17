@@ -223,6 +223,34 @@ export async function fetchGraphqlEmailThread(
   return mapGraphqlEmailThreadPage(threadFromPage(result.data));
 }
 
+/**
+ * Loads a thread's first page into the cache unless it is already there, so
+ * the next open (j/k, or Enter on a focused row) reads it without waiting on
+ * the network. Resolves to whether the page is cached; urql reports request
+ * failures in the result rather than rejecting. The open itself still
+ * revalidates and reports its own errors.
+ */
+export async function warmGraphqlEmailThread(
+  threadId: string
+): Promise<boolean> {
+  getGraphqlSoupClient();
+  const identity = await cachedThreadIdentity(threadId);
+  // An unsynced local thread is read from the cache already.
+  if (identity.kind === 'local') return true;
+  const result = await getGraphqlSoupClient()
+    .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+      EmailThreadPageDocument,
+      {
+        threadId: identity.canonical,
+        offset: 0,
+        limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+      },
+      { requestPolicy: 'cache-first' }
+    )
+    .toPromise();
+  return result.error === undefined && result.data !== undefined;
+}
+
 /** Creates the native urql-solid query for one thread's message pages. */
 export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   threadId: Accessor<string>,

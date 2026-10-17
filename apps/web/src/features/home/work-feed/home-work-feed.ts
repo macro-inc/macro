@@ -13,7 +13,7 @@ import {
   enableSupportedSoupForeignEntities,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { revalidateNotificationReaders } from '@queries/notification/revalidation';
+import { reconcileNotificationsDone } from '@queries/notification/state-cache';
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
@@ -84,7 +84,7 @@ export function useWorkFeedHomeDataSource(
     scope: () => scope() ?? EMPTY_SCOPE,
     enabled,
     onReconnected: subscribeGraphqlSoupReconnected,
-    revalidateNotifications: revalidateNotificationReaders,
+    revalidateNotifications: reconcileNotificationsDone,
   });
 
   const [now, setNow] = createSignal(homeClock());

@@ -174,11 +174,11 @@ export function MessageList(props: MessageListProps) {
               });
 
               // A message with an in-progress draft reply stays expanded so the
-              // draft remains visible even after newer messages arrive (matches
-              // Gmail/Superhuman). Desktop only: mobile edits drafts in a drawer.
+              // draft (inline on desktop, a preview on touch) remains visible
+              // even after newer messages arrive.
               const hasDraft = createMemo(() => {
                 const messageId = message().db_id;
-                if (!messageId || viewContext.thread.isTouch()) return false;
+                if (!messageId) return false;
                 return !!context.drafts.getDraftForMessage(messageId);
               });
 

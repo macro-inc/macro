@@ -17,6 +17,9 @@ import {
 const SWIPE_ACTIVATION_DISTANCE = 75; // Threshold, in pixels, of dx past which releasing touch will activate swipe gesture;
 const DIRECTIONALITY_THRESHOLD = 5; // Threshold, in pixels, of either dx or dy, past which a gesture is considered "horizontal" or "vertical". Note: it is not obvious that these should both be the same value... we may want to experiment more.
 const AUTO_ACTIVATION_PERCENTAGE = 0.75; // Percentage of container width past which the swipe gesture auto activates.
+// Touches this close to the left edge belong to the split's swipe-back
+// gesture (createMobileSplitMotion), so they never swipe a row right.
+const BACK_SWIPE_EDGE = 40; // px
 
 const TRANSLATE_AFTER_TRIGGERED_SPEED = 100; // ms;
 const SPRING_BACK_SPEED = 250; // ms;
@@ -47,6 +50,8 @@ const isAtLeastPhase = (phase: RowPhase, minInclusive: RowPhase) =>
 
 type SwipeDirection = 'left' | 'right' | null;
 
+type TriggerBehavior = 'fly-out' | 'spring-back';
+
 type SwipableRowState = {
   direction: SwipeDirection;
   phase: RowPhase;
@@ -66,6 +71,8 @@ type SwipeTouchState = {
   currentX: number;
   currentY: number;
   isSwipeGesture: boolean | null;
+  /** Started at the left edge, where a right swipe means "go back". */
+  fromLeftEdge: boolean;
   id: string | null;
   elements: RowElements | undefined;
 };
@@ -94,9 +101,12 @@ export function SwipableRowProvider(
      * How a row animates once its swipe triggers. 'fly-out' (default)
      * translates the row off-screen, for actions that remove the row from
      * the list (e.g. mark done). 'spring-back' returns the row to rest, for
-     * actions that keep it in place (e.g. reply to a message).
+     * actions that keep it in place (e.g. reply to a message). Give one per
+     * direction when the two swipes differ.
      */
-    triggerBehavior?: 'fly-out' | 'spring-back';
+    triggerBehavior?:
+      | TriggerBehavior
+      | { left?: TriggerBehavior; right?: TriggerBehavior };
     setCollapseEntity?: Setter<((id: string) => Promise<void>) | undefined>;
   }>
 ) {
@@ -128,6 +138,7 @@ export function SwipableRowProvider(
     currentX: 0,
     currentY: 0,
     isSwipeGesture: null,
+    fromLeftEdge: false,
     id: null,
     elements: undefined,
   };
@@ -158,6 +169,7 @@ export function SwipableRowProvider(
       currentX: 0,
       currentY: 0,
       isSwipeGesture: null,
+      fromLeftEdge: false,
       id: null,
       elements: undefined,
     };
@@ -210,7 +222,11 @@ export function SwipableRowProvider(
     // Cancel any pending animation frame
     if (rafId) cancelAnimationFrame(rafId);
 
-    if (props.triggerBehavior === 'spring-back') {
+    const behavior =
+      typeof props.triggerBehavior === 'object'
+        ? props.triggerBehavior[direction]
+        : props.triggerBehavior;
+    if (behavior === 'spring-back') {
       // The row stays in the list: return the content to rest and fire the
       // handler synchronously — still inside the touch gesture, so a
       // handler that focuses an input can open the iOS keyboard.
@@ -244,6 +260,7 @@ export function SwipableRowProvider(
   };
 
   const canSwipeRight = (id: string) => {
+    if (touchState.fromLeftEdge) return false;
     if (customRowSwipeHandlers.get(id)?.onSwipeRight !== undefined) return true;
     if (!props.onSwipeRight) return false;
     return props.canSwipeRight ? props.canSwipeRight(id) : true;
@@ -293,14 +310,14 @@ export function SwipableRowProvider(
     const leftRevealEl = rowEl.querySelector('[data-left-reveal]');
     const rightRevealEl = rowEl.querySelector('[data-right-reveal]');
 
+    const touch = e.touches[0];
+    touchState.fromLeftEdge = touch.clientX < BACK_SWIPE_EDGE;
     const allowRight = canSwipeRight(id);
     const allowLeft = canSwipeLeft(id);
     if (!allowRight && !allowLeft) return;
 
     const phase = stateById()[id]?.phase ?? 'idle';
     if (phase === 'triggered' || phase === 'collapsing') return;
-
-    const touch = e.touches[0];
 
     // Clear any existing transition immediately on touch start.
     contentEl.style.transition = '';
@@ -311,6 +328,7 @@ export function SwipableRowProvider(
       currentX: touch.clientX,
       currentY: touch.clientY,
       isSwipeGesture: null,
+      fromLeftEdge: touchState.fromLeftEdge,
       id: id,
       elements: {
         rowEl,

@@ -62,6 +62,72 @@ it.each(['view', 'comment', 'edit'] as const)(
   }
 );
 
+describe('email thread sort keys', () => {
+  const thread = {
+    __typename: 'GraphqlSoupEmailThread',
+    id: 'thread',
+    entityType: 'EMAIL_THREAD',
+    displayName: 'Invite',
+    isFavorited: false,
+    frecencyScore: null,
+    cacheProjection: null,
+    ownerId: 'owner',
+    linkId: 'link',
+    inboxVisible: true,
+    isRead: false,
+    isDraft: false,
+    isImportant: false,
+    isSignal: true,
+    projectId: null,
+    createdAt: '2026-09-28T19:32:00+00:00',
+    updatedAt: '2026-10-07T00:00:00+00:00',
+    viewedAt: null,
+    latestInboundMessageTs: '2026-09-28T19:32:00+00:00',
+    reminderReturnedAt: '2026-10-06T21:14:00+00:00',
+    latestOutboundMessageTs: '2026-09-29T08:00:00+00:00',
+    latestNonSpamMessageTs: '2026-09-29T08:00:00+00:00',
+    participants: [],
+    attachments: [],
+    labels: [],
+    properties: [],
+    notifications: [],
+  } as unknown as SoupItemFieldsFragment;
+  const sortTs = (item: ReturnType<typeof mapGraphqlSoupItem>) =>
+    item?.tag === 'emailThread' ? item.data.sortTs : undefined;
+  let mapGraphqlSoupItem: typeof import('./graphql-soup').mapGraphqlSoupItem;
+  beforeEach(async () => {
+    ({ mapGraphqlSoupItem } = await import('./graphql-soup'));
+  });
+
+  it.each([
+    ['INBOX', '2026-10-06T21:14:00+00:00'],
+    [undefined, '2026-10-06T21:14:00+00:00'],
+    ['SENT', '2026-09-29T08:00:00+00:00'],
+    ['ALL', '2026-09-29T08:00:00+00:00'],
+    ['DRAFTS', '2026-09-29T08:00:00+00:00'],
+  ] as const)('dates a thread by the %s view key', (view, expected) => {
+    expect(sortTs(mapGraphqlSoupItem(thread, { emailView: view }))).toBe(
+      expected
+    );
+  });
+
+  it('falls back to the thread update time when the view has no key', () => {
+    const bare = {
+      ...thread,
+      latestInboundMessageTs: null,
+      reminderReturnedAt: null,
+      latestOutboundMessageTs: null,
+      latestNonSpamMessageTs: null,
+    } as SoupItemFieldsFragment;
+    expect(sortTs(mapGraphqlSoupItem(bare, { emailView: 'INBOX' }))).toBe(
+      '2026-10-07T00:00:00+00:00'
+    );
+    expect(sortTs(mapGraphqlSoupItem(bare, { emailView: 'SENT' }))).toBe(
+      '2026-10-07T00:00:00+00:00'
+    );
+  });
+});
+
 it('preserves initiative identity, properties, and metadata separately from folders', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   expect(

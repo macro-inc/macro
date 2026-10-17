@@ -3,9 +3,13 @@ import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { isPersonalMessage } from '../../email-message/core/is-personal-message';
 import { EmailMessageView } from '../../email-message/views/email-message';
+import { DraftReplyPreview } from '../components/draft-reply-preview';
+import { ReplyInWindowNotice } from '../components/reply-in-window-notice';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
+import { draftPreviewText } from '../core/draft-preview';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
+import { createReplyWindowBinding } from '../primitives/reply-window-binding';
 import {
   revealMessageAfterLayout,
   scrollFocusedCardIntoView,
@@ -24,7 +28,11 @@ interface MessageContainerProps {
 }
 
 export function MessageContainer(props: MessageContainerProps) {
-  const { thread: threadContext, rendering } = useEmailThreadViewContext();
+  const {
+    thread: threadContext,
+    rendering,
+    replyWindow: appReplyWindow,
+  } = useEmailThreadViewContext();
   const isTouchDevice = threadContext.isTouch;
   const context = useEmailThreadState();
   const draftChild = createMemo(() => {
@@ -41,8 +49,35 @@ export function MessageContainer(props: MessageContainerProps) {
     showReplyInternal() ||
     context.messages.replyingToMessageId() === props.message.db_id;
 
+  const replyWindow = createReplyWindowBinding({
+    // Touch devices reply in a drawer.
+    replyWindow: () => (isTouchDevice() ? undefined : appReplyWindow),
+    target: () => {
+      const threadId = context.thread()?.db_id;
+      const messageId = props.message.db_id;
+      return threadId && messageId ? { threadId, messageId } : undefined;
+    },
+    replyRequested: () =>
+      context.replyRequest.messageId() === props.message.db_id,
+    clearReplyRequest: context.replyRequest.clear,
+    openInline: (replyType) =>
+      openEmailReplyComposerForMessage({
+        ctx: context,
+        message: props.message,
+        replyType,
+        isLastMessage: props.isLastMessage,
+        setShowReply,
+        isTouch: false,
+      }),
+    dropDraft: () => {
+      const messageId = props.message.db_id;
+      if (messageId) context.drafts.deleteDraftForMessage(messageId);
+      setShowReply(false);
+    },
+  });
+
   const showInlineReplyInput = createMemo(() => {
-    if (isTouchDevice()) return false;
+    if (isTouchDevice() || replyWindow.inWindow()) return false;
     if (!props.isLastMessage) return showReply() || !!draftChild();
     return context.messages.bottomReplyOpen() || !!draftChild();
   });
@@ -55,10 +90,16 @@ export function MessageContainer(props: MessageContainerProps) {
       context.drafts.initialDraftsSettled()
   );
 
+  // Touch replies live in a drawer, so a saved one would otherwise be invisible.
+  const touchDraft = () =>
+    isTouchDevice() && context.permissions().isOwner ? draftChild() : undefined;
+
   const showInlineReplyArea = createMemo(
     () =>
       context.permissions().isOwner &&
-      (showInlineReplyInput() || showDesktopLastReplyControls())
+      (replyWindow.inWindow() ||
+        showInlineReplyInput() ||
+        showDesktopLastReplyControls())
   );
 
   const setShowReply = (value: boolean | ((prev: boolean) => boolean)) => {
@@ -138,6 +179,20 @@ export function MessageContainer(props: MessageContainerProps) {
           : undefined
       }
     >
+      <Show when={touchDraft()}>
+        {(draft) => (
+          <div class="-mx-4 mt-3 border-t border-edge-muted px-4">
+            <DraftReplyPreview
+              text={draftPreviewText(draft())}
+              onOpen={() => {
+                const messageId = props.message.db_id;
+                if (messageId)
+                  context.mobileReplyComposer.openForMessage(messageId);
+              }}
+            />
+          </div>
+        )}
+      </Show>
       <Show when={showInlineReplyArea()}>
         <div class="relative -mx-4 mb-0 border-t border-edge-frame mt-4">
           <Show when={props.isLastMessage && !isTouchDevice()}>
@@ -148,6 +203,9 @@ export function MessageContainer(props: MessageContainerProps) {
           </Show>
           <div class="px-4">
             <Switch>
+              <Match when={replyWindow.inWindow() && appReplyWindow}>
+                {(window) => <ReplyInWindowNotice onShow={window().focus} />}
+              </Match>
               <Match when={showInlineReplyInput()}>
                 <ThreadReplyInput
                   replyingTo={() => props.message}
@@ -157,6 +215,10 @@ export function MessageContainer(props: MessageContainerProps) {
                     props.isLastMessage ? props.markdownDomRef : undefined
                   }
                   unframed
+                  popout={(() => {
+                    const move = replyWindow.popOut();
+                    return move && { inWindow: false, move };
+                  })()}
                 />
               </Match>
               <Match when={props.isLastMessage && !isTouchDevice()}>

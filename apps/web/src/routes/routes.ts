@@ -486,7 +486,8 @@ export const emailThreadRoute = defineRoute({
   path: ':threadId',
   params: z.object({ threadId: z.string().min(1) }),
   externalSearch: ['email_message_id'],
-  remountKey: ({ threadId }) => threadId,
+  // The Email view keeps one reader and swaps threads inside it, so the next
+  // thread can load behind the current one (EmailDetailRouteView).
   claim: ({ threadId }) => ({
     namespace: 'block',
     id: `email:${threadId}`,

@@ -689,6 +689,9 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
+                        latest_outbound_message_ts: (thread_id.as_u128() % 2 == 1)
+                            .then(Default::default),
+                        latest_non_spam_message_ts: Some(Default::default()),
                         reminder_returned_at: (thread_id.as_u128() % 2 == 0).then(Default::default),
                     }),
                 )
@@ -2198,7 +2201,7 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
 
     let with_metadata = harness
         .execute(
-            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs reminderReturnedAt } } } } }"#,
+            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs latestOutboundMessageTs latestNonSpamMessageTs reminderReturnedAt } } } } }"#,
         )
         .await;
     assert!(
@@ -2223,6 +2226,16 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
     assert!(items[1]["latestInboundMessageTs"].is_null());
     assert!(items[0]["reminderReturnedAt"].is_null());
     assert_eq!(items[1]["reminderReturnedAt"], "1970-01-01T00:00:00+00:00");
+    assert!(items[0]["latestOutboundMessageTs"].as_str().is_some());
+    assert!(items[1]["latestOutboundMessageTs"].is_null());
+    assert_eq!(
+        items[0]["latestNonSpamMessageTs"],
+        "1970-01-01T00:00:00+00:00"
+    );
+    assert_eq!(
+        items[1]["latestNonSpamMessageTs"],
+        "1970-01-01T00:00:00+00:00"
+    );
 }
 
 #[tokio::test]

@@ -16,6 +16,7 @@ import {
   useNavigate,
   useRouteParams,
 } from '@app/lib/split-router';
+import { usePreference } from '@app/preferences/use-preference';
 import { emailSplitRoute, emailThreadRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
@@ -28,6 +29,7 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useEmailLinksQuery } from '@queries/email/link';
+import { warmThread } from '@queries/email/thread';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import {
   type Accessor,
@@ -53,6 +55,7 @@ import {
 import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
 import { createInboxSelectionReconciliation } from './primitives/inbox-selection-reconciliation';
+import { createThreadWarmer } from './primitives/thread-warmer';
 import {
   type EmailDataSource,
   type EmailDataSourceItem,
@@ -110,11 +113,19 @@ export type EmailViewContext = {
   /** Returns false when inline detail is unavailable so the caller opens a split instead. */
   openThread: (
     thread: EmailThreadTarget,
-    options?: EntityDetailNavigationOptions
+    options?: EntityDetailNavigationOptions & {
+      /** Replace the history entry, for opens that follow the list cursor. */
+      replace?: boolean;
+    }
   ) => boolean;
   closeThread: () => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
+  /** Loads threads the user is about to open, so opening them is instant. */
+  warmThreads: (threadIds: readonly string[]) => void;
+  /** Open threads beside the list instead of in its place (desktop). */
+  readingPane: Accessor<boolean>;
+  setReadingPane: (enabled: boolean) => void;
 };
 
 export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
@@ -266,7 +277,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     );
   const openThread = (
     thread: EmailThreadTarget,
-    options?: EntityDetailNavigationOptions
+    options?: EntityDetailNavigationOptions & { replace?: boolean }
   ) => {
     if (!opensInline(options)) return false;
     const selection = { type: 'email' as const, id: thread.id };
@@ -276,6 +287,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     navigate(
       { route: emailThreadRoute, params: { threadId: thread.id } },
       {
+        replace: options?.replace,
         search: {
           [emailDetailSearch.namespace]: {},
           [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
@@ -410,6 +422,13 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     );
   };
 
+  const warmer = createThreadWarmer({ warm: warmThread });
+  onCleanup(warmer.dispose);
+  const [readingPane, setReadingPane] = usePreference(
+    'macro:pref:email:reading-pane',
+    { default: false }
+  );
+
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
 
@@ -435,5 +454,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     closeThread,
     isSidebarSectionOpen,
     setSidebarSectionOpen,
+    warmThreads: warmer.warm,
+    readingPane,
+    setReadingPane,
   };
 });

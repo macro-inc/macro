@@ -8,6 +8,7 @@ import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
@@ -54,6 +55,8 @@ type UseEntityActionHotkeysOptions = {
   enableDeleteHotkey?: boolean;
   /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  /** Keys that star the selection. Email adds `s`, as mail clients do. */
+  favoriteHotkeys?: ValidHotkey[];
 };
 
 export const useEntityActionHotkeys = (
@@ -177,7 +180,10 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.markDone,
     scopeId,
     description: 'Mark done',
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      // A held key auto-repeats; each repeat would archive the next row under
+      // the cursor and refetch the list, so one press marks one selection.
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markDone.canExecute)) return false;
@@ -206,7 +212,8 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.markNotDone,
     scopeId,
     description: 'Mark as not done',
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markNotDone.canExecute)) return false;
@@ -280,7 +287,8 @@ export const useEntityActionHotkeys = (
       const count = getEntitiesForAction().length;
       return count > 1 ? 'Delete items' : 'Delete item';
     };
-    const runDelete = () => {
+    const runDelete = (event?: KeyboardEvent) => {
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(deleteAction.canExecute)) return false;
@@ -360,7 +368,7 @@ export const useEntityActionHotkeys = (
 
   // Favorite - 'opt+f' (macOS emits 'ƒ'; normalizeEventKeyPress maps it back to 'f')
   registerHotkey({
-    hotkey: ['opt+f'],
+    hotkey: options.favoriteHotkeys ?? ['opt+f'],
     hotkeyToken: TOKENS.entity.action.favorite,
     scopeId,
     description: () => {
