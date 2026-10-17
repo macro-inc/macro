@@ -243,6 +243,10 @@ export function createShareForm<Recipient extends PickedRecipient>(
     const { plan } = attempt;
     return Telemetry.span('share.submit', async (span) => {
       span.setAttr('share.location', options.location);
+      span.setAttr(
+        'entity.ids',
+        plan.request.items.map(({ id }) => id)
+      );
       span.setAttr('share.items', plan.request.items.length);
       span.setAttr('share.targets', plan.targets.length);
       span.setAttr('share.retry', attempt.previousOutcome !== undefined);

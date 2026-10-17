@@ -338,6 +338,7 @@ it('traces each attempt with a span per recipient it worked on', async () => {
 
   const submit = (attributes: Record<string, unknown>) => ({
     'share.location': 'bulk_share',
+    'entity.ids': ['spec', 'brief'],
     'share.items': 2,
     'share.targets': 2,
     'share.complete': false,
