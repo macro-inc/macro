@@ -715,6 +715,32 @@ ordinary HTTP failures and background queries do not. Document AI-edit refusals
 apply no edits and open this dialog instead of the generic `AI edit failed`
 toast. Legacy chat tool errors carrying a recognized quota code also open it.
 
+### Team API keys for AI chat
+
+Settings → Team → **AI chat API keys** holds the team's own Anthropic
+(`sk-ant-…`) and OpenAI (`sk-…`) keys. Every member sees which providers have
+one; only admins and the owner can save, replace, or remove a key, and a saved
+key is never shown again. The copy says it only applies to AI chat: AI editing,
+call transcription, and other AI features keep using Macro usage.
+
+Only the in-memory agent (Macro's own chat, `macro-inmem`) uses team keys, and
+only for Anthropic and OpenAI models:
+
+- When the owner has a usable team key, the composer shows a key toggle next
+  to the speed toggle. On, it reads **Using team API usage** and turns run on
+  the team's key, never admitted against or counted toward Macro usage. Off
+  switches back to Macro usage.
+- A conversation whose first turn finds the owner's Macro usage spent moves to
+  the team key on its own, and the toggle turns on.
+- Mid-conversation, a spent allowance stops the turn with a
+  `You've used your AI usage for this month` card and a **Continue with team
+  API key** button, which turns the key on and re-sends the prompt.
+- On the team key with a model no key serves (Gemini, say), the turn fails with
+  `Your team's API key can't run this model`.
+
+Membership is checked on every turn: a member who leaves the team loses the
+key on their next message.
+
 ### Quota manual checks
 
 Use an isolated local backend with local billing fixtures, not real hosted

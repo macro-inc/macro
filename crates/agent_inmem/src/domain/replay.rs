@@ -180,6 +180,24 @@ pub fn replay_speed(frames: &[Message]) -> agent::ModelSpeed {
     })
 }
 
+/// Restore whether the session last ran on Macro usage or the team's key.
+pub fn replay_funding(frames: &[Message]) -> crate::domain::funding::Funding {
+    replay_config(frames, |options| {
+        options
+            .iter()
+            .find_map(|option| {
+                if option.id.to_string() != crate::domain::funding::FUNDING_CONFIG_ID {
+                    return None;
+                }
+                let SessionConfigKind::Select(select) = &option.kind else {
+                    return None;
+                };
+                crate::domain::funding::Funding::parse(&select.current_value.to_string())
+            })
+            .unwrap_or_default()
+    })
+}
+
 fn replay_config<T: Default>(frames: &[Message], read: impl Fn(&[SessionConfigOption]) -> T) -> T {
     let mut pending = HashSet::new();
     let mut current = T::default();

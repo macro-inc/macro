@@ -1,7 +1,9 @@
-//! Reading and writing the `cursor_configs` row.
+//! Reading and writing a user's `cursor_configs` row.
 //!
 //! The row is a user's Cursor configuration: their encrypted API key, and the
-//! model their `@cursor` sessions start on. Only ciphertext passes through
+//! model their `@cursor` sessions start on. The table also holds teams' model
+//! provider keys (see the `team_provider_keys` crate); every query here is
+//! scoped to `provider = 'cursor'`. Only ciphertext passes through
 //! here — this module cannot decrypt anything and does not hold a KMS client.
 //! That is deliberate: a caller that wants a usable key has to go through
 //! [`crate::cipher`], which means every read of a plaintext key is an
@@ -38,13 +40,19 @@ pub struct StoredCursorConfig {
 /// deliberately left untouched — rotating a key must not silently reset the
 /// model the user chose.
 ///
+/// `key_prefix` is [`CursorApiKey::prefix`] of the key `encrypted` holds; the
+/// table checks it is a Cursor prefix, since it cannot read the ciphertext.
+///
 /// # Errors
 /// If the row cannot be written — including because `user_id` is not a real
 /// user, which the foreign key rejects.
+///
+/// [`CursorApiKey::prefix`]: crate::cipher::CursorApiKey::prefix
 pub async fn upsert_cursor_api_key(
     executor: impl sqlx::PgExecutor<'_>,
     user_id: &str,
     encrypted: &EncryptedCursorApiKey,
+    key_prefix: &str,
 ) -> anyhow::Result<StoredCursorConfig> {
     let row = sqlx::query!(
         r#"
@@ -52,16 +60,18 @@ pub async fn upsert_cursor_api_key(
             user_id,
             key_ciphertext,
             encryption_version,
-            kms_key_id
+            kms_key_id,
+            key_prefix
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (user_id) DO UPDATE SET
             key_ciphertext       = EXCLUDED.key_ciphertext,
             encryption_version   = EXCLUDED.encryption_version,
             kms_key_id           = EXCLUDED.kms_key_id,
+            key_prefix           = EXCLUDED.key_prefix,
             updated_at           = NOW()
         RETURNING
-            user_id,
+            user_id AS "user_id!",
             key_ciphertext,
             encryption_version,
             kms_key_id,
@@ -73,6 +83,7 @@ pub async fn upsert_cursor_api_key(
         &encrypted.key_ciphertext,
         encrypted.encryption_version,
         encrypted.kms_key_id,
+        key_prefix,
     )
     .fetch_one(executor)
     .await?;
@@ -105,7 +116,7 @@ pub async fn get_cursor_api_key(
     let row = sqlx::query!(
         r#"
         SELECT
-            user_id,
+            user_id AS "user_id!",
             key_ciphertext,
             encryption_version,
             kms_key_id,
@@ -113,7 +124,7 @@ pub async fn get_cursor_api_key(
             created_at,
             updated_at
         FROM cursor_configs
-        WHERE user_id = $1
+        WHERE user_id = $1 AND provider = 'cursor'
         "#,
         user_id,
     )
@@ -153,7 +164,7 @@ pub async fn set_default_model_id(
         UPDATE cursor_configs
         SET default_model_id = $2,
             updated_at       = NOW()
-        WHERE user_id = $1
+        WHERE user_id = $1 AND provider = 'cursor'
         "#,
         user_id,
         default_model_id,
@@ -175,8 +186,11 @@ pub async fn delete_cursor_api_key(
     executor: impl sqlx::PgExecutor<'_>,
     user_id: &str,
 ) -> anyhow::Result<bool> {
-    let result = sqlx::query!("DELETE FROM cursor_configs WHERE user_id = $1", user_id)
-        .execute(executor)
-        .await?;
+    let result = sqlx::query!(
+        "DELETE FROM cursor_configs WHERE user_id = $1 AND provider = 'cursor'",
+        user_id
+    )
+    .execute(executor)
+    .await?;
     Ok(result.rows_affected() > 0)
 }

@@ -49,6 +49,7 @@ pub async fn handler(
 
     // Parsed before anything else, so a malformed key never reaches KMS.
     let key = CursorApiKey::parse(&req.api_key).map_err(|_| CursorApiKeyError::MalformedKey)?;
+    let key_prefix = key.prefix();
     let encrypted = cipher
         .encrypt(user_id.as_ref(), key)
         .await
@@ -60,13 +61,17 @@ pub async fn handler(
             CursorApiKeyError::Internal
         })?;
 
-    let stored =
-        cursor_api_key::store::upsert_cursor_api_key(&ctx.db, user_id.as_ref(), &encrypted)
-            .await
-            .map_err(|error| {
-                tracing::error!(error = ?error, "failed to store cursor api key");
-                CursorApiKeyError::Internal
-            })?;
+    let stored = cursor_api_key::store::upsert_cursor_api_key(
+        &ctx.db,
+        user_id.as_ref(),
+        &encrypted,
+        key_prefix,
+    )
+    .await
+    .map_err(|error| {
+        tracing::error!(error = ?error, "failed to store cursor api key");
+        CursorApiKeyError::Internal
+    })?;
 
     Ok(Json(CursorApiKeyStatus {
         registered: true,

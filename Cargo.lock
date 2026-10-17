@@ -454,6 +454,7 @@ dependencies = [
  "serde_json",
  "shared_entity_registry",
  "sqlx",
+ "team_provider_keys",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -564,6 +565,7 @@ dependencies = [
  "static_file",
  "static_file_service_client",
  "system_properties",
+ "team_provider_keys",
  "teams",
  "tempfile",
  "tokio",
@@ -625,6 +627,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sse-stream",
+ "team_provider_keys",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -2117,6 +2120,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "strum 0.27.2",
+ "team_provider_keys",
  "teams",
  "thiserror 2.0.18",
  "time",
@@ -19533,6 +19537,26 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "team_provider_keys"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "cursor_api_key",
+ "entity_access",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]

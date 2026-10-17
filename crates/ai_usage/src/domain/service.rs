@@ -16,6 +16,11 @@ fn require_admin(actor: &macro_user_id::user_id::MacroUserIdStr<'_>) -> Result<(
     }
 }
 
+/// Usage paid for by a team's own provider key never counts toward a quota.
+fn counts(enforcement: AiUsageEnforcement, event: &UsageEvent) -> bool {
+    event.provider_api_key_id.is_none() && enforcement.should_count(&event.user, event.feature)
+}
+
 /// The cost service. Generic over the storage [`UsageRepo`].
 ///
 /// Implements:
@@ -46,7 +51,7 @@ impl<Repo> UsageServiceImpl<Repo> {
     /// Whether this recorder will persist the event as quota-counted usage.
     /// Settlement wrappers use the same policy as persistence, never a second flag.
     pub fn counts_usage(&self, event: &UsageEvent) -> bool {
-        self.enforcement.should_count(&event.user, event.feature)
+        counts(self.enforcement, event)
     }
 }
 
@@ -71,7 +76,7 @@ where
         enforcement: AiUsageEnforcement,
         event: UsageEvent,
     ) -> Result<()> {
-        let count_usage = enforcement.should_count(&event.user, event.feature);
+        let count_usage = counts(enforcement, &event);
         // Store and price by the bare api id; chat hands us `provider/model`.
         let model = normalize_model_id(&event.model).to_string();
         let mut cost = Usage {
@@ -100,6 +105,7 @@ where
             feature: event.feature,
             user: event.user,
             entity: event.entity,
+            provider_api_key_id: event.provider_api_key_id,
             cost,
         };
 

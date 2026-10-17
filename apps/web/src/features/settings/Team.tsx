@@ -86,6 +86,7 @@ import {
   Switch,
 } from 'solid-js';
 import { z } from 'zod';
+import { TeamAiApiKeys } from './components/team-ai-api-keys';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
 import { ConnectAction } from './integration-ui';
 import {
@@ -1500,6 +1501,8 @@ function TeamManagement(props: {
             </IntegrationRow>
           </SettingsCard>
         </SettingsSection>
+
+        <TeamAiApiKeys canManage={isAdminOrOwner()} />
 
         <SettingsSection
           title="Members"

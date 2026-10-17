@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                team_key.id,\n                team_key.team_id AS \"team_id!\",\n                team_key.key_ciphertext,\n                team_key.encryption_version,\n                team_key.kms_key_id\n            FROM cursor_configs team_key\n            JOIN team_user membership ON membership.team_id = team_key.team_id\n            WHERE membership.user_id = $1 AND team_key.provider = $2\n            ORDER BY team_key.updated_at DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "key_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 3,
+        "name": "encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "kms_key_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "94e37217f8a5d54d6e29e7e83f9fbc8c4772d5075389b39cbb34960e273331c4"
+}

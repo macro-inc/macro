@@ -51,6 +51,9 @@ and usage metering.
 
 - `rig-core`/`rig-agent` are pinned exact versions (not workspace deps);
   bump both together and check `test-utils` feature compatibility.
+- `AgentLoop::with_provider_api_key` rekeys only the loop's own model calls
+  (native Anthropic/OpenAI); call it after `with_model`. Tools and
+  `complete*` still use the deployment's keys.
 
 ## Related
 

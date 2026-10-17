@@ -66,6 +66,8 @@ export const authExcluded = [
   'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
+  // Team AI chat API keys are a credential managed in the app's team settings.
+  'deleteTeamAiApiKey',
   'deleteTeamInviteHandler',
   'deleteUser',
   'disconnectCodex',
@@ -82,6 +84,7 @@ export const authExcluded = [
   'getReferralCode',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
+  'getTeamAiApiKeys',
   'getTeamInvites',
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
@@ -119,6 +122,7 @@ export const authExcluded = [
   'putCursorApiKey',
   'putCursorDefaultModel',
   'putProfilePicture',
+  'putTeamAiApiKey',
   'putUserName',
   'redeemGtmInviteLink',
   'refresh',

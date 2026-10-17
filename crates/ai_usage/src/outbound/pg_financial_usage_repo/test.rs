@@ -385,6 +385,7 @@ async fn legacy_analytics_writes_and_repricing_leave_financial_evidence_unchange
                 feature: AiFeature::Chat,
                 user: SYSTEM_USER_ID.clone(),
                 entity: None,
+                provider_api_key_id: None,
                 cost: Usage {
                     amount,
                     model: "test-model".into(),

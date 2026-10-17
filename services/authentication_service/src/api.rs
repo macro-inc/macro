@@ -37,6 +37,7 @@ mod permissions;
 mod permissions_extractor;
 mod session;
 pub(crate) mod signup_policy;
+mod team_ai_api_keys;
 mod user;
 
 pub use user::stripe::StripePrices;
@@ -120,6 +121,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/user", user::router())
         .nest("/link", link::router())
         .nest("/cursor-api-key", cursor_api_key::router())
+        .nest("/team-ai-api-keys", team_ai_api_keys::router())
         .nest("/codex", codex::router())
         .nest("/github_pull_requests", github_pull_requests::router())
         .nest(

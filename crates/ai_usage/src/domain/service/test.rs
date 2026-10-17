@@ -10,6 +10,7 @@ fn completion(feature: AiFeature, total: Option<f32>) -> CompletionUsage {
         feature,
         user: user(),
         entity: None,
+        provider_api_key_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input: 1000,
@@ -382,6 +383,31 @@ async fn both_recording_paths_persist_the_same_counting_policy() {
             }
         }
     }
+}
+
+#[tokio::test]
+async fn usage_on_a_team_provider_key_is_recorded_against_it_and_never_counted() {
+    let repo = FakeRepo::default();
+    let service = UsageServiceImpl::new(repo.clone()).with_enforcement(AiUsageEnforcement::Enabled);
+    let actor = MacroUserIdStr::try_from("macro|someone@example.com".to_owned()).unwrap();
+    let key = macro_uuid::generate_uuid_v7();
+    let event = UsageContext::new(AiFeature::AgentSession, actor)
+        .with_provider_api_key(key)
+        .into_event(
+            "anthropic/claude-opus-5".into(),
+            UsageAmount::Tokens {
+                input: 100,
+                output: 200,
+                cache_read: 0,
+                cache_write: 0,
+            },
+        );
+
+    assert!(!service.counts_usage(&event));
+    service.record_now(event).await.unwrap();
+
+    assert_eq!(*repo.counting.lock().unwrap(), vec![false]);
+    assert_eq!(repo.rows.lock().unwrap()[0].provider_api_key_id, Some(key));
 }
 
 #[tokio::test]

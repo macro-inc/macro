@@ -9,17 +9,20 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import { openExternalUrl } from '@core/util/url';
 import type {
+  FailureNotice,
   FoldedMessage,
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { UserMessageBubble } from '@ui';
 import {
   createMemo,
+  createSignal,
   For,
   Index,
   type JSX,
@@ -33,6 +36,7 @@ import { useOpenPromptOrigin } from '../open-prompt-origin';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
 import { agentContextText, promptOrigin } from '../state/prompt-origin';
+import { refusedPromptAction } from '../state/refused-prompt';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
@@ -336,6 +340,40 @@ export function Message(props: {
   const inFlight = () => props.inFlight;
   const failure = () =>
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
+  const agentSession = useOptionalAgentSession();
+  const [continuing, setContinuing] = createSignal(false);
+  // Out of Macro usage with a team key to fall back on: agreeing moves the
+  // session to the key and sends the refused prompt again.
+  const continueOnTeamKey = async () => {
+    if (!agentSession || continuing()) return;
+    setContinuing(true);
+    try {
+      await agentSession.setFunding('team_api_key');
+      const retry = refusedPromptAction(
+        agentSession.messages(),
+        props.message.turn
+      );
+      if (retry) await agentSession.issue(retry);
+    } catch (error) {
+      toast.failure(
+        error instanceof Error
+          ? error.message
+          : "Your team's API key could not be turned on"
+      );
+    } finally {
+      setContinuing(false);
+    }
+  };
+  const noticeAction = (notice: FailureNotice) =>
+    notice.kind === 'team_api_key_available' &&
+    agentSession &&
+    agentSession.session()?.canEdit !== false
+      ? {
+          label: 'Continue with team API key',
+          onClick: () => void continueOnTeamKey(),
+          disabled: continuing(),
+        }
+      : undefined;
 
   return (
     // A control and an event notification are both user-authored by the
@@ -405,6 +443,7 @@ export function Message(props: {
                   <FailureNoticeCard
                     notice={notice()}
                     onOpenLink={openExternalUrl}
+                    action={noticeAction(notice())}
                   />
                 )}
               </Show>

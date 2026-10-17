@@ -21,6 +21,7 @@ async fn usage_row(
                 feature: AiFeature::Chat,
                 user: user.clone(),
                 entity: None,
+                provider_api_key_id: None,
                 cost: Usage {
                     amount: UsageAmount::Tokens {
                         input: 1_000,

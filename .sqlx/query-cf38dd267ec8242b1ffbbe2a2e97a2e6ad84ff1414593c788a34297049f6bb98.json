@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cursor_configs (\n                team_id, provider, key_ciphertext, encryption_version, kms_key_id, key_prefix\n            )\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (team_id, provider) DO UPDATE SET\n                key_ciphertext     = EXCLUDED.key_ciphertext,\n                encryption_version = EXCLUDED.encryption_version,\n                kms_key_id         = EXCLUDED.kms_key_id,\n                key_prefix         = EXCLUDED.key_prefix,\n                updated_at         = NOW()\n            RETURNING updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bytea",
+        "Int2",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cf38dd267ec8242b1ffbbe2a2e97a2e6ad84ff1414593c788a34297049f6bb98"
+}

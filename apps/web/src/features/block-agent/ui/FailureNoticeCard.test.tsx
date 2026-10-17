@@ -54,4 +54,26 @@ describe('FailureNoticeCard', () => {
 
     expect(queryByRole('button')).toBeNull();
   });
+
+  it('acts in place through the action the host offers', () => {
+    const onClick = vi.fn();
+    const { getByRole } = render(() => (
+      <FailureNoticeCard
+        notice={{
+          kind: 'team_api_key_available',
+          title: "You've used your AI usage for this month",
+          body: "Continue on your team's API key?",
+          link: null,
+        }}
+        onOpenLink={() => {}}
+        action={{ label: 'Continue with team API key', onClick }}
+      />
+    ));
+
+    fireEvent.click(
+      getByRole('button', { name: 'Continue with team API key' })
+    );
+
+    expect(onClick).toHaveBeenCalledOnce();
+  });
 });

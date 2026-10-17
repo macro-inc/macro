@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO cursor_configs (\n            user_id,\n            key_ciphertext,\n            encryption_version,\n            kms_key_id\n        )\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (user_id) DO UPDATE SET\n            key_ciphertext       = EXCLUDED.key_ciphertext,\n            encryption_version   = EXCLUDED.encryption_version,\n            kms_key_id           = EXCLUDED.kms_key_id,\n            updated_at           = NOW()\n        RETURNING\n            user_id,\n            key_ciphertext,\n            encryption_version,\n            kms_key_id,\n            default_model_id,\n            created_at,\n            updated_at\n        ",
+  "query": "\n        INSERT INTO cursor_configs (\n            user_id,\n            key_ciphertext,\n            encryption_version,\n            kms_key_id,\n            key_prefix\n        )\n        VALUES ($1, $2, $3, $4, $5)\n        ON CONFLICT (user_id) DO UPDATE SET\n            key_ciphertext       = EXCLUDED.key_ciphertext,\n            encryption_version   = EXCLUDED.encryption_version,\n            kms_key_id           = EXCLUDED.kms_key_id,\n            key_prefix           = EXCLUDED.key_prefix,\n            updated_at           = NOW()\n        RETURNING\n            user_id AS \"user_id!\",\n            key_ciphertext,\n            encryption_version,\n            kms_key_id,\n            default_model_id,\n            created_at,\n            updated_at\n        ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "user_id",
+        "name": "user_id!",
         "type_info": "Text"
       },
       {
@@ -44,11 +44,12 @@
         "Text",
         "Bytea",
         "Int2",
+        "Text",
         "Text"
       ]
     },
     "nullable": [
-      false,
+      true,
       false,
       false,
       false,
@@ -57,5 +58,5 @@
       false
     ]
   },
-  "hash": "703614ad73a7e8473485059b305aa07056ebc1f111109cb263f39a74f27ad92c"
+  "hash": "303055f5dc75372653ed75dab8f699cf5e910faa81334f0cb416b539874ed23a"
 }

@@ -59,7 +59,7 @@ fn speed_is_advertised_only_for_supported_models_with_current_value() {
         ("openai/gpt-6.1-sol", ModelSpeed::Ultrafast),
     ] {
         let options =
-            super::session_config_options(model, &[model], ReasoningEffort::Default, speed);
+            super::session_config_options(model, &[model], ReasoningEffort::Default, speed, None);
         let option = options
             .iter()
             .find(|option| option.id.to_string() == "speed")

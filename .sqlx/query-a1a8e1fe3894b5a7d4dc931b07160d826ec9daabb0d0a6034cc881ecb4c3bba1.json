@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT team_key.provider\n            FROM cursor_configs team_key\n            JOIN team_user membership ON membership.team_id = team_key.team_id\n            WHERE membership.user_id = $1\n            ORDER BY team_key.provider\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a1a8e1fe3894b5a7d4dc931b07160d826ec9daabb0d0a6034cc881ecb4c3bba1"
+}

@@ -36,6 +36,8 @@ import {
   type EffortSelection,
   effortConfigOption,
   effortLabel,
+  fundingConfigOption,
+  usesTeamApiKey,
 } from '../state/session-config';
 import {
   AgentInput,
@@ -44,6 +46,7 @@ import {
   ComposerNotice,
   type QueuedPromptItem,
   QueuedPrompts,
+  TeamUsageToggle,
 } from '../ui';
 import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 import { AgentModelMenuItem } from './AgentModelMenuItem';
@@ -65,6 +68,7 @@ export function AgentComposer(props: {
   const {
     session,
     selectModel,
+    setFunding,
     displayName,
     userId,
     interactions,
@@ -119,6 +123,24 @@ export function AgentComposer(props: {
   };
 
   const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
+  const offersTeamKey = () =>
+    fundingConfigOption(metadata()?.configOptions ?? []) !== undefined;
+  const onTeamKey = () => usesTeamApiKey(metadata()?.configOptions ?? []);
+  const chooseFunding = async (teamKey: boolean) => {
+    if (readOnly() || configuring()) return;
+    setConfiguring(true);
+    try {
+      await setFunding(teamKey ? 'team_api_key' : 'macro');
+    } catch (error) {
+      toast.failure(
+        error instanceof Error
+          ? error.message
+          : 'The usage setting could not be changed'
+      );
+    } finally {
+      setConfiguring(false);
+    }
+  };
   const changingEffort = () => {
     const option = effort();
     return option ? changingConfig(messages(), option.id) : undefined;
@@ -403,6 +425,13 @@ export function AgentComposer(props: {
               )}
             >
               <SpeedToggle model={metadata()?.model ?? ''} />
+            </Show>
+            <Show when={offersTeamKey()}>
+              <TeamUsageToggle
+                on={onTeamKey()}
+                disabled={readOnly() || pending() || configuring()}
+                onToggle={(on) => void chooseFunding(on)}
+              />
             </Show>
           </div>
         }

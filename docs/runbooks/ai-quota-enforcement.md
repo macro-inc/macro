@@ -25,9 +25,16 @@ admission and recording:
 | True, real user, billable feature | Check existing allowance; fail closed on validation error | `true` when existing producer records usage |
 | True, exempt feature | No quota billing I/O | `false` |
 | Genuinely system-owned work | No user quota billing I/O | `false` |
+| Paid for by a team's own provider key (`provider_api_key_id` set) | No admission for that turn | `false`, row references the key |
 | Rejected before execution | No provider work | No usage row for work not executed |
 | Historical rows / inserts omitting column | Never retrospectively classified | `false` |
 | Disabled after activation | Stop admission and new counting | Existing booleans unchanged |
+
+**Team provider keys:** in-memory AI chat turns that run on a team's own
+Anthropic or OpenAI key (see [team API keys](../agent-guide/ai-chat.md#team-api-keys-for-ai-chat))
+skip admission and record `ai_usage.provider_api_key_id`, which keeps them out
+of `count_usage`. Only the loop's own model calls run on the key; tools,
+opening lines, and summaries in those turns still use Macro's keys and count.
 
 **Exempt:** Memory, AiProjection, CallSummary, Dictation, ChatRename.
 **Billable:** Chat, Automation, DynamicCompletionsApi, ChannelBot, AiEditing,

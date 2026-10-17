@@ -483,6 +483,48 @@ impl<H: HttpClientExt + Clone + 'static> ModelRouter<H> {
 }
 
 impl ModelRouter<MeteredHttpClient> {
+    /// This router with `provider`'s client authenticating with `api_key`
+    /// instead of the deployment's key, for a turn a team's own key pays for.
+    ///
+    /// Only the native Anthropic and OpenAI clients can be rekeyed; any other
+    /// provider is [`AgentError::UnknownModel`].
+    pub fn with_provider_api_key(&self, provider: &str, api_key: &str) -> Result<Self, AgentError> {
+        let http = ReqwestClient::builder()
+            .retry(reqwest::retry::never())
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|error| rig_core::http_client::Error::Instance(Box::new(error)))?;
+        let mut router = self.clone();
+        match provider {
+            ANTHROPIC_PROVIDER => {
+                router.anthropic = Arc::new(
+                    anthropic::Client::builder()
+                        .api_key(api_key)
+                        .http_client(AnthropicPromptLayout::new(MeteredHttpClient::new(
+                            http,
+                            ANTHROPIC_PROVIDER,
+                            WireProtocol::Anthropic,
+                        )))
+                        .build()?,
+                );
+            }
+            OPENAI_PROVIDER => {
+                router.openai = Arc::new(
+                    openai::Client::builder()
+                        .api_key(api_key)
+                        .http_client(MeteredHttpClient::new(
+                            http,
+                            OPENAI_PROVIDER,
+                            WireProtocol::Responses,
+                        ))
+                        .build()?,
+                );
+            }
+            other => return Err(AgentError::UnknownModel(other.to_owned())),
+        }
+        Ok(router)
+    }
+
     /// Register an OpenAI-compatible Chat Completions provider from a base URL
     /// and key.
     ///

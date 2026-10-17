@@ -30,6 +30,27 @@ export function effortConfigOption(
   return selectConfigOption(options, 'thought_level', 'reasoning_effort');
 }
 
+/** The in-memory agent's option for what its turns run on. */
+export const FUNDING_CONFIG_ID = 'funding';
+
+/** Macro's AI allowance, or the team's own provider API key. */
+export type SessionFunding = 'macro' | 'team_api_key';
+
+/** The funding option, present only when the owner's team has a usable key. */
+export function fundingConfigOption(
+  options: readonly SessionConfigOption[]
+): SelectSessionConfigOption | undefined {
+  const candidate = options.find((option) => option.id === FUNDING_CONFIG_ID);
+  return candidate?.type === 'select' ? candidate : undefined;
+}
+
+/** Whether the session's turns run on the team's own API key. */
+export function usesTeamApiKey(
+  options: readonly SessionConfigOption[]
+): boolean {
+  return fundingConfigOption(options)?.currentValue === 'team_api_key';
+}
+
 /** Opaque harness setting selected alongside a model. */
 export type EffortSelection = { configId: string; value: string };
 export type EffortChoice = EffortSelection & { name: string };

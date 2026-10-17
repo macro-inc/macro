@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM cursor_configs WHERE user_id = $1 AND provider = 'cursor'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e1f15343fd17869b7c0f3a173a39ed2b1685a4adaa2db64eb588bdd7443331b"
+}

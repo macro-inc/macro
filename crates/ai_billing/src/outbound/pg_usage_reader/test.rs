@@ -15,6 +15,7 @@ fn completion(
         feature,
         user,
         entity: None,
+        provider_api_key_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input: 1_000_000,
@@ -309,6 +310,7 @@ async fn priced_cache_tokens_count_through_the_stored_total(pool: PgPool) {
                 feature: AiFeature::Chat,
                 user: user.clone(),
                 entity: None,
+                provider_api_key_id: None,
                 cost: Usage {
                     amount,
                     model: "claude-opus-5".to_string(),
@@ -354,6 +356,7 @@ async fn unpriced_cache_tokens_fall_back_to_the_opus_5_cache_rates(pool: PgPool)
                 feature: AiFeature::Chat,
                 user: user.clone(),
                 entity: None,
+                provider_api_key_id: None,
                 cost: Usage {
                     amount: UsageAmount::Tokens {
                         input: 1_000_000,

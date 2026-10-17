@@ -14,7 +14,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { ToolApprovalController } from '../primitives/create-tool-approval-controller';
-import type { EffortSelection } from '../state/session-config';
+import type { EffortSelection, SessionFunding } from '../state/session-config';
 import type { QuoteInsert } from '../ui';
 import type { QueueController } from './create-queue-controller';
 
@@ -73,6 +73,11 @@ export type AgentSessionState = {
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
   /** Resolve only after the runtime confirms the selected model and effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
+  /**
+   * Confirm whether turns run on Macro usage or the team's own API key.
+   * Only the in-memory agent offers the choice (see `fundingConfigOption`).
+   */
+  setFunding: (funding: SessionFunding) => Promise<void>;
   /**
    * Send the next queued message now: stop the running turn, and show the
    * queue head as sent under the id the server already holds it by. The

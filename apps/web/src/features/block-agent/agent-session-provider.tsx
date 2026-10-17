@@ -189,6 +189,7 @@ export function AgentSessionProvider(
           turn,
           issue: live.issue,
           selectModel: live.selectModel,
+          setFunding: live.setFunding,
           sendNext,
           steer,
           interactions,

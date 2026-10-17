@@ -42,8 +42,13 @@ import {
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
 import { issueSessionAction } from '../queries/issue-session-action';
-import type { EffortSelection } from '../state/session-config';
+import {
+  type EffortSelection,
+  FUNDING_CONFIG_ID,
+  type SessionFunding,
+} from '../state/session-config';
 import { configureSessionModel } from './configure-session-model';
+import { confirmSessionControl } from './confirm-session-control';
 
 export type AgentSessionHandle = {
   /** Session row, absent until the load resolves. */
@@ -66,6 +71,8 @@ export type AgentSessionHandle = {
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
   /** Confirm a model change, then validate and confirm its optional effort. */
   selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
+  /** Confirm whether turns run on Macro usage or the team's own API key. */
+  setFunding: (funding: SessionFunding) => Promise<void>;
   /**
    * Show a queued action as dispatched under the id the server holds it
    * by. See {@link AgentSession.expect}.
@@ -380,6 +387,19 @@ export function createAgentSession(
         },
         model,
         effort
+      );
+    },
+    setFunding: async (funding) => {
+      const current = live();
+      if (!current) throw new Error('The agent session is not ready.');
+      await confirmSessionControl(
+        {
+          issue: (action) =>
+            issueSessionAction(current, action, { userId: options.userId() }),
+          snapshot: () => current.snapshot(),
+          subscribe: (listener) => current.subscribe(listener),
+        },
+        { type: 'setConfigOption', configId: FUNDING_CONFIG_ID, value: funding }
       );
     },
     expect: (actionId, action) =>

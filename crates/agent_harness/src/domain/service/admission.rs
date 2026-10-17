@@ -55,13 +55,32 @@ where
 
     pub(super) async fn admit_session(&self, session: &AgentSession) -> Result<()> {
         let kind = AgentKind::for_session(session.bot_id, &session.harness);
-        if macro_funded(kind) {
-            // Never use the actor or a system fallback for a missing user owner.
-            self.admission
-                .admit(session.owner_user()?, AiFeature::AgentSession)
-                .await?;
+        // Never use the actor or a system fallback for a missing user owner.
+        self.admit_kind(kind, session.owner_user()?).await
+    }
+
+    /// Admit macro-funded work for `owner`. An in-memory session also passes
+    /// when the allowance is spent but the owner's team has its own key: the
+    /// runtime then decides each turn whether to run on it or to ask first.
+    async fn admit_kind(&self, kind: AgentKind, owner: &MacroUserIdStr<'_>) -> Result<()> {
+        if !macro_funded(kind) {
+            return Ok(());
         }
-        Ok(())
+        let denial = match self.admission.admit(owner, AiFeature::AgentSession).await {
+            Ok(()) => return Ok(()),
+            Err(denial @ AiAdmissionError::Denied(_)) => denial,
+            Err(error) => return Err(error.into()),
+        };
+        if kind == AgentKind::InMemory {
+            match self.team_keys.usable_providers(owner).await {
+                Ok(providers) if !providers.is_empty() => return Ok(()),
+                Ok(_) => {}
+                Err(error) => {
+                    tracing::error!(error = ?error, "could not read the team's provider keys");
+                }
+            }
+        }
+        Err(denial.into())
     }
 
     pub(super) async fn admit_session_id(&self, session_id: AgentSessionId) -> Result<()> {
@@ -177,10 +196,8 @@ where
         harness: &str,
         owner: &MacroUserIdStr<'static>,
     ) -> Result<()> {
-        if macro_funded(AgentKind::for_session(bot, harness)) {
-            self.admission.admit(owner, AiFeature::AgentSession).await?;
-        }
-        Ok(())
+        self.admit_kind(AgentKind::for_session(bot, harness), owner)
+            .await
     }
 }
 

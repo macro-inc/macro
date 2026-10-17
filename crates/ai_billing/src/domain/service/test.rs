@@ -3436,6 +3436,7 @@ async fn assert_upgrade_resets_snapshot_and_gate(pool: sqlx::PgPool, from: PlanT
         feature: AiFeature::Chat,
         user: payer.clone(),
         entity: None,
+        provider_api_key_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input: 1_000_000,

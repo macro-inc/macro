@@ -16,11 +16,14 @@ use agent_session::domain::model::AgentSessionId;
 use ai_billing::domain::{AiAdmissionService, DisabledAiAdmissionService};
 use dashmap::DashMap;
 use model_owner::Owner;
+use team_provider_keys::domain::{NoTeamModelKeys, TeamModelKeys};
 
 use crate::domain::agent::{AgentState, serve};
 use crate::domain::engine::{AgentIdentity, TurnEngine};
 use crate::domain::mcp::DynMcpToolConnector;
-use crate::domain::replay::{FrameSource, replay_history, replay_reasoning_effort, replay_speed};
+use crate::domain::replay::{
+    FrameSource, replay_funding, replay_history, replay_reasoning_effort, replay_speed,
+};
 use crate::domain::session::{SessionState, SessionStore, Summarizing};
 
 #[cfg(test)]
@@ -69,6 +72,7 @@ impl Drop for LiveAgent {
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
     admission: Arc<dyn AiAdmissionService>,
+    team_keys: Arc<dyn TeamModelKeys>,
     model_access: Arc<dyn crate::domain::model_access::InMemModelAccess>,
     frames: Arc<dyn FrameSource>,
     mcp: Arc<dyn DynMcpToolConnector>,
@@ -96,6 +100,7 @@ impl InMemAgentManager {
             engine,
             model_access,
             admission: Arc::new(DisabledAiAdmissionService),
+            team_keys: Arc::new(NoTeamModelKeys),
             frames,
             mcp,
             enable_dev_commands: false,
@@ -110,6 +115,14 @@ impl InMemAgentManager {
     #[must_use]
     pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
         self.admission = admission;
+        self
+    }
+
+    /// Let owners' turns run on their team's own provider keys. Without
+    /// this, every turn runs on Macro's allowance.
+    #[must_use]
+    pub fn with_team_keys(mut self, team_keys: Arc<dyn TeamModelKeys>) -> Self {
+        self.team_keys = team_keys;
         self
     }
 
@@ -160,12 +173,14 @@ impl InMemAgentManager {
             } else {
                 agent::ModelSpeed::Standard
             };
+            let funding = replay_funding(&frames);
             let history = replay_history(frames);
             self.store.entry(facts.id).or_insert_with(|| SessionState {
                 acp_session_id: facts.acp_session_id.clone(),
                 model: facts.model.clone(),
                 reasoning_effort,
                 speed,
+                funding,
                 identity: facts.identity.clone(),
                 instructions: facts.instructions.clone(),
                 history,
@@ -190,6 +205,7 @@ impl InMemAgentManager {
             owner: facts.owner,
             engine: Arc::clone(&self.engine),
             admission: Arc::clone(&self.admission),
+            team_keys: Arc::clone(&self.team_keys),
             model_access: Arc::clone(&self.model_access),
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),

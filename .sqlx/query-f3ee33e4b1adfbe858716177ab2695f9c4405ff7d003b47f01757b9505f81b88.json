@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            user_id,\n            key_ciphertext,\n            encryption_version,\n            kms_key_id,\n            default_model_id,\n            created_at,\n            updated_at\n        FROM cursor_configs\n        WHERE user_id = $1\n        ",
+  "query": "\n        SELECT\n            user_id AS \"user_id!\",\n            key_ciphertext,\n            encryption_version,\n            kms_key_id,\n            default_model_id,\n            created_at,\n            updated_at\n        FROM cursor_configs\n        WHERE user_id = $1 AND provider = 'cursor'\n        ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "user_id",
+        "name": "user_id!",
         "type_info": "Text"
       },
       {
@@ -45,7 +45,7 @@
       ]
     },
     "nullable": [
-      false,
+      true,
       false,
       false,
       false,
@@ -54,5 +54,5 @@
       false
     ]
   },
-  "hash": "e96ee7a01c4296009ee3f3e9639ee559000daf0746a2d9a72b028c8450a56534"
+  "hash": "f3ee33e4b1adfbe858716177ab2695f9c4405ff7d003b47f01757b9505f81b88"
 }

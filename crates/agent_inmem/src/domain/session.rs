@@ -266,6 +266,8 @@ pub struct SessionState {
     pub reasoning_effort: ReasoningEffort,
     /// Inference speed applied to subsequent turns.
     pub speed: agent::ModelSpeed,
+    /// What subsequent turns run on: Macro's allowance or the team's key.
+    pub funding: crate::domain::funding::Funding,
     /// Who this agent is, snapshotted from the session's bot at attach.
     pub identity: Option<AgentIdentity>,
     /// Instructions every turn runs under, snapshotted from the session row
@@ -290,6 +292,7 @@ impl SessionState {
             model,
             reasoning_effort: ReasoningEffort::default(),
             speed: agent::ModelSpeed::Standard,
+            funding: crate::domain::funding::Funding::Macro,
             identity: None,
             instructions: None,
             history: Vec::new(),

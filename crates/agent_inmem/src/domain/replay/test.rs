@@ -533,6 +533,7 @@ fn only_confirmed_effort_replays_and_removal_resets_it() {
         &["anthropic/claude-sonnet-5-5"],
         ReasoningEffort::Low,
         agent::ModelSpeed::Standard,
+        None,
     );
     frames.push(config_response(
         serde_json::json!({ "configOptions": options }),
@@ -560,6 +561,7 @@ fn speed_replays_only_from_confirmed_configuration() {
         &["openai/gpt-6-astra"],
         ReasoningEffort::Default,
         ModelSpeed::Ultrafast,
+        None,
     );
     frames.push(config_response(
         serde_json::json!({"configOptions":options}),
@@ -568,4 +570,22 @@ fn speed_replays_only_from_confirmed_configuration() {
     frames.push(config_frame("model", "other-model"));
     frames.push(config_response(serde_json::json!({"configOptions":[]})));
     assert_eq!(replay_speed(&frames), ModelSpeed::Standard);
+}
+
+#[test]
+fn funding_replays_from_the_last_confirmed_configuration() {
+    use crate::domain::funding::{FUNDING_CONFIG_ID, Funding};
+    let mut frames = vec![config_frame(FUNDING_CONFIG_ID, "team_api_key")];
+    assert_eq!(replay_funding(&frames), Funding::Macro);
+    let options = crate::domain::model_options::session_config_options(
+        "anthropic/claude-sonnet-5-5",
+        &["anthropic/claude-sonnet-5-5"],
+        ReasoningEffort::Default,
+        agent::ModelSpeed::Standard,
+        Some(Funding::TeamApiKey),
+    );
+    frames.push(config_response(
+        serde_json::json!({ "configOptions": options }),
+    ));
+    assert_eq!(replay_funding(&frames), Funding::TeamApiKey);
 }

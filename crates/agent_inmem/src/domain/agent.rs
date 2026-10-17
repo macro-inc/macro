@@ -19,7 +19,7 @@ use agent::{ModelSpeed, ReasoningEffort};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
-    BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
+    BooleanPropertySchema, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk,
     CreateElicitationRequest, ElicitationAction, ElicitationFormMode, ElicitationPropertySchema,
     ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
     InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
@@ -42,11 +42,12 @@ use ai_tools::user_tool_review::{
 };
 use async_trait::async_trait;
 use model_owner::Owner;
+use team_provider_keys::domain::TeamModelKeys;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
-use crate::domain::admission::admit_turn;
 use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnPurpose, TurnRequest};
+use crate::domain::funding::{FUNDING_CONFIG_ID, Funding, FundingRefusal, TurnFunding, fund_turn};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
@@ -125,6 +126,9 @@ pub struct AgentState {
     pub engine: Arc<dyn TurnEngine>,
     /// Admission for new provider-backed turns, including direct ACP requests.
     pub admission: Arc<dyn AiAdmissionService>,
+    /// The owner's team's own provider keys, which turns may run on instead
+    /// of the owner's Macro allowance.
+    pub team_keys: Arc<dyn TeamModelKeys>,
     /// Current model permissions for the trusted session owner.
     pub model_access: Arc<dyn InMemModelAccess>,
     /// Conversation state, shared with the manager so it survives reattach.
@@ -253,17 +257,46 @@ impl AgentState {
     }
 
     /// ACP model configuration backed by the engine's supported-model source
-    /// and this session's current selection.
-    fn session_config_options(&self, access: ModelAccess) -> Vec<SessionConfigOption> {
+    /// and this session's current selection. `team_key` is whether the owner
+    /// may use a team key now (see [`Self::owner_has_team_key`]).
+    fn session_config_options(
+        &self,
+        access: ModelAccess,
+        team_key: bool,
+    ) -> Vec<SessionConfigOption> {
         let Some(session) = self.store.get(&self.session_id) else {
             return Vec::new();
         };
+        let funding =
+            (team_key || session.funding == Funding::TeamApiKey).then_some(session.funding);
         crate::domain::model_options::session_config_options(
             &session.model,
             &access.models(self.engine.supported_models()),
             session.reasoning_effort,
             session.speed,
+            funding,
         )
+    }
+
+    /// Whether the owner is on a team with a provider key they may run turns
+    /// on. A failed lookup offers nothing rather than failing the request.
+    async fn owner_has_team_key(&self) -> bool {
+        let Some(user) = self.owner.as_user() else {
+            return false;
+        };
+        match self.team_keys.usable_providers(user).await {
+            Ok(providers) => !providers.is_empty(),
+            Err(error) => {
+                tracing::error!(error = ?error, "could not read the team's provider keys");
+                false
+            }
+        }
+    }
+
+    fn set_funding(&self, funding: Funding) {
+        if let Some(mut state) = self.store.get_mut(&self.session_id) {
+            state.funding = funding;
+        }
     }
 
     /// Everything from the session's state that a turn answering `prompt`
@@ -592,9 +625,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
                     state.start_connect_mcp(request.mcp_servers);
+                    let team_key = state.owner_has_team_key().await;
                     let responded = responder.respond(
                         NewSessionResponse::new(acp_id.clone())
-                            .config_options(state.session_config_options(access)),
+                            .config_options(state.session_config_options(access, team_key)),
                     );
                     advertise_commands(&state, &connection, acp_id);
                     responded
@@ -626,9 +660,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id.clone(), true);
                     state.start_connect_mcp(request.mcp_servers);
+                    let team_key = state.owner_has_team_key().await;
                     let responded = responder.respond(
                         ResumeSessionResponse::new()
-                            .config_options(state.session_config_options(access)),
+                            .config_options(state.session_config_options(access, team_key)),
                     );
                     advertise_commands(&state, &connection, request.session_id);
                     responded
@@ -732,7 +767,22 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             AcpError::invalid_params().data("the config option takes a value id"),
                         );
                     };
+                    let team_key = state.owner_has_team_key().await;
                     match request.config_id.to_string().as_str() {
+                        FUNDING_CONFIG_ID => {
+                            let Some(funding) = Funding::parse(&value.to_string()) else {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params().data("unknown usage source"),
+                                );
+                            };
+                            if funding == Funding::TeamApiKey && !team_key {
+                                return responder.respond_with_error(
+                                    AcpError::invalid_params()
+                                        .data("your team has no API key you can use"),
+                                );
+                            }
+                            state.set_funding(funding);
+                        }
                         MODEL_CONFIG_ID => {
                             if !state
                                 .engine
@@ -796,7 +846,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         }
                     }
                     responder.respond(SetSessionConfigOptionResponse::new(
-                        state.session_config_options(access),
+                        state.session_config_options(access, team_key),
                     ))
                 }
             },
@@ -828,6 +878,31 @@ fn model_access_error(error: ModelAccessError) -> AcpError {
         .data(serde_json::json!({ "code": code, "retryable": retryable }))
 }
 
+/// The prompt error for a turn that cannot be paid for.
+fn funding_refusal(refusal: FundingRefusal) -> AcpError {
+    let notice = match refusal {
+        FundingRefusal::Admission(error) => {
+            return AcpError::new(-32603, error.to_string()).data(serde_json::json!({
+                "code": error.code(), "retryable": error.is_retryable(),
+            }));
+        }
+        FundingRefusal::ContinueOnTeamKey => FailureNotice {
+            kind: FailureNoticeKind::TeamApiKeyAvailable,
+            title: "You've used your AI usage for this month".to_owned(),
+            body: "Continue on your team's API key? Turns on it are billed to your team by the provider and don't count against your Macro usage.".to_owned(),
+            link: None,
+        },
+        FundingRefusal::TeamKeyUnavailable => FailureNotice {
+            kind: FailureNoticeKind::TeamApiKeyUnavailable,
+            title: "Your team's API key can't run this model".to_owned(),
+            body: "Choose an Anthropic or OpenAI model your team has a key for, or switch back to Macro usage.".to_owned(),
+            link: None,
+        },
+    };
+    AcpError::new(-32603, notice.title.clone())
+        .data(serde_json::to_value(notice).expect("failure notice is serializable"))
+}
+
 /// Run one turn to completion, streaming updates as they arrive.
 async fn run_turn(
     state: &Arc<AgentState>,
@@ -850,26 +925,45 @@ async fn run_turn(
     let span = tracing::Span::current();
     span.record("agent.turn.lock_wait_ms", elapsed_ms(started));
     let admission_started = Instant::now();
+    let (session_model, funding, conversation_started) = state
+        .store
+        .get(&state.session_id)
+        .map(|session| {
+            (
+                session.model.clone(),
+                session.funding,
+                !session.history.is_empty(),
+            )
+        })
+        .unwrap_or_default();
     // Check at execution time, not enqueue time. Cancellation stays responsive
     // even if billing is slow, and neither denial nor cancellation adds history.
-    tokio::select! {
+    let turn_funding = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
-            AcpError::new(-32603, error.to_string()).data(serde_json::json!({
-                "code": error.code(), "retryable": error.is_retryable(),
-            }))
-        )?,
-    }
+        result = fund_turn(
+            state.admission.as_ref(),
+            state.team_keys.as_ref(),
+            &state.owner,
+            &session_model,
+            funding,
+            conversation_started,
+        ) => result.map_err(funding_refusal)?,
+    };
     span.record(
         "agent.turn.admission_wait_ms",
         elapsed_ms(admission_started),
     );
-    let session_model = state
-        .store
-        .get(&state.session_id)
-        .map(|session| session.model.clone())
-        .unwrap_or_default();
+    let provider_key = match turn_funding {
+        TurnFunding::Macro => None,
+        TurnFunding::TeamKey(key) => Some(key),
+    };
+    // A conversation that starts with the allowance spent moved to the key on
+    // its own; the composer shows it once the update lands.
+    let moved_to_team_key = provider_key.is_some() && funding == Funding::Macro;
+    if moved_to_team_key {
+        state.set_funding(Funding::TeamApiKey);
+    }
     if compaction::too_long(&prompt, &session_model) {
         return Err(AcpError::invalid_params().data(
             "This message is too long. Split it into smaller messages or attach it as a file.",
@@ -901,6 +995,14 @@ async fn run_turn(
     };
     if !access.allows(&model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
+    }
+    if moved_to_team_key {
+        let _ = connection.send_notification(SessionNotification::new(
+            acp_session_id.clone(),
+            SessionUpdate::ConfigOptionUpdate(ConfigOptionUpdate::new(
+                state.session_config_options(access, true),
+            )),
+        ));
     }
     // Check the full history as well: changing models must not send earlier
     // images to a text-only provider or silently discard what the user attached.
@@ -940,6 +1042,7 @@ async fn run_turn(
             .clone()
             .map(|requester| requester as SharedUserInputRequester),
         reviewer: requester.map(|requester| requester as Arc<dyn UserToolReviewer>),
+        provider_key,
     });
 
     let mut accumulator = StreamAccumulator::new();

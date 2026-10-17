@@ -145,6 +145,53 @@ async fn denied_or_unavailable_trigger_open_has_no_side_effects() {
     }
 }
 
+/// A team with an Anthropic key every owner may use.
+struct TeamWithKey;
+
+#[async_trait::async_trait]
+impl team_provider_keys::domain::TeamModelKeys for TeamWithKey {
+    async fn usable_key(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _provider: team_provider_keys::domain::ModelProvider,
+    ) -> team_provider_keys::domain::Result<Option<team_provider_keys::domain::UsableProviderKey>>
+    {
+        Ok(None)
+    }
+
+    async fn usable_providers(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+    ) -> team_provider_keys::domain::Result<Vec<team_provider_keys::domain::ModelProvider>> {
+        Ok(vec![team_provider_keys::domain::ModelProvider::Anthropic])
+    }
+}
+
+#[tokio::test]
+async fn a_spent_allowance_admits_only_in_memory_sessions_whose_team_has_a_key() {
+    for (team_key, bot, harness, admitted) in [
+        (true, BotId::TEST_A, "in-memory", true),
+        (true, bot_id::MACRO_CODER_BOT_ID, "opencode", false),
+        (false, BotId::TEST_A, "in-memory", false),
+    ] {
+        let repo = InMemoryAgentSessionRepo::new();
+        let admission = Arc::new(AdmissionMock {
+            failure: Mutex::new(Some(denied())),
+            ..Default::default()
+        });
+        let mut service = harness_sharing_repo(repo).with_admission(admission);
+        if team_key {
+            service = service.with_team_keys(Arc::new(TeamWithKey));
+        }
+        let result = service.inner.admit_open(bot, harness, &sender()).await;
+        assert_eq!(
+            result.is_ok(),
+            admitted,
+            "{harness} with team key {team_key}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn unauthorized_open_never_consults_billing() {
     let (service, _, admission) = bench(Some(denied()));

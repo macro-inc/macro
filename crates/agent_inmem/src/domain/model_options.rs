@@ -7,13 +7,19 @@ use agent_client_protocol::schema::v1::{
 };
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 
+use super::funding::{FUNDING_CONFIG_ID, Funding};
+
 /// Build session configuration from the actual turn engine catalog and state.
+///
+/// `funding` is offered only when the owner's team has a key they may use
+/// (or the session already runs on one); `None` leaves it out.
 #[must_use]
 pub fn session_config_options(
     current_model: &str,
     models: &[&str],
     current_effort: ReasoningEffort,
     current_speed: ModelSpeed,
+    funding: Option<Funding>,
 ) -> Vec<SessionConfigOption> {
     let options: Vec<_> = models
         .iter()
@@ -52,7 +58,26 @@ pub fn session_config_options(
     if let Some(speed) = speed_config_option(current_model, current_speed) {
         config.push(speed);
     }
+    if let Some(funding) = funding {
+        config.push(funding_config_option(funding));
+    }
     config
+}
+
+/// ACP option for what the session's turns run on. Only in-memory AI chat
+/// offers it: the key is a team's own, and nothing else routes through it.
+#[must_use]
+pub fn funding_config_option(current: Funding) -> SessionConfigOption {
+    SessionConfigOption::select(
+        FUNDING_CONFIG_ID,
+        "Usage",
+        SessionConfigValueId::new(current.as_str()),
+        vec![
+            SessionConfigSelectOption::new(Funding::Macro.as_str(), "Macro usage"),
+            SessionConfigSelectOption::new(Funding::TeamApiKey.as_str(), "Team API key")
+                .description("Billed to your team's own Anthropic or OpenAI key; not counted against your Macro usage".to_owned()),
+        ],
+    )
 }
 
 /// ACP option for inference speed, available only for supported native models.
@@ -112,6 +137,7 @@ pub fn model_config_options(current: &str, models: &[&str]) -> Vec<SessionConfig
         models,
         ReasoningEffort::default(),
         ModelSpeed::Standard,
+        None,
     )
 }
 

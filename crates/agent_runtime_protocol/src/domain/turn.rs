@@ -46,6 +46,12 @@ pub enum FailureNoticeKind {
     ProviderUsageLimit,
     /// The selected model cannot read image attachments in this conversation.
     UnsupportedImageInput,
+    /// The session owner has used their Macro AI allowance, and their team
+    /// has its own API key the conversation can continue on if they agree.
+    TeamApiKeyAvailable,
+    /// The session runs on the team's API key, but no key the owner may use
+    /// serves the selected model.
+    TeamApiKeyUnavailable,
 }
 
 /// An external page where the person can act on a [`FailureNotice`].

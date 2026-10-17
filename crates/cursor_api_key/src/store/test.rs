@@ -44,7 +44,7 @@ async fn a_registered_key_round_trips(pool: Pool<Postgres>) -> anyhow::Result<()
     insert_user(&pool, USER_ID).await?;
     let encrypted = encrypted(1);
 
-    let inserted = upsert_cursor_api_key(&pool, USER_ID, &encrypted).await?;
+    let inserted = upsert_cursor_api_key(&pool, USER_ID, &encrypted, "crsr_").await?;
     let fetched = get_cursor_api_key(&pool, USER_ID)
         .await?
         .expect("the key was just registered");
@@ -62,8 +62,8 @@ async fn registering_again_replaces_the_key_and_keeps_created_at(
 ) -> anyhow::Result<()> {
     insert_user(&pool, USER_ID).await?;
 
-    let first = upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
-    let second = upsert_cursor_api_key(&pool, USER_ID, &encrypted(2)).await?;
+    let first = upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "crsr_").await?;
+    let second = upsert_cursor_api_key(&pool, USER_ID, &encrypted(2), "crsr_").await?;
 
     assert_eq!(second.encrypted, encrypted(2));
     assert_eq!(
@@ -87,8 +87,8 @@ async fn keys_are_scoped_to_their_owner(pool: Pool<Postgres>) -> anyhow::Result<
     insert_user(&pool, USER_ID).await?;
     insert_user(&pool, OTHER_USER_ID).await?;
 
-    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
-    upsert_cursor_api_key(&pool, OTHER_USER_ID, &encrypted(2)).await?;
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "crsr_").await?;
+    upsert_cursor_api_key(&pool, OTHER_USER_ID, &encrypted(2), "crsr_").await?;
 
     assert_eq!(
         get_cursor_api_key(&pool, USER_ID)
@@ -110,7 +110,7 @@ async fn keys_are_scoped_to_their_owner(pool: Pool<Postgres>) -> anyhow::Result<
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_reports_whether_there_was_a_key(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, USER_ID).await?;
-    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "crsr_").await?;
 
     assert!(delete_cursor_api_key(&pool, USER_ID).await?);
     assert!(get_cursor_api_key(&pool, USER_ID).await?.is_none());
@@ -127,7 +127,7 @@ async fn deleting_reports_whether_there_was_a_key(pool: Pool<Postgres>) -> anyho
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_the_user_cascades_to_the_key(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, USER_ID).await?;
-    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "crsr_").await?;
 
     sqlx::query!(r#"DELETE FROM "User" WHERE "id" = $1"#, USER_ID)
         .execute(&pool)
@@ -141,10 +141,24 @@ async fn deleting_the_user_cascades_to_the_key(pool: Pool<Postgres>) -> anyhow::
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_key_for_an_unknown_user_is_refused(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert!(
-        upsert_cursor_api_key(&pool, "nobody", &encrypted(1))
+        upsert_cursor_api_key(&pool, "nobody", &encrypted(1), "crsr_")
             .await
             .is_err()
     );
+    Ok(())
+}
+
+/// The table refuses a Cursor row whose key carries another provider's
+/// prefix: Postgres cannot read the ciphertext, so the prefix is its check.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_key_with_a_non_cursor_prefix_is_refused(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, USER_ID).await?;
+    assert!(
+        upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "sk-ant-")
+            .await
+            .is_err()
+    );
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "grok_").await?;
     Ok(())
 }
 
@@ -153,7 +167,7 @@ async fn a_key_for_an_unknown_user_is_refused(pool: Pool<Postgres>) -> anyhow::R
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_new_key_has_no_default_model(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, USER_ID).await?;
-    let stored = upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+    let stored = upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "crsr_").await?;
     assert_eq!(stored.default_model_id, None);
     Ok(())
 }
@@ -163,7 +177,7 @@ async fn a_new_key_has_no_default_model(pool: Pool<Postgres>) -> anyhow::Result<
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_default_model_round_trips_and_clears(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, USER_ID).await?;
-    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "crsr_").await?;
 
     assert!(set_default_model_id(&pool, USER_ID, Some("grok-4.6")).await?);
     assert_eq!(
@@ -190,10 +204,10 @@ async fn the_default_model_round_trips_and_clears(pool: Pool<Postgres>) -> anyho
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn rotating_the_key_keeps_the_default_model(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, USER_ID).await?;
-    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1), "crsr_").await?;
     set_default_model_id(&pool, USER_ID, Some("claude-opus-5")).await?;
 
-    let rotated = upsert_cursor_api_key(&pool, USER_ID, &encrypted(2)).await?;
+    let rotated = upsert_cursor_api_key(&pool, USER_ID, &encrypted(2), "crsr_").await?;
     assert_eq!(rotated.default_model_id.as_deref(), Some("claude-opus-5"));
     Ok(())
 }

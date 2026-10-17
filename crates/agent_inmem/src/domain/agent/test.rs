@@ -147,6 +147,7 @@ async fn record<Engine: TurnEngine, Out>(
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
+        team_keys: Arc::new(team_provider_keys::domain::NoTeamModelKeys),
         enable_dev_commands: true,
     });
 
@@ -1544,6 +1545,7 @@ async fn serve_with_mcp(
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
+        team_keys: Arc::new(team_provider_keys::domain::NoTeamModelKeys),
     });
     let (client_channel, agent_channel) = AcpChannel::duplex();
     let agent = tokio::spawn(serve(state, agent_channel));
@@ -1600,6 +1602,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
+        team_keys: Arc::new(team_provider_keys::domain::NoTeamModelKeys),
     });
     let (client_channel, agent_channel) = AcpChannel::duplex();
     let agent = tokio::spawn(serve(state, agent_channel));
@@ -1689,6 +1692,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
+        team_keys: Arc::new(team_provider_keys::domain::NoTeamModelKeys),
     });
     let (client_channel, agent_channel) = AcpChannel::duplex();
     let agent = tokio::spawn(serve(state, agent_channel));
@@ -1789,6 +1793,7 @@ where
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         client_renders_forms: AtomicBool::new(false),
+        team_keys: Arc::new(team_provider_keys::domain::NoTeamModelKeys),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
         mcp_connect: std::sync::Mutex::new(None),

@@ -193,6 +193,14 @@ fn key_parsing_accepts_pasted_keys_and_rejects_the_rest() {
     }
 }
 
+#[test]
+fn a_parsed_key_reports_the_prefix_it_carries() {
+    let crsr = CursorApiKey::parse("crsr_abc").expect("well-formed key");
+    let grok = CursorApiKey::parse("grok_abc").expect("well-formed key");
+    assert_eq!(crsr.prefix(), "crsr_");
+    assert_eq!(grok.prefix(), "grok_");
+}
+
 /// The key must never print itself: it used to be a bare `String` behind a
 /// derived `Debug`, so one `tracing::debug!(?config)` leaked a live credential.
 #[test]

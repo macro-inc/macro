@@ -484,7 +484,17 @@ export type FailureNoticeKind =
    */
   | 'provider_usage_limit'
   /**  The selected model cannot read image attachments in this conversation. */
-  | 'unsupported_image_input';
+  | 'unsupported_image_input'
+  /**
+   *  The session owner has used their Macro AI allowance, and their team
+   *  has its own API key the conversation can continue on if they agree.
+   */
+  | 'team_api_key_available'
+  /**
+   *  The session runs on the team's API key, but no key the owner may use
+   *  serves the selected model.
+   */
+  | 'team_api_key_unavailable';
 
 /**  A file modification a tool reported. */
 export type FileDiff = {

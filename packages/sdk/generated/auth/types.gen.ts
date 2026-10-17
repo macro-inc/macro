@@ -1407,6 +1407,16 @@ export type PutCursorDefaultModelRequest = {
     modelId?: string | null;
 };
 
+/**
+ * The key an admin pasted.
+ */
+export type PutTeamAiApiKeyRequest = {
+    /**
+     * An Anthropic (`sk-ant-…`) or OpenAI (`sk-…`) API key.
+     */
+    apiKey: string;
+};
+
 export type PutUserNameQueryParams = {
     /**
      * First Name of user
@@ -1573,6 +1583,35 @@ export type Team = {
     owner_id: string;
     slug: string;
 };
+
+/**
+ * One provider the team has a key for. Never includes the key.
+ */
+export type TeamAiApiKey = {
+    /**
+     * The provider.
+     */
+    provider: TeamAiProvider;
+    /**
+     * When the key was last replaced.
+     */
+    updatedAt: string;
+};
+
+/**
+ * The providers the caller's team has a key for.
+ */
+export type TeamAiApiKeys = {
+    /**
+     * One entry per provider with a key.
+     */
+    keys: Array<TeamAiApiKey>;
+};
+
+/**
+ * A provider a team can bring its own key for.
+ */
+export type TeamAiProvider = 'anthropic' | 'openai';
 
 /**
  * Detailed information about a team invite
@@ -3331,6 +3370,71 @@ export type CreateTeamResponses = {
 };
 
 export type CreateTeamResponse = CreateTeamResponses[keyof CreateTeamResponses];
+
+export type GetTeamAiApiKeysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team-ai-api-keys';
+};
+
+export type GetTeamAiApiKeysErrors = {
+    401: string;
+    403: ErrorResponse;
+};
+
+export type GetTeamAiApiKeysError = GetTeamAiApiKeysErrors[keyof GetTeamAiApiKeysErrors];
+
+export type GetTeamAiApiKeysResponses = {
+    200: TeamAiApiKeys;
+};
+
+export type GetTeamAiApiKeysResponse = GetTeamAiApiKeysResponses[keyof GetTeamAiApiKeysResponses];
+
+export type DeleteTeamAiApiKeyData = {
+    body?: never;
+    path: {
+        provider: TeamAiProvider;
+    };
+    query?: never;
+    url: '/team-ai-api-keys/{provider}';
+};
+
+export type DeleteTeamAiApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+};
+
+export type DeleteTeamAiApiKeyError = DeleteTeamAiApiKeyErrors[keyof DeleteTeamAiApiKeyErrors];
+
+export type DeleteTeamAiApiKeyResponses = {
+    200: TeamAiApiKeys;
+};
+
+export type DeleteTeamAiApiKeyResponse = DeleteTeamAiApiKeyResponses[keyof DeleteTeamAiApiKeyResponses];
+
+export type PutTeamAiApiKeyData = {
+    body: PutTeamAiApiKeyRequest;
+    path: {
+        provider: TeamAiProvider;
+    };
+    query?: never;
+    url: '/team-ai-api-keys/{provider}';
+};
+
+export type PutTeamAiApiKeyErrors = {
+    400: ErrorResponse;
+    401: string;
+    403: ErrorResponse;
+};
+
+export type PutTeamAiApiKeyError = PutTeamAiApiKeyErrors[keyof PutTeamAiApiKeyErrors];
+
+export type PutTeamAiApiKeyResponses = {
+    200: TeamAiApiKeys;
+};
+
+export type PutTeamAiApiKeyResponse = PutTeamAiApiKeyResponses[keyof PutTeamAiApiKeyResponses];
 
 export type ToggleTeamAutoJoinDomainData = {
     body?: never;

@@ -51,6 +51,9 @@ ledger decisions, plus a flexible admin query API.
 - `UsageRecorder` (analytics) is best-effort and never fails the
   originating call; `FinancialUsage` (billable) is awaited and fail-closed
   — don't conflate the two when adding a new recording path.
+- `UsageContext::with_provider_api_key` marks usage a team's own key paid
+  for: it is stored with `provider_api_key_id` and never counted. Set it only
+  on calls that actually authenticate with that key.
 
 ## Related
 

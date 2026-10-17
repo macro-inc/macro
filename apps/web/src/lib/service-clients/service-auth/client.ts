@@ -67,6 +67,8 @@ import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLin
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
 import type { Team } from './generated/schemas/team';
+import type { TeamAiApiKeys } from './generated/schemas/teamAiApiKeys';
+import type { TeamAiProvider } from './generated/schemas/teamAiProvider';
 import type { TeamInvitesResponse } from './generated/schemas/teamInvitesResponse';
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
@@ -218,6 +220,16 @@ const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERR
       code: 'CURSOR_API_KEY_ERROR',
       message: message ?? `HTTP error! status: ${response.status}`,
     };
+  };
+
+/**
+ * Surfaces the team AI API key endpoints' own error message ("value does not
+ * look like an API key for this provider"), the way the Cursor key does.
+ */
+const teamAiApiKeyErrorResponseHandler: ErrorResponseHandler<'TEAM_AI_API_KEY_ERROR'> =
+  async function handleTeamAiApiKeyErrorResponse(response) {
+    const { message } = await cursorApiKeyErrorResponseHandler(response);
+    return { code: 'TEAM_AI_API_KEY_ERROR', message };
   };
 
 /**
@@ -958,6 +970,52 @@ export const authServiceClient = {
           method: 'PUT',
           body: JSON.stringify({ modelId }),
           errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * The providers the signed-in user's team has its own AI API key for.
+   * Never returns a key or any part of one.
+   */
+  async getTeamAiApiKeys() {
+    return (
+      await fetchWithAuth<TeamAiApiKeys, 'TEAM_AI_API_KEY_ERROR'>(
+        `${authHost}/team-ai-api-keys`,
+        {
+          method: 'GET',
+          errorResponseHandler: teamAiApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Stores the team's key for `provider`, replacing any. Team admins only. */
+  async putTeamAiApiKey(provider: TeamAiProvider, apiKey: string) {
+    return (
+      await fetchWithAuth<TeamAiApiKeys, 'TEAM_AI_API_KEY_ERROR'>(
+        `${authHost}/team-ai-api-keys/${provider}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey }),
+          errorResponseHandler: teamAiApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Forgets the team's key for `provider`. Team admins only. Does not revoke
+   * it at the provider.
+   */
+  async deleteTeamAiApiKey(provider: TeamAiProvider) {
+    return (
+      await fetchWithAuth<TeamAiApiKeys, 'TEAM_AI_API_KEY_ERROR'>(
+        `${authHost}/team-ai-api-keys/${provider}`,
+        {
+          method: 'DELETE',
+          errorResponseHandler: teamAiApiKeyErrorResponseHandler,
         }
       )
     ).map((result) => result);

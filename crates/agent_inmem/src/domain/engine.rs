@@ -10,6 +10,7 @@ use ai_tools::user_tool_review::UserToolReviewer;
 use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
 use model_owner::Owner;
+use team_provider_keys::domain::UsableProviderKey;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -77,6 +78,10 @@ pub struct TurnRequest {
     /// rejected - before the model reads its result. Absent for the same
     /// reason as `user_input`; a pending call then stays pending.
     pub reviewer: Option<Arc<dyn UserToolReviewer>>,
+    /// The team key the turn's model calls run on instead of Macro's, with
+    /// their usage recorded against it rather than the owner's allowance.
+    /// `None` runs on Macro.
+    pub provider_key: Option<UsableProviderKey>,
 }
 
 /// Whether a model call answers the user or condenses their conversation.

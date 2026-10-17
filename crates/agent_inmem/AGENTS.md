@@ -18,6 +18,9 @@ milliseconds instead of waiting on container provisioning.
   and log replay on reconnect.
 - `src/domain/admission.rs` + `src/outbound/approval_gate.rs`: usage/plan
   admission and tool-approval gating for in-memory sessions.
+- `src/domain/funding.rs`: whether a turn runs on Macro usage or the owner's
+  team's own provider key (`team_provider_keys`), exposed as the `funding`
+  session config option.
 
 ## Scope
 
@@ -29,7 +32,7 @@ milliseconds instead of waiting on container provisioning.
 ## Boundaries
 
 - Depends on: `agent` (the turn loop), `ai_toolset`, `agent_egress`
-  (`egress_mcp.rs`), `ai_billing`, `ai_usage`.
+  (`egress_mcp.rs`), `ai_billing`, `ai_usage`, `team_provider_keys`.
 - Used by: `agent_harness_service` (its sole host, alongside
   `agent_harness` for sandboxed sessions).
 

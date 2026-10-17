@@ -61,6 +61,7 @@ fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
         cancel: CancellationToken::new(),
         user_input: None,
         reviewer: None,
+        provider_key: None,
     }
 }
 

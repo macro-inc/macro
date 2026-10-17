@@ -237,6 +237,9 @@ pub struct CompletionUsage {
     pub user: MacroUserIdStr<'static>,
     /// The entity the completion related to, if any.
     pub entity: Option<Uuid>,
+    /// The team's own provider key that paid for the completion, if Macro
+    /// did not. Such usage is recorded but never counted toward a quota.
+    pub provider_api_key_id: Option<Uuid>,
     /// Token/audio usage and cost.
     pub cost: Usage,
 }
@@ -288,6 +291,8 @@ pub struct UsageEvent {
     pub model: String,
     /// The invocation's billable quantity.
     pub amount: UsageAmount,
+    /// The team's own provider key that paid for the completion, if any.
+    pub provider_api_key_id: Option<Uuid>,
 }
 
 /// The constant attributes of a logical completion (everything except the model
@@ -303,6 +308,9 @@ pub struct UsageContext {
     pub user: MacroUserIdStr<'static>,
     /// The entity the completion relates to, if any.
     pub entity: Option<Uuid>,
+    /// The team's own provider key the completion runs on, when Macro is
+    /// not paying for it.
+    pub provider_api_key_id: Option<Uuid>,
 }
 
 impl UsageContext {
@@ -312,6 +320,7 @@ impl UsageContext {
             feature,
             user,
             entity: None,
+            provider_api_key_id: None,
         }
     }
 
@@ -321,12 +330,21 @@ impl UsageContext {
             feature,
             user: SYSTEM_USER_ID.clone(),
             entity: None,
+            provider_api_key_id: None,
         }
     }
 
     /// Set the related entity.
     pub fn with_entity(mut self, entity: Option<Uuid>) -> Self {
         self.entity = entity;
+        self
+    }
+
+    /// Attribute the completion to a team's own provider key. Only for calls
+    /// that actually authenticate with that key: the usage is not counted
+    /// toward the user's Macro allowance.
+    pub fn with_provider_api_key(mut self, provider_api_key_id: Uuid) -> Self {
+        self.provider_api_key_id = Some(provider_api_key_id);
         self
     }
 
@@ -340,6 +358,7 @@ impl UsageContext {
             entity: self.entity,
             model,
             amount,
+            provider_api_key_id: self.provider_api_key_id,
         }
     }
 
@@ -351,6 +370,7 @@ impl UsageContext {
             entity: self.entity,
             model,
             amount: UsageAmount::Audio { duration },
+            provider_api_key_id: self.provider_api_key_id,
         }
     }
 }

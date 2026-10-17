@@ -18,6 +18,8 @@ export interface FailureNoticeCardProps {
   notice: FailureNotice;
   /** Follows the notice's link; wired to the app's external-url handling. */
   onOpenLink: (url: string) => void;
+  /** Acts on the notice in place, when the host offers a way to. */
+  action?: { label: string; onClick: () => void; disabled?: boolean };
 }
 
 export function FailureNoticeCard(props: FailureNoticeCardProps) {
@@ -37,7 +39,20 @@ export function FailureNoticeCard(props: FailureNoticeCardProps) {
           </p>
         </div>
       </div>
-      <div class="p-3">
+      <div class="flex flex-wrap gap-2 p-3">
+        <Show when={props.action}>
+          {(action) => (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={action().disabled}
+              onClick={() => action().onClick()}
+            >
+              {action().label}
+            </Button>
+          )}
+        </Show>
         <Show when={props.notice.link}>
           {(link) => (
             <Button

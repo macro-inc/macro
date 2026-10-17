@@ -51,7 +51,10 @@ const CURSOR_KEY_PREFIXES: [&str; 2] = ["crsr_", "grok_"];
 /// be a bare `String` in a `Debug`-deriving config, so a single
 /// `tracing::debug!(?config)` would have written a live user credential into a
 /// log file.
-pub struct CursorApiKey(Zeroizing<String>);
+pub struct CursorApiKey {
+    key: Zeroizing<String>,
+    prefix: &'static str,
+}
 
 impl CursorApiKey {
     /// Accept a key the user supplied, checking its shape.
@@ -69,22 +72,32 @@ impl CursorApiKey {
         let trimmed = supplied
             .trim()
             .trim_matches(|character| character == '"' || character == '\'');
-        let has_secret_after_prefix = CURSOR_KEY_PREFIXES.iter().any(|prefix| {
-            trimmed
-                .strip_prefix(prefix)
-                .is_some_and(|secret| !secret.is_empty())
-        });
-        if !has_secret_after_prefix {
-            return Err(MalformedCursorApiKey);
-        }
-        Ok(Self(Zeroizing::new(trimmed.to_owned())))
+        let prefix = CURSOR_KEY_PREFIXES
+            .into_iter()
+            .find(|prefix| {
+                trimmed
+                    .strip_prefix(prefix)
+                    .is_some_and(|secret| !secret.is_empty())
+            })
+            .ok_or(MalformedCursorApiKey)?;
+        Ok(Self {
+            key: Zeroizing::new(trimmed.to_owned()),
+            prefix,
+        })
     }
 
     /// The plaintext key. Only for the transport that authenticates with it —
     /// never for a log, a span field, an error, or an API response.
     #[must_use]
     pub fn expose(&self) -> &str {
-        &self.0
+        &self.key
+    }
+
+    /// The public prefix the key carries, which `cursor_configs` stores so
+    /// Postgres can reject a row whose key is not a Cursor key.
+    #[must_use]
+    pub fn prefix(&self) -> &'static str {
+        self.prefix
     }
 }
 

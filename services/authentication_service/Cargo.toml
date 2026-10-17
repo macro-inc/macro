@@ -167,6 +167,7 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
 ] }
 strum = { workspace = true }
 teams = { path = "../../crates/teams" }
+team_provider_keys = { path = "../../crates/team_provider_keys" }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }

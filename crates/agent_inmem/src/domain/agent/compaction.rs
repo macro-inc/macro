@@ -594,6 +594,7 @@ async fn complete(
         cancel: call,
         user_input: None,
         reviewer: None,
+        provider_key: None,
     });
     let mut text = String::new();
     loop {
