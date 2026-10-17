@@ -70,6 +70,7 @@ export function BottomReplyButtons(props: {
         message: props.lastMessage,
         replyType: type,
         isLastMessage: true,
+        openReplyComposer: viewContext.openReplyComposer,
       });
     });
 

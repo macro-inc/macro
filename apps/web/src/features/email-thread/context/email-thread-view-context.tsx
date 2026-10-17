@@ -3,6 +3,7 @@ import type {
   EmailComposeContext,
   EmailComposeHost,
 } from '../../email-compose/context/compose-capabilities';
+import type { ReplyType } from '../../email-compose/core/reply-type';
 import type { CalendarInvitation } from '../../email-message/core/calendar-invitation';
 import type {
   EmailAttachment,
@@ -15,6 +16,11 @@ export interface EmailThreadViewContext {
   copySubject?: (subject: string) => void | boolean | Promise<void | boolean>;
   compose: EmailComposeContext;
   composeHost?: EmailComposeHost;
+  openReplyComposer?: (args: {
+    threadId: string;
+    messageId: string;
+    replyType: ReplyType;
+  }) => void;
   rendering: {
     renderTags?: () => JSX.Element;
     renderInvitation?: (

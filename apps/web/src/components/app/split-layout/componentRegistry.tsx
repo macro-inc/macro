@@ -65,6 +65,10 @@ const EmailCompose = lazyNamed(
   () => import('@app/features/email-compose/email-compose'),
   'EmailCompose'
 );
+const FullscreenReplyCompose = lazyNamed(
+  () => import('@app/features/email-compose/fullscreen-reply-compose'),
+  'FullscreenReplyCompose'
+);
 const MailRouteView = lazyNamed(
   () => import('@app/features/email-view/route-views'),
   'MailRouteView'
@@ -405,6 +409,31 @@ registerComponent('email-compose', (params) => {
       draftId={draftID}
       initialTo={initialTo}
       initialInboxId={initialInboxId}
+    />
+  );
+});
+registerComponent('email-reply-compose', (params) => {
+  usePageViewTracking('email-reply-compose');
+  const threadId =
+    typeof params.threadId === 'string' ? params.threadId : undefined;
+  const replyingToMessageId =
+    typeof params.replyingToMessageId === 'string'
+      ? params.replyingToMessageId
+      : undefined;
+  const replyType =
+    typeof params.replyType === 'string'
+      ? (params.replyType as 'reply' | 'reply-all' | 'forward')
+      : 'reply-all';
+
+  if (!threadId || !replyingToMessageId) {
+    return <div role="alert">Missing thread or message ID for reply.</div>;
+  }
+
+  return (
+    <FullscreenReplyCompose
+      threadId={threadId}
+      replyingToMessageId={replyingToMessageId}
+      replyType={replyType}
     />
   );
 });

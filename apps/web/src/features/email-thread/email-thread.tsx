@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useEmail, useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContacts } from '@core/user';
@@ -17,6 +18,7 @@ import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
 import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
+import type { ReplyType } from '../email-compose/core/reply-type';
 import { createEmailAttachmentOpener } from '../email-message/attachment-action-adapter';
 import type { CalendarInvitation } from '../email-message/core/calendar-invitation';
 import type { EmailMessage } from '../email-message/core/email-message';
@@ -73,6 +75,7 @@ export function EmailThread(props: EmailThreadProps) {
     createCommands: (snapshot) =>
       createThreadActionAdapter(source.id, snapshot),
   };
+  const { openWithSplit } = useSplitLayout();
   const viewContext = {
     copySubject: async (subject: string) => {
       try {
@@ -86,6 +89,25 @@ export function EmailThread(props: EmailThreadProps) {
     thread: threadContext,
     compose,
     composeHost: createEmailComposeHost(),
+    openReplyComposer: (args: {
+      threadId: string;
+      messageId: string;
+      replyType: ReplyType;
+    }) => {
+      openWithSplit(
+        {
+          type: 'component',
+          id: 'email-reply-compose',
+          params: {
+            threadId: args.threadId,
+            replyingToMessageId: args.messageId,
+            replyType: args.replyType,
+          },
+          preserveParams: true,
+        },
+        { preferNewSplit: false }
+      );
+    },
     rendering: {
       renderTags: () => (
         <Suspense

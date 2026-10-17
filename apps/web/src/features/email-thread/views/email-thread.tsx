@@ -27,7 +27,8 @@ export function EmailThreadView(props: EmailThreadViewProps) {
     props,
     context,
     threadContext,
-    props.host
+    props.host,
+    viewContext.openReplyComposer
   );
   const {
     showMiddleMessages,

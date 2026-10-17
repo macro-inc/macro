@@ -52,7 +52,12 @@ export function createThreadNavigation(
   props: { threadId: Accessor<string> },
   context: EmailThreadState,
   threadContext: EmailThreadContext,
-  host: EmailThreadHost = {}
+  host: EmailThreadHost = {},
+  openReplyComposer?: (args: {
+    threadId: string;
+    messageId: string;
+    replyType: ReplyType;
+  }) => void
 ) {
   const isTouchDevice = threadContext.isTouch;
   const setIsScrollingToMessage = context.setIsScrollingToMessage;
@@ -473,6 +478,7 @@ export function createThreadNavigation(
       message: target.message,
       replyType,
       isLastMessage: target.isLastMessage,
+      openReplyComposer,
     });
   };
 
@@ -537,6 +543,7 @@ export function createThreadNavigation(
         message: target.message,
         replyType: 'reply-all',
         isLastMessage: target.isLastMessage,
+        openReplyComposer,
       });
     }
 

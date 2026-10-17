@@ -14,14 +14,28 @@ export function openEmailReplyComposerForMessage(args: {
   replyType: ReplyType;
   isLastMessage?: boolean;
   setShowReply?: Setter<boolean>;
+  openReplyComposer?: (args: {
+    threadId: string;
+    messageId: string;
+    replyType: ReplyType;
+  }) => void;
 }) {
   const messageId = args.message.db_id;
   if (!messageId) return false;
 
-  // The reply type and focus land through the reply request: the mounted
-  // composer's effect applies them to its own (seed-keyed) form instance.
-  // Writing to the form registry from here would target the wrong entry —
-  // the registry key includes a seed only the composer knows.
+  const threadId = args.message.thread_db_id;
+
+  // Open the fullscreen reply composer if the callback is provided
+  if (args.openReplyComposer && threadId) {
+    args.openReplyComposer({
+      threadId,
+      messageId,
+      replyType: args.replyType,
+    });
+    return true;
+  }
+
+  // Fallback to inline composer behavior if no openReplyComposer callback
   args.ctx.replyRequest.set(messageId, args.replyType);
 
   if (args.isTouch) {
