@@ -42,6 +42,7 @@ import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
   mapGraphqlThreadError,
+  warmGraphqlEmailThread,
 } from './graphql/thread';
 import {
   archiveEmailThread,
@@ -116,6 +117,18 @@ export async function fetchAndCacheThread(
 
   if (result.isErr()) return err(result.error as any);
   return ok({ thread: result.value });
+}
+
+/**
+ * Loads a thread into the cache for its next open, if it is not there yet.
+ * Resolves to whether it is cached; prefetching never rejects.
+ */
+export async function warmThread(threadId: string): Promise<boolean> {
+  if (isFeatureEnabled(enableGraphqlSoup))
+    return await warmGraphqlEmailThread(threadId);
+  const options = threadQueryOptions(threadId);
+  await queryClient.prefetchInfiniteQuery(options);
+  return queryClient.getQueryState(options.queryKey)?.status === 'success';
 }
 
 /**

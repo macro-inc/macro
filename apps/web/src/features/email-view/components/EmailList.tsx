@@ -19,6 +19,7 @@ import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { debouncedDependent } from '@core/util/debounce';
 import {
   type EntityData,
   EntitySelectionToolbar,
@@ -37,6 +38,7 @@ import {
   createMemo,
   createSignal,
   Match,
+  on,
   type Setter,
   Show,
   Suspense,
@@ -83,6 +85,7 @@ export function EmailList(props: EmailListProps) {
     registerListActivationHandler,
     openThread,
     filterByTag,
+    warmThreads,
   } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
@@ -234,6 +237,20 @@ export function EmailList(props: EmailListProps) {
       grid()?.focus();
     },
   });
+
+  // The row under the cursor (keyboard or a resting pointer) and the one below
+  // it are the likeliest next opens.
+  const settledFocusIndex = debouncedDependent(() => list.focus.index(), 150);
+  createEffect(
+    on(settledFocusIndex, (index) => {
+      if (index < 0 || isTouchDevice()) return;
+      const ids = rows()
+        .slice(index)
+        .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []))
+        .slice(0, 2);
+      warmThreads(ids);
+    })
+  );
 
   const listInteractions = useListInteractions({
     controller: list,

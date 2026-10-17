@@ -38,7 +38,7 @@ import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
 import { ButtonGroup } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { emailDetailSearch } from '../email-route';
 import { useEmailView } from '../email-view-context';
@@ -118,7 +118,12 @@ export function EmailDetailView(props: {
   targetMessageId?: string;
   targetRequest?: string;
 }) {
-  const { closeThread, selectedThread } = useEmailView();
+  const {
+    closeThread,
+    selectedThread,
+    source: listSource,
+    warmThreads,
+  } = useEmailView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const canAutofocus = useCanAutofocusSplitContent();
@@ -128,6 +133,25 @@ export function EmailDetailView(props: {
     enabled: !!threadId(),
   }));
   const source = createEmailThreadSource(threadId, threadQuery);
+  // Once this thread has loaded, its neighbours are the likeliest next opens
+  // (j/k, Mark done): load them so stepping reads them from cache.
+  createEffect(() => {
+    if (!threadQuery.isSuccess) return;
+    const ids = listSource
+      .items()
+      .flatMap((row) =>
+        row.kind === 'entity' && row.entity.type === 'email'
+          ? [row.entity.id]
+          : []
+      );
+    const index = ids.indexOf(threadId());
+    if (index < 0) return;
+    warmThreads(
+      [ids[index + 1], ids[index - 1], ids[index + 2]].filter(
+        (id): id is string => id !== undefined
+      )
+    );
+  });
   const threadData = source.thread;
   const title = () => {
     const thread = threadData();

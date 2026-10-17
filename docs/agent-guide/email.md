@@ -291,6 +291,10 @@ or inbox metadata. Inbox-dependent actions stay gated while ownership is unknown
 explicit inbox IDs must never silently route to primary while links are loading.
 Background refreshes and older-message loading still update the same thread.
 Verify with API traffic delayed and with previously opened bodies offline.
+The Email view loads the threads the user is about to open: the focused row and
+the one below it once the cursor rests for 150 ms, and the open thread's
+neighbours once it has loaded. With network latency added, j/k and Enter on a
+rested row should show the next body without waiting for `EmailThreadPage`.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
