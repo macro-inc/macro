@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_entity_mentions\n            (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at)\n        VALUES\n            ($1, 'message', $2, 'agent_session', $3, $4, '2024-01-02 00:00:00+00')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c723352d5dcab7bad7fd1c99c913e38585df4085e657e57c069ed13c9337e543"
+}

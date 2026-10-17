@@ -2177,6 +2177,134 @@ async fn attachment_references_returns_message_mention(pool: Pool<Postgres>) -> 
     Ok(())
 }
 
+const SESSION_FROM_CHANNEL: Uuid = Uuid::from_u128(0x00000000_0000_7000_8000_0000000000a1);
+const SESSION_FROM_REPLY: Uuid = Uuid::from_u128(0x00000000_0000_7000_8000_0000000000a2);
+const SESSION_FROM_DELETED: Uuid = Uuid::from_u128(0x00000000_0000_7000_8000_0000000000a3);
+const SESSION_WITHOUT_ORIGIN: Uuid = Uuid::from_u128(0x00000000_0000_7000_8000_0000000000a4);
+
+async fn insert_session(
+    pool: &Pool<Postgres>,
+    id: Uuid,
+    originating_message_id: Option<Uuid>,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session (
+            id, owner_id, originating_message_id, bot_id, model, harness, workspace
+        )
+        VALUES ($1, $2, $3, $4, 'test-model', 'test-harness', '/workspace')
+        "#,
+        id,
+        USER_A,
+        originating_message_id,
+        Uuid::from_u128(0x00000000_0000_0000_0000_00000000a9e7),
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_include_the_channel_a_session_was_created_from(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_session(&pool, SESSION_FROM_CHANNEL, Some(MSG3)).await?;
+    insert_session(&pool, SESSION_FROM_REPLY, Some(REPLY1)).await?;
+    insert_session(&pool, SESSION_FROM_DELETED, Some(MSG2)).await?;
+    insert_session(&pool, SESSION_WITHOUT_ORIGIN, None).await?;
+
+    let repo = repo(pool.clone());
+    let origin = repo
+        .get_attachment_references("agent_session", &SESSION_FROM_CHANNEL.to_string(), USER_A)
+        .await?;
+    let channel = channel_refs(&origin);
+    assert_eq!(channel.len(), 1);
+    assert_eq!(channel[0].channel_id, CH1);
+    assert_eq!(channel[0].channel_name.as_deref(), Some("test-channel"));
+    assert_eq!(channel[0].message_id, MSG3);
+    assert_eq!(channel[0].thread_id, None);
+    assert_eq!(channel[0].message_content, "third message edited");
+
+    let reply = repo
+        .get_attachment_references("agent_session", &SESSION_FROM_REPLY.to_string(), USER_A)
+        .await?;
+    let channel = channel_refs(&reply);
+    assert_eq!(channel.len(), 1);
+    assert_eq!(channel[0].message_id, REPLY1);
+    assert_eq!(channel[0].thread_id, Some(MSG1));
+
+    let deleted = repo
+        .get_attachment_references("agent_session", &SESSION_FROM_DELETED.to_string(), USER_A)
+        .await?;
+    assert!(deleted.is_empty());
+
+    let none = repo
+        .get_attachment_references("agent_session", &SESSION_WITHOUT_ORIGIN.to_string(), USER_A)
+        .await?;
+    assert!(none.is_empty());
+
+    let outsider = repo
+        .get_attachment_references(
+            "agent_session",
+            &SESSION_FROM_CHANNEL.to_string(),
+            NON_MEMBER,
+        )
+        .await?;
+    assert!(outsider.is_empty());
+
+    let departed = repo
+        .get_attachment_references(
+            "agent_session",
+            &SESSION_FROM_CHANNEL.to_string(),
+            LEFT_USER,
+        )
+        .await?;
+    assert!(departed.is_empty());
+
+    // A document lookup must not consult session origins.
+    let document = repo
+        .get_attachment_references("document", &SESSION_FROM_CHANNEL.to_string(), USER_A)
+        .await?;
+    assert!(document.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_keep_one_row_when_the_origin_message_also_mentions_the_session(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_session(&pool, SESSION_FROM_CHANNEL, Some(MSG3)).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_entity_mentions
+            (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at)
+        VALUES
+            ($1, 'message', $2, 'agent_session', $3, $4, '2024-01-02 00:00:00+00')
+        "#,
+        Uuid::from_u128(0x00000000_0000_0000_0000_00000000e0c1),
+        MSG3.to_string(),
+        SESSION_FROM_CHANNEL.to_string(),
+        USER_A,
+    )
+    .execute(&pool)
+    .await?;
+
+    let refs = repo(pool)
+        .get_attachment_references("agent_session", &SESSION_FROM_CHANNEL.to_string(), USER_A)
+        .await?;
+
+    assert_eq!(refs.len(), 1);
+    assert_eq!(channel_refs(&refs)[0].message_id, MSG3);
+    Ok(())
+}
+
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
