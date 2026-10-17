@@ -6,6 +6,7 @@ import { listen } from '@tauri-apps/api/event';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import { createNativeUpdatePreparation } from './native-update-preparation';
+import { unlistenQuietly } from './unlisten';
 
 export type NativeUpdateStatus =
   | { status: 'Disabled' | 'Idle' | 'Checking' | 'Installing' }
@@ -94,10 +95,10 @@ export function createNativeUpdates(flush: () => Promise<void>) {
         }
       );
       if (disposed) {
-        stop();
+        unlistenQuietly(stop);
         return;
       }
-      unsubscribe = stop;
+      unsubscribe = () => unlistenQuietly(stop);
       const current = await invoke<NativeUpdateStatus>(
         'get_native_update_status'
       );

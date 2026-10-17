@@ -72,7 +72,7 @@ export function useAndroidShares(
     void initialize();
     onCleanup(() => {
       disposed = true;
-      if (remove) void remove();
+      remove?.().catch(() => {});
     });
   });
 }

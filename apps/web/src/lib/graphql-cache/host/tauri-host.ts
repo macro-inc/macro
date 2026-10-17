@@ -8,6 +8,7 @@ import type { MutationInspection } from '../protocol';
  * worker-host.ts.
  */
 
+import { unlistenQuietly } from '@macro/tauri/unlisten';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
@@ -249,10 +250,6 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const unlistenHydration = listenForHydration();
-  async function removeHydrationListener(): Promise<void> {
-    const unlisten = await unlistenHydration;
-    unlisten?.();
-  }
 
   async function initialize(): Promise<void> {
     const { default: schemaSdl } = await import(
@@ -677,10 +674,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       hydrationSubscribers.clear();
       generationChangeSubscribers.clear();
       settlementSubscribers.clear();
-      void unlistenOps.then((fn) => fn?.());
-      void unlistenCacheChanges.then((fn) => fn?.());
-      void removeHydrationListener();
-      void unlistenSettlements.then((fn) => fn?.());
+      unlistenQuietly(unlistenOps);
+      unlistenQuietly(unlistenCacheChanges);
+      unlistenQuietly(unlistenHydration);
+      unlistenQuietly(unlistenSettlements);
     },
   };
 }

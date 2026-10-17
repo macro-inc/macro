@@ -29,6 +29,7 @@ import {
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
+import { unlistenQuietly } from './unlisten';
 
 export type BundleUpdateStatus =
   | { status: 'Idle' }
@@ -132,12 +133,14 @@ function TauriProvider(props: { children: JSX.Element }) {
       );
     }
     // Fetch current status since events emitted before the listener registered are missed
-    invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
-      setBundleUpdateStatus(status);
-    });
-    onCleanup(() => {
-      unlistenPromise.then((unlisten) => unlisten());
-    });
+    invoke<BundleUpdateStatus>('get_bundle_update_status')
+      .then((status) => {
+        setBundleUpdateStatus(status);
+      })
+      .catch((e) =>
+        console.error('[bundle-update] get_bundle_update_status failed', e)
+      );
+    onCleanup(() => unlistenQuietly(unlistenPromise));
 
     document.body.classList.add('tauri');
     document.body.classList.add(`tauri-${value.os}`);

@@ -83,7 +83,11 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
         id: `bundle:${runningBuild()}`,
         ...UPDATE_COPY.bundle,
         busy: false,
-        apply: () => void invoke('perform_update'),
+        apply: () => {
+          invoke('perform_update').catch((e) =>
+            console.error('[bundle-update] perform_update failed', e)
+          );
+        },
       };
     }
 

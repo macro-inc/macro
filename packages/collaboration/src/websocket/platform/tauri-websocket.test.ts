@@ -191,3 +191,138 @@ describe('TauriWebSocketWrapper', () => {
     expect(plugin.sent).toEqual([]);
   });
 });
+
+describe('TauriWebSocketWrapper incoming messages', () => {
+  async function openSocket() {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const socket = new TauriWebSocketWrapper('wss://dss.test/ws');
+    const events = track(socket);
+    const received: unknown[] = [];
+    socket.onmessage = (event) => received.push(event.data);
+    plugin.connects[0]?.resolve(7);
+    await settle();
+    let seq = 0;
+    const channel = plugin.connects[0]!.args.onMessage;
+    const push = (message: unknown) =>
+      channel.onmessage?.({ seq: ++seq, message });
+    const pushRaw = (payload: unknown) =>
+      (channel.onmessage as (payload: unknown) => void)(payload);
+    return { socket, events, received, push, pushRaw };
+  }
+
+  it('delivers text messages', async () => {
+    const { received, push } = await openSocket();
+    push({ type: 'Text', data: 'hello' });
+    expect(received).toEqual(['hello']);
+  });
+
+  it('delivers binary messages as an ArrayBuffer', async () => {
+    const { socket, received, push } = await openSocket();
+    socket.binaryType = 'arraybuffer';
+    push({ type: 'Binary', data: [1, 2, 3] });
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBeInstanceOf(ArrayBuffer);
+    expect([...new Uint8Array(received[0] as ArrayBuffer)]).toEqual([1, 2, 3]);
+  });
+
+  it('delivers binary messages as a Blob by default', async () => {
+    const { received, push } = await openSocket();
+    push({ type: 'Binary', data: [1, 2, 3] });
+    expect(received[0]).toBeInstanceOf(Blob);
+    expect((received[0] as Blob).size).toBe(3);
+  });
+
+  it.each([
+    ['a null payload', { type: 'Close', data: null }],
+    ['no payload', { type: 'Close' }],
+    ['a malformed payload', { type: 'Close', data: { code: 'x' } }],
+  ])('closes normally on a close frame with %s', async (_label, frame) => {
+    const { socket, events, push } = await openSocket();
+    push(frame);
+    expect(events).toEqual(['open', 'close:1000']);
+    expect(socket.readyState).toBe(socket.CLOSED);
+  });
+
+  it('ignores ping and pong frames', async () => {
+    const { socket, events, received, push } = await openSocket();
+    push({ type: 'Ping', data: [] });
+    push({ type: 'Pong', data: [1] });
+    expect(events).toEqual(['open']);
+    expect(received).toEqual([]);
+    expect(socket.readyState).toBe(socket.OPEN);
+  });
+
+  it.each([
+    'IO error: Socket is not connected (os error 57)',
+    'Connection reset without closing handshake',
+    'IO error: Connection reset by peer (os error 54)',
+    'IO error: timed out',
+  ])('fails the connection on the read error %j', async (error) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { socket, events, received, push } = await openSocket();
+    let closeEvent: CloseEvent | undefined;
+    socket.addEventListener('close', (event) => {
+      closeEvent = event;
+    });
+
+    expect(() => push(error)).not.toThrow();
+    push({ type: 'Text', data: 'after the stream ended' });
+
+    expect(events).toEqual(['open', 'error', 'close:1006']);
+    expect(closeEvent?.wasClean).toBe(false);
+    expect(socket.readyState).toBe(socket.CLOSED);
+    expect(received).toEqual([]);
+    expect(plugin.sent).toEqual([]);
+  });
+
+  it('reports only the local closure when a read error races close()', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { events, push, socket } = await openSocket();
+    socket.close(4000, 'bye');
+    push('IO error: Broken pipe (os error 32)');
+    await settle();
+    expect(events).toEqual(['open', 'close:4000']);
+  });
+
+  it.each([
+    ['a raw frame', null],
+    ['an unknown message type', { type: 'Fragment', data: [] }],
+    ['a known type with a malformed payload', { type: 'Text', data: 42 }],
+    ['a number', 5],
+  ])('ignores %s and keeps delivering', async (_label, message) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { socket, events, received, push } = await openSocket();
+
+    expect(() => push(message)).not.toThrow();
+    push({ type: 'Text', data: 'still alive' });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(['open']);
+    expect(received).toEqual(['still alive']);
+    expect(socket.readyState).toBe(socket.OPEN);
+  });
+
+  it('accepts messages from native builds without the replay envelope', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { events, received, pushRaw } = await openSocket();
+    pushRaw({ type: 'Text', data: 'bare' });
+    pushRaw('IO error: Socket is not connected (os error 57)');
+    expect(received).toEqual(['bare']);
+    expect(events).toEqual(['open', 'error', 'close:1006']);
+  });
+
+  it('keeps delivering after a message handler throws', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { socket, push } = await openSocket();
+    const received: unknown[] = [];
+    socket.onmessage = (event) => {
+      received.push(event.data);
+      if (event.data === 'first') throw new Error('consumer bug');
+    };
+
+    expect(() => push({ type: 'Text', data: 'first' })).not.toThrow();
+    push({ type: 'Text', data: 'second' });
+
+    expect(received).toEqual(['first', 'second']);
+  });
+});

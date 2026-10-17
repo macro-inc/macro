@@ -12,6 +12,7 @@ import {
   useContext,
 } from 'solid-js';
 import { useAndroidShares } from './androidShares';
+import { unlistenQuietly } from './unlisten';
 
 interface StagedSharedFileData {
   token: string;
@@ -230,7 +231,7 @@ export function ShareTargetProvider(props: {
       }
     })();
 
-    onCleanup(() => void unlisten.then((fn) => fn()));
+    onCleanup(() => unlistenQuietly(unlisten));
   });
 
   const value: ShareTargetContextValue = {

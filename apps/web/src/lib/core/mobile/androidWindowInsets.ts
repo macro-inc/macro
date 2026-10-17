@@ -115,7 +115,7 @@ export function useAndroidWindowInsets() {
     onCleanup(() => {
       disposed = true;
       window.removeEventListener('resize', onResize);
-      if (remove) void remove();
+      remove?.().catch(() => {});
     });
   });
 }

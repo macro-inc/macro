@@ -16,8 +16,10 @@ under `services/` throw and validate with zod; elsewhere in `apps/web` and
 
 - **FE-35** Branch on unions and literal sets with ts-pattern:
   `match(x).with(...).exhaustive()`. `.otherwise` only for open domains
-  (arbitrary strings, error codes). Never hand-write `switch` on a discriminant;
-  a `switch` over `event.key` in a keyboard handler is fine.
+  (arbitrary strings, error codes, and any payload from a Tauri plugin, worker,
+  or the network: the sender ships separately and `.exhaustive()` throws on a
+  shape it doesn't know). Never hand-write `switch` on a discriminant; a
+  `switch` over `event.key` in a keyboard handler is fine.
 - **FE-36** Fallible operations return neverthrow `Result` / `ResultAsync`. New
   feature code types errors as `{ kind:... }` unions matched with ts-pattern;
   transport code keeps `ResultError<Code>[]`. Guard with `if (r.isErr())
