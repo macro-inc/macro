@@ -1,6 +1,24 @@
-import { describe, expect, test, vi } from 'vitest';
-import { createHotkeyGroup } from './hotkeys';
+import { Telemetry } from '@macro-inc/observability';
+import { createRoot } from 'solid-js';
+import { afterEach, describe, expect, test, vi } from 'vitest';
+import { createHotkeyGroup, registerHotkey, useHotKeyRoot } from './hotkeys';
+import { hotkeyTokenMap, setActiveScope, setPressedKeys } from './state';
+import type { HotkeyToken } from './tokens';
 import type { RegisterHotkeyReturn } from './types';
+import { registerScope, removeScope } from './utils';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+
+const disposers: (() => void)[] = [];
+const scopes: string[] = [];
+
+afterEach(() => {
+  for (const dispose of disposers.splice(0)) dispose();
+  for (const scopeId of scopes.splice(0)) removeScope(scopeId);
+  setActiveScope('global');
+  setPressedKeys(new Set<string>());
+  vi.restoreAllMocks();
+});
 
 const makeRegistration = (): RegisterHotkeyReturn => {
   const reg: RegisterHotkeyReturn = {
@@ -90,5 +108,103 @@ describe('createHotkeyGroup', () => {
     group.dispose();
 
     expect(reg.dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Chrome autofill dispatches trusted keydown/keyup events that carry no `key`.
+describe('key events without a key', () => {
+  test('are ignored instead of throwing or re-running a held hotkey', () => {
+    const errors: unknown[] = [];
+    const onError = (event: ErrorEvent) => {
+      errors.push(event.error);
+      event.preventDefault();
+    };
+    window.addEventListener('error', onError);
+    const keyDownHandler = vi.fn(() => false);
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      useHotKeyRoot();
+      registerHotkey({
+        scopeId: 'global',
+        hotkey: 'j',
+        description: 'Down',
+        keyDownHandler,
+      });
+    });
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j' }));
+    document.dispatchEvent(new Event('keydown'));
+    document.dispatchEvent(new Event('keyup'));
+    window.removeEventListener('error', onError);
+
+    expect(errors).toEqual([]);
+    expect(keyDownHandler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('registering a token that is already registered', () => {
+  const token = 'hotkeys-test:token' as HotkeyToken;
+
+  function makeScope(scopeId: string) {
+    registerScope({ parentScopeId: 'global', scopeId, type: 'dom' });
+    scopes.push(scopeId);
+  }
+
+  function mount(scopeId: string, hotkey: 'j' | ['arrowdown', 'j']) {
+    return createRoot((dispose) => {
+      registerHotkey({
+        scopeId,
+        hotkeyToken: token,
+        hotkey,
+        description: 'Down',
+        keyDownHandler: () => true,
+      });
+      return dispose;
+    });
+  }
+
+  test('a remount in the same scope keeps one registration and does not warn', () => {
+    const warn = vi.spyOn(Telemetry, 'warn');
+    makeScope('hotkeys-test-remount');
+
+    mount('hotkeys-test-remount', 'j')();
+    disposers.push(mount('hotkeys-test-remount', 'j'));
+
+    expect(hotkeyTokenMap().get(token)).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  test('a remount that registers before the old instance cleans up replaces it', () => {
+    const warn = vi.spyOn(Telemetry, 'warn');
+    makeScope('hotkeys-test-overlap');
+
+    const disposeOld = mount('hotkeys-test-overlap', 'j');
+    disposers.push(mount('hotkeys-test-overlap', 'j'));
+    disposeOld();
+
+    expect(hotkeyTokenMap().get(token)).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  test('the same token with other keys in another scope does not warn', () => {
+    const warn = vi.spyOn(Telemetry, 'warn');
+    makeScope('hotkeys-test-list');
+    makeScope('hotkeys-test-detail');
+
+    disposers.push(mount('hotkeys-test-list', ['arrowdown', 'j']));
+    disposers.push(mount('hotkeys-test-detail', 'j'));
+
+    expect(hotkeyTokenMap().get(token)).toHaveLength(2);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  test('the same token with other keys in the same scope warns', () => {
+    const warn = vi.spyOn(Telemetry, 'warn');
+    makeScope('hotkeys-test-conflict');
+
+    disposers.push(mount('hotkeys-test-conflict', ['arrowdown', 'j']));
+    disposers.push(mount('hotkeys-test-conflict', 'j'));
+
+    expect(warn).toHaveBeenCalledOnce();
   });
 });

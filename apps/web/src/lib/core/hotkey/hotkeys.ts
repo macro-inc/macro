@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { Telemetry } from '@macro-inc/observability';
 
-import { getOwner, onCleanup, onMount, untrack } from 'solid-js';
+import { getOwner, onCleanup, onMount } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
   EVENT_MODIFIER_NAME_MAP,
@@ -18,7 +18,6 @@ import {
   findLastLiveActiveDOMScope,
   hotkeyScopeTree,
   hotkeysAwaitingKeyUp,
-  hotkeyTokenMap,
   pressedKeys,
   setActiveScope,
   setHotkeyTokenMap,
@@ -173,9 +172,11 @@ export function registerHotkey(
   // Convert single hotkey to array for consistent handling
   const hotkeys = hotkey && !Array.isArray(hotkey) ? [hotkey] : hotkey;
 
-  // Check for existing duplicate hotkeyToken for non-identical command
+  // Tokens are shared across scopes on purpose (a list and an open entity
+  // both bind entity.step.end), and getActiveCommandByToken resolves them by
+  // the active branch. Only a same-token command in this scope is a conflict.
   const existingCommand = hotkeyToken
-    ? untrack(() => hotkeyTokenMap().get(hotkeyToken)?.at(0))
+    ? scopeNode.commands.find((c) => c.hotkeyToken === hotkeyToken)
     : undefined;
   if (existingCommand && hotkeys && existingCommand.hotkeys) {
     // Yes, you should be able to register multiple hotkeys with the same token. But if you do this, they should be "the same" hotkey.
@@ -604,9 +605,12 @@ export function useHotKeyRoot() {
   // keydown without its keyup leaves a phantom key stuck in pressedKeys that
   // makes every subsequent plain-key hotkey resolve to e.g. 'arrowdown+j'
   // until a modifier keyup clears the set. Tests simulate keypresses with
-  // dispatched (untrusted) events, so they stay exempt.
+  // dispatched (untrusted) events, so they stay exempt. Chrome autofill
+  // dispatches trusted keydown/keyup events with no `key`; they are not key
+  // presses either.
   const shouldIgnoreKeyEvent = (e: KeyboardEvent) =>
-    !e.isTrusted && import.meta.env.MODE !== 'test';
+    typeof e.key !== 'string' ||
+    (!e.isTrusted && import.meta.env.MODE !== 'test');
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (shouldIgnoreKeyEvent(e)) return;
