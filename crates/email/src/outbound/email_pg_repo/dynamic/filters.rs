@@ -1093,6 +1093,8 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
             "GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at)"
         }
+        // Matches idx_email_threads_non_spam_link_ts_id, so a per-link
+        // equality scan can stop at LIMIT.
         _ => "COALESCE(t.latest_non_spam_message_ts, t.updated_at)",
     }
 }

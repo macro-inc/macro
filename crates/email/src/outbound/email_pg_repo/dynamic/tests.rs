@@ -603,13 +603,20 @@ fn test_build_query_multi_link_fans_out_per_link() {
 }
 
 #[test]
-fn test_build_query_single_link_keeps_any_scan() {
+fn test_build_query_single_link_fans_out_per_link() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(false));
     let sql = super::query::debug_build_query_sql(&view, &expr);
 
-    assert!(sql.contains("t.link_id = ANY("));
-    assert!(!sql.contains("FROM unnest("));
+    // One id inside ANY still cannot walk the sort index in order.
+    assert!(
+        sql.contains("FROM unnest(") && sql.contains("t.link_id = links.link_id"),
+        "single-link owned scan must fan out: {sql}"
+    );
+    assert!(
+        !sql.contains("t.link_id = ANY("),
+        "single-link owned scan must not use = ANY: {sql}"
+    );
 }
 
 #[test]
@@ -738,13 +745,15 @@ fn test_build_query_non_team_has_no_dedupe_machinery() {
     // Cursor stays inside the candidate select on the per-mailbox path
     // (contrast with the team path, which moves it past the dedupe wrapper).
     // The default UpdatedAt sort defers the uh join, so the cursor is a plain
-    // (ts, id) comparison rather than the viewed-history CASE.
+    // (ts, id) comparison rather than the viewed-history CASE. Owned scans
+    // also open a per-link LATERAL before that cursor; the message join is
+    // the later one, after the candidate LIMIT.
     let cursor_pos = sql
         .find(", t.id) < (")
         .expect("per-mailbox cursor comparison missing");
-    let lateral_pos = sql.find("CROSS JOIN LATERAL").expect("lateral missing");
+    let message_lateral = sql.find("-- Step 2:").expect("message lateral missing");
     assert!(
-        cursor_pos < lateral_pos,
+        cursor_pos < message_lateral,
         "cursor must sit inside the candidate select: {sql}"
     );
 }
