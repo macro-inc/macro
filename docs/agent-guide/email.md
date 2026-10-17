@@ -264,8 +264,11 @@ follows the next row, and the open row keeps an accent marker while the pointer
 highlights others. Enter or a click opens the row and moves the keyboard into
 the reader, whose keys live in a child hotkey scope so they never replace the
 list's; Escape in the reader, once there is nothing to unwind, hands the
-keyboard back to the list without closing the thread. Narrow rows stack sender,
-subject and snippet. Without room for both (narrow split, collapsed window) the
+keyboard back to the list without closing the thread. Narrow email rows, here
+and on phones, stack senders and date, subject, and one preview line beside a
+slim unread-dot gutter (no per-type icon); unread rows are bold, hovering swaps
+the date for the row actions, and hovering the gutter shows the select checkbox.
+Without room for both (narrow split, collapsed window) the
 pane folds away and a thread replaces the list as usual. The divider can be
 dragged; the list width is remembered. Verify that list `e` still works after
 switching threads in the pane (the reader's `e` must not replace it).

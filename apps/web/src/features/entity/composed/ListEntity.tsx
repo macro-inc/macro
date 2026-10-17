@@ -48,6 +48,7 @@ import {
 } from '../utils/notification';
 import { useIsShared } from '../utils/shared';
 import { NarrowCondensedLayout } from './list-entity/narrow-condensed-layout';
+import { NarrowEmailLayout } from './list-entity/narrow-email-layout';
 import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
 import { NarrowLayout } from './list-entity/narrow-layout';
 import { NarrowSingleLineLayout } from './list-entity/narrow-single-line-layout';
@@ -195,8 +196,6 @@ export function ListEntity(props: ListEntityProps) {
   const usesCondensedNarrowLayout = () => !isWide() && isCondensedVariant();
   const isSingleLineVariant = () =>
     listLayout?.narrowLayout() === 'single-line';
-  const stacksNarrowEmail = () =>
-    isTouchDevice() || listLayout?.narrowLayout() === 'inbox';
 
   const mobileStacks = createMemo(() => {
     if (!isTouchDevice()) return [];
@@ -274,6 +273,24 @@ export function ListEntity(props: ListEntityProps) {
             <NarrowSingleLineLayout {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
+        {/* Email lists stack their rows compactly; mixed lists keep the
+            per-type icon that tells their rows apart. */}
+        <Match
+          when={
+            listLayout?.narrowLayout() === 'inbox' &&
+            isEmailEntity(props.entity) &&
+            props.entity
+          }
+        >
+          {(entity) => (
+            <MaybeEntityRow
+              entityId={props.entity.id}
+              config={props.entityRowConfig}
+            >
+              <NarrowEmailLayout {...layoutProps()} entity={entity()} />
+            </MaybeEntityRow>
+          )}
+        </Match>
         <Match when={isTouchDevice() && mobileStacks().length > 0}>
           <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
@@ -284,10 +301,10 @@ export function ListEntity(props: ListEntityProps) {
         </Match>
         <Match
           when={
-            (isTouchDevice() &&
-              ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
-                props.showUnrollNotifications)) ||
-            (stacksNarrowEmail() && isEmailEntity(props.entity))
+            isTouchDevice() &&
+            ((isChannelEntity(props.entity) && !isCondensedVariant()) ||
+              props.showUnrollNotifications ||
+              isEmailEntity(props.entity))
           }
         >
           <MaybeEntityRow
