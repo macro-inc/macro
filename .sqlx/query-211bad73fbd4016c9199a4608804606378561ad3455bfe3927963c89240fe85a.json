@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Each sort reads the companies this user has viewed from their history, and\n-- the rest of the team from an index in the sort's order, stopping after $3\n-- rows either way. Branch conditions on parameters alone are checked once per\n-- execution, so only the requested sort's branches run, also under a cached\n-- generic plan. A single ORDER BY CASE $4 reads and sorts the whole team.\n--\n-- Viewed companies get their own branch because a generic plan can look up a\n-- company's view time by scanning the user's whole history for each company.\n-- Only the explicit-ids branch, which reads few companies, looks views up per\n-- company.\nWITH limited_companies AS (\n    SELECT *\n    FROM (\n        -- Explicit ids are few, so this branch has no index order or limit.\n        (\n            SELECT\n                c.id, c.team_id, c.custom_name, c.email_sync, c.hidden,\n                c.first_interaction, c.last_interaction,\n                CASE $4\n                    WHEN 'created_at' THEN c.first_interaction\n                    WHEN 'viewed_at' THEN uh.\"updatedAt\"\n                    WHEN 'viewed_updated'\n                        THEN COALESCE(uh.\"updatedAt\", c.last_interaction)\n                    ELSE c.last_interaction\n                END AS sort_ts,\n                uh.\"updatedAt\"::timestamptz AS viewed_at\n            FROM crm_companies c\n            LEFT JOIN \"UserHistory\" uh\n                ON uh.\"itemId\" = c.id::text\n               AND uh.\"itemType\" = 'crm_company'\n               AND uh.\"userId\" = $8\n            WHERE cardinality($2::uuid[]) > 0\n              AND c.id = ANY($2::uuid[])\n              AND c.team_id = $1\n              AND c.hidden = COALESCE($5::bool, FALSE)\n        )\n        UNION ALL\n        -- Companies the user has viewed, under every sort. Bounded by the size\n        -- of the user's company history rather than the team.\n        (\n            SELECT *\n            FROM (\n                SELECT\n                    c.id, c.team_id, c.custom_name, c.email_sync, c.hidden,\n                    c.first_interaction, c.last_interaction,\n                    CASE $4\n                        WHEN 'created_at' THEN c.first_interaction\n                        WHEN 'updated_at' THEN c.last_interaction\n                        ELSE uh.\"updatedAt\"::timestamptz\n                    END AS sort_ts,\n                    uh.\"updatedAt\"::timestamptz AS viewed_at\n                FROM \"UserHistory\" uh\n                JOIN crm_companies c ON c.id::text = uh.\"itemId\"\n                WHERE cardinality($2::uuid[]) = 0\n                  AND uh.\"userId\" = $8\n                  AND uh.\"itemType\" = 'crm_company'\n                  AND c.team_id = $1\n                  AND c.hidden = COALESCE($5::bool, FALSE)\n            ) viewed\n            WHERE $6::timestamptz IS NULL OR (sort_ts, id::text) < ($6, $7)\n            ORDER BY sort_ts DESC NULLS LAST, id DESC\n            LIMIT $3\n        )\n        UNION ALL\n        -- The remaining branches read unviewed companies. NOT IN rather than\n        -- NOT EXISTS: \"itemId\" is NOT NULL, so they are equivalent, and NOT IN\n        -- is planned as one hashed lookup of the user's history instead of a\n        -- scan of it per company.\n        --\n        -- The seek bound repeats the keyset's leading column so the index\n        -- scan starts at the cursor. Both interaction columns are NOT NULL,\n        -- so it drops no rows; the row comparison stays exact.\n        --\n        -- Unviewed companies sort by last_interaction under viewed_updated too.\n        (\n            SELECT\n                c.id, c.team_id, c.custom_name, c.email_sync, c.hidden,\n                c.first_interaction, c.last_interaction,\n                c.last_interaction,\n                NULL::timestamptz\n            FROM crm_companies c\n            WHERE cardinality($2::uuid[]) = 0\n              AND $4 IN ('updated_at', 'viewed_updated')\n              AND c.team_id = $1\n              AND c.hidden = COALESCE($5::bool, FALSE)\n              AND c.last_interaction <= COALESCE($6::timestamptz, 'infinity')\n              AND ($6::timestamptz IS NULL OR (c.last_interaction, c.id::text) < ($6, $7))\n              AND c.id::text NOT IN (\n                  SELECT uh.\"itemId\" FROM \"UserHistory\" uh\n                  WHERE uh.\"userId\" = $8\n                    AND uh.\"itemType\" = 'crm_company'\n              )\n            ORDER BY c.last_interaction DESC NULLS LAST, c.id DESC\n            LIMIT $3\n        )\n        UNION ALL\n        (\n            SELECT\n                c.id, c.team_id, c.custom_name, c.email_sync, c.hidden,\n                c.first_interaction, c.last_interaction,\n                c.first_interaction,\n                NULL::timestamptz\n            FROM crm_companies c\n            WHERE cardinality($2::uuid[]) = 0\n              AND $4 = 'created_at'\n              AND c.team_id = $1\n              AND c.hidden = COALESCE($5::bool, FALSE)\n              AND c.first_interaction <= COALESCE($6::timestamptz, 'infinity')\n              AND ($6::timestamptz IS NULL OR (c.first_interaction, c.id::text) < ($6, $7))\n              AND c.id::text NOT IN (\n                  SELECT uh.\"itemId\" FROM \"UserHistory\" uh\n                  WHERE uh.\"userId\" = $8\n                    AND uh.\"itemType\" = 'crm_company'\n              )\n            ORDER BY c.first_interaction DESC NULLS LAST, c.id DESC\n            LIMIT $3\n        )\n        UNION ALL\n        -- Unviewed companies sort as NULL under viewed_at. NULL never passes a\n        -- cursor, so they only appear on a first page.\n        (\n            SELECT\n                c.id, c.team_id, c.custom_name, c.email_sync, c.hidden,\n                c.first_interaction, c.last_interaction,\n                NULL::timestamptz,\n                NULL::timestamptz\n            FROM crm_companies c\n            WHERE cardinality($2::uuid[]) = 0\n              AND $4 = 'viewed_at'\n              AND $6::timestamptz IS NULL\n              AND c.team_id = $1\n              AND c.hidden = COALESCE($5::bool, FALSE)\n              AND c.id::text NOT IN (\n                  SELECT uh.\"itemId\" FROM \"UserHistory\" uh\n                  WHERE uh.\"userId\" = $8\n                    AND uh.\"itemType\" = 'crm_company'\n              )\n            ORDER BY c.id DESC\n            LIMIT $3\n        )\n    ) candidates\n    WHERE EXISTS (\n        SELECT 1 FROM team_crm_settings tcs\n        WHERE tcs.team_id = $1 AND tcs.crm_enabled\n    )\n      -- Keyset seek (NULL = first page): keep only rows that sort strictly\n      -- after the cursor.\n      AND ($6::timestamptz IS NULL OR (sort_ts, id::text) < ($6, $7))\n    ORDER BY sort_ts DESC NULLS LAST, id DESC\n    LIMIT $3\n)\nSELECT\n    lc.id                AS \"company_id!\",\n    lc.team_id           AS \"company_team_id!\",\n    lc.email_sync        AS \"company_email_sync!\",\n    lc.hidden            AS \"company_hidden!\",\n    lc.first_interaction AS \"company_created_at!\",\n    lc.last_interaction  AS \"company_updated_at!\",\n    d.id                 AS \"domain_id?\",\n    d.domain             AS \"domain?\",\n    d.created_at         AS \"domain_created_at?\",\n    COALESCE(lc.custom_name, dd.name) AS \"display_name?\",\n    dd.description       AS \"dir_description?\",\n    lc.viewed_at         AS \"viewed_at?\"\nFROM limited_companies lc\nLEFT JOIN crm_domains d ON d.company_id = lc.id\nLEFT JOIN crm_domain_directory dd\n    ON LOWER(dd.domain) = LOWER(d.domain)\nORDER BY\n    lc.sort_ts DESC NULLS LAST,\n    lc.id DESC,\n    d.created_at ASC NULLS LAST\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "company_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "company_email_sync!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "company_hidden!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "company_created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "company_updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "domain_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "domain?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "domain_created_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "display_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "dir_description?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int8",
+        "Text",
+        "Bool",
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      false,
+      false,
+      false,
+      null,
+      true,
+      null
+    ]
+  },
+  "hash": "211bad73fbd4016c9199a4608804606378561ad3455bfe3927963c89240fe85a"
+}
