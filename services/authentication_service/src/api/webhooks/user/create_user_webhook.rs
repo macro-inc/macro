@@ -41,12 +41,13 @@ use teams::domain::team_repo::TeamService;
 use tracing::Instrument;
 
 /// Macro support team members added to every new user's support channel.
-const MACRO_SUPPORT_EMAILS: [&str; 5] = [
+const MACRO_SUPPORT_EMAILS: [&str; 6] = [
     "jacob@macro.com",
     "julia@macro.com",
     "teo@macro.com",
     "valentina@macro.com",
     "chaitanya@macro.com",
+    "zhamilya@macro.com",
 ];
 
 fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
