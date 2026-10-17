@@ -33,8 +33,8 @@ pub use label::{
     UpdateThreadLabelsResult,
 };
 pub use link::{
-    EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, UserEmailLink,
-    UserEmailLinkSettings, UserProvider,
+    EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, ResolvedSendingInbox,
+    SendingInboxRequest, UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 pub use mail_projection::{
     EmailDraftAggregate, EmailDraftEntry, EmailPreview, EmailThreadDraftState,

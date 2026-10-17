@@ -4,10 +4,10 @@ use crate::domain::models::{
     EmailThreadMailProjection, EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview,
     GetEmailsRequest, Label, Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow,
     MessageTimestamps, ParsedAddresses, ParsedMessage, ParsedThread, PreviewCursorQuery,
-    RecipientType, ResolvedDraftInput, SavedUserDraft, SenderPolicy, SettledDraftIds,
-    SimpleMessage, SimpleMessageInfo, SourcedAttachment, Thread, ThreadRow,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
-    UserProvider,
+    RecipientType, ResolvedDraftInput, ResolvedSendingInbox, SavedUserDraft, SenderPolicy,
+    SendingInboxRequest, SettledDraftIds, SimpleMessage, SimpleMessageInfo, SourcedAttachment,
+    Thread, ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts,
+    UserEmailLink, UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -125,11 +125,6 @@ pub trait EmailRepo: Send + Sync + 'static {
         fusionauth_user_id: &str,
         macro_id: MacroUserIdStr<'_>,
         provider: UserProvider,
-    ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
-
-    fn link_by_macro_id(
-        &self,
-        macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
     /// Resolve the inbox owning a thread, only when that inbox belongs to the
@@ -631,18 +626,25 @@ pub trait EmailService: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 
-    /// Fetch the email link for a user by their macro ID only.
-    fn get_link_by_macro_id(
-        &self,
-        macro_id: MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
-
     /// Fetch every inbox the caller can read — their own email_links rows plus
     /// any rows reachable via a `macro_user_links` edge (narrow-graph multi-inbox).
     fn get_inboxes_for_macro_id(
         &self,
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
+
+    /// Resolve which inbox a composed email is sent from, for a transport
+    /// that carries the inbox by value instead of out of band: the address
+    /// the caller named, else the inbox that received the message being
+    /// replied to, else the caller's default inbox. Returns the whole
+    /// accessible set alongside it, which [`send_message`] needs anyway.
+    ///
+    /// [`send_message`]: EmailService::send_message
+    fn resolve_sending_inbox(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> impl Future<Output = Result<ResolvedSendingInbox, EmailErr>> + Send;
 
     /// Resolve the inbox owning a thread, scoped to the caller's own and
     /// delegated inboxes. Lets thread-targeted mutations derive the inbox from
@@ -1129,17 +1131,18 @@ impl EmailService for NoOpEmailService {
         Err(no_op_email_err())
     }
 
-    async fn get_link_by_macro_id(
-        &self,
-        _macro_id: MacroUserIdStr<'_>,
-    ) -> Result<Option<Link>, EmailErr> {
-        Err(no_op_email_err())
-    }
-
     async fn get_inboxes_for_macro_id(
         &self,
         _macro_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<Link>, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn resolve_sending_inbox(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _request: SendingInboxRequest<'_>,
+    ) -> Result<ResolvedSendingInbox, EmailErr> {
         Err(no_op_email_err())
     }
 

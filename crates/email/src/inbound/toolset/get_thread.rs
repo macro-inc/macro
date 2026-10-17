@@ -11,6 +11,7 @@ use entity_access::domain::{
     models::{EntityType, ViewAccessLevel},
     ports::EntityAccessService,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -79,6 +80,11 @@ impl From<ParsedMessage> for ToolMessage {
 pub struct GetThreadResponse {
     /// The thread's unique identifier.
     pub thread_id: Uuid,
+    /// The address of the inbox this thread belongs to — the account that
+    /// received or sent it. Pass it as `SendEmail`'s `from` to answer the
+    /// thread as the sender its participants expect. Absent only when the
+    /// thread's inbox is no longer among the caller's.
+    pub inbox: Option<String>,
     /// Whether the thread has been read.
     pub is_read: bool,
     /// The labels applied to the thread — the distinct set of label names across
@@ -97,7 +103,7 @@ const DEFAULT_LIMIT: i64 = 10;
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "GetThread",
-    description = "Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has."
+    description = "Retrieve an email thread and its messages. Returns the thread metadata, the inbox the thread belongs to, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation, to see which labels a thread or message has, or to find out which of the user's inboxes received it before replying."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct GetThread {
@@ -169,11 +175,24 @@ where
         labels.sort();
         labels.dedup();
 
+        let inbox = service_context
+            .service
+            .get_inboxes_for_macro_id(MacroUserIdStr((*request_context.user_id).clone()))
+            .await
+            .map_err(|e| ToolCallError {
+                description: format!("Failed to resolve the thread's inbox: {e}"),
+                internal_error: e.into(),
+            })?
+            .into_iter()
+            .find(|link| link.id == thread.row.link_id)
+            .map(|link| link.email_address.0.as_ref().to_owned());
+
         let messages: Vec<ToolMessage> =
             thread.messages.into_iter().map(ToolMessage::from).collect();
 
         Ok(GetThreadResponse {
             thread_id: thread.row.db_id,
+            inbox,
             is_read: thread.row.is_read,
             labels,
             messages,

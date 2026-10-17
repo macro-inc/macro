@@ -4,6 +4,7 @@ mod followup;
 mod previews;
 mod send;
 mod senders;
+mod sending_inbox;
 pub(crate) mod signature;
 mod thread;
 mod thread_labels;
@@ -20,8 +21,8 @@ use crate::domain::{
     models::{
         CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailThreadMailProjection,
         EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, Link, LinkLabel,
-        ParsedMessage, ParsedThread, SenderPolicy, Thread, UpdateThreadLabelsResult,
-        UpsertEmailFilterInput,
+        ParsedMessage, ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest,
+        Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
     },
     ports::{
         EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService,
@@ -235,16 +236,6 @@ where
             .await
     }
 
-    async fn get_link_by_macro_id(
-        &self,
-        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<crate::domain::models::Link>, EmailErr> {
-        self.email_repo
-            .link_by_macro_id(macro_id)
-            .await
-            .map_err(|e| EmailErr::RepoErr(e.into()))
-    }
-
     async fn get_inboxes_for_macro_id(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -253,6 +244,14 @@ where
             .inboxes_for_macro_id(macro_id)
             .await
             .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
+    async fn resolve_sending_inbox(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> Result<ResolvedSendingInbox, EmailErr> {
+        self.resolve_sending_inbox_impl(macro_id, request).await
     }
 
     async fn get_owned_link_for_thread(

@@ -284,10 +284,11 @@ impl EmailService for MockEmail {
         }))
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -759,10 +760,11 @@ impl EmailService for MockEmailLinkResult {
         (self.get_link_result)()
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 

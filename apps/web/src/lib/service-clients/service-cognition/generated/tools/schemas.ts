@@ -8744,6 +8744,7 @@ export const GetThread = z.object({
 
 export const GetThreadResponse = z.object({
   threadId: z.string().uuid(),
+  inbox: z.union([z.string(), z.null()]).optional(),
   isRead: z.boolean(),
   labels: z.array(z.string()),
   messages: z.array(
@@ -14203,6 +14204,7 @@ export const SendChannelMessageResponse = z.object({
 
 export const SendConfirmedEmail = z.object({
   subject: z.string(),
+  from: z.union([z.string(), z.null()]).optional(),
   body: z.string(),
   to: z.array(
     z.object({
@@ -14266,6 +14268,7 @@ export const SendEmailResponse = z.any().superRefine((x, ctx) => {
 
 export const SendEmail = z.object({
   subject: z.string(),
+  from: z.union([z.string(), z.null()]).optional(),
   body: z.string(),
   to: z.array(
     z.object({

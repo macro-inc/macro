@@ -8,8 +8,9 @@ use email::domain::models::{
     EmailSyncStatus, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
     EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility,
     LabelType, Link, LinkLabel, Message, MessageAttachment, MessageListVisibility, ParsedMessage,
-    ParsedThread, SenderPolicy, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
-    UserEmailLink, UserEmailLinkSettings, UserProvider,
+    ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest, Thread,
+    UpdateThreadLabelsResult, UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings,
+    UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -495,10 +496,11 @@ impl EmailService for CountingEmailService {
         Err(test_email_err())
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: MacroUserIdStr<'_>,
-    ) -> Result<Option<Link>, EmailErr> {
+        _request: SendingInboxRequest<'_>,
+    ) -> Result<ResolvedSendingInbox, EmailErr> {
         Err(test_email_err())
     }
 

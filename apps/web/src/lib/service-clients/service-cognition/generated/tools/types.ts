@@ -9977,7 +9977,7 @@ export interface AvailabilityInterval {
   end: string;
 }
 /**
- * Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has.
+ * Retrieve an email thread and its messages. Returns the thread metadata, the inbox the thread belongs to, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation, to see which labels a thread or message has, or to find out which of the user's inboxes received it before replying.
  */
 export interface GetThread {
   /**
@@ -9997,6 +9997,13 @@ export interface GetThreadResponse {
    * The thread's unique identifier.
    */
   threadId: string;
+  /**
+   * The address of the inbox this thread belongs to — the account that
+   * received or sent it. Pass it as `SendEmail`'s `from` to answer the
+   * thread as the sender its participants expect. Absent only when the
+   * thread's inbox is no longer among the caller's.
+   */
+  inbox?: string | null;
   /**
    * Whether the thread has been read.
    */
@@ -13803,6 +13810,16 @@ export interface SendConfirmedEmail {
    */
   subject: string;
   /**
+   * The address of the inbox to send from, when the user has more than one
+   * connected and this email belongs to a particular one. Use the exact
+   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
+   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
+   * you know which inbox is right: a reply then goes out from the inbox
+   * that received the message it answers, and a new email from the user's
+   * primary inbox. The user can change it in the composer either way.
+   */
+  from?: string | null;
+  /**
    * The body of the email, written as Markdown. A host with a composer
    * (chat) replaces this with the base64url-encoded HTML the composer
    * exported before the tool runs; a host without one (an agent session)
@@ -13869,13 +13886,23 @@ export interface EmailAttachment {
   documentId: string;
 }
 /**
- * Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. To attach files, list the Macro documents in attachments — uploaded files such as PDFs, images, spreadsheets, or Word documents the user can view; the user can add or remove attachments in the composer before sending. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
+ * Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id; the reply then goes out from the inbox that received it unless `from` says otherwise. To attach files, list the Macro documents in attachments — uploaded files such as PDFs, images, spreadsheets, or Word documents the user can view; the user can add or remove attachments in the composer before sending. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body.
  */
 export interface SendEmail {
   /**
    * The subject line of the email.
    */
   subject: string;
+  /**
+   * The address of the inbox to send from, when the user has more than one
+   * connected and this email belongs to a particular one. Use the exact
+   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
+   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
+   * you know which inbox is right: a reply then goes out from the inbox
+   * that received the message it answers, and a new email from the user's
+   * primary inbox. The user can change it in the composer either way.
+   */
+  from?: string | null;
   /**
    * The body of the email, written as Markdown. A host with a composer
    * (chat) replaces this with the base64url-encoded HTML the composer

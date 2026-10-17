@@ -12,7 +12,7 @@ mod update_thread_labels;
 mod test;
 
 use crate::domain::{
-    models::Link,
+    models::{EmailErr, Link, ResolvedSendingInbox, SendingInboxRequest},
     ports::{
         EmailAttachmentSendService, EmailService, GmailTokenProvider, NoOpEmailAttachmentSender,
     },
@@ -150,20 +150,28 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
         self
     }
 
-    /// Resolve the user's email link from their macro ID.
+    /// Resolve the inbox a composed email goes out from, together with every
+    /// inbox the caller can reach.
     ///
-    /// This is shared across all email tools that need an authenticated link.
-    pub async fn resolve_link(&self, macro_id: MacroUserIdStr<'_>) -> Result<Link, ToolCallError> {
+    /// The choice is the domain's; this only turns its refusals into
+    /// something the model can act on - the error already names the
+    /// connected addresses, which is exactly the correction it needs.
+    pub async fn resolve_sending_inbox(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        request: SendingInboxRequest<'_>,
+    ) -> Result<ResolvedSendingInbox, ToolCallError> {
         self.service
-            .get_link_by_macro_id(macro_id)
+            .resolve_sending_inbox(macro_id, request)
             .await
             .map_err(|e| ToolCallError {
-                description: format!("Failed to resolve email link: {e}"),
+                description: match e {
+                    EmailErr::InboxNotFound => {
+                        "No email account is linked for this user.".to_owned()
+                    }
+                    ref other => other.to_string(),
+                },
                 internal_error: e.into(),
-            })?
-            .ok_or_else(|| ToolCallError {
-                description: "No email account linked for this user.".to_string(),
-                internal_error: anyhow::anyhow!("No email link found for user"),
             })
     }
 

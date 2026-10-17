@@ -144,6 +144,13 @@ export function SentEmailResponse(props: {
                 Email sent to{' '}
                 <span class="text-ink">{getRecipientsLabel(props.args)}</span>
               </span>
+              <Show when={props.args.from?.trim()}>
+                {(from) => (
+                  <span>
+                    from <span class="text-ink">{from()}</span>
+                  </span>
+                )}
+              </Show>
               <Show when={getAttachmentsLabel(props.args)}>
                 {(label) => <span>with {label()}</span>}
               </Show>

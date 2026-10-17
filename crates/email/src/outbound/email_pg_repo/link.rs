@@ -110,31 +110,6 @@ pub(super) async fn owned_link_for_thread(
 }
 
 #[tracing::instrument(err, skip(pool))]
-pub(super) async fn link_by_macro_id(
-    pool: &PgPool,
-    macro_id: MacroUserIdStr<'_>,
-) -> Result<Option<Link>, sqlx::Error> {
-    let db_link: Option<DbLink> = sqlx::query_as!(
-        DbLink,
-        r#"
-        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
-               is_sync_active, is_primary, created_at, updated_at
-        FROM email_links
-        WHERE macro_id = $1
-        LIMIT 1
-        "#,
-        macro_id.as_ref()
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    db_link
-        .map(|v: DbLink| v.try_into_model())
-        .transpose()
-        .map_err(|e| sqlx::Error::Decode(Box::new(e)))
-}
-
-#[tracing::instrument(err, skip(pool))]
 pub(super) async fn inboxes_for_macro_id(
     pool: &PgPool,
     macro_id: MacroUserIdStr<'_>,

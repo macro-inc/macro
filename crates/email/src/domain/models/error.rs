@@ -30,6 +30,19 @@ pub enum EmailErr {
     /// accessible to the caller, or the caller has no primary inbox.
     #[error("Email inbox not found")]
     InboxNotFound,
+    /// The caller asked to send from an address that is none of the inboxes
+    /// they have connected or been delegated. The accessible addresses are
+    /// carried along so the caller can be told what it could have been.
+    #[error(
+        "No connected inbox matches \"{requested}\". Connected inboxes: {}.",
+        available.join(", ")
+    )]
+    UnknownSendingInbox {
+        /// The address the caller asked to send from.
+        requested: String,
+        /// The addresses of every inbox the caller can send from.
+        available: Vec<String>,
+    },
     /// The referenced message has already been sent and cannot be modified.
     #[error("Message with id {0} has already been sent")]
     MessageAlreadySent(Uuid),
