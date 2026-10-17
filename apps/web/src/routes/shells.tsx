@@ -67,6 +67,20 @@ export function withFormRespondShell(Page: () => JSX.Element) {
   };
 }
 
+/**
+ * A project's client portal: read-only view for clients without accounts.
+ * Always shows the focused shell (no app chrome) regardless of auth state.
+ */
+export function withProjectPortalShell(Page: () => JSX.Element) {
+  return function ProjectPortalShell(): JSX.Element {
+    return (
+      <FocusedPage>
+        <Page />
+      </FocusedPage>
+    );
+  };
+}
+
 /** A call: full screen, without app chrome. */
 export function withMeetingShell(Page: () => JSX.Element) {
   return function MeetingShell(): JSX.Element {

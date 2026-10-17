@@ -72,6 +72,13 @@ export const formRespondRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** A project's client portal, outside the split layout so public links skip login. */
+export const projectPortalRoute = defineRoute({
+  id: 'project-portal',
+  path: 'project/:projectId/portal',
+  externalSearch: '*',
+});
+
 export const bookingReceiptRoute = defineRoute({
   id: 'booking-receipt',
   path: 'booking/:id',
