@@ -47,6 +47,14 @@ function crmTabFromQuery(query: URLSearchParams): string | undefined {
   return undefined;
 }
 
+/** The pipeline a shared `crmView` link shows, if any. */
+export function crmViewPipelineId(query: URLSearchParams): string | undefined {
+  const view = query.get(CRM_VIEW_URL_PARAM);
+  return pipelineIdOfTab(
+    view ? decodeCrmViewParam(view)?.activeTab : undefined
+  );
+}
+
 /** A shared Customers link that shows a pipeline references the pipeline. */
 export function crmViewReference(
   query: URLSearchParams

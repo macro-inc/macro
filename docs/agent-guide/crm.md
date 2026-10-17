@@ -182,7 +182,8 @@ The **People** list changes or removes their access. A teammate who receives a p
 pipeline sees it in their Customers sidebar. Only the owner sees **Team access**:
 choose **Edit** to share with the team or **None** to make the pipeline private.
 Viewers see only **Copy Link**. **Copy Link** copies a CRM link that opens this pipeline for
-anyone who has access; pasted into an editor it becomes a pipeline mention (see
+anyone who has access, including when followed inside a split already showing Customers;
+pasted into an editor it becomes a pipeline mention (see
 [CRM pipeline mentions](documents.md#crm-pipeline-mentions)). On mobile, team
 access is in the **Team** tab.
 
