@@ -140,15 +140,23 @@ export function createShareForm<Recipient extends PickedRecipient>(
     shareNotices(options.items(), level()?.value ?? 'view')
   );
 
-  async function grantAll(record: TargetRecord, steps: readonly GrantStep[]) {
+  async function grantAll(
+    record: TargetRecord,
+    steps: readonly GrantStep[],
+    span: Span
+  ) {
     const results = await Promise.all(
       steps.map(async (step) => ({
         ...step,
-        result: await context.changeChannelAccess(step.item, {
-          t: 'set',
-          channelId: record.channelId,
-          level: step.level,
-        }),
+        // The active span does not survive an `await`, so each grant
+        // re-enters the target's span for its request to join the trace.
+        result: await span.run(() =>
+          context.changeChannelAccess(step.item, {
+            t: 'set',
+            channelId: record.channelId,
+            level: step.level,
+          })
+        ),
       }))
     );
     return {
@@ -180,12 +188,12 @@ export function createShareForm<Recipient extends PickedRecipient>(
     span.setAttr('channel.id', record.channelId);
     let open: (() => void) | undefined;
     if (work.pendingGrants.length > 0) {
-      record = (await grantAll(record, work.pendingGrants)).record;
+      record = (await grantAll(record, work.pendingGrants, span)).record;
     }
     let sentCount = 0;
     for (const message of work.unsentMessages) {
       if (message.grantFirst.length > 0) {
-        const first = await grantAll(record, message.grantFirst);
+        const first = await grantAll(record, message.grantFirst, span);
         record = first.record;
         if (!first.allGranted) break;
       }
@@ -202,7 +210,7 @@ export function createShareForm<Recipient extends PickedRecipient>(
       sentCount++;
       record = withDelivery(record, message.id);
       open ??= sent.open;
-      record = (await grantAll(record, message.grantAfter)).record;
+      record = (await grantAll(record, message.grantAfter, span)).record;
     }
     span.setAttr('share.sent', sentCount);
     span.setAttr('share.grant_errors', record.grantErrors.size);

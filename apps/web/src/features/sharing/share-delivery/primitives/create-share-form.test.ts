@@ -34,6 +34,7 @@ vi.mock('@macro-inc/observability', () => {
       node.children.push(child);
       return operation(recorder(child));
     },
+    run: <T>(operation: () => T) => operation(),
     setAttr: (name: string, value: unknown) => {
       node.attributes[name] = value;
     },
