@@ -45,6 +45,5 @@ function sameUsers(previous: string[] | undefined, next: string[]) {
 }
 export const useUserIndicators = (entityId: Accessor<string>) => {
   if (!ENABLE_LIVE_INDICATORS) return () => [];
-  const indicators = () => unwrap(indicatorStore[entityId()]);
-  return indicators;
+  return () => indicatorStore[entityId()];
 };
