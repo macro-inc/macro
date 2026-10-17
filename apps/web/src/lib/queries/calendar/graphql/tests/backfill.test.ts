@@ -86,6 +86,50 @@ describe('runCalendarBackfill', () => {
     expect(host.calendarCommit).toHaveBeenCalledTimes(1);
   });
 
+  it('fails a page that never settles so its owner can retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const now = new Date(2026, 9, 7, 15);
+      const [month] = calendarBackfillMonths(now, 0);
+      const host = {
+        calendarRange: vi.fn().mockResolvedValue({
+          ...covered,
+          gaps: [
+            {
+              kind: 'timed',
+              start: Date.parse(month?.start ?? ''),
+              end: Date.parse(month?.end ?? ''),
+            },
+          ],
+        }),
+        calendarCommit: vi.fn(),
+      };
+      let pageSignal: AbortSignal | undefined;
+      const fetchPage = vi.fn(
+        (_input: CalendarRangeInput, signal?: AbortSignal) => {
+          pageSignal = signal;
+          return new Promise<never>(() => {});
+        }
+      );
+
+      const running = runCalendarBackfill(host, {
+        signal: new AbortController().signal,
+        now,
+        fetchPage,
+        delayMs: 0,
+      });
+      const failed = expect(running).rejects.toThrow(
+        'Calendar backfill page timed out'
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      await failed;
+      expect(pageSignal?.aborted).toBe(true);
+      expect(host.calendarCommit).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('stops when aborted or when the host cannot serve ranges', async () => {
     const abort = new AbortController();
     abort.abort();

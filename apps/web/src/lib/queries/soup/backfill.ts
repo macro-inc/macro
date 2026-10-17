@@ -4,6 +4,7 @@ import {
   enableGraphqlSoup,
 } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
+import { runWithBackgroundRetry } from '@core/util/backgroundRetry';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -34,8 +35,9 @@ const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
-const BACKFILL_RETRY_COUNT = 5;
-const BACKFILL_RETRY_SCHEDULE = Schedule.exponential('1 second');
+// Backfill pages are exempt from the foreground read deadline. A page that
+// never settles must still fail its lane so the backfill owner retries it.
+const PAGE_TIMEOUT = '60 seconds';
 const CACHE_HOST_RETRY_COUNT = 6;
 const CACHE_HOST_RETRY_SCHEDULE = Schedule.exponential('100 millis');
 const BACKFILL_PROGRESS_PAGE_INTERVAL = 10;
@@ -525,9 +527,10 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
       : { initial: passInput };
     // Hydration returns only the cursor projection. Cache-only entity
     // payloads are persisted without being materialized back into this page.
+    // Timing out interrupts the fetch, which aborts its signal.
     const page = yield* Effect.tryPromise((signal) =>
       fetchPage(input, { signal })
-    );
+    ).pipe(Effect.timeout(PAGE_TIMEOUT));
     const afterFetchGeneration = yield* Effect.tryPromise(() =>
       host.currentStorageGeneration()
     );
@@ -585,12 +588,17 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   }
 });
 
-/** Runs each backfill lane to completion before starting the next lane. */
+/**
+ * Runs each backfill lane to completion before starting the next lane. A lane
+ * that fails does not block later lanes. Failed lanes are returned so a single
+ * owner retries them, rather than every lane retrying through an outage.
+ */
 export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   userId: string,
   host: SoupBackfillCacheHost,
   lanes: readonly SoupBackfillParams[] = DEFAULT_SOUP_BACKFILL_LANES
 ) {
+  const failedLanes: SoupBackfillParams[] = [];
   yield* Effect.forEach(
     lanes,
     (lane) =>
@@ -624,13 +632,10 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
             });
           }
         }).pipe(
-          Effect.retry({
-            times: BACKFILL_RETRY_COUNT,
-            schedule: BACKFILL_RETRY_SCHEDULE,
-          }),
           Effect.matchEffect({
             onFailure: (error) =>
               Effect.sync(() => {
+                failedLanes.push(lane);
                 const checkpoint = loadSoupBackfillCheckpoint(
                   userId,
                   lane.checkpointId
@@ -642,10 +647,10 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
                   state: 'failed',
                   totalPagesFetched: checkpoint.pagesFetched,
                 });
-                console.warn(
-                  '[graphql-soup-backfill] lane failed after retries',
-                  { checkpointId: lane.checkpointId, error }
-                );
+                console.warn('[graphql-soup-backfill] lane failed', {
+                  checkpointId: lane.checkpointId,
+                  error,
+                });
               }),
             onSuccess: () =>
               Effect.sync(() => {
@@ -666,7 +671,28 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
       }),
     { concurrency: 1, discard: true }
   );
+  return failedLanes;
 });
+
+/**
+ * Retries failed lanes until every lane completes. Lanes that already
+ * completed in this session are not fetched again by a retry.
+ */
+function runSoupBackfillsUntilComplete(
+  userId: string,
+  host: SoupBackfillCacheHost
+): () => void {
+  let pendingLanes: readonly SoupBackfillParams[] = DEFAULT_SOUP_BACKFILL_LANES;
+  return runWithBackgroundRetry(async (signal) => {
+    pendingLanes = await Effect.runPromise(
+      runSoupBackfills(userId, host, pendingLanes),
+      { signal }
+    );
+    if (pendingLanes.length > 0) {
+      throw new Error(`${pendingLanes.length} Soup backfill lanes failed`);
+    }
+  });
+}
 
 const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
   const host = getGraphqlSoupCacheHost();
@@ -728,11 +754,6 @@ export function useSoupBackfills(userId: Accessor<string | undefined>): void {
     if (!host || !id) return;
     cacheGeneration();
 
-    const fiber = Effect.runFork(
-      runSoupBackfills(id, host).pipe(Effect.ignore)
-    );
-    onCleanup(() => {
-      Effect.runFork(Fiber.interrupt(fiber));
-    });
+    onCleanup(runSoupBackfillsUntilComplete(id, host));
   });
 }

@@ -1,4 +1,5 @@
 import type { CacheGenerationChange } from '@graphql-cache/host/types';
+import type { GraphqlSoupInitialInput } from '@service-storage/graphql-soup';
 import { render } from '@solidjs/testing-library';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
@@ -75,6 +76,12 @@ vi.mock('@service-storage/graphql/generated/graphql', () => ({
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: graphqlMocks.getGraphqlSoupCacheHost,
   hydrateGraphqlSoup: graphqlMocks.hydrateGraphqlSoup,
+}));
+
+vi.mock('@service-storage/shared-mail-backfill', () => ({
+  createSharedMailBackfillFetcher:
+    async () => (input: unknown, options: unknown) =>
+      graphqlMocks.hydrateGraphqlSoup({}, { input }, options),
 }));
 
 const lane = (
@@ -678,45 +685,38 @@ describe('runSoupBackfills', () => {
     );
   });
 
-  it('retries cache readiness failures before fetching a lane', async () => {
-    vi.useFakeTimers();
+  it('reports a lane whose cache readiness fails instead of fetching it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     mockCacheHost.currentStorageGeneration.mockRejectedValueOnce(
       new Error('cache temporarily unavailable')
     );
     const fetchPage = vi.fn(async () => ({ nextCursor: null }));
-    const running = Effect.runPromise(
-      runSoupBackfills('user-1', mockCacheHost, [
-        lane('core-entities', fetchPage),
-      ])
+    const coreLane = lane('core-entities', fetchPage);
+    const failedLanes = await Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [coreLane])
     );
-    await vi.advanceTimersByTimeAsync(1_000);
-    await running;
-    expect(fetchPage).toHaveBeenCalledOnce();
-    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
-      storageGeneration: 'storage-1',
-      completed: true,
-    });
+    expect(failedLanes).toEqual([coreLane]);
+    expect(fetchPage).not.toHaveBeenCalled();
   });
 
-  it('continues to later lanes after a lane exhausts its retries', async () => {
-    vi.useFakeTimers();
+  it('continues to later lanes after a lane fails and returns it for retry', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const failedFetch = vi.fn(async () => {
       throw new Error('failed lane');
     });
     const laterFetch = vi.fn(async () => ({ nextCursor: null }));
+    const failedLane = lane('failed-lane', failedFetch);
 
-    const running = Effect.runPromise(
+    const failedLanes = await Effect.runPromise(
       runSoupBackfills('user-1', mockCacheHost, [
-        lane('failed-lane', failedFetch),
+        failedLane,
         lane('later-lane', laterFetch),
       ])
     );
 
-    await vi.advanceTimersByTimeAsync(31_000);
-    await running;
-
-    expect(failedFetch).toHaveBeenCalledTimes(6);
+    // The owner retries failed lanes; a lane does not retry by itself.
+    expect(failedFetch).toHaveBeenCalledOnce();
+    expect(failedLanes).toEqual([failedLane]);
     expect(laterFetch).toHaveBeenCalledOnce();
     expect(loadSoupBackfillCheckpoint('user-1', 'failed-lane').completed).toBe(
       false
@@ -725,7 +725,7 @@ describe('runSoupBackfills', () => {
       true
     );
     expect(warn).toHaveBeenCalledWith(
-      '[graphql-soup-backfill] lane failed after retries',
+      '[graphql-soup-backfill] lane failed',
       expect.objectContaining({ checkpointId: 'failed-lane' })
     );
     const telemetryAttributes = telemetryMocks.anonymousSpan.mock.results
@@ -735,6 +735,121 @@ describe('runSoupBackfills', () => {
       'cache.backfill_state',
       'failed',
     ]);
+  });
+
+  it('retries only failed lanes after an outage, without refetching completed lanes', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let apiAvailable = false;
+    const coreInputs: unknown[] = [];
+    graphqlMocks.hydrateGraphqlSoup.mockImplementation(
+      async (
+        _document,
+        variables: { input: { initial?: GraphqlSoupInitialInput } }
+      ) => {
+        // Core is the only lane that excludes CRM companies but not documents.
+        const filters = variables.input.initial?.filters;
+        const isCore =
+          filters?.crmCompanyFilter !== undefined &&
+          filters.documentFilter === undefined;
+        if (isCore) coreInputs.push(variables.input);
+        if (isCore && !apiAvailable) throw new Error('API unavailable');
+        return { nextCursor: null };
+      }
+    );
+
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.waitFor(() =>
+        expect(
+          loadSoupBackfillCheckpoint('user-1', 'auxiliary-entities').completed
+        ).toBe(true)
+      );
+      // Every outage attempt reaches the server at most once per lane.
+      expect(coreInputs).toHaveLength(1);
+      const callsAfterFirstPass =
+        graphqlMocks.hydrateGraphqlSoup.mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(coreInputs).toHaveLength(2);
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(
+        callsAfterFirstPass + 1
+      );
+
+      apiAvailable = true;
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(coreInputs).toHaveLength(3);
+      expect(loadSoupBackfillCheckpoint('user-1').completed).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(coreInputs).toHaveLength(3);
+    } finally {
+      rendered.unmount();
+    }
+  });
+
+  it('fails a page that never settles so the owner retries its lane', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let stalledSignal: AbortSignal | undefined;
+    graphqlMocks.hydrateGraphqlSoup
+      .mockImplementationOnce(
+        (_document, _variables, options: { signal: AbortSignal }) => {
+          stalledSignal = options.signal;
+          return new Promise(() => {});
+        }
+      )
+      .mockResolvedValue({ nextCursor: null });
+
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce();
+
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce();
+
+      // The stalled Core page times out; later lanes still run.
+      await vi.advanceTimersByTimeAsync(1);
+      expect(stalledSignal?.aborted).toBe(true);
+      await vi.waitFor(() =>
+        expect(
+          loadSoupBackfillCheckpoint('user-1', 'auxiliary-entities').completed
+        ).toBe(true)
+      );
+      expect(loadSoupBackfillCheckpoint('user-1').completed).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(loadSoupBackfillCheckpoint('user-1').completed).toBe(true);
+    } finally {
+      rendered.unmount();
+    }
+  });
+
+  it('resumes a failed backfill as soon as the app returns to the foreground', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    graphqlMocks.hydrateGraphqlSoup
+      .mockRejectedValueOnce(new Error('API unavailable'))
+      .mockResolvedValue({ nextCursor: null });
+
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    try {
+      await vi.waitFor(() =>
+        expect(
+          loadSoupBackfillCheckpoint('user-1', 'auxiliary-entities').completed
+        ).toBe(true)
+      );
+      expect(loadSoupBackfillCheckpoint('user-1').completed).toBe(false);
+
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.waitFor(() =>
+        expect(loadSoupBackfillCheckpoint('user-1').completed).toBe(true)
+      );
+    } finally {
+      rendered.unmount();
+    }
   });
 
   it('starts after the GraphQL flag becomes enabled', async () => {

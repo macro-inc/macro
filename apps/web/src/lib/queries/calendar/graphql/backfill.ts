@@ -12,6 +12,9 @@ import {
 
 const BACKFILL_MONTHS = 12;
 const CHUNK_DELAY_MS = 2_000;
+// Backfill pages are exempt from the foreground read deadline. A page that
+// never settles must still fail the backfill so its owner retries it.
+const PAGE_TIMEOUT_MS = 60_000;
 
 /**
  * Months to cover, nearest first: this month, then alternating forward and
@@ -51,6 +54,40 @@ const sleep = (ms: number, signal: AbortSignal) =>
   });
 
 /**
+ * Bounds one page fetch. On timeout it aborts the page's signal and rejects,
+ * even when the fetch itself ignores the signal.
+ */
+function withPageTimeout(
+  fetchPage: FetchCalendarOccurrencePage
+): FetchCalendarOccurrencePage {
+  return async (input, signal) => {
+    const timeout = new AbortController();
+    const timer = setTimeout(
+      () => timeout.abort(new Error('Calendar backfill page timed out')),
+      PAGE_TIMEOUT_MS
+    );
+    const timedOut = new Promise<never>((_, reject) => {
+      timeout.signal.addEventListener(
+        'abort',
+        () => reject(timeout.signal.reason),
+        { once: true }
+      );
+    });
+    try {
+      return await Promise.race([
+        fetchPage(
+          input,
+          signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal
+        ),
+        timedOut,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+/**
  * Widens calendar coverage month by month in the background. Coverage is the
  * checkpoint: a month with no gaps costs one local read, so a restarted lane
  * resumes where the last one stopped.
@@ -65,6 +102,9 @@ export async function runCalendarBackfill(
   }
 ): Promise<void> {
   const { signal } = options;
+  const fetchPage = withPageTimeout(
+    options.fetchPage ?? hydrateCalendarOccurrencePage
+  );
   for (const range of calendarBackfillMonths(options.now)) {
     if (signal.aborted) return;
     const result = await host.calendarRange(toCalendarRangeArgs(range));
@@ -72,12 +112,7 @@ export async function runCalendarBackfill(
     if (result.gaps.length === 0) continue;
     for (const window of calendarGapWindows(result.gaps)) {
       if (signal.aborted) return;
-      await fetchCalendarWindow(
-        host,
-        window,
-        options.fetchPage ?? hydrateCalendarOccurrencePage,
-        signal
-      );
+      await fetchCalendarWindow(host, window, fetchPage, signal);
     }
     await sleep(options.delayMs ?? CHUNK_DELAY_MS, signal);
   }

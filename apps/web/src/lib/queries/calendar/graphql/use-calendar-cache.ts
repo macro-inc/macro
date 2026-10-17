@@ -1,4 +1,5 @@
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
+import { runWithBackgroundRetry } from '@core/util/backgroundRetry';
 import { queryClient } from '@queries/client';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
@@ -106,12 +107,15 @@ export function useCalendarCache(active: Accessor<boolean>): void {
     const cacheHost = host();
     if (!cacheHost || !active() || !isLeader()) return;
     generation();
-    const abort = new AbortController();
-    runCalendarBackfill(cacheHost, { signal: abort.signal }).catch((error) => {
-      if (!abort.signal.aborted) {
-        console.warn('Calendar backfill stopped', error);
-      }
-    });
-    onCleanup(() => abort.abort());
+    // Coverage is the checkpoint, so a retry skips months already cached.
+    onCleanup(
+      runWithBackgroundRetry(
+        (signal) => runCalendarBackfill(cacheHost, { signal }),
+        {
+          onError: (error) =>
+            console.warn('Calendar backfill failed; retrying later', error),
+        }
+      )
+    );
   });
 }
