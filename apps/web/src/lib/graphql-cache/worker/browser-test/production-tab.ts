@@ -1,6 +1,7 @@
 import { match } from 'ts-pattern';
 import type { CacheRequest, CacheResponse } from '../../protocol';
 import {
+  coordinatorWorkerName,
   createCacheCoordinatorPageAdapter,
   type DedicatedWorkerLike,
 } from '../coordinator-page-adapter';
@@ -61,7 +62,7 @@ const adapter = createCacheCoordinatorPageAdapter({
             new URL('../cache.coordinator.shared-worker.ts', import.meta.url),
             {
               type: 'module',
-              name: `graphql-cache-coordinator:${workerScope}:build-${build}`,
+              name: coordinatorWorkerName(workerScope, `build-${build}`),
             }
           ),
       }

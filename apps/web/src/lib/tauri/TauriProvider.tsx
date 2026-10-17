@@ -3,6 +3,7 @@ import { useCallKitSetup } from '@channel/Call/use-callkit';
 import { useAndroidBack } from '@core/mobile/androidBack';
 import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
+import { nativeUpdateRequired } from '@core/mobile/nativeUpdateRequired';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import { queryPersistence } from '@queries/client';
@@ -97,7 +98,10 @@ function TauriProvider(props: { children: JSX.Element }) {
   createEffect(() => {
     if (
       hasShownNativeAppUpdateRequiredDialog ||
-      !shouldShowNativeAppUpdateRequiredDialog(bundleUpdateStatus())
+      !(
+        shouldShowNativeAppUpdateRequiredDialog(bundleUpdateStatus()) ||
+        nativeUpdateRequired() !== undefined
+      )
     ) {
       return;
     }
@@ -188,7 +192,7 @@ function TauriProvider(props: { children: JSX.Element }) {
         description={
           isPlatform('desktop') && nativeUpdates.status().status !== 'Disabled'
             ? nativeUpdateDescription(nativeUpdates.status())
-            : undefined
+            : nativeUpdateRequired()
         }
         onRestart={
           nativeUpdates.status().status === 'Ready'

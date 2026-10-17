@@ -3,8 +3,9 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 /**
  * Handover of the cache database between app builds.
  *
- * A build usually runs its own coordinator, because the coordinator's script
- * URL is content-hashed, yet builds with the same storage version open one
+ * Builds whose cache engine differs (schema SDL or WASM) run separate
+ * coordinators, because the coordinator's name carries the engine identity
+ * (`coordinatorWorkerName`), yet builds with the same storage version open one
  * database. When a newer build finds that database held by an older one, it
  * asks on this channel, which only builds opening the same database join.
  * The holder either yields, closing the database and telling its tabs to

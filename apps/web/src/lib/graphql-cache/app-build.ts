@@ -4,3 +4,11 @@
  * database over from tabs of an older one.
  */
 export const APP_BUILD_TIME: number = import.meta.env.__APP_BUILD_TIME__ ?? 0;
+
+/**
+ * Hash of the schema SDL and engine WASM this build runs the cache with, or
+ * `unstamped` where the bundler did not stamp it. Tabs share a cache
+ * coordinator, and so an engine, only when this matches.
+ */
+export const CACHE_ENGINE_ID: string =
+  import.meta.env.__CACHE_ENGINE_ID__ ?? 'unstamped';

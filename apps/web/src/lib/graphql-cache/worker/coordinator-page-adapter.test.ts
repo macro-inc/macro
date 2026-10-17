@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CACHE_ENGINE_ID } from '../app-build';
 import {
+  coordinatorWorkerName,
   createCacheCoordinatorPageAdapter,
   type DedicatedWorkerLike,
   type SharedWorkerLike,
@@ -323,6 +325,43 @@ describe('CacheCoordinatorPageAdapter', () => {
       kind: 'register-tab',
       buildTime: 0,
     });
+  });
+
+  it('names its coordinator by the cache engine, so builds with different schemas never share one', async () => {
+    expect(coordinatorWorkerName('scope', 'engine-a')).not.toBe(
+      coordinatorWorkerName('scope', 'engine-b')
+    );
+    expect(coordinatorWorkerName('scope', 'engine-a')).toBe(
+      coordinatorWorkerName('scope', 'engine-a')
+    );
+
+    const names: string[] = [];
+    const port = new FakeCoordinatorPort();
+    vi.stubGlobal(
+      'SharedWorker',
+      class {
+        readonly port = port as unknown as MessagePort;
+        constructor(_url: URL, options: WorkerOptions) {
+          names.push(options.name ?? '');
+        }
+      }
+    );
+    try {
+      const adapter = createCacheCoordinatorPageAdapter({
+        scope: 'scope',
+        tabId: 'tab-a',
+        lockManager: heldLockManager(),
+        createDedicatedWorker: () => new FakeWorker(),
+      });
+      const started = adapter.start();
+      await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+      port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+      await started;
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(names).toEqual([coordinatorWorkerName('scope', CACHE_ENGINE_ID)]);
   });
 
   it('deletes stale databases in a disposable worker, once, for its own engine', async () => {

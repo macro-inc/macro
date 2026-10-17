@@ -2,6 +2,8 @@ interface ImportMetaEnv {
   readonly __APP_VERSION__: string;
   /** When this build was made, in ms since the epoch. Unset outside app builds. */
   readonly __APP_BUILD_TIME__?: number;
+  /** Hash of the cache schema SDL and engine WASM. Unset outside app builds. */
+  readonly __CACHE_ENGINE_ID__?: string;
   readonly __LOCAL_JWT__: string;
   readonly __GIT_BRANCH__: string;
 

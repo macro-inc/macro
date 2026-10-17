@@ -355,8 +355,8 @@ local copy rather than recreating the sent message. The REST compose path keeps
 its existing behavior.
 
 Native draft recovery requires a full app update containing queue inspection and
-durable mutation metadata support. An older app receiving an OTA bundle shows
-**Macro update required** and uses the existing uncached fallback. Its old queue
+durable mutation metadata support. An older app receiving an OTA bundle opens
+the update-required dialog once and uses the existing uncached fallback. Its old queue
 must remain intact, with no new claims or queued writes, until the native update.
 When the cache becomes unavailable, draft saves and discards must not bypass its
 preserved queue through GraphQL or REST fallback. Local editing stays durable;

@@ -124,14 +124,67 @@ export function reloadForNewerBuild(
  * the offer again even if it was dismissed, since something the user opened
  * just failed.
  */
-export function promptReloadForFailedLoad(): void {
-  reloadForNewerBuild();
+export function promptReloadForFailedLoad(
+  page: ReloadPage = browserPage
+): void {
+  reloadForNewerBuild(page);
   const current = pendingWebUpdate();
   setPendingWebUpdate({
     reload: current?.reload ?? (() => window.location.reload()),
     build: current?.build,
     failedLoads: (current?.failedLoads ?? 0) + 1,
   });
+}
+
+/** Allows one automatic reload per build; replaced in tests. */
+export interface ReloadOnce {
+  /** Records a reload of `build`; false when it already reloaded this session
+   * or the reload cannot be recorded, so a reload can never loop. */
+  claim(build: string): boolean;
+}
+
+const FAILED_LOAD_RELOAD_KEY = 'macro:failed-load-reload';
+
+const sessionReloadOnce: ReloadOnce = {
+  claim(build) {
+    try {
+      if (sessionStorage.getItem(FAILED_LOAD_RELOAD_KEY) === build) {
+        return false;
+      }
+      sessionStorage.setItem(FAILED_LOAD_RELOAD_KEY, build);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
+
+const currentBuild = `${import.meta.env.__APP_VERSION__ ?? 'dev'}@${
+  import.meta.env.__APP_BUILD_TIME__ ?? 0
+}`;
+
+/**
+ * A lazy chunk or its CSS failed to load, usually because a deploy removed this
+ * build's files. Reloads into the deployed build right away when the reload
+ * loses nothing: the device is online, nothing holds the tab, and no text is
+ * being written. It does so once per build per tab session, so a stale cache
+ * serving this build again cannot loop. Otherwise it offers the reload.
+ */
+export function recoverFromFailedLoad(
+  page: ReloadPage = browserPage,
+  reloadOnce: ReloadOnce = sessionReloadOnce,
+  build: string = currentBuild
+): void {
+  if (
+    !page.isOffline() &&
+    holds.size === 0 &&
+    !page.isEditingText() &&
+    reloadOnce.claim(build)
+  ) {
+    page.reload();
+    return;
+  }
+  promptReloadForFailedLoad(page);
 }
 
 /** Test seam: forget the scheduled reload and every hold. */

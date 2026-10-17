@@ -1,5 +1,5 @@
 import * as Effect from 'effect/Effect';
-import { APP_BUILD_TIME } from '../app-build';
+import { APP_BUILD_TIME, CACHE_ENGINE_ID } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
@@ -106,10 +106,22 @@ const withVersion = <
     ...value,
   }) as unknown as T;
 
+/**
+ * The coordinator's SharedWorker name. Its script URL stays the same across
+ * builds that did not change coordinator code, so the name carries the engine
+ * identity: a tab must never be served by an engine built from another schema.
+ * Builds with different identities reach the database through the cross-build
+ * takeover instead.
+ */
+export const coordinatorWorkerName = (
+  scope: string,
+  engineId: string = CACHE_ENGINE_ID
+): string => `graphql-cache-coordinator:${scope}:${engineId}`;
+
 const defaultSharedWorkerFactory = (scope: string): SharedWorkerLike =>
   new SharedWorker(
     new URL('./cache.coordinator.shared-worker.ts', import.meta.url),
-    { type: 'module', name: `graphql-cache-coordinator:${scope}` }
+    { type: 'module', name: coordinatorWorkerName(scope) }
   );
 
 const defaultDedicatedWorkerFactory = (

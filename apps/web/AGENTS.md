@@ -110,6 +110,16 @@ on focus/reconnect; route existing subscriptions to billing management. Keep
 known management access through refetch failures, but hide unconfirmed trials.
 Reset rejected checkout offers before refetching eligibility.
 
+## Native commands
+
+Over-the-air bundles reach native apps older than the commands they call.
+`native-commands.json` lists every Tauri command the web code invokes, and
+`src/lib/tauri/native-commands.test.ts` fails when code calls one missing from
+that list or not registered by the app (`generate_handler!` or an in-repo
+plugin's `build.rs`). Before adding a command to the list, raise
+`min-native-build.json` to the first build with it, or handle
+`Command … not found` in the caller (see the src-tauri README).
+
 ## iOS gotcha: Web Workers must be lazy
 On iOS WKWebView, eagerly constructing an ES module Web Worker (`new Worker(url, { type: 'module' })`) whose script is served via the `tauri://` custom URL scheme **deadlocks the WebContent process**. The worker thread parks in WebKit's sync module loader waiting for an IPC response that never wakes it; JS execution silently stops after that point.
 

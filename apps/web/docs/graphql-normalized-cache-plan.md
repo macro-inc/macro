@@ -230,9 +230,15 @@ scope only when the coordinator explicitly proves storage was untouched, not fro
 a page's last-seen phase. Missing/broken transports remain conservatively
 uncertain.
 
-A build's coordinator is usually a separate SharedWorker (its script URL is
-content-hashed), so after a deploy two builds can target one database. The newer
-build takes it over. Pages report their build time (`__APP_BUILD_TIME__`,
+Tabs share a coordinator, and so an engine, only when their cache engines match.
+The SharedWorker name carries `__CACHE_ENGINE_ID__`, a hash of
+`static_assets/schema.graphql` and the cache WASM that Vite stamps
+(`scripts/cache-engine-id.ts`, `coordinatorWorkerName`). The script URL alone
+is not enough: it stays the same across builds that did not change coordinator
+code, and an engine configured with an older SDL fails a newer tab's reads with
+`unknown field … (schema drift?)`. After a deploy that changes the engine, two
+coordinators therefore target one database, and the newer build takes it over.
+Pages report their build time (`__APP_BUILD_TIME__`,
 stamped by Vite) when they register. When the lock stays busy while tabs of
 another build are alive (liveness locks of tabs this coordinator never
 registered; a departed tab's lock can outlast it), the coordinator posts a

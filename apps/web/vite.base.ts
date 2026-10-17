@@ -10,6 +10,7 @@ import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
+import { readCacheEngineId } from './scripts/cache-engine-id';
 import { devHttps } from './scripts/dev-https';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
@@ -27,6 +28,8 @@ const shortSha = readShortSha();
 const appVersion = `${version}+${shortSha}`;
 /** Orders builds: a newer build takes the local cache over from older tabs. */
 const appBuildTime = Date.now();
+/** Tabs share a cache coordinator only when this matches. */
+const cacheEngineIdentity = readCacheEngineId(__dirname);
 
 function readGitBranch(): string {
   try {
@@ -396,6 +399,7 @@ function defineEnv(mode: string, command: string) {
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(appVersion),
     'import.meta.env.__APP_BUILD_TIME__': JSON.stringify(appBuildTime),
+    'import.meta.env.__CACHE_ENGINE_ID__': JSON.stringify(cacheEngineIdentity),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
     // index.html preconnects to the API gateway; keep in sync with servers.ts.
     'import.meta.env.GATEWAY_ORIGIN': JSON.stringify(

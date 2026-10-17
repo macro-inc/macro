@@ -9,7 +9,9 @@ import {
   holdAutomaticReload,
   pendingWebUpdate,
   promptReloadForFailedLoad,
+  type ReloadOnce,
   type ReloadPage,
+  recoverFromFailedLoad,
   reloadForNewerBuild,
   resetReloadForNewerBuildForTests,
 } from './reloadForNewerBuild';
@@ -151,5 +153,97 @@ describe('promptReloadForFailedLoad', () => {
 
     expect(pendingWebUpdate()?.failedLoads).toBe(2);
     expect(pendingWebUpdate()?.reload).toBeTypeOf('function');
+  });
+});
+
+describe('recoverFromFailedLoad', () => {
+  beforeEach(() => {
+    resetReloadForNewerBuildForTests();
+    sessionStorage.clear();
+  });
+
+  const reloadOnce = (): ReloadOnce & { claimed: Set<string> } => {
+    const claimed = new Set<string>();
+    return {
+      claimed,
+      claim(build) {
+        if (claimed.has(build)) return false;
+        claimed.add(build);
+        return true;
+      },
+    };
+  };
+
+  it('reloads the visible tab right away, once per build', () => {
+    const once = reloadOnce();
+    const { page, prompts } = fakePage({ hidden: false, offline: false });
+
+    recoverFromFailedLoad(page, once, 'build-a');
+    expect(page.reload).toHaveBeenCalledOnce();
+    expect(prompts).toHaveLength(0);
+
+    // The reload landed on the same build again, for example from a stale
+    // cache: offer the reload instead of looping.
+    recoverFromFailedLoad(page, once, 'build-a');
+    expect(page.reload).toHaveBeenCalledOnce();
+    expect(prompts).toHaveLength(1);
+
+    resetReloadForNewerBuildForTests();
+    recoverFromFailedLoad(page, once, 'build-b');
+    expect(page.reload).toHaveBeenCalledTimes(2);
+  });
+
+  it('only offers the reload while offline, holding work, or writing text', () => {
+    const offline = fakePage({ hidden: false, offline: true });
+    const once = reloadOnce();
+    recoverFromFailedLoad(offline.page, once, 'build-a');
+    expect(offline.page.reload).not.toHaveBeenCalled();
+    expect(offline.prompts).toHaveLength(1);
+
+    resetReloadForNewerBuildForTests();
+    const release = holdAutomaticReload();
+    const held = fakePage({ hidden: false, offline: false });
+    recoverFromFailedLoad(held.page, once, 'build-a');
+    expect(held.page.reload).not.toHaveBeenCalled();
+    release();
+
+    resetReloadForNewerBuildForTests();
+    const writing = fakePage({
+      hidden: false,
+      offline: false,
+      editingText: true,
+    });
+    recoverFromFailedLoad(writing.page, once, 'build-a');
+    expect(writing.page.reload).not.toHaveBeenCalled();
+
+    // None of those spent the one automatic reload.
+    expect(once.claimed.size).toBe(0);
+  });
+
+  it('remembers the reload in session storage and never reloads without it', () => {
+    const first = fakePage({ hidden: false, offline: false });
+    recoverFromFailedLoad(first.page, undefined, 'build-a');
+    expect(first.page.reload).toHaveBeenCalledOnce();
+
+    resetReloadForNewerBuildForTests();
+    const again = fakePage({ hidden: false, offline: false });
+    recoverFromFailedLoad(again.page, undefined, 'build-a');
+    expect(again.page.reload).not.toHaveBeenCalled();
+    expect(again.prompts).toHaveLength(1);
+
+    resetReloadForNewerBuildForTests();
+    const unavailable = vi
+      .spyOn(Storage.prototype, 'getItem')
+      .mockImplementation(() => {
+        throw new DOMException('denied', 'SecurityError');
+      });
+    try {
+      const noStorage = fakePage({ hidden: false, offline: false });
+      recoverFromFailedLoad(noStorage.page, undefined, 'build-b');
+      expect(noStorage.page.reload).not.toHaveBeenCalled();
+      expect(noStorage.prompts).toHaveLength(1);
+    } finally {
+      unavailable.mockRestore();
+    }
   });
 });
