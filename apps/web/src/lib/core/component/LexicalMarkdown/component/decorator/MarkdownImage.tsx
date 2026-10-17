@@ -58,6 +58,24 @@ const ImageErrors = {
 } as const;
 type ImageError = keyof typeof ImageErrors;
 
+/**
+ * Intrinsic sizes of images that arrived without stored dimensions, keyed by
+ * resolved URL. A remount (virtualized channel rows) reserves the final box
+ * from the first frame instead of the generic card.
+ */
+const intrinsicSizes = new Map<string, [number, number]>();
+const INTRINSIC_SIZE_CACHE_LIMIT = 500;
+const INTRINSIC_SIZE_POLL_MS = 50;
+
+function rememberIntrinsicSize(url: string, size: [number, number]) {
+  if (!url || intrinsicSizes.has(url)) return;
+  if (intrinsicSizes.size >= INTRINSIC_SIZE_CACHE_LIMIT) {
+    const oldest = intrinsicSizes.keys().next().value;
+    if (oldest !== undefined) intrinsicSizes.delete(oldest);
+  }
+  intrinsicSizes.set(url, size);
+}
+
 function Spinner() {
   return (
     <div class="animate-spin size-5">
@@ -143,6 +161,32 @@ export function MarkdownImage(props: ImageDecoratorProps) {
     });
   });
 
+  // Markdown images from agents and links carry no size, so the generic card
+  // would differ from the loaded image's box. Browsers expose the intrinsic
+  // size once the header arrives, well before `load`; adopt it then.
+  createEffect(
+    on(imageUrl, (url) => {
+      if (!url || imageDims()[0] > 0) return;
+      const known = intrinsicSizes.get(url);
+      if (known) {
+        setImageDims(known);
+        return;
+      }
+      const timer = setInterval(() => {
+        if (state() !== 'loading' || imageDims()[0] > 0) {
+          clearInterval(timer);
+          return;
+        }
+        const { naturalWidth, naturalHeight } = imageRef;
+        if (naturalWidth > 0 && naturalHeight > 0) {
+          clearInterval(timer);
+          setImageDims([naturalWidth, naturalHeight]);
+        }
+      }, INTRINSIC_SIZE_POLL_MS);
+      onCleanup(() => clearInterval(timer));
+    })
+  );
+
   const isSelectedAsNode = () => {
     const sel = selection();
     if (!sel) return false;
@@ -176,6 +220,10 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   const loadImage = () => {
     setState('ok');
     setImageDims([imageRef.naturalWidth, imageRef.naturalHeight]);
+    rememberIntrinsicSize(imageUrl(), [
+      imageRef.naturalWidth,
+      imageRef.naturalHeight,
+    ]);
     editor()?.dispatchCommand(UPDATE_MEDIA_SIZE_COMMAND, [
       props.key,
       {
@@ -342,9 +390,13 @@ export function MarkdownImage(props: ImageDecoratorProps) {
 
         <Show when={state() === 'loading'}>
           <Show
-            when={effectiveDims()[0] > 0}
+            when={effectiveDims()[0] > 0 && props.width && props.height}
             fallback={
-              <MediaLoadingPlaceholder kind="image" label={props.alt} />
+              <MediaLoadingPlaceholder
+                kind="image"
+                label={props.alt}
+                fill={effectiveDims()[0] > 0}
+              />
             }
           >
             <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">

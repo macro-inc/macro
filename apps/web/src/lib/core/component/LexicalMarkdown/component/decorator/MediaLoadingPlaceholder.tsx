@@ -17,6 +17,8 @@ export function MediaLoadingPlaceholder(props: {
   kind: 'image' | 'video';
   /** File name from the image alt text, or the last path segment of a video. */
   label?: string;
+  /** Cover a parent that already reserves the media's final box. */
+  fill?: boolean;
 }) {
   const caption = () => {
     const label = props.label?.trim();
@@ -31,7 +33,9 @@ export function MediaLoadingPlaceholder(props: {
       aria-label={`Loading ${caption()}`}
       data-media-loading={props.kind}
       class={cn(
-        'relative w-full max-w-[640px] aspect-video overflow-hidden',
+        props.fill
+          ? 'absolute inset-0 size-full overflow-hidden'
+          : 'relative w-full max-w-[640px] aspect-video overflow-hidden',
         'rounded-xl border border-edge bg-skeleton skeleton-shimmer'
       )}
     >
