@@ -16,11 +16,14 @@ alwaysApply: false
   `componentRegistry`, `app-router-view`, `routes/shells.tsx`, block
   `definition.ts`, Lexical `init.ts`).
 - Each top-level route picks its shell in `app-router-view.tsx`
-  (`routes/shells.tsx`): `authRoute` pages and booking links render without app
-  chrome, and `appRoute` renders `AppShell` — the app's providers
-  (`AppProviders`), chrome (`AppChrome` in `Layout.tsx`), and the split layout.
-  Put state only the app's views use in `AppProviders`, not `Root`; `Root` keeps
-  what every page or a call needs.
+  (`routes/shells.tsx`), which picks chrome only: `authRoute` pages and booking
+  links render without app chrome, and `appRoute` renders `AppShell` — the
+  chrome (`AppChrome` in `Layout.tsx`) and the split layout. `RootFrame`, the
+  router root, mounts `AppProviders` and the dialog host above every shell,
+  because onboarding, invite, form, and call pages render app views too. Put
+  contexts views read in `AppProviders`, never in a shell or `AppChrome`
+  (ast-grep `tsx-app-providers-at-root`, CI error; `routes/shells.test.tsx`
+  checks each shell); `Root` keeps what the router and calls need.
 - `index.html` paints a boot shell before any JS runs: the saved theme's
   background, the rail column, and the desktop app's content card — no app
   content. The first shell to mount dismisses it (`dismissBootShell`). Keep its

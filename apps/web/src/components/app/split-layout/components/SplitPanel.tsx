@@ -5,6 +5,7 @@ import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { type PaneId, SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { AppErrorBoundary } from '@components/app/AppErrorBoundary';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
@@ -158,27 +159,34 @@ export function SplitPanel(props: SplitPanelProps) {
         close: props.handle.close,
       }}
     >
-      <Suspense>
-        <Show
-          when={
-            props.split.mount.kind === 'component' &&
-            props.split.mount.meta.ownsCollectionState
-          }
-          fallback={
-            <SoupViewContextProvider soup={nextSoup}>
-              <SplitRouter.Outlet
-                pane={props.handle.id as string as PaneId}
-                fallback={<Dynamic component={props.split.mount.element} />}
-              />
-            </SoupViewContextProvider>
-          }
-        >
-          <SplitRouter.Outlet
-            pane={props.handle.id as string as PaneId}
-            fallback={<Dynamic component={props.split.mount.element} />}
-          />
-        </Show>
-      </Suspense>
+      <AppErrorBoundary
+        name="split-panel"
+        resetKey={() =>
+          `${props.handle.content().type}:${props.handle.content().id}`
+        }
+      >
+        <Suspense>
+          <Show
+            when={
+              props.split.mount.kind === 'component' &&
+              props.split.mount.meta.ownsCollectionState
+            }
+            fallback={
+              <SoupViewContextProvider soup={nextSoup}>
+                <SplitRouter.Outlet
+                  pane={props.handle.id as string as PaneId}
+                  fallback={<Dynamic component={props.split.mount.element} />}
+                />
+              </SoupViewContextProvider>
+            }
+          >
+            <SplitRouter.Outlet
+              pane={props.handle.id as string as PaneId}
+              fallback={<Dynamic component={props.split.mount.element} />}
+            />
+          </Show>
+        </Suspense>
+      </AppErrorBoundary>
     </SplitPanelControllerProvider>
   );
 

@@ -1,0 +1,24 @@
+id: tsx-app-providers-at-root
+language: tsx
+severity: error
+message: Mount app-wide providers only in AppProviders, which RootFrame mounts once for every route.
+note: |-
+  A provider mounted in one layout or shell leaves every other route
+  without it, and views that read it crash there. Add the provider to
+  apps/web/src/components/app/AppProviders.tsx instead.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/components/app/AppProviders.tsx
+  - apps/web/src/components/app/RootFrame.tsx
+  - apps/web/src/**/*.test.tsx
+rule:
+  kind: identifier
+  regex: ^(AppProviders|GlobalAppStateProvider|ItemDndProvider)$
+  any:
+    - inside:
+        kind: jsx_opening_element
+        field: name
+    - inside:
+        kind: jsx_self_closing_element
+        field: name

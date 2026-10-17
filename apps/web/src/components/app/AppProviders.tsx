@@ -8,6 +8,7 @@ import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { MacOSNotificationUpdateRequiredError } from '@app/lib/tauri/notification';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
+import { ItemDndProvider } from '@components/app/ItemDragAndDrop';
 import { useReactiveFavicon } from '@components/app/useReactiveFavicon';
 import { useGlobalAttachableHistory } from '@core/component/AI/signal/globalAttachments';
 import { toast } from '@core/component/Toast/Toast';
@@ -88,8 +89,10 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 }
 
 /**
- * State only the app's views use: notifications, undo, search, and the caches
- * and sync behind them. Auth, booking, and meeting pages render without it.
+ * Contexts the app's views read — notifications, block orchestration, undo,
+ * search, drag and drop — and the caches and sync behind them. `RootFrame`
+ * mounts it once for every route, because views, rows, and dialogs also render
+ * on pages without app chrome (onboarding, invites, form responses, calls).
  */
 export function AppProviders(props: ParentProps) {
   const userId = useUserId();
@@ -104,9 +107,11 @@ export function AppProviders(props: ParentProps) {
         <MutationUndoProvider>
           <SearchProvider>
             <IncomingMeetingInvitationsProvider>
-              {/* Ownerless dialogs inherit app state, not a transient menu owner. */}
-              <ImperativeDialogHost />
-              {props.children}
+              <ItemDndProvider>
+                {/* Ownerless dialogs inherit app state, not a transient menu owner. */}
+                <ImperativeDialogHost />
+                {props.children}
+              </ItemDndProvider>
             </IncomingMeetingInvitationsProvider>
           </SearchProvider>
         </MutationUndoProvider>

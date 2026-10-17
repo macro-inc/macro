@@ -14,7 +14,7 @@ import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { CallKitSync } from '@channel/Call/use-callkit';
 import { dismissBootShell } from '@components/app/boot-shell';
-import { RootFrame } from '@components/app/Layout';
+import { RootFrame } from '@components/app/RootFrame';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';

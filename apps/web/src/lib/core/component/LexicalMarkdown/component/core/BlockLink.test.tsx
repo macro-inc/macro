@@ -3,16 +3,16 @@ import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { createRoutedSplitLayout } from '@components/app/split-layout/tests/fixtures';
 import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createRoot } from 'solid-js';
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import { openDocument } from './BlockLink';
 
 const app = vi.hoisted(() => ({
   manager: undefined as SplitManager | undefined,
-  orchestrator: undefined as BlockOrchestrator | undefined,
 }));
-vi.mock('@components/app/GlobalAppState', () => ({
-  useGlobalBlockOrchestrator: () => app.orchestrator,
+vi.mock('@app/signal/splitLayout', () => ({
+  globalSplitManager: () => app.manager,
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => app.manager,
@@ -62,7 +62,6 @@ function setup() {
     },
   ]);
   app.manager = manager;
-  app.orchestrator = orchestrator;
   return {
     manager,
     chat,
@@ -107,4 +106,22 @@ it('orients users when an activity-list selection reuses a previewed channel', (
   expect(activate).toHaveBeenCalledOnce();
   expect(manager.activeSplitId()).toBe(chat.id);
   expect(toast.alert).toHaveBeenCalledWith('Content already open');
+});
+
+it('opens a mention at its location from a click handler, which has no owner', async () => {
+  const { navigate } = setup();
+  const params = { channel_message_id: 'message' };
+  render(() => (
+    <button
+      type="button"
+      onClick={() => openDocument('channel', 'channel', params)}
+    >
+      mention
+    </button>
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'mention' }));
+
+  await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith(params));
+  expect(toast.alert).not.toHaveBeenCalled();
 });

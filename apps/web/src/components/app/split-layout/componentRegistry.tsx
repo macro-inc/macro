@@ -236,6 +236,11 @@ registerComponent('getting-started', () => (
   <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
+// Home replaced the retired inbox view; old `/component/inbox` links land there.
+registerComponent('inbox', () => (
+  <RedirectSplit to={{ type: 'component', id: 'home' }} />
+));
+
 function DisabledProjectsRoute() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {

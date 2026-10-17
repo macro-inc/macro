@@ -1,4 +1,4 @@
-import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { type BlockAlias, type BlockName, useMaybeBlockId } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -30,8 +30,9 @@ async function openLocation<T extends BlockNameWithLocations>(
   id: string,
   params?: Record<string, string>
 ): Promise<void> {
-  const blockOrchestrator = useGlobalBlockOrchestrator();
-  const blockHandle = await blockOrchestrator.getBlockHandle(id);
+  // Reached from click handlers, which run without an owner to read context.
+  const blockOrchestrator = globalSplitManager()?.getOrchestrator();
+  const blockHandle = await blockOrchestrator?.getBlockHandle(id);
   await blockHandle?.goToLocationFromParams(params ?? {});
 }
 

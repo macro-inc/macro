@@ -197,7 +197,10 @@ while retaining the theme hue. Public variable-length routes use
 `~` as the boundary between panes
 (`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
-to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
+to their canonical paths above; legacy composers keep their existing paths, and
+the retired `/app/component/inbox` opens Home. A pane or page whose view throws
+while rendering shows **Something went wrong** with **Try again** in its place;
+opening other content in that pane clears it. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`. Route identity
 and breadcrumb nesting remain in the path. Home, Email, Tasks, Channels, and
 Customers store the selected tab under `sN.home.tab`, `sN.mail.tab`,
