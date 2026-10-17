@@ -393,8 +393,9 @@ impl PgMessageRepository {
             .map_err(|e| MessageError::Repository(rootcause::Report::new(e).into()))?;
         sqlx::query!(
             r#"INSERT INTO comms_message_threads
-                   (root_id, parent_entity_type, parent_entity_id, user_id, anchor, created_at, updated_at)
-               SELECT id, parent_entity_type, parent_entity_id, sender_id, $2, created_at, updated_at
+                   (root_id, parent_entity_type, parent_entity_id, user_id, anchor, created_at, updated_at, activity_at)
+               SELECT id, parent_entity_type, parent_entity_id, sender_id, $2, created_at, updated_at,
+                      CASE WHEN deleted_at IS NULL THEN updated_at END
                FROM comms_messages WHERE id = $1
                ON CONFLICT (root_id) DO UPDATE SET anchor = EXCLUDED.anchor"#,
             root_id,

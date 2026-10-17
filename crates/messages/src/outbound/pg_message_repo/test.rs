@@ -619,11 +619,20 @@ async fn roots_get_thread_rows_without_the_bookkeeping_trigger(pool: PgPool) {
     assert!(
         matches!(state.anchor, Some(ThreadAnchor::Markdown { mark_id, .. }) if mark_id == Uuid::from_u128(202))
     );
+    let activity_at = || {
+        sqlx::query_scalar!(
+            "SELECT activity_at FROM comms_message_threads WHERE root_id = $1",
+            root.id
+        )
+        .fetch_one(&pool)
+    };
+    assert_eq!(activity_at().await.unwrap(), Some(root.updated_at));
     let reply = repo
         .create(command("message-doc-a", Some(root.id), "reply"))
         .await
         .unwrap();
     assert_eq!(reply.thread_id, Some(root.id));
+    assert_eq!(activity_at().await.unwrap(), Some(reply.updated_at));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

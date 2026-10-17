@@ -1585,6 +1585,249 @@ async fn channel_thread_rows_apply_cursor(pool: Pool<Postgres>) -> anyhow::Resul
     Ok(())
 }
 
+fn at(timestamp: &str) -> DateTime<Utc> {
+    timestamp.parse().expect("valid timestamp")
+}
+
+async fn unfiltered_thread_ids(repo: &PgChannelsRepo) -> anyhow::Result<Vec<Uuid>> {
+    let rows = repo
+        .get_thread_messages(
+            thread_rows_request(USER_A, None, SimpleSortMethod::UpdatedAt, 50).into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+    Ok(rows.iter().map(|row| row.id).collect())
+}
+
+async fn insert_reply(
+    pool: &Pool<Postgres>,
+    channel_id: Uuid,
+    thread_id: Uuid,
+    id: Uuid,
+    updated_at: DateTime<Utc>,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_messages (
+            id, parent_entity_type, parent_entity_id, thread_id, sender_id,
+            content, created_at, updated_at
+        )
+        VALUES ($1, 'channel', $2, $3, $4, 'reply', $5, $5)
+        "#,
+        id,
+        channel_id.to_string(),
+        thread_id,
+        USER_A,
+        updated_at,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn set_message_times(
+    pool: &Pool<Postgres>,
+    id: Uuid,
+    updated_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "UPDATE comms_messages SET updated_at = $2, deleted_at = $3 WHERE id = $1",
+        id,
+        updated_at,
+        deleted_at.map(|deleted_at| deleted_at.naive_utc()),
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn thread_activity_at(
+    pool: &Pool<Postgres>,
+    root_id: Uuid,
+) -> anyhow::Result<Option<DateTime<Utc>>> {
+    Ok(sqlx::query_scalar!(
+        "SELECT activity_at FROM comms_message_threads WHERE root_id = $1",
+        root_id,
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+/// Threads whose stored activity_at differs from the value computed from
+/// their root and live replies.
+async fn stale_thread_activity_count(pool: &Pool<Postgres>) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "count!"
+        FROM comms_message_threads t
+        JOIN comms_messages root ON root.id = t.root_id
+        WHERE t.activity_at IS DISTINCT FROM CASE
+            WHEN root.deleted_at IS NOT NULL THEN NULL
+            ELSE GREATEST(
+                root.updated_at,
+                COALESCE((
+                    SELECT MAX(reply.updated_at)
+                    FROM comms_messages reply
+                    WHERE reply.thread_id = root.id
+                      AND reply.deleted_at IS NULL
+                ), root.updated_at)
+            )
+        END
+        "#
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_activity_follows_reply_writes(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    assert_eq!(unfiltered_thread_ids(&repo).await?, vec![MSG3, MSG1, MSG31]);
+
+    let newest_reply = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b0f1);
+    insert_reply(&pool, CH3, MSG31, newest_reply, at("2024-01-01T14:00:00Z")).await?;
+    assert_eq!(unfiltered_thread_ids(&repo).await?, vec![MSG31, MSG3, MSG1]);
+
+    set_message_times(&pool, REPLY2, at("2024-01-01T15:00:00Z"), None).await?;
+    assert_eq!(unfiltered_thread_ids(&repo).await?, vec![MSG1, MSG31, MSG3]);
+
+    let deleted = at("2024-01-01T16:00:00Z");
+    set_message_times(&pool, REPLY2, deleted, Some(deleted)).await?;
+    assert_eq!(unfiltered_thread_ids(&repo).await?, vec![MSG31, MSG3, MSG1]);
+    assert_eq!(
+        thread_activity_at(&pool, MSG1).await?,
+        Some(at("2024-01-01T10:04:00Z"))
+    );
+
+    let deleted = at("2024-01-01T17:00:00Z");
+    set_message_times(&pool, newest_reply, deleted, Some(deleted)).await?;
+    assert_eq!(unfiltered_thread_ids(&repo).await?, vec![MSG3, MSG1, MSG31]);
+    assert_eq!(
+        thread_activity_at(&pool, MSG31).await?,
+        Some(at("2024-01-01T10:01:00Z"))
+    );
+
+    let departed_user_reply = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b031);
+    sqlx::query!(
+        "DELETE FROM comms_messages WHERE id = $1",
+        departed_user_reply
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        thread_activity_at(&pool, MSG31).await?,
+        Some(at("2024-01-01T10:00:00Z"))
+    );
+
+    assert_eq!(stale_thread_activity_count(&pool).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_activity_drops_soft_deleted_root(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    let deleted = at("2024-01-01T14:00:00Z");
+    set_message_times(&pool, MSG3, deleted, Some(deleted)).await?;
+    assert_eq!(unfiltered_thread_ids(&repo).await?, vec![MSG1, MSG31]);
+    assert_eq!(thread_activity_at(&pool, MSG3).await?, None);
+
+    let reply_to_deleted_root = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b0f2);
+    insert_reply(
+        &pool,
+        CH1,
+        MSG3,
+        reply_to_deleted_root,
+        at("2024-01-01T15:00:00Z"),
+    )
+    .await?;
+    assert_eq!(thread_activity_at(&pool, MSG3).await?, None);
+
+    set_message_times(&pool, MSG3, at("2024-01-01T16:00:00Z"), None).await?;
+    assert_eq!(unfiltered_thread_ids(&repo).await?, vec![MSG3, MSG1, MSG31]);
+
+    assert_eq!(stale_thread_activity_count(&pool).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_activity_cursor_pages_stay_stable(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    insert_reply(
+        &pool,
+        CH3,
+        MSG31,
+        Uuid::from_u128(0x00000000_0000_0000_0000_00000000b0f3),
+        at("2024-01-01T11:00:00Z"),
+    )
+    .await?;
+    assert_eq!(unfiltered_thread_ids(&repo).await?, vec![MSG3, MSG31, MSG1]);
+
+    let mut paged = Vec::new();
+    let mut last = None;
+    loop {
+        let query = match last {
+            None => Query::Sort(SimpleSortMethod::UpdatedAt, None),
+            Some(id) => Query::Cursor(Cursor {
+                id,
+                limit: 1,
+                val: CursorVal {
+                    sort_type: SimpleSortMethod::UpdatedAt,
+                    last_val: thread_activity_at(&pool, id)
+                        .await?
+                        .expect("listed thread has activity"),
+                },
+                filter: None,
+            }),
+        };
+        let page = repo
+            .get_thread_messages(
+                GetThreadReplyRowsRequest {
+                    macro_id: macro_user_id(USER_A),
+                    limit: Some(1),
+                    query,
+                }
+                .into_params(),
+            )
+            .await
+            .map_err(report_err)?;
+        let Some(row) = page.first() else {
+            break;
+        };
+        paged.push(row.id);
+        last = Some(row.id);
+        if paged.len() == 1 {
+            // MSG1 moves above MSG31 but stays behind the cursor.
+            insert_reply(
+                &pool,
+                CH1,
+                MSG1,
+                Uuid::from_u128(0x00000000_0000_0000_0000_00000000b0f4),
+                at("2024-01-01T12:00:00Z"),
+            )
+            .await?;
+        }
+    }
+
+    assert_eq!(paged, vec![MSG3, MSG1, MSG31]);
+    assert_eq!(paged, unfiltered_thread_ids(&repo).await?);
+    Ok(())
+}
+
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
