@@ -64,6 +64,10 @@ to the browser via `inbound/wasm`.
   returned as an error — `fold` must stay total (see `domain/fold.rs` docs).
 - `scripts/sanitize_recording.py` strips real-session fixtures before they
   land under `fixtures/real/`; never commit an unsanitized recording.
+- A user-issued `set_model` closes the open turn so later agent output gets
+  a new turn id and sorts below the control line. A `set_model` with no
+  `user_id` is the session applying its own model (create/resume) and draws
+  no line. `set_config_option` (mode, effort) does not split a turn.
 
 ## Related
 

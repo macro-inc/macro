@@ -33,12 +33,33 @@ impl FoldState {
     /// Emit a standalone control message. A request-backed control starts
     /// pending and is resolved by its response; one with no request to answer
     /// (a stop notification) is accepted outright.
+    ///
+    /// A model change is punctuation *between* turns. If one lands while a
+    /// turn is open — the user switched models after sending, or a speculated
+    /// prompt raced the selection — later agent output must not keep the open
+    /// turn's id. The transcript sorts by turn, so that leftover id put every
+    /// later chunk *above* the line.
+    ///
+    /// A set-model with no user is the session applying its own model
+    /// (create, resume, reconnect). That is not a user action and must not
+    /// draw a line, or a resumed transcript grows a "Model set to" under
+    /// the history it just loaded.
     pub(super) fn record_control(
         &mut self,
         control: Control,
         request_id: Option<&RequestId>,
         user_id: Option<MacroUserIdStr<'static>>,
     ) -> Option<Changed> {
+        if matches!(control, Control::SetModel { .. }) && user_id.is_none() {
+            return None;
+        }
+        if matches!(control, Control::SetModel { .. }) && self.turn.is_some() {
+            // Nothing to stamp: the runtime has not ended the turn. Dropping
+            // it is enough for the next agent part to open a new one after
+            // this line. In-flight tool patches still find their parts by
+            // session-wide tool id.
+            let _ = self.close_turn(None);
+        }
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
         let message = self.messages.len();
