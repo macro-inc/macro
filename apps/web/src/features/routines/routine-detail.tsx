@@ -2,8 +2,9 @@ import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
-import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
@@ -44,6 +45,7 @@ export function RoutineDetail(props: {
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
+  const hasPaidAccess = useHasPaidAccess();
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
   const open = (id: string) =>
@@ -75,7 +77,7 @@ export function RoutineDetail(props: {
     <RoutineDetailView
       source={source}
       userId={userId}
-      defaultModel={DEFAULT_MODEL}
+      defaultModel={defaultModelForPlan(hasPaidAccess())}
       initialTab={props.initialTab}
       onBack={back}
       onDelete={remove}

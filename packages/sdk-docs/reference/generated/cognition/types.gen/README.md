@@ -112,6 +112,7 @@
 - [Expiry](type-aliases/Expiry.md)
 - [FeatureUsage](type-aliases/FeatureUsage.md)
 - [FileType](type-aliases/FileType.md)
+- [FreeTierModel](type-aliases/FreeTierModel.md)
 - [GenericErrorResponse](type-aliases/GenericErrorResponse.md)
 - [GetBatchPreviewData](type-aliases/GetBatchPreviewData.md)
 - [GetBatchPreviewError](type-aliases/GetBatchPreviewError.md)

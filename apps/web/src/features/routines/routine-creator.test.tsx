@@ -51,6 +51,7 @@ vi.mock('@core/constant/SettingsState', () => ({
 vi.mock('../agents-view/primitives/open-page', () => ({
   openAgentsPage: vi.fn(),
 }));
+vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({

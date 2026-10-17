@@ -45,4 +45,37 @@ describe('HomeSuggestions', () => {
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[1]);
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
+
+  it('offers Try again for a retryable failure', () => {
+    const onRetry = vi.fn();
+    const view = render(() => (
+      <HomeSuggestions
+        view={{ kind: 'error', retryable: true }}
+        onSelect={vi.fn()}
+        onOpen={vi.fn()}
+        onRetry={onRetry}
+        onConnect={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(view.getByRole('button', { name: 'Try again' }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it('offers no Try again when the plan refused the request', () => {
+    const view = render(() => (
+      <HomeSuggestions
+        view={{ kind: 'error', retryable: false }}
+        onSelect={vi.fn()}
+        onOpen={vi.fn()}
+        onRetry={vi.fn()}
+        onConnect={vi.fn()}
+      />
+    ));
+
+    expect(
+      view.getByText('Suggestions are unavailable right now.')
+    ).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
 });

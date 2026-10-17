@@ -3805,6 +3805,11 @@
           "swf"
         ]
       },
+      "FreeTierModel": {
+        "type": "string",
+        "description": "A `provider/model` id every user may request without professional features.",
+        "enum": ["google/gemini-3.8-flash"]
+      },
       "GenericErrorResponse": {
         "type": "object",
         "required": ["error", "message"],

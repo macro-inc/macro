@@ -1,0 +1,21 @@
+id: tsx-no-hardcoded-model-id
+language: tsx
+# Twin of ts-no-hardcoded-model-id — ast-grep rules are single-language.
+severity: error
+message: Don't hardcode a `provider/model` id. Pick the model from `@core/component/AI/constant` by plan (`FREE_DEFAULT_MODEL`, `defaultModelForPlan`, `modelsForPlan`).
+note: |-
+  Rule FE-57 in .agents/rules/web/data.md. See ts-no-hardcoded-model-id for the
+  rationale: the backend 403s models outside the user's plan, and `FREE_MODELS`
+  is generated from its `FreeTierModel` schema.
+files:
+  - apps/web/src/**
+ignores:
+  # Developer tools that deliberately exercise arbitrary models.
+  - '**/debug/**'
+  - '**/*.test.tsx'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/browser-test/**'
+rule:
+  kind: string_fragment
+  regex: ^(anthropic|openai|google|cerebras|fireworks)/[A-Za-z0-9][\w.:-]*$

@@ -123,6 +123,7 @@ export * from './errorResponse';
 export * from './expiry';
 export * from './featureUsage';
 export * from './fileType';
+export * from './freeTierModel';
 export * from './genericErrorResponse';
 export * from './getBatchPreviewRequest';
 export * from './getBatchPreviewResponse';

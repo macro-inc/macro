@@ -192,6 +192,7 @@ describe('deriveRecommendedView', () => {
   const base = {
     loading: false,
     failed: false,
+    retryable: true,
     items: undefined,
     emailLinked: true,
   };
@@ -209,7 +210,12 @@ describe('deriveRecommendedView', () => {
   check(
     'shows an explicit error — never claims caught-up on failure',
     { ...base, failed: true },
-    { kind: 'error' }
+    { kind: 'error', retryable: true }
+  );
+  check(
+    'a plan refusal is an error that offers no retry',
+    { ...base, failed: true, retryable: false },
+    { kind: 'error', retryable: false }
   );
   check(
     'connect CTA when no inbox is linked',

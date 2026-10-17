@@ -72,8 +72,9 @@ vi.mock('./routine-triggers', () => ({
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
 vi.mock('@core/component/AI/constant', () => ({
-  DEFAULT_MODEL: 'claude-sonnet-4-6',
+  defaultModelForPlan: () => 'claude-sonnet-4-6',
 }));
+vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
 vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: () => 'New routine',
 }));

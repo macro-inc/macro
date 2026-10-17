@@ -132,7 +132,9 @@ for tasks, skills, snippets, and other documents. Suggestion loading/errors
 are isolated from the input. If generation stalls for 45 seconds, the shimmer
 is replaced with a retry action; a late result still appears automatically.
 Generation status updates do not extend that deadline. Retry starts a fresh
-45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
+45-second wait. Free users get suggestions from the free-tier model; if the
+plan refuses the request (403), the row says suggestions are unavailable and
+offers no retry. Shift+Enter adds a line. Selecting a Home row replaces
 the composer with its preview. Home uses the shared 256px sidebar and collapses
 navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
 slide-over. Activating a row or **New chat** closes that overlay to show content;

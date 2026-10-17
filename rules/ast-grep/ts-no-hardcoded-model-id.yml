@@ -1,0 +1,29 @@
+id: ts-no-hardcoded-model-id
+language: typescript
+# Twin of tsx-no-hardcoded-model-id — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files.
+severity: error
+message: Don't hardcode a `provider/model` id. Pick the model from `@core/component/AI/constant` by plan (`FREE_DEFAULT_MODEL`, `defaultModelForPlan`, `modelsForPlan`).
+note: |-
+  Rule FE-57 in .agents/rules/web/data.md. The backend rejects any model outside
+  the user's plan with a 403, and its free tier changes independently of the
+  frontend: Home suggestions hardcoded Claude Haiku, then the free tier became
+  Gemini Flash only, and every free user's request failed. `FREE_MODELS` is
+  generated from the backend's `FreeTierModel` schema, so selecting through the
+  plan helpers keeps requests inside the user's tier. A new model id goes in the
+  catalog in `apps/web/src/lib/core/component/AI/constant/model.ts`.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/lib/core/component/AI/constant/model.ts
+  # Developer tools that deliberately exercise arbitrary models.
+  - '**/debug/**'
+  - '**/generated/**'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/browser-test/**'
+rule:
+  kind: string_fragment
+  regex: ^(anthropic|openai|google|cerebras|fireworks)/[A-Za-z0-9][\w.:-]*$
