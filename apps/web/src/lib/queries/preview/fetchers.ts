@@ -14,6 +14,7 @@ import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
 import type { ApiThread } from '@service-email/generated/schemas';
+import { scheduledActionClient } from '@service-scheduled-action/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { entityMessagesClient } from '@service-storage/messages';
@@ -483,6 +484,35 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
   );
 }
 
+/**
+ * A routine previews from its scheduled-action detail. Routines are owned by
+ * users, and only the owner can read the detail; others see no_access.
+ */
+async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
+  return Promise.all(
+    ids.map(async (id): Promise<PreviewItem> => {
+      const base = { id, type: 'routine', loading: false } as const;
+      const detail = await scheduledActionClient.getRoutine(id);
+      if (detail.isErr())
+        return {
+          ...base,
+          access: detail.error.some(
+            (error) => error.code === 'NOT_FOUND' || error.code === 'GONE'
+          )
+            ? 'does_not_exist'
+            : 'no_access',
+        };
+      return {
+        ...base,
+        access: 'access',
+        rawName: detail.value.name,
+        name: detail.value.name,
+        owner: detail.value.owner,
+      };
+    })
+  );
+}
+
 function filterMapToId(items: Array<ItemEntity>, type: ItemEntity['type']) {
   return items.filter((i) => i.type === type).map(({ id }) => id);
 }
@@ -513,6 +543,7 @@ export async function fetchRestPreviewBatch(
     doFetch(fetchCalendarEventPreviews, filterMapToId(items, 'calendar_event')),
     doFetch(fetchDatabasePreviews, filterMapToId(items, 'database')),
     doFetch(fetchFormPreviews, filterMapToId(items, 'form')),
+    doFetch(fetchRoutinePreviews, filterMapToId(items, 'routine')),
   ]);
   const resultMap = new Map<string, PreviewItem>();
   results.flat().forEach((result) => {
