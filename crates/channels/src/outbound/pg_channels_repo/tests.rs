@@ -1545,6 +1545,128 @@ async fn channel_thread_rows_filter_by_notification_seen_secondary_entity(
     Ok(())
 }
 
+#[test]
+fn channel_thread_rows_notification_plan_splits_and_keeps_or_on_the_scan() {
+    let state = |state| Expr::val(ChannelThreadLiteral::NotificationState(state));
+    let participant = Expr::val(ChannelThreadLiteral::Participant(macro_user_id(USER_A)));
+    let and_filter = Expr::and(
+        Expr::or(
+            state(item_filters::NotificationState::Unseen),
+            state(item_filters::NotificationState::Seen),
+        ),
+        participant.clone(),
+    );
+    let plan = super::classify_channel_thread_notification(&and_filter);
+    match plan {
+        super::ThreadNotifPlan::Ready {
+            residuals, ids_sql, ..
+        } => {
+            assert_eq!(residuals.len(), 1);
+            assert!(ids_sql.contains("UNION"));
+            assert!(!ids_sql.contains("INTERSECT"));
+        }
+        other => panic!("expected a notification-first plan, got {other:?}"),
+    }
+
+    let mixed_filter = Expr::or(state(item_filters::NotificationState::Unseen), participant);
+    let mixed = super::classify_channel_thread_notification(&mixed_filter);
+    assert!(matches!(mixed, super::ThreadNotifPlan::Unsafe));
+
+    let negated_filter = Expr::is_not(state(item_filters::NotificationState::Done));
+    let negated = super::classify_channel_thread_notification(&negated_filter);
+    assert!(matches!(negated, super::ThreadNotifPlan::Unsafe));
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_notification_and_participant(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG3, false, true).await?;
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG1, true, false).await?;
+    insert_channel_thread_notification(&pool, USER_B, CH1, MSG31, false, true).await?;
+    let bad_notification_id = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO notification (
+            id, notification_event_type, event_item_id, event_item_type,
+            service_sender, metadata, secondary_event_item_id, secondary_event_item_type
+        )
+        VALUES ($1, 'channel_reply', $2, 'channel', 'channels-test', '{}'::jsonb, 'not-a-uuid', 'channel_message')
+        "#,
+    )
+    .bind(bad_notification_id)
+    .bind(CH1.to_string())
+    .execute(&pool)
+    .await?;
+    insert_user_notification(&pool, USER_A, bad_notification_id, true, false).await?;
+
+    let participant = Expr::val(ChannelThreadLiteral::Participant(macro_user_id(USER_A)));
+    let parent_ids = thread_ids_matching(
+        pool.clone(),
+        USER_A,
+        Expr::and(
+            Expr::or(
+                Expr::val(ChannelThreadLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+                Expr::val(ChannelThreadLiteral::NotificationState(
+                    item_filters::NotificationState::Done,
+                )),
+            ),
+            participant.clone(),
+        ),
+    )
+    .await?;
+    assert_eq!(parent_ids, vec![MSG3, MSG1]);
+
+    // A notification on the wrong channel does not surface the thread.
+    insert_channel_thread_notification(&pool, USER_A, CH2, MSG1, false, false).await?;
+    let unseen = thread_ids_matching(
+        pool.clone(),
+        USER_A,
+        Expr::val(ChannelThreadLiteral::NotificationState(
+            item_filters::NotificationState::Unseen,
+        )),
+    )
+    .await?;
+    assert!(unseen.is_empty());
+
+    let not_done = thread_ids_matching(
+        pool.clone(),
+        USER_A,
+        Expr::is_not(Expr::val(ChannelThreadLiteral::NotificationState(
+            item_filters::NotificationState::Done,
+        ))),
+    )
+    .await?;
+    assert!(not_done.contains(&MSG3));
+    assert!(!not_done.contains(&MSG1));
+
+    let widened = thread_ids_matching(
+        pool.clone(),
+        USER_A,
+        Expr::or(
+            Expr::val(ChannelThreadLiteral::NotificationState(
+                item_filters::NotificationState::Done,
+            )),
+            participant,
+        ),
+    )
+    .await?;
+    let participating = thread_ids_matching(
+        pool,
+        USER_A,
+        Expr::val(ChannelThreadLiteral::Participant(macro_user_id(USER_A))),
+    )
+    .await?;
+    assert_eq!(widened, participating);
+    assert!(widened.contains(&MSG31));
+    Ok(())
+}
+
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
