@@ -1175,7 +1175,7 @@ function localSnapshot(
 }
 
 it.each(['standalone', 'reply'] as const)(
-  'keeps one %s local-save warning until recovery or disposal',
+  'keeps one %s local-save warning until a write recovers, even after closing',
   async (surface) => {
     const context = createComposeContext();
     let diskFailed = true;
@@ -1217,7 +1217,44 @@ it.each(['standalone', 'reply'] as const)(
     } finally {
       root.dispose();
     }
-    expect(context.notices.feedback.dismiss).toHaveBeenLastCalledWith(8);
+    await vi.advanceTimersByTimeAsync(0);
+    const closing = vi.mocked(context.drafts.saveLocalDraft!).mock.lastCall;
+    expect(decodeBase64Utf8(closing?.[0].draft.body_html ?? '')).toContain(
+      'Another failure'
+    );
+    expect(context.notices.feedback.dismiss).not.toHaveBeenCalledWith(8);
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'writes the unsaved %s edit once more on close and dismisses the warning when it lands',
+  async (surface) => {
+    const context = createComposeContext();
+    let diskFailed = true;
+    context.drafts.saveLocalDraft = vi.fn(async (input) => {
+      if (diskFailed) throw new Error('Draft storage transaction aborted');
+      return localSnapshot(input);
+    });
+    vi.mocked(context.notices.feedback.failure).mockReturnValueOnce(7);
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Typed before backgrounding');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+    } finally {
+      diskFailed = false;
+      root.dispose();
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    const closing = vi.mocked(context.drafts.saveLocalDraft!).mock.lastCall;
+    expect(decodeBase64Utf8(closing?.[0].draft.body_html ?? '')).toContain(
+      'Typed before backgrounding'
+    );
+    expect(context.notices.feedback.dismiss).toHaveBeenCalledExactlyOnceWith(7);
+    expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
   }
 );
 

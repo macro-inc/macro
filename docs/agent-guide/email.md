@@ -178,7 +178,7 @@ native offline archive support therefore requires a full app build, not just OTA
 The per-query caches for email threads, channels, and native offline document
 context reopen closed IndexedDB connections. Verify a cached read and a subsequent
 write after closing the connection, then clear/logout during recovery: old-account
-entries must not return. Only transaction creation retries automatically; persistent
+entries must not return. These caches retry only transaction creation; persistent
 storage failures still follow the existing cache fallback behavior.
 
 Performance check: switch Signal → All twice against a large synchronized cache.
@@ -341,15 +341,21 @@ that retry remains accessible beside the actions on mobile. Editing while failed
 continues saving locally without repeatedly submitting the rejected request.
 Local draft storage reopens unexpectedly closed IndexedDB connections. If creating
 a transaction fails because the connection is closing, it retries once before
-running any writes. Verify by closing the draft database connection, then editing:
-the latest content must persist locally and server autosave must continue without
-reloading. Repeat across background/resume on an iPhone. A transaction that has
-already started is never automatically replayed. Persistent failures still block
-server autosave; copy unsaved content before restarting. Storage failures and
-recovery report current page visibility and network state without draft content.
+running any writes. When WebKit aborts a started transaction (typically while the
+iOS app is backgrounded), the whole transaction replays on a new connection, at
+most three attempts; a save recognizes its own commit, so a replay never
+duplicates a revision. Hiding the app writes a debounced edit immediately, and
+any visibility change retries a failed local write with the live editor content.
+Verify by closing the draft database connection, then editing: the latest content
+must persist locally and server autosave must continue without reloading. Repeat
+across background/resume on an iPhone. Persistent failures still block server
+autosave; copy unsaved content before restarting. Storage failures and recovery
+report current page visibility and network state without draft content.
 
-Repeated local-save failures show one persistent warning per composer; recovery
-or closing that composer dismisses it. A later failure shows a new warning.
+Repeated local-save failures show one persistent warning per composer; a later
+successful write dismisses it. Closing the composer writes the unsaved edit once
+more and keeps the warning until that write lands. A later failure shows a new
+warning.
 Retry preserves the original draft handle. An already-sent rejection drops the
 local copy rather than recreating the sent message. The REST compose path keeps
 its existing behavior.
