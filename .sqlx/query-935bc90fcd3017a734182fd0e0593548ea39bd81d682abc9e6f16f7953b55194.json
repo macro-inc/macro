@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET last_active_at = NOW() - INTERVAL '31 days' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "935bc90fcd3017a734182fd0e0593548ea39bd81d682abc9e6f16f7953b55194"
+}

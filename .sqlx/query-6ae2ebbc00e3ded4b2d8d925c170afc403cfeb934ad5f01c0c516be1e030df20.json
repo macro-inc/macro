@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH touched AS (\n            SELECT id, sync_paused_at IS NOT NULL AS was_paused\n            FROM email_links\n            WHERE id = ANY($1)\n              AND deleting_at IS NULL\n              AND (sync_paused_at IS NOT NULL OR last_active_at < NOW() - INTERVAL '1 hour')\n            FOR UPDATE SKIP LOCKED\n        )\n        UPDATE email_links l\n        SET last_active_at = NOW(),\n            is_sync_active = l.is_sync_active OR touched.was_paused,\n            sync_paused_at = NULL,\n            updated_at = CASE WHEN touched.was_paused THEN NOW() ELSE l.updated_at END\n        FROM touched\n        WHERE l.id = touched.id\n        RETURNING l.id, touched.was_paused AS \"was_paused!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "was_paused!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "6ae2ebbc00e3ded4b2d8d925c170afc403cfeb934ad5f01c0c516be1e030df20"
+}

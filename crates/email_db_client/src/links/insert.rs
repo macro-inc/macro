@@ -52,6 +52,8 @@ pub async fn upsert_link(
         ON CONFLICT (fusionauth_user_id, email_address, provider)
         DO UPDATE SET
             is_sync_active = EXCLUDED.is_sync_active,
+            sync_paused_at = NULL,
+            last_active_at = NOW(),
             needs_reauth = false,
             last_sync_error_at = NULL,
             updated_at = NOW()

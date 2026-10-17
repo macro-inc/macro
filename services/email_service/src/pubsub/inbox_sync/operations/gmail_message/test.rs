@@ -31,12 +31,12 @@ async fn stored_history_id(pool: &PgPool, email_address: &str) -> Option<String>
 async fn recovery_backfill_job_is_created_once_and_then_reused(pool: PgPool) {
     let (link_id, _) = insert_email_link(&pool).await;
 
-    let (job, created) = ensure_recovery_backfill_job(&pool, link_id, "fa-user")
+    let (job, created) = ensure_recovery_backfill_job(&pool, link_id, "fa-user", None)
         .await
         .unwrap();
     assert!(created, "first stale-cursor recovery creates a job");
 
-    let (reused_job, created_again) = ensure_recovery_backfill_job(&pool, link_id, "fa-user")
+    let (reused_job, created_again) = ensure_recovery_backfill_job(&pool, link_id, "fa-user", None)
         .await
         .unwrap();
     assert!(
@@ -55,6 +55,18 @@ async fn recovery_backfill_job_is_created_once_and_then_reused(pool: PgPool) {
     .await
     .unwrap();
     assert!(is_recovery);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn capped_recovery_backfill_job_records_its_thread_limit(pool: PgPool) {
+    let (link_id, _) = insert_email_link(&pool).await;
+
+    let (job, created) = ensure_recovery_backfill_job(&pool, link_id, "fa-user", Some(500))
+        .await
+        .unwrap();
+
+    assert!(created);
+    assert_eq!(job.threads_requested_limit, Some(500));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

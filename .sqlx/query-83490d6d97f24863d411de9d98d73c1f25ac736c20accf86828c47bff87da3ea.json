@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET last_active_at = NOW() - make_interval(days => $2) WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "83490d6d97f24863d411de9d98d73c1f25ac736c20accf86828c47bff87da3ea"
+}

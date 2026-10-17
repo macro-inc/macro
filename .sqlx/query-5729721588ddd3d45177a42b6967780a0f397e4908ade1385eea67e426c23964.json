@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT is_sync_active, sync_paused_at, last_active_at FROM email_links WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_sync_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "sync_paused_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_active_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "5729721588ddd3d45177a42b6967780a0f397e4908ade1385eea67e426c23964"
+}

@@ -124,8 +124,25 @@ async fn schedule_stale_cursor_backfill(
     link: &Link,
     notification_history_id: u64,
 ) -> result::Result<(), ProcessingError> {
+    schedule_recovery_backfill(&ctx.db, &ctx.sqs_client, link, None).await?;
+
+    repair_stale_cursor(&ctx.db, link.id, notification_history_id).await;
+
+    Ok(())
+}
+
+/// Starts a recovery backfill that refreshes existing threads, reusing the link's
+/// active backfill job when there is one. `thread_limit` caps the recovery to the
+/// most recent threads; `None` recovers the whole mailbox.
+pub(crate) async fn schedule_recovery_backfill(
+    db: &PgPool,
+    sqs_client: &sqs_client::SQS,
+    link: &Link,
+    thread_limit: Option<i32>,
+) -> result::Result<(), ProcessingError> {
     let (job, created) =
-        ensure_recovery_backfill_job(&ctx.db, link.id, link.fusionauth_user_id.as_str()).await?;
+        ensure_recovery_backfill_job(db, link.id, link.fusionauth_user_id.as_str(), thread_limit)
+            .await?;
 
     let message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {
@@ -135,19 +152,17 @@ async fn schedule_stale_cursor_backfill(
         }),
     };
 
-    if let Err(enqueue_error) = ctx.sqs_client.enqueue_email_backfill_message(message).await {
+    if let Err(enqueue_error) = sqs_client.enqueue_email_backfill_message(message).await {
         if created {
-            email_db_client::backfill::job::update::fail_backfill_job(&ctx.db, job.id)
+            email_db_client::backfill::job::update::fail_backfill_job(db, job.id)
                 .await
                 .map_err(recovery_db_error)?;
         }
         return Err(ProcessingError::Retryable(DetailedError {
             reason: FailureReason::SqsEnqueueFailed,
-            source: enqueue_error.context("Failed to enqueue stale-cursor backfill"),
+            source: enqueue_error.context("Failed to enqueue recovery backfill"),
         }));
     }
-
-    repair_stale_cursor(&ctx.db, link.id, notification_history_id).await;
 
     Ok(())
 }
@@ -159,6 +174,7 @@ async fn ensure_recovery_backfill_job(
     db: &PgPool,
     link_id: Uuid,
     fusionauth_user_id: &str,
+    thread_limit: Option<i32>,
 ) -> result::Result<(BackfillJob, bool), ProcessingError> {
     let existing_job = email_db_client::backfill::job::get::get_active_backfill_job(db, link_id)
         .await
@@ -172,7 +188,7 @@ async fn ensure_recovery_backfill_job(
         db,
         link_id,
         fusionauth_user_id,
-        None,
+        thread_limit,
         // Stale-cursor recovery: refresh existing threads so the gap window's
         // replies are recovered (see backfill_thread's refresh path).
         true,

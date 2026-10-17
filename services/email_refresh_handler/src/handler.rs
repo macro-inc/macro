@@ -1,6 +1,6 @@
 use crate::context::{self};
 use aws_lambda_events::eventbridge::EventBridgeEvent;
-use chrono::Timelike;
+use chrono::{DateTime, Duration, Timelike, Utc};
 use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
@@ -26,8 +26,9 @@ pub async fn handler(
         send_health_check_messages(&ctx)
     )?;
 
-    // only send delete messages once daily, during the night
+    // only send retention messages once daily, during the night
     if matches!(ctx.config.environment, Environment::Production) && chrono::Utc::now().hour() == 5 {
+        send_pause_messages(&ctx).await?;
         send_delete_messages(&ctx).await?;
     }
 
@@ -140,9 +141,43 @@ async fn send_refresh_messages(ctx: &context::Context) -> Result<(), Error> {
     Ok(())
 }
 
+/// pause sync for idle links; links are only deleted once paused, so a delete never races a
+/// link that is still syncing
+async fn send_pause_messages(ctx: &context::Context) -> Result<(), Error> {
+    let idle_before = Utc::now() - Duration::days(i64::from(ctx.config.pause_inactive_after_days));
+
+    let idle_links = fetch_idle_link_ids(&ctx.db, idle_before)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!(error=?e, "Error fetching idle links for pausing");
+            Vec::new()
+        });
+
+    tracing::info!(
+        "Sending pause notifications for {} idle links",
+        idle_links.len()
+    );
+
+    for link_id in idle_links {
+        let notif = LinkManagerMessage::PauseSync {
+            link_id,
+            idle_before,
+        };
+        ctx.sqs_client
+            .enqueue_link_manager_notification(notif)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, link_id=%link_id, "Error enqueueing pause notification for idle link");
+            })
+            .ok();
+    }
+
+    Ok(())
+}
+
 /// delete unused and inactive links from our database
 async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
-    let unused_links = fetch_unused_link_ids(&ctx.db, ctx.config.delete_unused_after_days as i32)
+    let unused_links = fetch_unused_link_ids(&ctx.db, ctx.config.delete_inactive_after_days as i32)
         .await
         .unwrap_or_else(|e| {
             tracing::error!(error=?e, "Error fetching unused links for deletion");
@@ -194,10 +229,11 @@ async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
     Ok(())
 }
 
-/// Fetch link IDs that were created > X days ago and have never viewed a thread
-pub async fn fetch_unused_link_ids(
+/// Fetch syncing link IDs whose last activity (app opened or thread viewed) is before
+/// `idle_before`
+pub async fn fetch_idle_link_ids(
     pool: &Pool<Postgres>,
-    delete_unused_after_days: i32,
+    idle_before: DateTime<Utc>,
 ) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
     sqlx::query_scalar!(
         r#"
@@ -205,23 +241,50 @@ pub async fn fetch_unused_link_ids(
                 l.id AS "link_id!"
             FROM
                 public.email_links l
-            LEFT JOIN
-                public.email_user_history h ON l.id = h.link_id
+            LEFT JOIN LATERAL (
+                SELECT MAX(h.updated_at) AS last_viewed_at
+                FROM public.email_user_history h
+                WHERE h.link_id = l.id
+            ) h ON TRUE
             WHERE
                 l.macro_id NOT LIKE '%@macro.com'
-                AND l.created_at < NOW() - (make_interval(days => $1))
-            GROUP BY
-                l.id
-            HAVING
-                COUNT(h.link_id) = 0
+                AND l.is_sync_active
+                AND GREATEST(l.last_active_at, h.last_viewed_at) < $1
             "#,
-        delete_unused_after_days
+        idle_before
     )
     .fetch_all(pool)
     .await
 }
 
-/// Fetch link IDs where the latest thread viewed was > Y days ago
+/// Fetch paused link IDs whose app was last opened > X days ago and that have never viewed a
+/// thread
+pub async fn fetch_unused_link_ids(
+    pool: &Pool<Postgres>,
+    delete_after_days: i32,
+) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+            SELECT
+                l.id AS "link_id!"
+            FROM
+                public.email_links l
+            WHERE
+                l.macro_id NOT LIKE '%@macro.com'
+                AND NOT l.is_sync_active
+                AND l.last_active_at < NOW() - (make_interval(days => $1))
+                AND NOT EXISTS (
+                    SELECT 1 FROM public.email_user_history h WHERE h.link_id = l.id
+                )
+            "#,
+        delete_after_days
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// Fetch paused link IDs where both the app was last opened and the latest thread viewed > Y
+/// days ago
 pub async fn fetch_inactive_link_ids(
     pool: &Pool<Postgres>,
     delete_inactive_after_days: i32,
@@ -236,6 +299,8 @@ pub async fn fetch_inactive_link_ids(
                 public.email_user_history h ON l.id = h.link_id
             WHERE
                 l.macro_id NOT LIKE '%@macro.com'
+                AND NOT l.is_sync_active
+                AND l.last_active_at < NOW() - (make_interval(days => $1))
             GROUP BY
                 l.id
             HAVING

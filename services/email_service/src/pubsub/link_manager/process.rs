@@ -1,4 +1,5 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
+use crate::pubsub::link_manager::retention;
 use crate::pubsub::util::{build_notification_recipients, cg_refresh_email, publish_email_event};
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
@@ -31,7 +32,7 @@ const TEARDOWN_RETRY_DELAYS: [Duration; 2] =
 ///
 /// Only transient failures retry. Permanent errors (revoked grants, missing
 /// scopes) return immediately: retrying cannot help while tearing a link down.
-async fn retry_teardown<F, Fut>(mut operation: F) -> Result<(), EmailApiError>
+pub(super) async fn retry_teardown<F, Fut>(mut operation: F) -> Result<(), EmailApiError>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<(), EmailApiError>>,
@@ -97,10 +98,44 @@ pub async fn process_message(
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
-            handle_delete(&ctx, &link, &deletion_reason).await?;
+            if retention::claim_for_delete(&ctx, &link, &deletion_reason).await? {
+                handle_delete(&ctx, &link, &deletion_reason).await?;
+            }
         }
         LinkManagerMessage::DeleteUser { fusionauth_user_id } => {
             handle_delete_all_user_links(&ctx, &fusionauth_user_id).await?;
+        }
+        LinkManagerMessage::PauseSync {
+            link_id,
+            idle_before,
+        } => {
+            let lock = retention::lock_link(&ctx, link_id).await?;
+            let link = get_link_or_skip(&ctx, message, link_id).await?;
+            let Some(link) = link else { return Ok(()) };
+
+            retention::handle_pause(&ctx, &link, idle_before).await?;
+            lock.release().await;
+        }
+        LinkManagerMessage::ResumeSync { link_id } => {
+            let lock = retention::lock_link(&ctx, link_id).await?;
+            let link = get_link_or_skip(&ctx, message, link_id).await?;
+            let Some(link) = link else { return Ok(()) };
+
+            // Paused again or being removed since the resume was enqueued.
+            if link.is_sync_active {
+                // Fresh, so a grant revoked while the link was paused is caught here.
+                let result = ctx
+                    .email_api
+                    .get_access_token(link.id, TokenFreshness::Fresh)
+                    .await;
+
+                if settle_reauth_fetch(&ctx, &link, result).await?.is_some() {
+                    retention::handle_resume(&ctx, &link).await?;
+                }
+            } else {
+                tracing::debug!(link_id=%link.id, "Link is no longer sync-active; skipping resume");
+            }
+            lock.release().await;
         }
     }
 
@@ -114,7 +149,7 @@ pub async fn process_message(
 /// be dropped — but only once that mark is persisted; if the mark write itself failed,
 /// propagate the error so the message retries and the health signal isn't lost. Other,
 /// transient errors propagate to retry.
-async fn settle_reauth_fetch(
+pub(super) async fn settle_reauth_fetch(
     ctx: &LinkManagerContext,
     link: &Link,
     result: Result<AccessToken, EmailApiError>,

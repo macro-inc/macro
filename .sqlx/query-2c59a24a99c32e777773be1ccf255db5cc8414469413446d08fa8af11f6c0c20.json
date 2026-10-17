@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                l.id AS \"link_id!\"\n            FROM\n                public.email_links l\n            LEFT JOIN LATERAL (\n                SELECT MAX(h.updated_at) AS last_viewed_at\n                FROM public.email_user_history h\n                WHERE h.link_id = l.id\n            ) h ON TRUE\n            WHERE\n                l.macro_id NOT LIKE '%@macro.com'\n                AND l.is_sync_active\n                AND GREATEST(l.last_active_at, h.last_viewed_at) < $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2c59a24a99c32e777773be1ccf255db5cc8414469413446d08fa8af11f6c0c20"
+}

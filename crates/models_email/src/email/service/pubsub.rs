@@ -1,4 +1,5 @@
 use crate::service::contact::Contact;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 use thiserror::Error;
@@ -93,6 +94,16 @@ pub enum LinkManagerMessage {
     /// Gmail watch or syncing contacts. Enqueued by the periodic health poll so a dead
     /// grant surfaces between the daily full refreshes.
     HealthCheck { link_id: Uuid },
+    /// Pause sync for a link nobody has used since `idle_before`: stop its Gmail watch
+    /// and cancel backfills, keeping its data. Skipped when activity was recorded after
+    /// the retention sweep selected the link.
+    PauseSync {
+        link_id: Uuid,
+        idle_before: DateTime<Utc>,
+    },
+    /// Restart sync for a link resumed by user activity: renew its Gmail watch and
+    /// catch up on the mail it missed while paused.
+    ResumeSync { link_id: Uuid },
 }
 
 /// The message we send from the email_scheduled_handler lambda to the service via SQS to trigger

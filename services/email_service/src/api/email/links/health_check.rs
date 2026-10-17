@@ -65,6 +65,14 @@ pub async fn health_check_handler(
     .await
     .map_err(HealthCheckError::DatabaseError)?;
 
+    // The web app calls this on mount and on window focus, so it doubles as the
+    // "user opened the app" signal that drives mailbox retention.
+    tokio::spawn({
+        let ctx = ctx.clone();
+        let link_ids: Vec<_> = links.iter().map(|link| link.id).collect();
+        async move { record_activity_and_resume(&ctx, &link_ids).await }
+    });
+
     for link in links {
         if !link.is_sync_active {
             continue;
@@ -116,4 +124,36 @@ pub async fn health_check_handler(
     }
 
     Ok(StatusCode::ACCEPTED.into_response())
+}
+
+/// Records app activity on the caller's inboxes and restarts sync for any the
+/// retention sweep had paused. A resumed link skips this request's health probe;
+/// its resume fetches a fresh token instead.
+async fn record_activity_and_resume(ctx: &ApiContext, link_ids: &[uuid::Uuid]) {
+    let resumed =
+        match email_db_client::links::retention::record_link_activity(&ctx.db, link_ids).await {
+            Ok(resumed) => resumed,
+            Err(error) => {
+                tracing::error!(error=?error, "Failed to record inbox activity");
+                return;
+            }
+        };
+
+    for link_id in resumed {
+        tracing::info!(link_id=%link_id, "Resuming sync for paused inbox");
+        let Err(error) = ctx
+            .sqs_client
+            .enqueue_link_manager_notification(LinkManagerMessage::ResumeSync { link_id })
+            .await
+        else {
+            continue;
+        };
+        tracing::error!(error=?error, link_id=%link_id, "Failed to enqueue inbox resume; restoring its pause so the next app open retries");
+        email_db_client::links::retention::restore_link_pause(&ctx.db, link_id)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error=?error, link_id=%link_id, "Failed to restore pause after unsent inbox resume");
+            })
+            .ok();
+    }
 }

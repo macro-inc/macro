@@ -4,7 +4,7 @@ use macro_env_var::env_vars;
 
 env_vars! {
     struct DatabaseUrl;
-    struct DeleteUnusedAfterDays;
+    struct PauseInactiveAfterDays;
     struct DeleteInactiveAfterDays;
     struct InboxHealthPollIntervalHours;
 }
@@ -18,10 +18,10 @@ pub struct Config {
     #[allow(dead_code)]
     pub environment: Environment,
 
-    /// How many days to keep never-used links around
-    pub delete_unused_after_days: u32,
+    /// How many days without activity before a link's sync is paused
+    pub pause_inactive_after_days: u32,
 
-    /// How many days to keep inactive links around
+    /// How many days without activity before a link is deleted
     pub delete_inactive_after_days: u32,
 
     /// How often (in hours) the background poll probes each link's grant health
@@ -36,10 +36,10 @@ impl Config {
 
         let environment = Environment::new_or_prod();
 
-        let delete_unused_after_days = DeleteUnusedAfterDays::new()
-            .context("DELETE_UNUSED_AFTER_DAYS must be provided")?
+        let pause_inactive_after_days = PauseInactiveAfterDays::new()
+            .context("PAUSE_INACTIVE_AFTER_DAYS must be provided")?
             .parse()
-            .context("DELETE_UNUSED_AFTER_DAYS must be a valid u32")?;
+            .context("PAUSE_INACTIVE_AFTER_DAYS must be a valid u32")?;
 
         let delete_inactive_after_days = DeleteInactiveAfterDays::new()
             .context("DELETE_INACTIVE_AFTER_DAYS must be provided")?
@@ -54,7 +54,7 @@ impl Config {
         Ok(Config {
             database_url,
             environment,
-            delete_unused_after_days,
+            pause_inactive_after_days,
             delete_inactive_after_days,
             health_poll_interval_hours,
         })
