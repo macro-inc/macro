@@ -5,7 +5,7 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, For, type JSX, type ParentProps } from 'solid-js';
+import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CrmWorkspaceView } from './crm-workspace';
 
@@ -14,7 +14,9 @@ const fixture = vi.hoisted(() => ({
   pipelinesEnabled: true,
   listsEnabled: true,
   touch: true,
+  narrow: false,
   openWithSplit: vi.fn(),
+  setCollapsed: vi.fn(),
 }));
 
 vi.mock('@app/components/view-shell', () => ({
@@ -26,13 +28,22 @@ vi.mock('@app/components/view-shell', () => ({
   },
   useViewShell: () => ({
     aside: { isCollapsed: () => true },
-    breakpoints: { narrow: () => false },
+    breakpoints: { narrow: () => fixture.narrow },
   }),
   useViewControlHotkeys: () => {},
   SearchBar: () => null,
 }));
 vi.mock('@app/preferences/use-preference', () => ({
-  usePreference: () => createSignal(false),
+  usePreference: () => {
+    const [collapsed, setCollapsed] = createSignal(false);
+    return [
+      collapsed,
+      (value: boolean) => {
+        fixture.setCollapsed(value);
+        setCollapsed(value);
+      },
+    ];
+  },
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => fixture.touch,
@@ -55,6 +66,22 @@ vi.mock('@ui', async () => ({
   Button: (
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
   ) => <button aria-label={props.label} {...props} />,
+  Dropdown: Object.assign(
+    (
+      props: ParentProps<{
+        open: boolean;
+        onOpenChange: (open: boolean) => void;
+      }>
+    ) => (
+      <div>
+        <button type="button" onClick={() => props.onOpenChange(true)}>
+          Show CRM navigation
+        </button>
+        <Show when={props.open}>{props.children}</Show>
+      </div>
+    ),
+    { Trigger: () => null, Content: (props: ParentProps) => props.children }
+  ),
 }));
 vi.mock('@ui/components/Tour', () => ({ tourTarget: () => () => {} }));
 vi.mock('@app/components/view-shell/tour', () => ({
@@ -112,8 +139,12 @@ vi.mock('../components/crm-sidebar', () => ({
   CrmSidebar: (props: {
     pipelines?: JSX.Element;
     onNavigate: (id: string) => void;
+    onCollapse: () => void;
   }) => (
     <nav aria-label="CRM sidebar">
+      <button type="button" onClick={props.onCollapse}>
+        Collapse CRM sidebar
+      </button>
       <button type="button" onClick={() => props.onNavigate('active')}>
         Companies
       </button>
@@ -156,9 +187,11 @@ vi.mock('./import-companies', () => ({ CrmImport: () => null }));
 vi.mock('./pipeline', () => ({
   PipelineView: (props: {
     pipeline: { name: string };
+    navigation?: JSX.Element;
     onOpenRecord(record: { type: 'company'; id: string }): void;
   }) => (
     <div>
+      <header>{props.navigation}</header>
       {props.pipeline.name} table
       <button
         type="button"
@@ -218,7 +251,9 @@ afterEach(() => {
   fixture.pipelinesEnabled = true;
   fixture.listsEnabled = true;
   fixture.touch = true;
+  fixture.narrow = false;
   fixture.openWithSplit.mockReset();
+  fixture.setCollapsed.mockReset();
 });
 
 function setup(initialTab = 'active') {
@@ -302,6 +337,19 @@ it('shows a pipeline another view asks for, in place of an open record', () => {
   expect(activeTab()).toBe('pipeline:sales');
   expect(screen.getByText('Sales table')).toBeTruthy();
   expect(screen.queryByText('Sales record company:acme')).toBeNull();
+});
+
+it('closes the narrow navigation menu on collapse without saving the preference', () => {
+  fixture.touch = false;
+  fixture.narrow = true;
+  setup('pipeline:sales');
+  const collapses = () =>
+    screen.getAllByRole('button', { name: 'Collapse CRM sidebar' });
+  fireEvent.click(screen.getByRole('button', { name: 'Show CRM navigation' }));
+  expect(collapses()).toHaveLength(2);
+  fireEvent.click(collapses()[1]!);
+  expect(collapses()).toHaveLength(1);
+  expect(fixture.setCollapsed).not.toHaveBeenCalled();
 });
 
 it('opens the company of a pipeline row in its own split on touch', () => {
