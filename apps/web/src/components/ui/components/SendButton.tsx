@@ -65,8 +65,8 @@ export function SendButton(props: SendButtonProps) {
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',
         // Out of the flow, not just invisible: a transparent send button
-        // holds its slot and strands whatever sits before it (the dictation
-        // button) well short of the composer's edge.
+        // holds its slot and strands whatever sits before it well short of
+        // the composer's edge.
         local.hidden && 'hidden',
         local.class
       )}

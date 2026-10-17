@@ -1,10 +1,10 @@
-import { enableDictation, isFeatureEnabled } from '@core/constant/featureFlags';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
 import MicrophoneIcon from '@phosphor-icons/core/regular/microphone.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { isDictationAvailable } from '../availability';
 import type { DictationController } from '../core/types';
 import { VolumeTimeline } from './volume-timeline';
 
@@ -13,11 +13,11 @@ export function DictationButton(props: {
   disabled?: boolean;
 }) {
   return (
-    <Show when={isFeatureEnabled(enableDictation)}>
+    <Show when={isDictationAvailable()}>
       <Button
         variant="ghost"
         size="icon-composer"
-        class="text-ink not-touch:text-composer-ink"
+        class="text-composer-ink"
         label={props.dictation.label()}
         tooltip={props.dictation.label()}
         disabled={props.disabled || props.dictation.disabled()}
@@ -33,7 +33,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
   return (
     <Show when={props.dictation.active()}>
       <div
-        class="absolute inset-0 z-10 flex items-center gap-2 rounded-[inherit] bg-composer px-[9.375px] text-composer-ink touch:gap-1.5 touch:bg-chrome touch:pr-2 touch:pl-3"
+        class="absolute inset-0 z-10 flex items-center gap-2 rounded-[inherit] bg-composer px-[9.375px] text-composer-ink"
         role="group"
         aria-label="Dictation"
         onKeyDown={(event) => {
@@ -44,7 +44,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
           }
         }}
       >
-        <div class="flex min-w-0 flex-1 items-center gap-3 px-2 touch:gap-2 touch:px-0">
+        <div class="flex min-w-0 flex-1 items-center gap-3 px-2">
           <VolumeTimeline levels={props.dictation.volumeHistory()} />
           <span
             class="shrink-0 text-xs text-ink-muted"
@@ -61,7 +61,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
         <Button
           variant="ghost"
           size="icon-composer"
-          class="text-composer-ink touch:bg-ink/5 touch:text-ink-muted"
+          class="text-composer-ink"
           label="Cancel dictation"
           ref={(element) =>
             queueMicrotask(() => {
@@ -72,12 +72,10 @@ export function DictationPanel(props: { dictation: DictationController }) {
         >
           <XIcon />
         </Button>
-        {/* Confirm is the composer's primary action while recording, so on
-            touch it borrows the send button's filled circle. */}
         <Button
           variant="ghost"
           size="icon-composer"
-          class="text-composer-ink touch:bg-ink touch:text-surface-4"
+          class="text-composer-ink"
           label="Use dictation"
           disabled={
             props.dictation.phase() === 'starting' ||
