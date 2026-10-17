@@ -302,7 +302,9 @@ export function useAddInboxFlow() {
     scopes?: ConsentScopes;
     emailAddress?: string;
   }) => {
-    const scopes = options?.scopes ?? 'gmail';
+    // Default to gmail_and_calendar so email connections also enable calendar.
+    // Explicit calendar-only connections pass 'calendar' to skip email setup.
+    const scopes = options?.scopes ?? 'gmail_and_calendar';
     if (isNativeMobilePlatform()) {
       await startNativeFlow(scopes, options?.emailAddress);
       return;

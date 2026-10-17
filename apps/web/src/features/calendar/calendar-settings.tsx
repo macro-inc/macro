@@ -86,7 +86,7 @@ function CalendarSettingsContent() {
           void links.refetch();
           void calendarsQuery.refetch();
         }}
-        onConnect={() => void connect('gmail_and_calendar')}
+        onConnect={() => void connect('calendar')}
         onEnable={() => void connect('calendar')}
         onDisconnect={(account) =>
           setDisconnect({ linkId: account.id, emailAddress: account.email })
