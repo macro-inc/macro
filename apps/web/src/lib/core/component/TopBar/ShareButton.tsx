@@ -275,13 +275,12 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
 };
 
 const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
+/**
+ * Refetches each mounted block's share permissions. Share modals outside a
+ * block read their own when they open.
+ */
 export const refetchDocumentShareButtonResource = () => {
-  const refetchArray_ = refetchArray();
-  if (refetchArray_.length === 0) {
-    console.warn('no document share permission refetch functions initialized');
-    return;
-  }
-  refetchArray_.forEach((refetch) => refetch());
+  refetchArray().forEach((refetch) => refetch());
 };
 
 export function getShareDrawerRecipientInput(): HTMLElement | null {
