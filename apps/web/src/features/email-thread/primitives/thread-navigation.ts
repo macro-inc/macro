@@ -594,11 +594,7 @@ export function createThreadNavigation(
     }
     return true;
   };
-  const markDone = () => {
-    if (!host.listNavigation) return context.archiveThread();
-    host.listNavigation.markDone(context.archiveThread);
-    return true;
-  };
+  const markDone = () => context.archiveThreadAndAdvance();
   onMount(() =>
     host.registerKeyboard?.({
       replyToFocusedMessage: () => openHotkeyTarget('reply-all'),

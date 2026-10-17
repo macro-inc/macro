@@ -564,8 +564,9 @@ describe('send and schedule ordering', () => {
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email sent');
       expect(onMarkDone).toHaveBeenCalledOnce();
+      // Send and mark done moves on to the next thread, like Mark done.
       expect(onMarkDone).toHaveBeenCalledWith(
-        expect.objectContaining({ silent: true, navigate: false })
+        expect.objectContaining({ silent: true, navigate: true })
       );
       sentNotice?.[1]?.actions?.[0].onClick();
       await vi.advanceTimersByTimeAsync(0);
@@ -834,6 +835,26 @@ describe('send and schedule ordering', () => {
       newer.dispose();
     }
   });
+  it('stays on the thread after a plain reply in the inbox', async () => {
+    const composeContext = createComposeContext();
+    const onMarkDone = vi.fn();
+    const state = mountReplyComposer(
+      composeContext,
+      undefined,
+      { onMarkDone },
+      { inboxVisible: true }
+    );
+    try {
+      await state.sendEmail();
+      // Replying files the thread away, but the reader keeps it open.
+      expect(onMarkDone).toHaveBeenCalledWith(
+        expect.objectContaining({ silent: true, navigate: false })
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('completes reply mark-done when the post-send refresh fails', async () => {
     const composeContext = createComposeContext();
     const failure = new Error('Refresh failed');

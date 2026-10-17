@@ -148,7 +148,11 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
               formSeed={seed}
               onEngaged={() => setEngaged(true)}
               sideEffectOnSend={afterSend}
-              onMarkDone={ctx.archiveThread}
+              onMarkDone={(options) =>
+                options?.navigate
+                  ? ctx.archiveThreadAndAdvance(options)
+                  : ctx.archiveThread(options)
+              }
               setShowReply={props.setShowReply}
               markdownDomRef={props.markdownDomRef}
               unframed={props.unframed}

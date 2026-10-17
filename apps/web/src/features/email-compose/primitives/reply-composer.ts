@@ -1081,13 +1081,14 @@ export function createReplyComposer(
       }
       if (willMarkDone) {
         try {
-          // Sending a reply stays on the thread; explicit Mark done advances.
+          // A plain send stays on the thread; Send and mark done advances to
+          // the next thread, like Mark done.
           props.onMarkDone?.({
             silent: true,
             onUndoHandle: (handle) => {
               markDoneUndoHandle = handle;
             },
-            navigate: false,
+            navigate: markDone,
           });
         } catch (error) {
           props.notices.reportError(error);

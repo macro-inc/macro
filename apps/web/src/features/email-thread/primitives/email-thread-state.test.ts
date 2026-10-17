@@ -1,10 +1,58 @@
 import { createRoot, createSignal } from 'solid-js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { ArchiveThreadOptions } from '../context/email-thread-context';
 import type { EmailThread } from '../core/email-thread';
 import { createThreadContext, message, thread } from '../tests/fixtures';
 import { createEmailThreadState } from './email-thread-state';
 
 describe('thread state with an injected source', () => {
+  it('archives through the host list so done-and-advance keeps its undo', () =>
+    createRoot((dispose) => {
+      try {
+        const archiveThread = vi.fn((_options?: ArchiveThreadOptions) => true);
+        const context = createThreadContext({
+          thread: () => thread([message('last')]),
+        });
+        const state = createEmailThreadState(
+          {
+            ...context,
+            createCommands: (snapshot) => ({
+              ...context.createCommands(snapshot),
+              archiveThread,
+            }),
+          },
+          {
+            listNavigation: {
+              canNext: () => true,
+              canPrevious: () => false,
+              next() {},
+              previous() {},
+              // The host picks the next thread and archives without its own
+              // navigation, as Email's list navigation does.
+              markDone: (archive) =>
+                archive({ navigate: false, nextEntityId: 'next' }),
+            },
+          }
+        );
+        const onUndoHandle = vi.fn();
+        expect(
+          state.archiveThreadAndAdvance({
+            silent: true,
+            onUndoHandle,
+            navigate: true,
+          })
+        ).toBe(true);
+        expect(archiveThread).toHaveBeenCalledWith({
+          silent: true,
+          onUndoHandle,
+          navigate: false,
+          nextEntityId: 'next',
+        });
+      } finally {
+        dispose();
+      }
+    }));
+
   it('does not move an open bottom reply to a newly sent message', () =>
     createRoot((dispose) => {
       try {
