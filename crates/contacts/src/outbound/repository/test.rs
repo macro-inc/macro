@@ -77,6 +77,32 @@ async fn test_get_contacts(pool: PgPool) -> sqlx::Result<()> {
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("both_sides"))
+)]
+async fn test_get_contacts_reads_both_columns_once(pool: PgPool) -> sqlx::Result<()> {
+    let repo = DbContactsRepository::new(pool);
+    let mut contacts: Vec<String> = repo
+        .get_contacts(mid("macro|m@test.com"))
+        .await
+        .unwrap()
+        .iter()
+        .map(|c| c.as_ref().to_owned())
+        .collect();
+    contacts.sort();
+    assert_eq!(
+        contacts,
+        [
+            "macro|a@test.com",
+            "macro|b@test.com",
+            "macro|x@test.com",
+            "macro|z@test.com",
+        ]
+    );
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_create_connections_batch(pool: PgPool) -> sqlx::Result<()> {
     let connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)> = (0..8)
