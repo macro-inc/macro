@@ -582,6 +582,10 @@ full reply data loads. Check a target below the viewport, an unloaded parent, li
 notifications, and switching channels while notifications load. Loading this
 channel's notification edge must not delay its messages or activate the global
 GraphQL notification feed.
+An unrendered target follows the row order the list actually shows, not message
+timestamps: concurrent sends can arrive out of timestamp order. Check a burst of
+simultaneous messages followed by a reply; the chip must point toward the rendered
+row's side of the viewport.
 
 On native iOS, tapping a thread reply push in Notification Center or on the lock
 screen should open its channel, expand the parent thread, and reveal the actual

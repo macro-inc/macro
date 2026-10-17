@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import { compareTimelinePositions } from '@core/util/message-timeline';
 import { isTransientRequestError } from '@core/util/request-error';
 import { compositeEntity } from '@notifications/types';
 import { indexUnreadMessageNotifications } from '@notifications/unread-message-notifications';
@@ -27,6 +28,8 @@ export function createChannelUnreadNavigation(options: {
   messages: Accessor<MessageListItem[]>;
   /** Activity rows can be the first visible row, so they need positions too. */
   activities?: Accessor<ReadonlyMap<string, TimelineActivity>>;
+  /** Keys in the exact order rendered by the timeline. */
+  rowKeys?: Accessor<readonly string[]>;
   scrollState: Accessor<ThreadListScrollState | undefined>;
   container: Accessor<HTMLElement | undefined>;
   insets: Accessor<{ start: number; end: number }>;
@@ -81,16 +84,30 @@ export function createChannelUnreadNavigation(options: {
     }
   );
   const unreadChip = createMemo(() => {
-    const positions = new Map<string, ThreadPosition>(
+    const unloaded = new Map<string, ThreadPosition>(
       (queryReadyGate(unreadRoots) ? unreadRoots.data : []).map((message) => [
         message.id,
         message,
       ])
     );
-    for (const message of options.messages())
-      positions.set(message.id, message);
+    const positions = new Map<string, ThreadPosition>(
+      options.messages().map((message) => [message.id, message])
+    );
     for (const [key, activity] of options.activities?.() ?? [])
-      positions.set(key, { id: activity.id, created_at: activity.occurred_at });
+      positions.set(key, { id: key, created_at: activity.occurred_at });
+    const rows = options.rowKeys
+      ? options.rowKeys().flatMap((key) => {
+          const row = positions.get(key);
+          return row ? [row] : [];
+        })
+      : options.activities
+        ? [...positions.values()].sort((left, right) =>
+            compareTimelinePositions(
+              { id: left.id, createdAt: left.created_at },
+              { id: right.id, createdAt: right.created_at }
+            )
+          )
+        : options.messages();
     const scroll = options.scrollState();
     const container = options.container();
     const viewport = container?.querySelector('[data-channel-scroll]');
@@ -105,7 +122,7 @@ export function createChannelUnreadNavigation(options: {
         : undefined;
     return unreadNotificationChip(
       unread(),
-      positions,
+      { rows, unloaded },
       scroll?.didInitialScroll ? scroll.visibleRange : undefined,
       destinations
     );
