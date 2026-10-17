@@ -29,6 +29,8 @@ type ReplyEnvelopeProps = {
   portalScope: Accessor<'local' | undefined>;
   replyType: Accessor<ReplyType | undefined>;
   disabled: Accessor<boolean>;
+  /** Escape in a desktop field with nothing left to dismiss. */
+  onEscape: () => void;
 };
 
 /** Sender, recipients and subject, sharing field behavior across both layouts. */
@@ -96,6 +98,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
       }
       onChipDragEnd={handleChipDragEnd}
       hideMenuOnEscape
+      onEscape={field.mobile ? undefined : props.onEscape}
     />
   );
   return (
@@ -230,7 +233,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
               onKeyDown={(e) => {
                 if (e.key !== 'Escape') return;
                 e.preventDefault();
-                e.currentTarget.blur();
+                props.onEscape();
               }}
               placeholder="Subject"
               disabled={props.disabled()}

@@ -343,6 +343,8 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
   hideMenuOnEscape?: boolean;
+  /** Escape with no menu or typed text left to clear; the input blurs by default. */
+  onEscape?: () => void;
   horizontalScroll?: boolean;
   class?: string;
   depth?: 0 | 1 | 2 | 3 | 4;
@@ -898,7 +900,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                           return;
                         }
 
-                        inputEl?.blur();
+                        if (props.onEscape) props.onEscape();
+                        else inputEl?.blur();
                         return;
                       }
 

@@ -111,6 +111,8 @@ export const DateSelector = (props: DateSelectorProps) => {
   const [searchInputRef, setSearchInputRef] = createSignal<
     HTMLInputElement | undefined
   >();
+  let triggerRef: HTMLButtonElement | undefined;
+  let interactedOutside = false;
 
   const dateOptions = useDateSearch({
     query: searchQuery,
@@ -298,6 +300,7 @@ export const DateSelector = (props: DateSelectorProps) => {
       <Show when={typeof props.trigger !== 'undefined'}>
         <Combobox.Control>
           <Combobox.Trigger
+            ref={triggerRef}
             class={props.triggerClass ?? 'flex group/date-selector-trigger'}
             aria-label={props.triggerLabel}
             tabIndex={0}
@@ -321,6 +324,17 @@ export const DateSelector = (props: DateSelectorProps) => {
           as={Surface}
           depth={3}
           on:keydown={handleKeyDown}
+          onInteractOutside={() => {
+            interactedOutside = true;
+          }}
+          // The search input unmounts with the content, so Kobalte's default
+          // leaves focus on <body>. Return it to the trigger like a popover,
+          // unless the user already moved it elsewhere.
+          onCloseAutoFocus={(event: Event) => {
+            event.preventDefault();
+            if (!interactedOutside) triggerRef?.focus({ preventScroll: true });
+            interactedOutside = false;
+          }}
         >
           <WithCustomDateMode
             selectedDate={selectedDate()}

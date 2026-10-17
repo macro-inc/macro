@@ -131,7 +131,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
                   const id =
                     target === 'last'
                       ? ctx.messages.list().at(-1)?.db_id
-                      : ctx.messages.focusedId();
+                      : props.replyingTo()?.db_id;
                   if (!id) return false;
                   return focusMessage(id);
                 },

@@ -210,6 +210,12 @@ test-signup-browser *ARGS:
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts {{ARGS}}
     env -u LD_LIBRARY_PATH bunx playwright test --config src/features/auth/browser-test/playwright.config.ts {{ARGS}}
 
+# Keyboard behavior of an open email thread (the real thread view and reply
+# composer over a fake thread and compose backend) in Chromium, no network.
+# Same LD_LIBRARY_PATH caveat as the sign-up browser tests above.
+test-email-thread-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/email-thread/browser-test/playwright.config.ts {{ARGS}}
+
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:

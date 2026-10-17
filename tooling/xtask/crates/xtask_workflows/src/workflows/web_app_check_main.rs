@@ -193,6 +193,7 @@ fn test() -> Job {
         .add_step(build_agent_fold_for_tests())
         .add_step(run_tests())
         .add_step(run_signup_browser_tests())
+        .add_step(run_email_thread_browser_tests())
         .add_step(steps::teardown_nix())
 }
 
@@ -442,6 +443,14 @@ fn run_functional_tests() -> Step<Run> {
 fn run_signup_browser_tests() -> Step<Run> {
     Step::new("Sign-up Browser Tests")
         .run("just test-signup-browser")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Keyboard behavior of an open email thread over a fake backend: the real
+/// thread view and reply composer in Chromium, no network.
+fn run_email_thread_browser_tests() -> Step<Run> {
+    Step::new("Email Thread Browser Tests")
+        .run("just test-email-thread-browser")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 

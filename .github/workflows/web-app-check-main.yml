@@ -394,6 +394,9 @@ jobs:
     - name: Sign-up Browser Tests
       run: just test-signup-browser
       working-directory: apps/web
+    - name: Email Thread Browser Tests
+      run: just test-email-thread-browser
+      working-directory: apps/web
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

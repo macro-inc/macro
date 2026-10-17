@@ -87,6 +87,8 @@ export type EmailThreadState = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  /** Closes the thread back to the host's list; false when the host has none. */
+  returnToList: () => boolean;
   /** True when the thread is archived, i.e. currently marked done. */
   isThreadDone: Accessor<boolean>;
   /** True when the done state can actually be reversed — see
@@ -248,6 +250,11 @@ export function createEmailThreadState(
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
     ...threadContext.createCommands(threadSnapshot),
+    returnToList: () => {
+      if (!host.returnToList) return false;
+      host.returnToList();
+      return true;
+    },
     messagesContainerRef,
     messagesListRef,
     query: {

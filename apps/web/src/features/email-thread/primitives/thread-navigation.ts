@@ -554,6 +554,10 @@ export function createThreadNavigation(
       return false;
     }
 
+    // With a list to return to, Escape leaves at once; only a standalone
+    // thread unwinds its selection and expanded bodies first.
+    if (context.returnToList()) return true;
+
     if (context.messages.hiddenChipFocused()) {
       clearSelection();
       return true;

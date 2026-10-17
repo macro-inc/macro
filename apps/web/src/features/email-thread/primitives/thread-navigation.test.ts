@@ -1,9 +1,6 @@
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import type {
-  EmailThreadHost,
-  EmailThreadListNavigation,
-} from '../context/email-thread-context';
+import type { EmailThreadHost } from '../context/email-thread-context';
 import type { EmailThreadKeyboardHandlers } from '../core/thread-keyboard';
 import { createThreadContext, message, thread } from '../tests/fixtures';
 import { createEmailThreadState } from './email-thread-state';
@@ -58,7 +55,7 @@ it('leaves Enter to a focused button and still activates the thread container', 
 
 function navigationWithList(
   ids: string[],
-  listNavigation?: EmailThreadListNavigation
+  hostOptions: Pick<EmailThreadHost, 'listNavigation' | 'returnToList'> = {}
 ) {
   vi.useFakeTimers();
   vi.stubGlobal('CSS', { escape: (value: string) => value });
@@ -82,7 +79,7 @@ function navigationWithList(
       registerKeyboard: (registered: EmailThreadKeyboardHandlers) => {
         handlers = registered;
       },
-      listNavigation,
+      ...hostOptions,
     };
     const context = createEmailThreadState(threadContext, host);
     const navigation = createThreadNavigation(
@@ -108,16 +105,46 @@ function navigationWithList(
 it('delegates keyboard mark done to host list navigation', () => {
   const markDone = vi.fn();
   const state = navigationWithList(['last'], {
-    canPrevious: () => false,
-    canNext: () => false,
-    previous: vi.fn(),
-    next: vi.fn(),
-    markDone,
+    listNavigation: {
+      canPrevious: () => false,
+      canNext: () => false,
+      previous: vi.fn(),
+      next: vi.fn(),
+      markDone,
+    },
   });
 
   try {
     expect(state.handlers()?.markDone()).toBe(true);
     expect(markDone).toHaveBeenCalledWith(state.context.archiveThread);
+  } finally {
+    state.dispose();
+  }
+});
+
+it('returns to the list on the first Escape with the selected message expanded', () => {
+  const returnToList = vi.fn();
+  const state = navigationWithList(['first', 'last'], { returnToList });
+  try {
+    state.context.messages.setFocused('last');
+    expect(state.handlers()?.cancel()).toBe(true);
+    expect(returnToList).toHaveBeenCalledOnce();
+    expect(state.context.messages.expandedBodyIds.last).toBeUndefined();
+    expect(state.context.messages.focusedId()).toBe('last');
+  } finally {
+    state.dispose();
+  }
+});
+
+it('collapses then unselects the message when the thread has no list', () => {
+  const state = navigationWithList(['first', 'last']);
+  try {
+    state.context.messages.setFocused('last');
+    expect(state.handlers()?.cancel()).toBe(true);
+    expect(state.context.messages.expandedBodyIds.last).toBe(false);
+    expect(state.handlers()?.cancel()).toBe(true);
+    expect(state.context.messages.focusedId()).toBeUndefined();
+    expect(state.handlers()?.cancel()).toBe(false);
   } finally {
     state.dispose();
   }
