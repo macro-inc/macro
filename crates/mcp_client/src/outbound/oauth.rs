@@ -277,12 +277,25 @@ where
             .map_err(|e| anyhow::anyhow!("invalid user_id in pending context: {e}"))?
             .into_owned();
 
+        // Preserve any custom headers that were configured before the OAuth
+        // flow started (e.g. from the Add Server dialog). The add flow saves
+        // headers first, then the auth flow completes and must not wipe them.
+        let headers = self
+            .server_store
+            .load(&user_id, &pending.server_url)
+            .await
+            .ok()
+            .flatten()
+            .map(|r| r.headers)
+            .unwrap_or_default();
+
         let record = McpServerRecord {
             user_id,
             url: pending.server_url,
             server_name: pending.server_name,
             credentials: Some(credentials.clone()),
             enabled: true,
+            headers,
         };
 
         self.server_store
