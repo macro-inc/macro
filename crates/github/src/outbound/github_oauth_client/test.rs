@@ -189,7 +189,7 @@ async fn merge_pull_request_maps_head_change_and_access_statuses() {
 }
 
 #[tokio::test]
-async fn merge_pull_request_treats_unexpected_status_as_error() {
+async fn merge_pull_request_treats_a_failing_github_as_unavailable() {
     let server = MockServer::start(MockResponse {
         status: "502 Bad Gateway",
         body: "upstream down".to_string(),
@@ -201,8 +201,139 @@ async fn merge_pull_request_treats_unexpected_status_as_error() {
         .await
         .unwrap_err();
 
-    assert!(error.to_string().contains("502"));
+    assert_eq!(upstream_failure(error), Some(UpstreamFailure::Unavailable));
     server.finish();
+}
+
+fn upstream_failure(error: GithubError) -> Option<UpstreamFailure> {
+    match error {
+        GithubError::Upstream(UpstreamError { service, failure }) => {
+            assert_eq!(service, "GitHub");
+            Some(failure)
+        }
+        _ => None,
+    }
+}
+
+async fn github_answering(response: wiremock::ResponseTemplate) -> wiremock::MockServer {
+    let server = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::any())
+        .respond_with(response)
+        .mount(&server)
+        .await;
+    server
+}
+
+#[tokio::test]
+async fn token_check_reports_an_expired_token() {
+    let server = github_answering(wiremock::ResponseTemplate::new(401)).await;
+    let client = GithubOauthImpl::with_api_base_url(server.uri());
+
+    assert!(client.is_access_token_expired("token").await.unwrap());
+}
+
+#[tokio::test]
+async fn token_check_treats_an_exhausted_rate_limit_as_throttling() {
+    let reset = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 120;
+    let server = github_answering(
+        wiremock::ResponseTemplate::new(403)
+            .insert_header("x-ratelimit-remaining", "0")
+            .insert_header("x-ratelimit-reset", reset.to_string().as_str())
+            .set_body_string(r#"{"message":"API rate limit exceeded"}"#),
+    )
+    .await;
+    let client = GithubOauthImpl::with_api_base_url(server.uri());
+
+    let error = client.is_access_token_expired("token").await.unwrap_err();
+
+    let Some(UpstreamFailure::RateLimited {
+        retry_after: Some(retry_after),
+    }) = upstream_failure(error)
+    else {
+        panic!("expected a rate limit with a delay");
+    };
+    assert!(
+        (110..=120).contains(&retry_after.as_secs()),
+        "{retry_after:?}"
+    );
+}
+
+#[tokio::test]
+async fn token_check_treats_a_secondary_rate_limit_as_throttling() {
+    let server =
+        github_answering(wiremock::ResponseTemplate::new(403).insert_header("retry-after", "30"))
+            .await;
+    let client = GithubOauthImpl::with_api_base_url(server.uri());
+
+    let error = client.is_access_token_expired("token").await.unwrap_err();
+
+    assert_eq!(
+        upstream_failure(error),
+        Some(UpstreamFailure::RateLimited {
+            retry_after: Some(Duration::from_secs(30)),
+        })
+    );
+}
+
+#[tokio::test]
+async fn token_check_treats_a_failing_github_as_unavailable() {
+    let server = github_answering(wiremock::ResponseTemplate::new(503)).await;
+    let client = GithubOauthImpl::with_api_base_url(server.uri());
+
+    let error = client.is_access_token_expired("token").await.unwrap_err();
+
+    assert_eq!(upstream_failure(error), Some(UpstreamFailure::Unavailable));
+}
+
+#[tokio::test]
+async fn token_check_treats_an_unreachable_github_as_unavailable() {
+    let address = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap();
+    let client = GithubOauthImpl::with_api_base_url(format!("http://{address}"));
+
+    let error = client.is_access_token_expired("token").await.unwrap_err();
+
+    assert_eq!(upstream_failure(error), Some(UpstreamFailure::Unavailable));
+}
+
+#[tokio::test]
+async fn token_check_keeps_a_plain_refusal_ours() {
+    let server = github_answering(
+        wiremock::ResponseTemplate::new(403).set_body_string(r#"{"message":"Forbidden"}"#),
+    )
+    .await;
+    let client = GithubOauthImpl::with_api_base_url(server.uri());
+
+    let error = client.is_access_token_expired("token").await.unwrap_err();
+
+    assert!(matches!(error, GithubError::Internal(_)));
+}
+
+#[tokio::test]
+async fn merge_pull_request_does_not_read_a_rate_limit_as_a_refusal() {
+    let server = github_answering(
+        wiremock::ResponseTemplate::new(403)
+            .insert_header("x-ratelimit-remaining", "0")
+            .set_body_string(r#"{"message":"API rate limit exceeded"}"#),
+    )
+    .await;
+    let client = GithubOauthImpl::with_api_base_url(server.uri());
+
+    let error = client
+        .merge_pull_request("token", "macro", "app", 7, GithubMergeMethod::Merge)
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        upstream_failure(error),
+        Some(UpstreamFailure::RateLimited { retry_after: None })
+    );
 }
 
 #[tokio::test]

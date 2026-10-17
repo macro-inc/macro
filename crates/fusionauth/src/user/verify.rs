@@ -1,9 +1,6 @@
 use std::{borrow::Cow, net::IpAddr};
 
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -28,11 +25,7 @@ pub(crate) async fn verify_email<'a>(
         .json(&verify_email_request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status_code = res.status();
     match status_code {
@@ -41,11 +34,8 @@ pub(crate) async fn verify_email<'a>(
             Ok(())
         }
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if status_code == reqwest::StatusCode::BAD_REQUEST {
                 return Err(FusionAuthClientError::UserAlreadyRegistered);
@@ -55,11 +45,11 @@ pub(crate) async fn verify_email<'a>(
                 return Err(FusionAuthClientError::UserDoesNotExist);
             }
 
-            tracing::error!(body=%body, status=%status_code, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
+            Err(FusionAuthClientError::unexpected(
+                status_code,
+                &headers,
+                body,
+            ))
         }
     }
 }
@@ -81,11 +71,7 @@ pub async fn resend_verify_email(
         ))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status_code = res.status();
     match status_code {
@@ -94,21 +80,18 @@ pub async fn resend_verify_email(
             Ok(())
         }
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if status_code == reqwest::StatusCode::NOT_FOUND {
                 return Err(FusionAuthClientError::UserDoesNotExist);
             }
 
-            tracing::error!(body=%body, status=%status_code, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
+            Err(FusionAuthClientError::unexpected(
+                status_code,
+                &headers,
+                body,
+            ))
         }
     }
 }

@@ -49,20 +49,11 @@ pub(crate) async fn get_idp_id_by_domain(
         ))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
-            let response = res.json().await.map_err(|e| {
-                tracing::error!(error=?e, "unable to parse response");
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let response = res.json().await.map_err(FusionAuthClientError::transport)?;
 
             let response = serde_json::from_value::<IdentityProviderLookupResponse>(response)
                 .map_err(|e| {
@@ -80,8 +71,6 @@ pub(crate) async fn get_idp_id_by_domain(
             tracing::trace!("no identify provider matches domain");
             Ok(None)
         }
-        _ => Err(FusionAuthClientError::Generic(GenericErrorResponse {
-            message: "".to_string(),
-        })),
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }

@@ -69,3 +69,60 @@ async fn get_user_link_status_surfaces_token_lookup_failures() {
     assert!(matches!(result, Err(GithubError::Internal(_))));
     assert!(oauth.validated_tokens().is_empty());
 }
+
+#[tokio::test]
+async fn get_user_link_status_requires_reauthentication_when_the_grant_is_gone() {
+    let user_id = test_user_id();
+    let link = test_link(&user_id);
+    let oauth = StubGithubOauth::new(false);
+    let service = service(
+        StubGithubRepo::linked(link.clone()),
+        oauth.clone(),
+        StubAuth::new("valid-token").without_grant(link.fusionauth_user_id),
+    );
+
+    let status = service.get_user_link_status(&user_id).await.unwrap();
+
+    assert!(matches!(status, GithubLinkStatus::ReauthenticationRequired));
+    assert!(oauth.validated_tokens().is_empty());
+}
+
+#[tokio::test]
+async fn get_user_link_status_surfaces_sign_in_service_outages() {
+    let user_id = test_user_id();
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        StubGithubOauth::new(false),
+        StubAuth::new("valid-token").fail_access_token_upstream(UpstreamFailure::Unavailable),
+    );
+
+    let result = service.get_user_link_status(&user_id).await;
+
+    assert!(matches!(
+        result,
+        Err(GithubError::Upstream(UpstreamError {
+            failure: UpstreamFailure::Unavailable,
+            ..
+        }))
+    ));
+}
+
+#[tokio::test]
+async fn get_user_link_status_surfaces_github_rate_limits() {
+    let user_id = test_user_id();
+    let rate_limited = UpstreamFailure::RateLimited {
+        retry_after: Some(std::time::Duration::from_secs(60)),
+    };
+    let service = service(
+        StubGithubRepo::linked(test_link(&user_id)),
+        StubGithubOauth::new(false).fail_token_check(rate_limited),
+        StubAuth::new("valid-token"),
+    );
+
+    let result = service.get_user_link_status(&user_id).await;
+
+    assert!(matches!(
+        result,
+        Err(GithubError::Upstream(UpstreamError { failure, .. })) if failure == rate_limited
+    ));
+}

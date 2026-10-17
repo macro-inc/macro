@@ -51,6 +51,15 @@ link flow, following the hexagonal architecture pattern.
 - Webhook signature verification uses `hmac`/`subtle` for constant-time
   comparison — don't swap in a plain `==` when touching
   `github_sync_router.rs`.
+- A GitHub or sign-in outage is `GithubError::Upstream`, answered 502/503 by
+  `inbound.rs`. Outbound adapters classify it (`github_oauth_client.rs`
+  `throttling`/`unexpected_response`, `github_auth_client.rs`
+  `fusionauth_error`); everything else they cannot explain stays `Internal`.
+  A missing FusionAuth user or grant behind a link is `Ok(None)` from
+  `retreive_access_token`, which the service reports as reauthentication.
+- Re-linking replaces a link whose grant is gone (stale FusionAuth user or
+  missing token) instead of reusing it, so the 428 the status route returns
+  can be fixed by connecting again.
 - `GithubError::Forbidden`, `SetupUserNotLinked`, and `RepositoryUnavailable`
   all map to the same 403 deliberately — don't let a response distinguish
   "app not installed" from "installed somewhere you have no claim to".

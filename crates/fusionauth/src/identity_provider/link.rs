@@ -1,10 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 /// Structured shape of FusionAuth validation error responses.
 /// See https://fusionauth.io/docs/v1/tech/apis/errors
@@ -81,37 +78,23 @@ pub(crate) async fn get_links(
         url.push_str(&format!("&identityProviderId={id}"));
     }
 
-    let res = client.client().get(url).send().await.map_err(|e| {
-        FusionAuthClientError::Generic(GenericErrorResponse {
-            message: e.to_string(),
-        })
-    })?;
+    let res = client
+        .client()
+        .get(url)
+        .send()
+        .await
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
-            let response: RetrieveLinkResponse = res.json().await.map_err(|e| {
-                tracing::error!(error=?e, "unable to parse response");
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let response: RetrieveLinkResponse =
+                res.json().await.map_err(FusionAuthClientError::transport)?;
 
             tracing::trace!(identity_provider=?response.idp_links, "links found");
 
             Ok(response.idp_links)
         }
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: "unknown error".to_string(),
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
 
@@ -153,35 +136,24 @@ pub(crate) async fn link_user(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
-    match res.status() {
-        reqwest::StatusCode::OK => Ok(()),
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            if serde_json::from_str::<FusionAuthErrorBody>(&body)
-                .ok()
-                .as_ref()
-                .is_some_and(FusionAuthErrorBody::is_already_linked)
-            {
-                tracing::info!(body=%body, "fusionauth idp link already exists");
-                return Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists);
-            }
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+    let status = res.status();
+    if status == reqwest::StatusCode::OK {
+        return Ok(());
     }
+
+    let headers = res.headers().clone();
+    let body = res.text().await.map_err(FusionAuthClientError::transport)?;
+
+    if serde_json::from_str::<FusionAuthErrorBody>(&body)
+        .ok()
+        .as_ref()
+        .is_some_and(FusionAuthErrorBody::is_already_linked)
+    {
+        tracing::info!(body=%body, "fusionauth idp link already exists");
+        return Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists);
+    }
+
+    Err(FusionAuthClientError::unexpected(status, &headers, body))
 }

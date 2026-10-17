@@ -58,6 +58,7 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "too many pull requests requested".into(),
             ),
+            crate::domain::models::GithubError::Upstream(error) => return error.into_response(),
         };
 
         (

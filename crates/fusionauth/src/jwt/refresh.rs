@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    Result, UnauthedClient,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{Result, UnauthedClient, error::FusionAuthClientError};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -45,38 +42,27 @@ pub async fn refresh_token(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
             tracing::trace!("token refreshed");
-            let body = res.json::<RefreshJwtResponse>().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let body = res
+                .json::<RefreshJwtResponse>()
+                .await
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok((body.token.into(), body.refresh_token.into()))
         }
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let status = res.status();
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if body.contains("The refresh token was not found or has expired") {
                 Err(FusionAuthClientError::InvalidRefreshToken)
             } else {
-                tracing::error!(body=%body, "unexpected response from fusionauth");
-
-                Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: body,
-                }))
+                Err(FusionAuthClientError::unexpected(status, &headers, body))
             }
         }
     }

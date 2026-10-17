@@ -16,8 +16,12 @@ use github::domain::{
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
+use upstream_error::UpstreamErrorResponse;
 
-use crate::api::context::{ApiContext, AuthorizationService};
+use crate::api::{
+    context::{ApiContext, AuthorizationService},
+    link::github::github_error_response,
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum EnrichGithubPullRequestsProxyError {
@@ -27,7 +31,7 @@ pub enum EnrichGithubPullRequestsProxyError {
 
 impl IntoResponse for EnrichGithubPullRequestsProxyError {
     fn into_response(self) -> Response {
-        let (status_code, message) = match &self {
+        let (status_code, message) = match self {
             Self::Github(GithubError::NoLinkFound) => {
                 (StatusCode::NOT_FOUND, "no github link found")
             }
@@ -36,8 +40,7 @@ impl IntoResponse for EnrichGithubPullRequestsProxyError {
                 "reauthentication required",
             ),
             Self::Github(error) => {
-                tracing::error!(error=?error, "failed to enrich GitHub pull requests");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error")
+                return github_error_response(error, "failed to enrich GitHub pull requests");
             }
         };
 
@@ -73,11 +76,7 @@ impl IntoResponse for MergeGithubPullRequestError {
                 (github::inbound::merge_rejection_status(rejection), message)
             }
             Self::Github(error) => {
-                tracing::error!(error=?error, "failed to merge GitHub pull request");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "internal error".to_string(),
-                )
+                return github_error_response(error, "failed to merge GitHub pull request");
             }
         };
 
@@ -116,11 +115,7 @@ impl IntoResponse for UpdateGithubPullRequestError {
                 "too many pull requests requested".to_string(),
             ),
             Self::Github(error) => {
-                tracing::error!(error=?error, "failed to update GitHub pull request");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "internal error".to_string(),
-                )
+                return github_error_response(error, "failed to update GitHub pull request");
             }
         };
 
@@ -154,6 +149,8 @@ pub fn router() -> Router<ApiContext> {
         (status = 404, body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
@@ -192,6 +189,8 @@ pub async fn handler(
         (status = 422, body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
@@ -225,6 +224,8 @@ pub async fn merge_handler(
         (status = 422, description = "GitHub declined the change", body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
@@ -258,6 +259,8 @@ pub async fn draft_handler(
         (status = 422, description = "Too many pull requests requested", body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]

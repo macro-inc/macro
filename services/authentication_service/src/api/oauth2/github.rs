@@ -11,7 +11,7 @@ use tower_cookies::Cookies;
 
 use crate::api::{
     context::ApiContext,
-    link::github::REAUTHENTICATION_REQUIRED_MESSAGE,
+    link::github::{REAUTHENTICATION_REQUIRED_MESSAGE, github_error_response},
     oauth2::{
         OAuthState, format_redirect_uri,
         login::{self},
@@ -31,7 +31,7 @@ pub enum GithubLinkError {
 
 impl IntoResponse for GithubLinkError {
     fn into_response(self) -> Response {
-        let (status_code, message): (StatusCode, &str) = match &self {
+        let (status_code, message): (StatusCode, &str) = match self {
             GithubLinkError::GithubServiceError(GithubError::NoLinkFound) => {
                 (StatusCode::NOT_FOUND, "no github link found")
             }
@@ -44,8 +44,7 @@ impl IntoResponse for GithubLinkError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error occurred")
             }
             GithubLinkError::GithubServiceError(error) => {
-                tracing::error!(error=?error, "github service error occurred while linking github account");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error occurred")
+                return github_error_response(error, "failed to link github account");
             }
         };
 

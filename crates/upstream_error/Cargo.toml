@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "upstream_error"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["axum", "reqwest"]
+axum = ["dep:axum", "dep:serde", "dep:utoipa"]
+reqwest = ["dep:reqwest"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+http = { workspace = true }
+reqwest = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+wiremock = { workspace = true }

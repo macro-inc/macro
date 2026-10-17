@@ -41,6 +41,8 @@ pub use sync::{
     TeamTaskReference, ValidatedGithubWebhookEvent, extract_github_mentions,
     pull_request_task_reference, strip_markdown_code,
 };
+use upstream_error::UpstreamError;
+
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]
 pub enum GithubError {
@@ -108,4 +110,9 @@ pub enum GithubError {
     /// The request asked for more pull requests than one call may cover.
     #[error("too many pull requests requested")]
     TooManyPullRequests,
+    /// GitHub, or the sign-in service holding the user's GitHub grant, was
+    /// down, throttling, or answered with something unusable. Not the
+    /// caller's fault and not ours; retrying later can help.
+    #[error(transparent)]
+    Upstream(#[from] UpstreamError),
 }

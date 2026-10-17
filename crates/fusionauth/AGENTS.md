@@ -24,7 +24,7 @@ passwordless/password flows against the FusionAuth HTTP API.
 
 ## Boundaries
 
-- Depends on: nothing Macro-specific beyond `workspace-hack`; this is a plain
+- Depends on: `upstream_error` for outage classification; otherwise a plain
   HTTP client crate.
 - Used by: `authentication_service`, `mcp_auth_proxy`, `mcp_service`,
   `tooling/seed_cli`, `github` (for linking).
@@ -38,6 +38,18 @@ passwordless/password flows against the FusionAuth HTTP API.
 ## Checks
 
 - `cargo test -p fusionauth`.
+- `just check` runs `rules/ast-grep/rust-fusionauth-classify-transport.yml`.
+
+## Gotchas
+
+- Map request failures with `.map_err(FusionAuthClientError::transport)` and
+  statuses the endpoint does not document with
+  `FusionAuthClientError::unexpected_response` (or `unexpected` after reading
+  the body). They turn outages into `Upstream` (502/503 via
+  `crates/upstream_error`) and FusionAuth's `[invalid]userId` into
+  `UserDoesNotExist`; a hand-written `Generic` becomes a 500.
+- Calls to Google or Microsoft name the provider:
+  `FusionAuthClientError::provider_transport("Google", e)`.
 
 ## Related
 

@@ -94,19 +94,31 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
             .auth
             .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?
+            .ok_or(GithubError::ReauthenticationRequired)?;
 
         let token_is_expired = self
             .oauth
             .is_access_token_expired(access_token.as_str())
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         if token_is_expired {
             return Err(GithubError::ReauthenticationRequired);
         }
 
         Ok(access_token)
+    }
+
+    /// Whether the auth grant the link points at still exists. A link can
+    /// outlive it when the auth user it names is deleted.
+    async fn grant_exists(&self, link: &GithubLink) -> Result<bool, GithubError> {
+        Ok(self
+            .auth
+            .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
+            .await
+            .map_err(Into::into)?
+            .is_some())
     }
 
     /// The merge method for a request that named none: the first the
@@ -201,7 +213,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
     fn construct_oauth_url(&self, redirect_uri: &str, state: &str) -> Result<String, GithubError> {
         self.oauth
             .construct_oauth_url(&self.config.client_id, redirect_uri, state)
-            .map_err(|e| GithubError::Internal(e.into()))
+            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -293,7 +305,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 merge_method,
             )
             .await
-            .map_err(|error| GithubError::Internal(error.into()))?;
+            .map_err(Into::into)?;
 
         let merge = match outcome {
             GithubMergeOutcome::Merged(merge) => merge,
@@ -331,7 +343,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 request.draft,
             )
             .await
-            .map_err(|error| GithubError::Internal(error.into()))?;
+            .map_err(Into::into)?;
 
         let draft = match outcome {
             GithubDraftOutcome::Changed { draft } => draft,
@@ -368,7 +380,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         self.oauth
             .get_pull_request_mergeability(access_token.as_str(), &pull_requests)
             .await
-            .map_err(|error| GithubError::Internal(error.into()))
+            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -405,7 +417,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
             self.auth
                 .delete_user_link(&link, &self.config.idp_id)
                 .await
-                .map_err(|e| GithubError::Internal(e.into()))?;
+                .map_err(Into::into)?;
         }
 
         // Delete from repo
@@ -435,13 +447,13 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 code,
             )
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         let user_info = self
             .oauth
             .get_user_info(&tokens.access_token)
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         tracing::trace!(user_info=?user_info, "got user info");
 
@@ -450,29 +462,51 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         // 1. Does THIS user already have a link, and to which account?
         let this_user_link = self.find_user_link(user_id).await?;
 
+        // A link to the same account whose grant is gone is replaced below
+        // rather than kept, or reconnecting could never clear
+        // ReauthenticationRequired.
+        let mut stale_link = None;
         if let Some(existing) = &this_user_link
             && existing.github_user_id == gh_id
         {
-            // Idempotent re-link of the SAME account by the SAME user: skip auth + skip
-            // insert (avoids violating the new (macro_id, github_user_id) unique). Still
-            // clean up the in-progress link, then return the existing link.
-            let _ = self
-                .repo
-                .delete_in_progress_user_link(in_progess_link_id)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, "unable to delete in progress link id"));
-            return Ok(existing.clone());
+            if self.grant_exists(existing).await? {
+                // Idempotent re-link of the SAME account by the SAME user: skip auth + skip
+                // insert (avoids violating the new (macro_id, github_user_id) unique). Still
+                // clean up the in-progress link, then return the existing link.
+                let _ = self
+                    .repo
+                    .delete_in_progress_user_link(in_progess_link_id)
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "unable to delete in progress link id"),
+                    );
+                return Ok(existing.clone());
+            }
+            tracing::warn!(
+                link_id=%existing.id,
+                fusionauth_user_id=%existing.fusionauth_user_id,
+                "github link points at a missing grant, relinking"
+            );
+            stale_link = Some(existing.id);
         }
         // else: user previously linked a DIFFERENT github account; fall through and link
         // the new one (frontend is single-valued; not enforced here — matches prior
         // behavior).
 
         // 2. Does anyone already OWN this github account? (owner row = earliest row)
-        let account_owner = self
+        // An owner whose grant is gone cannot be shared; the caller becomes
+        // the owner instead.
+        let account_owner = match self
             .repo
             .get_github_link_by_github_user_id(&gh_id)
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(|e| GithubError::Internal(e.into()))?
+        {
+            Some(owner) if Some(owner.id) != stale_link && self.grant_exists(&owner).await? => {
+                Some(owner)
+            }
+            _ => None,
+        };
 
         let row_fusionauth_user_id = match &account_owner {
             Some(owner) => {
@@ -495,13 +529,20 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                         &tokens.access_token,
                     )
                     .await
-                    .map_err(|e| GithubError::Internal(e.into()))?;
+                    .map_err(Into::into)?;
 
                 tracing::trace!("linked auth user");
 
                 *fusionauth_user_id
             }
         };
+
+        if let Some(stale_link) = stale_link {
+            self.repo
+                .delete_github_link(&stale_link)
+                .await
+                .map_err(|e| GithubError::Internal(e.into()))?;
+        }
 
         // create github link
         let link = GithubLink {

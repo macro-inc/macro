@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    FusionAuthClient, Result, UnauthedClient,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{FusionAuthClient, Result, UnauthedClient, error::FusionAuthClientError};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
 struct AppleLoginRequestData<'a> {
@@ -46,38 +43,21 @@ async fn login(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status = res.status();
     match status {
         reqwest::StatusCode::OK => {
             tracing::trace!("apple login complete");
-            let body = res.json::<AppleLoginResponse>().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let body = res
+                .json::<AppleLoginResponse>()
+                .await
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok((body.token, body.refresh_token))
         }
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::IncorrectCode),
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(status=%status, body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
 

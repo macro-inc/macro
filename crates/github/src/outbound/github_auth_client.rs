@@ -1,6 +1,5 @@
 //! Github FusionAuth implementation of the [`Auth`] port.
 
-use anyhow::Context;
 use fusionauth::{
     FusionAuthClient,
     error::FusionAuthClientError,
@@ -10,7 +9,7 @@ use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 
 use crate::domain::{
-    models::{GithubAccessToken, GithubLink},
+    models::{GithubAccessToken, GithubError, GithubLink},
     ports::Auth,
 };
 
@@ -45,16 +44,28 @@ impl GithubAuthImpl {
     async fn clear_access_token_cache(
         &self,
         fusionauth_user_id: &uuid::Uuid,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), GithubError> {
         let key = github_access_token_key!(fusionauth_user_id);
         let mut conn = self.conn.clone();
-        conn.del::<&str, ()>(&key).await?;
+        conn.del::<&str, ()>(&key).await.map_err(cache_error)?;
         Ok(())
     }
 }
 
+/// FusionAuth outages are upstream failures; anything else is ours.
+fn fusionauth_error(error: FusionAuthClientError) -> GithubError {
+    match error.upstream() {
+        Some(upstream) => GithubError::Upstream(upstream),
+        None => GithubError::Internal(error.into()),
+    }
+}
+
+fn cache_error(error: redis::RedisError) -> GithubError {
+    GithubError::Internal(error.into())
+}
+
 impl Auth for GithubAuthImpl {
-    type Err = anyhow::Error;
+    type Err = GithubError;
 
     #[tracing::instrument(skip(self), err)]
     async fn link_user(
@@ -85,7 +96,7 @@ impl Auth for GithubAuthImpl {
                     "github idp link already exists, proceeding with existing grant"
                 );
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(fusionauth_error(e)),
         }
 
         self.clear_access_token_cache(fusionauth_user_id).await?;
@@ -98,34 +109,54 @@ impl Auth for GithubAuthImpl {
         &self,
         fusionauth_user_id: &uuid::Uuid,
         github_idp_id: &str,
-    ) -> Result<GithubAccessToken, Self::Err> {
+    ) -> Result<Option<GithubAccessToken>, Self::Err> {
         let key = github_access_token_key!(fusionauth_user_id);
         let mut conn = self.conn.clone();
 
-        if let Some(access_token) = conn.get::<&str, Option<String>>(&key).await? {
-            conn.expire::<&str, ()>(&key, TTL_SECONDS as i64).await?;
-            return Ok(GithubAccessToken::new(access_token));
+        if let Some(access_token) = conn
+            .get::<&str, Option<String>>(&key)
+            .await
+            .map_err(cache_error)?
+        {
+            conn.expire::<&str, ()>(&key, TTL_SECONDS as i64)
+                .await
+                .map_err(cache_error)?;
+            return Ok(Some(GithubAccessToken::new(access_token)));
         }
 
-        let links = self
+        let links = match self
             .fusionauth_client
             .get_links(
                 &fusionauth_user_id.to_string(),
                 Some(github_idp_id.to_string()),
             )
-            .await?;
-
-        if links.is_empty() {
-            anyhow::bail!("user does not have a github link")
-        }
+            .await
+        {
+            Ok(links) => links,
+            Err(FusionAuthClientError::UserDoesNotExist) => {
+                tracing::warn!(
+                    fusionauth_user_id=%fusionauth_user_id,
+                    "github link names a fusionauth user that no longer exists"
+                );
+                return Ok(None);
+            }
+            Err(e) => return Err(fusionauth_error(e)),
+        };
 
         // SAFETY: each Macro user links at most one GitHub account, and many users can share one GitHub account. For shared accounts, every github_links row stores the owner's fusionauth_user_id, so this lookup resolves to the owner's single shared FusionAuth grant (and its cached token).
-        let link = links.first().context("links should not be empty")?;
+        let Some(link) = links.first() else {
+            tracing::warn!(
+                fusionauth_user_id=%fusionauth_user_id,
+                "fusionauth user has no github link"
+            );
+            return Ok(None);
+        };
 
         conn.set_ex::<&str, &str, ()>(&key, &link.token, TTL_SECONDS)
-            .await?;
+            .await
+            .map_err(cache_error)?;
 
-        Ok(GithubAccessToken::new(link.token.clone()))
+        Ok(Some(GithubAccessToken::new(link.token.clone())))
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -143,12 +174,17 @@ impl Auth for GithubAuthImpl {
             )
             .await
         {
-            Ok(()) | Err(FusionAuthClientError::NoIdentityProviderFound) => {
+            // A grant whose auth user is gone has nothing left to unlink.
+            Ok(())
+            | Err(
+                FusionAuthClientError::NoIdentityProviderFound
+                | FusionAuthClientError::UserDoesNotExist,
+            ) => {
                 self.clear_access_token_cache(&github_link.fusionauth_user_id)
                     .await?;
                 Ok(())
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(fusionauth_error(e)),
         }
     }
 }

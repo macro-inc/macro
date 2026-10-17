@@ -75,6 +75,11 @@ key issuance, and account merge/link flows.
 
 ## Gotchas
 
+- Answer third-party failures as 502/503, not 500. A `GithubError` without a
+  route-specific answer goes through `github_error_response`
+  (`src/api/link/github.rs`); a `FusionAuthClientError` with `upstream()`
+  returns that error's `into_response()`. Document 502/503 with
+  `UpstreamErrorResponse` in the route's `utoipa::path`.
 - The signup allowlist has a temporary Develop-only bypass
   (`DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST`) that overrides the allowlist even
   when present; see `README.md` before changing signup behavior.

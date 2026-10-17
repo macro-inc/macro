@@ -178,3 +178,22 @@ fn verified_link_state_converts_to_provider_handler_state() {
     assert_eq!(state.original_url, link.original_url);
     assert_eq!(state.is_mobile, None);
 }
+
+#[test]
+fn a_github_outage_while_finishing_a_link_is_service_unavailable() {
+    use ::github::domain::models::GithubError;
+    use axum::response::IntoResponse;
+    use upstream_error::{UpstreamError, UpstreamFailure};
+
+    let response =
+        super::github::GithubLinkError::GithubServiceError(GithubError::Upstream(UpstreamError {
+            service: "GitHub",
+            failure: UpstreamFailure::Unavailable,
+        }))
+        .into_response();
+
+    assert_eq!(
+        response.status(),
+        axum::http::StatusCode::SERVICE_UNAVAILABLE
+    );
+}

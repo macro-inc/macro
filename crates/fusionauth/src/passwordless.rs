@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    AuthedClient, FusionAuthClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, FusionAuthClient, Result, error::FusionAuthClientError};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -87,11 +84,7 @@ async fn start(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
@@ -99,11 +92,7 @@ async fn start(
             let body = res
                 .json::<PasswordlessLoginStartResponse>()
                 .await
-                .map_err(|e| {
-                    FusionAuthClientError::Generic(GenericErrorResponse {
-                        message: e.to_string(),
-                    })
-                })?;
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok(body.code.to_string())
         }
@@ -111,19 +100,7 @@ async fn start(
             tracing::trace!("no user with loginId {} found", request.login_id);
             Err(FusionAuthClientError::UserDoesNotExist)
         }
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
 
@@ -141,30 +118,14 @@ async fn send(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
             tracing::trace!("code generated");
             Ok(())
         }
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
 
@@ -184,11 +145,7 @@ async fn complete(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status = res.status();
     match status {
@@ -197,11 +154,7 @@ async fn complete(
             let body = res
                 .json::<PasswordlessLoginCompleteResponse>()
                 .await
-                .map_err(|e| {
-                    FusionAuthClientError::Generic(GenericErrorResponse {
-                        message: e.to_string(),
-                    })
-                })?;
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok(body)
         }
@@ -210,17 +163,11 @@ async fn complete(
                 return Err(FusionAuthClientError::IncorrectCode);
             }
 
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let headers = res.headers().clone();
 
-            tracing::error!(status=%status, body=%body, "unexpected response from fusionauth");
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
+            Err(FusionAuthClientError::unexpected(status, &headers, body))
         }
     }
 }

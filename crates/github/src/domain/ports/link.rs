@@ -70,7 +70,7 @@ pub trait GithubRepo: Send + Sync + 'static {
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait GithubOauth: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+    type Err: Into<GithubError> + Send + std::fmt::Debug;
 
     /// Constructs the oauth url to authenticate with github.
     ///
@@ -159,7 +159,7 @@ pub trait GithubOauth: Send + Sync + 'static {
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait Auth: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+    type Err: Into<GithubError> + Send + std::fmt::Debug;
 
     /// Links the github account to the auth user
     fn link_user(
@@ -178,12 +178,14 @@ pub trait Auth: Send + Sync + 'static {
         github_idp_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Retreives the users github access token
+    /// Retreives the users github access token, or `None` when the grant is
+    /// gone: the auth user no longer exists or holds no GitHub link. The user
+    /// has to reconnect GitHub.
     fn retreive_access_token(
         &self,
         fusionauth_user_id: &uuid::Uuid,
         github_idp_id: &str,
-    ) -> impl Future<Output = Result<GithubAccessToken, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<GithubAccessToken>, Self::Err>> + Send;
 }
 
 /// Service interface for github link operations (OAuth and account linking).

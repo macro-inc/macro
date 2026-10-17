@@ -1,7 +1,4 @@
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 /// Unlinks a user from an identity provider
 /// https://fusionauth.io/docs/apis/identity-providers/links#unlink-a-user
@@ -20,24 +17,11 @@ pub(crate) async fn unlink(
         ))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
-    let status = res.status();
-    let body = res.text().await.map_err(|e| {
-        FusionAuthClientError::Generic(GenericErrorResponse {
-            message: e.to_string(),
-        })
-    })?;
-
-    match status {
+    match res.status() {
         reqwest::StatusCode::OK => Ok(()),
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::NoIdentityProviderFound), // no idp to unlink
-        _ => Err(FusionAuthClientError::Generic(GenericErrorResponse {
-            message: body,
-        })),
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
