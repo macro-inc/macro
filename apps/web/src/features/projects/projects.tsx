@@ -25,6 +25,7 @@ import {
   createEffect,
   createSignal,
   ErrorBoundary,
+  type JSX,
   on,
   onCleanup,
   type ParentProps,
@@ -101,6 +102,8 @@ function ProjectsContent(props: ParentProps) {
 
 export function ProjectsTab(props: {
   onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
+  /** The host's touch tab switcher, rendered inside the projects header. */
+  mobileTabs?: JSX.Element;
 }) {
   return (
     <Projects>
@@ -119,6 +122,7 @@ export function ProjectsSidebarSection(props: ProjectsSidebarProps) {
 
 function ProjectsCollectionHost(props: {
   onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
+  mobileTabs?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -172,6 +176,7 @@ function ProjectsCollectionHost(props: {
     <>
       <ProjectsCollection
         onOpen={open}
+        mobileTabs={props.mobileTabs}
         collection={displayCollection}
         ganttEnabled={ganttFlag().enabled}
         createAssigneeName={(id) => usePropertyUserDisplay(id).name}
