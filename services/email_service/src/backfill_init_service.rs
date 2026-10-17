@@ -91,6 +91,7 @@ async fn initialize_backfill(
         &ctx.email_api,
         &ctx.sqs_client,
         &ctx.macro_event_broker,
+        &*ctx.contacts_ingress,
     )
     .await
     {

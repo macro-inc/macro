@@ -183,3 +183,48 @@ async fn publishes_a_second_batch_for_fifty_one_threads() {
 async fn publishes_ordered_bounded_batches_for_larger_inputs() {
     assert_published_batches(137, &[50, 50, 37]);
 }
+
+fn link_for(macro_id: &str, email: &str) -> Link {
+    let macro_id = MacroUserIdStr::try_from(macro_id.to_string()).expect("valid macro id");
+    let email_address = macro_user_id::email::EmailStr::try_from(email.to_string()).expect("email");
+    Link {
+        id: Uuid::nil(),
+        is_primary: Link::derive_is_primary(&macro_id, &email_address),
+        macro_id,
+        fusionauth_user_id: "fa".to_string(),
+        email_address,
+        provider: models_email::service::link::UserProvider::Gmail,
+        is_sync_active: true,
+        needs_reauth: false,
+        last_sync_error_at: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    }
+}
+
+#[test]
+fn address_book_connections_cover_saved_contacts_and_skip_noise() {
+    let link = link_for("macro|owner@acme.com", "owner@acme.com");
+    let contacts = vec![
+        other_contact(Some("Alice@Acme.com"), Some("Alice")),
+        other_contact(Some("alice@acme.com"), Some("Alice again")),
+        other_contact(Some("owner@acme.com"), Some("Me")),
+        other_contact(Some("noreply@acme.com"), None),
+        other_contact(Some("   "), None),
+        other_contact(None, Some("No address")),
+        other_contact(Some("friend@gmail.com"), Some("Friend")),
+    ];
+
+    let connections = address_book_connections(&link, &contacts);
+
+    let second: Vec<String> = connections
+        .iter()
+        .map(|connection| connection.second.to_string())
+        .collect();
+    assert_eq!(second, vec!["macro|alice@acme.com", "macro|friend@gmail.com"]);
+    assert!(
+        connections
+            .iter()
+            .all(|connection| connection.first == link.macro_id)
+    );
+}

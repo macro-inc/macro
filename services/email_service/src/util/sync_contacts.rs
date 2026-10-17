@@ -1,6 +1,7 @@
 use crate::outbound::email_api::GmailApi;
 use crate::pubsub::util::publish_email_event;
 use anyhow::{Context, anyhow};
+use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
 use email::domain::events::{
     EmailMacroEvent, ThreadsReindexReason, ThreadsReindexRequestedMetadata,
 };
@@ -22,12 +23,13 @@ use uuid::Uuid;
 mod test;
 
 /// Syncs user's contacts with gmail
-pub async fn sync_contacts<B: MacroEventBroker>(
+pub async fn sync_contacts<B: MacroEventBroker, I: ContactsIngress>(
     link: &Link,
     db: &PgPool,
     email_api: &GmailApi,
     sqs_client: &SQS,
     macro_event_broker: &B,
+    contacts_ingress: &I,
 ) -> anyhow::Result<()> {
     // 1. Get existing sync tokens from our DB
     let (contacts_sync_token, other_contacts_sync_token) =
@@ -44,6 +46,9 @@ pub async fn sync_contacts<B: MacroEventBroker>(
 
     // 3. If we received any new/updated contacts, process and store them.
     if !new_contacts.is_empty() {
+        // Connect the user to their address book before storing it, so a failed
+        // enqueue leaves the sync tokens untouched and the next sync retries.
+        connect_address_book(contacts_ingress, link, &new_contacts).await?;
         Box::pin(process_and_store_contacts(
             db,
             sqs_client,
@@ -59,6 +64,60 @@ pub async fn sync_contacts<B: MacroEventBroker>(
         .await
         .with_context(|| format!("Unable to insert new sync tokens for link_id: {}", link.id))?;
 
+    Ok(())
+}
+
+/// How many address-book connections go in one contacts message.
+const CONNECTIONS_PER_MESSAGE: usize = 500;
+
+/// The connections from the link's owner to each distinct, non-automated
+/// address in `contacts`.
+fn address_book_connections(link: &Link, contacts: &[Contact]) -> Vec<ContactConnection> {
+    let own_email = link.email_address.0.as_ref().to_ascii_lowercase();
+    let mut seen: HashSet<String> = HashSet::new();
+    contacts
+        .iter()
+        .filter_map(|contact| contact.email_address.as_deref())
+        .map(|email| email.trim().to_ascii_lowercase())
+        .filter(|email| {
+            !email.is_empty()
+                && *email != own_email
+                && !email_utils::is_generic_email(email)
+                && seen.insert(email.clone())
+        })
+        .filter_map(|email| match MacroUserIdStr::try_from_email(&email) {
+            Ok(contact) => Some(ContactConnection::new(link.macro_id.clone(), contact)),
+            Err(error) => {
+                // One malformed address must not drop the rest of the address book.
+                tracing::warn!(error = ?error, "skipping invalid address-book email");
+                None
+            }
+        })
+        .collect()
+}
+
+/// Connects the link's owner to everyone in their synced address book, so the
+/// people they know, not only the people they have emailed, show up wherever
+/// Macro suggests or @mentions a contact.
+async fn connect_address_book<I: ContactsIngress>(
+    contacts_ingress: &I,
+    link: &Link,
+    contacts: &[Contact],
+) -> anyhow::Result<()> {
+    if cfg!(not(feature = "contacts_sync")) {
+        return Ok(());
+    }
+    for chunk in address_book_connections(link, contacts).chunks(CONNECTIONS_PER_MESSAGE) {
+        contacts_ingress
+            .enqueue_contact_connections(chunk.to_vec())
+            .await
+            .map_err(|error| {
+                anyhow!("{error:?}").context(format!(
+                    "Unable to connect address book contacts for link_id: {}",
+                    link.id
+                ))
+            })?;
+    }
     Ok(())
 }
 
