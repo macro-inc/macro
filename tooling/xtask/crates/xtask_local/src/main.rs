@@ -19,6 +19,7 @@ const LAUNCHER_USAGE: &str = indoc::indoc! {"
       cargo x nextest-filter <changed-files-path> <base-revision>
       cargo x doppler-bins <changed-files-path>
       cargo x graphql-soup-schema <output-path>
+      cargo x graphql-schema-compat [--base <rev>]
       cargo x cache-wasm [--force]
       cargo x kafka-topics [--check]
       cargo x workflows [--check]

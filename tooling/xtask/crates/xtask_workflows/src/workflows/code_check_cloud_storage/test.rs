@@ -69,7 +69,13 @@ fn filter_binary_cache_is_trusted_only() {
 fn status_check_covers_every_job() {
     let status = serde_json::to_value(status_check()).unwrap();
     let script = status["steps"][0]["run"].as_str().unwrap();
-    for needed in ["path-check", "check", "doppler-config", "test"] {
+    for needed in [
+        "path-check",
+        "check",
+        "doppler-config",
+        "test",
+        "graphql-schema-compat",
+    ] {
         let check = format!(r#"[[ "${{{{ needs.{needed}.result }}}}" == "failure" ]]"#);
         assert!(script.contains(&check), "{check}: {script}");
         assert!(
@@ -239,4 +245,27 @@ fn test_job_keeps_one_sccache_server_for_the_whole_run() {
         .position(|name| *name == "run tests")
         .unwrap();
     assert!(configure < start && start < run, "{step_names:?}");
+}
+
+/// A schema change runs the compatibility check against the base branch tip.
+#[test]
+fn schema_changes_run_the_compatibility_check() {
+    let filters = serde_json::to_value(&paths_filter().value.with).unwrap()["filters"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let schema_filter = filters
+        .split("graphql_schema:")
+        .nth(1)
+        .expect("graphql schema filter");
+    assert!(schema_filter.contains("static_assets/schema.graphql"));
+    let job = serde_json::to_value(graphql_schema_compat()).unwrap();
+    assert!(
+        job["if"]
+            .as_str()
+            .unwrap()
+            .contains("graphql_schema == 'true'")
+    );
+    let job = job.to_string();
+    assert!(job.contains("graphql-schema-compat --base HEAD^1"), "{job}");
 }

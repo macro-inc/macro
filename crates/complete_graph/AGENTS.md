@@ -106,3 +106,8 @@ The exported `static_assets/schema.graphql` feeds both the client codegen
 (`apps/web && bun gen-graphql`) and the cache metadata codegen. Additive changes
 keep persisted client caches; a change that makes stored records unsafe needs a
 bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-core/src/codec.rs`.
+
+Never remove or narrow anything deployed clients send without a dated
+deprecation (`Remove after YYYY-MM-DD`, at least 30 days out).
+`cargo x graphql-schema-compat` checks the SDL against `origin/main`, and CI runs
+it; see [step 8 of the field guide](../../docs/guides/add-graphql-field.md#8-compatibility-and-rollout).

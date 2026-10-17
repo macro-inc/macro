@@ -14154,6 +14154,10 @@
       "tooling/xtask/crates/xtask_graph",
       "tooling/xtask/crates/xtask_paths"
     ],
+    "xtask_graphql_schema_compat": [
+      "tooling/xtask/crates/xtask_graphql_schema_compat",
+      "tooling/xtask/crates/xtask_paths"
+    ],
     "xtask_graphql_soup_schema": [
       "tooling/xtask/crates/xtask_graphql_soup_schema",
       "tooling/xtask/crates/xtask_paths"

@@ -1521,6 +1521,8 @@ function mapGraphqlNotifications(
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
   // Rows are read by the database SQL engine, never listed as Soup items.
   if (item.__typename === 'GraphqlSoupDatabaseRow') return null;
+  // Kept in the schema for older clients; the server never returns one.
+  if (item.__typename === 'GraphqlSoupReminder') return null;
 
   const frecency = item.frecencyScore ?? 0;
 

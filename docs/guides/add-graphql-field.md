@@ -39,7 +39,8 @@ Read first: [`crates/complete_graph/AGENTS.md`](../../crates/complete_graph/AGEN
   existing documents, and the native cache rejects conflicting field shapes. New
   arguments and input fields are nullable or defaulted (`Option<T>`). Don't rename,
   remove, retype, or change the nullability of a field a shipped client selects.
-  Add the replacement, move clients, and remove the old field later. See step 8.
+  Add the replacement, move clients, deprecate the old field with a removal
+  date, and remove it after that date. CI enforces this; see step 8.
 - **Lists take `filter` and `limit` arguments, applied in the domain query before
   the limit.** Unbounded edges made the web fetch whole notification histories to
   draw unread dots; the fix added a server-side filter and a one-row limit.
@@ -197,6 +198,29 @@ new fields needs the regenerated SDL in the same change.
 
 ## 8. Compatibility and rollout
 
+- Removal waits for a dated deprecation. App Store builds run their embedded web
+  bundle until the bundle updater replaces it, and cached tabs and desktop OTA
+  bundles keep running for days, so a removed field, type, argument, input
+  field, or enum value fails every document that names it ("Try again" on
+  Soup, Inbox, Mail, Channels, and Calendar after #7536). To remove one:
+  1. Deprecate it with `Remove after YYYY-MM-DD` in the reason, at least 30 days
+     out: `#[graphql(deprecation = "Use x. Remove after 2026-11-30.")]`. Types
+     cannot be deprecated in GraphQL, so put the marker in the type's doc
+     comment. Keep resolving it, or return `null` or an empty list.
+  2. Move the web documents off it.
+  3. After the date, delete it.
+  If the backing feature is already gone, keep an inert stub: a nullable field
+  returning `None`, an ignored input field, or an uninhabited type (see
+  `crates/graphql_soup/src/objects/reminder.rs`).
+- `cargo x graphql-schema-compat` enforces this. It compares
+  `static_assets/schema.graphql` with the schema at the merge base with
+  `origin/main` and fails on removals before their date, output types that
+  became nullable or changed, inputs that became required or changed, new
+  required arguments or input fields, dropped interfaces or union members,
+  and removal dates under 30 days out. The `graphql-schema-compat` job in the
+  cloud storage code check runs it against the base branch tip when the schema
+  changes, and `just check` runs it locally. There is no override; set a date
+  and wait.
 - Deploy the schema before a frontend that selects it. A DSS without the field
   rejects the whole document.
 - Additive fields keep existing client caches. An incompatible change to identity
@@ -210,6 +234,7 @@ new fields needs the regenerated SDL in the same change.
 ```sh
 cargo test -p graphql_<domain>
 cargo test -p complete_graph            # SDL contract + schema tests; SQLX_OFFLINE unset
+cargo x graphql-schema-compat           # no breaking change vs origin/main
 SQLX_OFFLINE=true cargo check -p document_storage_service
 cd apps/web && bun run gen-graphql && bun run check
 cd apps/web && bunx vitest run src/lib/queries/mutation-coverage.test.ts

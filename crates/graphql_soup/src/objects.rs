@@ -294,6 +294,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::CalendarEvent(_) => {}
             Self::AgentSession(entity) => entity.2 = score,
             Self::DatabaseRow(entity) => entity.2 = score,
+            Self::Reminder(entity) => match entity.0 {},
         }
         self
     }
@@ -315,6 +316,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::ForeignEntity(_)
             | Self::AgentSession(_)
             | Self::DatabaseRow(_) => {}
+            Self::Reminder(entity) => match entity.0 {},
         }
         self
     }
@@ -446,6 +448,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     AgentSession(GraphqlSoupAgentSession<E>),
     /// Database row entity.
     DatabaseRow(GraphqlSoupDatabaseRow<E>),
+    /// Removed reminder entity, never constructed.
+    Reminder(GraphqlSoupReminder<E>),
 }
 
 impl<E> GraphqlSoupEntity<E>
@@ -1027,6 +1031,15 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
             viewed_at: self.0.viewed_at.map(|ts| ts.to_rfc3339()),
             deleted_at: None,
         }
+    }
+
+    /// Always null: project descriptions are collaborative surfaces (#7193),
+    /// keyed by the initiative id.
+    #[graphql(
+        deprecation = "Use ensureInitiativeDescriptionSurface; the description surface id is the initiative id. Remove after 2026-11-30."
+    )]
+    async fn description_document_id(&self) -> Option<ID> {
+        None
     }
 
     /// Common entity edges, including properties and viewer permissions.
@@ -2319,6 +2332,10 @@ where
 
 pub use crm_contact::GraphqlSoupCrmContact;
 mod crm_contact;
+pub use reminder::{
+    GraphqlReminderScheduleType, GraphqlSoupReminder, GraphqlSoupReminderReference,
+};
+mod reminder;
 
 /// GraphQL CRM company entity.
 pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany<()>, E, Option<f64>);
@@ -2592,6 +2609,7 @@ impl_common_interface_edges!(
     GraphqlSoupForeignEntity,
     GraphqlSoupAgentSession,
     GraphqlSoupDatabaseRow,
+    GraphqlSoupReminder,
 );
 
 /// Realtime Soup patch represented as exactly one update or cache deletion.

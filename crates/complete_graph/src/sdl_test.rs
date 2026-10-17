@@ -345,6 +345,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupForeignEntity",
         "GraphqlSoupAgentSession",
         "GraphqlSoupDatabaseRow",
+        "GraphqlSoupReminder",
     ] {
         let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
         else {

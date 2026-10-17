@@ -3729,6 +3729,10 @@ input GraphqlEntityFilterAst {
 	"""
 	githubPullRequestFilter: GraphqlGithubPullRequestExpr
 	"""
+	Ignored: Soup no longer returns reminders.
+	"""
+	reminderFilter: GraphqlReminderExpr @deprecated(reason: "Soup no longer returns reminders (#7536). Remove after 2026-11-30.")
+	"""
 	The agent session filter to apply.
 	"""
 	agentSessionFilter: GraphqlAgentSessionExpr
@@ -5821,6 +5825,69 @@ A property value represented by a type-safe GraphQL union.
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
 
 """
+The two operands of a recursive reminder filter expression. Ignored.
+Remove after 2026-11-30.
+"""
+input GraphqlReminderBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlReminderExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlReminderExpr!
+}
+
+"""
+A recursive reminder filter expression. Ignored. Remove after 2026-11-30.
+"""
+input GraphqlReminderExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlReminderBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlReminderBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlReminderExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlReminderLiteral
+}
+
+"""
+A reminder literal. Ignored. Remove after 2026-11-30.
+"""
+input GraphqlReminderLiteral @oneOf {
+	"""
+	Opt the query into reminders.
+	"""
+	include: Boolean
+	"""
+	The reminder id.
+	"""
+	id: ID
+	"""
+	The referenced entity, as `"{type}:{id}"`.
+	"""
+	entity: String
+	"""
+	Whether the owner marked the reminder done.
+	"""
+	completed: Boolean
+	"""
+	Whether the reminder came due.
+	"""
+	fired: Boolean
+}
+
+"""
 Metadata for a due reminder.
 """
 type GraphqlReminderMetadata {
@@ -5840,6 +5907,20 @@ type GraphqlReminderMetadata {
 	notifications written before recurring dispatch existed.
 	"""
 	scheduledFor: String
+}
+
+"""
+How often a reminder fires. Never returned. Remove after 2026-11-30.
+"""
+enum GraphqlReminderScheduleType {
+	"""
+	Fires once, at `remindAt`.
+	"""
+	ONCE
+	"""
+	Fires repeatedly, on `cron` evaluated in `timezone`.
+	"""
+	RECURRING
 }
 
 """
@@ -8191,6 +8272,11 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	"""
 	metadata: GraphqlEntityMetadata!
 	"""
+	Always null: project descriptions are collaborative surfaces (#7193),
+	keyed by the initiative id.
+	"""
+	descriptionDocumentId: ID @deprecated(reason: "Use ensureInitiativeDescriptionSurface; the description surface id is the initiative id. Remove after 2026-11-30.")
+	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""
 	properties: [GraphqlProperty!]!
@@ -8320,6 +8406,126 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+}
+
+"""
+A removed reminder entity. Soup no longer returns reminders (#7536); the
+type remains so documents from older clients validate. Remove after
+2026-11-30.
+"""
+type GraphqlSoupReminder implements GraphqlSoupEntity {
+	"""
+	The unique identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	The reminder's description.
+	"""
+	displayName: String
+	"""
+	Common reminder metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The entity this reminder was about.
+	"""
+	referencedEntity: GraphqlSoupReminderReference
+	"""
+	What to remind the user about.
+	"""
+	description: String!
+	"""
+	Whether the reminder fires once or repeatedly.
+	"""
+	scheduleType: GraphqlReminderScheduleType!
+	"""
+	The instant a one-shot reminder fires at, in RFC 3339 format.
+	"""
+	remindAt: String
+	"""
+	The cron expression a recurring reminder fires on.
+	"""
+	cron: String
+	"""
+	The timezone a recurring reminder's cron is evaluated in.
+	"""
+	timezone: String
+	"""
+	The next firing, in RFC 3339 format.
+	"""
+	nextRunAt: String!
+	"""
+	When false, the dispatcher skips this reminder.
+	"""
+	enabled: Boolean!
+	"""
+	When a one-shot reminder fired, in RFC 3339 format.
+	"""
+	completedAt: String
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity.
+	"""
+	frecencyScore: Float
+}
+
+"""
+The entity a reminder was about. Never returned. Remove after 2026-11-30.
+"""
+type GraphqlSoupReminderReference {
+	"""
+	The referenced entity's id.
+	"""
+	id: ID!
+	"""
+	The referenced entity's type.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	File type, when the reference is a document.
+	"""
+	fileType: String
+	"""
+	Sub type, when the reference is a task or snippet document.
+	"""
+	subType: String
 }
 
 """

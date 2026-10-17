@@ -72,6 +72,10 @@ check *ARGS:
       echo "── oxlint (warn-only; docs/development/style-guide.md FE-12)"
       (cd apps/web && bunx --yes oxlint@1.73.0 "${js_paths[@]}") || fail=1
     fi
+    if grep -qx 'static_assets/schema.graphql' <<<"$changed"; then
+      echo "── GraphQL schema compatibility (docs/guides/add-graphql-field.md step 8)"
+      cargo x graphql-schema-compat --base "${base:-origin/main}" || fail=1
+    fi
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/development/style-guide.md)"
       bunx --yes @ast-grep/cli@0.44.1 scan --report-style=short $sg || fail=1

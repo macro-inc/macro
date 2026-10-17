@@ -38,6 +38,7 @@ fn main() {
         Some("nextest-filter") => "xtask_nextest_filter",
         Some("doppler-bins") => "xtask_doppler_bins",
         Some("graphql-soup-schema") => "xtask_graphql_soup_schema",
+        Some("graphql-schema-compat") => "xtask_graphql_schema_compat",
         Some("cache-wasm") => "xtask_cache_wasm",
         Some("kafka-topics") => "xtask_kafka_topics",
         Some("workflows") => "xtask_workflows",

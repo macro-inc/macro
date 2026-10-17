@@ -50,8 +50,11 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod reminder;
 #[cfg(test)]
 mod test;
+
+use reminder::GraphqlReminderExpr;
 
 /// Maximum accepted GraphQL filter expression depth.
 pub const MAX_FILTER_DEPTH: usize = 64;
@@ -389,6 +392,14 @@ pub struct GraphqlEntityFilterAst {
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
     /// The GitHub pull request filter to apply, on top of the foreign entity filter.
     github_pull_request_filter: Option<GraphqlGithubPullRequestExpr>,
+    /// Ignored: Soup no longer returns reminders.
+    #[cfg_attr(
+        feature = "server",
+        graphql(
+            deprecation = "Soup no longer returns reminders (#7536). Remove after 2026-11-30."
+        )
+    )]
+    reminder_filter: Option<GraphqlReminderExpr>,
     /// The agent session filter to apply.
     agent_session_filter: Option<GraphqlAgentSessionExpr>,
     /// The initiative filter to apply. Initiatives are opt-in.

@@ -22412,6 +22412,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xtask_graphql_schema_compat"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "apollo-compiler",
+ "chrono",
+ "xtask_paths",
+]
+
+[[package]]
 name = "xtask_graphql_soup_schema"
 version = "0.1.0"
 dependencies = [
