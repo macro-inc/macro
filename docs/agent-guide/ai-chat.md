@@ -883,10 +883,11 @@ preserve the submitted tool selection.
 
 ## Composer anatomy (a11y)
 
-AI chat (including Home and doc-scoped chat) and agent session composers have
-a **Start dictation** microphone beside Send. It records
-in memory and uploads to the
-authenticated `/dictation/transcribe` storage endpoint only on confirmation.
+On pointer devices, AI chat (including Home and doc-scoped chat) and agent
+session composers have a **Start dictation** microphone beside Send. Touch
+devices omit it because their keyboards already dictate. It records in memory
+and uploads to the authenticated `/dictation/transcribe` storage endpoint only
+on confirmation.
 Whisper is available on all plans without consuming chat credits; its server
 credential is never exposed to the browser. Unsupported recording environments
 show a disabled microphone. Every supported browser uses Whisper; there are
@@ -903,7 +904,6 @@ If the browser stops listening on its own, **Ready** waits for confirmation.
 While **Finishing…**, the checkmark is disabled and Cancel remains available.
 No provider name or transcription hint appears below the composer; only the
 recording limit and failures do.
-Mobile chat stays expanded when focus moves into dictation controls.
 Starting dictation in another composer releases the previous session without
 moving focus back to it. Closing the composer releases the microphone. Capture failures
 appear below the composer.
