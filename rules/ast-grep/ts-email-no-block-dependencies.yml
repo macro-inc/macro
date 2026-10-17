@@ -6,6 +6,7 @@ files:
   - apps/web/src/features/email-message/**
   - apps/web/src/features/email-thread/**
   - apps/web/src/features/email-compose/**
+  - apps/web/src/features/email-reply-window/**
 rule:
   kind: string
   regex: ^['"](@block-|@core/block|@core/signal/(block|load)|@app/features/block-|.*[/]block-[^/]*/)

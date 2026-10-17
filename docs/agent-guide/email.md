@@ -332,6 +332,15 @@ delete, attach, format, schedule, and send. Touch compose uses its header toolba
 or the latest message when none is selected. `F` opens a forward and focuses To.
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
+On desktop, a reply's Pop out button (Shift+Cmd+P) saves the draft and reopens
+it in a reply window floating in the app's bottom-right corner. The window stays
+open while the user reads other threads or leaves Email; its message shows
+"Reply open in a window" with a Show button, and `r`/`R`/`f` on that message
+bring the window forward instead of opening a second editor. The title bar
+minimizes the window, fills the screen, or closes it (Shift+Cmd+P too), which
+saves the reply and gives it back to its thread inline. Text must survive each
+hand-off; sending or discarding from the window closes it and leaves no draft in
+an open thread. One reply is in the window at a time.
 An edited reply remains a draft when navigating away and returning. Standalone
 compose also flushes pending edits when leaving through app navigation. Switch
 views immediately after typing, before the 500 ms autosave debounce: the old

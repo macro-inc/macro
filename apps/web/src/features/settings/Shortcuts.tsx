@@ -1012,6 +1012,11 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['s'], codes: ['KeyS'], description: 'Star or unstar' },
       { keys: ['z'], codes: ['KeyZ'], description: 'Undo the last action' },
       {
+        keys: [`shift+${cmdOrCtrl}+p`],
+        codes: ['ShiftLeft', CmdOrCtrl, 'KeyP'],
+        description: 'Pop a reply out into a window, or back into its thread',
+      },
+      {
         keys: ['escape'],
         codes: ['Escape'],
         description: 'Back to the list, then to Signal',

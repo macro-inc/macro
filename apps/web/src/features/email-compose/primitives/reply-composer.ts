@@ -1429,6 +1429,8 @@ export function createReplyComposer(
 
   return {
     retryDraft,
+    /** Saves the reply now, for a hand-off to another editor. */
+    saveDraftNow: () => executeSaveDraft(),
     flushLocal: autosave.flushLocal,
     localSaveState: autosave.localSaveState,
     acknowledgeSaved: autosave.acknowledgeSaved,

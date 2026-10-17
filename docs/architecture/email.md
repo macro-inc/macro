@@ -12,8 +12,9 @@ same application routes.
 | --- | --- | --- |
 | `packages/email-renderer` | Deterministic preparation of HTML/plaintext bodies; framework-independent browser containment, colors, layout, and resource lifecycle | Solid, message DTOs, threads, app services, sender classification, block state |
 | `email-message` | A received or sent message, its sender/header, body renderer lifecycle and policy, Macro Markdown, quote expansion controls, and attachment presentation | Thread ordering, pagination, selection policy, drafts, reply placement, navigation, block state |
-| `email-thread` | A conversation, chronological ordering, hidden middle messages, pagination, draft association, reading stops, selection, scroll coordination, and where a reply appears | Rendering the internals of an email, editing or sending a draft, block lifecycle |
+| `email-thread` | A conversation, chronological ordering, hidden middle messages, pagination, draft association, reading stops, selection, scroll coordination, and where a reply appears, including the notice that stands in for a reply held by the reply window | Rendering the internals of an email, editing or sending a draft, block lifecycle |
 | `email-compose` | Form state, recipient rules, editor content, attachments, draft persistence, sending, scheduling, signatures, and undo recovery | Thread pagination/rendering, block identity, app routes or split navigation |
+| `email-reply-window` | The app-level window a reply pops out into: which reply it holds, minimized and full-screen state, focus requests, and hand-offs back to the thread (given back, sent, discarded) | The composer, drafts, thread state |
 | `block-email` | The legacy document-block adapter plus host-neutral thread body shared with the Email view: load gate, read marker, modals, side panel, and host actions | Reusable thread, message, composer state, or a host's top bar |
 
 An email thread and an individual email are independent features. A message can be
@@ -44,8 +45,17 @@ flowchart TD
 
 `email-message` must never import `email-thread` or `email-compose`.
 `email-compose` must never import `email-thread`. Thread composition may import
-both features' reusable views and contracts. No module in these three packages
-may import a block package, `@core/block`, or block-related signal modules.
+both features' reusable views and contracts. No module in these three packages,
+or in `email-reply-window`, may import a block package, `@core/block`, or
+block-related signal modules.
+
+`email-reply-window` and `email-thread` depend on each other only at their entry
+points. The window imports the thread's view-context types and, lazily, the
+production reply entry `email-thread/email-thread-reply.tsx`.
+`email-thread/email-thread.tsx` reads the window through
+`email-reply-window/context.ts` and hands it to thread views as
+`EmailThreadViewContext.replyWindow`; thread views and primitives never import
+`email-reply-window`.
 
 ## Production entry points and reusable surfaces
 
@@ -58,6 +68,13 @@ may import a block package, `@core/block`, or block-related signal modules.
   cleanup. `views/email-thread-surface.tsx` builds thread state and providers from
   supplied contexts. It imports no production entry point for a nested
   message or composer.
+- `email-thread/email-thread-reply.tsx` composes one message's reply without
+  its thread, for the reply window, through the same
+  `createEmailThreadComposition` that `email-thread.tsx` uses for a whole
+  thread. `email-reply-window/email-reply-window.tsx` mounts it in a portal over
+  the app shell (`components/app/Layout.tsx`), on desktop only; touch devices
+  reply in a drawer. A reply moves either way by saving its draft first, and the
+  other side opens it from that draft.
 - `email-compose/email-compose.tsx` supplies the production compose context and split-host
   callbacks to `views/email-compose.tsx`. Inline replies use
   `views/reply-input.tsx` with explicit capabilities and a reply session.
@@ -95,7 +112,7 @@ test exercises this ordering.
 | `EmailThreadSource` | Requested identity, available domain thread, request status, pagination availability, and refresh/page completion |
 | `EmailThreadCommands` | Thread actions and their availability; no soup collection or mutation objects |
 | `EmailThreadContext` | Thread source, viewer and device state, recipients, and the command factory used by thread state and navigation |
-| `EmailThreadViewContext` | Thread and compose contexts, plus view callbacks and optional compose host behavior |
+| `EmailThreadViewContext` | Thread and compose contexts, plus view callbacks, optional compose host behavior, and the app's reply window when one is mounted |
 | `EmailThreadHost` | Optional location target, focus, activation status, and keyboard registration |
 | `EmailRenderingContextValue` | Theme values, explicit image policy, link preparation, and image resolution with an abortable resource lifetime |
 | `EmailFormContextInputs` | Viewer address and available inbox identities for recipient selection |
@@ -160,6 +177,7 @@ The compose controllers now assemble these smaller responsibilities:
 | `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits on disposal, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
+| `reply-move.ts` | Moving a reply between its thread and the app's reply window: saves the draft first, keeps a reply that fails to save in place, and ignores a second request while one is saving. |
 | `views/reply-envelope.tsx` | Sender, recipients and subject presentation. One recipient input implementation supplies the desktop/mobile layouts while the parent keeps a single editor mounted. |
 
 A reply retains the draft ID and the thread returned by persistence together.
