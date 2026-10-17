@@ -179,23 +179,28 @@ pub async fn link_has_any_message_with(
     email: &str,
 ) -> anyhow::Result<bool> {
     let normalized = email.to_ascii_lowercase();
+    // Received branch first: Postgres runs UNION ALL branches in order and
+    // stops at the first row. That branch is one index probe on
+    // `from_contact_id`; the sent branch checks the contact's recipient rows
+    // one message at a time, including every received message they were
+    // cc'd on, before it can answer.
     sqlx::query_scalar!(
         r#"
         SELECT EXISTS (
+            SELECT 1
+            FROM email_messages m
+            JOIN email_contacts c ON c.id = m.from_contact_id
+            WHERE m.link_id = $1
+              AND m.is_sent = false
+              AND c.link_id = $1
+              AND LOWER(c.email_address) = $2
+            UNION ALL
             SELECT 1
             FROM email_messages m
             JOIN email_message_recipients r ON r.message_id = m.id
             JOIN email_contacts c ON c.id = r.contact_id
             WHERE m.link_id = $1
               AND m.is_sent = true
-              AND c.link_id = $1
-              AND LOWER(c.email_address) = $2
-            UNION ALL
-            SELECT 1
-            FROM email_messages m
-            JOIN email_contacts c ON c.id = m.from_contact_id
-            WHERE m.link_id = $1
-              AND m.is_sent = false
               AND c.link_id = $1
               AND LOWER(c.email_address) = $2
             LIMIT 1
