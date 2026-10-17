@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                    SELECT needs_reauth\n                    FROM email_links\n                    WHERE id = $1\n                    FOR UPDATE\n                    ",
+  "query": "\n            SELECT needs_reauth\n            FROM email_links\n            WHERE id = $1 AND is_sync_active\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "c1e3f6c64b310c965b6fefabd5ca8a62fc49058fdd1fd475a737b0a9c50eb304"
+  "hash": "a5d2e69bd05dfcd3ef56483e6a87887594b82ab79061acbf190a2694d6d0d36e"
 }

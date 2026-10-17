@@ -78,20 +78,15 @@ impl PgCalendarRepository {
         // the same order for reauth failure so concurrent consent and worker
         // deliveries cannot deadlock.
         let previous_link_reauth = if link_needs_reauth {
-            Some(
-                sqlx::query_scalar!(
-                    r#"
-                    SELECT needs_reauth
-                    FROM email_links
-                    WHERE id = $1
-                    FOR UPDATE
-                    "#,
-                    key.email_link_id,
-                )
-                .fetch_one(&mut *tx)
-                .await
-                .map_err(report)?,
-            )
+            match Self::lock_link_for_reauth(&mut tx, key.email_link_id).await? {
+                Some(needs_reauth) => Some(needs_reauth),
+                None => {
+                    return Ok(CalendarBackfillFailureOutcome {
+                        job_transitioned: false,
+                        link_reauth_transitioned: false,
+                    });
+                }
+            }
         } else {
             None
         };
@@ -214,6 +209,40 @@ impl PgCalendarRepository {
             job_transitioned: true,
             link_reauth_transitioned: previous_link_reauth == Some(false),
         })
+    }
+
+    /// Lock the inbox row for a reauth transition, returning its prior
+    /// `needs_reauth`. Returns `None` when the inbox is gone or has sync turned
+    /// off: it is being deleted and its calendar rows cascade away with it.
+    /// Marking a link deleting commits sync-off before the purge, so the
+    /// `is_sync_active` filter skips the row without waiting on the purge's row
+    /// lock. A live inbox whose row stays locked past the timeout returns an
+    /// error so the delivery retries.
+    async fn lock_link_for_reauth(
+        tx: &mut Transaction<'_, Postgres>,
+        email_link_id: Uuid,
+    ) -> Result<Option<bool>, Report> {
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut **tx)
+            .await
+            .map_err(report)?;
+        sqlx::query_scalar!(
+            r#"
+            SELECT needs_reauth
+            FROM email_links
+            WHERE id = $1 AND is_sync_active
+            FOR UPDATE
+            "#,
+            email_link_id,
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .inspect_err(|error| {
+            if is_lock_not_available(error) {
+                tracing::warn!(%email_link_id, "inbox row stayed locked; retrying calendar reauth failure later");
+            }
+        })
+        .map_err(report)
     }
 
     #[cfg(test)]
@@ -4386,6 +4415,16 @@ fn canonical_projection(value: &serde_json::Value) -> serde_json::Value {
 
 fn report(error: impl std::error::Error + Send + Sync + 'static) -> Report {
     rootcause::report!(error).into()
+}
+
+/// Postgres `lock_not_available` SQLSTATE, raised when `lock_timeout` expires.
+const LOCK_NOT_AVAILABLE: &str = "55P03";
+
+fn is_lock_not_available(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|db| db.code())
+        .is_some_and(|code| code == LOCK_NOT_AVAILABLE)
 }
 
 fn db_sequence(sequence: u32) -> Result<i32, Report> {

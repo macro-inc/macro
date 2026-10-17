@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH prev AS (\n            SELECT needs_reauth FROM email_links\n            WHERE id = $1 AND is_sync_active\n            FOR UPDATE\n        )\n        UPDATE email_links e\n        SET needs_reauth = true,\n            last_sync_error_at = NOW(),\n            updated_at = NOW()\n        FROM prev\n        WHERE e.id = $1\n        RETURNING (NOT prev.needs_reauth) AS \"did_transition!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "did_transition!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "92cccf8d27a6040b719bd961c0d4f7340c2b1d7f9ec8064d892e1faeb54b4376"
+}

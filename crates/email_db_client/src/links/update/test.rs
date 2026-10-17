@@ -6,6 +6,7 @@ use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::service::link::{Link, UserProvider};
 use sqlx::{Pool, Postgres};
+use std::time::Duration;
 
 async fn insert_test_link(pool: &Pool<Postgres>, email: &str) -> anyhow::Result<Uuid> {
     let link = Link {
@@ -80,5 +81,63 @@ async fn set_needs_reauth_on_missing_link_is_not_a_transition(
 ) -> anyhow::Result<()> {
     let missing = macro_uuid::generate_uuid_v7();
     assert!(!set_link_needs_reauth(&pool, missing).await?);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_needs_reauth_skips_link_with_sync_off(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let id = insert_test_link(&pool, "off@reauth.test").await?;
+    update_link_sync_status(&pool, id, false).await?;
+
+    assert!(!set_link_needs_reauth(&pool, id).await?);
+
+    let link = fetch_link_by_id(&pool, id).await?.expect("link exists");
+    assert!(!link.needs_reauth);
+    assert!(link.last_sync_error_at.is_none());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_needs_reauth_does_not_wait_on_link_being_deleted(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let id = insert_test_link(&pool, "deleting@reauth.test").await?;
+    crate::links::delete::mark_link_deleting(&pool, id).await?;
+
+    // An uncommitted delete holds the row lock, like the cascading link delete.
+    let mut deleting = pool.begin().await?;
+    sqlx::query!("DELETE FROM email_links WHERE id = $1", id)
+        .execute(&mut *deleting)
+        .await?;
+
+    let marked =
+        tokio::time::timeout(Duration::from_secs(2), set_link_needs_reauth(&pool, id)).await??;
+    assert!(!marked);
+
+    deleting.rollback().await?;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_needs_reauth_gives_up_on_long_held_row_lock(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let id = insert_test_link(&pool, "locked@reauth.test").await?;
+
+    let mut holder = pool.begin().await?;
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR UPDATE", id)
+        .fetch_one(&mut *holder)
+        .await?;
+
+    let marked =
+        tokio::time::timeout(Duration::from_secs(15), set_link_needs_reauth(&pool, id)).await??;
+    assert!(!marked);
+    holder.rollback().await?;
+
+    let link = fetch_link_by_id(&pool, id).await?.expect("link exists");
+    assert!(!link.needs_reauth);
+
+    // Once the lock is released the next failure marks the link.
+    assert!(set_link_needs_reauth(&pool, id).await?);
     Ok(())
 }

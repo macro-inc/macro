@@ -31,16 +31,37 @@ pub async fn update_link_fusionauth_user_id(
     Ok(())
 }
 
+/// Postgres `lock_not_available` SQLSTATE, raised when `lock_timeout` expires.
+const LOCK_NOT_AVAILABLE: &str = "55P03";
+
+fn is_lock_not_available(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|db| db.code())
+        .is_some_and(|code| code == LOCK_NOT_AVAILABLE)
+}
+
 /// Marks a link as needing reauth and records when the failure was observed.
 /// Returns `true` only when this call flipped the link from healthy to
 /// needs-reauth, letting callers fire a one-time notification on that edge.
-/// Returns `false` when it was already flagged or no such link exists.
+///
+/// Returns `false` without writing when the link is already flagged, gone, has
+/// sync turned off, or its row stays locked past a short lock timeout. Marking a
+/// link deleting also turns its sync off, so a deleting link is skipped without
+/// waiting on the purge's row lock; the next token failure retries the mark.
 #[tracing::instrument(skip(pool), err)]
 pub async fn set_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Result<bool> {
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL lock_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
+
     let row = sqlx::query!(
         r#"
         WITH prev AS (
-            SELECT needs_reauth FROM email_links WHERE id = $1 FOR UPDATE
+            SELECT needs_reauth FROM email_links
+            WHERE id = $1 AND is_sync_active
+            FOR UPDATE
         )
         UPDATE email_links e
         SET needs_reauth = true,
@@ -52,8 +73,18 @@ pub async fn set_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Resu
         "#,
         link_id,
     )
-    .fetch_optional(pool)
-    .await?;
+    .fetch_optional(&mut *tx)
+    .await;
+
+    let row = match row {
+        Ok(row) => row,
+        Err(error) if is_lock_not_available(&error) => {
+            tracing::info!(%link_id, "Link row is locked, likely by a deletion; skipping reauth mark");
+            return Ok(false);
+        }
+        Err(error) => return Err(error.into()),
+    };
+    tx.commit().await?;
 
     Ok(matches!(row, Some(r) if r.did_transition))
 }

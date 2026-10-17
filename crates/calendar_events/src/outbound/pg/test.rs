@@ -2677,6 +2677,137 @@ async fn unclaimed_google_reauth_failure_is_atomic_and_edge_triggered(pool: PgPo
     assert!(!duplicate.link_reauth_transitioned);
 }
 
+async fn insert_pending_google_job(pool: &PgPool, owner_id: &str) -> CalendarBackfillJobKey {
+    let link_id = insert_link(pool, owner_id).await;
+    persist_complete_grant(pool, link_id, 1).await;
+    let account_id = Uuid::now_v7();
+    let job_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_accounts (
+            id, owner_id, email_link_id, provider, provider_account_id
+        )
+        VALUES ($1, $2, $3, 'google', $4)
+        "#,
+        account_id,
+        owner_id,
+        link_id,
+        owner_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_backfill_jobs (
+            id, email_link_id, account_id, kind, grant_version, status
+        )
+        VALUES ($1, $2, $3, 'google_calendar', 1, 'pending')
+        "#,
+        job_id,
+        link_id,
+        account_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    CalendarBackfillJobKey {
+        job_id,
+        email_link_id: link_id,
+    }
+}
+
+async fn job_status_and_link_reauth(pool: &PgPool, key: CalendarBackfillJobKey) -> (String, bool) {
+    let state = sqlx::query!(
+        r#"
+        SELECT job.status, link.needs_reauth
+        FROM calendar_backfill_jobs job
+        JOIN email_links link ON link.id = job.email_link_id
+        WHERE job.id = $1
+        "#,
+        key.job_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    (state.status, state.needs_reauth)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unclaimed_reauth_failure_does_not_wait_on_inbox_being_deleted(pool: PgPool) {
+    let key = insert_pending_google_job(&pool, "macro|calendar-deleting@example.com").await;
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active = false WHERE id = $1",
+        key.email_link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // An uncommitted delete holds the inbox row lock, like the cascading link delete.
+    let mut deleting = pool.begin().await.unwrap();
+    sqlx::query!("DELETE FROM email_links WHERE id = $1", key.email_link_id)
+        .execute(&mut *deleting)
+        .await
+        .unwrap();
+
+    let failure_service =
+        GoogleCalendarBackfillFailureService::new(PgCalendarRepository::new(pool.clone()));
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        failure_service.fail_unclaimed(
+            key,
+            CalendarBackfillFailureDisposition::ReauthRequired,
+            "grant revoked",
+        ),
+    )
+    .await
+    .expect("must not wait on the deleting inbox's row lock")
+    .unwrap();
+    assert!(!outcome.job_transitioned);
+    assert!(!outcome.link_reauth_transitioned);
+
+    deleting.rollback().await.unwrap();
+    assert_eq!(
+        job_status_and_link_reauth(&pool, key).await,
+        ("pending".to_owned(), false)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unclaimed_reauth_failure_retries_when_live_inbox_stays_locked(pool: PgPool) {
+    let key = insert_pending_google_job(&pool, "macro|calendar-locked@example.com").await;
+
+    let mut holder = pool.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM email_links WHERE id = $1 FOR UPDATE",
+        key.email_link_id,
+    )
+    .fetch_one(&mut *holder)
+    .await
+    .unwrap();
+
+    let failure_service =
+        GoogleCalendarBackfillFailureService::new(PgCalendarRepository::new(pool.clone()));
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        failure_service.fail_unclaimed(
+            key,
+            CalendarBackfillFailureDisposition::ReauthRequired,
+            "grant revoked",
+        ),
+    )
+    .await
+    .expect("lock timeout must bound the wait");
+    assert!(result.is_err(), "a live inbox must retry the delivery");
+
+    holder.rollback().await.unwrap();
+    assert_eq!(
+        job_status_and_link_reauth(&pool, key).await,
+        ("pending".to_owned(), false)
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn calendar_permission_failure_does_not_mark_the_gmail_link_for_reauth(pool: PgPool) {
     let owner_id = "macro|calendar-permission-only@example.com";

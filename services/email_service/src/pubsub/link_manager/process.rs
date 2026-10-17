@@ -112,8 +112,9 @@ pub async fn process_message(
 /// Returns the token on success. When the grant is gone the link has already been
 /// marked for reauth as a side effect, so the message is terminal — return `None` to let it
 /// be dropped — but only once that mark is persisted; if the mark write itself failed,
-/// propagate the error so the message retries and the health signal isn't lost. Other,
-/// transient errors propagate to retry.
+/// propagate the error so the message retries and the health signal isn't lost. A link
+/// that is gone or has sync turned off is being deleted and is never marked, so it is
+/// terminal too. Other, transient errors propagate to retry.
 async fn settle_reauth_fetch(
     ctx: &LinkManagerContext,
     link: &Link,
@@ -122,12 +123,12 @@ async fn settle_reauth_fetch(
     match result {
         Ok(token) => Ok(Some(token)),
         Err(EmailApiError::AuthRequired) => {
-            let persisted = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
+            let settled = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
                 .await
                 .context("Failed to verify needs_reauth state after token fetch failure")?
-                .is_some_and(|l| l.needs_reauth);
+                .is_none_or(|l| l.needs_reauth || !l.is_sync_active);
 
-            settle_reauth_result(Err(EmailApiError::AuthRequired), persisted)
+            settle_reauth_result(Err(EmailApiError::AuthRequired), settled)
         }
         result => settle_reauth_result(result, false),
     }
@@ -135,11 +136,11 @@ async fn settle_reauth_fetch(
 
 fn settle_reauth_result(
     result: Result<AccessToken, EmailApiError>,
-    needs_reauth_persisted: bool,
+    reauth_settled: bool,
 ) -> anyhow::Result<Option<AccessToken>> {
     match result {
         Ok(token) => Ok(Some(token)),
-        Err(EmailApiError::AuthRequired) if needs_reauth_persisted => Ok(None),
+        Err(EmailApiError::AuthRequired) if reauth_settled => Ok(None),
         Err(error) => Err(anyhow::Error::new(error)),
     }
 }
@@ -308,34 +309,6 @@ async fn handle_delete(
         })
         .ok();
 
-    // delete cached access token, in case user re-enables within cache window
-    ctx.redis_client
-        .delete_gmail_access_token(&TokenCacheKey::new(
-            link.fusionauth_user_id.clone(),
-            link.email_address.0.as_ref(),
-            UserProvider::Gmail.as_str(),
-        ))
-        .await
-        .inspect_err(|e| {
-            tracing::warn!(error=?e, "Failed to delete Gmail access token");
-        })
-        .ok();
-
-    // remove google fusionauth link with gmail inbox permissions. best-effort: the FA user may
-    // already be gone (e.g. account deleted before we delete their email), so we warn and keep
-    // going rather than failing the message and retrying.
-    ctx.auth_service_client
-        .remove_link(
-            &link.fusionauth_user_id,
-            link.email_address.0.as_ref(),
-            "google_gmail",
-        )
-        .await
-        .inspect_err(|e| {
-            tracing::warn!(error=?e, "Failed to remove FusionAuth IdP link");
-        })
-        .ok();
-
     // Tear down CRM rows this link contributed to the user's team before
     // the link is purged. Best-effort: a failure here
     // would only leave orphan `crm_contacts`/`crm_companies` rows behind
@@ -366,6 +339,39 @@ async fn handle_delete(
     email_db_client::links::delete::purge_link(&ctx.db, link.id, PurgeBatchSizes::default())
         .await
         .context("Failed to purge link in background task")?;
+
+    // Revoke credentials only once the rows are gone. Sync and calendar work still
+    // running against the link during the purge would otherwise hit token errors and
+    // try to mark it for reauth. A failed purge returns above, so the retry still finds
+    // the link and revokes then.
+
+    // delete cached access token, in case user re-enables within cache window
+    ctx.redis_client
+        .delete_gmail_access_token(&TokenCacheKey::new(
+            link.fusionauth_user_id.clone(),
+            link.email_address.0.as_ref(),
+            UserProvider::Gmail.as_str(),
+        ))
+        .await
+        .inspect_err(|e| {
+            tracing::warn!(error=?e, "Failed to delete Gmail access token");
+        })
+        .ok();
+
+    // remove google fusionauth link with gmail inbox permissions. best-effort: the FA user may
+    // already be gone (e.g. account deleted before we delete their email), so we warn and keep
+    // going rather than failing the message and retrying.
+    ctx.auth_service_client
+        .remove_link(
+            &link.fusionauth_user_id,
+            link.email_address.0.as_ref(),
+            "google_gmail",
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::warn!(error=?e, "Failed to remove FusionAuth IdP link");
+        })
+        .ok();
 
     // The teardown is async relative to the delete request, so signal completion
     // now that the rows are gone — a client showing this inbox can drop its data.
