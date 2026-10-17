@@ -1,9 +1,8 @@
 import { useNavigate } from '@solidjs/router';
 import { createSignal, Show } from 'solid-js';
-import { analytics } from '../../utils/utilAnalytic';
 import {
-  isLikelyEmail,
   MOBILE_SIGNUP_SENT_PATH,
+  recordMobileSignupSubmitted,
   submitMobileSignup,
 } from '../../utils/utilMobileSignup';
 
@@ -46,8 +45,11 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
   const submit = async () => {
     if (pending()) return;
 
-    const trimmed = email().trim();
-    if (!isLikelyEmail(trimmed)) {
+    const normalized = recordMobileSignupSubmitted(email(), {
+      buttonName: props.buttonName,
+      pageLocation: window.location.href,
+    });
+    if (!normalized) {
       setError('Enter a valid email address.');
       focusEmail();
       return;
@@ -55,12 +57,8 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
 
     setError(null);
     setPending(true);
-    analytics.track('mobile_signup_submitted', {
-      page_location: window.location.href,
-      button_name: props.buttonName,
-    });
 
-    const result = await submitMobileSignup(trimmed);
+    const result = await submitMobileSignup(normalized);
     setPending(false);
 
     if (!result.ok) {
@@ -74,7 +72,7 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
     // The email rides along in history state as well as session storage, so
     // the confirmation page can name the address (and dedupe its conversion
     // fire) even where storage is unavailable.
-    navigate(MOBILE_SIGNUP_SENT_PATH, { state: { email: trimmed } });
+    navigate(MOBILE_SIGNUP_SENT_PATH, { state: { email: normalized } });
   };
 
   const buttonLabel = () =>
@@ -184,22 +182,27 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
             setEmail(event.currentTarget.value);
             if (error()) setError(null);
           }}
-          style={card() ? undefined : {
-            'background-color':
-              'color-mix(in srgb, var(--b1) 88%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--b4) 46%, transparent)',
-            'border-radius': '999px',
-            'box-sizing': 'border-box',
-            color: 'var(--c0)',
-            'font-family': 'body',
-            // 16px minimum: iOS Safari zooms the page when focusing a smaller field.
-            'font-size': '16px',
-            height: inline() ? '32px' : '46px',
-            outline: 'none',
-            padding: inline() ? '0 96px 0 14px' : '0 18px',
-            transition: 'border-color 160ms ease',
-            width: '100%',
-          }}
+          style={
+            card()
+              ? undefined
+              : {
+                  'background-color':
+                    'color-mix(in srgb, var(--b1) 88%, transparent)',
+                  border:
+                    '1px solid color-mix(in srgb, var(--b4) 46%, transparent)',
+                  'border-radius': '999px',
+                  'box-sizing': 'border-box',
+                  color: 'var(--c0)',
+                  'font-family': 'body',
+                  // 16px minimum: iOS Safari zooms the page when focusing a smaller field.
+                  'font-size': '16px',
+                  height: inline() ? '32px' : '46px',
+                  outline: 'none',
+                  padding: inline() ? '0 96px 0 14px' : '0 18px',
+                  transition: 'border-color 160ms ease',
+                  width: '100%',
+                }
+          }
         />
 
         <button
@@ -212,38 +215,42 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
           }
           type="submit"
           disabled={pending()}
-          style={card() ? undefined : {
-            'align-items': 'center',
-            'background-color': 'var(--c1)',
-            border: '1px solid transparent',
-            'border-radius': '999px',
-            'box-sizing': 'border-box',
-            color: 'var(--b0)',
-            cursor: 'default',
-            display: 'inline-flex',
-            'font-family': 'body',
-            'font-size': inline() ? '13px' : '16px',
-            'font-weight': '700',
-            ...(inline()
-              ? {
-                  bottom: 'auto',
-                  height: '26px',
-                  padding: '0 12px',
-                  position: 'absolute',
-                  right: '3px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                }
+          style={
+            card()
+              ? undefined
               : {
-                  height: '46px',
-                  padding: '0 22px',
-                  width: '100%',
-                }),
-            'justify-content': 'center',
-            'letter-spacing': '0.01em',
-            'line-height': 1,
-            'white-space': 'nowrap',
-          }}
+                  'align-items': 'center',
+                  'background-color': 'var(--c1)',
+                  border: '1px solid transparent',
+                  'border-radius': '999px',
+                  'box-sizing': 'border-box',
+                  color: 'var(--b0)',
+                  cursor: 'default',
+                  display: 'inline-flex',
+                  'font-family': 'body',
+                  'font-size': inline() ? '13px' : '16px',
+                  'font-weight': '700',
+                  ...(inline()
+                    ? {
+                        bottom: 'auto',
+                        height: '26px',
+                        padding: '0 12px',
+                        position: 'absolute',
+                        right: '3px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                      }
+                    : {
+                        height: '46px',
+                        padding: '0 22px',
+                        width: '100%',
+                      }),
+                  'justify-content': 'center',
+                  'letter-spacing': '0.01em',
+                  'line-height': 1,
+                  'white-space': 'nowrap',
+                }
+          }
         >
           {buttonLabel()}
         </button>

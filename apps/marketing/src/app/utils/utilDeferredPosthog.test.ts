@@ -7,10 +7,24 @@ const settle = async () => {
 
 const setup = () => {
   const order: string[] = [];
+  const distinctIdsAtCapture: string[] = [];
+  let distinctId = 'anonymous';
   const client = {
     init: vi.fn(() => order.push('init')),
-    capture: vi.fn((event: string) => order.push(event)),
-    identify: vi.fn((email: string) => order.push(`identify:${email}`)),
+    capture: vi.fn((event: string) => {
+      order.push(event);
+      distinctIdsAtCapture.push(distinctId);
+    }),
+    identify: vi.fn(
+      (
+        email: string,
+        _properties?: Record<string, unknown>,
+        _setOnce?: Record<string, unknown>
+      ) => {
+        distinctId = email;
+        order.push(`identify:${email}`);
+      }
+    ),
     set_config: vi.fn(() => order.push('automatic pageviews')),
   };
   let resolve!: (value: typeof client) => void;
@@ -21,7 +35,14 @@ const setup = () => {
       })
   );
   const analytics = createDeferredPosthog('public-key', load);
-  return { analytics, load, client, order, resolve: () => resolve(client) };
+  return {
+    analytics,
+    load,
+    client,
+    order,
+    distinctIdsAtCapture,
+    resolve: () => resolve(client),
+  };
 };
 
 describe('deferred website PostHog', () => {
@@ -172,6 +193,51 @@ describe('deferred website PostHog', () => {
       'identify:person@example.com',
       'automatic pageviews',
     ]);
+  });
+
+  it('identifies the normalized email before the following capture', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/mobile-signup?utm_source=ig&utm_medium=paid&utm_campaign=spring&utm_content=story&fbclid=click&gclid=ads'
+    );
+    const fixture = setup();
+    fixture.analytics.identify(' Dartagnan@CtrlStrategies.com ', {
+      mobile_capture_at: '2026-10-14T12:00:00.000Z',
+      mobile_capture_device: 'mobile',
+    });
+    fixture.analytics.capture('mobile_signup_submitted', {
+      button_name: 'mobile_signup_page',
+    });
+    await settle();
+    fixture.resolve();
+    await settle();
+
+    expect(fixture.order).toEqual([
+      'init',
+      '$pageview',
+      'identify:dartagnan@ctrlstrategies.com',
+      'mobile_signup_submitted',
+      'automatic pageviews',
+    ]);
+    expect(fixture.distinctIdsAtCapture).toEqual([
+      'anonymous',
+      'dartagnan@ctrlstrategies.com',
+    ]);
+    expect(fixture.client.identify).toHaveBeenCalledWith(
+      'dartagnan@ctrlstrategies.com',
+      { email: 'dartagnan@ctrlstrategies.com' },
+      expect.objectContaining({
+        utm_source: 'ig',
+        utm_medium: 'paid',
+        utm_campaign: 'spring',
+        utm_content: 'story',
+        fbclid: 'click',
+        mobile_capture_at: '2026-10-14T12:00:00.000Z',
+        mobile_capture_device: 'mobile',
+      })
+    );
+    expect(fixture.client.identify.mock.calls[0]?.[2]?.gclid).toBeUndefined();
   });
 
   it('starts in background tabs where animation frames are suspended', async () => {

@@ -164,6 +164,10 @@ function useUserInfoSideEffects() {
           email: user.email,
           os,
         });
+      } else {
+        // Already identified, including as the mobile-capture email on this
+        // browser. identify() will not switch that browser to the account id.
+        analytics.linkMobileCapturePerson(user.id, user.email);
       }
 
       const planKey = `${user.id}:${user.licenseStatus}`;

@@ -16,6 +16,7 @@ import {
 } from '@core/util/telemetryUrl';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
+import { normalizeAnalyticsEmail } from './mobileCaptureIdentity';
 import { getPlanAnalyticsProperties } from './planProperties';
 
 /**
@@ -71,7 +72,28 @@ type TrackFn = <E extends EventName>(
 interface UserIdentifyInfo {
   email: string;
   os: string;
+  /** Person properties applied once (`$set_once`), not on the event. */
+  setOnce: Record<string, string>;
 }
+
+const MERGED_EMAIL_KEY = 'macro_ph_merged_email:';
+
+const readMergedEmail = (userId: string): string | null => {
+  try {
+    return localStorage.getItem(MERGED_EMAIL_KEY + userId);
+  } catch {
+    return null;
+  }
+};
+
+const rememberMergedEmail = (userId: string, email: string) => {
+  try {
+    localStorage.setItem(MERGED_EMAIL_KEY + userId, email);
+  } catch {
+    // The merge was still sent. A repeat is safe; PostHog no-ops an id that
+    // already belongs to this person.
+  }
+};
 
 interface PageViewOptions {
   /** Override the page path (defaults to window.location.pathname) */
@@ -313,24 +335,73 @@ const createAnalytics = () => {
     }
   };
 
+  /**
+   * Mobile capture identifies PostHog as the normalized email. This app and
+   * the create-user webhook use `macro|{email}`. `identify` only merges an
+   * anonymous id into an identified one, and `alias` refuses an id that was
+   * already passed to `identify`, so those two persons stay split.
+   * `$merge_dangerously` is the merge PostHog applies; the event's distinct
+   * id is the person that survives.
+   *
+   * The account id is preferred, matching server `sign_up`. When this browser
+   * is already identified as the email (in-app capture), `identify(accountId)`
+   * is dropped, so the account id is merged into that email person instead.
+   */
+  const linkMobileCapturePerson = (
+    userId: string,
+    email: string | null | undefined
+  ) => {
+    if (disabled) return;
+    const normalized = normalizeAnalyticsEmail(email);
+    if (!normalized || normalized === userId) return;
+    if (readMergedEmail(userId) === normalized) return;
+
+    try {
+      const current = posthog.get_distinct_id();
+      if (current === userId) {
+        posthog.capture('$merge_dangerously', { alias: normalized });
+        rememberMergedEmail(userId, normalized);
+        return;
+      }
+      if (current === normalized) {
+        posthog.capture('$merge_dangerously', { alias: userId });
+        rememberMergedEmail(userId, normalized);
+      }
+    } catch (e) {
+      console.error('[Analytics] Failed to link mobile capture:', e);
+    }
+  };
+
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
     if (disabled) return;
+
+    const { setOnce, ...rest } = info;
+    const email = normalizeAnalyticsEmail(rest.email);
+    const properties = {
+      ...rest,
+      ...(email ? { email } : {}),
+    };
 
     try {
       gtag('config', GA_ID, {
         user_id: userID,
-        ...(info.email && { email: info.email }),
-        ...(info.os && { os: info.os }),
+        ...(email && { email }),
+        ...(rest.os && { os: rest.os }),
       });
 
       if (metaPixelEnabled) {
         fbq('init', '639142540393286', {
           external_id: userID,
-          em: info.email,
+          em: email || undefined,
         });
       }
 
-      posthog.identify(userID, { ...info });
+      if (setOnce && Object.keys(setOnce).length > 0) {
+        posthog.identify(userID, properties, setOnce);
+      } else {
+        posthog.identify(userID, properties);
+      }
+      linkMobileCapturePerson(userID, email);
     } catch (e) {
       console.error('[Analytics] Failed to identify user:', e);
     }
@@ -412,6 +483,7 @@ const createAnalytics = () => {
     trackMeta,
     trackGoogleConversion,
     identify,
+    linkMobileCapturePerson,
     setPlanProperties,
     reset,
     pageView,
@@ -431,6 +503,10 @@ export type AnalyticsInterface = {
     data?: { value?: number; currency?: string; transaction_id?: string }
   ) => void;
   identify: (userID: string, info: Partial<UserIdentifyInfo>) => void;
+  linkMobileCapturePerson: (
+    userId: string,
+    email: string | null | undefined
+  ) => void;
   setPlanProperties: (licenseStatus: string | undefined) => void;
   reset: () => void;
   pageView: (pageTitle: string, opts?: PageViewOptions) => void;

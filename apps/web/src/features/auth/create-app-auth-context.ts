@@ -90,6 +90,7 @@ export function createAppAuthContext(): AuthContext {
       analytics.identify(user.id, {
         email: user.email,
         os: detect(navigator.userAgent)?.os?.replaceAll(' ', ''),
+        setOnce: user.setOnce,
       }),
     trackMobileSignupLead: (email) => {
       // Lead feeds an existing custom conversion; Meta's Maximize Value

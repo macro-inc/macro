@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   platform: 'web' as 'web' | 'ios' | 'android' | 'desktop',
   touch: false,
+  distinctId: 'anon-id',
+  identified: false,
   capture: vi.fn(),
   identify: vi.fn(),
   gtag: vi.fn(),
@@ -24,6 +26,8 @@ vi.mock('posthog-js', () => ({
   PostHog: class {
     capture = mocks.capture;
     identify = mocks.identify;
+    get_distinct_id = () => mocks.distinctId;
+    _isIdentified = () => mocks.identified;
   },
 }));
 
@@ -36,6 +40,16 @@ beforeEach(() => {
   vi.stubGlobal('fbq', mocks.fbq);
   mocks.platform = 'web';
   mocks.touch = false;
+  mocks.distinctId = 'anon-id';
+  mocks.identified = false;
+  localStorage.clear();
+  mocks.identify.mockImplementation((id: string) => {
+    // PostHog drops identify() when this browser is already identified as
+    // someone else. Callers have to merge instead of switching.
+    if (mocks.identified && mocks.distinctId !== id) return;
+    mocks.distinctId = id;
+    mocks.identified = true;
+  });
 });
 
 afterEach(() => {
@@ -126,4 +140,83 @@ describe('Meta pixel platform support', () => {
       );
     }
   );
+});
+
+describe('mobile capture linked to the account', () => {
+  it('merges the normalized email into the account after identify', async () => {
+    const { analytics } = await import('./analytics');
+    analytics.identify('macro|person@example.com', {
+      email: 'Person@Example.com',
+    });
+
+    expect(mocks.identify).toHaveBeenCalledWith('macro|person@example.com', {
+      email: 'person@example.com',
+    });
+    expect(mocks.gtag).toHaveBeenCalledWith(
+      'config',
+      expect.any(String),
+      expect.objectContaining({
+        user_id: 'macro|person@example.com',
+        email: 'person@example.com',
+      })
+    );
+    expect(mocks.capture).toHaveBeenCalledWith('$merge_dangerously', {
+      alias: 'person@example.com',
+    });
+    expect(mocks.distinctId).toBe('macro|person@example.com');
+
+    analytics.identify('macro|person@example.com', {
+      email: 'Person@Example.com',
+    });
+    expect(mocks.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('merges the account into a browser already identified as that email', async () => {
+    mocks.distinctId = 'person@example.com';
+    mocks.identified = true;
+    const { analytics } = await import('./analytics');
+
+    analytics.identify('macro|person@example.com', {
+      email: 'Person@Example.com',
+    });
+
+    expect(mocks.distinctId).toBe('person@example.com');
+    expect(mocks.capture).toHaveBeenCalledWith('$merge_dangerously', {
+      alias: 'macro|person@example.com',
+    });
+  });
+
+  it('does not merge a browser identified as a different account', async () => {
+    mocks.distinctId = 'macro|other@example.com';
+    mocks.identified = true;
+    const { analytics } = await import('./analytics');
+
+    analytics.linkMobileCapturePerson(
+      'macro|person@example.com',
+      'person@example.com'
+    );
+
+    expect(mocks.capture).not.toHaveBeenCalled();
+  });
+
+  it('sets mobile-capture properties once and does not merge the email into itself', async () => {
+    const { analytics } = await import('./analytics');
+    analytics.identify('visitor@acme.com', {
+      email: 'Visitor@Acme.com',
+      setOnce: {
+        mobile_capture_at: '2026-10-14T12:00:00.000Z',
+        mobile_capture_device: 'mobile',
+      },
+    });
+
+    expect(mocks.identify).toHaveBeenCalledWith(
+      'visitor@acme.com',
+      { email: 'visitor@acme.com' },
+      {
+        mobile_capture_at: '2026-10-14T12:00:00.000Z',
+        mobile_capture_device: 'mobile',
+      }
+    );
+    expect(mocks.capture).not.toHaveBeenCalled();
+  });
 });
