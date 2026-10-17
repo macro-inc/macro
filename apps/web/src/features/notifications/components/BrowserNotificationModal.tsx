@@ -8,6 +8,7 @@ import {
   type SupportedNotificationSettings,
   useNotificationSettings,
 } from '../notification-settings';
+import { notificationsBlockedMessage } from '../notifications-blocked-message';
 
 export const BrowserNotificationModal = () => {
   const settings = useNotificationSettings();
@@ -59,6 +60,9 @@ function NotificationToastTrigger(props: {
             onClick: async () => {
               try {
                 await props.settings.toggle(true);
+                if (!props.settings.isEnabled()) {
+                  toast.failure(notificationsBlockedMessage());
+                }
               } catch (error) {
                 console.error('Failed to enable notifications:', error);
               }

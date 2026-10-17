@@ -344,6 +344,21 @@ describe('SyncServiceSource', () => {
     expect((await pending)._unsafeUnwrap()).toEqual(bytes);
   });
 
+  it('waits for replies on webviews without Promise.withResolvers', async () => {
+    const withResolvers = Promise.withResolvers;
+    Reflect.deleteProperty(Promise, 'withResolvers');
+    try {
+      const ws = new FakeSocket();
+      const src = new SyncServiceSource(ws, 'doc1');
+      const pending = src.requestSnapshot();
+      const bytes = new Uint8Array([7]);
+      ws.deliver(remote.snapshot(bytes));
+      expect((await pending)._unsafeUnwrap()).toEqual(bytes);
+    } finally {
+      Object.assign(Promise, { withResolvers });
+    }
+  });
+
   it('re-syncs and emits reconnect after a Reconnect event', async () => {
     const ws = new FakeSocket();
     const src = new SyncServiceSource(ws, 'doc1');

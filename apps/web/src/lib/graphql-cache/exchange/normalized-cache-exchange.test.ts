@@ -4400,12 +4400,10 @@ describe('normalizedCacheExchange', () => {
 
     it('bounds queued network attempts to one minute', async () => {
       const timeoutSignal = new AbortController().signal;
-      const existingSignal = new AbortController().signal;
-      const combinedSignal = new AbortController().signal;
+      const existing = new AbortController();
       const timeout = vi
         .spyOn(AbortSignal, 'timeout')
         .mockReturnValue(timeoutSignal);
-      const any = vi.spyOn(AbortSignal, 'any').mockReturnValue(combinedSignal);
       const operationFetch = vi.fn().mockResolvedValue(new Response());
       try {
         const mutation = makeMutationOp(1, optimistic);
@@ -4416,7 +4414,7 @@ describe('normalizedCacheExchange', () => {
         const { ops } = harness(host, (op) => {
           if (op.kind === 'mutation') {
             void op.context.fetch?.('http://test', {
-              signal: existingSignal,
+              signal: existing.signal,
             });
           }
           return {};
@@ -4425,14 +4423,13 @@ describe('normalizedCacheExchange', () => {
         await tick();
 
         expect(timeout).toHaveBeenCalledWith(60_000);
-        expect(any).toHaveBeenCalledWith([existingSignal, timeoutSignal]);
-        expect(operationFetch).toHaveBeenCalledWith(
-          'http://test',
-          expect.objectContaining({ signal: combinedSignal })
-        );
+        const signal: AbortSignal = operationFetch.mock.calls[0]?.[1].signal;
+        expect(signal.aborted).toBe(false);
+        existing.abort('cancelled');
+        expect(signal.aborted).toBe(true);
+        expect(signal.reason).toBe('cancelled');
       } finally {
         timeout.mockRestore();
-        any.mockRestore();
       }
     });
 

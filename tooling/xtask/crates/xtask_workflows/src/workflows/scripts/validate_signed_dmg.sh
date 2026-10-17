@@ -20,6 +20,24 @@ if [ -z "$app" ]; then
 fi
 codesign --verify --deep --strict --verbose=2 "$app"
 
+# WebKit hides navigator.mediaDevices without the usage strings, and the
+# hardened runtime blocks capture without the entitlements.
+for key in NSCameraUsageDescription NSMicrophoneUsageDescription; do
+  value=$(/usr/libexec/PlistBuddy -c "Print :$key" "$app/Contents/Info.plist" 2>/dev/null || true)
+  if [ -z "${value//[[:space:]]/}" ]; then
+    echo "Info.plist is missing a $key string" >&2
+    exit 1
+  fi
+done
+entitlements=$(mktemp)
+codesign -d --entitlements - --xml "$app" > "$entitlements"
+for key in com.apple.security.device.camera com.apple.security.device.audio-input; do
+  if [ "$(/usr/libexec/PlistBuddy -c "Print :$key" "$entitlements" 2>/dev/null || true)" != true ]; then
+    echo "App signature does not grant the $key entitlement" >&2
+    exit 1
+  fi
+done
+
 dylib_refs=$(mktemp)
 search_roots=("$app/Contents/MacOS")
 if [ -d "$app/Contents/Frameworks" ]; then

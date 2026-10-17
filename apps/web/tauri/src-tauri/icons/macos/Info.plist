@@ -6,5 +6,9 @@
 	<string>Macro</string>
 	<key>CFBundleIconName</key>
 	<string>Macro</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Macro uses the camera for video in calls and meetings.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Macro uses the microphone for calls, meetings and dictation.</string>
 </dict>
 </plist>

@@ -1,3 +1,4 @@
+import { anyAbortSignal } from '@core/util/abort-signal';
 import {
   invalidateSlackImport,
   parseSlackImportUpdate,
@@ -239,7 +240,7 @@ export function createImportSource(
           activeUploads.add(controller);
           try {
             const signal = options?.signal
-              ? AbortSignal.any([options.signal, controller.signal])
+              ? anyAbortSignal([options.signal, controller.signal])
               : controller.signal;
             const result = await upload(grant, blob, { ...options, signal });
             check();

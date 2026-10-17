@@ -16,4 +16,10 @@ xcrun actool "$icon_dir/Macro.icon" \
   --output-partial-info-plist "$output_dir/Info.plist" \
   --output-format human-readable-text
 
-cp "$output_dir/Assets.car" "$output_dir/Macro.icns" "$output_dir/Info.plist" "$icon_dir/"
+cp "$output_dir/Assets.car" "$output_dir/Macro.icns" "$icon_dir/"
+# Info.plist also holds the camera and microphone usage strings, so update
+# only the icon keys actool generates.
+for key in CFBundleIconFile CFBundleIconName; do
+  plutil -replace "$key" -string "$(plutil -extract "$key" raw "$output_dir/Info.plist")" \
+    "$icon_dir/Info.plist"
+done

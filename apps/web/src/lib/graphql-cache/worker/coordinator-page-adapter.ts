@@ -107,6 +107,7 @@ const withVersion = <
   }) as unknown as T;
 
 const defaultSharedWorkerFactory = (scope: string): SharedWorkerLike =>
+  // eslint-disable-next-line platform-compat/browser-floor -- connect() checks for SharedWorker before calling this.
   new SharedWorker(
     new URL('./cache.coordinator.shared-worker.ts', import.meta.url),
     { type: 'module', name: `graphql-cache-coordinator:${scope}` }

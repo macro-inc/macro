@@ -43,6 +43,11 @@ function mediaErrorMessage(device: 'microphone' | 'camera', error: unknown) {
         permission: false,
         text: `${label} is in use by another app or tab. Close it, ${retry}`,
       };
+    case 'NotSupportedError':
+      return {
+        permission: false,
+        text: `${label} isn’t available in this app or browser. Update it, ${retry}`,
+      };
     case 'NotFoundError':
     case 'OverconstrainedError':
       return {

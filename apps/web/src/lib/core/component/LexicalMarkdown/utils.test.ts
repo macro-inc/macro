@@ -2,7 +2,7 @@
 import { SupportedNodeTypes } from '@macro-inc/lexical-core';
 import { $getRoot, $isParagraphNode, createEditor } from 'lexical';
 import { describe, expect, it, vi } from 'vitest';
-import { setEditorStateFromHtml } from './utils';
+import { $getCaretRect, setEditorStateFromHtml } from './utils';
 
 // utils.ts imports the plugin barrel, whose leaves open the storage and
 // connection-gateway sockets on import.
@@ -54,5 +54,14 @@ describe('setEditorStateFromHtml', () => {
       { paragraph: true, text: 'c' },
       { paragraph: true, text: 'd' },
     ]);
+  });
+});
+
+describe('$getCaretRect', () => {
+  it('returns null when the document has no selection range', () => {
+    const editor = makeEditor();
+    window.getSelection()?.removeAllRanges();
+
+    expect(editor.read(() => $getCaretRect())).toBeNull();
   });
 });

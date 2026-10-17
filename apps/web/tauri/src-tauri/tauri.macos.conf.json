@@ -8,6 +8,7 @@
       "icons/macos/Macro.icns"
     ],
     "macOS": {
+      "entitlements": "Entitlements.macos.plist",
       "files": {
         "Resources/Assets.car": "icons/macos/Assets.car"
       },

@@ -287,24 +287,24 @@ export class SyncServiceSource implements LiveSyncSource {
     match: (message: FromRemote) => boolean,
     timeoutMs: number
   ): Promise<FromRemote> {
-    const { promise, resolve, reject } = Promise.withResolvers<FromRemote>();
-    const waiter: MessageWaiter = {
-      match,
-      resolve: (message) => {
+    return new Promise<FromRemote>((resolve, reject) => {
+      const waiter: MessageWaiter = {
+        match,
+        resolve: (message) => {
+          remove();
+          resolve(message);
+        },
+      };
+      const timer = setTimeout(() => {
         remove();
-        resolve(message);
-      },
-    };
-    const timer = setTimeout(() => {
-      remove();
-      reject(SyncError.timeout(timeoutMs));
-    }, timeoutMs);
-    const remove = () => {
-      clearTimeout(timer);
-      this.waiters.delete(waiter);
-    };
-    this.waiters.add(waiter);
-    return promise;
+        reject(SyncError.timeout(timeoutMs));
+      }, timeoutMs);
+      const remove = () => {
+        clearTimeout(timer);
+        this.waiters.delete(waiter);
+      };
+      this.waiters.add(waiter);
+    });
   }
 
   private onMessage: WebsocketEventListener<

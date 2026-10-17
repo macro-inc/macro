@@ -475,7 +475,10 @@ export function bindStateAs<T extends EditorState | string>(
  * wrapping and is therefore hard to query with lexical alone.
  */
 export function $getCaretRect(): DOMRect | null {
-  const domRange = window.getSelection()?.getRangeAt(0);
+  const domSelection = window.getSelection();
+  const domRange = domSelection?.rangeCount
+    ? domSelection.getRangeAt(0)
+    : undefined;
   if (domRange) {
     const rects = domRange.getClientRects();
     if (rects.length) return rects[rects.length - 1];
