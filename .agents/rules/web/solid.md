@@ -27,8 +27,11 @@ State ownership, reactivity, and async error handling.
   by oxlint `promise/prefer-await-to-then` — `bun run lint:oxlint` from the
   repository root.
 - **FE-13** Extract multi-step async coordination into named helper functions,
-  and make intentionally-unawaited promises explicit — no bare floating
-  promises.
+  and make intentionally-unawaited promises explicit with `void` — no bare
+  floating promises. Enforced by type-aware oxlint
+  `typescript/no-floating-promises` in `just check` and CI, ratcheted against
+  `apps/web/floating-promises-baseline.json`; after fixing violations, lower it
+  with `bun scripts/check-floating-promises.ts --update` from `apps/web`.
 - **FE-14** Keep neverthrow `Result`/`ResultAsync` intact end-to-end — use the
   existing helpers (`ResultAsync`, `throwOnErr` in `queryFn`, `catchToResult`)
   instead of ad hoc `Promise <-> Result` conversions.

@@ -1,14 +1,15 @@
 {
   // oxlint runs ALONGSIDE Biome, scoped to rules Biome cannot express.
-  // Enforces FE-12 (and eventually FE-13) from docs/development/style-guide.md.
+  // Enforces FE-12 and FE-13 from docs/development/style-guide.md.
   //
   // Run: bun run lint:oxlint (from the repository root), or `bunx oxlint` from apps/web.
   //
-  // typescript/no-floating-promises additionally needs type information:
-  // install `bun add -d oxlint oxlint-tsgolint` and run `oxlint --type-aware`
-  // (requires access to the repo's private git dependencies to update the
-  // lockfile, so it is not wired up yet).
-  "plugins": ["promise"],
+  // typescript/no-floating-promises needs type information, so plain runs skip
+  // it. `bun scripts/check-floating-promises.ts` (from apps/web) runs it with
+  // `--type-aware` against floating-promises-baseline.json, a per-file ratchet:
+  // a file may not gain violations, and the baseline must be lowered when
+  // violations are fixed.
+  "plugins": ["promise", "typescript"],
   "categories": {
     "correctness": "off"
   },
@@ -16,7 +17,8 @@
     "promise/prefer-await-to-then": "warn",
     // eslint/complexity — McCabe cyclomatic complexity, default max 20.
     // https://oxc.rs/docs/guide/usage/linter/rules/eslint/complexity
-    "complexity": "warn"
+    "complexity": "warn",
+    "typescript/no-floating-promises": "error"
   },
   "ignorePatterns": [
     "**/node_modules/**",

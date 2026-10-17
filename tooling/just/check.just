@@ -3,7 +3,11 @@
 # the output is exactly what is wrong with YOUR changes — legacy findings in
 # untouched files never appear. Findings print as file:line with the rule id;
 # ast-grep rule ids map to docs/development/style-guide.md (its `severity: error` rules fail
-# the run, warnings/hints only print; oxlint is warn-only for now).
+# the run, warnings/hints only print; oxlint is warn-only for now). The
+# no-floating-promises ratchet is the exception to file scoping: it needs type
+# information, so it lints all of apps/web/src and fails when any file has more
+# (or fewer, until the baseline is lowered) violations than
+# apps/web/floating-promises-baseline.json records.
 #
 #   just check        fast: rustfmt + biome + oxlint + ast-grep   (~seconds)
 #   just check full   also runs tsc + clippy                      (~minutes)
@@ -71,6 +75,10 @@ check *ARGS:
       fi
       echo "── oxlint (warn-only; docs/development/style-guide.md FE-12)"
       (cd apps/web && bunx --yes oxlint@1.73.0 "${js_paths[@]}") || fail=1
+    fi
+    if grep -qE '^apps/web/(.*\.(ts|tsx)|floating-promises-baseline\.json)$' <<<"$changed"; then
+      echo "── no-floating-promises ratchet (apps/web, type-aware; FE-13)"
+      (\cd apps/web && bun scripts/check-floating-promises.ts) || fail=1
     fi
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/development/style-guide.md)"

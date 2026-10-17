@@ -202,6 +202,9 @@ jobs:
     - name: Check Types
       run: bun run type-check
       working-directory: apps/web
+    - name: Check Floating Promises
+      run: bun scripts/check-floating-promises.ts
+      working-directory: apps/web
     - name: Check Functional Test Types
       run: bun run --bun --silent tsc --project tests/functional/tsconfig.json
       working-directory: apps/web
