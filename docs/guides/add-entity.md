@@ -459,8 +459,11 @@ so grep for the sibling kind.
   `features/command/Launcher.tsx`, and `create.<kind>` tokens in
   `lib/core/hotkey/tokens.ts`. Quick Access and Cmd+K are separate
   registrations; CRM contacts reached one weeks before the other.
-- **Sharing:** `features/sharing/global-share-modal/shareable-entity.ts`,
-  `GlobalShareModal.tsx`, `lib/core/component/TopBar/ShareButton.tsx`, and
+- **Sharing:** `features/sharing/global-share-modal/shareable-entity.ts` and
+  `GlobalShareModal.tsx`; `features/sharing/share-delivery/core/share-item.ts`
+  (`ShareKind`, `KIND_POLICY`) and `share-delivery/queries/channel-access.ts`
+  (`CHANNEL_GRANT_CLIENTS`) for the send policy and channel grant request;
+  `lib/core/component/TopBar/ShareButton.tsx` for per-kind copy; and
   `linkShare.ts` if team-shareable.
 - **Optional by capability:** properties (`features/property/utils/entityConversion.ts`,
   `editors/selectors/entityUtils.ts`, `hooks/usePropertyEntityDisplay.tsx`),
