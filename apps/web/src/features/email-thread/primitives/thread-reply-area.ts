@@ -86,8 +86,11 @@ export function createThreadReplyArea(options: {
   const replyInputOpen = () =>
     options.bottomReply.open() || emailReplyInfo()?.replyingTo == null;
 
-  // Whether the compose input is rendered in normal flow.
-  const replyInputInFlow = () => Boolean(replyArea() && replyInputOpen());
+  // Whether the compose input is rendered in normal flow. Touch never puts it
+  // there — phones and tablets compose in the drawer — so the message list
+  // keeps its under-scroll inset even while `bottomReply` is latched open.
+  const replyInputInFlow = () =>
+    !options.isTouch() && Boolean(replyArea() && replyInputOpen());
 
   const mobileBottomReplyMessage = createMemo(() => {
     if (options.mobileReply.open()) return;
