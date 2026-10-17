@@ -295,6 +295,12 @@ The Email view loads the threads the user is about to open: the focused row and
 the one below it once the cursor rests for 150 ms, and the open thread's
 neighbours once it has loaded. With network latency added, j/k and Enter on a
 rested row should show the next body without waiting for `EmailThreadPage`.
+Stepping between threads keeps the current one on screen until the next has
+rendered its messages (at most one second), so the reader is never empty
+between threads. The incoming thread loads hidden and inert: it marks itself
+read, takes keys and focus only once shown. Verify with a mutation observer that
+the visible reader never has zero messages during j/k, that held j advances one
+row per press, and that `z` after `e` returns to the archived thread.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop

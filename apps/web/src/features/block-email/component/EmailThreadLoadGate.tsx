@@ -14,6 +14,8 @@ export type EmailThreadLoadGateProps<Data> = ParentProps<{
   >['notificationSource'];
   threadId: string;
   linkId?: string;
+  /** False while the thread is not on screen yet (loading behind another). */
+  markRead?: boolean;
   debounceTime?: number;
   onRetry: () => void;
 }>;
@@ -40,7 +42,7 @@ export function EmailThreadLoadGate<Data>(
         loadErrorTitle="Unable to load this email"
         onRetry={props.onRetry}
       >
-        <Show when={props.threadId} keyed>
+        <Show when={props.markRead !== false && props.threadId} keyed>
           {(threadId) => (
             <EmailDebouncedReadMarker
               notificationSource={props.notificationSource}
