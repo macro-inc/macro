@@ -95,7 +95,14 @@ where
 
     /// Get access level for a channel.
     ///
-    /// Channel access is binary - members get View access, non-members get None.
+    /// Channel access uses the same role resolution as `get_entity_permission`:
+    /// public channels grant access to any user, team channels grant view-only
+    /// access to team members, and private/DM channels require explicit
+    /// participation.
+    ///
+    /// Since `get_access_level` doesn't carry `user_org_id`, organization
+    /// channels are conservatively handled — only explicit participants or users
+    /// whose org membership was verified elsewhere gain access here.
     async fn get_channel_access(
         &self,
         channel_id: &str,
@@ -104,16 +111,12 @@ where
         let channel_uuid = Uuid::from_str(channel_id)
             .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
 
-        let user_channels = self
+        let result = self
             .repo
-            .check_user_channel_membership(user_id, &[channel_uuid])
+            .get_channel_role(&channel_uuid, user_id, None)
             .await?;
 
-        if user_channels.contains(&channel_uuid) {
-            Ok(Some(AccessLevel::View))
-        } else {
-            Ok(None)
-        }
+        Ok(channel_role_result_to_access_level(result))
     }
 
     /// Get access level for a foreign entity.
@@ -879,6 +882,17 @@ fn channel_role_result_to_permission(
         ChannelRoleResult::ViewOnly => Ok(EntityPermission::ChannelViewOnly),
         ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
         ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
+    }
+}
+
+/// Convert a channel role result to an access level for `get_access_level`.
+///
+/// Both explicit participant roles and view-only access (team membership in a
+/// team channel) map to `View` — the single access level this API can express.
+fn channel_role_result_to_access_level(result: ChannelRoleResult) -> Option<AccessLevel> {
+    match result {
+        ChannelRoleResult::Role(_) | ChannelRoleResult::ViewOnly => Some(AccessLevel::View),
+        ChannelRoleResult::NoAccess | ChannelRoleResult::NotFound => None,
     }
 }
 

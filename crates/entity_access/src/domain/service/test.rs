@@ -268,6 +268,7 @@ impl MockRepo {
         self
     }
 
+    #[allow(dead_code)]
     fn with_channel_membership(mut self, channels: Vec<Uuid>) -> Self {
         self.channel_membership = Arc::new(Mutex::new(channels));
         self
@@ -762,8 +763,24 @@ async fn test_get_thread_access_returns_level_from_repo() {
 
 #[tokio::test]
 async fn test_get_channel_access_for_member_returns_view() {
-    let channel_uuid: Uuid = "11111111-1111-1111-1111-111111111111".parse().unwrap();
-    let repo = MockRepo::new().with_channel_membership(vec![channel_uuid]);
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Member));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_access_level(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert_eq!(result.unwrap(), Some(AccessLevel::View));
+}
+
+#[tokio::test]
+async fn test_get_channel_access_for_view_only_returns_view() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::ViewOnly);
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 
@@ -780,7 +797,7 @@ async fn test_get_channel_access_for_member_returns_view() {
 
 #[tokio::test]
 async fn test_get_channel_access_for_non_member_returns_none() {
-    let repo = MockRepo::new().with_channel_membership(vec![]);
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::NoAccess);
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 
