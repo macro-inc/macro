@@ -18,6 +18,7 @@ function parseBuildNumber(name, fallback) {
 }
 
 function gitSha() {
+  if (process.env.MACRO_GIT_SHA) return process.env.MACRO_GIT_SHA;
   try {
     return execSync('git rev-parse --short HEAD', {
       cwd: packageDir,

@@ -32,3 +32,7 @@ test('incomplete or unsafe minima fail the build', () => {
 test('legacy manifests retain schema 2', () => {
   assert.equal(build({ MIN_NATIVE_BUILD: '5' }).schemaVersion, 2);
 });
+test('MACRO_GIT_SHA names the commit when the build has no git checkout', () => {
+  assert.equal(build({}).gitSha, null);
+  assert.equal(build({ MACRO_GIT_SHA: '170584f' }).gitSha, '170584f');
+});

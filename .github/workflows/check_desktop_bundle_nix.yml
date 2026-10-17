@@ -1,0 +1,52 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_desktop_bundle_nix.rs
+name: check desktop bundle nix
+'on':
+  pull_request:
+    branches:
+    - main
+    paths:
+    - nix/tauri-desktop.nix
+    - nix-support/node_modules.nix
+    - nix-support/node_modules-hashes.json
+    - flake.nix
+    - flake.lock
+    - apps/web/wasm-packages.json
+    - apps/web/build-env.json
+    - apps/web/package.json
+    - apps/web/vite.base.ts
+    - apps/web/scripts/build-tauri-frontend.sh
+    - apps/web/scripts/verify-tauri-bundle.ts
+    - apps/web/scripts/wasm-packages.ts
+    - apps/web/scripts/write-bundle-manifest.mjs
+    - apps/web/scripts/cache-wasm/cli.ts
+    - '.github/workflows/check_desktop_bundle_nix.yml'
+permissions:
+  contents: read
+jobs:
+  check-desktop-bundle-nix:
+    name: check Linux desktop bundle nix
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=desktop-bundle-check
+    timeout-minutes: 90
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: build the desktop frontend and verify its bundle
+      run: |
+        nix build .#tauri-frontend \
+          --option sandbox true \
+          --print-build-logs \
+          --no-link
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'

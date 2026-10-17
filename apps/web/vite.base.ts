@@ -15,7 +15,9 @@ import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
 
+/** `MACRO_GIT_SHA` stands in for git where the build has no checkout (Nix). */
 function readShortSha(): string {
+  if (process.env.MACRO_GIT_SHA) return process.env.MACRO_GIT_SHA;
   try {
     return execSync('git rev-parse --short HEAD').toString().trim();
   } catch {

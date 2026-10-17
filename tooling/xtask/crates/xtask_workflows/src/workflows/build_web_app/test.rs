@@ -25,3 +25,20 @@ fn build_uses_remote_sccache_and_wasm_cache() {
         "build still runs via just: {job}"
     );
 }
+
+#[test]
+fn build_reports_to_the_telemetry_endpoint_the_desktop_builds_use() {
+    let yaml = build_web_app().to_string().expect("workflow yaml");
+    assert!(
+        yaml.contains(
+            "VITE_OTEL_EXPORTER_URL: ${{ inputs.environment == 'prod' && 'https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces' || 'https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces' }}"
+        ),
+        "the web build must take apps/web/build-env.json's endpoints: {yaml}"
+    );
+    assert!(
+        yaml.contains(
+            "VITE_OTEL_ENV: ${{ inputs.environment == 'prod' && 'prod' || 'development' }}"
+        ),
+        "the web build must take apps/web/build-env.json's env names: {yaml}"
+    );
+}

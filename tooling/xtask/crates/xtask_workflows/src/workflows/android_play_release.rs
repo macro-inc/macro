@@ -196,12 +196,9 @@ fn build_bundle() -> Step<Run> {
             "VITE_SEGMENT_WRITE_KEY",
             "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
         ))
+        // The telemetry endpoint comes from apps/web/build-env.json, which
+        // `just build-tauri` (Tauri's beforeBuildCommand) applies itself.
         .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
-        .add_env((
-            "VITE_OTEL_EXPORTER_URL",
-            "https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces",
-        ))
-        .add_env(("VITE_OTEL_ENV", "prod"))
 }
 
 fn preserve_build_log() -> Step<Use> {

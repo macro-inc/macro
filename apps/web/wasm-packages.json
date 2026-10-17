@@ -1,0 +1,74 @@
+{
+  "packages": [
+    {
+      "name": "cache_wasm",
+      "package": "cache-wasm",
+      "crate": "crates/client/cache-wasm",
+      "outDir": "src/lib/graphql-cache/wasm",
+      "targetDir": "target/cache-wasm",
+      "profile": "release"
+    },
+    {
+      "name": "agent_fold",
+      "package": "agent_fold",
+      "crate": "crates/folds/agent_fold",
+      "outDir": "src/lib/core/agent-fold/wasm",
+      "targetDir": "target/agent-fold-wasm",
+      "profile": "release",
+      "cargoArgs": ["--no-default-features"]
+    },
+    {
+      "name": "database_sql",
+      "package": "database_sql",
+      "crate": "crates/database_sql",
+      "outDir": "src/lib/core/database-sql/wasm",
+      "targetDir": "target/database-sql-wasm",
+      "profile": "release"
+    },
+    {
+      "name": "pptx_engine",
+      "package": "pptx_engine",
+      "crate": "crates/pptx_engine",
+      "outDir": "src/lib/core/pptx-engine/wasm",
+      "targetDir": "target/pptx-engine-wasm",
+      "profile": "release",
+      "rustflags": "-C target-feature=+simd128"
+    },
+    {
+      "name": "docx_engine",
+      "package": "docx_engine",
+      "crate": "crates/docx_engine",
+      "outDir": "src/lib/core/docx-engine/wasm",
+      "targetDir": "target/docx-engine-wasm",
+      "profile": "release",
+      "rustflags": "-C target-feature=+simd128"
+    },
+    {
+      "name": "fig_engine",
+      "package": "fig_engine",
+      "crate": "crates/fig_engine",
+      "outDir": "src/lib/core/fig-engine/wasm",
+      "targetDir": "target/fig-engine-wasm",
+      "profile": "fig-engine-wasm",
+      "rustflags": "-C target-feature=+simd128"
+    },
+    {
+      "name": "psd_engine",
+      "package": "psd_engine",
+      "crate": "crates/psd_engine",
+      "outDir": "src/lib/core/psd-engine/wasm",
+      "targetDir": "target/psd-engine-wasm",
+      "profile": "psd-engine-wasm",
+      "rustflags": "-C target-feature=+simd128"
+    },
+    {
+      "name": "ai_engine",
+      "package": "ai_engine",
+      "crate": "crates/ai_engine",
+      "outDir": "src/lib/core/ai-engine/wasm",
+      "targetDir": "target/ai-engine-wasm",
+      "profile": "ai-engine-wasm",
+      "rustflags": "-C target-feature=+simd128"
+    }
+  ]
+}

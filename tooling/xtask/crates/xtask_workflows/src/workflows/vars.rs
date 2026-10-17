@@ -98,6 +98,31 @@ pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-mod
 /// whose crates did not change (`apps/web/scripts/cached-wasm-build.sh`).
 pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
 
+const WEB_BUILD_ENV_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../../apps/web/build-env.json"
+));
+
+/// The web app's public build-time env for `mode` (`production` or
+/// `development`), from `apps/web/build-env.json`. The desktop and iOS builds
+/// read the same file (`apps/web/scripts/build-tauri-frontend.sh`), so every
+/// platform's bundle reports to the same telemetry endpoint.
+pub fn web_build_env(mode: &str) -> Vec<(String, String)> {
+    let env: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(WEB_BUILD_ENV_JSON).expect("build-env.json should parse");
+    env[mode]
+        .as_object()
+        .expect("build-env.json should have every mode")
+        .iter()
+        .map(|(name, value)| {
+            let value = value
+                .as_str()
+                .expect("build-env.json values should be strings");
+            (name.clone(), value.to_string())
+        })
+        .collect()
+}
+
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
 /// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.
 pub const AGENT_HARNESS_GHCR_IMAGE: &str = "ghcr.io/macro-inc/macro-agent-harness";

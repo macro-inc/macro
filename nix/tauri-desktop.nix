@@ -48,6 +48,10 @@
       };
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
+      # The same list `just build-wasm` builds; see apps/web/scripts/wasm-packages.ts.
+      webWasmPackages = (builtins.fromJSON (builtins.readFile ../apps/web/wasm-packages.json)).packages;
+      webWasmOutDirs = map (p: "apps/web/${p.outDir}") webWasmPackages;
+
       jsRoot = ../.;
       jsSrc = lib.cleanSourceWith {
         src = jsRoot;
@@ -65,7 +69,7 @@
           && !(lib.hasPrefix "apps/web/node_modules/" rel)
           && !(lib.hasPrefix "apps/web/dist/" rel)
           && !(lib.hasPrefix "apps/web/tauri/target/" rel)
-          && !(lib.hasPrefix "apps/web/src/lib/graphql-cache/wasm/" rel)
+          && !(lib.any (dir: rel == dir || lib.hasPrefix "${dir}/" rel) webWasmOutDirs)
           && !(lib.hasPrefix "packages/lexical-core/node_modules/" rel)
           && !(lib.hasPrefix "services/lexical-service/node_modules/" rel)
           && !(lib.hasPrefix "packages/loro-mirror/node_modules/" rel)
@@ -75,8 +79,7 @@
           && rel != "node_modules"
           && rel != "apps/web/node_modules"
           && rel != "apps/web/dist"
-          && rel != "apps/web/tauri/target"
-          && rel != "apps/web/src/lib/graphql-cache/wasm";
+          && rel != "apps/web/tauri/target";
       };
 
       rootCargoVendorDir = craneLib.vendorCargoDeps {
@@ -85,36 +88,49 @@
         outputHashes = import ../nix-support/root-cargo-output-hashes.nix;
       };
 
-      cacheWasmPackage = craneLib.mkCargoDerivation {
-        pname = "macro-cache-wasm";
-        version = appVersion;
-        src = jsSrc;
-        cargoArtifacts = null;
-        cargoVendorDir = rootCargoVendorDir;
-        nativeBuildInputs = [
-          pkgs.binaryen
-          # wasm-pack requires the CLI version to exactly match Cargo.lock.
-          pkgs.wasm-bindgen-cli_0_2_126
-          pkgs.wasm-pack
-        ];
-        doCheck = false;
-        preBuild = ''
-          export HOME="$TMPDIR"
-          export XDG_CACHE_HOME="$TMPDIR/xdg-cache"
-        '';
-        buildPhaseCargoCommand = ''
-          wasm-pack build crates/client/cache-wasm \
-            --target web \
-            --release \
-            --mode no-install \
-            --out-dir "$PWD/apps/web/src/lib/graphql-cache/wasm"
-        '';
-        installPhaseCommand = ''
-          mkdir -p $out
-          cp -a apps/web/src/lib/graphql-cache/wasm/. $out/
-        '';
-        doInstallCargoArtifacts = false;
-      };
+      buildWebWasmPackage =
+        wasmPackage:
+        craneLib.mkCargoDerivation (
+          {
+            pname = "macro-${wasmPackage.name}";
+            version = appVersion;
+            src = jsSrc;
+            cargoArtifacts = null;
+            cargoVendorDir = rootCargoVendorDir;
+            nativeBuildInputs = [
+              pkgs.binaryen
+              # wasm-pack requires the CLI version to exactly match Cargo.lock.
+              pkgs.wasm-bindgen-cli_0_2_126
+              pkgs.wasm-pack
+            ];
+            doCheck = false;
+            preBuild = ''
+              export HOME="$TMPDIR"
+              export XDG_CACHE_HOME="$TMPDIR/xdg-cache"
+            '';
+            buildPhaseCargoCommand = ''
+              wasm-pack build ${wasmPackage.crate} \
+                --target web \
+                ${if wasmPackage.profile == "release" then "--release" else "--profile ${wasmPackage.profile}"} \
+                --mode no-install \
+                --out-dir "$PWD/wasm-out" \
+                ${lib.optionalString (wasmPackage ? cargoArgs) "-- ${lib.escapeShellArgs wasmPackage.cargoArgs}"}
+            '';
+            installPhaseCommand = ''
+              mkdir -p $out
+              cp -a wasm-out/. $out/
+            '';
+            doInstallCargoArtifacts = false;
+          }
+          // lib.optionalAttrs (wasmPackage ? rustflags) {
+            CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS = wasmPackage.rustflags;
+          }
+        );
+
+      copyWebWasmPackages = lib.concatMapStrings (wasmPackage: ''
+        mkdir -p apps/web/${wasmPackage.outDir}
+        cp -a ${buildWebWasmPackage wasmPackage}/. apps/web/${wasmPackage.outDir}/
+      '') webWasmPackages;
 
       nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
         src = jsRoot;
@@ -135,6 +151,8 @@
         # Vite reads prefixed variables straight off the build environment, the
         # same way `just build-prod` picks them up in the web and Android jobs.
         VITE_POSTHOG_API_KEY = posthogApiKey;
+        # The sandbox has no git checkout to read the commit from.
+        MACRO_GIT_SHA = gitRev;
 
         buildPhase = ''
             runHook preBuild
@@ -151,25 +169,19 @@
                 "          // NIX_TAURI_ALIAS" \
                 '          { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../node_modules/@tauri-apps/api") },'
 
-            printf production > apps/web/tauri/src-tauri/.macro-tauri-env
-            mkdir -p apps/web/src/lib/graphql-cache/wasm
-            cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
-            (
-              cd apps/web
-              MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
-              printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-              BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
-            )
+            ${copyWebWasmPackages}
 
-            # A supplied key that never reaches the bundle means PostHog — and
-            # every feature flag behind it — is silently off in the shipped app.
-            # Fail the build instead, the way the signed DMG fails on a missing
-            # signing identity.
-            if [ -n "''${VITE_POSTHOG_API_KEY:-}" ] \
-              && ! grep -rqF -- "$VITE_POSTHOG_API_KEY" apps/web/dist; then
-              echo "VITE_POSTHOG_API_KEY was set but Vite did not inline it into apps/web/dist" >&2
-              exit 1
-            fi
+            # Bun starts package bins through their `#!/usr/bin/env node` line,
+            # which the sandbox cannot resolve. Point vite's at Bun directly,
+            # the runtime `bun run --bun` would give it.
+            mkdir -p "$TMPDIR/bun-as-node"
+            ln -s ${lib.getExe pkgs.bun} "$TMPDIR/bun-as-node/node"
+            PATH="$TMPDIR/bun-as-node:$PATH" patchShebangs --build node_modules/vite/bin/vite.js
+
+            # Also fails the build when VITE_POSTHOG_API_KEY was supplied but
+            # never reached the bundle, or the telemetry exporter URL is missing.
+            BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 \
+              bash apps/web/scripts/build-tauri-frontend.sh production
 
             runHook postBuild
         '';
