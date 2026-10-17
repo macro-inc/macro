@@ -41,6 +41,6 @@ export function useMessageParticipants(
       .with('channel', () => channelParticipants.users())
       .with(P.union('document', 'initiative', 'call'), () => contacts())
       .with(P.union('crm_company', 'crm_contact'), () => teamMembers())
-      .exhaustive()
+      .exhaustive(() => [])
   );
 }

@@ -388,7 +388,11 @@ function statusActivity(status: MagicChipStatus): MagicChipActivity {
       busy: false,
       tone: 'stopped' as const,
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      label: 'Queued',
+      busy: false,
+      tone: 'neutral' as const,
+    }));
 }
 
 /**

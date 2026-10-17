@@ -75,7 +75,9 @@ export function publicationMessage(
           { kind: 'textTooLong' },
           ({ max }) => `Shorten the text to ${max} characters or fewer.`
         )
-        .exhaustive()
+        .exhaustive(
+          () => 'Your draft is saved, but it couldn’t be published yet.'
+        )
     )
-    .exhaustive();
+    .exhaustive(() => 'Your draft is saved, but it couldn’t be published yet.');
 }

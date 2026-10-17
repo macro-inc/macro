@@ -26,8 +26,13 @@ Module layout, layering, and TypeScript conventions.
 - **FE-21** No `any` — proper types or `unknown` + type guards.
 - **FE-31** Never cast a string to `ItemType` — parse it with `stringToItemType`
   from `@service-storage/client`, the one owner of entity-type spellings (email
-  threads alone are stored as `email`, `thread`, and `email_thread`). Enforced
-  by ast-grep `ts-no-item-type-cast` + `tsx-no-item-type-cast`, CI error.
+  threads alone are stored as `email`, `thread`, and `email_thread`). The same
+  goes for a service's `EntityType`: each service has its own enum, so parse
+  with `parseEntityType` (properties) or type the source rather than casting
+  (`as EntityReference['entity_type']` let `AGENT_SESSION` crash the property
+  editor). Enforced by ast-grep `ts-no-item-type-cast` +
+  `tsx-no-item-type-cast` for `as ItemType`, `as EntityType`, and
+  `as EntityReference['entity_type']`, CI error.
 - **FE-33** New features and feature restructures use the [layered feature
   architecture](../../../docs/architecture/frontend-features.md), with
   `features/activity` as the reference. Use `core/` for pure feature types and

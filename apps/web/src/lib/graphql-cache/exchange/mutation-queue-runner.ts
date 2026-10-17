@@ -718,7 +718,10 @@ export function createMutationQueueRunner(
           resolveLiveOperationsAsQueued();
           scheduleDrain(EMPTY_QUEUE_POLL_MS);
         })
-        .exhaustive();
+        .exhaustive(() => {
+          resolveLiveOperationsAsQueued();
+          scheduleDrain();
+        });
     } catch (error) {
       // Enqueue already succeeded. Preserve durable-runner ownership even
       // if routing or claim rollback fails unexpectedly.

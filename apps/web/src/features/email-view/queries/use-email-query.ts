@@ -83,7 +83,7 @@ function emailMatchesTab(
       'all',
       () => true
     )
-    .exhaustive();
+    .exhaustive(() => true);
 }
 
 type AdmittedEmails = {

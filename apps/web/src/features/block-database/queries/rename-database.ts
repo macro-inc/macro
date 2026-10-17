@@ -103,7 +103,7 @@ export function renameDatabase(
         );
         return ok(undefined);
       })
-      .exhaustive();
+      .exhaustive(async () => err({ kind: 'unreachable' }));
   };
   return new ResultAsync(renamed());
 }

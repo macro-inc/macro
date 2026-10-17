@@ -92,7 +92,9 @@ function openSource(wasm: WasmModule, source: Source): WasmDocxDocument {
       wasm.DocxDocument.fromCollab(state, seed)
     )
     .with({ kind: 'v1' }, ({ state }) => wasm.DocxDocument.fromV1(state))
-    .exhaustive();
+    .exhaustive(() => {
+      throw new Error('Unknown document source');
+    });
 }
 
 /**
@@ -121,7 +123,9 @@ async function recover() {
             doc.setExternalUndo(external)
           )
           .with({ kind: 'setAuthor' }, ({ author }) => doc.setAuthor(author))
-          .exhaustive();
+          .exhaustive(() => {
+            throw new Error('Unknown change log entry');
+          });
       }
       open.doc = doc;
     } catch {
@@ -421,7 +425,10 @@ async function serve(request: DocxRequest): Promise<Served> {
       ) as ArrayBuffer;
       return [{ id, ok: true, kind: 'save', bytes }, [bytes]];
     })
-    .exhaustive();
+    .exhaustive((unknown): Served => {
+      console.warn('docx worker: unknown request', unknown);
+      return [{ id, ok: false, error: 'Unknown document request.' }, []];
+    });
 }
 
 scope.addEventListener('message', (event: MessageEvent<DocxRequest>) => {

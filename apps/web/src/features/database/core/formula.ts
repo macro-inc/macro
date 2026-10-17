@@ -95,7 +95,7 @@ function engineKind(column: DatabaseViewColumn): ColumnKind {
       multi: column.isMultiSelect,
       target: column.specificEntityType ?? 'USER',
     }))
-    .exhaustive();
+    .exhaustive(() => ({ kind: 'text' }));
 }
 
 /** Columns the name being typed at the caret could mean, and where it starts. */

@@ -122,7 +122,7 @@ function matchesTab(
       );
     })
     .with('noise', () => noiseFilter(entity) && notDone())
-    .exhaustive();
+    .exhaustive(() => false);
 }
 
 // Cached query meta outlives the view; build the gate at module scope over the

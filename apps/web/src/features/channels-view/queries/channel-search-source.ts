@@ -45,7 +45,7 @@ export function createChannelSearchSource(options: {
               .with('direct_messages', () => ['direct_message'])
               .with('channels', () => ['public', 'private', 'team'])
               .with('recents', 'search', 'threads', () => undefined)
-              .exhaustive(),
+              .exhaustive(() => undefined),
           },
         },
       },

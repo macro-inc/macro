@@ -44,7 +44,7 @@ export function jobTone(status: ImportJobStatus): StatusTone {
     .with('completed', () => 'success' as const)
     .with('completed_with_errors', 'cancelling', () => 'warning' as const)
     .with('failed', 'cancelled', () => 'failure' as const)
-    .exhaustive();
+    .exhaustive(() => 'neutral' as const);
 }
 
 export function conversationTone(
@@ -56,7 +56,7 @@ export function conversationTone(
     .with('completed', () => 'success' as const)
     .with('skipped', () => 'warning' as const)
     .with('failed', () => 'failure' as const)
-    .exhaustive();
+    .exhaustive(() => 'neutral' as const);
 }
 
 const TONE_CLASS: Record<StatusTone, string> = {

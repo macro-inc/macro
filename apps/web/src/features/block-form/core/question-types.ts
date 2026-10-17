@@ -163,7 +163,7 @@ export function widgetsFor(kind: FormColumnKind): QuestionWidget[] {
       { type: 'relation' },
       () => []
     )
-    .exhaustive();
+    .exhaustive(() => []);
 }
 
 /** The widget a question shows with: its own, or its kind's default. */
@@ -226,7 +226,7 @@ export function questionTypeOf(
     )
     .with({ type: 'entity' }, () => 'entity')
     .with({ type: 'relation' }, () => 'relation')
-    .exhaustive();
+    .exhaustive(() => 'short');
 }
 
 /** The chip label of a question's type. */
@@ -256,7 +256,7 @@ export function questionTypeLabel(
         { type: 'relation' },
         () => 'Question'
       )
-      .exhaustive()
+      .exhaustive(() => 'Question')
   );
 }
 
@@ -297,7 +297,7 @@ export function sameColumnKind(
         right.database === one.database &&
         right.table === one.table
     )
-    .exhaustive();
+    .exhaustive(() => false);
 }
 
 /** Whether a kind's answers are picked from options the column owns. */

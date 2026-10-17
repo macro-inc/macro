@@ -86,7 +86,7 @@ function query(
     .with('textGeometry', () => f.textGeometry(a as number))
     .with('describe', () => JSON.stringify(f.describe()))
     .with('isEdited', () => JSON.stringify(f.isEdited()))
-    .exhaustive();
+    .exhaustive(() => 'null');
 }
 
 type Request<K extends AiRequest['kind']> = Extract<AiRequest, { kind: K }>;
@@ -156,7 +156,11 @@ function edit(request: Request<'edit'>) {
     .with('redo', () => f.redo())
     .with('remote', () => f.applyCollab(request.changes ?? '[]'))
     .with('apply', () => f.apply(request.ops ?? '[]', request.coalesce))
-    .exhaustive();
+    .exhaustive(() => undefined);
+  if (json === undefined) {
+    fail(request.id, `unknown edit action: ${request.action}`);
+    return;
+  }
   post({ id: request.id, ok: true, kind: 'edit', json });
 }
 
@@ -218,7 +222,10 @@ async function serve(request: AiRequest): Promise<void> {
     .with({ kind: 'blank' }, blank)
     .with({ kind: 'save' }, (r) => postSaved(r.id, openFile().save()))
     .with({ kind: 'cancel' }, () => undefined)
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('ai worker: unknown request', unknown);
+      fail(request.id, 'unknown request');
+    });
 }
 
 function takeRender(): Render | undefined {

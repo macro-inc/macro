@@ -98,6 +98,14 @@ it('preserves initiative identity, properties, and metadata separately from fold
   });
 });
 
+it('skips a Soup item type from a newer server', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const fromNewerServer = JSON.parse(
+    '{"__typename":"GraphqlSoupNewKind","id":"new-1","frecencyScore":null}'
+  );
+  expect(mapGraphqlSoupItem(fromNewerServer)).toBeNull();
+});
+
 it('preserves the scheduled occurrence identity on reminder notifications', async () => {
   const { mapGraphqlNotification } = await import('./graphql-soup');
   const mapped = mapGraphqlNotification({

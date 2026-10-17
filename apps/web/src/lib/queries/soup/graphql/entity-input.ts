@@ -125,7 +125,7 @@ export function buildGraphqlEntitySoupInput(
     }))
     // Users and CRM contacts are not Soup items.
     .with('USER', 'CONTACT', () => undefined)
-    .exhaustive();
+    .exhaustive(() => undefined);
   if (!targetFilter) return undefined;
 
   const filters: GraphqlEntityFilterAst = {

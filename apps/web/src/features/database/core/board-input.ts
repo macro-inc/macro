@@ -36,7 +36,7 @@ function kind(column: DatabaseViewColumn): ColumnKind {
           }
         : { kind: 'text' }
     )
-    .exhaustive();
+    .exhaustive(() => ({ kind: 'text' }));
 }
 
 function cell(column: DatabaseViewColumn, row: DatabaseRow): Cell | null {

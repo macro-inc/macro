@@ -17,7 +17,7 @@ function mentionTypeLabel(type: DatabaseEntityType): string {
     .with('CALL_RECORD', () => 'Call')
     .with('CALENDAR_EVENT', () => 'Event')
     .with('DATABASE_ROW', () => 'Row')
-    .exhaustive();
+    .exhaustive(() => 'Item');
 }
 
 export function DatabaseMentionLabel(props: {

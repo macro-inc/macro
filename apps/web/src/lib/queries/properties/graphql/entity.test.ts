@@ -48,6 +48,7 @@ import {
   entityPropertyOptimisticMutationUuid,
   mapGraphqlEntityProperties,
   refetchGraphqlInitiativeProperties,
+  toGraphqlSetPropertyValue,
 } from './entity';
 
 const NIL_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
@@ -253,6 +254,16 @@ describe('entityPropertyOptimisticMutationUuid', () => {
         entityId: 'document-1',
         propertyDefinitionId: 'property:1',
       })
+    );
+  });
+});
+
+describe('toGraphqlSetPropertyValue', () => {
+  it('refuses to send a value type this build does not know', () => {
+    const fromNewerBuild = JSON.parse('{"type":"color","value":"#ff0000"}');
+
+    expect(() => toGraphqlSetPropertyValue(fromNewerBuild)).toThrow(
+      'Unsupported property value type: color'
     );
   });
 });

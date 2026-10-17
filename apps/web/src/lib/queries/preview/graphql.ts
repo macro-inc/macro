@@ -439,7 +439,8 @@ export async function setGraphqlPreviewName(
       ...base,
       __typename: 'GraphqlSoupInitiative' as const,
     }))
-    .exhaustive();
+    .exhaustive(() => null);
+  if (!record) return;
   await writeGraphqlPreviewCache({
     query: stringifyDocument(ItemPreviewNameCacheWriteDocument),
     operationName: 'ItemPreviewNameCacheWrite',

@@ -188,3 +188,15 @@ describe('document soup entities', () => {
     }
   );
 });
+
+describe('unknown soup entities', () => {
+  it('maps a tag from a newer server to a placeholder row instead of throwing', () => {
+    const fromNewerServer = JSON.parse(
+      '{"tag":"whiteboard","frecency_score":0,"is_favorited":false,"data":{"id":"board"}}'
+    );
+    expect(mapApiSoupItemToEntity(fromNewerServer)).toMatchObject({
+      type: 'document',
+      id: 'board',
+    });
+  });
+});

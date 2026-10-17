@@ -77,4 +77,21 @@ describe('publicationMessage', () => {
     );
     expect(publicationMessage({ detail })).toBeUndefined();
   });
+
+  it('gives generic copy for problems from a newer server instead of throwing', () => {
+    expect(
+      publicationMessage({
+        detail,
+        publicationError: JSON.parse('{"kind":"quotaExceeded"}'),
+      })
+    ).toBe('Your draft is saved, but it couldn’t be published yet.');
+    expect(
+      publicationMessage({
+        detail,
+        publicationError: JSON.parse(
+          '{"kind":"layout","problem":{"kind":"tooManySections"}}'
+        ),
+      })
+    ).toBe('Your draft is saved, but it couldn’t be published yet.');
+  });
 });

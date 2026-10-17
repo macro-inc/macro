@@ -487,7 +487,7 @@ function mapChannelThreadLiteral(
     .with('NotificationState', () => ({
       notificationState: mapNotificationState(value),
     }))
-    .exhaustive();
+    .exhaustive(() => ({ threadId: '00000000-0000-0000-0000-000000000000' }));
 }
 
 function mapCallLiteral(literal: unknown): GraphqlCallLiteralInput {
@@ -817,7 +817,7 @@ function makeGraphqlGroupByInput(groupBy: GroupByField): GraphqlGroupByInput {
       propertyDefinitionId: field.propertyDefinitionId,
       entityType: field.entityType,
     }))
-    .exhaustive();
+    .exhaustive(() => ({ field: 'ENTITY_TYPE' as const }));
 }
 
 /** Maps the existing grouped Soup request shape to its GraphQL input. */

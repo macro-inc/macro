@@ -90,7 +90,7 @@ function formatReadChannelWindow(args: {
     .with({ windowType: 'aroundMessage' }, () => 'around message')
     .with({ windowType: 'messages' }, () => 'specific messages')
     .with({ windowType: 'latest' }, () => 'latest')
-    .exhaustive();
+    .exhaustive(() => 'latest');
 }
 
 export const readChannelMessagesHandler = createToolRenderer({

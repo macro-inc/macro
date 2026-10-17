@@ -29,7 +29,7 @@ export const DefaultUserNameResolver: UserNameResolver = async (id: string) => {
   return macroId ? macroIdToEmail(macroId) : id || undefined;
 };
 
-const getPreview = async (id: string, type: EntityType) => {
+const getPreview = async (id: string, type: string) => {
   const itemType = stringToItemType(type);
   if (!itemType) return undefined;
   return await raceTimeout(
@@ -42,7 +42,7 @@ export const DefaultDocumentNameResolver: DocumentNameResolver = async (
   id: string,
   type: string
 ) => {
-  const preview = await getPreview(id, type as EntityType);
+  const preview = await getPreview(id, type);
   if (!preview || !isAccessiblePreviewItem(preview)) return undefined;
   return preview.name;
 };

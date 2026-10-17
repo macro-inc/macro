@@ -244,6 +244,11 @@ it('maps single and multiple entity values without leaking transport objects int
   expect(pipelineCell(undefined, column)).toBeNull();
 });
 
+it('shows a value type from a newer server as an empty cell', () => {
+  const fromNewerServer = JSON.parse('{"type":"Rating","value":4}');
+  expect(pipelineCell(fromNewerServer, table.columns[0])).toBeNull();
+});
+
 it('forwards the complete query and retained row request to the pipeline endpoint', async () => {
   const host = setup();
   const query = {

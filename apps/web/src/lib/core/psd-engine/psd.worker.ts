@@ -116,7 +116,10 @@ function query(request: Extract<PsdRequest, { kind: 'query' }>): string {
     .with('describe', () => JSON.stringify(f.describe()))
     .with('isEdited', () => JSON.stringify(f.isEdited()))
     .with('fileLayers', () => f.fileLayers())
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('psd worker: unknown query method', unknown);
+      return 'null';
+    });
 }
 
 function bytes(request: Extract<PsdRequest, { kind: 'bytes' }>): Uint8Array {
@@ -130,7 +133,10 @@ function bytes(request: Extract<PsdRequest, { kind: 'bytes' }>): Uint8Array {
     .with('exportPng', () => f.exportPng(optional(a)))
     .with('exportJpeg', () => f.exportJpeg(a ?? 90))
     .with('sample', () => f.sample(a ?? 0, b ?? 0, optional(c)))
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('psd worker: unknown bytes method', unknown);
+      return new Uint8Array();
+    });
 }
 
 async function serve(request: PsdRequest) {
@@ -174,7 +180,11 @@ async function serve(request: PsdRequest) {
         .with('redo', () => f.redo())
         .with('remote', () => f.applyCollab(request.changes ?? '[]'))
         .with('apply', () => f.apply(request.ops ?? '[]', request.coalesce))
-        .exhaustive();
+        .exhaustive(() => undefined);
+      if (json === undefined) {
+        fail(request.id, `unknown edit action: ${request.action}`);
+        return;
+      }
       post({ id: request.id, ok: true, kind: 'json', json });
       return;
     }

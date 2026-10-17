@@ -437,7 +437,7 @@ function propertyFromPendingDefinition(
     }))
     .with('LINK', () => ({ ...base, valueType: 'LINK' as const, value: null }))
     .with('TAG', () => undefined)
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function sortPinnedProperties<T extends Property>(

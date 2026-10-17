@@ -159,7 +159,7 @@ export function resolveGroupMetaForKey(
       return;
     })
     .with({ type: 'date' }, () => undefined)
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function getGroupedPropertyValueType(
@@ -297,5 +297,5 @@ export function computeGroupKeysForItem(
       return;
     })
     .with({ type: 'date' }, () => undefined)
-    .exhaustive();
+    .exhaustive(() => undefined);
 }

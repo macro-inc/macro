@@ -51,7 +51,7 @@ export function columnKindOf(column: ColumnDetail): FormColumnKind | undefined {
       const target = entityKind(definition.specific_entity_type);
       return target ? { type: 'entity', target, multi } : undefined;
     })
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 export function toFormColumn(column: ColumnDetail): FormColumn | undefined {

@@ -32,7 +32,7 @@ function mapAccessLevel(
     .with('COMMENT', () => 'comment')
     .with('EDIT', () => 'edit')
     .with('OWNER', () => 'owner')
-    .exhaustive();
+    .exhaustive(() => 'view');
 }
 
 function mapContact(

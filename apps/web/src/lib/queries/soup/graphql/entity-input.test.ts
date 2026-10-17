@@ -91,6 +91,11 @@ describe('batched entity Soup inputs', () => {
       buildGraphqlEntitiesSoupInput([{ entityType: 'USER', entityId: 'user' }])
     ).toBeUndefined();
   });
+
+  it('skips an entity type from a newer server', () => {
+    const fromNewerServer = JSON.parse('"NEW_KIND"');
+    expect(buildGraphqlEntitySoupInput(fromNewerServer, 'id')).toBeUndefined();
+  });
 });
 
 describe('database rows', () => {

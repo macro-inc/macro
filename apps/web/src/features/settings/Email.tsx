@@ -340,7 +340,7 @@ function syncStatusLabel(status: SyncStatus): string {
     .with(SyncStatus.ERROR, () => 'Error — re-sync')
     .with(SyncStatus.NEEDS_REAUTH, () => 'Reconnect to resume sync')
     .with(SyncStatus.INACTIVE, () => 'Disabled')
-    .exhaustive();
+    .exhaustive(() => 'Unknown sync status');
 }
 
 // Live backfill progress bar. `completed`/`total` are the connection-gateway

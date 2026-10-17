@@ -107,7 +107,7 @@ function tabClause(
   return match(tab)
     .with('signal', () => signalClause(capabilities, now, userId))
     .with('noise', noiseClause)
-    .exhaustive();
+    .exhaustive(() => signalClause(capabilities, now, userId));
 }
 
 export type HomeViewContext = {

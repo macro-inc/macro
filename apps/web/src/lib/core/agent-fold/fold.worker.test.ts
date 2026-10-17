@@ -71,3 +71,26 @@ it('initializes on preload without opening a fold, then processes a session afte
     { kind: 'snapshot', rows: [] },
   ]);
 });
+
+it('answers a request kind this build does not know with an error', async () => {
+  const scope = new WorkerScope();
+  vi.stubGlobal('self', scope);
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  fold.initialize.mockResolvedValue({ FoldStream: class {} });
+  const posted = new Promise<FoldResponse>((resolve) =>
+    scope.postMessage.mockImplementation(resolve)
+  );
+  await import('./fold.worker');
+
+  scope.dispatchEvent(
+    new MessageEvent('message', {
+      data: JSON.parse('{"id":7,"kind":"compact"}'),
+    })
+  );
+
+  expect(await posted).toEqual({
+    id: 7,
+    ok: false,
+    error: 'unknown request',
+  });
+});

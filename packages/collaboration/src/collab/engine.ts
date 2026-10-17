@@ -149,7 +149,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         .with({ type: 'awareness' }, (m) =>
           this.awareness.importRemoteAwareness(m.data)
         )
-        .exhaustive()
+        .exhaustive(() =>
+          this.log('warn', 'engine.chatter: unknown message ignored')
+        )
     );
 
     this._isRunning = true;

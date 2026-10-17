@@ -1021,7 +1021,12 @@ export const mapApiSoupItemToEntity = (
         frecencyScore: item.frecency_score,
       } satisfies CalendarEventEntity;
     })
-    .exhaustive();
+    .exhaustive(() => ({
+      type: 'document' as const,
+      id: 'id' in item.data ? item.data.id : '',
+      name: '',
+      ownerId: '',
+    }));
 
   // Attached once for every tag: only touched_by_me pages carry the field,
   // and the Recent feed's client sort reads it off the entity. Resolved

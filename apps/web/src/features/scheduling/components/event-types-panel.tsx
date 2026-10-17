@@ -384,7 +384,7 @@ export function EventTypesPanel(props: {
                               Round robin
                             </>
                           ))
-                          .exhaustive()}
+                          .exhaustive(() => null)}
                       </Badge>
                       <Dropdown>
                         <Dropdown.Trigger

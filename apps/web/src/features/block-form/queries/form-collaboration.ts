@@ -288,7 +288,7 @@ function decodeSections(value: unknown): FormSection[] | undefined {
         const { rules } = gate;
         return isFilterGroup(rules) ? { ...gate, rules } : undefined;
       })
-      .exhaustive();
+      .exhaustive(() => undefined);
     if (!decoded) return undefined;
     sections.push(decoded);
   }

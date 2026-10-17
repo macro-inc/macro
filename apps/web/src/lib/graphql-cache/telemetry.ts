@@ -530,7 +530,7 @@ export function operationCategoryForRequest(
       'inspect-mutations',
       () => 'lifecycle' as const
     )
-    .exhaustive();
+    .exhaustive(() => 'lifecycle' as const);
 }
 
 export function isStorageTransactionRequest(

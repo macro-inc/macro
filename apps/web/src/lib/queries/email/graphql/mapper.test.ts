@@ -188,6 +188,20 @@ describe('mapGraphqlEmailThreadPage', () => {
     expect(mapped.access_level).toBe('view');
   });
 
+  it('defaults an access level from a newer server to view-only', () => {
+    const fromNewerServer = JSON.parse('"SUPER_OWNER"');
+    const mapped = mapGraphqlEmailThreadPage(
+      thread({
+        viewerPermission: {
+          __typename: 'GraphqlAccessLevelPermission',
+          accessLevel: fromNewerServer,
+        },
+      })
+    );
+
+    expect(mapped.access_level).toBe('view');
+  });
+
   it('uses message metadata when a canonical label is unavailable', () => {
     const mapped = mapGraphqlEmailThreadPage(thread({ labels: [] }));
 

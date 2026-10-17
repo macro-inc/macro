@@ -209,6 +209,19 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
+  it('groups by entity type when a newer build saved a grouping this one does not know', () => {
+    const fromNewerBuild = JSON.parse('{"type":"assignee"}');
+    const input = makeGraphqlGroupedSoupInput({
+      params: { limit: 100, sort_method: 'updated_at' },
+      body: compileToAst(queryStateFrom({ include: { documentDone: false } })),
+      groupBy: fromNewerBuild,
+    });
+
+    expect(input).toMatchObject({
+      initial: { groupBy: { field: 'ENTITY_TYPE' } },
+    });
+  });
+
   it('maps grouped cursor continuations to GraphQL input', () => {
     expect(
       makeGraphqlGroupedSoupContinuationInput({

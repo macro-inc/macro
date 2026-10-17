@@ -78,7 +78,16 @@ function toSection(section: FormSectionDetail): FormSection {
       bookingTarget: booking.target ? toBookingTarget(booking.target) : null,
       questions: [],
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      id: section.id,
+      title: section.title,
+      description: section.description,
+      kind: 'questions',
+      gateRules: null,
+      gateMessage: '',
+      bookingTarget: null,
+      questions: [],
+    }));
 }
 
 function toBookingTarget(target: FormBookingTarget): FormBookingTarget {
@@ -174,7 +183,16 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           bookingTarget: toBookingTarget(booking.target),
           questions: [],
         }))
-        .exhaustive()
+        .exhaustive(() => ({
+          id: section.id,
+          title: section.title,
+          description: section.description,
+          kind: 'questions',
+          gateRules: null,
+          gateMessage: '',
+          bookingTarget: null,
+          questions: [],
+        }))
     ),
   };
 }
@@ -213,7 +231,9 @@ export function toLayoutDocument(layout: FormLayout): WireFormLayout {
             widget: question.widget,
           })),
         }))
-        .exhaustive()
+        .exhaustive(() => {
+          throw new Error(`Section “${section.id}” has an unknown kind`);
+        })
     ),
   };
 }
@@ -243,7 +263,11 @@ export function toSubmitOutcome(outcome: SubmissionOutcome): SubmitOutcome {
       sectionId: section,
       message,
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      kind: 'stopped',
+      sectionId: '',
+      message: 'Update Macro to see whether your response was submitted.',
+    }));
 }
 
 export function toMyResponse(mine: WireMyResponse): MyResponse {

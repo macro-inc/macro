@@ -189,7 +189,7 @@ function typeLabel(type: ColumnType): string {
     .with({ type: 'tag' }, () => 'Tag')
     .with({ type: 'entity' }, ({ target }) => entityLabels[target])
     .with({ type: 'relation' }, () => 'Relation')
-    .exhaustive();
+    .exhaustive(() => 'Column');
 }
 
 function newOptions(labels: string[]): NewOption[] {
@@ -217,7 +217,7 @@ function resultName(result: OpResult): string {
       { kind: P.union('table', 'column', 'rows', 'view') },
       ({ kind, change }) => `${kind}.${change.kind}`,
     )
-    .exhaustive();
+    .exhaustive(() => 'unknown');
 }
 
 /** The one result of a one-op batch, which must be what the op answers. */

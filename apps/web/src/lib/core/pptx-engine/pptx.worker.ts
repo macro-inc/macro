@@ -112,7 +112,9 @@ async function recover() {
           .with({ kind: 'applyCollab' }, ({ changes }) =>
             doc.applyCollab(changes)
           )
-          .exhaustive();
+          .exhaustive(() => {
+            throw new Error('Unknown change log entry');
+          });
       }
       open.doc = doc;
     } catch {
@@ -438,7 +440,10 @@ async function serve(
         Transferable[],
       ];
     })
-    .exhaustive();
+    .exhaustive((unknown): [PptxResponse, Transferable[]] => {
+      console.warn('pptx worker: unknown request', unknown);
+      return [{ id, ok: false, error: 'Unknown presentation request.' }, []];
+    });
 }
 
 scope.addEventListener('message', (event: MessageEvent<PptxRequest>) => {

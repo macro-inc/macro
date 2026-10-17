@@ -136,6 +136,38 @@ it('reads stored values the way the pipeline table does', () => {
   ]);
 });
 
+it('reads value kinds from a newer server as empty instead of throwing', () => {
+  const fromNewerServer = JSON.parse(
+    '{"__typename":"GraphqlColorPropertyValue","hex":"#ff0000"}'
+  );
+  const optionFromNewerServer = JSON.parse(
+    '{"__typename":"GraphqlColorPropertyOptionValue","hex":"#ff0000"}'
+  );
+  const mapped = toPipelineEntry(
+    entry([
+      {
+        __typename: 'GraphqlCrmPipelineCell',
+        column: column({
+          id: 'shade',
+          options: [
+            {
+              __typename: 'GraphqlPropertyOption',
+              id: 'red',
+              color: null,
+              value: optionFromNewerServer,
+            },
+          ],
+        }),
+        value: fromNewerServer,
+      },
+    ])
+  );
+  expect(mapped.cells[0].value).toBeNull();
+  expect(mapped.cells[0].column.options).toEqual([
+    { id: 'red', label: '', color: null },
+  ]);
+});
+
 it('reads one company or one contact through soup', () => {
   const company = pipelineEntriesInput({ type: 'company', id: 'acme' });
   expect(company?.initial?.filters?.crmCompanyFilter).toEqual({

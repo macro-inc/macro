@@ -130,6 +130,23 @@ describe('database AI transport boundaries', () => {
     });
   });
 
+  it('reports an outcome status from a newer service as an interruption', async () => {
+    complete.mockResolvedValue(
+      ok({
+        outcome: JSON.parse('{"status":"paused"}'),
+        toolActivity: [],
+      })
+    );
+    const result = await generateDatabaseQuery(
+      input,
+      'google/gemini-3.8-flash'
+    );
+    expect(result._unsafeUnwrapErr()).toEqual({
+      kind: 'interrupted',
+      reason: 'unknown',
+    });
+  });
+
   it('keeps the service errors of a failed completion', async () => {
     complete.mockResolvedValue(
       err([

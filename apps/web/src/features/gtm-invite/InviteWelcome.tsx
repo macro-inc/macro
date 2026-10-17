@@ -75,7 +75,7 @@ export function InviteWelcome() {
       .with('expired', () => ({ kind: 'expired' }))
       .with('revoked', () => ({ kind: 'revoked' }))
       .with('redeemed', 'converted', () => ({ kind: 'used' }))
-      .exhaustive();
+      .exhaustive(() => ({ kind: 'invalid' }));
   });
   const welcomeDetails = () => {
     const current = view();

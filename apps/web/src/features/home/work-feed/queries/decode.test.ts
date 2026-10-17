@@ -63,6 +63,18 @@ describe('decodeWorkFeedEntry', () => {
     );
     expect(decoded?.entity.touchedAt).toBe('2026-02-01T10:30:00Z');
   });
+
+  it('decodes an item state from a newer server as seen', () => {
+    const entry = documentEntry({
+      docId: 'doc-1',
+      sortAt: '2026-02-01T10:09:00Z',
+    });
+    const decoded = decodeWorkFeedEntry({
+      ...entry,
+      item: { ...entry.item, state: JSON.parse('"SNOOZED"') },
+    });
+    expect(decoded?.state).toBe('seen');
+  });
 });
 
 describe('encodeWorkFeedScope', () => {

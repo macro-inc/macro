@@ -79,7 +79,7 @@ function activityAction(action: Activity['action']): ActivityAction {
       kind: 'unknown' as const,
       tag,
     }))
-    .exhaustive();
+    .exhaustive(() => ({ kind: 'unknown' as const, tag: action.type }));
 }
 
 function activityEvent(activity: Activity, index: number): ActivityEvent {

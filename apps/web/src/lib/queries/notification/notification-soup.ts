@@ -42,7 +42,7 @@ function notificationEntityTypeToSoupTag(
       ),
       () => null
     )
-    .exhaustive();
+    .exhaustive(() => null);
 }
 
 /** Keep REST-backed Home rows live even when notifications use GraphQL. */

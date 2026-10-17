@@ -703,7 +703,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
     .with({ type: 'form' }, () => 'form')
-    .exhaustive();
+    .exhaustive(() => 'default');
 }
 
 export function getEntityIconConfig(

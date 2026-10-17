@@ -75,7 +75,7 @@ function getNotificationIcon(
     .with('agent_session_settled', () => AgentIcon)
     .with('agent_session_waiting_for_input', () => QuestionIcon)
     .with('agent_session_mentioned', () => AtIcon)
-    .exhaustive();
+    .exhaustive(() => BellIcon);
 }
 
 /**

@@ -58,7 +58,11 @@ import {
   removeTopLevelMessageFromMessageTimeline,
   restoreTopLevelMessageInMessageTimeline,
 } from '../timeline';
-import { timelineEntryKey, timelineMessages } from '../timeline-entries';
+import {
+  reconcileTimelineEntries,
+  timelineEntryKey,
+  timelineMessages,
+} from '../timeline-entries';
 
 const parent: MessageParent = { type: 'channel', id: 'channel-1' };
 const document: MessageParent = { type: 'document', id: 'document-1' };
@@ -671,6 +675,21 @@ describe('channel activity entries', () => {
     expect(index.entryKeys).toEqual(['m', 'n', 'b']);
     expect([m, n, b].map(timelineEntryKey)).toEqual(['m', 'n', 'b']);
     expect(index.byId.get('n')?.content).toBe('Message n');
+  });
+
+  it('keeps an entry type from a newer server instead of throwing', () => {
+    const message: MessageTimelineEntry = {
+      type: 'message',
+      message: createMessage('m', '2026-09-10T15:00:00Z'),
+    };
+    const fromNewerServer = JSON.parse('{"type":"poll","poll":{"id":"p"}}');
+
+    expect(timelineEntryKey(fromNewerServer)).toBe(
+      '{"type":"poll","poll":{"id":"p"}}'
+    );
+    const merged = reconcileTimelineEntries([message], [fromNewerServer]);
+    expect(merged).toHaveLength(2);
+    expect(merged).toContain(fromNewerServer);
   });
 
   it('keeps activity in place through message removal and rollback', () => {

@@ -96,7 +96,7 @@ export function describeInviteStatus(
       label: 'Subscribed',
       tone: 'success' as const,
     }))
-    .exhaustive();
+    .exhaustive(() => ({ label: 'Unknown', tone: 'muted' as const }));
 }
 
 const MINUTE_MS = 60_000;

@@ -66,7 +66,7 @@ export function flushFailureOf(error: unknown): FormWriteFailure {
     .with({ kind: 'publish-failed' }, () => ({
       message: 'The form couldn’t be published. Try again.',
     }))
-    .exhaustive();
+    .exhaustive(() => ({ message: 'The form couldn’t be saved.' }));
 }
 
 /** The form's shared layout for an editor; call under the editor's owner. */
@@ -109,7 +109,7 @@ export function createFormLayoutCollaboration(
         .with({ kind: 'unsaved', reason: 'undelivered' }, () => 'unsaved')
         .with({ kind: 'saving' }, () => 'saving')
         .with({ kind: 'saved' }, () => 'saved')
-        .exhaustive(),
+        .exhaustive(() => 'unsaved'),
     connection: session.connection,
     apply: (previous, next) =>
       session.apply(toLayoutDocument(previous), toLayoutDocument(next)),

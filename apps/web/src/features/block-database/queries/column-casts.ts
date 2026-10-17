@@ -70,6 +70,6 @@ function toMenuCast(cast: ServerColumnCast) {
         examples: cast.examples,
       }))
       .with('never', () => ({ verdict: 'never', reason: cast.reason ?? '' }))
-      .exhaustive(),
+      .exhaustive(() => ({ verdict: 'never', reason: cast.reason ?? '' })),
   };
 }

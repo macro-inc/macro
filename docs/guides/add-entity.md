@@ -411,8 +411,11 @@ adapter translates legacy block state into feature context (FE-34).
 `rules/ast-grep/{ts,tsx}-feature-*.yml` files.
 
 **Exhaustiveness.** New branches on a kind use `match().exhaustive()` or a
-`Record<Kind, ...>`, never `.otherwise`, `P._`, `default`, or `switch`. Never cast
-a string to `ItemType`; parse it with `stringToItemType` (FE-31, enforced by
+`Record<Kind, ...>`, never `.otherwise`, `P._`, `default`, or `switch`. Where the
+kind arrives from the wire (queries, service clients, workers, SDK hydrators),
+pass a fallback, `.exhaustive((unknown) => fallback)`, so older clients survive
+the new kind (FE-35). Never cast a string to `ItemType` or an `EntityType`; parse
+it with `stringToItemType` or `parseEntityType` (FE-31, enforced by
 `rules/ast-grep/ts-no-item-type-cast.yml`). Existing catch-alls hide the new kind,
 so grep for the sibling kind.
 

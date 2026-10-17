@@ -40,7 +40,7 @@ function entityNoun(target: FormEntityKind): string {
     .with('THREAD', () => 'email')
     .with('CALENDAR_EVENT', () => 'event')
     .with('INITIATIVE', () => 'initiative')
-    .exhaustive();
+    .exhaustive(() => 'item');
 }
 
 export function FormEntityPicker(props: EntityPickerProps) {

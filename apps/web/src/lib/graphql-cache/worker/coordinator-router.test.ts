@@ -412,6 +412,30 @@ describe('CoordinatorRouter', () => {
     expect(router.snapshot()).toBeUndefined();
   });
 
+  it('reports an unknown message kind from a newer tab as a protocol error', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const port = new FakePort();
+    await register(router, port, 'tab-a');
+    const fromNewerTab = JSON.parse('"tab-took-a-nap"');
+
+    await expect(
+      router.handleTabMessage(port as CoordinatorMessagePort, {
+        ...version,
+        kind: fromNewerTab,
+        tabId: 'tab-a',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(messagesOfKind(port, 'protocol-error')).toContainEqual(
+      expect.objectContaining({
+        error: 'invalid tab-took-a-nap coordinator envelope',
+      })
+    );
+  });
+
   it('routes colliding tab ids through unique engine ids, restores responses, and fans pushes', async () => {
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,

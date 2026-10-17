@@ -84,7 +84,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer in')
       .with('agent_session_mentioned', () => 'mentioned you in')
-      .exhaustive()
+      .exhaustive(() => 'notified you about')
   );
 }
 
@@ -142,7 +142,7 @@ export function getNotificationTargetName(
         },
         (m) => m.content.sessionName
       )
-      .exhaustive()
+      .exhaustive(() => undefined)
   );
 }
 
@@ -215,7 +215,7 @@ export function getNotificationContent(
         (m) => m.content.question
       )
       .with({ tag: 'agent_session_mentioned' }, () => undefined)
-      .exhaustive()
+      .exhaustive(() => undefined)
   );
 }
 
@@ -289,6 +289,6 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
         },
         () => true
       )
-      .exhaustive()
+      .exhaustive(() => true)
   );
 }

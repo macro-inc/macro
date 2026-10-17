@@ -85,7 +85,10 @@ function streamIsDone(
 ): boolean {
   const isDone = match({ kind, item })
     .with({ kind: 'chat' }, ({ item }) => item.type === 'stream_end')
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('connection stream: unknown entity type', unknown);
+      return false;
+    });
   return isDone;
 }
 
