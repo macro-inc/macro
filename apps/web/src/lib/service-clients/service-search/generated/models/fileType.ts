@@ -30,6 +30,7 @@ export const FileType = {
   md: 'md',
   spreadsheet: 'spreadsheet',
   canvas: 'canvas',
+  desmos: 'desmos',
   coffee: 'coffee',
   cson: 'cson',
   iced: 'iced',

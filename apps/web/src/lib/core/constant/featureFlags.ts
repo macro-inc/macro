@@ -794,6 +794,17 @@ export const enablePsdEditor = defineFlag({
 });
 
 /**
+ * The in-browser Desmos-style graphing calculator (`block-desmos`). Off hides
+ * creating graphs and shows existing files as unavailable. On in dev;
+ * deployed environments follow PostHog.
+ */
+export const enableDesmosEditor = defineFlag({
+  key: 'enable-desmos-editor',
+  env: 'ENABLE_DESMOS_EDITOR',
+  default: onInDev,
+});
+
+/**
  * The in-browser Figma file viewer (`block-fig`). Off shows uploaded `.fig`
  * files as before: download only. On in dev; deployed environments follow
  * PostHog.

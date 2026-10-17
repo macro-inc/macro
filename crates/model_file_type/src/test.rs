@@ -109,3 +109,16 @@ fn illustrator_documents_keep_their_extension_and_media_type() {
     assert_eq!(FileType::Ai.mime_type(), "application/postscript");
     assert_eq!(FileType::Ai.macro_app_path().to_string(), "vector");
 }
+
+#[test]
+fn desmos_graphs_keep_their_extension_and_media_type() {
+    assert_eq!(FileType::from_str(".desmos").unwrap(), FileType::Desmos);
+    assert_eq!(FileType::from_str("DESMOS").unwrap(), FileType::Desmos);
+    assert_eq!(FileType::Desmos.as_str(), "desmos");
+    assert_eq!(FileType::Desmos.mime_type(), "application/x-macro-desmos");
+    assert_eq!(FileType::Desmos.macro_app_path().to_string(), "desmos");
+    assert_eq!(
+        ContentType::from_str("application/x-macro-desmos").unwrap(),
+        ContentType::Desmos
+    );
+}

@@ -40,6 +40,7 @@ import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
 import FolderUser from '@phosphor/folder-simple-user.svg';
+import FunctionIcon from '@phosphor/function.svg';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
 import GlobeIcon from '@phosphor/globe.svg';
@@ -81,6 +82,7 @@ import FileVideoBold from '@phosphor-icons/core/bold/file-video-bold.svg';
 import FilesBold from '@phosphor-icons/core/bold/files-bold.svg';
 import FolderBold from '@phosphor-icons/core/bold/folder-simple-bold.svg';
 import FolderUserBold from '@phosphor-icons/core/bold/folder-simple-user-bold.svg';
+import FunctionIconBold from '@phosphor-icons/core/bold/function-bold.svg';
 import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
 import GitPullRequestBold from '@phosphor-icons/core/bold/git-pull-request-bold.svg';
 import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
@@ -168,6 +170,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-canvas',
     background: 'bg-canvas/20',
     prettyName: 'Canvas',
+  },
+  desmos: {
+    icon: FunctionIcon,
+    boldIcon: FunctionIconBold,
+    foreground: 'text-blue',
+    background: 'bg-blue/20',
+    prettyName: 'Graph',
   },
   spreadsheet: {
     icon: Spreadsheet,

@@ -16,6 +16,7 @@ const typeOptions = [
   { id: 'doc-markdown', label: 'Markdown', type: 'md' },
   { id: 'doc-canvas', label: 'Canvas', type: 'canvas' },
   { id: 'doc-spreadsheet', label: 'Spreadsheet', type: 'spreadsheet' },
+  { id: 'doc-desmos', label: 'Graph', type: 'desmos' },
   { id: 'file-code', label: 'Code', type: 'code' },
   { id: 'file-image', label: 'Images', type: 'image' },
   { id: 'file-pdf', label: 'PDFs', type: 'pdf' },

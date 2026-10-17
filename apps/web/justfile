@@ -141,9 +141,10 @@ docx_engine_wasm_target := justfile_directory() / "../../target/docx-engine-wasm
 fig_engine_wasm_target := justfile_directory() / "../../target/fig-engine-wasm"
 psd_engine_wasm_target := justfile_directory() / "../../target/psd-engine-wasm"
 ai_engine_wasm_target := justfile_directory() / "../../target/ai-engine-wasm"
+desmos_engine_wasm_target := justfile_directory() / "../../target/desmos-engine-wasm"
 
 [parallel]
-build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
+build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm build-desmos-engine-wasm
 
 build-dev: build-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
@@ -436,6 +437,23 @@ ensure-ai-engine-wasm:
     FIG="{{justfile_directory()}}/../../crates/fig_engine"
     if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$FIG/src" "$FIG/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-ai-engine-wasm
+    fi
+
+# Build the desmos-engine wasm module (expression parse/eval/plot, hosted
+# in a worker by the desmos block) into src/lib/core/desmos-engine/wasm
+# (gitignored).
+build-desmos-engine-wasm:
+    scripts/cached-wasm-build.sh desmos_engine {{justfile_directory()}}/src/lib/core/desmos-engine/wasm -- env CARGO_TARGET_DIR="{{desmos_engine_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/desmos_engine --target web --profile desmos-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/desmos-engine/wasm
+
+# Dev fast path: build the desmos-engine wasm pkg only when it is missing or
+# the crate is newer than it.
+ensure-desmos-engine-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/desmos-engine/wasm/desmos_engine_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/desmos_engine"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-desmos-engine-wasm
     fi
 
 # Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts

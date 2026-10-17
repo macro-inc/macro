@@ -12,6 +12,8 @@ export const BlockRegistry = [
   'code',
   'image',
   'canvas',
+  // Graphing calculator (Desmos-style), edited in the browser.
+  'desmos',
   'spreadsheet',
   // PowerPoint presentations, edited in the browser.
   'pptx',

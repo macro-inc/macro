@@ -286,6 +286,8 @@ export const TOKENS = {
     chatNewSplit: 'create.chatNewSplit',
     canvas: 'create.canvas',
     canvasNewSplit: 'create.canvasNewSplit',
+    desmos: 'create.desmos',
+    desmosNewSplit: 'create.desmosNewSplit',
     photoshop: 'create.photoshop',
     photoshopNewSplit: 'create.photoshopNewSplit',
     design: 'create.design',

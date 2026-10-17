@@ -4907,6 +4907,9 @@
       "crates/workspace-hack",
       "services/deleted_item_poller"
     ],
+    "desmos_engine": [
+      "crates/desmos_engine"
+    ],
     "dictation": [
       "crates/ai_usage",
       "crates/bot_id",

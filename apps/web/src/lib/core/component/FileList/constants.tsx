@@ -64,6 +64,7 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   csv: 'bg-code/20 group/item',
   image: 'bg-image/20 group/item',
   canvas: 'bg-canvas/20 group/item',
+  desmos: 'bg-blue/20 group/item',
   spreadsheet: 'bg-success/20 group/item',
   pptx: 'bg-orange/20 group/item',
   psd: 'bg-blue/20 group/item',

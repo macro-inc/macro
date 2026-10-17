@@ -45,6 +45,7 @@ Use `<m-document-mention>` with the right `blockName` (and `blockParams` when ne
 - CRM pipeline mention: `<m-document-mention>{"documentId":"{pipeline_id}","documentName":"","blockName":"pipeline","blockParams":{}}</m-document-mention>`
 - Database mention: `<m-document-mention>{"documentId":"{database_id}","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>`
 - Form mention: `<m-document-mention>{"documentId":"{form_id}","documentName":"","blockName":"form","blockParams":{}}</m-document-mention>`
+- Desmos graph mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"desmos","blockParams":{}}</m-document-mention>`
 
 The `blockName` for a Macro database is always exactly `database` — never `md` or `document`; a database id mentioned as a document renders as deleted. `documentId` is the database id a database tool returned.
 The `blockName` for a form is always exactly `form` — never `md` or `document`. `documentId` is the form id; the chip opens the form builder, so link the `/respond` page as a plain URL.

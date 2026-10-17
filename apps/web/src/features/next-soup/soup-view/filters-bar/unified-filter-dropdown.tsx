@@ -301,6 +301,11 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         icon: () => <EntityIcon targetType="spreadsheet" size="xs" />,
       },
       {
+        id: 'doc-desmos',
+        label: 'Graph',
+        icon: () => <EntityIcon targetType="desmos" size="xs" />,
+      },
+      {
         id: 'file-code',
         label: 'Code',
         icon: () => <EntityIcon targetType="code" size="xs" />,

@@ -29,6 +29,7 @@ export interface BlockMethodRegistry {
   code: EmptySpec;
   image: EmptySpec;
   canvas: AssertSpec<CanvasSpec>;
+  desmos: EmptySpec;
   spreadsheet: EmptySpec;
   pptx: EmptySpec;
   psd: EmptySpec;

@@ -758,6 +758,28 @@ uploaded before conversion existed are not converted.
 Conversion runs in the convert service through the upload finalizer Lambda,
 neither of which the local stack runs, so verify it against a deployed backend.
 
+## Graphs (Desmos)
+
+Graphs are a file-backed calculator (`desmos`, `/app/desmos/<documentId>`),
+gated by `enable-desmos-editor` (on in development; `ENABLE_DESMOS_EDITOR`
+overrides it). Create one from **Create → Graph** (hotkey `y`), the project
+menu, or Files. The editor (`desmos-editor`) is laid out as Desmos is: an
+expression list on the left and graph paper on the right.
+
+- Type `y=x^2`, `x^2+y^2=25`, `y>x`, `(3,4)`, `r=2sin(3theta)`, or
+  `(cos(t), sin(t))`. Implicit multiply, `|x|`, `n!`, piecewise
+  `{x<0:-x, x}`, and domain `{0<x<5}` work. Free parameters such as `m` and
+  `b` in `y=mx+b` offer **add slider**.
+- The color circle hides or shows a row. Selecting a row shows the Desmos
+  palette. Enter adds a row; Backspace on an empty row removes it.
+- Drag the paper to pan, scroll to zoom, use **+** / **−** / **home** at the
+  bottom right. Edits save after a short debounce (`desmos-save-state`).
+- With the flag off, opening a graph shows "Desmos graphs are not enabled
+  for this workspace" (`desmos-unavailable`).
+
+To verify a save: plot `y=x^2`, wait for `data-state="saved"`, reload
+`/app/desmos/<id>`, and confirm the parabola is still there.
+
 ## Presentations (PowerPoint)
 
 Uploaded `.pptx` files open in the `pptx` block (`/app/pptx/<documentId>`).

@@ -82,6 +82,13 @@ const DETAILS: Record<string, CreateMenuDetails> = {
       'An infinite canvas for flowcharts, mind maps, architecture diagrams and freeform brainstorming.',
     examples: ['Flowchart', 'Mind map', 'Architecture diagram'],
   },
+  Graph: {
+    group: 'design',
+    tagline: 'Graphing calculator',
+    details:
+      'Plot functions, implicit curves, inequalities, points and sliders on graph paper, the way Desmos does.',
+    examples: ['y=x^2', 'x^2+y^2=25', 'y=a sin(x)'],
+  },
   Design: {
     group: 'design',
     tagline: 'Figma-compatible design editor',
@@ -275,6 +282,7 @@ const SHORT_TAGLINES: Record<string, string> = {
   Code: 'Syntax-highlighted file',
   Folder: 'Keep files together',
   Canvas: 'Diagrams & whiteboard',
+  Graph: 'Graphing calculator',
   Design: 'Figma-compatible editor',
   Spreadsheet: 'Formulas & sheets',
   Database: 'Tables & boards',

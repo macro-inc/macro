@@ -199,7 +199,7 @@ describe('cached GraphQL history', () => {
     }
   });
 
-  it.each(['pdf', 'spreadsheet'])(
+  it.each(['pdf', 'spreadsheet', 'desmos'])(
     'preserves %s file types for quick-access navigation and icons',
     async (fileType) => {
       const id = `document-${fileType}`;

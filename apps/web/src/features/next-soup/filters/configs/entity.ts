@@ -34,7 +34,7 @@ export const filesAndFolderFilter = config({
   predicate: filesAndFolderPredicate,
   query: {
     exclude: {
-      fileType: ['md', 'canvas', 'spreadsheet'],
+      fileType: ['md', 'canvas', 'spreadsheet', 'desmos'],
       folderId: [NIL_UUID],
     },
   },

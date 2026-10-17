@@ -38,6 +38,7 @@ type DocumentTypeOptionId =
   | 'doc-markdown'
   | 'doc-canvas'
   | 'doc-spreadsheet'
+  | 'doc-desmos'
   | 'file-code'
   | 'file-image'
   | 'file-pdf'
@@ -87,6 +88,11 @@ const TYPE_OPTIONS: DriveFacetOption[] = [
     'doc-spreadsheet',
     clause.eq('fileType', 'spreadsheet'),
     (entity) => entity.type === 'document' && entity.fileType === 'spreadsheet'
+  ),
+  typeOption(
+    'doc-desmos',
+    clause.eq('fileType', 'desmos'),
+    (entity) => entity.type === 'document' && entity.fileType === 'desmos'
   ),
   typeOption(
     'file-code',
@@ -146,7 +152,11 @@ const TYPE_OPTIONS: DriveFacetOption[] = [
 
       const fileType = entity.fileType ?? '';
 
-      if (['md', 'canvas', 'spreadsheet', 'pdf', 'docx'].includes(fileType)) {
+      if (
+        ['md', 'canvas', 'spreadsheet', 'desmos', 'pdf', 'docx'].includes(
+          fileType
+        )
+      ) {
         return false;
       }
       if ((codeFileExtensions as readonly string[]).includes(fileType)) {
@@ -168,6 +178,7 @@ const SEARCH_FILE_TYPES: Record<string, readonly string[] | undefined> = {
   'doc-markdown': ['md'],
   'doc-canvas': ['canvas'],
   'doc-spreadsheet': ['spreadsheet'],
+  'doc-desmos': ['desmos'],
   'doc-snippet': ['md'],
   'doc-skill': ['md'],
   'file-code': codeFileExtensions,

@@ -2,6 +2,7 @@ import { openAgentComposer } from '@app/features/agents-view/primitives/open-com
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
+import { createDesmosDocument } from '@app/features/block-desmos/queries/create-desmos';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
@@ -26,6 +27,7 @@ import {
   enableCarouselCreateMenu,
   enableChatV3Agents,
   enableDatabases,
+  enableDesmosEditor,
   enableFigViewer,
   enableForms,
   enableProjects,
@@ -341,6 +343,17 @@ export function runCreateAction(
         loading: true,
         createFn: () =>
           createAiDocument({ projectId: options.projectId, source }),
+        shouldInsert,
+        openCreated,
+      });
+      return;
+    case 'desmos':
+      if (!isFeatureEnabled(enableDesmosEditor)) return;
+      createBlock({
+        blockName: 'desmos',
+        loading: true,
+        createFn: () =>
+          createDesmosDocument({ projectId: options.projectId, source }),
         shouldInsert,
         openCreated,
       });
@@ -757,6 +770,22 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    label: 'Graph',
+    enabled: () => isFeatureEnabled(enableDesmosEditor),
+    icon: getIconConfig('desmos').icon,
+    description: 'Create graph',
+    launcherHint: 'Desmos-style graphing calculator',
+    keywords: ['new', 'make', 'add', 'desmos', 'graph', 'calculator', 'math'],
+    blockName: 'desmos',
+    hotkeyToken: TOKENS.create.desmos,
+    altHotkeyToken: TOKENS.create.desmosNewSplit,
+    hotkey: 'y',
+    keyDownHandler: () => {
+      runCreateAction('desmos', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
     label: 'Canvas',
     icon: getIconConfig('canvas').icon,
     description: 'Create canvas',
@@ -910,6 +939,7 @@ export function useCreateMenuBlocks(
   const projectsFlag = useFeatureFlag(enableProjects);
   const databasesFlag = useFeatureFlag(enableDatabases);
   const psdFlag = useFeatureFlag(enablePsdEditor);
+  const desmosFlag = useFeatureFlag(enableDesmosEditor);
   const figFlag = useFeatureFlag(enableFigViewer);
   const aiFlag = useFeatureFlag(enableAiEditor);
   const formsFlag = useFeatureFlag(enableForms);
@@ -917,6 +947,7 @@ export function useCreateMenuBlocks(
     agentsFlag();
     databasesFlag();
     psdFlag();
+    desmosFlag();
     figFlag();
     aiFlag();
     formsFlag();

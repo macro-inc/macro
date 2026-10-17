@@ -106,6 +106,7 @@ members = [
   "crates/pipedream_mcp",
   "crates/onboarding",
   "crates/ai_engine",
+  "crates/desmos_engine",
   "crates/docx_engine",
   "crates/fig_engine",
   "crates/pptx_engine",
@@ -508,6 +509,11 @@ lto = "fat"
 codegen-units = 1
 
 [profile.ai-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.desmos-engine-wasm]
 inherits = "release"
 lto = "fat"
 codegen-units = 1

@@ -9,8 +9,8 @@ use document_sub_type::DocumentSubType;
 use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use model_file_type::{
-    Archive, Audio, Canvas, Code, Data, Database, Document, Executable, FileAssociation, FileType,
-    Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
+    Archive, Audio, Canvas, Code, Data, Database, Desmos, Document, Executable, FileAssociation,
+    FileType, Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
 };
 use model_owner::Owner;
 use nom::{
@@ -94,6 +94,7 @@ fn file_association(s: &str) -> IResult<&str, FileAssociation> {
         assotiation::<Pdf>("pdf").map(FileAssociation::from),
         assotiation::<Md>("md").map(FileAssociation::from),
         assotiation::<Canvas>("canvas").map(FileAssociation::from),
+        assotiation::<Desmos>("desmos").map(FileAssociation::from),
         assotiation::<Code>("code").map(FileAssociation::from),
         assotiation::<Image>("image").map(FileAssociation::from),
         assotiation::<Archive>("archive").map(FileAssociation::from),
@@ -137,6 +138,7 @@ fn other(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
                             | FileAssociation::Pdf(_)
                             | FileAssociation::Md(_)
                             | FileAssociation::Canvas(_)
+                            | FileAssociation::Desmos(_)
                             | FileAssociation::Code(_)
                             | FileAssociation::Video(_)
                     )

@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "desmos_engine"
+publish = false
+version = "0.1.0"
+
+[lib]
+# `cdylib` for the browser build; `rlib` so native tools and tests link it.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.custom]
+wasm-opt = false

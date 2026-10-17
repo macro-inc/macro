@@ -29,6 +29,7 @@ export const CHANNEL_DOCUMENT_FILE_EXTENSIONS = [
   'canvas',
   'csv',
   'doc',
+  'desmos',
   'docx',
   'json',
   'md',

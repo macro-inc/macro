@@ -21,6 +21,7 @@ just ensure-docx-engine-wasm
 just ensure-fig-engine-wasm
 just ensure-psd-engine-wasm
 just ensure-ai-engine-wasm
+just ensure-desmos-engine-wasm
 
 # build.rs reads this ignored file. Restore it even if compilation fails.
 env_file="$web/tauri/src-tauri/.macro-tauri-env"

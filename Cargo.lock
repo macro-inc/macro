@@ -6152,6 +6152,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "desmos_engine"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "determinator"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

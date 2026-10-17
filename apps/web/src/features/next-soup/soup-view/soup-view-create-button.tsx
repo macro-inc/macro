@@ -28,7 +28,15 @@ import { useMaybeSoupView } from './soup-view-context';
 
 // Which blocks to show as create options per view, in order
 const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
-  documents: ['md', 'snippet', 'spreadsheet', 'canvas', 'code', 'project'],
+  documents: [
+    'md',
+    'snippet',
+    'spreadsheet',
+    'canvas',
+    'desmos',
+    'code',
+    'project',
+  ],
   tasks: ['task'],
   agents: ['agent', 'chat', 'routine', 'skill'],
   mail: ['email'],
