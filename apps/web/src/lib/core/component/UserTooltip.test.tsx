@@ -143,7 +143,7 @@ describe('UserTooltip clipboard action', () => {
 });
 
 describe('UserTooltip direct message action', () => {
-  it('offers a DM for another person', () => {
+  it('offers a message action for another person', () => {
     render(() => (
       <UserTooltip
         displayName="Jane Doe"
@@ -152,10 +152,10 @@ describe('UserTooltip direct message action', () => {
       />
     ));
 
-    expect(screen.getByRole('button', { name: 'DM' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeTruthy();
   });
 
-  it('offers no DM for an agent, which is mentioned rather than messaged', () => {
+  it('offers no message action for an agent, which is mentioned rather than messaged', () => {
     render(() => (
       <UserTooltip
         displayName="Cursor"
@@ -164,7 +164,7 @@ describe('UserTooltip direct message action', () => {
       />
     ));
 
-    expect(screen.queryByRole('button', { name: 'DM' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
     // The rest of the card is untouched: an agent still hovers like a person.
     expect(screen.getByText('Cursor')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Assign task' })).toBeTruthy();
