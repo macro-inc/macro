@@ -665,6 +665,7 @@ describe('agent session sharing', () => {
       channelId: 'channel-1',
       mentions: [],
       messageId: 'new-message',
+      trace: expect.anything(),
     });
     await vi.waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     expect(mocks.updateAgentPermissions).toHaveBeenCalledWith(

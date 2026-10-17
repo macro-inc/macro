@@ -34,7 +34,6 @@ vi.mock('@macro-inc/observability', () => {
       node.children.push(child);
       return operation(recorder(child));
     },
-    run: <T>(operation: () => T) => operation(),
     setAttr: (name: string, value: unknown) => {
       node.attributes[name] = value;
     },
@@ -79,43 +78,48 @@ function setup(items: readonly ShareItem[]) {
   const brokenPosts = new Map<string, Error>();
   const grantErrors = new Map<string, ChannelAccessError>();
 
+  // Each request runs as a child of the span it is handed, as an HTTP client
+  // span would.
   const context: ShareDeliveryContext = {
-    async resolvePeopleChannel(userIds) {
-      const channelId = `dm:${userIds.join('+')}`;
-      if (userIds.some((id) => unreachable.has(id))) {
-        note(channelId, 'resolve failed');
-        return err({ kind: 'failed' });
-      }
-      note(channelId, 'resolve');
-      return ok(channelId);
-    },
-    async send({ channelId, messageId, items: attached, text }) {
-      const broken = brokenPosts.get(messageId);
-      if (broken) throw broken;
-      if (failingPosts.has(messageId)) {
-        note(channelId, `post ${messageId} failed`);
-        return err({ kind: 'failed' });
-      }
-      const ids = attached.map(({ id }) => id).join(' ');
-      note(
-        channelId,
-        text
-          ? `post ${messageId}: ${ids} "${text}"`
-          : `post ${messageId}: ${ids}`
-      );
-      return ok({ open: () => note(channelId, 'open') });
-    },
-    async changeChannelAccess(ref, change) {
-      const level = change.t === 'set' ? change.level : 'removed';
-      const error = grantErrors.get(ref.id);
-      note(
-        change.channelId,
-        error
-          ? `grant ${ref.id} ${level} ${error.kind}`
-          : `grant ${ref.id} ${level}`
-      );
-      return error ? err(error) : ok(undefined);
-    },
+    resolvePeopleChannel: (userIds, span) =>
+      span.span('resolve', async () => {
+        const channelId = `dm:${userIds.join('+')}`;
+        if (userIds.some((id) => unreachable.has(id))) {
+          note(channelId, 'resolve failed');
+          return err({ kind: 'failed' });
+        }
+        note(channelId, 'resolve');
+        return ok(channelId);
+      }),
+    send: ({ channelId, messageId, items: attached, text }, span) =>
+      span.span('post', async () => {
+        const broken = brokenPosts.get(messageId);
+        if (broken) throw broken;
+        if (failingPosts.has(messageId)) {
+          note(channelId, `post ${messageId} failed`);
+          return err({ kind: 'failed' });
+        }
+        const ids = attached.map(({ id }) => id).join(' ');
+        note(
+          channelId,
+          text
+            ? `post ${messageId}: ${ids} "${text}"`
+            : `post ${messageId}: ${ids}`
+        );
+        return ok({ open: () => note(channelId, 'open') });
+      }),
+    changeChannelAccess: (ref, change, span) =>
+      span.span('grant', async () => {
+        const level = change.t === 'set' ? change.level : 'removed';
+        const error = grantErrors.get(ref.id);
+        note(
+          change.channelId,
+          error
+            ? `grant ${ref.id} ${level} ${error.kind}`
+            : `grant ${ref.id} ${level}`
+        );
+        return error ? err(error) : ok(undefined);
+      }),
     track: (event) => {
       events = [...events, event];
     },
@@ -247,9 +251,12 @@ it('retries a direct message it could not find or create', async () => {
     unsent: [spec],
     accessIssues: [],
   });
-  expect(traces[0].children[1].errors).toEqual([
-    'No channel for the recipients',
-  ]);
+  expect(traces[0].children[1]).toMatchObject({
+    errors: ['No channel for the recipients'],
+    children: [
+      { name: 'share.find_channel', errors: ['No channel for the recipients'] },
+    ],
+  });
 
   unreachable.clear();
   await form.submit();
@@ -361,7 +368,7 @@ it('retries a failed grant but never a refused one', async () => {
   expect(form.status().t).toBe('incomplete');
 });
 
-it('traces each attempt with a span per recipient it worked on', async () => {
+it('traces each attempt with a span per recipient and phase', async () => {
   const { form, failingPosts, grantErrors } = setup([
     item('document', 'spec'),
     item('document', 'brief'),
@@ -398,7 +405,18 @@ it('traces each attempt with a span per recipient it worked on', async () => {
             'share.grant_errors': 1,
           },
           errors: [],
-          children: [],
+          children: [
+            {
+              name: 'share.send_message',
+              attributes: { 'message.id': 'm1', 'share.items': 2 },
+              errors: [],
+              children: [
+                { name: 'post', attributes: {}, errors: [], children: [] },
+              ],
+            },
+            { name: 'grant', attributes: {}, errors: [], children: [] },
+            { name: 'grant', attributes: {}, errors: [], children: [] },
+          ],
         },
         {
           name: 'share.target',
@@ -411,7 +429,24 @@ it('traces each attempt with a span per recipient it worked on', async () => {
             'share.grant_errors': 0,
           },
           errors: ['Message was not sent'],
-          children: [],
+          children: [
+            {
+              name: 'share.find_channel',
+              attributes: {},
+              errors: [],
+              children: [
+                { name: 'resolve', attributes: {}, errors: [], children: [] },
+              ],
+            },
+            {
+              name: 'share.send_message',
+              attributes: { 'message.id': 'm2', 'share.items': 2 },
+              errors: ['Message was not sent'],
+              children: [
+                { name: 'post', attributes: {}, errors: [], children: [] },
+              ],
+            },
+          ],
         },
       ],
     },
@@ -430,7 +465,18 @@ it('traces each attempt with a span per recipient it worked on', async () => {
             'share.grant_errors': 1,
           },
           errors: [],
-          children: [],
+          children: [
+            {
+              name: 'share.send_message',
+              attributes: { 'message.id': 'm2', 'share.items': 2 },
+              errors: [],
+              children: [
+                { name: 'post', attributes: {}, errors: [], children: [] },
+              ],
+            },
+            { name: 'grant', attributes: {}, errors: [], children: [] },
+            { name: 'grant', attributes: {}, errors: [], children: [] },
+          ],
         },
       ],
     },

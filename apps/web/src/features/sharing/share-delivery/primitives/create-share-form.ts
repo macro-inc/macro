@@ -1,7 +1,10 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { ShareDeliveryContext } from '../context/share-delivery-context';
+import type {
+  OutgoingMessage,
+  ShareDeliveryContext,
+} from '../context/share-delivery-context';
 import {
   canSendAsGroup,
   type DeliveryLedger,
@@ -148,14 +151,10 @@ export function createShareForm<Recipient extends PickedRecipient>(
     const results = await Promise.all(
       steps.map(async (step) => ({
         ...step,
-        // The active span does not survive an `await`, so each grant
-        // re-enters the target's span for its request to join the trace.
-        result: await span.run(() =>
-          context.changeChannelAccess(step.item, {
-            t: 'set',
-            channelId: record.channelId,
-            level: step.level,
-          })
+        result: await context.changeChannelAccess(
+          step.item,
+          { t: 'set', channelId: record.channelId, level: step.level },
+          span
         ),
       }))
     );
@@ -163,6 +162,24 @@ export function createShareForm<Recipient extends PickedRecipient>(
       record: results.reduce(withGrant, record),
       allGranted: results.every(({ result }) => result.isOk()),
     };
+  }
+
+  function findChannel(userIds: readonly string[], target: Span) {
+    return target.span('share.find_channel', async (span) => {
+      const channel = await context.resolvePeopleChannel(userIds, span);
+      if (channel.isErr()) span.error('No channel for the recipients');
+      return channel;
+    });
+  }
+
+  function post(message: OutgoingMessage, target: Span) {
+    return target.span('share.send_message', async (span) => {
+      span.setAttr('message.id', message.messageId);
+      span.setAttr('share.items', message.items.length);
+      const sent = await context.send(message, span);
+      if (sent.isErr()) span.error('Message was not sent');
+      return sent;
+    });
   }
 
   async function runTarget(
@@ -176,7 +193,7 @@ export function createShareForm<Recipient extends PickedRecipient>(
       record = work.channel.record;
     } else {
       span.setAttr('share.recipients', work.channel.userIds.length);
-      const channel = await context.resolvePeopleChannel(work.channel.userIds);
+      const channel = await findChannel(work.channel.userIds, span);
       if (channel.isErr()) {
         span.error('No channel for the recipients');
         return undefined;
@@ -195,12 +212,15 @@ export function createShareForm<Recipient extends PickedRecipient>(
         record = first.record;
         if (!first.allGranted) break;
       }
-      const sent = await context.send({
-        channelId: record.channelId,
-        messageId: message.id,
-        items: message.items,
-        text: message.text,
-      });
+      const sent = await post(
+        {
+          channelId: record.channelId,
+          messageId: message.id,
+          items: message.items,
+          text: message.text,
+        },
+        span
+      );
       if (sent.isErr()) {
         span.error('Message was not sent');
         break;

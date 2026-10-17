@@ -15,7 +15,31 @@ const mocks = vi.hoisted(() => ({
   changeChannelAccess: vi.fn(),
   track: vi.fn(),
   minted: 0,
+  activeSpan: undefined as string | undefined,
 }));
+
+vi.mock('@macro-inc/observability', () => {
+  type Operation = (span: ReturnType<typeof named>) => Promise<unknown>;
+  const named = (name: string) => ({
+    span: (child: string, operation: Operation) => operation(named(child)),
+    run: <T>(operation: () => T) => {
+      const outer = mocks.activeSpan;
+      mocks.activeSpan = name;
+      try {
+        return operation();
+      } finally {
+        mocks.activeSpan = outer;
+      }
+    },
+    setAttr: () => {},
+    error: () => {},
+  });
+  return {
+    Telemetry: {
+      span: (name: string, operation: Operation) => operation(named(name)),
+    },
+  };
+});
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: mocks.track }),
@@ -180,10 +204,37 @@ describe('useShareForm', () => {
             { entity_type: 'agent_session', entity_id: 'session-1' },
           ],
           messageId: 'message-1',
+          trace: expect.anything(),
         },
       ],
     ]);
     expect(result?.open).toBe(navigate);
+  });
+
+  it('runs each request in the span of its phase', async () => {
+    const ranIn: Record<string, string | undefined> = {};
+    mocks.resolvePeopleChannel.mockImplementation(async (_userIds, trace) => {
+      ranIn.lookup = trace.run(() => mocks.activeSpan);
+      return 'dm-1';
+    });
+    mocks.sendToChannel.mockImplementation(async ({ trace }) => {
+      ranIn.post = trace.run(() => mocks.activeSpan);
+      return { channelId: 'dm-1', navigateToChannel: vi.fn() };
+    });
+    mocks.changeChannelAccess.mockImplementation(async () => {
+      ranIn.grant = mocks.activeSpan;
+      return ok(undefined);
+    });
+    const form = mountForm([plan], 'forward_to_channel');
+    form.setRecipients([user('user-1')]);
+
+    await form.submit();
+
+    expect(ranIn).toEqual({
+      lookup: 'share.find_channel',
+      post: 'share.send_message',
+      grant: 'share.target',
+    });
   });
 
   it('sends a group to its private channel and retries under the same id', async () => {
@@ -199,7 +250,7 @@ describe('useShareForm', () => {
     await form.submit();
 
     expect(mocks.resolvePeopleChannel.mock.calls).toEqual([
-      [['user-1', 'user-2']],
+      [['user-1', 'user-2'], expect.anything()],
     ]);
     expect(
       mocks.sendToChannel.mock.calls.map(([message]) => [

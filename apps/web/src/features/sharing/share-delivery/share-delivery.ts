@@ -103,23 +103,27 @@ function useAppShareDeliveryContext(
   const analytics = useAnalytics();
 
   return {
-    resolvePeopleChannel: async (userIds) => {
-      const channelId = await resolvePeopleChannel(userIds);
+    resolvePeopleChannel: async (userIds, span) => {
+      const channelId = await resolvePeopleChannel(userIds, span);
       return channelId === undefined ? err({ kind: 'failed' }) : ok(channelId);
     },
-    send: async ({ channelId, messageId, items: attached, text }) => {
+    send: async ({ channelId, messageId, items: attached, text }, span) => {
       const sent = await sendToChannel({
         channelId,
         content: text,
         mentions: [],
         attachments: attached.map(toAttachment),
         messageId,
+        trace: span,
       });
       return sent
         ? ok({ open: sent.navigateToChannel })
         : err({ kind: 'failed' });
     },
-    changeChannelAccess,
+    // The active span does not survive an `await`; a grant's request starts
+    // before its first one.
+    changeChannelAccess: (item, change, span) =>
+      span.run(() => changeChannelAccess(item, change)),
     track: (event) =>
       analytics.track('share_entity', {
         ...toSharePayload(event),

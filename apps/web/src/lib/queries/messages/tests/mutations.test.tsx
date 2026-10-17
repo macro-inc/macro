@@ -856,6 +856,53 @@ describe('sending', () => {
     ).toEqual([id]);
   });
 
+  it('posts, and reads back a resend, inside the caller span', async () => {
+    const parent: MessageParent = { type: 'document', id: 'doc' };
+    testQueryClient.setQueryData<MessageTimelineData>(
+      getMessageTimelineQueryKey(parent),
+      {
+        pageParams: [null],
+        pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
+      }
+    );
+    const id = newMessageId();
+    let inSpan = false;
+    const trace = {
+      run: <T,>(operation: () => T): T => {
+        inSpan = true;
+        try {
+          return operation();
+        } finally {
+          inSpan = false;
+        }
+      },
+    };
+    const requests: [string, boolean][] = [];
+    mocks.post.mockImplementation(async () => {
+      requests.push(['post', inSpan]);
+      throw new ThrownResultError([
+        { code: 'CONFLICT', message: 'message id already exists' },
+      ]);
+    });
+    mocks.get.mockImplementation(async () => {
+      requests.push(['get', inSpan]);
+      return message(parent, id);
+    });
+
+    await mountSend().mutateAsync({
+      parent,
+      message: { content: id },
+      senderId: 'macro|a@example.com',
+      optimisticId: id,
+      trace,
+    });
+
+    expect(requests).toEqual([
+      ['post', true],
+      ['get', true],
+    ]);
+  });
+
   it.each([
     {
       failure: 'a conflict on an id the server does not hold',

@@ -1,3 +1,4 @@
+import type { Span } from '@macro-inc/observability';
 import type { Result } from 'neverthrow';
 import type { ShareEvent } from '../core/delivery-plan';
 import type {
@@ -19,16 +20,20 @@ export type SentMessage = {
 
 export type DeliveryError = { readonly kind: 'failed' };
 
+/** Each call's requests join the span it is given. */
 export type ShareDeliveryContext = {
   readonly resolvePeopleChannel: (
-    userIds: readonly string[]
+    userIds: readonly string[],
+    span: Span
   ) => Promise<Result<string, DeliveryError>>;
   readonly send: (
-    message: OutgoingMessage
+    message: OutgoingMessage,
+    span: Span
   ) => Promise<Result<SentMessage, DeliveryError>>;
   readonly changeChannelAccess: (
     item: ShareItemRef,
-    change: ChannelAccessChange
+    change: ChannelAccessChange,
+    span: Span
   ) => Promise<Result<void, ChannelAccessError>>;
   readonly track: (event: ShareEvent) => void;
 };

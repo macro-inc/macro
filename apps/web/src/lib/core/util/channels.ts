@@ -4,6 +4,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { invalidateContacts } from '@core/user/contactService';
+import type { Span } from '@macro-inc/observability';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
@@ -23,6 +24,8 @@ type SendContent = {
   attachments?: NewAttachment[];
   /** Reuse one id across retries of the same message, so the server stores one copy. */
   messageId?: string;
+  /** The span the channel lookup and the post join. */
+  trace?: Pick<Span, 'run'>;
 };
 
 type NavigationOptions = {
@@ -65,6 +68,7 @@ export function useSendMessageToPeople() {
         },
         senderId,
         optimisticId: args.messageId ?? newMessageId(),
+        trace: args.trace,
       })
       .catch(() => undefined);
     if (!sent) return;
@@ -95,16 +99,19 @@ export function useSendMessageToPeople() {
   }
 
   async function resolvePeopleChannel(
-    users: readonly string[]
+    users: readonly string[],
+    trace?: Pick<Span, 'run'>
   ): Promise<string | undefined> {
     try {
       const result =
         users.length === 1
           ? await getOrCreateDmMutation.mutateAsync({
               recipient_id: users[0],
+              trace,
             })
           : await getOrCreatePrivateChannelMutation.mutateAsync({
               recipients: [...users],
+              trace,
             });
       return result.channel_id;
     } catch (err) {
@@ -115,7 +122,7 @@ export function useSendMessageToPeople() {
   }
 
   async function sendToUsers(args: SendToUsersArgs) {
-    const channelId = await resolvePeopleChannel(args.users);
+    const channelId = await resolvePeopleChannel(args.users, args.trace);
     if (channelId === undefined) return;
     return sendAndNavigateToChannel(channelId, args);
   }

@@ -66,6 +66,18 @@ it.each([
   }
 );
 
+it('hands the caller span to the channel lookup and the post', async () => {
+  const trace = { run: <T>(operation: () => T) => operation() };
+  const { resolvePeopleChannel, sendToUsers } = useSendMessageToPeople();
+
+  await resolvePeopleChannel(['recipient', 'other'], trace);
+  await sendToUsers({ users: ['recipient'], content: '', mentions: [], trace });
+
+  expect(mocks.group.mock.calls[0][0].trace).toBe(trace);
+  expect(mocks.direct.mock.calls[0][0].trace).toBe(trace);
+  expect(mocks.send.mock.calls[0][0].trace).toBe(trace);
+});
+
 it('resolves a failed lookup to nothing and posts nothing', async () => {
   const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
   onTestFinished(() => logError.mockRestore());
