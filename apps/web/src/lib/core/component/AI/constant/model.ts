@@ -58,6 +58,9 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
 /** Default model for paid users. */
 export const DEFAULT_MODEL: TModel = Model.sonnet55;
 
+/** Default model for routines: the highest Opus model for best results. */
+export const ROUTINE_DEFAULT_MODEL: TModel = Model.opus55;
+
 /**
  * Default model for free users. Free users aren't entitled to the premium
  * models (which the backend rejects with a 403), so they start on Gemini Flash.

@@ -1,7 +1,7 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import { ROUTINE_DEFAULT_MODEL } from '@core/component/AI/constant';
 import {
   clearRoutineComposerDraft,
   loadRoutineComposerDraft,
@@ -23,7 +23,7 @@ export function RoutineCreator(
   return (
     <RoutineCreatorView
       source={source}
-      defaultModel={DEFAULT_MODEL}
+      defaultModel={ROUTINE_DEFAULT_MODEL}
       storage={{
         load: loadRoutineComposerDraft,
         save: saveRoutineComposerDraft,
