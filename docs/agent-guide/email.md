@@ -15,9 +15,16 @@ Unlike Calls, it lists only personal tags; team-shared tags are hidden,
 and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
-`Archived` / `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
+`Archived` / `All`, plus `Reminders` when reminders are enabled. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
-connected account. Search is `Ctrl+F` within the surface.
+connected account. Search is `Ctrl+F` or `/` within the surface.
+
+Mail-client keys work in the list and the open thread while Email is focused:
+`c` new email, `s` star, `z` undo the last action, and `g` then a letter for a
+tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e` Archived,
+`h` Reminders, `a` All). These letters replace the app-wide `g` targets only
+inside Email (`g t` is still Tasks elsewhere). `Escape` in a list with nothing
+selected returns to Signal. `?` lists every shortcut for the focused view.
 
 Sender names use each message's `From` display name, falling back to the
 address-book name when it is absent. Multiple people or bots sending through

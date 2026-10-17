@@ -8,6 +8,7 @@ import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
@@ -54,6 +55,8 @@ type UseEntityActionHotkeysOptions = {
   enableDeleteHotkey?: boolean;
   /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  /** Keys that star the selection. Email adds `s`, as mail clients do. */
+  favoriteHotkeys?: ValidHotkey[];
 };
 
 export const useEntityActionHotkeys = (
@@ -360,7 +363,7 @@ export const useEntityActionHotkeys = (
 
   // Favorite - 'opt+f' (macOS emits 'ƒ'; normalizeEventKeyPress maps it back to 'f')
   registerHotkey({
-    hotkey: ['opt+f'],
+    hotkey: options.favoriteHotkeys ?? ['opt+f'],
     hotkeyToken: TOKENS.entity.action.favorite,
     scopeId,
     description: () => {

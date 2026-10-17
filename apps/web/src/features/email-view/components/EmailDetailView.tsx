@@ -174,6 +174,7 @@ export function EmailDetailView(props: {
     onEmailReminderSaved: async () => {
       await listNavigation.afterReminderSaved?.();
     },
+    favoriteHotkeys: ['s', 'opt+f'],
   });
 
   let container: HTMLDivElement | undefined;

@@ -275,6 +275,7 @@ export function EmailList(props: EmailListProps) {
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
     condition: panel.isPanelActive,
+    favoriteHotkeys: ['s', 'opt+f'],
   });
 
   useEmailListHotkeys({

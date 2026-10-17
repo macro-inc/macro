@@ -1004,6 +1004,26 @@ const shortcutSections: ShortcutSection[] = [
       },
     ],
   },
+  {
+    title: 'Email',
+    items: [
+      { keys: ['c'], codes: ['KeyC'], description: 'New email' },
+      { keys: ['/'], codes: ['Slash'], description: 'Search email' },
+      { keys: ['s'], codes: ['KeyS'], description: 'Star or unstar' },
+      { keys: ['z'], codes: ['KeyZ'], description: 'Undo the last action' },
+      {
+        keys: ['escape'],
+        codes: ['Escape'],
+        description: 'Back to the list, then to Signal',
+      },
+      {
+        keys: ['g'],
+        codes: ['KeyG'],
+        description:
+          'Then i Signal, o Noise, s Favorites, t Sent, d Drafts, e Archived, h Reminders, a All',
+      },
+    ],
+  },
 ];
 
 const [hoveredCodes, setHoveredCodes] = createSignal<string[]>([]);
