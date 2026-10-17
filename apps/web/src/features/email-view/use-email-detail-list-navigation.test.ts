@@ -45,6 +45,25 @@ function setup(ids: string[], current = 'b') {
   });
   return { navigation, setRows, setHasMore, setThreadId };
 }
+describe('thread navigation after the open thread leaves the list', () => {
+  it('keeps next and previous on its former neighbours', async () => {
+    const { navigation, setRows } = setup(['a', 'b', 'c']);
+    // Replying in Signal marks the thread done, which removes its row.
+    setRows(['a', 'c']);
+    expect(navigation.canNext()).toBe(true);
+    expect(navigation.canPrevious()).toBe(true);
+    await navigation.navigate(1);
+    expect(mocks.open).toHaveBeenLastCalledWith({ id: 'c', fallbackName: 'c' });
+    await navigation.navigate(-1);
+    expect(mocks.open).toHaveBeenLastCalledWith({ id: 'a', fallbackName: 'a' });
+  });
+  it('has no previous when the removed thread was first', () => {
+    const { navigation, setRows } = setup(['a', 'b', 'c'], 'a');
+    setRows(['b', 'c']);
+    expect(navigation.canPrevious()).toBe(false);
+    expect(navigation.canNext()).toBe(true);
+  });
+});
 describe('email reminder navigation', () => {
   it('advances after the server event removes the saved row', async () => {
     const { navigation, setRows } = setup(['a', 'b', 'c']);
