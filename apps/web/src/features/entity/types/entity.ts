@@ -302,6 +302,8 @@ export type EmailEntity = EntityBase & {
   linkId?: string;
   labels?: SoupLabel[] | ApiLabel[];
   hasIcsAttachment?: boolean;
+  /** A sent file, not an inline image or calendar invite, is on the thread. */
+  hasFileAttachment?: boolean;
   attachments?: EmailAttachment[];
   properties?: SoupProperty[];
   /** ISO 8601 time of the thread draft's confirmed scheduled send. */

@@ -1,4 +1,5 @@
 import type { DateValue } from '@core/util/date';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import { Show } from 'solid-js';
 import { ScheduledBadge } from '../components/Badges';
 import { type EntityData, isEmailEntity } from '../types/entity';
@@ -19,9 +20,23 @@ export function EntityTimestamp(props: {
     !props.overrideTimeStamp && isEmailEntity(props.entity)
       ? props.entity.scheduledSendTime
       : undefined;
-  return (
+  const hasFileAttachment = () =>
+    isEmailEntity(props.entity) && props.entity.hasFileAttachment === true;
+  const stamp = () => (
     <Show when={scheduledSendTime()} fallback={formatTimestamp(timestamp())}>
       {(sendTime) => <ScheduledBadge sendTime={sendTime()} />}
+    </Show>
+  );
+  return (
+    <Show when={hasFileAttachment()} fallback={stamp()}>
+      <span class="flex items-center gap-1 whitespace-nowrap">
+        <PaperclipIcon
+          class="size-3.5 shrink-0"
+          role="img"
+          aria-label="Has attachments"
+        />
+        {stamp()}
+      </span>
     </Show>
   );
 }

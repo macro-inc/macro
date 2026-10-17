@@ -44,6 +44,11 @@ Rows offer **Unarchive email**;
 unarchiving removes the row at once. The tab persists across reloads. An empty
 list shows `No archived email`.
 
+A thread carrying a sent file shows a muted paperclip immediately before its
+date, in every list layout. Inline images (an image with a Content-ID, such as
+a signature logo) and calendar invites do not count; invites keep their own row
+icon. Search-service results carry no attachments, so they never show it.
+
 On desktop, a favorited email keeps a filled, muted star just before its
 timestamp. Other rows reserve only that small star slot. Hovering reveals
 **Star email** (Macro favorites), **Archive email** (Mark Done, with Undo), and
