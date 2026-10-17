@@ -699,6 +699,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   hidden={sendActionHidden()}
                   onClick={() => sendEmail()}
                   tooltip={sendUnavailableReason() ?? scheduleActionLabel()}
+                  shortcut={sendUnavailableReason() ? undefined : 'cmd+enter'}
                   aria-label={scheduleActionLabel()}
                 />
               </div>
