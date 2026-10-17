@@ -1,3 +1,4 @@
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, type JSX, Suspense } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 
@@ -11,6 +12,8 @@ export function ListViewport<T>(props: {
   children: (item: T) => JSX.Element;
 }) {
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  const [inset, setInset] = createSignal<HTMLDivElement>();
+  const insetSize = createElementSize(inset);
   return (
     <div
       ref={(element) => {
@@ -19,9 +22,15 @@ export function ListViewport<T>(props: {
       }}
       class="min-h-0 flex-1 overflow-auto overscroll-none"
     >
+      <div
+        ref={setInset}
+        aria-hidden
+        class="h-0 touch:h-[var(--list-content-inset-top,0px)]"
+      />
       <Suspense>
         <Virtualizer
           ref={props.ref}
+          startMargin={insetSize.height ?? 0}
           data={props.items}
           scrollRef={viewport()}
           bufferSize={240}
@@ -34,6 +43,10 @@ export function ListViewport<T>(props: {
           {(row) => <div>{props.children(row)}</div>}
         </Virtualizer>
       </Suspense>
+      <div
+        aria-hidden
+        class="h-0 touch:h-[var(--list-content-inset-bottom,0px)]"
+      />
     </div>
   );
 }

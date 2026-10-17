@@ -358,8 +358,12 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
               <ViewShell.Main class="overflow-hidden">
                 <ViewTour tour={agentsTour} />
                 <main
-                  class="main touch:pt-[calc(var(--safe-top,0px)+0.5rem)]"
-                  classList={{ hidden: isTouchDevice() && mobileList() }}
+                  class="main"
+                  classList={{
+                    hidden: isTouchDevice() && mobileList(),
+                    'touch:pt-[calc(var(--safe-top,0px)+0.5rem)]':
+                      page() !== 'routines',
+                  }}
                 >
                   <Show
                     when={selected()?.conversation}

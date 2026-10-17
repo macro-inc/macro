@@ -304,7 +304,10 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
     });
   };
   return (
-    <div ref={setListElement} class="min-h-0 flex-1 overflow-y-auto py-3">
+    <div
+      ref={setListElement}
+      class="min-h-0 flex-1 overflow-y-auto py-3 touch:pt-[calc(var(--mobile-detail-inset-top,0px)+0.75rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]"
+    >
       <Show
         when={props.records.length > 0}
         fallback={

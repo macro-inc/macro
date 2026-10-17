@@ -100,7 +100,7 @@ export function ProjectWorkspace(props: {
         <div class="min-h-0 flex-1">
           <Switch>
             <Match when={props.section === 'overview'}>
-              <div class="h-full overflow-y-auto px-6 pb-8 pt-12 touch:pt-6">
+              <div class="h-full overflow-y-auto px-6 pb-8 pt-12 touch:px-5 touch:pt-[calc(var(--mobile-detail-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+2rem)]">
                 <div class="mx-auto max-w-3xl">
                   <Show
                     when={canEdit()}

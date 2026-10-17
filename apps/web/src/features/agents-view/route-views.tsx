@@ -134,7 +134,7 @@ export const AgentsRouteView = withAuth(() => {
                     })()}
                     fallback={<LegacyAgentsView />}
                   >
-                    <div class="size-full overflow-auto touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                    <div class="size-full overflow-hidden">
                       <RoutinesPage />
                     </div>
                   </Show>

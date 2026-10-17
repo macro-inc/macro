@@ -10,6 +10,7 @@ import {
   DiffView,
   StatusLetter,
 } from '@app/components/diff-view';
+import { MobileDetailFrame } from '@components/app/mobile/MobileDetailFrame';
 import { Resize } from '@core/component/Resize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import * as Dialog from '@kobalte/core/dialog';
@@ -126,7 +127,7 @@ function ChangesControls(props: { narrow: boolean; drawerOpen: boolean }) {
   const treeVisible = () => !props.narrow && layout.treeOpen();
   return (
     <div
-      class="flex min-w-0 shrink-0 items-center gap-1 px-3 pt-2"
+      class="flex min-w-0 shrink-0 items-center gap-1 px-3 pt-2 touch:absolute touch:inset-x-(--mobile-chrome-gutter) touch:top-(--mobile-detail-inset-top) touch:z-10 touch:h-10 touch:rounded-xl touch:glass touch:pt-0"
       role="group"
       aria-label="Diff controls"
     >
@@ -172,7 +173,7 @@ function ChangesTreeHeader(props: { narrow: boolean; onClose: () => void }) {
   const { model, layout } = useChanges();
   return (
     <div
-      class="flex min-w-0 shrink-0 items-center justify-between gap-1 px-3 pt-2 pb-1"
+      class="flex min-w-0 shrink-0 items-center justify-between gap-1 px-3 pt-2 pb-1 touch:pt-[calc(var(--mobile-detail-inset-top,0px)+0.5rem)]"
       role="group"
       aria-label="File tree controls"
     >
@@ -253,7 +254,7 @@ function ChangesBodyContent(props: {
       aria-hidden={!(treeVisible() || (props.narrow() && props.drawerOpen()))}
     >
       <ChangesTreeHeader narrow={props.narrow()} onClose={props.closeDrawer} />
-      <div class="min-h-0 flex-1 overflow-y-auto p-2 pt-1">
+      <div class="min-h-0 flex-1 overflow-y-auto p-2 pt-1 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]">
         <FileTree.Root
           aria-label="Changed files"
           items={model.files()}
@@ -299,7 +300,7 @@ function ChangesBodyContent(props: {
     )
   );
   return (
-    <Panel.Body class="relative flex flex-col">
+    <Panel.Body class="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={props.body}
         class="relative flex size-full min-h-0 min-w-0 flex-col"
@@ -386,6 +387,8 @@ function ChangesBodyContent(props: {
                   </Match>
                   <Match when={model.patch() !== undefined}>
                     <DiffView.Stack
+                      contentClass="touch:pt-[calc(var(--mobile-detail-inset-top,0px)+3rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]"
+                      fileClass="touch:scroll-mt-[calc(var(--mobile-detail-inset-top,0px)+3rem)]"
                       header={(entry) => (
                         <>
                           <DiffView.CollapseButton />
@@ -437,7 +440,7 @@ function ChangesNotices() {
     return current ? describeRange(current) : undefined;
   };
   return (
-    <Panel.Body class="flex flex-col">
+    <Panel.Body class="flex min-h-0 flex-1 flex-col touch:pt-(--mobile-detail-inset-top) touch:pb-(--mobile-content-inset-bottom)">
       <CaptureBanners />
       <Switch>
         <Match when={state().kind === 'loading'}>
@@ -534,35 +537,40 @@ export function ChangesPane(props: { fullWidth?: boolean }) {
     >
       <Panel
         hideBorder
-        class="rounded-none @container/changes-pane"
+        class="flex flex-col rounded-none @container/changes-pane"
         role="region"
         aria-label="Changes"
       >
-        <Panel.Header class="gap-1 py-1">
-          <div
-            class="flex min-w-0 flex-1 items-center gap-1"
-            role="group"
-            aria-label="Changes controls"
-          >
-            <ChangesHeader
-              mobile={isTouchDevice()}
-              spotlit={!!props.fullWidth || layout.layout() === 'full'}
-              range={range()}
-              pullRequestUrl={context.host.pullRequestUrl()}
-              pullRequestTitle={context.host.pullRequestTitle?.()}
-              changeCounts={changeCounts()}
-              onViewPullRequest={() => {
-                const url = context.host.pullRequestUrl();
-                if (url) context.host.openExternal(url);
-              }}
-              onSpotlight={props.fullWidth ? undefined : layout.spotlight}
-              onClose={layout.close}
-            />
-          </div>
-        </Panel.Header>
-        <Show when={showsFiles()} fallback={<ChangesNotices />}>
-          <ChangesBody />
-        </Show>
+        <MobileDetailFrame
+          header={
+            <div class="flex min-h-10 items-center gap-1 px-2 py-1 not-touch:border-b not-touch:border-edge-divider">
+              <div
+                class="flex min-w-0 flex-1 items-center gap-1"
+                role="group"
+                aria-label="Changes controls"
+              >
+                <ChangesHeader
+                  mobile={isTouchDevice()}
+                  spotlit={!!props.fullWidth || layout.layout() === 'full'}
+                  range={range()}
+                  pullRequestUrl={context.host.pullRequestUrl()}
+                  pullRequestTitle={context.host.pullRequestTitle?.()}
+                  changeCounts={changeCounts()}
+                  onViewPullRequest={() => {
+                    const url = context.host.pullRequestUrl();
+                    if (url) context.host.openExternal(url);
+                  }}
+                  onSpotlight={props.fullWidth ? undefined : layout.spotlight}
+                  onClose={layout.close}
+                />
+              </div>
+            </div>
+          }
+        >
+          <Show when={showsFiles()} fallback={<ChangesNotices />}>
+            <ChangesBody />
+          </Show>
+        </MobileDetailFrame>
       </Panel>
     </DiffView.Root>
   );

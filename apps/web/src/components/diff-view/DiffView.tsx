@@ -132,6 +132,9 @@ type DiffListProps = {
    * It targets Pierre's internal markup, so it can break on an upgrade.
    */
   unsafeCSS?: string;
+  /** Insets inside the scroll surface, supplied by the hosting chrome. */
+  contentClass?: string;
+  fileClass?: string;
   class?: string;
 };
 
@@ -268,7 +271,9 @@ function Stack(props: DiffListProps) {
           Loading the diff…
         </div>
       </Show>
-      <div class="flex min-w-0 flex-col gap-3 p-3 pb-24">
+      <div
+        class={cn('flex min-w-0 flex-col gap-3 p-3 pb-24', props.contentClass)}
+      >
         <For each={view.entries()}>
           {(entry) => {
             const path = () => entry.file.path;
@@ -285,6 +290,7 @@ function Stack(props: DiffListProps) {
                   }
                   class={cn(
                     'shrink-0 scroll-mt-3 overflow-clip transition',
+                    props.fileClass,
                     flashing() === path() &&
                       'border-accent ring-2 ring-selected'
                   )}
