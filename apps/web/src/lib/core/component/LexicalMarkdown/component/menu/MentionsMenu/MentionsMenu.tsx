@@ -87,6 +87,8 @@ type MentionsMenuProps = {
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
   useBlockBoundary?: boolean;
   portalScope?: PortalScope;
+  /** Mounts the menu here instead of by `portalScope`. */
+  portalMount?: HTMLElement;
   block?: BlockName;
   anchor?: HTMLElement | null;
   onUserMention?: (mention: UserMentionRecord) => void;
@@ -691,7 +693,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   return (
     <Show when={menuOpen()}>
-      <ScopedPortal scope={props.portalScope}>
+      <ScopedPortal scope={props.portalScope} mount={props.portalMount}>
         <div
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content"
           classList={{ 'menu-open-animation': props.animate !== false }}

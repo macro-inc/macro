@@ -15,7 +15,7 @@ import {
 // The part before the @: non-empty, no whitespace or a second @.
 const LOCAL_PART_PATTERN = /^[^\s@]+$/;
 
-function createErrorMessage(cause: unknown): string {
+export function contactCreationError(cause: unknown): string {
   if (cause instanceof ThrownResultError) {
     if (cause.errors.some((e) => e.code === 'CONFLICT')) {
       return 'A contact with this email already exists.';
@@ -146,7 +146,7 @@ export function CreateContactModal(props: {
       props.onCreated(id);
     } catch (cause) {
       console.error('Failed to create contact', cause);
-      setError(createErrorMessage(cause));
+      setError(contactCreationError(cause));
     }
   }
 

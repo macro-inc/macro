@@ -711,6 +711,63 @@ describe('database board', () => {
     );
   });
 
+  it("hands a lane's new record to the host's form instead of an inline card", () => {
+    const status: DatabaseViewColumn = {
+      id: 'status',
+      name: 'Status',
+      dataType: 'SELECT_STRING',
+      isMultiSelect: false,
+      options: [{ id: 'todo', label: 'To do', color: null }],
+      writable: true,
+    };
+    const onCreate = vi.fn(async () => true);
+    const onCompose = vi.fn();
+    render(() => (
+      <DatabaseBoard
+        rows={[]}
+        columns={[
+          {
+            id: 'title',
+            name: 'Name',
+            dataType: 'STRING',
+            isMultiSelect: false,
+            options: [],
+            writable: true,
+          },
+          status,
+        ]}
+        board={{
+          lanes: [
+            { key: { kind: 'option', id: 'todo' }, hidden: false, cards: [] },
+          ],
+        }}
+        layout={{
+          kind: 'board',
+          groupBy: 'status',
+          title: 'title',
+          lanes: [],
+          cardFields: [],
+          hideEmptyLanes: false,
+        }}
+        groupColumn={status}
+        canEdit
+        rowPending={() => false}
+        onOpen={vi.fn()}
+        onMove={vi.fn()}
+        onCreate={onCreate}
+        onCompose={onCompose}
+      />
+    ));
+    const lane = boardLane('To do lane');
+    fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
+    expect(onCompose).toHaveBeenCalledExactlyOnceWith({
+      kind: 'option',
+      id: 'todo',
+    });
+    expect(within(lane).queryByRole('textbox')).toBeNull();
+    expect(onCreate).not.toHaveBeenCalled();
+  });
+
   it("moves a card from its Move menu into the chosen lane's option", async () => {
     const status: DatabaseViewColumn = {
       id: 'status',

@@ -63,7 +63,10 @@ import {
 import { createColumnLayout } from '../primitives/column-layout';
 import { createDraftRows } from '../primitives/draft-rows';
 import { createHeldGridRows } from '../primitives/held-grid-rows';
-import { createRecordActions } from '../primitives/record-actions';
+import {
+  createRecordActions,
+  type RecordCreation,
+} from '../primitives/record-actions';
 import { createTableController } from '../primitives/table-controller';
 import { type BoardPositions, DatabaseBoardView } from './database-board-view';
 import { DatabaseTableView } from './database-table-view';
@@ -71,6 +74,8 @@ import { DatabaseTableView } from './database-table-view';
 /** What the toolbar and the block can ask of the records on screen. */
 export type DatabaseRecordsActions = {
   createRecord: () => Promise<boolean>;
+  /** Saves a record with its values set; resolves whether it was saved. */
+  createRow: (creation: RecordCreation) => Promise<boolean>;
   focusFirstCell: () => Promise<void>;
   focusColumn: (columnId: string) => boolean;
   openRecord: (rowId: string) => void;
@@ -110,6 +115,8 @@ export type DatabaseRecordsViewProps = {
   onClearConstraints?: () => void;
   /** A board's card places. */
   boardPositions?: BoardPositions;
+  /** Starts a record in the host's own form in place of a board's inline card, with its lane's values. */
+  onComposeRecord?: (values: Record<string, DatabaseCellValue>) => void;
   renderTextEditor?: GridCellProps['renderTextEditor'];
   renderTextValue?: GridCellProps['renderTextValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
@@ -228,6 +235,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
       layoutKind() === 'table'
         ? records.focusBlankRow()
         : boardControls?.addCard() || records.createRow({ open: true }),
+    createRow: records.createRow,
     focusFirstCell: records.focusFirstCell,
     focusColumn,
     // A grid just mounted for a record from elsewhere has no rows to find it in yet.
@@ -483,6 +491,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               createComplete={controller.createComplete}
               onOpen={records.open}
               onCreate={records.createRow}
+              onCompose={props.onComposeRecord}
               controlsRef={(controls) => {
                 boardControls = controls;
               }}

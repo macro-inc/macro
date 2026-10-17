@@ -57,6 +57,10 @@ to the host's API/service; UI capabilities only determine which controls appear.
 props supply persisted board positions, conversion previews, relationships,
 presence, and stored-view changes. Omit an unsupported action. A board can render
 without a position writer; it cannot offer card moves that pretend to persist.
+`onComposeRecord` replaces a board lane's inline card with the host's own form,
+seeded with the lane's values; the form creates its row with the actions'
+`createRow`. A `GridCell` rendered inside a modal dialog takes `popupMount` so
+its menus stay inside the dialog, which blocks the page around it.
 View preferences in the example are local; hosts that save views pass their own
 view state and authorized persistence callback. Shared filter, sort, toolbar and
 view components are in `components/`.

@@ -38,6 +38,7 @@ import {
 } from '../core/board-moves';
 import type { DatabaseEntityType } from '../core/column-inference';
 import {
+  type DatabaseCellValue,
   type DatabaseViewColumn,
   isBoardGroupColumn,
   isOptionColumn,
@@ -84,6 +85,7 @@ type DatabaseBoardViewProps = {
   createComplete: (intentId: string) => boolean;
   onOpen: (rowId: string) => void;
   onCreate: (creation: RecordCreation) => Promise<boolean>;
+  onCompose?: (values: Record<string, DatabaseCellValue>) => void;
   /** Adds an option to the group column; absent for viewers. */
   onAddGroup?: (
     columnId: string,
@@ -291,15 +293,18 @@ function GroupedBoard(
     );
     if (move) write(move);
   }
+  const laneValues = (lane: LaneKey) => {
+    const value = laneValue(props.groupColumn, lane);
+    return value === undefined ? {} : { [props.groupColumn.id]: value };
+  };
   function create(
     lane: LaneKey,
     title: string,
     intentId: string,
     options?: { open: true }
   ) {
-    const value = laneValue(props.groupColumn, lane);
     return props.onCreate({
-      values: value === undefined ? {} : { [props.groupColumn.id]: value },
+      values: laneValues(lane),
       title,
       titleColumn: props.layout.title,
       intentId,
@@ -356,6 +361,11 @@ function GroupedBoard(
                   : undefined
               }
               onCreate={create}
+              onCompose={
+                props.onCompose
+                  ? (lane) => props.onCompose?.(laneValues(lane))
+                  : undefined
+              }
               onAddGroup={addGroup()}
               controlsRef={props.controlsRef}
             />

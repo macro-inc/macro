@@ -78,3 +78,6 @@ export const useResetCrmStagesMutation = (
 export const useQuickAccessCrmCompaniesQuery = (
   ...args: Parameters<CrmContext['createCompanySuggestions']>
 ) => useCrmContext().createCompanySuggestions(...args);
+export const useQuickAccessCrmContactsQuery = (
+  ...args: Parameters<CrmContext['createContactSuggestions']>
+) => useCrmContext().createContactSuggestions(...args);

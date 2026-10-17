@@ -81,6 +81,7 @@ import {
   useResetCrmStagesMutation,
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
+import { useQuickAccessCrmContactsQuery } from './record-adapter';
 import { createAppDealStages } from './stage-adapter';
 
 // Loaded on demand: the Tasks list imports soup, which imports CRM entry points.
@@ -224,6 +225,7 @@ export function createAppCrmContext(): CrmContext {
     exportCompanies: (...args) =>
       fetchCrmExportCompanies(deps.storage, ...args),
     createCompanySuggestions: useQuickAccessCrmCompaniesQuery,
+    createContactSuggestions: useQuickAccessCrmContactsQuery,
     hydrateCompany(company) {
       if (company.properties) return company;
       const cached = getSoupEntityById(company.id);

@@ -108,6 +108,10 @@ export type CrmContext = {
     >;
     query: { readonly isLoading: boolean };
   };
+  createContactSuggestions(): {
+    contacts: Accessor<{ id: string; name: string; email: string }[]>;
+    query: { readonly isLoading: boolean };
+  };
   exportCompanies(
     signal: AbortSignal,
     progress: (count: number) => void
