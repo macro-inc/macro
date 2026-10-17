@@ -18,6 +18,7 @@ import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debouncedDependent } from '@core/util/debounce';
 import {
@@ -156,6 +157,12 @@ export function EmailList(props: EmailListProps) {
   const topSpacerSize = createElementSize(topSpacer);
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
+  // Coming back from a thread remounts the list with focus on the page; the
+  // list takes it so its keys and screen-reader cursor work.
+  createSplitAutofocus({
+    element: () => grid() ?? null,
+    enabled: () => panel.isPanelActive() && !isTouchDevice(),
+  });
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [isPullRefreshing, setIsPullRefreshing] = createSignal(false);
   const forceEmptyState = useDebugSetting(
