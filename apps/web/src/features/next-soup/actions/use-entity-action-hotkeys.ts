@@ -180,7 +180,10 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.markDone,
     scopeId,
     description: 'Mark done',
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      // A held key auto-repeats; each repeat would archive the next row under
+      // the cursor and refetch the list, so one press marks one selection.
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markDone.canExecute)) return false;
@@ -209,7 +212,8 @@ export const useEntityActionHotkeys = (
     hotkeyToken: TOKENS.entity.action.markNotDone,
     scopeId,
     description: 'Mark as not done',
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(markNotDone.canExecute)) return false;
@@ -283,7 +287,8 @@ export const useEntityActionHotkeys = (
       const count = getEntitiesForAction().length;
       return count > 1 ? 'Delete items' : 'Delete item';
     };
-    const runDelete = () => {
+    const runDelete = (event?: KeyboardEvent) => {
+      if (event?.repeat) return true;
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!entities.every(deleteAction.canExecute)) return false;

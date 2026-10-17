@@ -54,6 +54,10 @@ vi.mock('@core/component/Toast/Toast', () => ({ toast: mocks.toast }));
 vi.mock('./graphql-done-optimism', () => ({
   applyGraphqlDoneOptimistic: mocks.apply,
 }));
+// No normalized cache here: a no-op entity write rolls its hide back.
+vi.mock('@queries/notification/state-cache', () => ({
+  confirmEntityNotificationsDone: () => false,
+}));
 vi.mock('@queries/notification/entity-mutations', () => ({
   toNotificationEntityRef: (entity: EntityData) => ({
     type: entity.type,

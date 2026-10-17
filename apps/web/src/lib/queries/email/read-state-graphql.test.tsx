@@ -5,6 +5,7 @@ import { mountEmailMutation } from './tests/mutation';
 
 const mocks = vi.hoisted(() => ({
   graphqlEnabled: true,
+  cacheEnabled: true,
   markSeen: vi.fn(),
   updateLabel: vi.fn(),
   getLabels: vi.fn(),
@@ -54,6 +55,7 @@ vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ mutation: mocks.graphqlMutation }),
+  graphqlCacheEnabled: () => mocks.cacheEnabled,
 }));
 
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
@@ -89,6 +91,7 @@ function hasReadPatch(value: unknown, isRead: boolean): boolean {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.graphqlEnabled = true;
+  mocks.cacheEnabled = true;
   mocks.legacyPatch.mockReturnValue({ rollback: vi.fn() });
   mocks.refresh.mockResolvedValue(undefined);
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -207,7 +210,8 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
-      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
+      // The cached record carries the change to every list.
+      expect(mocks.refresh).not.toHaveBeenCalled();
     }
   );
 
@@ -272,16 +276,40 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
+      expect(mocks.refresh).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([useMarkThreadAsSeenMutation, useMarkThreadAsUnreadMutation])(
+    'refreshes lists only without the normalized cache',
+    async (useMutation) => {
+      mocks.cacheEnabled = false;
+      mocks.graphqlMutation.mockReturnValue({
+        toPromise: async () => ({
+          data: {
+            markEmailThreadSeen: { id: 'thread', isRead: true },
+            markEmailThreadUnread: { id: 'thread', isRead: false },
+          },
+        }),
+      });
+      const mutation = mountEmailMutation(useMutation, client);
+      await mutation.mutateAsync({ threadId: 'thread' });
       expect(mocks.refresh).toHaveBeenCalledOnce();
     }
   );
 
   it.each([useMarkThreadAsSeenMutation, useMarkThreadAsUnreadMutation])(
-    'queues membership revalidation without refetching over offline optimism',
+    'queues an offline write that reads only unmaintained lists on replay',
     async (useMutation) => {
       const variables = { input: { initial: { limit: 50 } } };
-      const unregister = registerGraphqlSoupRevalidations(() => [
-        { document: SoupDocument, variables },
+      const grouped = { input: { initial: { limit: 20 } } };
+      const unregisterMaintained = registerGraphqlSoupRevalidations(
+        () => [{ document: SoupDocument, variables }],
+        undefined,
+        () => true
+      );
+      const unregisterGrouped = registerGraphqlSoupRevalidations(() => [
+        { document: SoupDocument, variables: grouped },
       ]);
       mocks.graphqlMutation.mockReturnValue({
         toPromise: async () => ({
@@ -296,19 +324,17 @@ describe('email read state with GraphQL Soup', () => {
       try {
         const mutation = mountEmailMutation(useMutation, client);
         await mutation.mutateAsync({ threadId: 'thread' });
+        // Replay commits the record, which the maintained list reads; only
+        // the list the cache cannot keep current is read again.
         expect(
           mocks.graphqlMutation.mock.calls[0][2].optimisticMutation
             .revalidations
-        ).toEqual([
-          {
-            document: SoupDocument,
-            variables,
-          },
-        ]);
+        ).toEqual([{ document: SoupDocument, variables: grouped }]);
         expect(mocks.refresh).not.toHaveBeenCalled();
         expect(mocks.markSeen).not.toHaveBeenCalled();
       } finally {
-        unregister();
+        unregisterMaintained();
+        unregisterGrouped();
       }
     }
   );

@@ -12,6 +12,7 @@ import { createChannelUnreadQuery } from './unread-presence';
 const clientMock = vi.hoisted(() => vi.fn());
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: clientMock,
+  hasGraphqlCacheHost: () => false,
 }));
 
 function setup() {

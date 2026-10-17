@@ -16,6 +16,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupClient,
+  hasGraphqlCacheHost,
   mapGraphqlNotification,
 } from '@service-storage/graphql-soup';
 import { executeGraphqlUpdateNotifications } from '@service-storage/graphql-update-notifications';
@@ -121,6 +122,8 @@ export function createGraphqlNotificationsQuery(
     registerNotificationReader({
       client: getGraphqlSoupClient,
       isEnabled: () => query.isEnabled,
+      // Rows render each notification's cached state.
+      cacheMaintained: hasGraphqlCacheHost,
       refresh: () =>
         query.refetch({ requestPolicy: 'network-only', throwOnError: true }),
     })

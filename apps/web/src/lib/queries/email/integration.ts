@@ -6,7 +6,10 @@ import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
 import { setGraphqlEmailThreadArchived } from '@service-storage/graphql-email-archive-state';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import { invalidateEmailReminderCollection } from '../reminders/email-collection';
 import {
   getActiveGraphqlSoupRevalidations,
@@ -20,8 +23,10 @@ export const scheduleEmailMessage = (
 export type EmailArchiveDisposition = 'committed' | 'queued';
 
 /** Shared archive path for Done, Not Done, send completion, and Undo/Redo.
- * GraphQL owns optimistic state and durable replay; queued writes must not
- * refetch the server's pre-write membership over the optimistic update. */
+ * GraphQL owns optimistic state and durable replay. The optimistic
+ * `inboxVisible` and the committed record update every list the cache
+ * maintains (FE-56); only the others, such as grouped lists, are read again
+ * when the write commits, including on a replay after reload. */
 export async function archiveEmailThread(
   ...args: Parameters<typeof emailClient.flagArchived>
 ): Promise<EmailArchiveDisposition> {
@@ -31,12 +36,14 @@ export async function archiveEmailThread(
       getGraphqlSoupClient(),
       id,
       value,
-      getActiveGraphqlSoupRevalidations()
+      getActiveGraphqlSoupRevalidations(undefined, { unmaintainedOnly: true })
     );
     if (disposition === 'committed') {
-      await refreshActiveGraphqlSoupQueries({
-        target: { kind: 'email-archive', threadId: id },
-      });
+      if (!graphqlCacheEnabled()) {
+        await refreshActiveGraphqlSoupQueries({
+          target: { kind: 'email-archive', threadId: id },
+        });
+      }
       void invalidateEmailReminderCollection();
     }
     return disposition;

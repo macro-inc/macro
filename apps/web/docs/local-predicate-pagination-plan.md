@@ -44,7 +44,7 @@ After the optimistic fact-index prerequisite is complete, the index has the requ
 
 1. Local predicate cursors are separate from opaque server GraphQL Soup cursors. Neither cursor is translated into the other.
 2. A local page chain is valid only within one cache-engine generation and one exact cache revision.
-3. Any cache revision or engine-generation change discards the complete local continuation chain and reevaluates its initial page. Pages from different revisions are never merged.
+3. Any cache revision or engine-generation change discards the complete local continuation chain and reevaluates it from the first row down to the depth already loaded, so the list keeps its length. Only an input change (filter, sort, limit, view) starts again from the initial page. Pages from different revisions are never merged.
 4. A live network response tagged with the current cache revision replaces the local chain and becomes authoritative again.
 5. Local pagination remains all-or-network. Unsupported compilation, incomplete projections, malformed cursors, storage errors, or query-relevant uncertainty never produce an approximate page.
 6. Cursor pagination uses keyset semantics over `(sort_value, record_key)`, matching the existing ordering exactly.
@@ -153,7 +153,7 @@ type EntityFilterCacheResult =
   | { kind: 'stale-cursor'; revision: CacheRevision };
 ```
 
-A stale cursor is a recoverable control-flow result: clear the local page chain and request its first page at the reported current revision. It is not a user-visible error and must not silently continue from the stale boundary.
+A stale cursor is a recoverable control-flow result: clear the local page chain and reevaluate it at the reported current revision, one page deeper than the chain that was displayed. It is not a user-visible error and must not silently continue from the stale boundary.
 
 ## Keyset semantics
 
@@ -196,7 +196,7 @@ The existing revision-qualified reads provide the required consistency checks:
 
 Continuation requests additionally require that the cursor revision equals the engine's current revision before predicate execution. Because engine commands are serialized, a successful predicate call observes one revision. Record selection is a separate command and retains the existing post-selection revision check.
 
-Do not attempt MVCC snapshots across revisions. Revision change means reset and reevaluate, not continue reading an old snapshot.
+Do not attempt MVCC snapshots across revisions. Revision change means reset and reevaluate at the current depth, not continue reading an old snapshot.
 
 ## Frontend local page state
 
@@ -223,9 +223,10 @@ The exact generation representation should reuse the cache host's replacement li
 Behavior:
 
 - initial local evaluation replaces the entire local chain;
-- local `fetchNextPage` evaluates with the last page's local cursor and appends only after revision checks pass;
+- local `fetchNextPage` evaluates with the last page's local cursor and appends only after revision checks pass; when a cache write has moved the cursor, it re-evaluates the list one page deeper instead;
 - duplicate concurrent next-page calls share or reject behind one in-flight promise;
-- a filter, sort, limit, feature-option, revision, or generation change invalidates the chain;
+- a filter, sort, limit, or feature-option change invalidates the chain and starts again from the initial page;
+- a revision or generation change re-evaluates the chain at the depth already loaded (`mail-depth.ts` follows the index cursor past the per-request limit), so a cache write never collapses a scrolled Mail list to its first page; the `graphql_cache.soup_local_evaluation` span records `evaluation.depth` and `evaluation.depth_requests`;
 - local pages are flattened in order with defensive key deduplication at the page boundary;
 - `hasNextPage` comes from the authoritative chain: local `nextCursor` while local, urql while network;
 - `isFetchingNextPage` combines local and urql fetch state;

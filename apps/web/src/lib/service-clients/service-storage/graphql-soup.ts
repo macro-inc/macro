@@ -68,7 +68,7 @@ import {
   type Client as GraphqlWsClient,
 } from 'graphql-ws';
 import { createSignal } from 'solid-js';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
@@ -80,6 +80,7 @@ import type { SoupProperty } from './generated/schemas/soupProperty';
 import {
   type ChannelListItemFieldsFragment,
   type ChannelListNotificationFieldsFragment,
+  type GraphqlEmailView,
   type GroupedSoupInput,
   type GroupSoupQuery,
   GroupSoupDocument as GroupSoupQueryDocument,
@@ -513,6 +514,10 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
   cacheAvailability();
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
 }
+
+/** Cache writes reach readers of the normalized cache only while it runs. */
+export const hasGraphqlCacheHost = (): boolean =>
+  getGraphqlCacheHost() !== undefined;
 
 /**
  * Resolves the urql client, lazily assembling the cached client on first
@@ -1518,7 +1523,46 @@ function mapGraphqlNotifications(
   return notifications?.map(mapGraphqlNotification);
 }
 
-export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
+function latestTimestamp(
+  ...timestamps: (string | null | undefined)[]
+): string | undefined {
+  return timestamps.reduce<string | undefined>(
+    (latest, timestamp) =>
+      typeof timestamp === 'string' &&
+      (latest === undefined || Date.parse(timestamp) > Date.parse(latest))
+        ? timestamp
+        : latest,
+    undefined
+  );
+}
+
+/** The server's per-view sort key, recomputed from the thread's own facts so a
+ * cache re-read never dates a row by the view that fetched the thread last.
+ * Mirrors `get_sort_timestamp_field` in crates/email; INBOX is the server's
+ * default view. */
+export function emailThreadSortTs(
+  thread: {
+    latestInboundMessageTs?: string | null;
+    reminderReturnedAt?: string | null;
+    latestOutboundMessageTs?: string | null;
+    latestNonSpamMessageTs?: string | null;
+    updatedAt: string;
+  },
+  emailView: GraphqlEmailView | null | undefined
+): string {
+  const key = match(emailView)
+    .with('SENT', () => thread.latestOutboundMessageTs)
+    .with('INBOX', P.nullish, () =>
+      latestTimestamp(thread.latestInboundMessageTs, thread.reminderReturnedAt)
+    )
+    .otherwise(() => thread.latestNonSpamMessageTs);
+  return key ?? thread.updatedAt;
+}
+
+export function mapGraphqlSoupItem(
+  item: GraphqlSoupItem,
+  options?: { emailView?: GraphqlEmailView | null }
+): SoupApiItem | null {
   // Rows are read by the database SQL engine, never listed as Soup items.
   if (item.__typename === 'GraphqlSoupDatabaseRow') return null;
 
@@ -1666,7 +1710,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             isImportant: entity.isImportant,
             isSignal: entity.isSignal,
             projectId: entity.projectId ?? undefined,
-            sortTs: entity.sortTs,
+            sortTs: emailThreadSortTs(entity, options?.emailView),
             createdAt: entity.createdAt,
             updatedAt: entity.updatedAt,
             viewedAt: entity.viewedAt ?? undefined,
@@ -1943,7 +1987,7 @@ type GraphqlSoupPageData = {
 export function mapGraphqlSoupPage(data: GraphqlSoupPageData): SoupPage {
   return {
     items: data.user.soup.items
-      .map(mapGraphqlSoupItem)
+      .map((item) => mapGraphqlSoupItem(item))
       .filter((item): item is SoupApiItem => item !== null),
     next_cursor: data.user.soup.nextCursor ?? undefined,
   };

@@ -69,6 +69,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
   },
 }));
 
+// No normalized cache here: a no-op entity write rolls its hide back.
+vi.mock('@queries/notification/state-cache', () => ({
+  confirmEntityNotificationsDone: () => false,
+}));
 vi.mock('@queries/notification/entity-mutations', () => ({
   toNotificationEntityRef: mocks.toNotificationEntityRef,
   updateNotificationsForEntities: vi.fn(),

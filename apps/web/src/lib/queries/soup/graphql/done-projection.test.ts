@@ -65,6 +65,24 @@ it('acknowledges raw fields, not the optimistic fields it just projected', () =>
   expect(done.observe).toHaveBeenLastCalledWith(expect.any(Object), true);
 });
 
+it('keeps a done email hidden while an excludes-done page still lists it', () => {
+  const project = createProjection();
+  const done = intent();
+  project('signal', page([email('a')]), [done], true, deleted);
+  expect(done.observe).toHaveBeenLastCalledWith(expect.any(Object), false);
+  const stale = project(
+    'signal',
+    page([email('a', true)]),
+    [done],
+    true,
+    deleted
+  )!;
+  expect(stale.entities).toEqual([]);
+  expect(done.observe).toHaveBeenLastCalledWith(expect.any(Object), false);
+  project('signal', page([]), [done], true, deleted);
+  expect(done.observe).toHaveBeenLastCalledWith(expect.any(Object), true);
+});
+
 it('restores an admitted row at once on Undo after the cache removed it', () => {
   const project = createProjection();
   const before = page([email('b'), email('a'), email('c')]);

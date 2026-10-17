@@ -65,6 +65,15 @@ that start within 40px of the left edge are left to swipe-back navigation.
 Search results use the same reserved column, with actions aligned to the first
 line; snippets, highlighted matches, and expanded hits remain unobstructed.
 
+The list holds still while mail changes under it. Scrolled down, new mail or a
+thread marked done elsewhere above the viewport leaves the rows on screen where
+they are; at the top, new mail appears at the top. Cache writes (the mail
+backfill, read marks, thread loads) and mutation refreshes keep the list as deep
+as it was loaded, and Load More keeps working while they land. Verify by
+scrolling past the first 100 threads, then marking a thread done and letting new
+mail arrive (locally: insert a thread and publish `email.message_received` on
+`macro.email`).
+
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows
 under the new heading. Active searches also hide retained results and show loading
@@ -125,17 +134,19 @@ the server resolves that inbox's UNREAD label and returns the canonical thread
 (`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
 even when the client labels cache is missing or stale—no label fetch precedes the
 optimistic update. Queued read/unread writes retain revalidation descriptors for
-active flat and grouped lists, including loaded continuation pages. Once replay
-commits (even after a reload), those queries refresh from the server; they should
-not refetch over the optimistic state merely because a write was queued. Trash
+the active lists the cache does not maintain (grouped lists, filters it cannot
+evaluate, a Mail page whose local evaluation is incomplete), including loaded
+continuation pages. Once replay commits (even after a reload), only those queries
+refresh from the server; they should not refetch over the optimistic state merely
+because a write was queued. Trash
 and its Undo refresh mounted GraphQL lists after the server operation finishes.
 The GraphQL-disabled REST path is unchanged. With GraphQL enabled, archive-based
 Mark Done, Mark Not Done, and Undo/Redo use `setEmailThreadArchived`: `inboxVisible`
 updates optimistically in the normalized cache, and each reversal is a distinct
 ordered queue entry. The server resolves the thread's owning/delegated inbox;
-no client INBOX-label lookup is needed. Confirmed writes revalidate mounted lists,
-including continuation pages; queued writes retain those descriptors for replay
-without refetching over optimism. Callers preserve the queued disposition and
+no client INBOX-label lookup is needed. Confirmed writes revalidate the mounted
+lists the cache does not maintain, including continuation pages; queued writes
+retain those descriptors for replay without refetching over optimism. Callers preserve the queued disposition and
 skip REST/TanStack email invalidations as well, including Done/Undo batches and
 thread archive replay. Committed writes and failed non-queued batches still
 reconcile. Permanent failures roll back the failed intent.
@@ -150,9 +161,14 @@ remain restored. Only accepted
 threads get their notifications restored. Notification or list-refresh failures
 warn without rolling back accepted unarchives. Verify mixed committed/queued/
 rejected selections, partial-success counts, and that a queued sibling prevents
-shared-list refetch even when notification restoration fails. GraphQL reversals
-rely on normalized writes and their durable revalidation, not an extra REST Soup
-refetch after rows settle. Verify the open-thread header too: with GraphQL enabled,
+shared-list refetch even when notification restoration fails. With the normalized
+cache, a list the cache maintains is not read again after Done, Not Done, Undo,
+read/unread, an entity notification update, a reminder or a draft save: the
+optimistic write and the returned records update it, and it re-evaluates from the
+cache (FE-56). Every Mail tab is maintained once its local evaluation succeeds;
+grouped lists and filters the cache cannot evaluate are still read again. In the
+network panel one `e` in the Email view sends its two mutations and no `Soup`,
+`SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
 Mark Not Done remains available for an archived thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification
@@ -283,8 +299,10 @@ email title menu: open the menu button beside the subject for **Ask AI**, **Crea
 Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
 and **Previous item** / **Next item** sit at the right of that header. The arrows
 follow the current filtered list and disable at its ends. Mark done advances in
-that list. Mark as unread (in the header or title menu) returns to the originating
-list with its tab, inbox, and filters preserved. Mark as not done and Mark as read
+that list. In a list, the Mark done, Mark as not done and Delete keys act once per
+press: a held key auto-repeats, and those repeats are ignored. Mark as unread (in
+the header or title menu) returns to the originating list with its tab, inbox, and
+filters preserved. Mark as not done and Mark as read
 stay on the current thread.
 Opening a saved draft from **Drafts** keeps the subject breadcrumb, title menu,
 and applicable header controls visible above the composer. Verify these remain

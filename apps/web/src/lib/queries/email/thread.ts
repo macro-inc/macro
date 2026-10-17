@@ -20,7 +20,10 @@ import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
 } from '@service-storage/graphql-email-read-state';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -358,12 +361,16 @@ export function useMarkThreadAsSeenMutation(
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsSeenParams) => {
       if (isFeatureEnabled(enableGraphqlSoup)) {
+        // The optimistic and committed `isRead` reach every list the cache
+        // maintains; the rest are read again when the write commits.
         const disposition = await markGraphqlEmailThreadSeen(
           getGraphqlSoupClient(),
           params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          getActiveGraphqlSoupRevalidations(undefined, {
+            unmaintainedOnly: true,
+          })
         );
-        if (disposition === 'committed')
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }
@@ -441,12 +448,16 @@ export function useMarkThreadAsUnreadMutation(
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsUnreadParams) => {
       if (isFeatureEnabled(enableGraphqlSoup)) {
+        // The optimistic and committed `isRead` reach every list the cache
+        // maintains; the rest are read again when the write commits.
         const disposition = await markGraphqlEmailThreadUnread(
           getGraphqlSoupClient(),
           params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          getActiveGraphqlSoupRevalidations(undefined, {
+            unmaintainedOnly: true,
+          })
         );
-        if (disposition === 'committed')
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }

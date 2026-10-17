@@ -62,6 +62,7 @@ import {
   type EmailListStateSnapshot,
 } from '../persistence';
 import { createEmailRowActionState } from '../primitives/row-action-state';
+import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import type { EmailListPane } from '../reader-pane';
 import { EMAIL_TOUR } from '../tour';
@@ -208,6 +209,7 @@ export function EmailList(props: EmailListProps) {
   );
 
   const rows = source.items;
+  const scrollAnchor = createScrollAnchor({ scroller: viewport, rows });
 
   const swipeRowsByEntityId = createMemo(() => {
     const entities = new Map<string, EmailActionRow>();
@@ -622,7 +624,10 @@ export function EmailList(props: EmailListProps) {
                           ? [list.focus.index()]
                           : undefined
                       }
-                      onScroll={checkNearEnd}
+                      onScroll={() => {
+                        scrollAnchor.capture();
+                        checkNearEnd();
+                      }}
                     >
                       {(row) => (
                         <Switch>
