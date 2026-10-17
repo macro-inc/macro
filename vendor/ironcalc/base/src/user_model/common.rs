@@ -619,6 +619,12 @@ impl<'a> UserModel<'a> {
         self.model.set_pivot_tables(pivot_tables);
     }
 
+    /// MACRO: describes the host's filtered tables for SUBTOTAL, from the
+    /// next evaluation on.
+    pub fn set_filtered_ranges(&mut self, ranges: Vec<crate::FilteredRange>) {
+        self.model.set_filtered_ranges(ranges);
+    }
+
     /// Adds new sheet
     ///
     /// See also:

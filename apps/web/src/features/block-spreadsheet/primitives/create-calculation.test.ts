@@ -447,7 +447,10 @@ describe('reactive spreadsheet calculation', () => {
 });
 
 describe('incremental workbook calculation', () => {
-  function setupIncremental(cells: SpreadsheetCells) {
+  function setupIncremental(
+    cells: SpreadsheetCells,
+    metadata?: SpreadsheetWorkbookSheet['metadata']
+  ) {
     return createRoot((dispose) => {
       cleanups.push(dispose);
       const [workbook] = createSignal<SpreadsheetWorkbookSheet[]>([
@@ -456,6 +459,7 @@ describe('incremental workbook calculation', () => {
           name: 'Plan',
           cells,
           layout: { rowCount: 200, columnCount: 26, columnWidths: {} },
+          metadata,
         },
       ]);
       const clients: ReturnType<typeof client>[] = [];
@@ -495,6 +499,41 @@ describe('incremental workbook calculation', () => {
     expect(calculator.requests[1].operation).toMatchObject({
       type: 'update-workbook',
       sheets: [{ id: 'sheet1', changes: {} }],
+    });
+  });
+
+  it('sends tables with the column names their header cells give', async () => {
+    const [calculator] = setupIncremental(
+      {
+        A1: { value: 'Qty' },
+        A2: { value: '2' },
+        C1: { value: '=SUM(Sales[Qty])' },
+      },
+      {
+        tables: [
+          { name: 'Sales', range: 'A1:B2', totalsRow: false, bandedRows: true },
+        ],
+      }
+    );
+    await vi.advanceTimersByTimeAsync(60);
+    expect(calculator.requests[0].operation).toMatchObject({
+      type: 'update-workbook',
+      sheets: [
+        {
+          id: 'sheet1',
+          tables: [
+            {
+              name: 'Sales',
+              sheet: 'Plan',
+              top: 0,
+              left: 0,
+              bottom: 1,
+              right: 1,
+              columns: ['Qty', 'Column2'],
+            },
+          ],
+        },
+      ],
     });
   });
 

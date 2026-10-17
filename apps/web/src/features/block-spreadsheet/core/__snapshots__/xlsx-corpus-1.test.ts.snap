@@ -117,8 +117,6 @@ exports[`real-world XLSX corpus > libreoffice-forum-mso-en4-134670-sales-… 1`]
   "sheets": 5,
   "styledCells": 10319,
   "warnings": [
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Text rotation, shrink-to-fit and right-to-left layout are not imported.",
   ],
@@ -162,8 +160,6 @@ exports[`real-world XLSX corpus > openxmlsdk-business-startup-costs-pl-te… 1`]
   "sheets": 6,
   "styledCells": 3731,
   "warnings": [
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Font sizes are rounded and limited to 8–36 pt.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Rich text is imported as plain text with the cell’s formatting.",

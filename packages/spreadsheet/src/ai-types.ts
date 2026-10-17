@@ -1,4 +1,5 @@
 import type { DataValidation, DropdownColor } from './sheet-rules';
+import type { TableColumnType } from './sheet-tables';
 import type { SpreadsheetCellStyle } from './spreadsheet-document';
 
 export type SpreadsheetCellInput = { address: string; value: string };
@@ -46,7 +47,17 @@ export type SpreadsheetOperation =
       colors?: DropdownColor[];
     }
   | { type: 'clear_validation'; sheetId: string; range: string }
-  | { type: 'insert_checkboxes'; sheetId: string; range: string };
+  | { type: 'insert_checkboxes'; sheetId: string; range: string }
+  | {
+      type: 'create_table';
+      sheetId: string;
+      range: string;
+      name?: string;
+      totalsRow?: boolean;
+      /** Types by column name; other columns take the type their values
+       * suggest. */
+      columnTypes?: SpreadsheetTableColumnType[];
+    };
 
 export type SpreadsheetReadRequest = {
   action: 'read';
@@ -91,6 +102,23 @@ export type SpreadsheetSheetSummary = {
   populatedCells: number;
   formulaCells: number;
   errorCells: number;
+  tables?: SpreadsheetTableSummary[];
+};
+/** A named table, which formulas address as `Name[Column]`. */
+export type SpreadsheetTableSummary = {
+  name: string;
+  range: string;
+  columns: string[];
+  totalsRow: boolean;
+  /** Columns whose filters hide rows. */
+  filteredColumns?: string[];
+  /** Typed columns; untyped columns are left out. */
+  columnTypes?: SpreadsheetTableColumnType[];
+};
+/** A table column's type, by column name. */
+export type SpreadsheetTableColumnType = {
+  column: string;
+  type: TableColumnType;
 };
 /** A data validation rule overlapping a read range. */
 export type SpreadsheetReadValidation = {

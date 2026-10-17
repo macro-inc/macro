@@ -67,13 +67,16 @@ function updateWorkbook(
   }
   inputs = next;
   const structure = JSON.stringify(
-    [...inputs.values()].map(({ id, name, rowCount, metadata, pivots }) => [
-      id,
-      name,
-      rowCount,
-      metadata ?? null,
-      pivots ?? null,
-    ])
+    [...inputs.values()].map(
+      ({ id, name, rowCount, metadata, pivots, tables }) => [
+        id,
+        name,
+        rowCount,
+        metadata ?? null,
+        pivots ?? null,
+        tables ?? null,
+      ]
+    )
   );
   session ??= engine.session();
   if (!replacedInputs && structure === loaded) {
@@ -96,6 +99,7 @@ function updateWorkbook(
       rowCount: sheet.rowCount,
       metadata: sheet.metadata,
       pivots: sheet.pivots,
+      tables: sheet.tables ?? [],
     })),
     { includeTypes: true }
   );

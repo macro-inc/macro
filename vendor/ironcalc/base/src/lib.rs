@@ -82,7 +82,7 @@ pub use model::set_fixed_time;
 #[cfg(target_arch = "wasm32")]
 pub use functions::set_random_seed;
 // MACRO
-pub use functions::{PivotField, PivotItem, PivotLayout, PivotLine};
+pub use functions::{FilteredRange, PivotField, PivotItem, PivotLayout, PivotLine};
 pub use model::FmtSettings;
 pub use model::Model;
 pub use user_model::BorderArea;

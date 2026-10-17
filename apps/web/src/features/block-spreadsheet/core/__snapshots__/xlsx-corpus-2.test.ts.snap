@@ -37,8 +37,6 @@ exports[`real-world XLSX corpus > closedxml-template-table-source-pivot-t… 1`]
   "sheets": 28,
   "styledCells": 2126,
   "warnings": [
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "Macro cannot calculate these Excel functions yet, so their formulas show errors: _XLL.DSSDATA.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
@@ -191,8 +189,6 @@ exports[`real-world XLSX corpus > poi-structured-refs-lots-with-lookups-b… 1`]
   "sheets": 5,
   "styledCells": 4022,
   "warnings": [
-    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
-    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
     "External workbook links are not supported; formulas that use them keep their last calculated values.",
     "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
     "Names that refer to other workbooks are not imported.",

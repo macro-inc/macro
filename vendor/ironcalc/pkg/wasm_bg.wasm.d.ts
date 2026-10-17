@@ -111,6 +111,7 @@ export const model_setAreaWithBorder: (a: number, b: any, c: any) => [number, nu
 export const model_setCellLink: (a: number, b: number, c: number, d: number, e: any, f: number, g: number) => [number, number];
 export const model_setColumnsHidden: (a: number, b: number, c: number, d: number, e: number) => [number, number];
 export const model_setColumnsWidth: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+export const model_setFilteredRanges: (a: number, b: any) => [number, number];
 export const model_setFrozenColumnsCount: (a: number, b: number, c: number) => [number, number];
 export const model_setFrozenRowsCount: (a: number, b: number, c: number) => [number, number];
 export const model_setLanguage: (a: number, b: number, c: number) => [number, number];

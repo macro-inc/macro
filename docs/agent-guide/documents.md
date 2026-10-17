@@ -304,6 +304,60 @@ shows the rule's message in the footer, and a "stop" rule keeps the previous val
 A red corner marks a cell with a note; selecting the cell shows the note, and any
 input message, beside it.
 
+To make a table, select a cell in the records (or the records with their header
+row) and choose **Format and data → Convert to table** (or **Convert to table**
+in the cell menu, or ⌘/Ctrl+Alt+T). It converts at once, with no dialog: one cell
+converts the block of filled cells around it, an empty cell becomes a blank table
+headed **Column1**–**Column4**, and the table is named `Table1`, `Table2`….
+Blank or repeated headers are renamed (`Column3`, `Amount2`) and columns take the
+type their values suggest. While the active cell or the pointer is in a table,
+its name shows as a tab above the header row (as an icon in the column header
+bar for a table in row 1), a button named
+**Table Table1 menu** whose menu has **Rename table** and **Adjust table range…**
+(dialogs with **Table name** or **Range** and **Save**), a **Table color**
+radio group of ten swatches, **Formatting** checkboxes (**Alternating colors**,
+**Banded columns**, **Bold first column**, **Bold last column**, **Footer row
+with totals**), **Group by view…**, **Clear all filters** when filtered,
+**Convert to range** (cells keep the table's look) and **Delete table** (removes
+its cells too). In a table cell, **Table options** in the cell menu or **Format
+and data** opens the same menu.
+
+Each header cell has a button (**Region column menu**; a filtered column's ends
+in **, filtered** and shows a funnel) whose menu shows the column's type, a
+**Column type** submenu (**None**, **Text**, **Number**, **Percent**,
+**Currency**, **Date**, **Date time**, **Time**, **Checkbox**, **Dropdown**,
+**People**), **Sort A → Z**, **Sort Z → A**, **Filter…**, **Clear filter** when
+filtered, **Group by this column**, and **Insert column left**, **Insert column
+right** and **Delete column**. A type formats the column's data cells; checkbox
+makes blanks unchecked boxes and dropdown offers the column's values as colored
+chips. A cell whose value does not fit shows an orange corner and a tooltip such
+as "Expected a number". **Filter…** opens **Filter "Region"**: a **Condition**
+select (**Text contains**, **Greater than**, **Is between**…) with **Value** (and
+**To**) fields, and **By values** with **Search values**, **Select all**,
+**Clear** and a checkbox per value; **OK** applies it and hides whole sheet rows.
+**Group by view…** opens **Group by view · Table1** with **Group by**,
+**Summarize** and **As** selects and a table of groups with their row counts and
+summary; choosing a group filters the table to it and **Show all rows** clears
+that filter.
+
+With **Footer row with totals** on, selecting a footer cell shows its arrow
+(**Choose a value for B5**) listing **None**, **Sum**, **Average**, **Min**,
+**Max**, **Count**, **Count numbers**, **Empty**, **Unique**, **Percent
+filled**, **Percent empty**, **Percent unique**, **Standard deviation** and
+**Variance**; the cell shows the aggregate's name beside its value. Typing a value
+directly below the table (without a footer) or directly to its right grows the
+table; a new row takes the formatting, dropdowns and calculated formulas of the
+row above. Formulas use structured references such as `=SUM(Table1[Amount])`,
+`=[@Qty]*[@Price]` and `=ROWS(Table1)`; typing `Table1[` suggests its columns.
+Renaming a header rewrites formulas that use the old name, and references to a
+missing table or column show `#REF!`. Scrolling past a table's header row shows
+its column names in the column headers. Agents create tables, with optional
+`columnTypes`, through `EditSpreadsheet`'s `create_table` operation, and
+`ReadSpreadsheet` lists each sheet's tables with their columns and types. Excel
+tables with a header row import with their names, styles, totals and value or
+condition filters and download as Excel tables; a table without a header row
+imports as ordinary cells, with its references converted to cell ranges.
+
 To add checkboxes, select the cells and choose **Checkbox** in the toolbar's
 **Insert chart, image or checkbox** menu (chart icon), or **Insert checkbox** in
 the cell context menu. Blank cells become unchecked boxes backed by `FALSE`;
@@ -707,11 +761,12 @@ waits for acknowledgement. A failed save leaves the draft editable and supports
 retry, without opening an empty chat. This path needs the updated native-document
 backend, just like Share.
 
-The AI can use **ReadSpreadsheet** to inspect sheet names, used ranges, raw inputs,
-formulas, typed results, errors, and formatting. **CalculateSpreadsheet** evaluates
-scratch formulas and what-if inputs without changing the workbook.
+The AI can use **ReadSpreadsheet** to inspect sheet names, used ranges, tables,
+raw inputs, formulas, typed results, errors, and formatting. **CalculateSpreadsheet**
+evaluates scratch formulas and what-if inputs without changing the workbook.
 **EditSpreadsheet** applies a validated batch of cell/formula/format edits, fill,
-row additions, column resizing, and sheet creation/rename/duplication/deletion.
+row additions, column resizing, dropdowns, checkboxes, table creation, and sheet
+creation/rename/duplication/deletion.
 `format_cells` shows dates in any Excel date code with
 `{ "format": "date", "numberFormat": "mmm yyyy" }`.
 Edits require a revision from a fresh read; a concurrent change rejects the entire

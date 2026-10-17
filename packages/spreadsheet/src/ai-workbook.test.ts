@@ -406,6 +406,88 @@ describe('spreadsheet AI atomic editing', () => {
     ).toThrow('referenced');
   });
 
+  it('converts a range to a table that formulas and reads name', () => {
+    const doc = document();
+    writeSpreadsheetCells(doc, {
+      A1: { value: 'Region' },
+      B1: { value: 'Qty' },
+      A2: { value: 'East' },
+      B2: { value: '2' },
+      A3: { value: 'West' },
+      B3: { value: '5' },
+    });
+    const edit = (
+      operations: Parameters<typeof prepareSpreadsheetEdit>[1]['operations']
+    ) => {
+      const result = prepareSpreadsheetEdit(
+        doc,
+        { action: 'edit', expectedRevision: 'v', operations },
+        calculator
+      );
+      doc.import(result.update);
+      return result;
+    };
+    const created = edit([
+      {
+        type: 'create_table',
+        sheetId: 'sheet1',
+        range: 'a1:b3',
+        name: 'Orders',
+        totalsRow: true,
+        columnTypes: [{ column: 'region', type: 'dropdown' }],
+      },
+      {
+        type: 'set_cells',
+        sheetId: 'sheet1',
+        cells: [{ address: 'D1', value: '=SUM(Orders[Qty])*2' }],
+      },
+    ]);
+    expect(created.changes[0]).toMatchObject({
+      type: 'create_table',
+      range: 'a1:b3',
+      summary: 'Converted A1:B3 in “Sheet1” to the table “Orders”.',
+    });
+    expect(created.warnings).toEqual([]);
+    const read = readSpreadsheetForAi(
+      doc,
+      'v',
+      { action: 'read', ranges: ['A4:D4', 'D1'] },
+      calculator
+    );
+    expect(read.sheets[0].tables).toEqual([
+      {
+        name: 'Orders',
+        range: 'A1:B4',
+        columns: ['Region', 'Qty'],
+        totalsRow: true,
+        columnTypes: [
+          { column: 'Region', type: 'dropdown' },
+          { column: 'Qty', type: 'number' },
+        ],
+      },
+    ]);
+    expect(
+      read.ranges[0].cells.map((cell) => [cell.source, cell.value])
+    ).toEqual([
+      ['Total', 'Total'],
+      ['=SUBTOTAL(109,[Qty])', 7],
+    ]);
+    expect(read.ranges[1].cells[0].value).toBe(14);
+    expect(() =>
+      edit([{ type: 'create_table', sheetId: 'sheet1', range: 'B2:C6' }])
+    ).toThrow('Tables cannot overlap');
+    expect(() =>
+      edit([
+        {
+          type: 'create_table',
+          sheetId: 'sheet1',
+          range: 'F1:G3',
+          name: 'orders',
+        },
+      ])
+    ).toThrow('already uses the name');
+  });
+
   it('adds, reads, replaces and clears in-cell dropdowns', () => {
     const doc = document();
     const lists = addSpreadsheetSheet(doc, 'Lists');

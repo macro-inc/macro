@@ -9,6 +9,7 @@ import Clipboard from '@phosphor/clipboard.svg?component-solid';
 import Copy from '@phosphor/copy.svg?component-solid';
 import Eraser from '@phosphor/eraser.svg?component-solid';
 import Scissors from '@phosphor/scissors.svg?component-solid';
+import Table from '@phosphor/table.svg?component-solid';
 import Trash from '@phosphor/trash.svg?component-solid';
 import XSquare from '@phosphor/x-square.svg?component-solid';
 import { type Component, type JSX, Show } from 'solid-js';
@@ -26,6 +27,7 @@ export type CellAction =
       | 'fill-down'
       | 'fill-right'
       | 'dropdown'
+      | 'table'
       | 'insert-checkbox'
       | 'remove-checkbox'
     >
@@ -38,6 +40,8 @@ export function SpreadsheetCellMenu(props: {
   hasComments?: boolean;
   canFillDown: boolean;
   canFillRight: boolean;
+  /** Whether the menu's cell is in a table, whose options it offers. */
+  inTable?: boolean;
   hasCheckboxes: () => boolean;
   onAction: (action: CellAction) => void;
   onRestoreFocus: () => void;
@@ -120,6 +124,11 @@ export function SpreadsheetCellMenu(props: {
           <Show when={props.hasCheckboxes()}>
             {item('Remove checkbox', 'remove-checkbox', XSquare)}
           </Show>
+          {item(
+            props.inTable ? 'Table options' : 'Convert to table',
+            'table',
+            Table
+          )}
           <Show when={props.hasComments}>
             <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
             {item('Comment', 'comment', Chat, !props.canComment)}

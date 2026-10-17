@@ -16,6 +16,7 @@ import Selection from '@phosphor/selection.svg';
 import Sliders from '@phosphor/sliders-horizontal.svg';
 import SortAscending from '@phosphor/sort-ascending.svg';
 import SortDescending from '@phosphor/sort-descending.svg';
+import Table from '@phosphor/table.svg';
 import TextAlignLeft from '@phosphor/text-align-left.svg';
 import Upload from '@phosphor/upload-simple.svg';
 import { Dropdown } from '@ui/components/Dropdown';
@@ -244,6 +245,14 @@ export function DataFormatMenu(props: SpreadsheetToolbarProps) {
         >
           <CaretCircleDown class="size-4" />
           Dropdown…
+        </Dropdown.Item>
+        <Dropdown.Item
+          closeOnSelect
+          disabled={props.readonly}
+          onSelect={() => props.onCommand('table')}
+        >
+          <Table class="size-4" />
+          {props.inTable ? 'Table options' : 'Convert to table'}
         </Dropdown.Item>
         <Dropdown.Item
           closeOnSelect

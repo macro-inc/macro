@@ -1,4 +1,5 @@
 import type { ConditionalStyle } from '@macro-inc/spreadsheet/sheet-rules';
+import type { WorkbookTable } from '@macro-inc/spreadsheet/structured-references';
 import {
   MAX_PIVOT_PART_LENGTH,
   MAX_SHEET_PIVOT_TABLES,
@@ -10,7 +11,6 @@ import {
   SPREADSHEET_MAX_ROWS,
 } from './spreadsheet-document';
 import type { XlsxArchive } from './xlsx-archive';
-import type { WorkbookTable } from './xlsx-formula';
 import { attributes, parse, relationships } from './xlsx-parts';
 
 const MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';

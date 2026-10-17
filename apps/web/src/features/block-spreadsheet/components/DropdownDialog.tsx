@@ -1,4 +1,7 @@
-import type { DropdownOptions } from '@macro-inc/spreadsheet/data-validation';
+import {
+  DROPDOWN_CHOICE_COLORS,
+  type DropdownOptions,
+} from '@macro-inc/spreadsheet/data-validation';
 import type { DropdownColor } from '@macro-inc/spreadsheet/sheet-rules';
 import Check from '@phosphor/check.svg';
 import Plus from '@phosphor/plus.svg';
@@ -9,19 +12,6 @@ import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { ChoiceChip } from './ChoiceChip';
 import { SpreadsheetDialog } from './SpreadsheetDialog';
-
-// Document colors, light enough for dark chip text. New choices take them in turn.
-const CHOICE_COLORS = [
-  { value: '#bfdbfe', name: 'Blue' },
-  { value: '#bbf7d0', name: 'Green' },
-  { value: '#fef08a', name: 'Yellow' },
-  { value: '#fecaca', name: 'Red' },
-  { value: '#e9d5ff', name: 'Purple' },
-  { value: '#fed7aa', name: 'Orange' },
-  { value: '#99f6e4', name: 'Teal' },
-  { value: '#fbcfe8', name: 'Pink' },
-  { value: '#e5e7eb', name: 'Gray' },
-] as const;
 
 const PLACEHOLDERS = ['Not started', 'In progress', 'Done'];
 
@@ -108,14 +98,16 @@ function DropdownForm(props: {
   const newChoice = (text: string): Choice => {
     if (!colorful(choices.some((choice) => choice.color)))
       return { id: nextId++, text };
-    const unused = CHOICE_COLORS.find(
+    const unused = DROPDOWN_CHOICE_COLORS.find(
       (color) => !choices.some((choice) => choice.color === color.value)
     );
     return {
       id: nextId++,
       text,
-      color: (unused ?? CHOICE_COLORS[choices.length % CHOICE_COLORS.length])
-        .value,
+      color: (
+        unused ??
+        DROPDOWN_CHOICE_COLORS[choices.length % DROPDOWN_CHOICE_COLORS.length]
+      ).value,
     };
   };
   setChoices(
@@ -159,7 +151,7 @@ function DropdownForm(props: {
     if (rangePicks().has(key)) return rangePicks().get(key);
     if (stored.has(key)) return stored.get(key);
     if (!colorful([...rangePicks().values()].some(Boolean))) return;
-    return CHOICE_COLORS[index % CHOICE_COLORS.length].value;
+    return DROPDOWN_CHOICE_COLORS[index % DROPDOWN_CHOICE_COLORS.length].value;
   };
 
   return (
@@ -417,7 +409,7 @@ function ChoiceColorMenu(props: {
             No color
           </Dropdown.Item>
           <div class="grid grid-cols-5 gap-1 p-1.5">
-            <For each={CHOICE_COLORS}>
+            <For each={DROPDOWN_CHOICE_COLORS}>
               {(color) => (
                 <Dropdown.Item
                   closeOnSelect

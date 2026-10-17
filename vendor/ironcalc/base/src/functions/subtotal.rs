@@ -25,6 +25,16 @@ enum SubTotalMode {
     SkipHidden,
 }
 
+/// MACRO: the cells of a table whose filters hide rows, as the host keeps
+/// tables outside the workbook.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct FilteredRange {
+    /// The index of its sheet.
+    pub sheet: u32,
+    /// The cells it covers, `[top, left, bottom, right]`, counted from 1.
+    pub range: [i32; 4],
+}
+
 #[derive(PartialEq, Debug)]
 pub enum CellTableStatus {
     Normal,
@@ -33,7 +43,22 @@ pub enum CellTableStatus {
 }
 
 impl<'a> Model<'a> {
+    /// MACRO: describes the host's filtered tables for SUBTOTAL, from the
+    /// next evaluation on.
+    pub fn set_filtered_ranges(&mut self, ranges: Vec<FilteredRange>) {
+        self.filtered_ranges = ranges;
+    }
+
     fn get_table_for_cell(&self, sheet_index: u32, row: i32, column: i32) -> bool {
+        // MACRO: the host's filtered tables.
+        if self.filtered_ranges.iter().any(|filtered| {
+            let [top, left, bottom, right] = filtered.range;
+            filtered.sheet == sheet_index
+                && (top..=bottom).contains(&row)
+                && (left..=right).contains(&column)
+        }) {
+            return true;
+        }
         let worksheet = match self.workbook.worksheet(sheet_index) {
             Ok(ws) => ws,
             Err(_) => return false,
