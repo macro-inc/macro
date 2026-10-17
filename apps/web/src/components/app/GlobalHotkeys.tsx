@@ -23,8 +23,9 @@ import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import { getShortcutSheet, type ShortcutSheet } from '@core/hotkey/getCommands';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { setActiveScope } from '@core/hotkey/state';
+import { activeScope, setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import {
@@ -123,6 +124,12 @@ function useHotkeyAnalytics(): void {
   onCleanup(() => {
     debouncedTrack.clear();
   });
+}
+
+/** The sheet loads on demand; it is not part of the startup bundle. */
+async function showKeyboardShortcuts(sheet: ShortcutSheet) {
+  const { openKeyboardShortcuts } = await import('./KeyboardShortcutsDialog');
+  openKeyboardShortcuts(sheet);
 }
 
 export default function GlobalShortcuts() {
@@ -563,6 +570,20 @@ export default function GlobalShortcuts() {
           await handleFileUpload(entries, false);
         });
       });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.keyboardShortcuts,
+    // '?' arrives as shift+/ and prints back as '?'.
+    hotkey: 'shift+/',
+    scopeId: 'global',
+    description: 'Show keyboard shortcuts',
+    keywords: ['hotkeys', 'keys', 'help', 'cheat sheet'],
+    keyDownHandler: () => {
+      // Read before the sheet takes focus and changes the active scope.
+      void showKeyboardShortcuts(getShortcutSheet(activeScope()));
       return true;
     },
   });

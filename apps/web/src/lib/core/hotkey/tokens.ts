@@ -111,6 +111,7 @@ export const TOKENS = {
     inviteTeam: 'global.inviteTeam',
     undo: 'global.undo',
     redo: 'global.redo',
+    keyboardShortcuts: 'global.keyboardShortcuts',
   },
 
   // sidebar navigation

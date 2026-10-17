@@ -904,6 +904,11 @@ const shortcutSections: ShortcutSection[] = [
         description: 'Focus AI chat',
       },
       { keys: ['g'], codes: ['KeyG'], description: 'Go to a view' },
+      {
+        keys: ['?'],
+        codes: ['ShiftLeft', 'Slash'],
+        description: 'Show shortcuts for the current view',
+      },
     ],
   },
   {
