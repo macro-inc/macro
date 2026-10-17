@@ -136,6 +136,22 @@ export function createListController<TItem, TMetadata = unknown>(
     return result && canNavigateTo(result, forcedFocus()) ? result : undefined;
   });
 
+  // The keys around the focused item while it was present, nearest first.
+  const focusedNeighbours = createMemo<
+    { key: ListKey; after: ListKey[]; before: ListKey[] } | undefined
+  >((previous) => {
+    const focused = focusedResult();
+    if (!focused) {
+      return previous?.key === requestedFocusKey() ? previous : undefined;
+    }
+    const keys = snapshot().all.map((item) => options.getKey(item));
+    return {
+      key: focused.key,
+      after: keys.slice(focused.index + 1),
+      before: keys.slice(0, focused.index).reverse(),
+    };
+  });
+
   const commitFocus = (
     nextKey: ListKey | undefined,
     reason: NonNullable<ListFocusOptions['reason']>,
@@ -301,6 +317,19 @@ export function createListController<TItem, TMetadata = unknown>(
           restoreOptions.nearestIndex ?? focusedResult()?.index ?? 0,
           { ...restoreOptions, reason }
         );
+      case 'successor': {
+        const neighbours = focusedNeighbours();
+        if (key !== undefined && neighbours?.key === key) {
+          for (const neighbour of [...neighbours.after, ...neighbours.before]) {
+            const restored = focusResult(itemResultFor(neighbour), {
+              ...restoreOptions,
+              reason,
+            });
+            if (restored) return restored;
+          }
+        }
+        return restoreFocus(key, { ...restoreOptions, fallback: 'none' });
+      }
       case 'none':
         commitFocus(
           restoreOptions.retainUnavailable !== false &&

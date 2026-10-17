@@ -358,6 +358,10 @@ export function EmailList(props: EmailListProps) {
 
     handle.scrollTo(scrollOffset);
     restoredScroll = true;
+    // j/k in the open thread moves list focus; returning shows that row even
+    // when it is outside the saved viewport.
+    const focused = list.focus.index();
+    if (focused >= 0) handle.scrollToIndex(focused, { align: 'nearest' });
   }
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
@@ -406,10 +410,16 @@ export function EmailList(props: EmailListProps) {
 
     if (list.focus.result()) return;
 
-    const restored = list.focus.restore(list.focus.requestedKey(), {
-      retainUnavailable: false,
-    });
-    if (restored) return;
+    // A row that left the list (archived from its open thread or on another
+    // device) hands focus to the row that took its place. Without surviving
+    // neighbours (rows still loading) the key waits to reappear.
+    const requested = list.focus.requestedKey();
+    const restored = list.focus.restore(requested, { fallback: 'successor' });
+    if (restored) {
+      virtualizer()?.scrollToIndex(restored.index, { align: 'nearest' });
+      return;
+    }
+    if (requested !== undefined) return;
     if (isTouchDevice()) return;
 
     list.focus.first({
