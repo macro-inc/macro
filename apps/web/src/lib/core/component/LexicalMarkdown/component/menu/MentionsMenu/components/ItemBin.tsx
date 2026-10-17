@@ -49,7 +49,7 @@ export function ItemBin(
         <Show when={showViewAllButton()}>
           <button
             type="button"
-            class="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-normal text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-1 focus-visible:ring-ink/30"
+            class="-my-1 inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-xs font-normal text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-1 focus-visible:ring-ink/30"
             aria-keyshortcuts={props.isSelected ? 'ArrowRight' : undefined}
             onMouseDown={(e) => {
               e.preventDefault();
