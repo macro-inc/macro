@@ -351,14 +351,18 @@ it('discards a standalone draft with the original coalescing key and bindings fo
   ).toBe(true);
 });
 
-it('saves and discards without refetching the lists that show the thread', async () => {
+it('saves and discards without refetching the lists the cache maintains', async () => {
   // A mounted list's pages. The returned draft and thread records update it.
-  const unregister = registerGraphqlSoupRevalidations(() => [
-    {
-      document: SoupDocument,
-      variables: { input: { initial: { limit: 50 } } },
-    },
-  ]);
+  const unregister = registerGraphqlSoupRevalidations(
+    () => [
+      {
+        document: SoupDocument,
+        variables: { input: { initial: { limit: 50 } } },
+      },
+    ],
+    undefined,
+    () => true
+  );
   try {
     const { client, operations, thread } = await standalone();
     await executeGraphqlSaveEmailDraft(client, {

@@ -161,15 +161,20 @@ export function createGraphqlDoneOperation(args: Args) {
               );
             ids = notifications.map(({ id }) => id);
           }
+          // An entity-wide Done changes only rows still open on the server.
+          // Known rows it left out were already done there; record that.
+          const missed =
+            outcome.kind === 'entity-notifications'
+              ? attempt.knownNotificationIds.filter((id) => !ids.includes(id))
+              : [];
+          const confirmed =
+            missed.length > 0 && confirmEntityNotificationsDone(missed);
           if (ids.length > 0) {
             attempt.receipt = {
               emailIds: [],
               notificationIds: ids,
             };
-          } else if (
-            outcome.kind === 'entity-notifications' &&
-            confirmEntityNotificationsDone(attempt.knownNotificationIds)
-          ) {
+          } else if (confirmed) {
             // Already done on the server; this client was stale. The row
             // stays hidden as its cached notifications now read done, and
             // there is nothing to undo.

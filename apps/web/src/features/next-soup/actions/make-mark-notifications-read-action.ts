@@ -60,6 +60,7 @@ export const makeMarkNotificationsReadAction = (
   const execute = async (entities: EntityData[]) => {
     const notificationsById = new Map<string, UnifiedNotification>();
     const entityRefs: NotificationEntityRef[] = [];
+    const expectedNotificationIds: string[] = [];
     const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
     let targetCount = 0;
 
@@ -67,6 +68,9 @@ export const makeMarkNotificationsReadAction = (
       const entityRef = toNotificationEntityRef(entity);
       if (useEntityMutations && entityRef) {
         entityRefs.push(entityRef);
+        for (const notification of notificationsForEntity(entity))
+          if (notification.state === 'unseen')
+            expectedNotificationIds.push(notification.id);
         targetCount += 1;
         continue;
       }
@@ -89,6 +93,7 @@ export const makeMarkNotificationsReadAction = (
           ? updateNotificationsForEntities({
               entities: entityRefs,
               operation: 'MARK_SEEN',
+              expectedNotificationIds,
             })
           : Promise.resolve(),
         notifications.length > 0

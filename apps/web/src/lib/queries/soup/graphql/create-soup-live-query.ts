@@ -97,6 +97,9 @@ export function createSoupLiveQuery(
   // so far. Cache writes re-evaluate the page; evaluating only the first page
   // would collapse a scrolled list and lose its position.
   const [localMailDepth, setLocalMailDepth] = createSignal(0);
+  // The last local Mail evaluation for this input succeeded, so cache writes
+  // keep the page current; incomplete or failed ones leave the network page.
+  const [localMailCurrent, setLocalMailCurrent] = createSignal(false);
 
   const firstPageInput = createMemo<GraphqlSoupInput | undefined>(() => {
     const input = request();
@@ -417,16 +420,20 @@ export function createSoupLiveQuery(
   });
 
   onCleanup(
-    registerGraphqlSoupRevalidations(() => {
-      if (!query.isEnabled) return [];
-      const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
-      return [...cursors].flatMap((cursor) => {
-        const input = inputForCursor(cursor);
-        return input
-          ? [{ document: queryDocument(), variables: { input } }]
-          : [];
-      });
-    }, getGraphqlSoupClient)
+    registerGraphqlSoupRevalidations(
+      () => {
+        if (!query.isEnabled) return [];
+        const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
+        return [...cursors].flatMap((cursor) => {
+          const input = inputForCursor(cursor);
+          return input
+            ? [{ document: queryDocument(), variables: { input } }]
+            : [];
+        });
+      },
+      getGraphqlSoupClient,
+      () => cacheMaintained()
+    )
   );
 
   registerChannelNotificationRefresh(() => ({
@@ -544,6 +551,15 @@ export function createSoupLiveQuery(
     live.status() !== 'idle' &&
     live.status() !== 'unsupported' &&
     live.status() !== 'error';
+  // Whether a write that updates the cache also updates this list: a local
+  // Mail page that evaluates, or a maintained predicate query. Other lists
+  // (unsupported filters, a cold cache) still read the server after writes.
+  const cacheMaintained = (): boolean => {
+    if (!getGraphqlSoupCacheHost()) return false;
+    return localSource()?.mailView
+      ? localMailCurrent()
+      : maintainedQueryAvailable();
+  };
   const liveRecords = createMemo(
     () => {
       const snapshot = live.data();
@@ -591,6 +607,7 @@ export function createSoupLiveQuery(
       previousInitialInput = input;
       setLocalProjection(undefined);
       setLocalMailDepth(0);
+      setLocalMailCurrent(false);
     }
     const depth = Math.max(localMailDepth(), definition?.records.length ?? 0);
     const existing = untrack(localProjection);
@@ -742,6 +759,7 @@ export function createSoupLiveQuery(
         // Unsupported, incomplete, validation, and storage failures retain
         // the stale network/normalized-cache fallback already on screen.
       } finally {
+        if (mailView && !discarded) setLocalMailCurrent(outcome === 'success');
         span.setAttr('evaluation.outcome', outcome);
         span.setAttr('evaluation.retry_count', retryCount);
         span.setAttr('evaluation.discarded', discarded);
@@ -843,6 +861,7 @@ export function createSoupLiveQuery(
   );
 
   return {
+    cacheMaintained,
     queryScope: () => JSON.stringify([firstPageInput(), cacheGeneration]),
     localRevision: () => displayLocalProjection()?.mail?.revision,
     localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,

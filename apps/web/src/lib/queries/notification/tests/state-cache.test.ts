@@ -1,19 +1,26 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import type { Client } from '@urql/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   host: undefined as { writeQuery: ReturnType<typeof vi.fn> } | undefined,
+  revalidate: vi.fn(async (..._args: unknown[]) => {}),
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: () => mocks.host,
 }));
+vi.mock('../revalidation', () => ({
+  revalidateNotificationReaders: mocks.revalidate,
+}));
 
 import {
   confirmEntityNotificationsDone,
+  reconcileNotificationsDone,
   writeNotificationStates,
 } from '../state-cache';
 
 beforeEach(() => {
   mocks.host = { writeQuery: vi.fn(async () => ({ kind: 'written' })) };
+  mocks.revalidate.mockClear();
 });
 
 it('writes only the state of each notification', async () => {
@@ -74,4 +81,23 @@ it('keeps a failed cache write from escaping', async () => {
   expect(confirmEntityNotificationsDone(['n1'])).toBe(true);
   await vi.waitFor(() => expect(error).toHaveBeenCalledOnce());
   error.mockRestore();
+});
+
+describe('reconcileNotificationsDone', () => {
+  it('records the done rows, then reads only readers the cache does not maintain', async () => {
+    const client = {} as Client;
+    await reconcileNotificationsDone(client, ['n1']);
+    expect(mocks.host?.writeQuery).toHaveBeenCalledOnce();
+    expect(mocks.revalidate).toHaveBeenCalledExactlyOnceWith(client, {
+      unmaintainedOnly: true,
+    });
+  });
+
+  it('reads every reader again without done rows or a cache', async () => {
+    const client = {} as Client;
+    await reconcileNotificationsDone(client);
+    mocks.host = undefined;
+    await reconcileNotificationsDone(client, ['n1']);
+    expect(mocks.revalidate.mock.calls).toEqual([[client], [client]]);
+  });
 });

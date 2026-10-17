@@ -74,7 +74,11 @@ const document = (id: string) =>
     ],
   }) as unknown as EntityData;
 
-function setup(grouped: boolean, targets: string[]) {
+function setup(
+  grouped: boolean,
+  targets: string[],
+  knownIds: (id: string) => string[] = (id) => [`n-${id}`]
+) {
   const source: SoupAstItemsData = {
     entities: [document('a'), document('b')],
     groups: grouped
@@ -112,7 +116,7 @@ function setup(grouped: boolean, targets: string[]) {
       emailIds: [],
       notificationIds: [],
       notificationIdsByEntity: new Map(
-        entities.map((entity) => [doneEntityKey(entity), [`n-${entity.id}`]])
+        entities.map((entity) => [doneEntityKey(entity), knownIds(entity.id)])
       ),
       notificationEntities: entities.map(({ id }) => ({
         type: 'document',
@@ -192,6 +196,30 @@ describe('no-op receipts with real GraphQL display intents', () => {
       expect(pending()).toHaveLength(1);
     }
   );
+});
+
+describe('partial receipts with the normalized cache', () => {
+  it('records known rows the server left out as done, and undoes only its own', async () => {
+    writes.confirmDone.mockReturnValue(true);
+    const { operation, reply } = setup(false, ['a'], (id) => [
+      `n-${id}`,
+      `n-${id}-earlier`,
+    ]);
+    const write = operation.execute();
+    // n-a changed; n-a-earlier was already done on the server and left out.
+    reply.resolve([notificationReceipt('n-a', { type: 'document', id: 'a' })]);
+    await write;
+    operation.settle();
+
+    expect(writes.confirmDone).toHaveBeenCalledExactlyOnceWith(['n-a-earlier']);
+    expect(operation.completedCount()).toBe(1);
+    expect(operation.hasNoopRows()).toBe(false);
+    writes.undone.mockResolvedValue(undefined);
+    await operation.undo();
+    expect(writes.undone).toHaveBeenCalledWith(
+      expect.objectContaining({ notificationIds: ['n-a'] })
+    );
+  });
 });
 
 describe('no-op receipts with the normalized cache', () => {

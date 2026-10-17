@@ -79,12 +79,14 @@ describe('email follow-up cache reconciliation', () => {
     });
     expect(mocks.refreshGraphql).not.toHaveBeenCalled();
   });
-  it('reads the thread again, not every list, when the cache holds them', async () => {
+  it('reads the thread again, and only the lists the cache does not maintain', async () => {
     mocks.graphql.mockReturnValue(true);
     mocks.cacheEnabled.mockReturnValue(true);
     await executeEmailFollowup('thread', command);
     expect(mocks.fetchThread).toHaveBeenCalledWith('thread');
-    expect(mocks.refreshGraphql).not.toHaveBeenCalled();
+    expect(mocks.refreshGraphql).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: true,
+    });
   });
   it('refreshes GraphQL lists and the thread even when host navigation fails', async () => {
     mocks.graphql.mockReturnValue(true);

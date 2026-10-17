@@ -215,6 +215,12 @@ export async function markNotificationsForEntityAsRead(
     await updateNotificationsForEntities({
       entities: [entityRef],
       operation: 'MARK_SEEN',
+      expectedNotificationIds: (
+        notificationSource.notificationsByEntity()[compositeEntity(entity)] ??
+        []
+      )
+        .filter(({ state }) => state === 'unseen')
+        .map(({ id }) => id),
     });
     return;
   }

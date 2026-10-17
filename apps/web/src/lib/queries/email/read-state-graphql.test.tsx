@@ -299,11 +299,17 @@ describe('email read state with GraphQL Soup', () => {
   );
 
   it.each([useMarkThreadAsSeenMutation, useMarkThreadAsUnreadMutation])(
-    'queues an offline write without list revalidations or refetches',
+    'queues an offline write that reads only unmaintained lists on replay',
     async (useMutation) => {
       const variables = { input: { initial: { limit: 50 } } };
-      const unregister = registerGraphqlSoupRevalidations(() => [
-        { document: SoupDocument, variables },
+      const grouped = { input: { initial: { limit: 20 } } };
+      const unregisterMaintained = registerGraphqlSoupRevalidations(
+        () => [{ document: SoupDocument, variables }],
+        undefined,
+        () => true
+      );
+      const unregisterGrouped = registerGraphqlSoupRevalidations(() => [
+        { document: SoupDocument, variables: grouped },
       ]);
       mocks.graphqlMutation.mockReturnValue({
         toPromise: async () => ({
@@ -318,15 +324,17 @@ describe('email read state with GraphQL Soup', () => {
       try {
         const mutation = mountEmailMutation(useMutation, client);
         await mutation.mutateAsync({ threadId: 'thread' });
-        // Replay commits the record; the lists reading it need no refetch.
+        // Replay commits the record, which the maintained list reads; only
+        // the list the cache cannot keep current is read again.
         expect(
           mocks.graphqlMutation.mock.calls[0][2].optimisticMutation
             .revalidations
-        ).toEqual([]);
+        ).toEqual([{ document: SoupDocument, variables: grouped }]);
         expect(mocks.refresh).not.toHaveBeenCalled();
         expect(mocks.markSeen).not.toHaveBeenCalled();
       } finally {
-        unregister();
+        unregisterMaintained();
+        unregisterGrouped();
       }
     }
   );

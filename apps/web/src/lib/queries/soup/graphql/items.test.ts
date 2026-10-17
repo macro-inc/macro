@@ -2084,6 +2084,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         if (kind === 'mail-page' || kind === 'reconciled') {
           await vi.waitFor(() => expect(query.data()?.entities).toEqual([]));
           expect(query.data()?.cachedMail).toBe(mail);
+          // A local Mail page that evaluates keeps itself current: writes
+          // that update the cache need not read it again.
+          if (mail) expect(query.cacheMaintained?.()).toBe(true);
           if (!mail)
             expect(entityFilterMock.mock.calls.at(-1)?.[0].baseline).toEqual(
               []
@@ -2110,6 +2113,8 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         } else {
           expect(query.data()?.cachedMail).not.toBe(true);
           expect(query.error()).toBe(offlineError);
+          // An incomplete or unsupported page still needs the server.
+          if (mail) expect(query.cacheMaintained?.()).toBe(false);
         }
       } finally {
         dispose();

@@ -94,9 +94,12 @@ describe('GraphQL email archive writes', () => {
       finish();
       await expect(result).resolves.toBe('committed');
       expect(mocks.reminders).toHaveBeenCalledOnce();
-      // The cached record carries the change to every list; nothing refetches.
+      // The cached record carries the change to every list the cache
+      // maintains; only the others are read again, by the exchange.
       expect(mocks.refresh).not.toHaveBeenCalled();
-      expect(mocks.revalidations).not.toHaveBeenCalled();
+      expect(mocks.revalidations).toHaveBeenCalledExactlyOnceWith(undefined, {
+        unmaintainedOnly: true,
+      });
     }
   );
 
@@ -139,10 +142,11 @@ describe('GraphQL email archive writes', () => {
     ).toBe(true);
   });
 
-  it('queues an offline write without list revalidations or refetches', async () => {
-    mocks.revalidations.mockReturnValue([
+  it('queues an offline write that reads only unmaintained lists on replay', async () => {
+    const unmaintained = [
       { document: SoupDocument, variables: { input: { initial: {} } } },
-    ]);
+    ];
+    mocks.revalidations.mockReturnValue(unmaintained);
     mocks.mutation.mockReturnValue({
       toPromise: async () => ({
         extensions: {
@@ -156,10 +160,14 @@ describe('GraphQL email archive writes', () => {
     await expect(
       archiveEmailThread({ id: 'thread', value: true })
     ).resolves.toBe('queued');
-    // Replay commits the record; the lists reading it need no refetch.
+    // Replay commits the record; only lists the cache does not maintain are
+    // read again, even after a reload.
+    expect(mocks.revalidations).toHaveBeenCalledWith(undefined, {
+      unmaintainedOnly: true,
+    });
     expect(
       mocks.mutation.mock.calls[0][2].optimisticMutation.revalidations
-    ).toEqual([]);
+    ).toEqual(unmaintained);
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.reminders).not.toHaveBeenCalled();
   });

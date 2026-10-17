@@ -5,7 +5,8 @@ import {
   type NotificationStateCacheWriteSubscription,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
-import { stringifyDocument } from '@urql/core';
+import { type Client, stringifyDocument } from '@urql/core';
+import { revalidateNotificationReaders } from './revalidation';
 
 const stateWrite = stringifyDocument(NotificationStateCacheWriteDocument);
 
@@ -47,11 +48,11 @@ async function writeConfirmedDone(
 }
 
 /**
- * An entity-wide mark done answers with only the rows it changed, and nothing
- * pushes notification state. When it changed none, the server already holds
- * every notification of the entity as done, so the ones this client still
- * shows are stale. Records them as done; false when there is no cache to
- * record them in.
+ * An entity-wide mark done answers with only the rows it changed, and rows it
+ * did not change are not pushed. Every notification of the entity is done on
+ * the server afterwards, so known rows the answer left out were already done
+ * there and are stale here. Records them as done; false when there is no
+ * cache to record them in.
  */
 export function confirmEntityNotificationsDone(
   ids: readonly string[]
@@ -60,4 +61,23 @@ export function confirmEntityNotificationsDone(
   if (!host || ids.length === 0) return false;
   void writeConfirmedDone(host, ids);
   return true;
+}
+
+/**
+ * After a write that made `doneIds` done without returning them: record them
+ * in the cache, which keeps its readers current, and read again only the
+ * readers it does not maintain. Without ids or a cache, every reader is read
+ * again.
+ */
+export async function reconcileNotificationsDone(
+  client: Client,
+  doneIds: readonly string[] = []
+): Promise<void> {
+  const host = getGraphqlCacheHost();
+  if (!host || doneIds.length === 0) {
+    await revalidateNotificationReaders(client);
+    return;
+  }
+  await writeNotificationStates(host, doneIds, 'DONE');
+  await revalidateNotificationReaders(client, { unmaintainedOnly: true });
 }

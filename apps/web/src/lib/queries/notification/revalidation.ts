@@ -16,6 +16,8 @@ type NotificationReader = {
   client: () => Client;
   isEnabled: () => boolean;
   refresh: () => Promise<unknown>;
+  /** Cached notification writes keep this reader current. */
+  cacheMaintained?: () => boolean;
 };
 
 const notificationReaders = new Set<NotificationReader>();
@@ -45,16 +47,18 @@ async function refreshSafely(refresh: () => Promise<unknown>): Promise<void> {
 }
 
 /**
- * Reads mounted notification readers again for the uncached transport, whose
- * lists have no other way to learn of a write. With the normalized cache the
- * written rows update every reader instead (FE-56). Reuses loaded page
- * variables instead of resetting pagination or reading all cached history.
- * Disabled/unstarted notification feeds remain dormant.
+ * Reads mounted notification readers again after a notification write.
+ * `unmaintainedOnly` skips readers the cache keeps current from the written
+ * rows (FE-56); callers use it once the cache holds every row the write
+ * changed, and read everything when it may not (no cache, a stale mark seen,
+ * a Home undo). Reuses loaded page variables instead of resetting pagination
+ * or reading all cached history. Disabled/unstarted feeds remain dormant.
  */
 export async function revalidateNotificationReaders(
-  client: Client
+  client: Client,
+  options: { unmaintainedOnly?: boolean } = {}
 ): Promise<void> {
-  const pages = getActiveGraphqlSoupRevalidations(client).filter(
+  const pages = getActiveGraphqlSoupRevalidations(client, options).filter(
     ({ document }) => notificationDocuments.has(document)
   );
   await Promise.all([
@@ -69,7 +73,12 @@ export async function revalidateNotificationReaders(
       })
     ),
     ...[...notificationReaders]
-      .filter((reader) => reader.isEnabled() && reader.client() === client)
+      .filter(
+        (reader) =>
+          reader.isEnabled() &&
+          reader.client() === client &&
+          !(options.unmaintainedOnly && reader.cacheMaintained?.())
+      )
       .map((reader) => refreshSafely(reader.refresh)),
   ]);
 }

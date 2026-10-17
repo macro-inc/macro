@@ -31,7 +31,21 @@ export type GraphqlUpdateNotificationsResult =
 export type GraphqlUpdateNotificationsForEntitiesArgs = {
   entities: NotificationEntityInput[];
   operation: Exclude<NotificationUpdateOperation, 'MARK_UNDONE'>;
+  /** Notifications this client shows as changing; never sent. A mark seen
+   * that leaves one out means this client was stale. */
+  expectedNotificationIds?: readonly string[];
 };
+
+/** A mark seen answers with only the rows it changed. An expected row it left
+ * out is seen or done elsewhere, which this client cannot tell apart. */
+function missedExpectedSeen(
+  args: GraphqlUpdateNotificationsForEntitiesArgs,
+  rows: readonly { id: string }[]
+): boolean {
+  if (args.operation !== 'MARK_SEEN') return false;
+  const changed = new Set(rows.map(({ id }) => id));
+  return (args.expectedNotificationIds ?? []).some((id) => !changed.has(id));
+}
 
 /** Authoritative rows returned after an entity-scoped notification write. */
 export type GraphqlUpdateNotificationsForEntitiesResult =
@@ -104,9 +118,15 @@ export async function executeGraphqlUpdateNotificationsForEntities(
   const result = await client
     .mutation(UpdateNotificationsForEntityDocument, variables)
     .toPromise();
-  // The changed rows update every cached reader. Only the uncached transport
-  // has to read its notification lists again.
-  if (!result.error && result.data && !graphqlCacheEnabled())
-    await revalidateNotificationReaders(client);
+  if (!result.error && result.data) {
+    // The changed rows update every reader the cache maintains; the others
+    // are read again. A stale mark seen reads every reader again: the rows
+    // it left out are seen or done, and only the server knows which.
+    await revalidateNotificationReaders(client, {
+      unmaintainedOnly:
+        graphqlCacheEnabled() &&
+        !missedExpectedSeen(args, result.data.updateNotificationsForEntity),
+    });
+  }
   return result;
 }
