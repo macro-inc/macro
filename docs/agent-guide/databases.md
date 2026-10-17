@@ -259,7 +259,9 @@ toast. A database's only table cannot be deleted: the item is disabled there.
 An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
-Click a cell to edit, or focus it with the arrow keys and start typing. Enter
+Click a cell to edit, or focus it with the arrow keys and start typing. The
+whole cell takes the click, including the space below its value when wrapped
+pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty
 new-record row. Typing there starts the next record without waiting for the
 previous save. Shift+Enter moves up. Both place the typing cursor at the end of

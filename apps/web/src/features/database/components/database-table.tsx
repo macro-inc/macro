@@ -721,7 +721,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                 )}
                                 aria-colindex={columnIndex() + 2}
                                 tabindex={-1}
-                                class="relative min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/30 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/30"
+                                class="relative grid min-w-0 border-r border-edge-muted/40 px-0.5 py-0.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ink/30 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ink/30"
                                 classList={{
                                   'bg-accent/15 ring-1 ring-inset ring-accent/50':
                                     selection.contains(index(), columnIndex()),

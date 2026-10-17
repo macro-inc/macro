@@ -346,7 +346,7 @@ export function GridCell(props: GridCellProps) {
   );
 
   return (
-    <div ref={cell} class="relative min-w-0" style={editorStyle()}>
+    <div ref={cell} class="relative grid min-w-0" style={editorStyle()}>
       <Switch>
         <Match when={cellKind() === 'editing'}>{renderEditor()}</Match>
         <Match when={cellKind() === 'boolean'}>
@@ -397,9 +397,10 @@ export function GridCell(props: GridCellProps) {
           </div>
         </Match>
         <Match when={cellKind() === 'text'}>
-          <div class="relative">
+          <div class="relative grid">
             {/* Keep the resolved label and its subscription alive while picking. */}
             <div
+              class="grid"
               inert={isEntity() && editing()}
               classList={{
                 invisible: isEntity() && editing() && draft() !== '',
