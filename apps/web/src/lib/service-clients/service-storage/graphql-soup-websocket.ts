@@ -132,6 +132,8 @@ type GraphqlSoupWebSocketAuth = {
   bearerTokenAuth: boolean;
   getApiToken: () => Promise<string>;
   refreshCookieAuth: () => Promise<Result<void, { code: string }[]>>;
+  /** Resolves once a user is signed in; see `waitForSession`. */
+  waitForSession: () => Promise<unknown>;
 };
 
 /** Creates the reconnect-safe URL resolver used by graphql-ws. */
@@ -140,8 +142,12 @@ export function createGraphqlSoupWebSocketUrlResolver({
   bearerTokenAuth,
   getApiToken,
   refreshCookieAuth,
+  waitForSession,
 }: GraphqlSoupWebSocketAuth): () => Promise<string> {
   return async () => {
+    // A signed-out or expired client holds the connection until sign-in
+    // rather than handshaking into a 401.
+    await waitForSession();
     if (bearerTokenAuth) {
       const apiToken = await getApiToken();
       if (!apiToken) throw new Error('No Macro API token');

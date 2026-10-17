@@ -3,6 +3,7 @@ import { authServiceClient } from '@service-auth/client';
 import type { UserName } from '@service-auth/generated/schemas/userName';
 import { useQueries } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { requiresSession } from '../session-gate';
 import { authKeys } from './keys';
 
 const USER_NAMES_STALE_TIME = 10 * 60 * 1000;
@@ -107,6 +108,7 @@ export function userNameQueryOptions(userId: string) {
     enabled: Boolean(queryUserId),
     throwOnError: false,
     staleTime: USER_NAMES_STALE_TIME,
+    meta: requiresSession,
   };
 }
 

@@ -2,6 +2,7 @@ import type { IUser } from '@core/user/types';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
+import { requiresSession } from '@queries/session-gate';
 import { contactsClient } from '@service-contacts/client';
 import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
@@ -11,6 +12,7 @@ export function contactsQueryOptions() {
   return {
     queryKey: contactsKeys.all.queryKey,
     queryFn: () => throwOnErr(() => contactsClient.getContacts()),
+    meta: requiresSession,
   };
 }
 

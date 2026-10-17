@@ -1,5 +1,5 @@
+import { deriveIsAuthenticated, sessionStatus } from '@core/auth/session';
 import type { PermissionId } from '@core/constant/permissions';
-import { thrownResultErrorHasCode } from '@core/util/result';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
@@ -23,28 +23,6 @@ type UserContextValue = {
   referralCode: Accessor<string | undefined>;
 };
 
-/**
- * Derives the auth state from the user-info query. Data-first: a failed
- * background refetch keeps the previous data alongside the error, and the
- * last-known auth state must survive it — otherwise an offline cold start
- * that restored user-info from cache drops all auth-gated chrome.
- */
-export function deriveIsAuthenticated(
-  query: Pick<
-    ReturnType<typeof useUserInfoQuery>,
-    'isLoading' | 'isError' | 'error' | 'data'
-  >
-): boolean | undefined {
-  // Only a 401 proves the user is signed out; it wins even over retained data.
-  if (thrownResultErrorHasCode(query.error, 'UNAUTHORIZED')) return false;
-  if (query.data) return query.data.authenticated ?? false;
-  // No data and no definitive signal: a transient failure (network blip, 5xx)
-  // leaves the auth state unknown so consumers don't bounce an authenticated
-  // user to login.
-  if (query.isLoading || query.isError) return undefined;
-  return false;
-}
-
 export const [UserContextProvider, useUserContext] =
   createAssertedContextProvider('UserContext', (): UserContextValue => {
     const query = useUserInfoQuery({ enabled: shouldQueryUserInfo });
@@ -55,13 +33,17 @@ export const [UserContextProvider, useUserContext] =
 
     const isLoading = () => query.isLoading;
 
+    // An expired session reads as signed out even while user-info still holds
+    // the old identity, which is what routes it to sign-in.
     const isAuthenticated = createMemo(() =>
-      deriveIsAuthenticated({
-        isLoading: query.isLoading,
-        isError: query.isError,
-        error: query.error,
-        data: userInfo(),
-      })
+      sessionStatus() === 'expired'
+        ? false
+        : deriveIsAuthenticated({
+            isLoading: query.isLoading,
+            isError: query.isError,
+            error: query.error,
+            data: userInfo(),
+          })
     );
 
     const userId = createMemo(() => userInfo()?.id);

@@ -1,8 +1,8 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { deriveIsAuthenticated } from '@core/auth/session';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import {

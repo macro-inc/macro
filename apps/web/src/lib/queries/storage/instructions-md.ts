@@ -4,10 +4,12 @@ import {
   initializeEditorWithState,
 } from '@core/component/LexicalMarkdown/utils';
 
+import { ThrownResultError } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { syncServiceClient } from '@service-sync/client';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
+import { requiresSession } from '../session-gate';
 import { instructionsMdKeys } from './keys';
 
 export { default as AiInstructionsIcon } from '@phosphor/notepad.svg';
@@ -30,8 +32,11 @@ const getInstructionsMdId = async (): Promise<string | null | undefined> => {
     return null;
   }
 
-  console.error('Error getting instructionsMdId', error);
-  throw new Error('Error getting instructionsMdId');
+  // An unauthenticated read is the session's problem, not a document error.
+  if (code !== 'UNAUTHORIZED') {
+    console.error('Error getting instructionsMdId', error);
+  }
+  throw new ThrownResultError(error);
 };
 
 function instructionsMdIdQueryOptions() {
@@ -42,6 +47,7 @@ function instructionsMdIdQueryOptions() {
     throwOnError: false,
     retry: false,
     retryOnMount: false,
+    meta: requiresSession,
   };
 }
 

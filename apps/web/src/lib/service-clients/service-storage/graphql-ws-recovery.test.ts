@@ -80,6 +80,7 @@ function cookieClient(refreshCookieAuth: () => Promise<unknown>) {
       bearerTokenAuth: false,
       getApiToken: vi.fn(),
       refreshCookieAuth: refreshCookieAuth as never,
+      waitForSession: async () => 'signed-in',
     }),
     webSocketImpl: TauriWebSocketWrapper,
     retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,

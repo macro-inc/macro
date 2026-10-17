@@ -1,0 +1,28 @@
+id: ts-no-raw-token-refresh
+language: typescript
+# Twin of tsx-no-raw-token-refresh — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files.
+severity: error
+message: Don't call fetchToken directly — await refreshedSession() (@core/auth/refreshed-session) or waitForSession() (@core/auth/session), or fetch through fetchWithToken.
+note: |-
+  Rule FE-58 in .agents/rules/web/data.md. A raw refresh ignores the session:
+  it fires before sign-in and after /jwt/refresh has rejected the session, and
+  callers that loop on it become 401 storms. refreshedSession() refreshes only
+  for a signed-in user and waits for the next sign-in after a rejection;
+  fetchWithToken refreshes once per 401. The allowed callers below are those
+  primitives.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/lib/core/util/fetchWithToken.ts
+  - apps/web/src/lib/core/auth/refreshed-session.ts
+  # authorizedDssGraphqlFetch is fetchWithToken's refresh-once for urql.
+  - apps/web/src/lib/service-clients/service-storage/graphql-soup.ts
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.spec.ts'
+  - '**/test/**'
+  - '**/tests/**'
+rule:
+  kind: identifier
+  regex: ^fetchToken$

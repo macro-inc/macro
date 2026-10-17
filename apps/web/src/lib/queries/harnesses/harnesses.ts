@@ -1,6 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
+import { requiresSession } from '@queries/session-gate';
 import {
   type Harness,
   type HarnessPairing,
@@ -26,6 +27,7 @@ const harnessesQueryOptions = queryOptions({
   queryFn: async (): Promise<Harness[]> =>
     await throwOnErr(() => storageServiceClient.getHarnesses()),
   refetchInterval: 15_000,
+  meta: requiresSession,
 });
 
 /**

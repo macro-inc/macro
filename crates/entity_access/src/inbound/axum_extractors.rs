@@ -82,6 +82,11 @@ pub enum ExtractorError {
     #[error("{0}")]
     UnauthorizedWithMessage(&'static str),
 
+    /// An authenticated user lacks the membership or role the route needs.
+    /// Answers 403 so clients do not treat it as an expired session.
+    #[error("{0}")]
+    Forbidden(&'static str),
+
     /// Bad request parameters.
     #[error("Bad request: {0}")]
     BadRequest(&'static str),
@@ -126,6 +131,9 @@ impl IntoResponse for ExtractorError {
             ExtractorError::Authorization { status, message } => (status, message),
             error @ (ExtractorError::Unauthorized | ExtractorError::UnauthorizedWithMessage(_)) => {
                 (StatusCode::UNAUTHORIZED, error.to_string().into())
+            }
+            error @ ExtractorError::Forbidden(_) => {
+                (StatusCode::FORBIDDEN, error.to_string().into())
             }
             error @ ExtractorError::BadRequest(_) => {
                 (StatusCode::BAD_REQUEST, error.to_string().into())

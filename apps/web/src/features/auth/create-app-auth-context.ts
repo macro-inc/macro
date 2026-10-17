@@ -1,8 +1,8 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
 import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
+import { deriveIsAuthenticated } from '@core/auth/session';
 import { toast } from '@core/component/Toast/Toast';
-import { deriveIsAuthenticated } from '@core/context/user';
 import { useEmailLinks } from '@core/email-link';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { useSendMobileWelcomeEmail } from '@queries/auth';

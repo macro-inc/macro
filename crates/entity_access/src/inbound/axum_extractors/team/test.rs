@@ -563,7 +563,7 @@ async fn team_scoped_bot_cannot_satisfy_admin_or_owner_requirements() {
         .expect_err("team-scoped bot should not receive Admin access");
     assert!(matches!(
         admin_error,
-        ExtractorError::UnauthorizedWithMessage("you do not have a high enough role")
+        ExtractorError::Forbidden("you do not have a high enough role")
     ));
 
     let owner_error =
@@ -572,7 +572,7 @@ async fn team_scoped_bot_cannot_satisfy_admin_or_owner_requirements() {
             .expect_err("team-scoped bot should not receive Owner access");
     assert!(matches!(
         owner_error,
-        ExtractorError::UnauthorizedWithMessage("you do not have a high enough role")
+        ExtractorError::Forbidden("you do not have a high enough role")
     ));
 }
 
@@ -652,10 +652,7 @@ async fn user_scoped_bot_without_team_membership_has_no_team_access() {
     let error = extract_required_v2(bot_request(VALID_BOT_TOKEN, BotScope::User), &state)
         .await
         .expect_err("acting user without a team should fail required extraction");
-    assert!(matches!(
-        error,
-        ExtractorError::UnauthorizedWithMessage("not in a team")
-    ));
+    assert!(matches!(error, ExtractorError::Forbidden("not in a team")));
     assert_eq!(
         state.entity_access.membership_lookups(),
         [
@@ -696,10 +693,24 @@ async fn required_v2_preserves_no_membership_error() {
         .await
         .expect_err("required extraction should reject absent membership");
 
-    assert!(matches!(
-        error,
-        ExtractorError::UnauthorizedWithMessage("not in a team")
-    ));
+    assert!(matches!(error, ExtractorError::Forbidden("not in a team")));
+}
+
+#[tokio::test]
+async fn required_v2_answers_forbidden_for_a_signed_in_user_without_a_team() {
+    let state = state(
+        FakeEntityAccessService::default(),
+        FakeAuthorizationService::default(),
+    );
+
+    let error = extract_required_v2(bearer_request("valid"), &state)
+        .await
+        .expect_err("required extraction should reject absent membership");
+    let (status, body) = response_parts(error.into_response()).await;
+
+    // A 401 here would send the client to refresh a session that is valid.
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, r#"{"message":"not in a team"}"#);
 }
 
 #[tokio::test]
@@ -715,7 +726,7 @@ async fn required_v2_preserves_insufficient_role_error() {
 
     assert!(matches!(
         error,
-        ExtractorError::UnauthorizedWithMessage("you do not have a high enough role")
+        ExtractorError::Forbidden("you do not have a high enough role")
     ));
 }
 

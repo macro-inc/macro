@@ -1,0 +1,24 @@
+id: tsx-no-ungated-query-client
+language: tsx
+# Twin of ts-no-ungated-query-client — ast-grep rules are single-language, and
+# `typescript` only scans .ts files.
+severity: error
+message: Don't construct a QueryClient in app code — use the app `queryClient` from @queries/client, which applies the session gate.
+note: |-
+  Rule FE-58 in .agents/rules/web/data.md. The app client is a
+  SessionGatedQueryClient: every query it runs stops when the session expires,
+  waits for sign-in when tagged `meta: requiresSession`, never retries a 401,
+  and stops polling after one. A second client skips all of that and brings
+  back pre-login and expired-session 401 storms. Tests and browser-test
+  fixtures may build their own.
+files:
+  - apps/web/src/**
+ignores:
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.spec.ts'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/browser-test/**'
+rule:
+  pattern: new QueryClient($$$)

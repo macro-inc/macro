@@ -290,7 +290,7 @@ fn seal_body() -> Value {
 async fn all_seven_operations_require_authenticated_team_admin() {
     for (role, authenticated, status) in [
         (TeamRole::Admin, false, StatusCode::UNAUTHORIZED),
-        (TeamRole::Member, true, StatusCode::UNAUTHORIZED),
+        (TeamRole::Member, true, StatusCode::FORBIDDEN),
     ] {
         let (app, service) = router(role);
         for (method, path) in operations(JOB) {

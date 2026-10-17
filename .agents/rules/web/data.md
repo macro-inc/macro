@@ -79,3 +79,17 @@ Examples: [session query factory](../../../apps/web/src/lib/queries/agent-sessio
   Query keys hold exactly the fetch inputs.
 - **FE-51** State moved into the URL round-trips every field. Removed or renamed
   routes and route ids get redirects, and saved split layouts keep working.
+- **FE-58** Auth-dependent work waits for the session gate
+  (`@core/auth/session`). Queries run on the app `queryClient`, which stops all
+  queries when the session expires, never retries a 401, and stops polling after
+  one; tag a query whose endpoint 401s without a user with
+  `meta: requiresSession` (spread it into existing `meta`) so it waits for
+  sign-in, or list its key family in `queries/session-families.ts` when no
+  member of that family serves shared links or signed-out pages. Root providers
+  mount on signed-out routes too, so their user-only queries belong there.
+  Websockets and startup work (push/VoIP registration, recovery) await
+  `waitForSession()` (`@core/auth/session`) or `refreshedSession()`
+  (`@core/auth/refreshed-session`) instead of calling `fetchToken()`.
+  A signed-in user who lacks a team or role gets 403, not 401: 401 means the
+  session itself is gone. Enforced by ast-grep `ts-no-ungated-query-client`,
+  `ts-no-raw-token-refresh` and their `tsx-` twins, error.

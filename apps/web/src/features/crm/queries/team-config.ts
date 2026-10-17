@@ -24,6 +24,7 @@ export type {
  */
 
 import { throwOnErr } from '@core/util/result';
+import { requiresSession } from '@queries/session-gate';
 import type { CrmTeamSettingsResponse } from '@service-storage/generated/schemas/crmTeamSettingsResponse';
 import type { UpdateCrmTeamSettingsRequest } from '@service-storage/generated/schemas/updateCrmTeamSettingsRequest';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
@@ -36,6 +37,7 @@ function teamCrmSettingsQueryOptions(deps: CrmQueryDependencies) {
     queryKey: CRM_TEAM_SETTINGS_QUERY_KEY,
     queryFn: async () =>
       await throwOnErr(() => deps.storage.getCrmTeamSettings()),
+    meta: requiresSession,
   });
 }
 

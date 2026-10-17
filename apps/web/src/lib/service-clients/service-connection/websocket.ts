@@ -1,7 +1,8 @@
+import { refreshedSession } from '@core/auth/refreshed-session';
+import { waitForSession } from '@core/auth/session';
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { fetchToken } from '@core/util/fetchWithToken';
 import {
   ArrayQueue,
   createSocketEffect,
@@ -30,14 +31,17 @@ export type FromWebsocketMessage = {
   data: any;
 };
 
+// Resolves only for a signed-in session, so a signed-out or expired client
+// holds the socket closed instead of handshaking into a 401 retry storm.
 async function resolveWsUrl() {
   if (ENABLE_BEARER_TOKEN_AUTH) {
+    await waitForSession();
     const apiToken = await getMacroApiToken();
     if (!apiToken) throw new Error('No Macro API token');
 
     return `${wsHost}?macro-api-token=${apiToken}`;
   }
-  await fetchToken();
+  await refreshedSession();
   return wsHost;
 }
 

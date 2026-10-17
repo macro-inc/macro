@@ -1,3 +1,4 @@
+import { waitForSession } from '@core/auth/session';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_BEARER_TOKEN_AUTH,
@@ -373,6 +374,7 @@ function createGraphqlSoupWebSocketClient(
     bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
     getApiToken: getMacroApiToken,
     refreshCookieAuth: fetchToken,
+    waitForSession,
   });
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,

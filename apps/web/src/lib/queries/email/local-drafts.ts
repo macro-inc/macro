@@ -7,6 +7,7 @@ import type {
 import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { analytics } from '@app/lib/analytics';
+import { resolvedSession } from '@core/auth/session';
 import { getNativeStagedUpload } from '@core/mobile/nativeStagedUpload';
 import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -85,10 +86,15 @@ export async function clearLocalDrafts(): Promise<void> {
   }
 }
 
+function cachedUser() {
+  return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey);
+}
+
 async function session() {
-  const user = queryClient.getQueryData<UserInfoData>(
-    authKeys.userInfo.queryKey
-  );
+  // Startup mutation recovery can run before user-info has answered; that is
+  // an unresolved session, not a signed-out one.
+  if (!cachedUser()) await resolvedSession();
+  const user = cachedUser();
   if (!user?.authenticated || !user.id)
     throw new Error('Sign in to save drafts on this device');
   const epoch = storageEpoch();
@@ -108,9 +114,7 @@ async function session() {
     expected.accountId,
     expected.epoch,
     () => {
-      const current = queryClient.getQueryData<UserInfoData>(
-        authKeys.userInfo.queryKey
-      );
+      const current = cachedUser();
       return (
         !retiredSession &&
         current?.authenticated === true &&

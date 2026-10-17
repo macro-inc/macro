@@ -1214,7 +1214,7 @@ async fn get_document_by_team_slug_requires_credentials_and_team_membership() {
 
     assert_eq!(
         send_status(&router, missing_team).await,
-        StatusCode::UNAUTHORIZED
+        StatusCode::FORBIDDEN
     );
     assert!(document_service.team_slug_calls().is_empty());
     assert!(document_service.internal_get_calls().is_empty());

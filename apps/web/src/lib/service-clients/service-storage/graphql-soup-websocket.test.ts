@@ -70,6 +70,7 @@ describe('GraphQL Soup websocket auth', () => {
       bearerTokenAuth: false,
       getApiToken,
       refreshCookieAuth,
+      waitForSession: vi.fn().mockResolvedValue('signed-in'),
     });
 
     await expect(resolveUrl()).resolves.toBe(
@@ -90,11 +91,37 @@ describe('GraphQL Soup websocket auth', () => {
       bearerTokenAuth: true,
       getApiToken,
       refreshCookieAuth,
+      waitForSession: vi.fn().mockResolvedValue('signed-in'),
     });
 
     await expect(resolveUrl()).resolves.toContain('macro-api-token=first');
     await expect(resolveUrl()).resolves.toContain('macro-api-token=second');
     expect(refreshCookieAuth).not.toHaveBeenCalled();
+  });
+
+  it('holds the connection without refreshing until a session exists', async () => {
+    let signIn = () => {};
+    const waitForSession = vi.fn(
+      () => new Promise<void>((resolve) => (signIn = resolve))
+    );
+    const refreshCookieAuth = vi.fn().mockResolvedValue(ok(undefined));
+    const resolveUrl = createGraphqlSoupWebSocketUrlResolver({
+      dssHost: 'https://gateway.macro.com/dss',
+      bearerTokenAuth: false,
+      getApiToken: vi.fn(),
+      refreshCookieAuth,
+      waitForSession,
+    });
+
+    const url = resolveUrl();
+    await Promise.resolve();
+    expect(refreshCookieAuth).not.toHaveBeenCalled();
+
+    signIn();
+    await expect(url).resolves.toBe(
+      'wss://gateway.macro.com/dss/items/soup/graphql/ws'
+    );
+    expect(refreshCookieAuth).toHaveBeenCalledOnce();
   });
 
   it('retries a cookie refresh lost to an outage but not a rejected session', async () => {
@@ -104,6 +131,7 @@ describe('GraphQL Soup websocket auth', () => {
         bearerTokenAuth: false,
         getApiToken: vi.fn(),
         refreshCookieAuth: vi.fn().mockResolvedValue(err([{ code }])),
+        waitForSession: vi.fn().mockResolvedValue('signed-in'),
       });
 
     for (const code of ['NETWORK_ERROR', 'UNKNOWN_ERROR', 'HTTP_ERROR']) {

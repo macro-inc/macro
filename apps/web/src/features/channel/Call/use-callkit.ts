@@ -1,5 +1,6 @@
 import { whenSplitManagerReady } from '@app/signal/splitLayout';
 import { registerPushRegistrationLifecycle } from '@core/auth/push-registration-lifecycle';
+import { waitForSession } from '@core/auth/session';
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { isPlatform } from '@core/util/platform';
@@ -35,6 +36,9 @@ async function getCachedVoipToken(): Promise<string | null> {
 }
 
 async function registerVoipToken(token: string): Promise<void> {
+  // PushKit hands over tokens at cold start and on rotation, often before
+  // sign-in; the registration is authenticated, so hold it until a session.
+  await waitForSession();
   const res = await notificationServiceClient.registerDevice({
     token,
     deviceType: DEVICE_TYPE_IOS_VOIP,

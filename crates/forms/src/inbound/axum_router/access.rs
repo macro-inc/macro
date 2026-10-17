@@ -85,6 +85,7 @@ fn form_refusal(rejection: &ExtractorError, signed_in: bool) -> AccessRefusal {
                 AccessRefusal::SignInRequired
             }
         }
+        ExtractorError::Forbidden(_) => AccessRefusal::Forbidden,
         ExtractorError::NotFound(_) | ExtractorError::BadRequest(_) => AccessRefusal::NotFound,
         error @ (ExtractorError::Internal | ExtractorError::Database) => {
             tracing::error!(error = ?error, "form access check failed");

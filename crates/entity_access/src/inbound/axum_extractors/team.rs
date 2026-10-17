@@ -48,8 +48,8 @@ impl<T: RequiredPermission> TeamAccessOutcome<T> {
     fn into_required_receipt(self) -> Result<EntityAccessReceipt<T>, ExtractorError> {
         match self {
             Self::Qualifying(receipt) => Ok(receipt),
-            Self::NotInTeam => Err(ExtractorError::UnauthorizedWithMessage("not in a team")),
-            Self::InsufficientRole => Err(ExtractorError::UnauthorizedWithMessage(
+            Self::NotInTeam => Err(ExtractorError::Forbidden("not in a team")),
+            Self::InsufficientRole => Err(ExtractorError::Forbidden(
                 "you do not have a high enough role",
             )),
         }

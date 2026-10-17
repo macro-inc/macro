@@ -9,6 +9,8 @@
  * invoke all registered lifecycles.
  */
 
+import { resolvedSession } from './session';
+
 export type PushRegistrationLifecycle = {
   /** (Re-)register this device's push token under the current session's user. */
   syncRegistration: () => Promise<void>;
@@ -57,6 +59,9 @@ export async function syncPushRegistrations(
   if (source === 'resume' && loggedOut) return;
   if (source === 'session') loggedOut = false;
   const generation = sessionGeneration;
+  // Registration is authenticated; without a signed-in user it can only 401.
+  if ((await resolvedSession()) !== 'signed-in') return;
+  if (generation !== sessionGeneration) return;
   await Promise.all(
     [...lifecycles].map(async (lifecycle) => {
       try {

@@ -719,7 +719,7 @@ async fn teams_router_uses_entity_access_team_receipts() {
     .await
     .expect("router should respond");
 
-    assert_eq!(member_response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(member_response.status(), StatusCode::FORBIDDEN);
     assert!(member_service.team_receipt_calls().is_empty());
 }
 

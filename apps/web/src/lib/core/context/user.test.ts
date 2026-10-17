@@ -2,10 +2,10 @@
  * @vitest-environment jsdom
  */
 
+import { deriveIsAuthenticated } from '@core/auth/session';
 import { ThrownResultError } from '@core/util/result';
 import type { UserInfoData } from '@queries/auth/user-info';
 import { describe, expect, test, vi } from 'vitest';
-import { deriveIsAuthenticated } from './user';
 
 vi.mock('@queries/auth/user-info', () => ({
   useUserInfoQuery: vi.fn(),
