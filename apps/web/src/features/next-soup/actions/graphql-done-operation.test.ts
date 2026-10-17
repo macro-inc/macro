@@ -22,6 +22,7 @@ const writes = vi.hoisted(() => ({
   notificationOverride: vi.fn(() =>
     Object.assign(vi.fn(), { release: vi.fn() })
   ),
+  confirmDone: vi.fn((_ids: readonly string[]) => false),
 }));
 vi.mock('../utils', () => ({
   executeMarkEntitiesDone: writes.done,
@@ -38,6 +39,9 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 vi.mock('@notifications', () => ({
   setDoneOverride: writes.notificationOverride,
 }));
+vi.mock('@queries/notification/state-cache', () => ({
+  confirmEntityNotificationsDone: writes.confirmDone,
+}));
 
 let client: QueryClient;
 const cleanup: (() => void)[] = [];
@@ -46,6 +50,8 @@ beforeEach(() => {
   writes.done.mockReset();
   writes.undone.mockReset();
   writes.notificationOverride.mockClear();
+  writes.confirmDone.mockReset();
+  writes.confirmDone.mockReturnValue(false);
   client = new QueryClient();
   client.setQueryData(authKeys.userInfo.queryKey, {
     userId: 'viewer',
@@ -186,4 +192,31 @@ describe('no-op receipts with real GraphQL display intents', () => {
       expect(pending()).toHaveLength(1);
     }
   );
+});
+
+describe('no-op receipts with the normalized cache', () => {
+  it('records stale notifications as done and keeps the row hidden', async () => {
+    writes.confirmDone.mockReturnValue(true);
+    const { operation, visible, reply } = setup(false, ['a']);
+    await vi.waitFor(() =>
+      expect(visible().entities.map(({ id }) => id)).toEqual(['b'])
+    );
+    const write = operation.execute();
+    // The server changed nothing: it already held the entity as done.
+    reply.resolve([]);
+    await write;
+    operation.settle();
+
+    expect(writes.confirmDone).toHaveBeenCalledExactlyOnceWith(['n-a']);
+    expect(operation.hasNoopRows()).toBe(false);
+    expect(operation.completedCount()).toBe(1);
+    // No rollback: the row does not come back while its cache catches up.
+    expect(
+      writes.notificationOverride.mock.results[0].value
+    ).not.toHaveBeenCalled();
+    expect(visible().entities.map(({ id }) => id)).toEqual(['b']);
+    // Nothing changed on the server, so Undo has nothing to reverse.
+    await operation.undo();
+    expect(writes.undone).not.toHaveBeenCalled();
+  });
 });

@@ -2,6 +2,7 @@ import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-no
 import type { EntityData } from '@entity';
 import { toNotificationEntity } from '@entity/utils/notification';
 import type { NotificationEntityRef } from '@queries/notification/entity-mutations';
+import { confirmEntityNotificationsDone } from '@queries/notification/state-cache';
 import { batch } from 'solid-js';
 import {
   executeMarkEntitiesDone,
@@ -165,6 +166,13 @@ export function createGraphqlDoneOperation(args: Args) {
               emailIds: [],
               notificationIds: ids,
             };
+          } else if (
+            outcome.kind === 'entity-notifications' &&
+            confirmEntityNotificationsDone(attempt.knownNotificationIds)
+          ) {
+            // Already done on the server; this client was stale. The row
+            // stays hidden as its cached notifications now read done, and
+            // there is nothing to undo.
           } else {
             // No matching receipt justifies neither a hide nor a restoration.
             // Release this attempt even when Undo was never requested: a stale

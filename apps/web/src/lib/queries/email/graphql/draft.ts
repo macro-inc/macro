@@ -9,7 +9,6 @@ import {
   select,
   update,
 } from '@graphql-cache/exchange/optimistic';
-import { getActiveGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import {
   DeleteEmailDraftDocument,
   type DeleteEmailDraftMutation,
@@ -348,11 +347,11 @@ export async function executeGraphqlSaveEmailDraft(
             ),
           ]
         : [],
+      // The returned draft and thread records update every list that reads
+      // them. Refetch the thread page only when a missing snapshot or an
+      // inbox move prevents the message-list patch; otherwise a save can
+      // reset the open thread.
       revalidations: [
-        ...getActiveGraphqlSoupRevalidations(),
-        // Ordinary autosaves already return the draft and thread records.
-        // Refetch only when a missing snapshot or inbox move prevents the
-        // message-list patch; otherwise a save can reset the open thread.
         ...(canPatchThread
           ? []
           : [
@@ -481,7 +480,6 @@ export async function executeGraphqlDeleteEmailDraft(
         ),
       ],
       revalidations: [
-        ...getActiveGraphqlSoupRevalidations(),
         {
           document: EmailThreadPageDocument,
           variables: threadPageVariables,

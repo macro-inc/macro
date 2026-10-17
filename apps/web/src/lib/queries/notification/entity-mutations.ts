@@ -115,10 +115,12 @@ export function toNotificationEntityInput(
 
 /**
  * Mark all notifications associated with the supplied entities seen or done.
- * The changed-row response updates the normalized GraphQL cache; the client
- * also revalidates mounted readers to reconcile stale rows omitted by a no-op.
- * It is deliberately not mirrored into the legacy TanStack notification cache.
- * Returned rows include only the exact IDs needed by a later ID-scoped undo.
+ * The changed-row response updates the normalized GraphQL cache and every
+ * reader of it; a Done that changed nothing records the rows this client
+ * still showed (`confirmEntityNotificationsDone`). Without the cache, mounted
+ * readers are read again. It is deliberately not mirrored into the legacy
+ * TanStack notification cache. Returned rows include only the exact IDs
+ * needed by a later ID-scoped undo.
  */
 export async function updateNotificationsForEntities(args: {
   entities: NotificationEntityRef[];

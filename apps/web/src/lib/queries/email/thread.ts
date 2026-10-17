@@ -20,7 +20,10 @@ import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
 } from '@service-storage/graphql-email-read-state';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -30,10 +33,7 @@ import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
-import {
-  getActiveGraphqlSoupRevalidations,
-  refreshActiveGraphqlSoupQueries,
-} from '../soup/graphql/active-queries';
+import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -360,10 +360,10 @@ export function useMarkThreadAsSeenMutation(
       if (isFeatureEnabled(enableGraphqlSoup)) {
         const disposition = await markGraphqlEmailThreadSeen(
           getGraphqlSoupClient(),
-          params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          params.threadId
         );
-        if (disposition === 'committed')
+        // The cache's optimistic and committed `isRead` reach every list.
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }
@@ -443,10 +443,10 @@ export function useMarkThreadAsUnreadMutation(
       if (isFeatureEnabled(enableGraphqlSoup)) {
         const disposition = await markGraphqlEmailThreadUnread(
           getGraphqlSoupClient(),
-          params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          params.threadId
         );
-        if (disposition === 'committed')
+        // The cache's optimistic and committed `isRead` reach every list.
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }

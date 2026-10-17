@@ -159,9 +159,12 @@ remain restored. Only accepted
 threads get their notifications restored. Notification or list-refresh failures
 warn without rolling back accepted unarchives. Verify mixed committed/queued/
 rejected selections, partial-success counts, and that a queued sibling prevents
-shared-list refetch even when notification restoration fails. GraphQL reversals
-rely on normalized writes and their durable revalidation, not an extra REST Soup
-refetch after rows settle. Verify the open-thread header too: with GraphQL enabled,
+shared-list refetch even when notification restoration fails. With the normalized
+cache, no list is read again after Done, Not Done, Undo, read/unread, an entity
+notification update, a reminder or a draft save: the optimistic write and the
+returned records update every list, which re-evaluates from the cache. In the
+network panel one `e` sends its two mutations and no `Soup`, `SoupNotifications`
+or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
 Mark Not Done remains available for an archived thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification

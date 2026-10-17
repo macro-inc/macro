@@ -2,6 +2,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { graphqlCacheEnabled } from '@service-storage/graphql-soup';
 import { queryClient } from '../client';
 import { fetchGraphqlEmailThread } from '../email/graphql/thread';
 import { emailKeys } from '../email/keys';
@@ -22,8 +23,13 @@ export async function refreshEmailFollowup(threadId: string) {
       queryKey: emailKeys.threadMessages(threadId).queryKey,
     }),
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def }),
+    // Reading the thread again updates its cached record, which every list
+    // reads; only the uncached transport has to read its lists again.
     ...(isFeatureEnabled(enableGraphqlSoup)
-      ? [refreshActiveGraphqlSoupQueries(), fetchGraphqlEmailThread(threadId)]
+      ? [
+          fetchGraphqlEmailThread(threadId),
+          ...(graphqlCacheEnabled() ? [] : [refreshActiveGraphqlSoupQueries()]),
+        ]
       : []),
   ]);
 }

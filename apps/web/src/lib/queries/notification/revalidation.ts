@@ -45,10 +45,11 @@ async function refreshSafely(refresh: () => Promise<unknown>): Promise<void> {
 }
 
 /**
- * Entity writes return only changed rows. Empty AND partial responses can leave
- * stale notifications behind, so refresh mounted readers after every commit.
- * Reuse loaded page variables instead of resetting pagination or reading all
- * cached history. Disabled/unstarted notification feeds remain dormant.
+ * Reads mounted notification readers again for the uncached transport, whose
+ * lists have no other way to learn of a write. With the normalized cache the
+ * written rows update every reader instead (FE-56). Reuses loaded page
+ * variables instead of resetting pagination or reading all cached history.
+ * Disabled/unstarted notification feeds remain dormant.
  */
 export async function revalidateNotificationReaders(
   client: Client

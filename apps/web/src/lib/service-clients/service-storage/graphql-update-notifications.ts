@@ -15,6 +15,7 @@ import {
   type UpdateNotificationsMutation,
   type UpdateNotificationsMutationVariables,
 } from './graphql/generated/graphql';
+import { graphqlCacheEnabled } from './graphql-soup';
 
 /** Input for a GraphQL notification status write. */
 export type GraphqlUpdateNotificationsArgs = {
@@ -103,6 +104,9 @@ export async function executeGraphqlUpdateNotificationsForEntities(
   const result = await client
     .mutation(UpdateNotificationsForEntityDocument, variables)
     .toPromise();
-  if (!result.error && result.data) await revalidateNotificationReaders(client);
+  // The changed rows update every cached reader. Only the uncached transport
+  // has to read its notification lists again.
+  if (!result.error && result.data && !graphqlCacheEnabled())
+    await revalidateNotificationReaders(client);
   return result;
 }

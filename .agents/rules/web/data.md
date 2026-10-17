@@ -77,5 +77,11 @@ Examples: [session query factory](../../../apps/web/src/lib/queries/agent-sessio
   never openable.
 - **FE-50** Scope invalidation to what changed, but update every reader of it.
   Query keys hold exactly the fetch inputs.
+- **FE-56** With the GraphQL normalized cache, never refetch lists after a
+  mutation: its optimistic write and returned records update every reader,
+  and lists re-evaluate locally. A refetch reads a replica that can lag the
+  write and puts stale state back. Refetch only without the cache, on
+  reconnect, or as a failure fallback; a write the server answers only in
+  part writes the confirmed rest into the cache itself.
 - **FE-51** State moved into the URL round-trips every field. Removed or renamed
   routes and route ids get redirects, and saved split layouts keep working.
