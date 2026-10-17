@@ -59,7 +59,9 @@ replace the timestamp within its existing space. Archived rows offer
 **Unarchive email**; the archive control is disabled in tabs that do not support
 Mark Done. The icons also appear when a button receives keyboard focus. Clicking
 an icon neither opens the thread nor applies the action to other selected rows.
-Touch devices retain the swipe actions.
+On touch devices, swiping a row left marks it done and swiping right opens
+**Remind me** for it; the row springs back until a time is picked. Right swipes
+that start within 40px of the left edge are left to swipe-back navigation.
 Search results use the same reserved column, with actions aligned to the first
 line; snippets, highlighted matches, and expanded hits remain unobstructed.
 

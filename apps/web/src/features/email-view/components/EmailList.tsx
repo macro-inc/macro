@@ -28,6 +28,7 @@ import {
   ListLayoutProvider,
   type WithNotification,
 } from '@entity';
+import BellIcon from '@phosphor/bell-simple.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -339,10 +340,14 @@ export function EmailList(props: EmailListProps) {
     });
   }
 
-  const markDoneActionFor = (row: EmailActionRow) =>
+  const rowActionFor = (row: EmailActionRow, id: string) =>
     actionGroupsFor(row)
       .flatMap((group) => group.items)
-      .find((action) => action.id === 'mark-done');
+      .find((action) => action.id === id);
+  const markDoneActionFor = (row: EmailActionRow) =>
+    rowActionFor(row, 'mark-done');
+  const remindActionFor = (row: EmailActionRow) =>
+    rowActionFor(row, 'create-reminder');
 
   function focusActionRow(row: EmailActionRow) {
     list.focus.set(row.rowId, { reason: 'pointer', force: true });
@@ -525,6 +530,22 @@ export function EmailList(props: EmailListProps) {
               focusActionRow(row);
               void action.onClick();
             }}
+            canSwipeRight={(entityId) => {
+              const row = swipeRowsByEntityId().get(entityId);
+              return row ? remindActionFor(row) !== undefined : false;
+            }}
+            onSwipeRight={(entityId) => {
+              const row = swipeRowsByEntityId().get(entityId);
+              if (!row) return;
+
+              const action = remindActionFor(row);
+              if (!action) return;
+
+              focusActionRow(row);
+              void action.onClick();
+            }}
+            // Done removes the row; Remind me keeps it until a time is picked.
+            triggerBehavior={{ left: 'fly-out', right: 'spring-back' }}
           >
             <Switch>
               <Match
@@ -723,6 +744,10 @@ export function EmailList(props: EmailListProps) {
                                         swipeLeftColor: 'bg-success',
                                         swipeLeftRevealedComponent: (
                                           <CheckIcon class="size-8 text-surface" />
+                                        ),
+                                        swipeRightColor: 'bg-accent',
+                                        swipeRightRevealedComponent: (
+                                          <BellIcon class="size-8 text-surface" />
                                         ),
                                       }}
                                       onClick={(event) => {
