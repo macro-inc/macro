@@ -91,3 +91,67 @@ fn settle_reauth_retries_transient_probe_failures() {
         Some(EmailApiError::Transient { .. })
     ));
 }
+
+#[tokio::test(start_paused = true)]
+async fn renewing_while_renews_on_each_interval_until_work_finishes() {
+    let renewals = AtomicU32::new(0);
+    let output = renewing_while(
+        async {
+            tokio::time::sleep(LINK_DELETE_LOCK_RENEW_INTERVAL * 3 + Duration::from_secs(1)).await;
+            "deleted"
+        },
+        LINK_DELETE_LOCK_RENEW_INTERVAL,
+        || {
+            renewals.fetch_add(1, Ordering::SeqCst);
+            async {}
+        },
+    )
+    .await;
+
+    assert_eq!(output, "deleted");
+    assert_eq!(renewals.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn renewing_while_skips_renewal_for_quick_work() {
+    let renewals = AtomicU32::new(0);
+    renewing_while(async {}, LINK_DELETE_LOCK_RENEW_INTERVAL, || {
+        renewals.fetch_add(1, Ordering::SeqCst);
+        async {}
+    })
+    .await;
+
+    assert_eq!(renewals.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn renewing_while_finishes_work_even_if_renewal_hangs() {
+    let output = renewing_while(
+        async {
+            tokio::time::sleep(LINK_DELETE_LOCK_RENEW_INTERVAL * 2).await;
+            "deleted"
+        },
+        LINK_DELETE_LOCK_RENEW_INTERVAL,
+        std::future::pending::<()>,
+    )
+    .await;
+
+    assert_eq!(output, "deleted");
+}
+
+#[test]
+fn only_refresh_handler_deletes_drop_their_duplicates() {
+    assert!(rescheduled_by_refresh_handler(&DeletionReason::Unused));
+    assert!(rescheduled_by_refresh_handler(&DeletionReason::Inactive));
+    for user_initiated in [
+        DeletionReason::ManuallyDisabled,
+        DeletionReason::UserDeleted,
+        DeletionReason::AccessRevoked,
+    ] {
+        assert!(
+            !rescheduled_by_refresh_handler(&user_initiated),
+            "{} deletes are enqueued once and must be retried",
+            user_initiated.as_str()
+        );
+    }
+}

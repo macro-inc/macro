@@ -48,8 +48,33 @@ impl SQS {
         message: LinkManagerMessage,
     ) -> anyhow::Result<()> {
         if let Some(link_manager_queue) = &self.link_manager_queue {
-            return enqueue_link_manager_notification(&self.inner, link_manager_queue, message)
-                .await;
+            return enqueue_link_manager_notification(
+                &self.inner,
+                link_manager_queue,
+                message,
+                None,
+            )
+            .await;
+        }
+        anyhow::bail!("link_manager_queue is not configured")
+    }
+
+    /// Sends a notification message to the email refresh queue, hidden from consumers for
+    /// `delay_seconds` (SQS allows 0..=900).
+    #[tracing::instrument(skip(self), err)]
+    pub async fn enqueue_link_manager_notification_with_delay(
+        &self,
+        message: LinkManagerMessage,
+        delay_seconds: i32,
+    ) -> anyhow::Result<()> {
+        if let Some(link_manager_queue) = &self.link_manager_queue {
+            return enqueue_link_manager_notification(
+                &self.inner,
+                link_manager_queue,
+                message,
+                Some(delay_seconds),
+            )
+            .await;
         }
         anyhow::bail!("link_manager_queue is not configured")
     }
@@ -217,6 +242,7 @@ pub async fn enqueue_link_manager_notification(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,
     message: LinkManagerMessage,
+    delay_seconds: Option<i32>,
 ) -> anyhow::Result<()> {
     let message_str = serde_json::to_string(&message)?;
 
@@ -224,6 +250,7 @@ pub async fn enqueue_link_manager_notification(
         .send_message()
         .queue_url(queue_url)
         .message_body(message_str)
+        .set_delay_seconds(delay_seconds)
         .send()
         .await?;
     Ok(())

@@ -2,6 +2,9 @@ use crate::util::redis::RedisClient;
 use std::time::Duration;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// A distributed lock backed by Redis using SET NX EX.
 ///
 /// Prefer calling [`RedisLock::release`] explicitly for deterministic cleanup.
@@ -54,6 +57,32 @@ impl RedisLock {
         if let Some(inner) = self.inner.take() {
             inner.release().await;
         }
+    }
+
+    /// Resets the lock's TTL to `ttl`, but only while this caller still holds it.
+    /// Returns `false` when the lock already expired and may now belong to someone else.
+    pub async fn extend(&self, ttl: Duration) -> Result<bool, redis::RedisError> {
+        let Some(inner) = &self.inner else {
+            return Ok(false);
+        };
+        let script = redis::Script::new(
+            r#"
+            if redis.call('GET', KEYS[1]) == ARGV[1] then
+                return redis.call('EXPIRE', KEYS[1], ARGV[2])
+            else
+                return 0
+            end
+            "#,
+        );
+
+        let mut con = inner.client.get_multiplexed_async_connection().await?;
+        let extended: i64 = script
+            .key(&inner.key)
+            .arg(&inner.token)
+            .arg(ttl.as_secs())
+            .invoke_async(&mut con)
+            .await?;
+        Ok(extended == 1)
     }
 }
 

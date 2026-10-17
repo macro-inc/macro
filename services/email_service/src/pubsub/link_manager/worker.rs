@@ -2,6 +2,7 @@ use crate::outbound::email_api::GmailApi;
 use crate::pubsub::context::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::link_manager::process;
+use crate::pubsub::link_manager::visibility::BatchVisibility;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
@@ -92,15 +93,18 @@ pub async fn run_worker_with_cancellation(
                             if messages.is_empty() {
                                 continue;
                             }
+                            let visibility = BatchVisibility::start(&worker, &messages);
                             let result = futures::stream::iter(messages.iter())
                                 .then(|message| {
                                     let ctx = ctx.clone();
+                                    let visibility = &visibility;
                                     async move {
                                         let result = process::process_message(
                                             ctx,
                                             message,
                                         )
                                             .await;
+                                        visibility.finish(message);
 
                                         match result {
                                             Ok(_) => Ok(()),

@@ -57,6 +57,24 @@ impl SQSWorker {
     pub async fn delete_message(&self, receipt_handle: &str) -> anyhow::Result<()> {
         delete_message::delete_message(&self.inner, &self.queue_url, receipt_handle).await
     }
+
+    /// Hides a received message from other consumers for `visibility_timeout_seconds`
+    /// from now. SQS caps a message's total visibility at 12 hours from its receipt.
+    #[tracing::instrument(skip(self, receipt_handle), err)]
+    pub async fn change_message_visibility(
+        &self,
+        receipt_handle: &str,
+        visibility_timeout_seconds: i32,
+    ) -> anyhow::Result<()> {
+        self.inner
+            .change_message_visibility()
+            .queue_url(&self.queue_url)
+            .receipt_handle(receipt_handle)
+            .visibility_timeout(visibility_timeout_seconds)
+            .send()
+            .await?;
+        Ok(())
+    }
 }
 
 #[tracing::instrument(skip(sqs_worker, message), fields(message_id=message.message_id, message_receipt_handle=message.receipt_handle))]

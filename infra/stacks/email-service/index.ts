@@ -164,8 +164,9 @@ export const gmailOpsRetryQueueName = pulumi.interpolate`${gmail_ops_retry_queue
 
 const link_manager_queue = new Queue('email-service-refresh', {
   tags,
-  // deleting a link from the database can sometimes take a long time
-  visibilityTimeoutSeconds: 300,
+  // Link deletes can run for over an hour. The link manager worker extends visibility
+  // in flight (VISIBILITY_TIMEOUT_SECONDS in link_manager/visibility.rs); keep the two equal.
+  visibilityTimeoutSeconds: 900,
 });
 
 export const linkManagerQueueArn = pulumi.interpolate`${link_manager_queue.queue.arn}`;

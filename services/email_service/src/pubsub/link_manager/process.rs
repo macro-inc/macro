@@ -1,5 +1,6 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::util::{build_notification_recipients, cg_refresh_email, publish_email_event};
+use crate::util::redis::lock::LockError;
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
 use crm::domain::service::CrmService;
@@ -17,11 +18,19 @@ use models_email::service::link::{Link, UserProvider};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use sqs_worker::cleanup_message;
+use std::convert::Infallible;
 use std::future::Future;
 use std::time::Duration;
 
 #[cfg(test)]
 mod test;
+
+/// Lifetime of a link-delete claim between renewals; how long a crashed worker's claim
+/// blocks the redelivered message.
+const LINK_DELETE_LOCK_TTL: Duration = Duration::from_secs(900);
+
+/// Well under [`LINK_DELETE_LOCK_TTL`], so one failed renewal doesn't drop the claim.
+const LINK_DELETE_LOCK_RENEW_INTERVAL: Duration = Duration::from_secs(300);
 
 /// Backoff schedule for teardown provider calls: three attempts total.
 const TEARDOWN_RETRY_DELAYS: [Duration; 2] =
@@ -97,7 +106,14 @@ pub async fn process_message(
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
-            handle_delete(&ctx, &link, &deletion_reason).await?;
+            let attempt = delete_link_exclusively(&ctx, &link, &deletion_reason).await?;
+            if attempt == DeleteAttempt::InProgressElsewhere
+                && !rescheduled_by_refresh_handler(&deletion_reason)
+            {
+                anyhow::bail!(
+                    "link {link_id} is being deleted by another worker; retrying after its claim clears"
+                );
+            }
         }
         LinkManagerMessage::DeleteUser { fusionauth_user_id } => {
             handle_delete_all_user_links(&ctx, &fusionauth_user_id).await?;
@@ -267,13 +283,118 @@ async fn handle_delete_all_user_links(
         "Deleting all email links for user"
     );
 
+    let mut in_progress_elsewhere = 0_usize;
     for link in &links {
-        if let Err(e) = handle_delete(ctx, link, &DeletionReason::UserDeleted).await {
-            tracing::error!(error=?e, link_id=?link.id, "Failed to delete link during user cleanup");
+        match delete_link_exclusively(ctx, link, &DeletionReason::UserDeleted).await {
+            Ok(DeleteAttempt::Deleted) => {}
+            Ok(DeleteAttempt::InProgressElsewhere) => in_progress_elsewhere += 1,
+            Err(e) => {
+                tracing::error!(error=?e, link_id=?link.id, "Failed to delete link during user cleanup");
+            }
         }
     }
 
+    if in_progress_elsewhere > 0 {
+        anyhow::bail!(
+            "{in_progress_elsewhere} link(s) for user {fusionauth_user_id} are being deleted by another worker; retrying after their claims clear"
+        );
+    }
+
     Ok(())
+}
+
+/// Outcome of [`delete_link_exclusively`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeleteAttempt {
+    Deleted,
+    InProgressElsewhere,
+}
+
+/// Whether the refresh handler re-enqueues this delete on its next hourly run while the
+/// link still exists. Those duplicates can be dropped; any other delete is enqueued once,
+/// so its message must be retried. A claim can outlive a crashed holder's message
+/// visibility by up to one renewal interval.
+fn rescheduled_by_refresh_handler(deletion_reason: &DeletionReason) -> bool {
+    matches!(
+        deletion_reason,
+        DeletionReason::Unused | DeletionReason::Inactive
+    )
+}
+
+/// Runs [`handle_delete`] unless another worker holds the link's delete claim, which
+/// returns [`DeleteAttempt::InProgressElsewhere`] without touching the link.
+///
+/// The claim is a Redis lock renewed for as long as the delete runs, so a crashed worker
+/// releases it within one TTL. If Redis is unreachable the delete runs unclaimed rather
+/// than stalling teardown.
+async fn delete_link_exclusively(
+    ctx: &LinkManagerContext,
+    link: &Link,
+    deletion_reason: &DeletionReason,
+) -> anyhow::Result<DeleteAttempt> {
+    let key = format!("link_delete:{}", link.id);
+    let lock = match ctx
+        .redis_client
+        .try_acquire_lock(&key, LINK_DELETE_LOCK_TTL)
+        .await
+    {
+        Ok(lock) => lock,
+        Err(LockError::AlreadyHeld) => {
+            tracing::info!(link_id=%link.id, "Link delete already in progress on another worker");
+            return Ok(DeleteAttempt::InProgressElsewhere);
+        }
+        Err(LockError::Redis(error)) => {
+            tracing::warn!(error=?error, link_id=%link.id, "Failed to claim link delete; deleting unclaimed");
+            handle_delete(ctx, link, deletion_reason).await?;
+            return Ok(DeleteAttempt::Deleted);
+        }
+    };
+
+    let claim = &lock;
+    let result = renewing_while(
+        handle_delete(ctx, link, deletion_reason),
+        LINK_DELETE_LOCK_RENEW_INTERVAL,
+        move || async move {
+            match claim.extend(LINK_DELETE_LOCK_TTL).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    tracing::warn!(link_id=%link.id, "Link delete claim lapsed; a duplicate delete may start");
+                }
+                Err(error) => {
+                    tracing::warn!(error=?error, link_id=%link.id, "Failed to renew link delete claim");
+                }
+            }
+        },
+    )
+    .await;
+    lock.release().await;
+    result.map(|()| DeleteAttempt::Deleted)
+}
+
+/// Drives `work` to completion, calling `renew` every `interval` while it runs. Renewal
+/// runs alongside `work`, so a slow or hung renewal never stalls it.
+async fn renewing_while<W, R, RFut>(work: W, interval: Duration, renew: R) -> W::Output
+where
+    W: Future,
+    R: FnMut() -> RFut,
+    RFut: Future<Output = ()>,
+{
+    tokio::select! {
+        output = work => output,
+        never = renew_every(interval, renew) => match never {},
+    }
+}
+
+async fn renew_every<R, RFut>(interval: Duration, mut renew: R) -> Infallible
+where
+    R: FnMut() -> RFut,
+    RFut: Future<Output = ()>,
+{
+    let mut ticker = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);
+    loop {
+        ticker.tick().await;
+        renew().await;
+    }
 }
 
 /// notifies downstream dependencies of link deletion, and deletes link (and all data) from database

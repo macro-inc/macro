@@ -7,8 +7,16 @@ use lambda_runtime::{
 };
 use macro_env::Environment;
 use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
+use rand::seq::SliceRandom;
 use sqlx::types::uuid;
 use sqlx::{Pool, Postgres, Type};
+
+/// Each link delete is one cascading transaction over all of the link's mail, so the
+/// backlog is drained a few links per hourly run instead of all at once.
+pub const MAX_DELETES_PER_RUN: usize = 10;
+
+/// SQS rejects per-message delays above 15 minutes.
+pub const MAX_DELETE_DELAY_SECONDS: i32 = 900;
 
 #[derive(Type, Debug, Clone, Copy)]
 #[sqlx(type_name = "email_user_provider_enum", rename_all = "UPPERCASE")]
@@ -26,8 +34,7 @@ pub async fn handler(
         send_health_check_messages(&ctx)
     )?;
 
-    // only send delete messages once daily, during the night
-    if matches!(ctx.config.environment, Environment::Production) && chrono::Utc::now().hour() == 5 {
+    if matches!(ctx.config.environment, Environment::Production) {
         send_delete_messages(&ctx).await?;
     }
 
@@ -142,14 +149,15 @@ async fn send_refresh_messages(ctx: &context::Context) -> Result<(), Error> {
 
 /// delete unused and inactive links from our database
 async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
-    let unused_links = fetch_unused_link_ids(&ctx.db, ctx.config.delete_unused_after_days as i32)
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!(error=?e, "Error fetching unused links for deletion");
-            Vec::new()
-        });
+    let mut unused_links =
+        fetch_unused_link_ids(&ctx.db, ctx.config.delete_unused_after_days as i32)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!(error=?e, "Error fetching unused links for deletion");
+                Vec::new()
+            });
 
-    let inactive_links =
+    let mut inactive_links =
         fetch_inactive_link_ids(&ctx.db, ctx.config.delete_inactive_after_days as i32)
             .await
             .unwrap_or_else(|e| {
@@ -157,41 +165,87 @@ async fn send_delete_messages(ctx: &context::Context) -> Result<(), Error> {
                 Vec::new()
             });
 
+    let (unused_count, inactive_count) = (unused_links.len(), inactive_links.len());
+    // Random picks keep links whose deletes keep failing, or are still running from the
+    // previous hour, from holding the same capped slots every run.
+    {
+        let mut rng = rand::rng();
+        unused_links.shuffle(&mut rng);
+        inactive_links.shuffle(&mut rng);
+    }
+    let planned = plan_delete_batch(unused_links, inactive_links);
+
     tracing::info!(
+        sending = planned.len(),
+        max_per_run = MAX_DELETES_PER_RUN,
         "Sending delete notifications for {} unused and {} inactive links",
-        unused_links.len(),
-        inactive_links.len()
+        unused_count,
+        inactive_count
     );
 
-    for link_id in unused_links {
+    for planned in planned {
+        let link_id = planned.link_id;
+        let deletion_reason = planned.deletion_reason;
         let notif = LinkManagerMessage::DeleteLink {
             link_id,
-            deletion_reason: DeletionReason::Unused,
+            deletion_reason,
         };
         ctx.sqs_client
-            .enqueue_link_manager_notification(notif)
+            .enqueue_link_manager_notification_with_delay(notif, planned.delay_seconds)
             .await
             .inspect_err(|e| {
-                tracing::error!(error=?e, link_id=%link_id, "Error enqueueing delete notification for unused link");
-            })
-            .ok();
-    }
-
-    for link_id in inactive_links {
-        let notif = LinkManagerMessage::DeleteLink {
-            link_id,
-            deletion_reason: DeletionReason::Inactive,
-        };
-        ctx.sqs_client
-            .enqueue_link_manager_notification(notif)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, link_id=%link_id, "Error enqueueing delete notification for inactive link");
+                tracing::error!(error=?e, link_id=%link_id, deletion_reason=deletion_reason.as_str(), "Error enqueueing delete notification for link");
             })
             .ok();
     }
 
     Ok(())
+}
+
+/// A delete notification scheduled for this run.
+#[derive(Debug, Clone, Copy)]
+pub struct PlannedDelete {
+    pub link_id: uuid::Uuid,
+    pub deletion_reason: DeletionReason,
+    pub delay_seconds: i32,
+}
+
+/// Picks at most [`MAX_DELETES_PER_RUN`] links, alternating unused and inactive so neither
+/// starves the other, and staggers their SQS delivery evenly across
+/// [`MAX_DELETE_DELAY_SECONDS`]. Links left over stay eligible for the next hourly run.
+pub fn plan_delete_batch(
+    unused_links: Vec<uuid::Uuid>,
+    inactive_links: Vec<uuid::Uuid>,
+) -> Vec<PlannedDelete> {
+    let mut unused = unused_links
+        .into_iter()
+        .map(|id| (id, DeletionReason::Unused));
+    let mut inactive = inactive_links
+        .into_iter()
+        .map(|id| (id, DeletionReason::Inactive));
+    let mut prefer_unused = true;
+    let alternating = std::iter::from_fn(move || {
+        let next = if prefer_unused {
+            unused.next().or_else(|| inactive.next())
+        } else {
+            inactive.next().or_else(|| unused.next())
+        };
+        prefer_unused = !prefer_unused;
+        next
+    });
+
+    let spacing = MAX_DELETE_DELAY_SECONDS / MAX_DELETES_PER_RUN as i32;
+    alternating
+        .take(MAX_DELETES_PER_RUN)
+        .zip((0..).map(|slot| slot * spacing))
+        .map(
+            |((link_id, deletion_reason), delay_seconds)| PlannedDelete {
+                link_id,
+                deletion_reason,
+                delay_seconds,
+            },
+        )
+        .collect()
 }
 
 /// Fetch link IDs that were created > X days ago and have never viewed a thread

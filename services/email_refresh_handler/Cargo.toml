@@ -17,6 +17,7 @@ macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 model = { path = "../../crates/model" }
 models_email = { path = "../../crates/models_email" }
+rand = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client" }
 tokio = { workspace = true }
