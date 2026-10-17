@@ -43,6 +43,9 @@ import OpenTelemetry directly.
   failure; manual spans must `end()` on every path.
 - A flow that spans components or outlives one call keeps its root span in a
   registry keyed by entity id and resumes it later (see the document example).
+- The active span does not survive an `await`, so pass the span down and
+  `span.run` the request. A TanStack mutation awaits before `mutationFn`, so it
+  takes the span in its variables (`trace` in `useSendMessageMutation`).
 - Transports without headers carry `span.traceparent()` another way, such as a
   WebSocket query parameter.
 - Workers wrap their handler with `instrument()` and `createWorkerTraceConfig`
