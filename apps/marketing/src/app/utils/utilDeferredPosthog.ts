@@ -1,4 +1,5 @@
 import type { CaptureOptions, PostHogConfig } from 'posthog-js';
+import { attributionReferrer } from './landingReferrer';
 
 type Properties = Record<string, unknown>;
 
@@ -26,16 +27,20 @@ type PendingEvent =
     }
   | { type: 'identify'; email: string };
 
-const pageProperties = (): Properties => ({
-  $current_url: window.location.href,
-  $host: window.location.host,
-  $pathname: window.location.pathname,
-  $title: document.title,
-  $referrer: document.referrer || '$direct',
-  $referring_domain: document.referrer
-    ? new URL(document.referrer).hostname
-    : '$direct',
-});
+const pageProperties = (): Properties => {
+  // A same-site hop (the phone redirect onto /mobile-signup) would otherwise
+  // report the previous macro.com URL. attributionReferrer keeps the external
+  // landing referrer for $referrer and $initial_referrer.
+  const referrer = attributionReferrer();
+  return {
+    $current_url: window.location.href,
+    $host: window.location.host,
+    $pathname: window.location.pathname,
+    $title: document.title,
+    $referrer: referrer || '$direct',
+    $referring_domain: referrer ? new URL(referrer).hostname : '$direct',
+  };
+};
 
 // Preserve paid and organic landing attribution if navigation happens while
 // the SDK chunk is loading. These are the campaign fields supported by PostHog.

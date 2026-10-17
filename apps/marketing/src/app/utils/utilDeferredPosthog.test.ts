@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { rememberLandingReferrer } from './landingReferrer';
 import { createDeferredPosthog } from './utilDeferredPosthog';
+
+const referrer = (value: string) => {
+  vi.spyOn(document, 'referrer', 'get').mockReturnValue(value);
+};
 
 const settle = async () => {
   for (let turn = 0; turn < 8; turn++) await Promise.resolve();
@@ -29,10 +34,9 @@ describe('deferred website PostHog', () => {
 
   beforeEach(() => {
     frames = [];
+    sessionStorage.clear();
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
-    vi.spyOn(document, 'referrer', 'get').mockReturnValue(
-      'https://search.example/results'
-    );
+    referrer('https://search.example/results');
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       frames.push(callback);
       return frames.length;
@@ -86,6 +90,42 @@ describe('deferred website PostHog', () => {
       'automatic pageviews',
       'after_ready',
     ]);
+  });
+
+  it('keeps the external landing referrer when the first event is after a same-site hop', async () => {
+    referrer('https://instagram.com/');
+    rememberLandingReferrer();
+    referrer(`${window.location.origin}/?utm_source=ig&utm_medium=cpc`);
+    window.history.replaceState(
+      {},
+      '',
+      '/mobile-signup?utm_source=ig&utm_medium=cpc'
+    );
+    const fixture = setup();
+    frames.shift()?.(0);
+    frames.shift()?.(16);
+    await settle();
+    fixture.resolve();
+    await settle();
+
+    expect(fixture.client.capture).toHaveBeenCalledWith(
+      '$pageview',
+      expect.objectContaining({
+        $pathname: '/mobile-signup',
+        $referrer: 'https://instagram.com/',
+        $referring_domain: 'instagram.com',
+        utm_source: 'ig',
+        utm_medium: 'cpc',
+      }),
+      expect.objectContaining({
+        $set_once: expect.objectContaining({
+          $initial_referrer: 'https://instagram.com/',
+          $initial_referring_domain: 'instagram.com',
+          $initial_utm_source: 'ig',
+          $initial_utm_medium: 'cpc',
+        }),
+      })
+    );
   });
 
   it('preserves landing attribution, timestamps, and early pageviews across navigation', async () => {

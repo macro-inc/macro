@@ -7,6 +7,7 @@ import {
   BookingReceiptPage,
   PublicBookingPage,
 } from '@app/features/scheduling/public-booking';
+import { rememberLandingReferrer } from '@app/lib/analytics/landingReferrer';
 import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { isMobile } from '@core/mobile/isMobile';
@@ -40,6 +41,10 @@ export function LoginPage() {
  */
 export function SignupPage() {
   if (isMobile() && !isNativeMobilePlatform()) {
+    // The replace makes this page document.referrer on /mobile-signup.
+    // Remember the external referrer first so that page's first PostHog
+    // event can still attribute Instagram or Facebook.
+    rememberLandingReferrer();
     window.location.replace(
       `${getWebOrigin()}/mobile-signup${window.location.search}`
     );

@@ -1,3 +1,5 @@
+import { rememberLandingReferrer } from '../../../app/utils/landingReferrer';
+
 export const FEATURE_PAGES = [
   { href: '/email', label: 'Email' },
   { href: '/tasks', label: 'Tasks' },
@@ -25,6 +27,11 @@ export const DEMO_BOOKING_URL =
 
 const MOBILE_SIGNUP_HREF = '/mobile-signup';
 
+/** Keep the ad query so PostHog still sees utm_* after the full-page hop. */
+function mobileSignupHref() {
+  return `${MOBILE_SIGNUP_HREF}${window.location.search}`;
+}
+
 /** Same test as the app's `isMobile()`: a touch-first, phone-width screen. */
 function isPhoneBrowser() {
   return (
@@ -41,13 +48,15 @@ function isPhoneBrowser() {
 export function routePhoneToMobileSignup(event: MouseEvent) {
   if (!isPhoneBrowser()) return;
   event.preventDefault();
-  window.location.href = MOBILE_SIGNUP_HREF;
+  rememberLandingReferrer();
+  window.location.href = mobileSignupHref();
 }
 
 /** Full document navigation keeps the app and marketing CSS independent. */
 export function journeyHref() {
   if (typeof window === 'undefined') return '/app/signup';
-  if (isPhoneBrowser()) return MOBILE_SIGNUP_HREF;
+  rememberLandingReferrer();
+  if (isPhoneBrowser()) return mobileSignupHref();
   try {
     const active = JSON.parse(
       sessionStorage.getItem('onboarding-flow-step') ?? 'null'

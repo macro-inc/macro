@@ -16,6 +16,7 @@ import {
 } from '@core/util/telemetryUrl';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
+import { restoreInitialReferrer } from './landingReferrer';
 import { getPlanAnalyticsProperties } from './planProperties';
 
 /**
@@ -157,6 +158,7 @@ const initializePosthog = (instance: PostHog) => {
           : PROD_MODE_ENV
             ? 'PROD'
             : 'LOCAL';
+        restoreInitialReferrer(cr);
       }
 
       if (cr?.event !== '$exception') return cr;
