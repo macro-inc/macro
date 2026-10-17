@@ -14,8 +14,10 @@ import {
   redactCallLinkProperties,
   redactCallLinkTokens,
 } from '@core/util/telemetryUrl';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
+import { isIgnorableException, rewriteNativeFrameUrls } from './exceptionList';
 import { getPlanAnalyticsProperties } from './planProperties';
 
 /**
@@ -111,11 +113,6 @@ export type MetaStandardEvent = (typeof META_STANDARD_EVENT_NAMES)[number];
 
 const META_STANDARD_EVENTS: Set<string> = new Set(META_STANDARD_EVENT_NAMES);
 
-const IGNORABLE_ERRORS = [
-  // This error is reported very frequently but is not an actual issue.
-  'ResizeObserver loop completed with undelivered notifications',
-];
-
 // Privacy filter lists block the upstream filename; the proxy maps this opaque alias back.
 const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
 const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
@@ -161,12 +158,10 @@ const initializePosthog = (instance: PostHog) => {
 
       if (cr?.event !== '$exception') return cr;
 
-      const exceptionValues = cr.properties.$exception_values;
+      if (isIgnorableException(cr.properties.$exception_list)) return null;
 
-      if (!exceptionValues || !Array.isArray(exceptionValues)) return cr;
-
-      if (IGNORABLE_ERRORS.some((e) => exceptionValues.includes(e))) {
-        return null;
+      if (isTauri()) {
+        rewriteNativeFrameUrls(cr.properties.$exception_list, getWebOrigin());
       }
 
       return cr;

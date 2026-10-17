@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   touch: false,
   capture: vi.fn(),
   identify: vi.fn(),
+  init: vi.fn(),
   gtag: vi.fn(),
   fbq: vi.fn(),
 }));
@@ -24,6 +25,7 @@ vi.mock('posthog-js', () => ({
   PostHog: class {
     capture = mocks.capture;
     identify = mocks.identify;
+    init = mocks.init;
   },
 }));
 
@@ -126,4 +128,99 @@ describe('Meta pixel platform support', () => {
       );
     }
   );
+});
+
+describe('PostHog exception frames', () => {
+  async function beforeSendException(value: string, filenames: string[]) {
+    vi.stubEnv('VITE_POSTHOG_API_KEY', 'test-key');
+    await import('./analytics');
+    const beforeSend = mocks.init.mock.calls[0][1].before_send;
+    return beforeSend({
+      event: '$exception',
+      properties: {
+        $exception_values: [value],
+        $exception_list: [
+          {
+            type: 'Error',
+            value,
+            stacktrace: {
+              type: 'raw',
+              frames: filenames.map((filename) => ({
+                platform: 'web:javascript',
+                filename,
+                lineno: 27,
+                colno: 40048,
+              })),
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  async function sendException(filenames: string[]) {
+    const event = await beforeSendException('boom', filenames);
+    return event.properties.$exception_list[0].stacktrace.frames.map(
+      (frame: { filename: string }) => frame.filename
+    );
+  }
+
+  it('drops the ResizeObserver loop warning, which browsers report with a trailing period', async () => {
+    expect(
+      await beforeSendException(
+        'ResizeObserver loop completed with undelivered notifications.',
+        ['https://macro.com/app/app-gifhAVYj.js']
+      )
+    ).toBeNull();
+  });
+
+  it('drops errors thrown by browser extensions', async () => {
+    expect(
+      await beforeSendException(
+        "Cannot read properties of undefined (reading 'M_ID')",
+        [
+          'https://macro.com/app/app-gifhAVYj.js',
+          'chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon/content.js',
+        ]
+      )
+    ).toBeNull();
+  });
+
+  it('keeps app errors that only pass through an extension frame', async () => {
+    expect(
+      await beforeSendException('boom', [
+        'chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon/content.js',
+        'https://macro.com/app/app-gifhAVYj.js',
+      ])
+    ).not.toBeNull();
+  });
+
+  it.each(['ios', 'android', 'desktop'] as const)(
+    'points %s bundle frames at the public web bundle so PostHog can fetch its source map',
+    async (platform) => {
+      mocks.platform = platform;
+
+      expect(
+        await sendException([
+          'tauri://localhost/app/app-xMZRw8gs.js',
+          'https://tauri.localhost/app/chunk-AbC123.js',
+          'http://tauri.localhost/app/chunk-AbC123.js',
+          'tauri://localhost',
+          'https://cdn.example.com/app/vendor.js',
+        ])
+      ).toEqual([
+        'https://macro.com/app/app-xMZRw8gs.js',
+        'https://macro.com/app/chunk-AbC123.js',
+        'https://macro.com/app/chunk-AbC123.js',
+        'tauri://localhost',
+        'https://cdn.example.com/app/vendor.js',
+      ]);
+    }
+  );
+
+  it('leaves web frames untouched', async () => {
+    expect(
+      await sendException(['https://macro.com/app/app-gifhAVYj.js'])
+    ).toEqual(['https://macro.com/app/app-gifhAVYj.js']);
+  });
 });

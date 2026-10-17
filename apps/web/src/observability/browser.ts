@@ -1,3 +1,4 @@
+import { isIgnorableError } from '@core/util/ignorableErrors';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { recordBrowserTursoCacheNavigation } from '@graphql-cache/rollout-observability';
 import { Telemetry } from '@macro-inc/observability';
@@ -110,6 +111,9 @@ export async function initializeBrowserObservability(): Promise<void> {
 
   window.addEventListener('pagehide', () => void Telemetry.flush());
   window.addEventListener('error', (event) => {
+    if (isIgnorableError({ message: event.message, source: event.filename })) {
+      return;
+    }
     Telemetry.error(event.error ?? event.message, {
       'error.source': 'window',
     });

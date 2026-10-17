@@ -62,3 +62,9 @@ ios_require_posthog_key() {
   fi
   export VITE_POSTHOG_API_KEY
 }
+
+ios_production_telemetry() {
+  # Without an exporter the app sends no traces or logs to Datadog.
+  export VITE_OTEL_EXPORTER_URL="${VITE_OTEL_EXPORTER_URL:-https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces}"
+  export VITE_OTEL_ENV="${VITE_OTEL_ENV:-prod}"
+}

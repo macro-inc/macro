@@ -214,6 +214,11 @@ ios-release --config prd -- just ios-release` covers them), and
 `scripts/ios-app-store.mjs` for the underlying App Store Connect commands
 (`wait-build`, `submit`, `status`).
 
+`just ios-build` and `just ios-release` export frontend traces and logs to the
+production OTLP proxy
+(`ios_production_telemetry` in `scripts/ios-native-env.sh`); set
+`VITE_OTEL_EXPORTER_URL` and `VITE_OTEL_ENV` to send them elsewhere.
+
 ## One-time repository setup
 
 - **Labels**: create `ios-update` and `skip-ios-update`.

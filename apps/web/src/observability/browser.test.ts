@@ -72,6 +72,42 @@ it('explicit native recording overrides the normal enablement gate and exporter 
   });
 });
 
+it('drops browser and extension noise from window errors but reports app errors', async () => {
+  vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
+  const addEventListener = vi.spyOn(window, 'addEventListener');
+  await initializeBrowserObservability();
+  const onError = addEventListener.mock.calls.find(
+    ([type]) => type === 'error'
+  )?.[1] as (event: ErrorEvent) => void;
+  addEventListener.mockRestore();
+  const appError = new Error('boom');
+
+  onError(
+    new ErrorEvent('error', {
+      message: 'ResizeObserver loop completed with undelivered notifications.',
+    })
+  );
+  onError(
+    new ErrorEvent('error', {
+      message: "Cannot read properties of undefined (reading 'M_ID')",
+      filename:
+        'chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon/content.js',
+    })
+  );
+  onError(
+    new ErrorEvent('error', {
+      message: 'boom',
+      filename: 'https://macro.com/app/app-gifhAVYj.js',
+      error: appError,
+    })
+  );
+
+  expect(Telemetry.error).toHaveBeenCalledOnce();
+  expect(Telemetry.error).toHaveBeenCalledWith(appError, {
+    'error.source': 'window',
+  });
+});
+
 it('an older binary without diagnostics still obeys the normal telemetry gate', async () => {
   vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
   await initializeBrowserObservability();

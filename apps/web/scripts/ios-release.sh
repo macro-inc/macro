@@ -115,6 +115,7 @@ just ios-prepare
 # skipped because it has already run here.
 step "Building the frontend bundle"
 ios_require_posthog_key
+ios_production_telemetry
 just build-tauri
 
 step "Archiving and exporting IPA (this takes a while)"
