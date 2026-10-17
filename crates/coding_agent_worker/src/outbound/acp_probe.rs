@@ -6,14 +6,90 @@ use std::time::Duration;
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    InitializeRequest, NewSessionRequest, SessionConfigOption,
+    InitializeRequest, NewSessionRequest, NewSessionResponse, SessionConfigOption,
+    SessionConfigOptionCategory, SessionConfigSelectOption, SessionConfigValueId,
 };
 use agent_client_protocol::{Agent, Channel, Client, ConnectionTo};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::outbound::acp_process::AcpProcess;
 
 #[cfg(test)]
 mod test;
+
+// Keep the SDK's request parameters and JSON-RPC routing, but decode the
+// result before NewSessionResponse drops the legacy `models` field.
+#[derive(Clone, Debug, Serialize, Deserialize, agent_client_protocol::JsonRpcRequest)]
+#[serde(transparent)]
+#[request(method = "session/new", response = Value)]
+struct ProbeNewSessionRequest(NewSessionRequest);
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyModels {
+    current_model_id: Option<String>,
+    available_models: Vec<LegacyModel>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyModel {
+    model_id: String,
+    name: String,
+    description: Option<String>,
+}
+
+fn probe_config_options(
+    response: Value,
+) -> Result<Vec<SessionConfigOption>, agent_client_protocol::Error> {
+    let opened: NewSessionResponse = agent_client_protocol::util::json_cast(&response)?;
+    let mut options = opened.config_options.unwrap_or_default();
+    // The existing model projection selects id="model", including grouped
+    // selects. Do not change category-only IDs or overwrite modern options.
+    if options.iter().any(|option| option.id.to_string() == "model") {
+        return Ok(options);
+    }
+    let Some(models) = response.get("models").filter(|models| !models.is_null()) else {
+        return Ok(options);
+    };
+    let invalid = || {
+        agent_client_protocol::Error::invalid_params()
+            .data("invalid legacy model advertisement")
+    };
+    let legacy: LegacyModels = serde_json::from_value(models.clone()).map_err(|_| invalid())?;
+    let Some(first) = legacy.available_models.first() else {
+        return Ok(options);
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    if legacy.available_models.iter().any(|model| {
+        model.model_id.trim().is_empty()
+            || model.name.trim().is_empty()
+            || !ids.insert(model.model_id.as_str())
+    }) {
+        return Err(invalid());
+    }
+    let current = legacy
+        .current_model_id
+        .as_deref()
+        .filter(|current| ids.contains(current))
+        .unwrap_or(&first.model_id)
+        .to_owned();
+    drop(ids);
+    let choices: Vec<_> = legacy
+        .available_models
+        .into_iter()
+        .map(|model| {
+            SessionConfigSelectOption::new(SessionConfigValueId::new(model.model_id), model.name)
+                .description(model.description)
+        })
+        .collect();
+    options.push(
+        SessionConfigOption::select("model", "Model", SessionConfigValueId::new(current), choices)
+            .category(SessionConfigOptionCategory::Model),
+    );
+    Ok(options)
+}
 
 /// A subprocess launch description for one isolated ACP probe.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,10 +136,10 @@ async fn probe_channel(
             .block_task()
             .await?;
         let opened = connection
-            .send_request(NewSessionRequest::new(cwd))
+            .send_request(ProbeNewSessionRequest(NewSessionRequest::new(cwd)))
             .block_task()
             .await?;
-        Ok(opened.config_options.unwrap_or_default())
+        probe_config_options(opened)
     });
 
     tokio::time::timeout(deadline, exchange)
