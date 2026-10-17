@@ -406,10 +406,15 @@ export function EmailList(props: EmailListProps) {
 
     if (list.focus.result()) return;
 
-    const restored = list.focus.restore(list.focus.requestedKey(), {
-      retainUnavailable: false,
+    const requestedKey = list.focus.requestedKey();
+    const restored = list.focus.restore(requestedKey, {
+      retainUnavailable: true,
     });
     if (restored) return;
+    // Keep waiting for a retained key to appear in the list rather than
+    // jumping to the first row. The key may be temporarily unavailable while
+    // data loads or settles after navigation.
+    if (requestedKey !== undefined) return;
     if (isTouchDevice()) return;
 
     list.focus.first({
