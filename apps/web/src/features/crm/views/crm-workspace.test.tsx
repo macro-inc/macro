@@ -56,6 +56,12 @@ vi.mock('@ui', async () => ({
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
   ) => <button aria-label={props.label} {...props} />,
 }));
+vi.mock('@components/app/split-panel', () => ({
+  SplitPanel: {
+    ControlGroup: (props: ParentProps) => <div>{props.children}</div>,
+    CloseButton: () => <button type="button" aria-label="Close split" />,
+  },
+}));
 vi.mock('@ui/components/Tour', () => ({ tourTarget: () => () => {} }));
 vi.mock('@app/components/view-shell/tour', () => ({
   VIEW_SHELL_TOUR: { sidebarToggle: 'sidebar-toggle' },
@@ -156,9 +162,11 @@ vi.mock('./import-companies', () => ({ CrmImport: () => null }));
 vi.mock('./pipeline', () => ({
   PipelineView: (props: {
     pipeline: { name: string };
+    navigation?: JSX.Element;
     onOpenRecord(record: { type: 'company'; id: string }): void;
   }) => (
     <div>
+      <header>{props.navigation}</header>
       {props.pipeline.name} table
       <button
         type="button"
@@ -302,6 +310,15 @@ it('shows a pipeline another view asks for, in place of an open record', () => {
   expect(activeTab()).toBe('pipeline:sales');
   expect(screen.getByText('Sales table')).toBeTruthy();
   expect(screen.queryByText('Sales record company:acme')).toBeNull();
+});
+
+it('keeps the split close beside the collapsed sidebar toggle on a pipeline', () => {
+  fixture.touch = false;
+  setup('pipeline:sales');
+  const close = screen.getByRole('button', { name: 'Close split' });
+  expect(close.nextElementSibling?.getAttribute('aria-label')).toBe(
+    'Expand CRM sidebar'
+  );
 });
 
 it('opens the company of a pipeline row in its own split on touch', () => {

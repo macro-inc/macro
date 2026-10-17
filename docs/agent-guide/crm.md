@@ -162,6 +162,8 @@ editors without changing hosted data.
 
 `Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
+While the sidebar is collapsed, the split's **Close** sits before either toggle,
+including on a pipeline, and stays hidden when the split cannot close.
 The sidebar's Records and Lists sections can also collapse independently.
 
 **Pipelines** in the CRM sidebar hold company or contact entries in the shared
